@@ -1,0 +1,77 @@
+import { useState } from "react";
+import { cn } from "@/lib/utils";
+import {
+  Briefcase, Users, Settings, Globe, Share2, Building2, FileText, Database,
+} from "lucide-react";
+import { OfertasTrabajoConfig } from "./OfertasTrabajoConfig";
+import { CandidatosConfig } from "./CandidatosConfig";
+import { ConfigGeneralConfig } from "./ConfigGeneralConfig";
+import { PortalEmpleoConfig } from "./PortalEmpleoConfig";
+import { PublicacionesPortalesConfig } from "./PublicacionesPortalesConfig";
+import { DatosEmpresaConfig } from "./DatosEmpresaConfig";
+import { PlantillasConfig } from "./PlantillasConfig";
+import { GestionDatosConfig } from "./GestionDatosConfig";
+
+type ConfigSection =
+  | "ofertas"
+  | "candidatos"
+  | "configuracion"
+  | "portal"
+  | "publicaciones"
+  | "datos_empresa"
+  | "plantillas"
+  | "gestion_datos";
+
+const SECTIONS: { id: ConfigSection; label: string; icon: React.ReactNode }[] = [
+  { id: "ofertas", label: "Ofertas de trabajo", icon: <Briefcase className="h-4 w-4" /> },
+  { id: "candidatos", label: "Candidatos", icon: <Users className="h-4 w-4" /> },
+  { id: "configuracion", label: "Configuración", icon: <Settings className="h-4 w-4" /> },
+  { id: "portal", label: "Portal de empleo", icon: <Globe className="h-4 w-4" /> },
+  { id: "publicaciones", label: "Publicaciones en portales", icon: <Share2 className="h-4 w-4" /> },
+  { id: "datos_empresa", label: "Datos de tu empresa", icon: <Building2 className="h-4 w-4" /> },
+  { id: "plantillas", label: "Plantillas", icon: <FileText className="h-4 w-4" /> },
+  { id: "gestion_datos", label: "Gestión de datos", icon: <Database className="h-4 w-4" /> },
+];
+
+const CONTENT: Record<ConfigSection, React.ReactNode> = {
+  ofertas: <OfertasTrabajoConfig />,
+  candidatos: <CandidatosConfig />,
+  configuracion: <ConfigGeneralConfig />,
+  portal: <PortalEmpleoConfig />,
+  publicaciones: <PublicacionesPortalesConfig />,
+  datos_empresa: <DatosEmpresaConfig />,
+  plantillas: <PlantillasConfig />,
+  gestion_datos: <GestionDatosConfig />,
+};
+
+export function ReclutamientoConfigView() {
+  const [active, setActive] = useState<ConfigSection>("ofertas");
+
+  return (
+    <div className="flex gap-6 min-h-[600px]">
+      {/* Sidebar */}
+      <nav className="w-56 shrink-0 space-y-0.5">
+        {SECTIONS.map((s) => (
+          <button
+            key={s.id}
+            onClick={() => setActive(s.id)}
+            className={cn(
+              "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left",
+              active === s.id
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+            )}
+          >
+            {s.icon}
+            {s.label}
+          </button>
+        ))}
+      </nav>
+
+      {/* Content */}
+      <div className="flex-1 min-w-0">
+        {CONTENT[active]}
+      </div>
+    </div>
+  );
+}
