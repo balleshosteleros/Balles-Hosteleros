@@ -15,9 +15,10 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Search, ShieldCheck, ShieldOff, KeyRound, Pencil, UserCog,
-  Power, PowerOff, Lock, Eye, PenLine, Users,
+  Power, PowerOff, Lock, Eye, PenLine, Users, UserPlus,
 } from "lucide-react";
 import { toast } from "sonner";
+import { createEmployee, resetEmployeePassword } from "@/actions/admin";
 
 const ESTADO_STYLES: Record<EstadoAcceso, string> = {
   Activo: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
@@ -39,6 +40,11 @@ export function UsuariosTab() {
   const [filtroEstado, setFiltroEstado] = useState("todos");
   const [editModal, setEditModal] = useState<AccesoPortal | null>(null);
   const [permisosModal, setPermisosModal] = useState<AccesoPortal | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [resetModal, setResetModal] = useState<{ id: string; nombre: string } | null>(null);
+  const [resetLoading, setResetLoading] = useState(false);
 
   // Refresh when company changes
   const [lastEmpresa, setLastEmpresa] = useState(empresaActual.id);
@@ -74,8 +80,18 @@ export function UsuariosTab() {
     setAccesos((prev) => prev.map((a) => a.id === id ? { ...a, estadoAcceso: "Bloqueado" as EstadoAcceso } : a));
     toast.success("Acceso bloqueado");
   };
-  const resetPassword = (nombre: string) => {
-    toast.success(`Contraseña reseteada para ${nombre}`);
+  const handleResetPassword = async (formData: FormData) => {
+    if (!resetModal) return;
+    setResetLoading(true);
+    const newPassword = formData.get("new_password") as string;
+    const result = await resetEmployeePassword(resetModal.id, newPassword);
+    if (result?.error) {
+      toast.error(result.error);
+    } else {
+      toast.success(`Contraseña actualizada para ${resetModal.nombre}`);
+      setResetModal(null);
+    }
+    setResetLoading(false);
   };
   const darAcceso = (empId: string) => {
     const emp = empleados.find((e) => e.id === empId);
@@ -100,6 +116,31 @@ export function UsuariosTab() {
     toast.success("Permisos actualizados");
   };
 
+  const handleCreateUser = async (formData: FormData) => {
+    setCreateLoading(true);
+    setCreateError(null);
+
+    const result = await createEmployee(formData);
+
+    if (result?.error) {
+      setCreateError(result.error);
+      setCreateLoading(false);
+    } else {
+      toast.success("Usuario creado correctamente en Supabase");
+      setShowCreateModal(false);
+      setCreateLoading(false);
+      // Also add to local state for immediate UI update
+      const nombre = formData.get("full_name") as string;
+      const email = formData.get("email") as string;
+      const rol = formData.get("role") as string;
+      const nuevo = crearAccesoDesdeEmpleado(
+        `sup-${Date.now()}`, nombre, email,
+        empresaActual.nombre, empresaActual.id, rol,
+      );
+      setAccesos((prev) => [...prev, { ...nuevo, estadoAcceso: "Activo" as EstadoAcceso }]);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -111,6 +152,9 @@ export function UsuariosTab() {
             <p className="text-xs text-muted-foreground">{accesos.length} usuarios · {accesos.filter((a) => a.estadoAcceso === "Activo").length} activos · {sinAcceso.length} sin acceso</p>
           </div>
         </div>
+        <Button size="sm" className="gap-1.5" onClick={() => setShowCreateModal(true)}>
+          <UserPlus className="h-4 w-4" /> Nuevo usuario
+        </Button>
       </div>
 
       {/* Filters */}
@@ -177,7 +221,7 @@ export function UsuariosTab() {
                         <Lock className="h-3.5 w-3.5" />
                       </Button>
                     )}
-                    <Button variant="ghost" size="icon" className="h-7 w-7" title="Resetear contraseña" onClick={() => resetPassword(acc.nombreEmpleado)}>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" title="Resetear contraseña" onClick={() => setResetModal({ id: acc.empleadoId, nombre: acc.nombreEmpleado })}>
                       <KeyRound className="h-3.5 w-3.5" />
                     </Button>
                     <Button variant="ghost" size="icon" className="h-7 w-7" title="Editar" onClick={() => setEditModal(acc)}>
@@ -249,6 +293,70 @@ export function UsuariosTab() {
           onSave={guardarPermisos}
         />
       )}
+
+      {/* Reset password modal (Supabase) */}
+      <Dialog open={!!resetModal} onOpenChange={(o) => !o && setResetModal(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5" /> Resetear contraseña — {resetModal?.nombre}
+            </DialogTitle>
+          </DialogHeader>
+          <form action={handleResetPassword} className="space-y-4">
+            <div>
+              <Label className="text-xs font-bold">Nueva contraseña</Label>
+              <Input name="new_password" type="password" required minLength={6} placeholder="Mínimo 6 caracteres" />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setResetModal(null)}>Cancelar</Button>
+              <Button type="submit" disabled={resetLoading}>
+                {resetLoading ? "Actualizando..." : "Cambiar contraseña"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create user modal (Supabase) */}
+      <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5" /> Nuevo usuario
+            </DialogTitle>
+          </DialogHeader>
+          <form action={handleCreateUser} className="space-y-4">
+            <div>
+              <Label className="text-xs font-bold">Nombre completo</Label>
+              <Input name="full_name" required />
+            </div>
+            <div>
+              <Label className="text-xs font-bold">Email</Label>
+              <Input name="email" type="email" required />
+            </div>
+            <div>
+              <Label className="text-xs font-bold">Contraseña</Label>
+              <Input name="password" type="password" required minLength={6} />
+            </div>
+            <div>
+              <Label className="text-xs font-bold">Rol</Label>
+              <Select name="role" defaultValue="Empleado">
+                <SelectTrigger><SelectValue placeholder="Selecciona rol" /></SelectTrigger>
+                <SelectContent>
+                  {ROLES_PORTAL.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {createError && <p className="text-sm text-red-600">{createError}</p>}
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setShowCreateModal(false)}>Cancelar</Button>
+              <Button type="submit" disabled={createLoading}>
+                {createLoading ? "Creando..." : "Crear usuario"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

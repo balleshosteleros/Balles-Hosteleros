@@ -84,7 +84,19 @@ export function DatosGeneralesTab() {
           <Field label="Correo contabilidad" value={d.correoContabilidad} onChange={(v) => set("correoContabilidad", v)} type="email" />
           <Field label="Correo marketing" value={d.correoMarketing} onChange={(v) => set("correoMarketing", v)} type="email" />
           <Field label="Correo jurídico" value={d.correoJuridico} onChange={(v) => set("correoJuridico", v)} type="email" />
+          <Field label="Correo reservas" value={d.correoReservas} onChange={(v) => set("correoReservas", v)} type="email" />
+          <Field label="Correo incidencias" value={d.correoIncidencias} onChange={(v) => set("correoIncidencias", v)} type="email" />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3"><CardTitle className="text-base">Web y redes sociales</CardTitle></CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <Field label="Web" value={d.web} onChange={(v) => set("web", v)} />
+          <Field label="WhatsApp empresa" value={d.whatsapp} onChange={(v) => set("whatsapp", v)} />
+          <Field label="Instagram" value={d.instagram} onChange={(v) => set("instagram", v)} />
+          <Field label="Facebook" value={d.facebook} onChange={(v) => set("facebook", v)} />
+          <Field label="TikTok" value={d.tiktok} onChange={(v) => set("tiktok", v)} />
         </CardContent>
       </Card>
 

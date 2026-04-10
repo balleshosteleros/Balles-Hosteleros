@@ -12,7 +12,13 @@ export interface DatosGenerales {
   correoContabilidad: string;
   correoMarketing: string;
   correoJuridico: string;
+  correoReservas: string;
+  correoIncidencias: string;
   web: string;
+  whatsapp: string;
+  instagram: string;
+  facebook: string;
+  tiktok: string;
   ciudad: string;
   provincia: string;
   pais: string;
@@ -169,7 +175,13 @@ export function buildDefaultAjustes(empresaNombre: string): AjustesEmpresa {
       correoContabilidad: "",
       correoMarketing: "",
       correoJuridico: "",
+      correoReservas: "",
+      correoIncidencias: "",
       web: "",
+      whatsapp: "",
+      instagram: "",
+      facebook: "",
+      tiktok: "",
       ciudad: "Madrid",
       provincia: "Madrid",
       pais: "España",

@@ -1,13 +1,12 @@
 "use client";
 
-import { Settings, Building2, Users, Shield, Layers, Mail, Cog, ClipboardList, HelpCircle, Briefcase, Store } from "lucide-react";
+import { Settings, Building2, Users, Shield, Layers, Cog, ClipboardList, HelpCircle, Briefcase, Store } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ResumenGeneral } from "@/features/ajustes/components/ResumenGeneral";
 import { DatosGeneralesTab } from "@/features/ajustes/components/DatosGeneralesTab";
 import { UsuariosTab } from "@/features/ajustes/components/UsuariosTab";
 import { RolesTab } from "@/features/ajustes/components/RolesTab";
 import { DepartamentosTab } from "@/features/ajustes/components/DepartamentosTab";
-import { ContactosTab } from "@/features/ajustes/components/ContactosTab";
 import { ConfigOperativaTab } from "@/features/ajustes/components/ConfigOperativaTab";
 import { AuditoriaTab } from "@/features/ajustes/components/AuditoriaTab";
 import { AyudaAdminTab } from "@/features/ajustes/components/AyudaAdminTab";
@@ -22,7 +21,6 @@ const tabs = [
   { id: "roles", label: "Roles", icon: Shield },
   { id: "puestos", label: "Puestos de empresa", icon: Briefcase },
   { id: "departamentos", label: "Departamentos", icon: Layers },
-  { id: "contactos", label: "Contactos", icon: Mail },
   { id: "operativa", label: "Config. operativa", icon: Cog },
   { id: "auditoria", label: "Auditoría", icon: ClipboardList },
   { id: "ayuda", label: "Ayuda", icon: HelpCircle },
@@ -56,7 +54,6 @@ export default function AjustesPage() {
         <TabsContent value="roles"><RolesTab /></TabsContent>
         <TabsContent value="puestos"><PuestosEmpresaTab /></TabsContent>
         <TabsContent value="departamentos"><DepartamentosTab /></TabsContent>
-        <TabsContent value="contactos"><ContactosTab /></TabsContent>
         <TabsContent value="operativa"><ConfigOperativaTab /></TabsContent>
         <TabsContent value="auditoria"><AuditoriaTab /></TabsContent>
         <TabsContent value="ayuda"><AyudaAdminTab /></TabsContent>
