@@ -1,9 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { getEmpleadosPorEmpresa } from "@/features/rrhh/data/rrhh";
 import {
   AccesoPortal, EstadoAcceso, ROLES_PORTAL,
-  getAccesosPorEmpresa, crearAccesoDesdeEmpleado, permisosDesdeRol,
+  crearAccesoDesdeEmpleado, permisosDesdeRol,
 } from "@/features/rrhh/data/accesos-portal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,7 @@ import {
   Power, PowerOff, Lock, Eye, PenLine, Users, UserPlus,
 } from "lucide-react";
 import { toast } from "sonner";
-import { createEmployee, resetEmployeePassword } from "@/actions/admin";
+import { createEmployee, resetEmployeePassword, getEmployees } from "@/actions/admin";
 
 const ESTADO_STYLES: Record<EstadoAcceso, string> = {
   Activo: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
@@ -31,11 +31,54 @@ function EstadoBadge({ estado }: { estado: EstadoAcceso }) {
   return <Badge variant="outline" className={`text-[10px] ${ESTADO_STYLES[estado]}`}>{estado}</Badge>;
 }
 
+// ─── Tipo del row real de Supabase (tabla profiles + role joineado de user_roles) ───
+type SupabaseProfile = {
+  id: string;
+  user_id: string | null;
+  email: string;
+  full_name: string | null;
+  nombre: string | null;
+  apellidos: string | null;
+  avatar_url: string | null;
+  empresa_id: string | null;
+  role?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+const ROLE_DB_TO_UI: Record<string, string> = {
+  admin: "Administrador",
+  director: "Director",
+  gerencia: "Gerencia",
+  responsable: "Responsable",
+  empleado: "Empleado",
+  solo_lectura: "Solo lectura",
+};
+
+function profileToAcceso(p: SupabaseProfile, empresa: { id: string; nombre: string }): AccesoPortal {
+  const rolUI = ROLE_DB_TO_UI[p.role ?? "empleado"] ?? "Empleado";
+  const fullName = [p.nombre, p.apellidos].filter(Boolean).join(" ").trim() || p.full_name || p.email;
+  return {
+    id: `sup-${p.id}`,
+    empleadoId: p.id,
+    nombreEmpleado: fullName,
+    emailUsuario: p.email,
+    empresa: empresa.nombre,
+    empresaId: empresa.id,
+    rol: rolUI,
+    estadoAcceso: "Activo",
+    ultimaConexion: "—",
+    fechaCreacion: p.created_at?.slice(0, 10) ?? "",
+    permisos: permisosDesdeRol(rolUI),
+  };
+}
+
 export function UsuariosTab() {
   const { empresaActual } = useEmpresa();
   const empleados = useMemo(() => getEmpleadosPorEmpresa(empresaActual.id), [empresaActual.id]);
 
-  const [accesos, setAccesos] = useState<AccesoPortal[]>(() => getAccesosPorEmpresa(empresaActual.id));
+  const [accesos, setAccesos] = useState<AccesoPortal[]>([]);
+  const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("todos");
   const [editModal, setEditModal] = useState<AccesoPortal | null>(null);
@@ -46,12 +89,29 @@ export function UsuariosTab() {
   const [resetModal, setResetModal] = useState<{ id: string; nombre: string } | null>(null);
   const [resetLoading, setResetLoading] = useState(false);
 
-  // Refresh when company changes
-  const [lastEmpresa, setLastEmpresa] = useState(empresaActual.id);
-  if (lastEmpresa !== empresaActual.id) {
-    setLastEmpresa(empresaActual.id);
-    setAccesos(getAccesosPorEmpresa(empresaActual.id));
-  }
+  // Carga real desde Supabase
+  const loadAccesos = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await getEmployees();
+      if (result.error) {
+        toast.error(result.error);
+        setAccesos([]);
+        return;
+      }
+      const profiles = (result.data ?? []) as SupabaseProfile[];
+      setAccesos(profiles.map((p) => profileToAcceso(p, empresaActual)));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Error cargando usuarios");
+      setAccesos([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [empresaActual]);
+
+  useEffect(() => {
+    loadAccesos();
+  }, [loadAccesos]);
 
   const filtrados = useMemo(() => {
     return accesos.filter((a) => {
@@ -129,15 +189,8 @@ export function UsuariosTab() {
       toast.success("Usuario creado correctamente en Supabase");
       setShowCreateModal(false);
       setCreateLoading(false);
-      // Also add to local state for immediate UI update
-      const nombre = formData.get("full_name") as string;
-      const email = formData.get("email") as string;
-      const rol = formData.get("role") as string;
-      const nuevo = crearAccesoDesdeEmpleado(
-        `sup-${Date.now()}`, nombre, email,
-        empresaActual.nombre, empresaActual.id, rol,
-      );
-      setAccesos((prev) => [...prev, { ...nuevo, estadoAcceso: "Activo" as EstadoAcceso }]);
+      // Recarga real desde Supabase (no estado local, que se pierde al refrescar)
+      await loadAccesos();
     }
   };
 
@@ -234,7 +287,10 @@ export function UsuariosTab() {
                 </td>
               </tr>
             ))}
-            {filtrados.length === 0 && (
+            {loading && (
+              <tr><td colSpan={7} className="text-center py-8 text-muted-foreground">Cargando usuarios desde Supabase…</td></tr>
+            )}
+            {!loading && filtrados.length === 0 && (
               <tr><td colSpan={7} className="text-center py-8 text-muted-foreground">No se encontraron usuarios.</td></tr>
             )}
           </tbody>
