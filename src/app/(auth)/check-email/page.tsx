@@ -28,7 +28,7 @@ export default function CheckEmailPage() {
       </div>
 
       <Link
-        href="/login"
+        href="/"
         className="inline-block text-sm font-semibold text-blue-400 transition-colors hover:text-blue-300"
       >
         ← Volver al inicio de sesión

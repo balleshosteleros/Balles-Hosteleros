@@ -16,7 +16,7 @@ export default function SignupPage() {
       <p className="text-center text-sm text-slate-400">
         ¿Ya tienes cuenta?{' '}
         <Link
-          href="/login"
+          href="/"
           className="font-semibold text-blue-400 transition-colors hover:text-blue-300"
         >
           Inicia sesión

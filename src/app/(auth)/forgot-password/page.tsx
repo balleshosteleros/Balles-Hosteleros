@@ -15,7 +15,7 @@ export default function ForgotPasswordPage() {
 
       <p className="text-center text-sm text-slate-400">
         <Link
-          href="/login"
+          href="/"
           className="font-semibold text-blue-400 transition-colors hover:text-blue-300"
         >
           ← Volver al inicio de sesión
