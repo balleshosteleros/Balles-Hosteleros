@@ -3,7 +3,7 @@ import "./globals.css";
 import { Providers } from "@/shared/providers";
 
 export const metadata: Metadata = {
-  title: "Balles Hosteleros — Software de Gestión",
+  title: "BallesHosteleros",
   description: "Sistema de gestión integral para hostelería",
 };
 
