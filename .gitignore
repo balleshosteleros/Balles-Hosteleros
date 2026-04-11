@@ -57,6 +57,8 @@ Thumbs.db
 # Claude Code
 .claude/skills/**/node_modules
 .claude/plugins
+.claude/logs/
+.claude/.watchdog-state
 *.mcp.json
 !example.mcp.json
 

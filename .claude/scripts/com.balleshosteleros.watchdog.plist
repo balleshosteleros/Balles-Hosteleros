@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.balleshosteleros.watchdog</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/ivanballesteros/Desktop/SAAS/Balles-Hosteleros/.claude/scripts/watchdog.sh</string>
+        <string>--quiet</string>
+    </array>
+
+    <!-- Cada 900 segundos = 15 minutos -->
+    <key>StartInterval</key>
+    <integer>900</integer>
+
+    <!-- NO ejecutar al cargar — arranca con el primer intervalo -->
+    <key>RunAtLoad</key>
+    <false/>
+
+    <!-- Trabajar desde la raíz del proyecto -->
+    <key>WorkingDirectory</key>
+    <string>/Users/ivanballesteros/Desktop/SAAS/Balles-Hosteleros</string>
+
+    <!-- Logs de launchd (separados del log interno del watchdog) -->
+    <key>StandardOutPath</key>
+    <string>/Users/ivanballesteros/Desktop/SAAS/Balles-Hosteleros/.claude/logs/launchd.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/ivanballesteros/Desktop/SAAS/Balles-Hosteleros/.claude/logs/launchd.err.log</string>
+
+    <!-- Solo cuando la sesión del usuario está activa -->
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>
