@@ -1,4 +1,4 @@
-# PRP-001: Proceso de Nuevos Platos para COCINA Y SALA
+# PRP-004: Crear un Onboarding automático que obligue una vez que entras por primera vez al SAAS hacer todo un Onboarding, donde habrá toda la formación que necesite ver combinando:
 
 **Estado:** PENDIENTE
 **Creado:** 2026-04-11 23:39

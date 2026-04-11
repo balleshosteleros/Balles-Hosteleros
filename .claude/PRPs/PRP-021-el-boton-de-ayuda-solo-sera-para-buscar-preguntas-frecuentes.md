@@ -1,4 +1,9 @@
-# PRP-001: Proceso de Nuevos Platos para COCINA Y SALA
+# PRP-021: El botón de AYUDA solo será para buscar preguntas frecuentes y sobre todo que tenga en el lateral un índice con todo lo que existe de información solo podrá salirle l infrmaicon en función a su ROL
+
+> ⚠️ **CONSOLIDADO EN PRP-023**
+> Este PRP ha sido fusionado con PRP-020 y PRP-021 en **[PRP-023: Sistema Ayuda y Soporte](./PRP-023-sistema-ayuda-y-soporte.md)**.
+> Ver el PRP consolidado para la versión actualizada con blueprint de 4 fases.
+
 
 **Estado:** PENDIENTE
 **Creado:** 2026-04-11 23:39

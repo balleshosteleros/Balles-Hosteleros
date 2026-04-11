@@ -7,6 +7,7 @@ import { useAuth } from "@/features/auth/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { LogOut, UserCircle } from "lucide-react";
+import { FloatingSoporteButton } from "@/features/soporte/components";
 
 const ROUTE_TITLES: Record<string, string> = {
   "/": "DASHBOARD",
@@ -84,6 +85,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </header>
           <main className="flex-1 overflow-auto">{children}</main>
         </div>
+        {user && <FloatingSoporteButton />}
       </div>
     </SidebarProvider>
   );

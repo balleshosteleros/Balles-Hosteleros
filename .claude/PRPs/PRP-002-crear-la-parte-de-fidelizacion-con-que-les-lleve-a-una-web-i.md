@@ -1,4 +1,4 @@
-# PRP-001: Proceso de Nuevos Platos para COCINA Y SALA
+# PRP-002: Crear la parte de Fidelizacion con que les lleve a una web interactiva o incluso APP para descargar si fuera mejor donde tengan sus datos y puedan ver las visitas los ticket gastados a través de escanear el QR delos tickets y tengan como premios y automatizaciones y recordatorios.
 
 **Estado:** PENDIENTE
 **Creado:** 2026-04-11 23:39

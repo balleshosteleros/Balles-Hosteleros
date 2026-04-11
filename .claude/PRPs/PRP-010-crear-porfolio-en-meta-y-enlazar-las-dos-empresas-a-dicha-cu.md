@@ -1,4 +1,4 @@
-# PRP-001: Proceso de Nuevos Platos para COCINA Y SALA
+# PRP-010: Crear porfolio en meta y enlazar las dos empresas a dicha cuenta, para que la publicidad crezca la cuenta del holding
 
 **Estado:** PENDIENTE
 **Creado:** 2026-04-11 23:39

@@ -1,7 +1,7 @@
-# PRP-008: El de soporte debe ser tipo Chat y deberá solo dar soporte en función del Rol que esté dado de alta ese usuario ya que no podrá decir nada demás por privacidad y deberá avisarle si pregunta algo que no corresponde.
+# PRP-006: Necesito de algún modo que las AGENDAS de los empleados con número corporativo de la empresa no se un caos y tener como un base de datos centralizada con los móviles y que podamos tener una AGENDA común ordena por tipos de contactos ( MANTENIMIENTO , PROOVEDORES , OTROS ) algo así para yo no tenerle que mandar un WhatsApp a mi gerente para que me dé un número y además ya que mi gerente muchas veces no sabe ni cuál darme o cómo lo guardo .
 
 **Estado:** PENDIENTE
-**Creado:** 2026-04-11 12:36
+**Creado:** 2026-04-11 23:39
 **Origen:** Auto-generado por watchdog.sh desde ROADMAP.md (lista "SAAS" de Recordatorios)
 
 ---
@@ -44,6 +44,6 @@ _Aún sin implementar._
 
 ---
 
-> 🤖 Este PRP fue auto-generado por `watchdog.sh`.
+> 🤖 Este PRP fue auto-generado por **watchdog.sh**.
 > Revísalo, completa los campos marcados con TODO, y cuando esté listo ejecuta
-> `/bucle-agentico` para que yo (Claude) lo implemente fase a fase.
+> **/bucle-agentico** para que yo (Claude) lo implemente fase a fase.

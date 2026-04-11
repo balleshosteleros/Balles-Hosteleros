@@ -50,15 +50,22 @@ tell application "Reminders"
     -- Saltar títulos vacíos o solo "."
     if itemName is not "" and itemName is not "." then
       set itemPrio to priority of r
+      -- Leer body con manejo explícito de "missing value"
+      set itemBody to ""
       try
-        set itemBody to (body of r) as string
+        set rawBody to body of r
+        if rawBody is not missing value then
+          set itemBody to rawBody as string
+        end if
       on error
         set itemBody to ""
       end try
       -- Limpiar saltos/tabs del body para mantener una línea por registro
-      set itemBody to my replaceAll(itemBody, return, "<br>")
-      set itemBody to my replaceAll(itemBody, linefeed, "<br>")
-      set itemBody to my replaceAll(itemBody, tab, "    ")
+      if itemBody is not "" then
+        set itemBody to my replaceAll(itemBody, return, "<br>")
+        set itemBody to my replaceAll(itemBody, linefeed, "<br>")
+        set itemBody to my replaceAll(itemBody, tab, "    ")
+      end if
       set output to output & (itemPrio as string) & tab & itemName & tab & itemBody & linefeed
     end if
   end repeat

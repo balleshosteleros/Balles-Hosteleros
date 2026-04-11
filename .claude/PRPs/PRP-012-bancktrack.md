@@ -1,7 +1,7 @@
-# PRP-009: El botón de AYUDA solo será para buscar preguntas frecuentes y sobre todo que tenga en el lateral un índice con todo lo que existe de información solo podrá salirle l infrmaicon en función a su ROL
+# PRP-012: BANCKTRACK
 
 **Estado:** PENDIENTE
-**Creado:** 2026-04-11 12:39
+**Creado:** 2026-04-11 23:39
 **Origen:** Auto-generado por watchdog.sh desde ROADMAP.md (lista "SAAS" de Recordatorios)
 
 ---
@@ -44,6 +44,6 @@ _Aún sin implementar._
 
 ---
 
-> 🤖 Este PRP fue auto-generado por `watchdog.sh`.
+> 🤖 Este PRP fue auto-generado por **watchdog.sh**.
 > Revísalo, completa los campos marcados con TODO, y cuando esté listo ejecuta
-> `/bucle-agentico` para que yo (Claude) lo implemente fase a fase.
+> **/bucle-agentico** para que yo (Claude) lo implemente fase a fase.

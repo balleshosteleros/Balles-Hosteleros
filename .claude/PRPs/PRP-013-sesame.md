@@ -1,4 +1,4 @@
-# PRP-001: Proceso de Nuevos Platos para COCINA Y SALA
+# PRP-013: SESAME
 
 **Estado:** PENDIENTE
 **Creado:** 2026-04-11 23:39

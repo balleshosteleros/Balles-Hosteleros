@@ -1,4 +1,4 @@
-# PRP-001: Proceso de Nuevos Platos para COCINA Y SALA
+# PRP-014: Valorar Grabar reuniones y meter notas para que de un resumen, con Gemini te lo hace y es de pago los emails y centralizas todos los emails con Workspace
 
 **Estado:** PENDIENTE
 **Creado:** 2026-04-11 23:39

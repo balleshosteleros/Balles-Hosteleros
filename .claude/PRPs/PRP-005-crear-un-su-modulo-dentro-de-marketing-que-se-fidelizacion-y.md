@@ -1,4 +1,4 @@
-# PRP-001: Proceso de Nuevos Platos para COCINA Y SALA
+# PRP-005: Crear un su módulo dentro de marketing que se FIDELIZACION Y OTRO DE CAPTACIÓN quiero que estén aquí las métricas de lo que te desarrollo que quiero crear.Descuentos para clientes  cuando lleguen a X dinero gastado o incluso ticket de menú cada x visitas, además les permita ver la carta y acceder a ofertas exclusivas, debe ser igual que la App de ( Pablo Espinoza )
 
 **Estado:** PENDIENTE
 **Creado:** 2026-04-11 23:39

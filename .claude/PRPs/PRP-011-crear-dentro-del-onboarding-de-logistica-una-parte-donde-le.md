@@ -1,4 +1,4 @@
-# PRP-001: Proceso de Nuevos Platos para COCINA Y SALA
+# PRP-011: Crear dentro del Onboarding de Logistica, una parte donde le indique la subida de un producto en concreto de precio permitiéndole poner el precio al que esta y al que debería estar y que te diga la subida en porcentaje.
 
 **Estado:** PENDIENTE
 **Creado:** 2026-04-11 23:39

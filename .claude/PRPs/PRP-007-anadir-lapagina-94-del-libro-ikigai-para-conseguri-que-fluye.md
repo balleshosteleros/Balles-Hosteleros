@@ -1,4 +1,4 @@
-# PRP-001: Proceso de Nuevos Platos para COCINA Y SALA
+# PRP-007: -Añadir lapagina 94 del libro Ikigai para conseguri que fluyen en su trabajo y sean productivos y estén agusto realizando su trabajo .Añadir página 102 para que entiendan la importancia de la concentración en lo que se hace .
 
 **Estado:** PENDIENTE
 **Creado:** 2026-04-11 23:39

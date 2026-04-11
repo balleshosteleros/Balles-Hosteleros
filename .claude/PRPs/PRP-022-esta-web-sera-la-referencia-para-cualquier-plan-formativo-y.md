@@ -1,7 +1,7 @@
-# PRP-003: Fotos Marketing
+# PRP-022: Está web será la referencia para cualquier plan formativo y de comunicación será Sesame .
 
 **Estado:** PENDIENTE
-**Creado:** 2026-04-11 12:36
+**Creado:** 2026-04-11 23:39
 **Origen:** Auto-generado por watchdog.sh desde ROADMAP.md (lista "SAAS" de Recordatorios)
 
 ---
@@ -44,6 +44,6 @@ _Aún sin implementar._
 
 ---
 
-> 🤖 Este PRP fue auto-generado por `watchdog.sh`.
+> 🤖 Este PRP fue auto-generado por **watchdog.sh**.
 > Revísalo, completa los campos marcados con TODO, y cuando esté listo ejecuta
-> `/bucle-agentico` para que yo (Claude) lo implemente fase a fase.
+> **/bucle-agentico** para que yo (Claude) lo implemente fase a fase.

@@ -1,4 +1,4 @@
-# PRP-001: Proceso de Nuevos Platos para COCINA Y SALA
+# PRP-015: Fotos Marketing
 
 **Estado:** PENDIENTE
 **Creado:** 2026-04-11 23:39

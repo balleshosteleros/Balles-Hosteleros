@@ -1,4 +1,4 @@
-# PRP-001: Proceso de Nuevos Platos para COCINA Y SALA
+# PRP-009: Realizar un tecla en menú superior que se llame Onboarding que esté como la parte de La escuela de Balles en color Azul y solamente explique que su formación será verse el resto de apartado de esta web interactiva para que entienda en funcionamiento de la empresa
 
 **Estado:** PENDIENTE
 **Creado:** 2026-04-11 23:39

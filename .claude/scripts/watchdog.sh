@@ -20,7 +20,11 @@
 #   launchctl unload .claude/scripts/com.ballesshosteleros.watchdog.plist
 #
 
-set -euo pipefail
+# Nota: NO usamos 'set -e' a propósito. Queremos que el watchdog sea
+# tolerante a fallos puntuales (una tarea mal-formada no debe abortar
+# el procesamiento de las demás). Sí mantenemos 'pipefail' para detectar
+# errores en pipes y 'nounset' para pillar variables no definidas.
+set -uo pipefail
 
 # -----------------------------
 # Configuración
@@ -52,11 +56,19 @@ log() {
 }
 
 slugify() {
+  # 1. Convierte a ASCII con iconv. En macOS los acentos salen como marca + letra
+  #    (ej. "ó" → "'o"). Por eso luego hay que eliminar esas marcas.
+  # 2. Elimina los caracteres marcadores de diacríticos: '  "  ~  ^  `
+  # 3. Pasa a minúsculas
+  # 4. Reemplaza cualquier char no-alfanumérico por guión
+  # 5. Colapsa guiones repetidos, trim, y limita a 60 caracteres
   printf '%s' "$1" \
+    | iconv -f UTF-8 -t ASCII//TRANSLIT//IGNORE 2>/dev/null \
+    | tr -d "\"'~^\`" \
     | tr '[:upper:]' '[:lower:]' \
-    | LC_ALL=C sed 's/[áàäâã]/a/g; s/[éèëê]/e/g; s/[íìïî]/i/g; s/[óòöô]/o/g; s/[úùüû]/u/g; s/ñ/n/g' \
     | sed 's/[^a-z0-9]/-/g; s/-\{2,\}/-/g; s/^-//; s/-$//' \
-    | cut -c1-60
+    | cut -c1-60 \
+    | sed 's/-$//'
 }
 
 next_prp_number() {
@@ -137,9 +149,9 @@ _Aún sin implementar._
 
 ---
 
-> 🤖 Este PRP fue auto-generado por \`watchdog.sh\`.
+> 🤖 Este PRP fue auto-generado por **watchdog.sh**.
 > Revísalo, completa los campos marcados con TODO, y cuando esté listo ejecuta
-> \`/bucle-agentico\` para que yo (Claude) lo implemente fase a fase.
+> **/bucle-agentico** para que yo (Claude) lo implemente fase a fase.
 EOF
 
   log "📝 Creado PRP ${file}"

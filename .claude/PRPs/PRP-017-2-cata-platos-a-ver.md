@@ -1,4 +1,4 @@
-# PRP-001: Proceso de Nuevos Platos para COCINA Y SALA
+# PRP-017: 2 Cata + Platos a ver
 
 **Estado:** PENDIENTE
 **Creado:** 2026-04-11 23:39
