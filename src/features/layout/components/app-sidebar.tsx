@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  LayoutDashboard, Briefcase, Calculator, FileText, Scale, User, UsersRound, Truck, Camera,
+  Briefcase, Calculator, FileText, Scale, User, UsersRound, Truck, Camera,
   Wrench, ChevronDown, Settings, HelpCircle, MessageSquareWarning, CalendarDays, Utensils,
   ChefHat, UserCheck, ClipboardList, Gift, Banknote, Crown, Network, PercentDiamond,
   TrendingUp, FolderOpen, Clock, Calendar, Timer, UserRoundSearch, HandCoins, Megaphone,
@@ -72,6 +72,12 @@ const gerenciaSubs = [
   { title: "RATIOS", url: "/gerencia/ratios", icon: TrendingUp },
   { title: "COMUNICADOS", url: "/gerencia/comunicados", icon: Megaphone },
   { title: "ENCUESTAS", url: "/gerencia/encuestas", icon: ClipboardList },
+];
+const calidadSubs = [
+  { title: "AUDITORÍAS", url: "/calidad/auditorias", icon: ClipboardList },
+  { title: "EMPLEADOS", url: "/calidad/empleados", icon: UsersRound },
+  { title: "CLIENTES", url: "/calidad/clientes", icon: ContactRound },
+  { title: "INSPECCIONES", url: "/calidad/inspecciones", icon: FileSearch },
 ];
 const rrhhSubs = [
   { title: "EMPLEADOS", url: "/rrhh/empleados", icon: UsersRound },
@@ -206,6 +212,7 @@ export function AppSidebar() {
               <CollapsibleSection icon={UtensilsCrossed} label="SALA" prefix="/sala" items={salaSubs} collapsed={collapsed} />
               <CollapsibleSection icon={ChefHat} label="COCINA" prefix="/cocina" items={cocinaSubs} collapsed={collapsed} />
               <CollapsibleSection icon={Briefcase} label="GERENCIA" prefix="/gerencia" items={gerenciaSubs} collapsed={collapsed} />
+              <CollapsibleSection icon={CheckCircle2} label="CALIDAD" prefix="/calidad" items={calidadSubs} collapsed={collapsed} linkTo="/calidad" />
               <CollapsibleSection icon={User} label="RECURSOS HUMANOS" prefix="/rrhh" items={rrhhSubs} collapsed={collapsed} linkTo="/rrhh" />
               <CollapsibleSection icon={Camera} label="MARKETING" prefix="/marketing" items={marketingSubs} collapsed={collapsed} linkTo="/marketing" />
               <CollapsibleSection icon={Truck} label="LOGÍSTICA" prefix="/logistica" items={logisticaSubs} collapsed={collapsed} />
