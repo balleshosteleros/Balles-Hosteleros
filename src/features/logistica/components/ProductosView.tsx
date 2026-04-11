@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
   TipoProducto, getProductosPorEmpresa, getCategorias, getFamilias,
   ESTADOS_PRODUCTO, ESTADO_COLOR, EstadoProducto, type Producto,
   CATEGORIAS_COMPRA, FAMILIAS_COMPRA, CATEGORIAS_VENTA, FAMILIAS_VENTA,
 } from "@/features/logistica/data/productos";
+import { listProductos } from "@/features/logistica/actions/producto-actions";
 import {
   getProductosElaboracion, CATEGORIAS_ELABORACION,
   type ProductoElaboracion,
@@ -25,6 +26,7 @@ import {
   Package, FlaskConical, CalendarDays, AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ImportExportButtons } from "@/features/logistica/components/productos/ImportExportButtons";
 
 function EstadoBadge({ estado }: { estado: EstadoProducto }) {
   return <Badge variant="outline" className={`text-[10px] ${ESTADO_COLOR[estado]}`}>{estado}</Badge>;
@@ -33,7 +35,27 @@ function EstadoBadge({ estado }: { estado: EstadoProducto }) {
 /* ─── TABLA ─── */
 function TablaProductos({ tipo, onAddClick }: { tipo: TipoProducto; onAddClick: () => void }) {
   const { empresaActual } = useEmpresa();
-  const productos = useMemo(() => getProductosPorEmpresa(empresaActual.id, tipo), [empresaActual.id, tipo]);
+  const [productos, setProductos] = useState<Producto[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    listProductos(tipo)
+      .then((data) => {
+        if (!cancelled) setProductos(data);
+      })
+      .catch((err) => {
+        console.error("Error cargando productos:", err);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tipo, empresaActual.id]);
+
   const [busqueda, setBusqueda] = useState("");
   const [filtroCategoria, setFiltroCategoria] = useState("todas");
   const [filtroEstado, setFiltroEstado] = useState("todos");
@@ -72,7 +94,10 @@ function TablaProductos({ tipo, onAddClick }: { tipo: TipoProducto; onAddClick: 
             {ESTADOS_PRODUCTO.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Button size="sm" className="gap-1.5 ml-auto" onClick={onAddClick}><Plus className="h-3.5 w-3.5" /> Añadir producto</Button>
+        <div className="ml-auto flex items-center gap-2">
+          <ImportExportButtons tipo={tipo} onImportSuccess={() => window.location.reload()} />
+          <Button size="sm" className="gap-1.5" onClick={onAddClick}><Plus className="h-3.5 w-3.5" /> Añadir producto</Button>
+        </div>
       </div>
 
       <div className="bg-card rounded-lg border overflow-x-auto">
@@ -110,8 +135,14 @@ function TablaProductos({ tipo, onAddClick }: { tipo: TipoProducto; onAddClick: 
                 <td className="px-3 py-2.5 text-xs text-muted-foreground">{p.ultimaActualizacion}</td>
               </tr>
             ))}
-            {filtrados.length === 0 && (
-              <tr><td colSpan={8} className="text-center py-10 text-muted-foreground">No se encontraron productos.</td></tr>
+            {loading && productos.length === 0 && (
+              <tr><td colSpan={8} className="text-center py-10 text-muted-foreground">Cargando productos...</td></tr>
+            )}
+            {!loading && productos.length === 0 && (
+              <tr><td colSpan={8} className="text-center py-10 text-muted-foreground">No hay productos todavía. Usa el botón <strong>Importar</strong> para cargar tu catálogo desde CSV o Excel.</td></tr>
+            )}
+            {!loading && productos.length > 0 && filtrados.length === 0 && (
+              <tr><td colSpan={8} className="text-center py-10 text-muted-foreground">Ningún producto coincide con los filtros.</td></tr>
             )}
           </tbody>
         </table>
