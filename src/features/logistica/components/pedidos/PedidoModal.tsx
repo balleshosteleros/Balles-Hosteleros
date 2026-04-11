@@ -25,12 +25,12 @@ const emptyLinea = (): LineaPedido => ({
 
 export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNombre }: Props) {
   const isEdit = !!item;
-  const almacenes = ALMACENES[empresaId] || ALMACENES.habana;
+  const almacenes = ALMACENES[empresaId] || ALMACENES.habana || [];
 
   const [form, setForm] = useState(() => item ? { ...item } : {
     id: `ped-${Date.now()}`, numero: `PED-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900) + 100)}`,
-    empresaId, empresa: empresaNombre, proveedor: PROVEEDORES[0], docProveedor: "",
-    almacen: almacenes[0], fecha: new Date().toISOString().slice(0, 10),
+    empresaId, empresa: empresaNombre, proveedor: PROVEEDORES[0] ?? "", docProveedor: "",
+    almacen: almacenes[0] ?? "", fecha: new Date().toISOString().slice(0, 10),
     fechaEntrega: "", estado: "Borrador" as const,
     lineas: [emptyLinea()], dtoPct: 0, dtoEur: 0, notas: "",
     albaranId: null, creador: "Usuario actual", ultimaActualizacion: new Date().toISOString().slice(0, 10),
