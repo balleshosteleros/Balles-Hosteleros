@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Search, Plus, Star, UserCheck, UserX } from "lucide-react";
-import { SAMPLE_CLIENTES, Cliente, ClasificacionCliente } from "@/features/sala/data/clientes";
+import { Cliente, ClasificacionCliente } from "@/features/sala/data/clientes";
+import { listClientes, createCliente, updateCliente, deleteCliente } from "@/features/sala/actions/clientes-actions";
+import { toast } from "sonner";
 
 const clasificacionBadge: Record<ClasificacionCliente, string> = {
   "VIP": "bg-amber-100 text-amber-800 border-amber-300",
@@ -20,12 +22,48 @@ const clasificacionBadge: Record<ClasificacionCliente, string> = {
   "INACTIVO": "bg-muted text-muted-foreground",
 };
 
+function mapDbToCliente(row: Record<string, unknown>): Cliente {
+  return {
+    id: row.id as string,
+    nombre: (row.nombre as string) ?? "",
+    telefono: (row.telefono as string) ?? "",
+    email: (row.email as string) ?? "",
+    clasificacion: (row.clasificacion as ClasificacionCliente) ?? "NUEVO",
+    visitas: (row.visitas as number) ?? 0,
+    ultimaVisita: (row.ultima_visita as string) ?? "",
+    observaciones: (row.observaciones as string) ?? "",
+    preferencias: (row.preferencias as string) ?? "",
+    notasInternas: (row.notas_internas as string) ?? "",
+  };
+}
+
 export function ClientesView() {
   const { empresaActual } = useEmpresa();
-  const [clientes] = useState<Cliente[]>(SAMPLE_CLIENTES);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   const [filtro, setFiltro] = useState("TODOS");
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
+
+  const loadClientes = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listClientes();
+      if (res.ok) {
+        setClientes(res.data.map(mapDbToCliente));
+      } else {
+        toast.error("Error al cargar clientes");
+      }
+    } catch {
+      toast.error("Error de conexion al cargar clientes");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadClientes();
+  }, [loadClientes]);
 
   const filtrados = clientes.filter(c => {
     const matchBusqueda = c.nombre.toLowerCase().includes(busqueda.toLowerCase()) || c.telefono.includes(busqueda) || c.email.toLowerCase().includes(busqueda.toLowerCase());
@@ -40,7 +78,11 @@ export function ClientesView() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-end">
-        <Button><Plus className="h-4 w-4 mr-2" />Nuevo cliente</Button>
+        <Button onClick={async () => {
+          const res = await createCliente({ nombre: "Nuevo cliente" });
+          if (res.ok) { toast.success("Cliente creado"); loadClientes(); }
+          else toast.error(res.error ?? "Error al crear cliente");
+        }}><Plus className="h-4 w-4 mr-2" />Nuevo cliente</Button>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

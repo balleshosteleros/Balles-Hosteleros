@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   type Incidencia, type Actualizacion, LOCALES, ESTADOS, GRAVEDADES, AREAS, REPARADORES,
   type Estado, type Gravedad,
 } from "@/features/empresa/data/mantenimiento";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { listMantenimiento, createIncidenciaMantenimiento, updateIncidencia, addActualizacion as serverAddActualizacion } from "@/features/gerencia/actions/mantenimiento-actions";
+import { toast } from "sonner";
 import { StatusBadge, GravedadBadge } from "@/features/mantenimiento/components/Badges";
 import { IncidenciaModal } from "@/features/mantenimiento/components/IncidenciaModal";
 import { DetalleIncidencia } from "@/features/mantenimiento/components/DetalleIncidencia";
@@ -35,8 +37,25 @@ function filterByPeriodo(fecha: string, periodo: FiltroPeriodo): boolean {
   return true;
 }
 
+function mapDbToIncidencia(row: Record<string, unknown>): Incidencia {
+  return {
+    id: row.id as string,
+    desperfecto: (row.desperfecto as string) ?? "",
+    local: (row.local_nombre as string) ?? (row.local as string) ?? "",
+    estado: (row.estado as Estado) ?? "PENDIENTE",
+    gravedad: (row.gravedad as Gravedad) ?? "LEVE",
+    apuntaDesperfecto: (row.apunta_desperfecto as string) ?? "",
+    reparador: (row.reparador as string) ?? "",
+    fechaPublicado: (row.fecha_publicado as string) ?? "",
+    comentarios: (row.comentarios as string) ?? "",
+    actualizaciones: Array.isArray(row.actualizaciones) ? row.actualizaciones : [],
+  };
+}
+
 export function MantenimientoView() {
-  const { datos: data, setDatos: setData } = useEmpresa();
+  const { datos: contextData, setDatos: setContextData } = useEmpresa();
+  const [data, setData] = useState<Incidencia[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterLocal, setFilterLocal] = useState(ALL);
   const [filterEstado, setFilterEstado] = useState(ALL);
@@ -46,6 +65,28 @@ export function MantenimientoView() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editItem, setEditItem] = useState<Incidencia | null>(null);
   const [detalleItem, setDetalleItem] = useState<Incidencia | null>(null);
+
+  const loadIncidencias = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listMantenimiento();
+      if (res.ok) {
+        const mapped = res.data.map(mapDbToIncidencia);
+        setData(mapped);
+        setContextData(() => mapped);
+      } else {
+        toast.error("Error al cargar incidencias");
+      }
+    } catch {
+      toast.error("Error de conexion al cargar incidencias");
+    } finally {
+      setLoading(false);
+    }
+  }, [setContextData]);
+
+  useEffect(() => {
+    loadIncidencias();
+  }, [loadIncidencias]);
 
   const filtered = useMemo(() => data.filter((i) => {
     if (filterLocal !== ALL && i.local !== filterLocal) return false;
@@ -71,19 +112,63 @@ export function MantenimientoView() {
     "MUY GRAVE": data.filter((i) => i.gravedad === "MUY GRAVE").length,
   }), [data]);
 
-  const updateField = (id: string, field: keyof Incidencia, value: string) =>
+  const updateField = async (id: string, field: keyof Incidencia, value: string) => {
     setData((prev) => prev.map((i) => i.id === id ? { ...i, [field]: value } : i));
+    // Map component field names to server action params
+    const fieldMap: Record<string, string> = {
+      local: "localNombre", estado: "estado", gravedad: "gravedad",
+      apuntaDesperfecto: "apuntaDesperfecto", reparador: "reparador",
+      fechaPublicado: "fechaPublicado", comentarios: "comentarios",
+      desperfecto: "desperfecto",
+    };
+    const serverField = fieldMap[field];
+    if (serverField) {
+      const res = await updateIncidencia(id, { [serverField]: value });
+      if (!res.ok) { toast.error("Error al actualizar campo"); loadIncidencias(); }
+    }
+  };
 
-  const handleSave = (item: Incidencia) =>
-    setData((prev) => prev.find((i) => i.id === item.id) ? prev.map((i) => i.id === item.id ? item : i) : [item, ...prev]);
+  const handleSave = async (item: Incidencia) => {
+    const exists = data.find((i) => i.id === item.id);
+    setData((prev) => exists ? prev.map((i) => i.id === item.id ? item : i) : [item, ...prev]);
 
-  const addActualizacion = (incidenciaId: string, act: Actualizacion) =>
+    if (exists) {
+      const res = await updateIncidencia(item.id, {
+        desperfecto: item.desperfecto,
+        localNombre: item.local,
+        estado: item.estado,
+        gravedad: item.gravedad,
+        apuntaDesperfecto: item.apuntaDesperfecto,
+        reparador: item.reparador,
+        comentarios: item.comentarios,
+      });
+      if (res.ok) toast.success("Incidencia actualizada");
+      else { toast.error("Error al actualizar incidencia"); loadIncidencias(); }
+    } else {
+      const res = await createIncidenciaMantenimiento({
+        desperfecto: item.desperfecto,
+        localNombre: item.local,
+        gravedad: item.gravedad,
+        apuntaDesperfecto: item.apuntaDesperfecto,
+        reparador: item.reparador,
+        comentarios: item.comentarios,
+      });
+      if (res.ok) { toast.success("Incidencia creada"); loadIncidencias(); }
+      else { toast.error(res.error ?? "Error al crear incidencia"); loadIncidencias(); }
+    }
+  };
+
+  const addActualizacionHandler = async (incidenciaId: string, act: Actualizacion) => {
     setData((prev) => prev.map((i) => {
       if (i.id !== incidenciaId) return i;
       const updated = { ...i, actualizaciones: [...i.actualizaciones, act] };
       setDetalleItem(updated);
       return updated;
     }));
+    const res = await serverAddActualizacion(incidenciaId, act.texto, act.apuntadoPor);
+    if (res.ok) toast.success("Actualizacion agregada");
+    else { toast.error("Error al agregar actualizacion"); loadIncidencias(); }
+  };
 
   const statCards: { label: string; key: Estado; color: string }[] = [
     { label: "PENDIENTE", key: "PENDIENTE", color: "border-status-pending bg-status-pending/10 text-status-pending" },
@@ -212,7 +297,7 @@ export function MantenimientoView() {
 
       <IncidenciaModal open={modalOpen} onClose={() => setModalOpen(false)} onSave={handleSave} item={editItem} />
       {detalleItem && (
-        <DetalleIncidencia open={!!detalleItem} onClose={() => setDetalleItem(null)} item={detalleItem} onAddActualizacion={addActualizacion} />
+        <DetalleIncidencia open={!!detalleItem} onClose={() => setDetalleItem(null)} item={detalleItem} onAddActualizacion={addActualizacionHandler} />
       )}
     </div>
   );

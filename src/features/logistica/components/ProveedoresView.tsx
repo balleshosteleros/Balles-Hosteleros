@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
-  getProveedoresPorEmpresa, ESTADOS_PROVEEDOR, CATEGORIAS_PROVEEDOR, DIAS_REPARTO,
+  ESTADOS_PROVEEDOR, CATEGORIAS_PROVEEDOR, DIAS_REPARTO,
   type Proveedor, type EstadoProveedor,
 } from "@/features/logistica/data/proveedores";
+import { listProveedores, createProveedor, updateProveedor, deleteProveedor } from "@/features/logistica/actions/proveedores-actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -33,12 +34,46 @@ function EstadoBadge({ value }: { value: EstadoProveedor }) {
   return <Badge className={`${cls[value] || ""} border-0 text-[11px]`}>{value}</Badge>;
 }
 
+function mapDbToProveedor(row: Record<string, unknown>): Proveedor {
+  return {
+    id: row.id as string,
+    empresaId: (row.empresa_id as string) ?? "",
+    nombreComercial: (row.nombre_comercial as string) ?? (row.nombre as string) ?? "",
+    razonSocial: (row.razon_social as string) ?? "",
+    cifNif: (row.cif as string) ?? "",
+    categoria: (row.categoria as string) ?? "",
+    estado: (row.estado as EstadoProveedor) ?? "Activo",
+    observaciones: (row.observaciones as string) ?? (row.notas as string) ?? "",
+    personaContacto: (row.persona_contacto as string) ?? "",
+    telefonoPrincipal: (row.telefono_principal as string) ?? "",
+    telefonoSecundario: (row.telefono_secundario as string) ?? "",
+    emailPrincipal: (row.email_principal as string) ?? "",
+    emailPedidos: (row.email_pedidos as string) ?? "",
+    emailIncidencias: (row.email_incidencias as string) ?? "",
+    web: (row.web as string) ?? "",
+    direccion: (row.direccion as string) ?? "",
+    ciudad: (row.ciudad as string) ?? "",
+    provincia: (row.provincia as string) ?? "",
+    pais: (row.pais as string) ?? "Espana",
+    codigoPostal: (row.codigo_postal as string) ?? "",
+    diasReparto: Array.isArray(row.dias_reparto) ? row.dias_reparto as string[] : [],
+    condicionesPago: (row.condiciones as string) ?? (row.forma_pago as string) ?? "",
+    plazo: (row.plazo as string) ?? "",
+    observacionesLogisticas: (row.observaciones_logisticas as string) ?? "",
+    comentariosInternos: (row.comentarios_internos as string) ?? "",
+    creador: (row.creador as string) ?? "",
+    createdAt: (row.created_at as string) ?? "",
+    ultimaActualizacion: (row.updated_at as string) ?? "",
+  };
+}
+
 export function ProveedoresView() {
   const pathname = usePathname();
   useEffect(() => { sessionStorage.setItem("logistica_last", pathname); }, [pathname]);
 
   const { empresaActual } = useEmpresa();
-  const [proveedores, setProveedores] = useState<Proveedor[]>(() => getProveedoresPorEmpresa(empresaActual.id));
+  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterEstado, setFilterEstado] = useState(ALL);
   const [filterCategoria, setFilterCategoria] = useState(ALL);
@@ -46,7 +81,25 @@ export function ProveedoresView() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editItem, setEditItem] = useState<Proveedor | null>(null);
 
-  useMemo(() => { setProveedores(getProveedoresPorEmpresa(empresaActual.id)); }, [empresaActual.id]);
+  const loadProveedores = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listProveedores();
+      if (res.ok) {
+        setProveedores(res.data.map(mapDbToProveedor));
+      } else {
+        toast.error("Error al cargar proveedores");
+      }
+    } catch {
+      toast.error("Error de conexion al cargar proveedores");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadProveedores();
+  }, [loadProveedores]);
 
   const filtered = useMemo(() => {
     return proveedores.filter((p) => {
@@ -62,12 +115,52 @@ export function ProveedoresView() {
 
   const stats = { total: proveedores.length, activos: proveedores.filter((p) => p.estado === "Activo").length, inactivos: proveedores.filter((p) => p.estado === "Inactivo").length };
 
-  const handleSave = (item: Proveedor) => {
+  const handleSave = async (item: Proveedor) => {
+    const exists = proveedores.find((p) => p.id === item.id);
+    // Optimistic update
     setProveedores((prev) => {
-      const exists = prev.find((p) => p.id === item.id);
       if (exists) return prev.map((p) => (p.id === item.id ? item : p));
       return [item, ...prev];
     });
+
+    if (exists) {
+      const res = await updateProveedor(item.id, {
+        nombre: item.nombreComercial,
+        nombreComercial: item.nombreComercial,
+        cif: item.cifNif,
+        direccion: item.direccion,
+        codigoPostal: item.codigoPostal,
+        ciudad: item.ciudad,
+        telefonoPrincipal: item.telefonoPrincipal,
+        telefonoSecundario: item.telefonoSecundario,
+        emailPrincipal: item.emailPrincipal,
+        emailPedidos: item.emailPedidos,
+        emailIncidencias: item.emailIncidencias,
+        web: item.web,
+        estado: item.estado,
+        notas: item.observaciones,
+      });
+      if (!res.ok) { toast.error("Error al actualizar proveedor"); loadProveedores(); }
+    } else {
+      const res = await createProveedor({
+        nombre: item.nombreComercial,
+        nombreComercial: item.nombreComercial,
+        cif: item.cifNif,
+        direccion: item.direccion,
+        codigoPostal: item.codigoPostal,
+        ciudad: item.ciudad,
+        telefonoPrincipal: item.telefonoPrincipal,
+        telefonoSecundario: item.telefonoSecundario,
+        emailPrincipal: item.emailPrincipal,
+        emailPedidos: item.emailPedidos,
+        emailIncidencias: item.emailIncidencias,
+        web: item.web,
+        estado: item.estado,
+        notas: item.observaciones,
+      });
+      if (res.ok) { loadProveedores(); }
+      else { toast.error(res.error ?? "Error al crear proveedor"); loadProveedores(); }
+    }
   };
 
   // ── Detail view ──

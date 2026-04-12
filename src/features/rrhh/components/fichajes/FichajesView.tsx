@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { getFichajesPorEmpresa, getIncidenciasPorEmpresa, getConfigFichajes, ESTADO_FICHAJE_LABEL, ESTADO_FICHAJE_COLOR, TIPOS_INCIDENCIA_LABEL } from "@/features/rrhh/data/fichajes";
+import { ESTADO_FICHAJE_LABEL, ESTADO_FICHAJE_COLOR, TIPOS_INCIDENCIA_LABEL } from "@/features/rrhh/data/fichajes";
 import type { EstadoFichaje, Fichaje, ConfigFichajes } from "@/features/rrhh/data/fichajes";
+import { listFichajes, ficharEntrada, ficharSalida, updateFichaje } from "@/features/rrhh/actions/fichajes-actions";
+import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,15 +18,71 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Clock, AlertTriangle, CheckCircle2, Search, Filter, Plus, Settings2, ClipboardList, History } from "lucide-react";
 
+function mapDbToFichaje(row: Record<string, unknown>): Fichaje {
+  return {
+    id: row.id as string,
+    empleadoId: (row.empleado_id as string) ?? "",
+    empleadoNombre: (row.empleado_nombre as string) ?? "",
+    fecha: (row.fecha as string) ?? "",
+    horaEntrada: (row.hora_entrada as string | null) ?? null,
+    horaSalida: (row.hora_salida as string | null) ?? null,
+    pausaInicio: (row.pausa_inicio as string | null) ?? null,
+    pausaFin: (row.pausa_fin as string | null) ?? null,
+    horasTotales: (row.horas_totales as number) ?? 0,
+    estado: (row.estado as EstadoFichaje) ?? "pendiente",
+    incidencia: (row.incidencia as string | null) ?? null,
+    validadoPor: (row.validado_por as string | null) ?? null,
+    observaciones: (row.observaciones as string | null) ?? null,
+    departamento: (row.departamento as string) ?? "",
+    centro: (row.centro as string) ?? "",
+  };
+}
+
 export function FichajesView() {
   const { empresaActual } = useEmpresa();
-  const fichajes = getFichajesPorEmpresa(empresaActual.id);
-  const incidencias = getIncidenciasPorEmpresa(empresaActual.id);
-  const [config, setConfig] = useState<ConfigFichajes>(getConfigFichajes());
+  const [fichajes, setFichajes] = useState<Fichaje[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [config, setConfig] = useState<ConfigFichajes>({
+    permitirManual: true,
+    requiereValidacion: true,
+    toleranciaMinutos: 10,
+    pausasActivas: true,
+  });
   const [busqueda, setBusqueda] = useState("");
   const [filtroEstado, setFiltroEstado] = useState<string>("todos");
   const [filtroDpto, setFiltroDpto] = useState<string>("todos");
   const [fichajeModal, setFichajeModal] = useState<Fichaje | null>(null);
+
+  const loadFichajes = useCallback(async () => {
+    setLoading(true);
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      const res = await listFichajes(today);
+      if (res.ok) {
+        setFichajes(res.data.map(mapDbToFichaje));
+      } else {
+        toast.error("Error al cargar fichajes");
+      }
+    } catch {
+      toast.error("Error de conexion al cargar fichajes");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadFichajes();
+  }, [loadFichajes]);
+
+  const incidencias = useMemo(() => fichajes.filter(f => f.estado === "incidencia").map(f => ({
+    id: f.id,
+    fichajeId: f.id,
+    empleadoNombre: f.empleadoNombre,
+    fecha: f.fecha,
+    tipo: "fichaje_incompleto" as const,
+    descripcion: f.incidencia ?? "Incidencia detectada",
+    resuelta: false,
+  })), [fichajes]);
 
   const dptos = useMemo(() => [...new Set(fichajes.map(f => f.departamento))].sort(), [fichajes]);
 
@@ -86,7 +144,11 @@ export function FichajesView() {
                 {dptos.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Button size="sm" className="gap-1"><Plus className="h-4 w-4" />Registrar fichaje</Button>
+            <Button size="sm" className="gap-1" onClick={async () => {
+              const res = await ficharEntrada();
+              if (res.ok) { toast.success("Entrada registrada"); loadFichajes(); }
+              else toast.error(res.error ?? "Error al fichar entrada");
+            }}><Plus className="h-4 w-4" />Fichar entrada</Button>
           </div>
           <Card>
             <Table>
@@ -232,7 +294,16 @@ export function FichajesView() {
               {fichajeModal.validadoPor && <div><span className="text-muted-foreground">Validado por:</span><p className="font-medium">{fichajeModal.validadoPor}</p></div>}
             </div>
           )}
-          <DialogFooter><Button variant="outline" onClick={() => setFichajeModal(null)}>Cerrar</Button></DialogFooter>
+          <DialogFooter>
+            {fichajeModal && !fichajeModal.horaSalida && fichajeModal.horaEntrada && (
+              <Button onClick={async () => {
+                const res = await ficharSalida(fichajeModal.id);
+                if (res.ok) { toast.success("Salida registrada"); setFichajeModal(null); loadFichajes(); }
+                else toast.error(res.error ?? "Error al fichar salida");
+              }}>Fichar salida</Button>
+            )}
+            <Button variant="outline" onClick={() => setFichajeModal(null)}>Cerrar</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

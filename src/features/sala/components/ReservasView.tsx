@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -12,10 +12,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Plus, Search, Users, ChevronLeft, ChevronRight, Eye, ListPlus } from "lucide-react";
 import {
-  SAMPLE_MESAS, SAMPLE_RESERVAS, SAMPLE_LISTA_ESPERA,
+  SAMPLE_MESAS, SAMPLE_LISTA_ESPERA,
   Mesa, Reserva, ListaEspera, EstadoReserva, ZonaSala, TurnoReserva,
   ZONAS_LABELS, ESTADO_RESERVA_LABELS, ESTADO_MESA_LABELS,
 } from "@/features/sala/data/reservas";
+import { listReservas, createReserva, updateReserva, deleteReserva } from "@/features/sala/actions/reservas-actions";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 const mesaBg: Record<string, string> = {
@@ -211,12 +213,31 @@ function renderZoneLabels(filtro: ZonaSala | "TODAS") {
     ));
 }
 
+function mapDbToReserva(row: Record<string, unknown>): Reserva {
+  return {
+    id: row.id as string,
+    cliente: (row.cliente_nombre as string) ?? "",
+    apellidos: (row.apellidos as string) ?? "",
+    telefono: (row.cliente_telefono as string) ?? "",
+    email: (row.email as string) ?? "",
+    fecha: (row.fecha as string) ?? "",
+    hora: (row.hora as string) ?? "",
+    turno: (row.turno as TurnoReserva) ?? "COMIDA",
+    comensales: (row.personas as number) ?? (row.comensales as number) ?? 0,
+    zona: (row.zona as ZonaSala | "") ?? "",
+    mesaId: (row.mesa as string) ?? (row.mesa_id as string) ?? "",
+    estado: (row.estado as EstadoReserva) ?? "PENDIENTE",
+    observaciones: (row.notas as string) ?? (row.observaciones as string) ?? "",
+  };
+}
+
 export function ReservasView() {
   const { empresaActual } = useEmpresa();
   const [mesas, setMesas] = useState<Mesa[]>(SAMPLE_MESAS);
-  const [reservas, setReservas] = useState<Reserva[]>(SAMPLE_RESERVAS);
+  const [reservas, setReservas] = useState<Reserva[]>([]);
+  const [loading, setLoading] = useState(true);
   const [listaEspera, setListaEspera] = useState<ListaEspera[]>(SAMPLE_LISTA_ESPERA);
-  const [fecha, setFecha] = useState("2026-04-07");
+  const [fecha, setFecha] = useState(new Date().toISOString().split("T")[0]);
   const [turno, setTurno] = useState<TurnoReserva | "DIA_COMPLETO">("CENA");
   const [busqueda, setBusqueda] = useState("");
   const [filtroZona, setFiltroZona] = useState<ZonaSala | "TODAS">("TODAS");
@@ -226,6 +247,26 @@ export function ReservasView() {
   const [showListaEspera, setShowListaEspera] = useState(false);
   const [selectedReserva, setSelectedReserva] = useState<Reserva | null>(null);
   const [showVerTodo, setShowVerTodo] = useState(false);
+
+  const loadReservas = useCallback(async (f?: string) => {
+    setLoading(true);
+    try {
+      const res = await listReservas(f);
+      if (res.ok) {
+        setReservas(res.data.map(mapDbToReserva));
+      } else {
+        toast.error("Error al cargar reservas");
+      }
+    } catch {
+      toast.error("Error de conexion al cargar reservas");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadReservas(fecha);
+  }, [fecha, loadReservas]);
 
   const reservasDia = useMemo(() => reservas.filter(r => r.fecha === fecha), [reservas, fecha]);
   const reservasTurno = useMemo(() => turno === "DIA_COMPLETO" ? reservasDia : reservasDia.filter(r => r.turno === turno), [reservasDia, turno]);
@@ -254,9 +295,16 @@ export function ReservasView() {
   const getReservasMesa = (mesaId: string) =>
     reservasTurno.filter(r => r.mesaId === mesaId && !["CANCELADA", "NO SHOW", "COMPLETADA"].includes(r.estado));
 
-  const cambiarEstadoReserva = (id: string, estado: EstadoReserva) => {
+  const cambiarEstadoReserva = async (id: string, estado: EstadoReserva) => {
     setReservas(prev => prev.map(r => r.id === id ? { ...r, estado } : r));
     setSelectedReserva(null);
+    const res = await updateReserva(id, { estado });
+    if (res.ok) {
+      toast.success(`Reserva actualizada a ${ESTADO_RESERVA_LABELS[estado]}`);
+    } else {
+      toast.error("Error al actualizar reserva");
+      loadReservas(fecha);
+    }
   };
 
   return (
@@ -304,7 +352,22 @@ export function ReservasView() {
                 <DialogContent className="max-w-lg">
                   <DialogHeader><DialogTitle>Nueva reserva</DialogTitle></DialogHeader>
                   <NuevaReservaForm fecha={fecha} turno={turno === "DIA_COMPLETO" ? "COMIDA" : turno} onClose={() => setShowNueva(false)}
-                    onSave={r => { setReservas(prev => [...prev, r]); setShowNueva(false); }} />
+                    onSave={async r => {
+                      setReservas(prev => [...prev, r]);
+                      setShowNueva(false);
+                      const res = await createReserva({
+                        clienteNombre: r.cliente || "WALK IN",
+                        clienteTelefono: r.telefono,
+                        fecha: r.fecha,
+                        hora: r.hora,
+                        personas: r.comensales,
+                        zona: r.zona || undefined,
+                        turno: r.turno,
+                        notas: r.observaciones || undefined,
+                      });
+                      if (res.ok) { toast.success("Reserva creada"); loadReservas(fecha); }
+                      else { toast.error(res.error ?? "Error al crear reserva"); }
+                    }} />
                 </DialogContent>
               </Dialog>
               <Dialog open={showListaEspera} onOpenChange={setShowListaEspera}>

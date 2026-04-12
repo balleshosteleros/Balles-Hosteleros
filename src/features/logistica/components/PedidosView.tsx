@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
-  getPedidosPorEmpresa, getAlbaranesPorEmpresa, calcularTotalesLineas,
+  calcularTotalesLineas,
   ESTADOS_PEDIDO, PROVEEDORES, PROVEEDOR_EMAILS,
   type Pedido, type Albaran, type EstadoPedido, type EstadoAlbaran,
 } from "@/features/logistica/data/pedidos";
+import { listPedidos, createPedido, updatePedidoEstado as serverUpdatePedidoEstado, deletePedido as serverDeletePedido } from "@/features/logistica/actions/pedidos-actions";
 import { EstadoPedidoBadge } from "@/features/logistica/components/pedidos/BadgesPedido";
 import { DetallePedido } from "@/features/logistica/components/pedidos/DetallePedido";
 import { DetalleAlbaran } from "@/features/logistica/components/pedidos/DetalleAlbaran";
@@ -32,13 +33,38 @@ import {
 
 const ALL = "__ALL__";
 
+function mapDbToPedido(row: Record<string, unknown>): Pedido {
+  return {
+    id: row.id as string,
+    numero: (row.numero as string) ?? "",
+    empresaId: (row.empresa_id as string) ?? "",
+    empresa: (row.empresa as string) ?? "",
+    proveedor: (row.proveedor_nombre as string) ?? (row.proveedor as string) ?? "",
+    docProveedor: (row.doc_proveedor as string) ?? "",
+    almacen: (row.almacen as string) ?? "",
+    fecha: (row.fecha as string) ?? "",
+    fechaEntrega: (row.fecha_entrega as string) ?? "",
+    estado: (row.estado as EstadoPedido) ?? "Borrador",
+    lineas: Array.isArray(row.lineas) ? row.lineas : [],
+    dtoPct: (row.dto_pct as number) ?? 0,
+    dtoEur: (row.dto_eur as number) ?? 0,
+    notas: (row.notas as string) ?? "",
+    albaranId: (row.albaran_id as string | null) ?? null,
+    creador: (row.creador as string) ?? (row.created_by as string) ?? "",
+    ultimaActualizacion: (row.updated_at as string) ?? "",
+    enviadoAt: (row.enviado_at as string | null) ?? null,
+    enviadoEmail: (row.enviado_email as string | null) ?? null,
+  };
+}
+
 export function PedidosView() {
   const pathname = usePathname();
   useEffect(() => { sessionStorage.setItem("logistica_last", pathname); }, [pathname]);
 
   const { empresaActual } = useEmpresa();
-  const [pedidos, setPedidos] = useState<Pedido[]>(() => getPedidosPorEmpresa(empresaActual.id));
-  const [albaranes, setAlbaranes] = useState<Albaran[]>(() => getAlbaranesPorEmpresa(empresaActual.id));
+  const [pedidos, setPedidos] = useState<Pedido[]>([]);
+  const [albaranes, setAlbaranes] = useState<Albaran[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState("");
   const [filterEstado, setFilterEstado] = useState(ALL);
@@ -52,10 +78,25 @@ export function PedidosView() {
   const [detalleAlbaran, setDetalleAlbaran] = useState<Albaran | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  useMemo(() => {
-    setPedidos(getPedidosPorEmpresa(empresaActual.id));
-    setAlbaranes(getAlbaranesPorEmpresa(empresaActual.id));
-  }, [empresaActual.id]);
+  const loadPedidos = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listPedidos();
+      if (res.ok) {
+        setPedidos(res.data.map(mapDbToPedido));
+      } else {
+        toast.error("Error al cargar pedidos");
+      }
+    } catch {
+      toast.error("Error de conexion al cargar pedidos");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPedidos();
+  }, [loadPedidos]);
 
   // Filtered pedidos
   const filteredPedidos = useMemo(() => {
@@ -77,18 +118,38 @@ export function PedidosView() {
   ESTADOS_PEDIDO.forEach((e) => { statCounts[e] = pedidos.filter((p) => p.estado === e).length; });
 
   // Handlers
-  const handleSave = (item: Pedido) => {
+  const handleSave = async (item: Pedido) => {
+    const exists = pedidos.find((p) => p.id === item.id);
+    // Optimistic update
     setPedidos((prev) => {
-      const exists = prev.find((p) => p.id === item.id);
       if (exists) return prev.map((p) => (p.id === item.id ? item : p));
       return [item, ...prev];
     });
+
+    if (exists) {
+      const res = await serverUpdatePedidoEstado(item.id, item.estado);
+      if (!res.ok) { toast.error("Error al actualizar pedido"); loadPedidos(); }
+    } else {
+      const res = await createPedido({
+        proveedorNombre: item.proveedor,
+        fechaEntrega: item.fechaEntrega || undefined,
+        notas: item.notas || undefined,
+        lineas: item.lineas.map(l => ({
+          productoNombre: l.producto,
+          cantidad: l.cantidad,
+          unidad: l.unidad,
+          precioUnitario: l.precioUC,
+        })),
+      });
+      if (res.ok) { toast.success("Pedido creado"); loadPedidos(); }
+      else { toast.error(res.error ?? "Error al crear pedido"); loadPedidos(); }
+    }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     const ped = pedidos.find((p) => p.id === id);
     if (ped?.albaranId) {
-      toast.error("No se puede eliminar un pedido con albarán vinculado");
+      toast.error("No se puede eliminar un pedido con albaran vinculado");
       return;
     }
     if (ped?.enviadoAt) {
@@ -102,7 +163,9 @@ export function PedidosView() {
     setPedidos((prev) => prev.filter((p) => p.id !== id));
     setSelected((prev) => { const n = new Set(prev); n.delete(id); return n; });
     setDeleteConfirm(null);
-    toast.success("Pedido eliminado");
+    const res = await serverDeletePedido(id);
+    if (res.ok) { toast.success("Pedido eliminado"); }
+    else { toast.error("Error al eliminar pedido"); loadPedidos(); }
   };
 
   const handleEnviarProveedor = (ped: Pedido) => {
@@ -160,9 +223,11 @@ export function PedidosView() {
     toast.success("Albarán confirmado");
   };
 
-  const updatePedidoEstado = (id: string, estado: string) => {
+  const updatePedidoEstado = async (id: string, estado: string) => {
     setPedidos((prev) => prev.map((p) => p.id === id ? { ...p, estado: estado as EstadoPedido } : p));
     setDetallePedido((prev) => prev && prev.id === id ? { ...prev, estado: estado as EstadoPedido } : prev);
+    const res = await serverUpdatePedidoEstado(id, estado);
+    if (!res.ok) { toast.error("Error al actualizar estado"); loadPedidos(); }
   };
 
   const updateAlbaranEstado = (id: string, estado: string) => {
