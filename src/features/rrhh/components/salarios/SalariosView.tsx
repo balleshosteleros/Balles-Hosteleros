@@ -90,12 +90,8 @@ function ListView({
   const toggle = (d: string) => setExpanded((prev) => ({ ...prev, [d]: !prev[d] }));
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Salarios</h1>
-          <p className="text-muted-foreground text-sm">Estructura salarial por departamento y puesto</p>
-        </div>
+    <div className="space-y-4 p-4 md:p-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-4">
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={onNormas}>
             <AlertTriangle className="h-4 w-4 mr-1" /> Normas y cláusulas
@@ -231,11 +227,11 @@ function ListView({
 
 function DetalleView({ puesto, onBack }: { puesto: PuestoSalarial; onBack: () => void }) {
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-4 p-4 md:p-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="h-4 w-4" /></Button>
         <div>
-          <h1 className="text-2xl font-bold text-foreground">{puesto.puesto}</h1>
+          <h2 className="text-base font-semibold text-foreground">{puesto.puesto}</h2>
           <p className="text-muted-foreground text-sm">Departamento: {puesto.departamento}</p>
         </div>
         <div className="ml-auto">{estadoBadge(puesto.estado)}</div>
@@ -365,11 +361,11 @@ function ConfigView({ puestos, normas, onBack }: { puestos: PuestoSalarial[]; no
   const [tab, setTab] = useState("puestos");
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-4 p-4 md:p-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="h-4 w-4" /></Button>
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Configuración de salarios</h1>
+          <h2 className="text-base font-semibold text-foreground">Configuración de salarios</h2>
           <p className="text-muted-foreground text-sm">Gestión de departamentos, puestos y condiciones</p>
         </div>
       </div>
@@ -466,11 +462,11 @@ function ConfigView({ puestos, normas, onBack }: { puestos: PuestoSalarial[]; no
 
 function NormasView({ normas, onBack }: { normas: NormaSalarial[]; onBack: () => void }) {
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-4 p-4 md:p-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="h-4 w-4" /></Button>
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Normas y cláusulas salariales</h1>
+          <h2 className="text-base font-semibold text-foreground">Normas y cláusulas salariales</h2>
           <p className="text-muted-foreground text-sm">Reglas aplicables a toda la estructura salarial de la empresa</p>
         </div>
       </div>

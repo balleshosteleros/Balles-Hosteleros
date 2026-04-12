@@ -53,12 +53,8 @@ function ListadoBonus({ bonus, onSelect, onCrear }: {
   }, [bonus, filtro, busq]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Bonus</h1>
-          <p className="text-sm text-muted-foreground mt-1">Plan de incentivos y bonificaciones del equipo</p>
-        </div>
+    <div className="space-y-4">
+      <div className="flex items-center justify-end">
         <Button onClick={onCrear}><Plus className="h-4 w-4 mr-1" />Crear bonus</Button>
       </div>
 
@@ -612,14 +608,14 @@ export function BonusView() {
 
   if (selected) {
     return (
-      <div className="p-6 max-w-5xl mx-auto">
+      <div className="p-4 md:p-6 max-w-5xl mx-auto">
         <DetalleBonus bonus={selected.bonus} config={config} empresaId={eId} onBack={() => setSelected(null)} initialTab={selected.tab} />
       </div>
     );
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-4 md:p-6 max-w-5xl mx-auto">
       <ListadoBonus bonus={bonusList} onSelect={handleSelect} onCrear={handleCrear} />
     </div>
   );

@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, PieChart, Pie, Cell } from "recharts";
-import { GraduationCap, ExternalLink, Users, Award, Video, TrendingUp, BookOpen, CheckCircle2, XCircle, BarChart3, Target } from "lucide-react";
+import { ExternalLink, Users, Award, Video, TrendingUp, BookOpen, CheckCircle2, XCircle, BarChart3, Target } from "lucide-react";
 
 const ESTADO_BADGE: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   en_curso: { label: "En curso", variant: "default" },
@@ -43,15 +43,8 @@ export function FormacionView() {
   };
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <GraduationCap className="h-6 w-6 text-primary" />
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Formación</h1>
-            <p className="text-sm text-muted-foreground">Panel de control y seguimiento del portal formativo externo</p>
-          </div>
-        </div>
+    <div className="p-4 md:p-6 space-y-4">
+      <div className="flex items-center justify-end">
         <Button onClick={() => window.open(`${PORTAL_FORMATIVO_URL}/${empresaActual.id}`, "_blank")} className="gap-2">
           <ExternalLink className="h-4 w-4" />Acceder al portal formativo
         </Button>

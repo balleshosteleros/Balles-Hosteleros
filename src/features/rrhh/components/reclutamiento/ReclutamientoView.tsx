@@ -409,7 +409,7 @@ export function ReclutamientoView() {
       );
     }
     return (
-      <div className="p-6 max-w-[1400px] mx-auto">
+      <div className="p-4 md:p-6 max-w-[1400px] mx-auto">
         <div className="flex items-center justify-end mb-4">{viewToggle}</div>
         <CandidatosView vacante={selectedVacante} faseInicial={selectedFase} onBack={() => setSelectedVacante(null)} />
       </div>
@@ -420,15 +420,9 @@ export function ReclutamientoView() {
   const vacantesAbiertas = vacantes.filter((v) => v.estadoPublicacion === "publicada").length;
 
   return (
-    <div className="p-6 max-w-[1400px] mx-auto space-y-6">
+    <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-4">
       <Tabs defaultValue="vacantes">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Reclutamiento</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {vacantesAbiertas} vacantes abiertas · {totalCandidatos} candidatos totales
-            </p>
-          </div>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-4">
           <div className="flex items-center gap-2">
             <TabsList className="h-9">
               <TabsTrigger value="vacantes" className="text-xs">Vacantes</TabsTrigger>

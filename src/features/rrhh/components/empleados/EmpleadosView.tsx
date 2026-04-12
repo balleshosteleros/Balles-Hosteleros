@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, UserPlus, Users } from "lucide-react";
+import { Search, UserPlus } from "lucide-react";
 
 const AVATAR_COLORS = [
   "hsl(var(--primary))", "hsl(25 80% 55%)", "hsl(280 60% 55%)", "hsl(160 55% 42%)",
@@ -77,15 +77,8 @@ export function EmpleadosView() {
   const departamentosUsados = [...new Set(empleados.map((e) => e.departamento))].sort();
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Users className="h-6 w-6 text-primary" />
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Empleados</h1>
-            <p className="text-sm text-muted-foreground">{filtrados.length} empleados en plantilla</p>
-          </div>
-        </div>
+    <div className="space-y-4 p-4 md:p-6">
+      <div className="flex items-center justify-end">
         <Button size="sm" className="gap-2"><UserPlus className="h-4 w-4" /> Añadir empleado</Button>
       </div>
 
