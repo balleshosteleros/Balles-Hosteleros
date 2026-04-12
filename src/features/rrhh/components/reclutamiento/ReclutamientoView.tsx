@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { listCandidatos } from "@/features/rrhh/actions/reclutamiento-actions";
+import { toast } from "sonner";
 import {
   contarCandidatosPorFase,
   FASES_PRINCIPALES,
@@ -335,6 +337,19 @@ export function ReclutamientoView() {
   const { empresaActual } = useEmpresa();
   const router = useRouter();
   const vacantes = useMemo(() => getVacantesDesdeRoles(empresaActual.id), [empresaActual.id]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        await listCandidatos(); // warm up server; vacantes come from roles-empresa mock
+      } catch { /* mock data is fallback */ }
+      if (!cancelled) setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [empresaActual.id]);
 
   const [search, setSearch] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("todos");

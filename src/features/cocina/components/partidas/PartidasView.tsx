@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { getPartidasByEmpresa, getConfigPartidas, Partida, ProductoPartida, MisePlaceItem, ESTADO_PARTIDA_LABELS, EstadoPartida } from "@/features/cocina/data/partidas";
+import { Partida, ProductoPartida, MisePlaceItem, ESTADO_PARTIDA_LABELS, EstadoPartida, type ConfigPartidas } from "@/features/cocina/data/partidas";
 import { getEmpleadosPorEmpresa } from "@/features/rrhh/data/rrhh";
+import { listPartidas, createPartida, updatePartida } from "@/features/cocina/actions/partidas-actions";
+import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -55,7 +57,7 @@ function PartidaDetail({ partida, onBack, empleados, config }: {
   partida: Partida;
   onBack: () => void;
   empleados: { id: string; nombre: string; apellidos: string }[];
-  config: ReturnType<typeof getConfigPartidas>;
+  config: ConfigPartidas;
 }) {
   const [productos, setProductos] = useState<ProductoPartida[]>(partida.productos);
   const [mise, setMise] = useState<MisePlaceItem[]>(partida.misEnPlace);
@@ -226,13 +228,61 @@ function PartidaDetail({ partida, onBack, empleados, config }: {
   );
 }
 
+// --- Helper: map DB row → Partida ---
+function mapDbToPartida(row: Record<string, unknown>): Partida {
+  return {
+    id: row.id as string,
+    nombre: (row.nombre as string) ?? "",
+    area: ((row.area as string) ?? "COCINA") as "COCINA" | "BARRA",
+    estado: ((row.estado as string) ?? "activa") as EstadoPartida,
+    creador: (row.responsable as string) ?? (row.created_by as string) ?? "",
+    fechaActualizacion: ((row.updated_at as string) ?? (row.created_at as string))?.slice(0, 10) ?? "",
+    productos: Array.isArray(row.productos) ? row.productos : [],
+    misEnPlace: Array.isArray(row.mis_en_place) ? row.mis_en_place : [],
+  };
+}
+
+const defaultConfig: ConfigPartidas = {
+  areas: ["COCINA", "BARRA"],
+  partidas: ["FRÍO + POSTRES", "FUEGOS + HORNOS", "FREIDORA + PLANCHA"],
+  categorias: [
+    "PARA EMPEZAR", "ARROCES", "PRA VEGANOS", "DE LA MAR",
+    "DE LA TIERRA", "MOMENTOS DULCES", "PARA NIÑOS",
+  ],
+  gruposMise: ["SECOS", "SALSAS", "FRESCOS", "CONGELADOS"],
+  estados: ["activa", "inactiva", "en_revision"],
+};
+
 // ─── Main page ──────────────────────────────────────────────────
 export function PartidasView() {
   const { empresaActual } = useEmpresa();
   const empresaId = empresaActual?.id || "habana";
-  const partidas = getPartidasByEmpresa(empresaId);
-  const config = getConfigPartidas(empresaId);
   const empleados = getEmpleadosPorEmpresa(empresaId);
+  const [partidasData, setPartidasData] = useState<Partida[]>([]);
+  const [loading, setLoading] = useState(true);
+  const config = defaultConfig;
+
+  const loadPartidas = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listPartidas();
+      if (res.ok) {
+        setPartidasData((res.data as Record<string, unknown>[]).map(mapDbToPartida));
+      } else {
+        toast.error("Error al cargar partidas");
+      }
+    } catch {
+      toast.error("Error de conexión al cargar partidas");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPartidas();
+  }, [loadPartidas]);
+
+  const partidas = partidasData;
 
   const [mainTab, setMainTab] = useState<"lista" | "pipeline" | "config">("lista");
   const [search, setSearch] = useState("");
@@ -250,6 +300,17 @@ export function PartidasView() {
     const matchEstado = filtroEstado === "todos" || p.estado === filtroEstado;
     return matchSearch && matchEstado;
   });
+
+  if (loading) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-[300px]">
+        <div className="text-center space-y-2">
+          <div className="h-8 w-8 mx-auto animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          <p className="text-sm text-muted-foreground">Cargando partidas...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (selectedPartida) {
     return <PartidaDetail partida={selectedPartida} onBack={() => setSelectedPartida(null)} empleados={empleados} config={config} />;

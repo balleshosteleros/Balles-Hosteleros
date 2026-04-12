@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
-  Documento, DOCUMENTOS_POR_EMPRESA, CATEGORIAS_DOCUMENTALES, NIVELES_ACCESO,
+  Documento, CATEGORIAS_DOCUMENTALES, NIVELES_ACCESO,
   ESTADOS_DOCUMENTO, CARPETAS, NivelAcceso, EstadoDocumento, TipoArchivo,
 } from "@/features/direccion/data/documentacion";
+import { listDocumentos, createDocumento, deleteDocumento } from "@/features/direccion/actions/documentacion-actions";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -55,10 +57,53 @@ const accesoIcon = (n: NivelAcceso) => {
 
 const accesoLabel = (n: NivelAcceso) => NIVELES_ACCESO.find((x) => x.value === n)?.label ?? n;
 
+function mapDbToDocumento(row: Record<string, unknown>): Documento {
+  return {
+    id: row.id as string,
+    nombre: (row.titulo as string) ?? "",
+    descripcion: (row.descripcion as string) ?? "",
+    categoria: (row.categoria as string) ?? "",
+    etiquetas: Array.isArray(row.etiquetas) ? row.etiquetas as string[] : [],
+    empresa: (row.empresa_id as string) ?? "",
+    creador: (row.created_by as string) ?? "",
+    fechaSubida: (row.created_at as string) ?? "",
+    ultimaActualizacion: (row.updated_at as string) ?? (row.created_at as string) ?? "",
+    tipoArchivo: ((row.tipo_archivo as string) ?? "pdf") as TipoArchivo,
+    tamano: (row.tamano as string) ?? "",
+    estado: ((row.estado as string) ?? "vigente") as EstadoDocumento,
+    nivelAcceso: ((row.nivel_acceso as string) ?? "lectura") as NivelAcceso,
+    permisos: Array.isArray(row.permisos) ? row.permisos as { rol: string; accion: string }[] : [],
+    driveFileId: (row.drive_file_id as string) ?? undefined,
+    driveUrl: (row.drive_url as string) ?? undefined,
+    carpeta: (row.carpeta as string) ?? "General",
+  };
+}
+
 /* ── component ── */
 export function DocumentacionView() {
   const { empresaActual } = useEmpresa();
-  const docs = useMemo(() => DOCUMENTOS_POR_EMPRESA[empresaActual?.id ?? "habana"] ?? [], [empresaActual]);
+  const [docs, setDocs] = useState<Documento[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadDocumentos = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listDocumentos();
+      if (res.ok) {
+        setDocs(res.data.map(mapDbToDocumento));
+      } else {
+        toast.error("Error al cargar documentos");
+      }
+    } catch {
+      toast.error("Error de conexion al cargar documentos");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadDocumentos();
+  }, [loadDocumentos]);
 
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("todas");

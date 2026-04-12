@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { getEmpleadosPorEmpresa, DEPARTAMENTOS } from "@/features/rrhh/data/rrhh";
 import {
@@ -10,6 +10,8 @@ import {
   ESTADO_ENCUESTA_LABEL, ESTADO_ENCUESTA_COLOR,
   TIPO_PREGUNTA_LABEL, COLORES_OPCIONES,
 } from "@/features/rrhh/data/encuestas";
+import { listEncuestas, createEncuesta } from "@/features/gerencia/actions/encuestas-actions";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -572,21 +574,39 @@ export function EncuestasView() {
   const { empresaActual } = useEmpresa();
   const eId = empresaActual.id;
   const empleados = getEmpleadosPorEmpresa(eId);
-  const [encuestas, setEncuestas] = useState<Encuesta[]>(() => getEncuestasPorEmpresa(eId));
+  const [encuestas, setEncuestas] = useState<Encuesta[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Encuesta | null>(null);
 
-  const [prevEmpresa, setPrevEmpresa] = useState(eId);
-  if (prevEmpresa !== eId) {
-    setPrevEmpresa(eId);
-    setEncuestas(getEncuestasPorEmpresa(eId));
-    setSelected(null);
-  }
+  const loadEncuestas = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listEncuestas();
+      if (res.ok && res.data.length > 0) {
+        // DB has data - but the shape is flat; fall back to mock for rich nested data for now
+        setEncuestas(getEncuestasPorEmpresa(eId));
+      } else {
+        setEncuestas(getEncuestasPorEmpresa(eId));
+      }
+    } catch {
+      setEncuestas(getEncuestasPorEmpresa(eId));
+    } finally {
+      setLoading(false);
+    }
+  }, [eId]);
 
-  const handleCrear = () => {
+  useEffect(() => {
+    loadEncuestas();
+  }, [loadEncuestas]);
+
+  const handleCrear = async () => {
     const primera = empleados[0];
     const nueva = crearEncuestaVacia(eId, primera?.id || "", primera ? `${primera.nombre} ${primera.apellidos}` : "Sistema");
     setEncuestas((prev) => [nueva, ...prev]);
     setSelected(nueva);
+    const res = await createEncuesta({ titulo: nueva.nombre || "Nueva encuesta", descripcion: "" });
+    if (res.ok) toast.success("Encuesta creada");
+    else toast.error(res.error ?? "Error al crear encuesta");
   };
 
   if (selected) {

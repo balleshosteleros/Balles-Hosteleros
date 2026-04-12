@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Plus, Search, ChevronDown, MoreVertical, Building2, User, Briefcase } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { SAMPLE_CONTACTOS, ContactoContable, TipoContacto, FILTROS_CONTABLES } from "@/features/contabilidad/data/contabilidad";
+import { ContactoContable, TipoContacto, FILTROS_CONTABLES } from "@/features/contabilidad/data/contabilidad";
+import { listContactos, createContacto } from "@/features/contabilidad/actions/contabilidad-actions";
+import { toast } from "sonner";
 
 const TABS: { id: string; label: string }[] = [
   { id: "TODOS", label: "Todos" },
@@ -22,11 +24,45 @@ const TABS: { id: string; label: string }[] = [
 
 const tipoIcon: Record<TipoContacto, typeof Building2> = { EMPRESA: Building2, AUTONOMO: Briefcase, PARTICULAR: User };
 
+function mapDbToContacto(row: Record<string, unknown>): ContactoContable {
+  return {
+    id: row.id as string,
+    nombre: (row.nombre as string) ?? "",
+    tipo: ((row.tipo as string) ?? "EMPRESA") as TipoContacto,
+    documento: (row.nif as string) ?? "",
+    email: (row.email as string) ?? "",
+    etiquetas: Array.isArray(row.etiquetas) ? row.etiquetas as string[] : [],
+    categoria: (row.categoria as string) ?? "",
+    observaciones: (row.observaciones as string) ?? "",
+  };
+}
+
 export function ContactosView() {
   const { empresaActual } = useEmpresa();
   const [tab, setTab] = useState("TODOS");
   const [busqueda, setBusqueda] = useState("");
-  const [contactos] = useState(SAMPLE_CONTACTOS);
+  const [contactos, setContactos] = useState<ContactoContable[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadContactos = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listContactos();
+      if (res.ok) {
+        setContactos(res.data.map(mapDbToContacto));
+      } else {
+        toast.error("Error al cargar contactos");
+      }
+    } catch {
+      toast.error("Error de conexion al cargar contactos");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadContactos();
+  }, [loadContactos]);
 
   const filtrados = useMemo(() => {
     return contactos.filter(c => {

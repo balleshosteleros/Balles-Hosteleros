@@ -1,14 +1,17 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
-  getFichasPorEmpresa, getCategoriasPorEmpresa, getConfigFichasPorEmpresa, crearFichaVacia, calcularMargen,
+  crearFichaVacia, calcularMargen,
   generateShareToken, registerSharedFicha, unregisterSharedFicha,
   type FichaTecnica, type CategoriaFicha, type EstadoFicha, type ConfigFichas,
   ESTADO_FICHA_LABELS, DEFAULT_ALERGENOS, DEFAULT_RECOMENDACIONES, DEFAULT_PARTIDAS, DEFAULT_MENAJE,
 } from "@/features/cocina/data/fichas-tecnicas";
 import { getEmpleadosPorEmpresa } from "@/features/rrhh/data/rrhh";
+import {
+  listFichas, createFicha, updateFicha, deleteFicha,
+} from "@/features/cocina/actions/fichas-tecnicas-actions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -566,22 +569,67 @@ function FichaDetalle({
 export function FichasTecnicasView() {
   const { empresaActual } = useEmpresa();
 
-  const [fichas, setFichas] = useState<Record<string, FichaTecnica[]>>(() => ({
-    habana: [...getFichasPorEmpresa("habana")],
-    bacanal: [...getFichasPorEmpresa("bacanal")],
-  }));
-  const [categorias, setCategorias] = useState<Record<string, CategoriaFicha[]>>(() => ({
-    habana: [...getCategoriasPorEmpresa("habana")],
-    bacanal: [...getCategoriasPorEmpresa("bacanal")],
-  }));
-  const [configs, setConfigs] = useState<Record<string, ConfigFichas>>(() => ({
-    habana: getConfigFichasPorEmpresa("habana"),
-    bacanal: getConfigFichasPorEmpresa("bacanal"),
-  }));
+  const [fichas, setFichas] = useState<Record<string, FichaTecnica[]>>({});
+  const [categorias, setCategorias] = useState<Record<string, CategoriaFicha[]>>({});
+  const [configs, setConfigs] = useState<Record<string, ConfigFichas>>({});
+  const [loading, setLoading] = useState(true);
+
+  // --- Helper: map DB row → FichaTecnica ---
+  const mapDbToFicha = useCallback((row: Record<string, unknown>): FichaTecnica => {
+    return {
+      id: row.id as string,
+      nombre: (row.nombre as string) ?? "",
+      categoriaId: (row.categoria as string) ?? "",
+      estado: ((row.estado as string) ?? "borrador") as EstadoFicha,
+      responsable: (row.created_by as string) ?? "",
+      fechaCreacion: (row.created_at as string)?.slice(0, 10) ?? "",
+      fechaActualizacion: (row.updated_at as string)?.slice(0, 10) ?? "",
+      foto: (row.foto as string) ?? undefined,
+      delicatessen: (row.delicatessen as boolean) ?? false,
+      ingredientes: Array.isArray(row.ingredientes) ? row.ingredientes : [],
+      elaboracion: (row.elaboracion as string) ?? "",
+      partida: (row.partida as string) ?? "",
+      guarnicion: (row.guarnicion as string) ?? "",
+      decoracion: (row.decoracion as string) ?? "",
+      menaje: (row.menaje as string) ?? "",
+      presentacionMesa: (row.presentacion_mesa as string) ?? "",
+      alergenos: Array.isArray(row.alergenos) ? row.alergenos : [],
+      recomendaciones: Array.isArray(row.recomendaciones) ? row.recomendaciones : [],
+      costeTotal: (row.coste_total as number) ?? 0,
+      pvp: (row.pvp as number) ?? 0,
+      desglose: Array.isArray(row.desglose) ? row.desglose : [],
+      empresaId: (row.empresa_id as string) ?? "",
+      shareToken: (row.share_token as string) ?? undefined,
+      shareEnabled: (row.share_enabled as boolean) ?? false,
+    };
+  }, []);
+
+  // --- Load fichas from server ---
+  const loadFichas = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listFichas();
+      if (res.ok) {
+        const mapped = (res.data as Record<string, unknown>[]).map(mapDbToFicha);
+        setFichas((prev) => ({ ...prev, [empresaActual.id]: mapped }));
+      } else {
+        toast.error("Error al cargar fichas técnicas");
+      }
+    } catch {
+      toast.error("Error de conexión al cargar fichas");
+    } finally {
+      setLoading(false);
+    }
+  }, [empresaActual.id, mapDbToFicha]);
+
+  useEffect(() => {
+    loadFichas();
+  }, [loadFichas]);
 
   const empresaFichas = fichas[empresaActual.id] ?? [];
   const empresaCats = categorias[empresaActual.id] ?? [];
-  const empresaConfig = configs[empresaActual.id] ?? getConfigFichasPorEmpresa(empresaActual.id);
+  const defaultConfig: ConfigFichas = { alergenos: DEFAULT_ALERGENOS, partidas: DEFAULT_PARTIDAS, menaje: DEFAULT_MENAJE, recomendaciones: DEFAULT_RECOMENDACIONES };
+  const empresaConfig = configs[empresaActual.id] ?? defaultConfig;
 
   const [view, setView] = useState<"lista" | "pipeline">("lista");
   const [tab, setTab] = useState("fichas");
@@ -612,11 +660,13 @@ export function FichasTecnicasView() {
     setDetalleOpen(true);
   };
 
-  const handleSave = useCallback((f: FichaTecnica) => {
+  const handleSave = useCallback(async (f: FichaTecnica) => {
+    const isNew = f.id.startsWith("ft-new");
+    // Optimistic update
     setFichas((prev) => {
       const list = prev[empresaActual.id] ?? [];
       const exists = list.find((x) => x.id === f.id);
-      const updated = exists ? list.map((x) => x.id === f.id ? f : x) : [...list, { ...f, id: f.id.startsWith("ft-new") ? `ft-${Date.now()}` : f.id }];
+      const updated = exists ? list.map((x) => x.id === f.id ? f : x) : [...list, { ...f, id: isNew ? `ft-${Date.now()}` : f.id }];
       return { ...prev, [empresaActual.id]: updated };
     });
     // Re-register share if enabled
@@ -624,7 +674,36 @@ export function FichasTecnicasView() {
       const catNombre = empresaCats.find((c) => c.id === f.categoriaId)?.nombre || "";
       registerSharedFicha(f, catNombre);
     }
-  }, [empresaActual.id, empresaCats]);
+    // Persist to server
+    try {
+      if (isNew) {
+        const res = await createFicha({
+          nombre: f.nombre,
+          categoria: f.categoriaId,
+          raciones: undefined,
+          tiempo_elaboracion: undefined,
+          notas: f.elaboracion || undefined,
+          ingredientes: f.ingredientes.map((i) => ({
+            producto_nombre: i.ingrediente,
+            cantidad: i.cantidad,
+            unidad: i.unidad,
+            coste: 0,
+          })),
+        });
+        if (!res.ok) { toast.error("Error al crear ficha en servidor"); loadFichas(); }
+      } else {
+        const res = await updateFicha(f.id, {
+          nombre: f.nombre,
+          categoria: f.categoriaId,
+          notas: f.elaboracion || undefined,
+        });
+        if (!res.ok) { toast.error("Error al actualizar ficha en servidor"); loadFichas(); }
+      }
+    } catch {
+      toast.error("Error de conexión al guardar ficha");
+      loadFichas();
+    }
+  }, [empresaActual.id, empresaCats, loadFichas]);
 
   const duplicar = (f: FichaTecnica) => {
     const copia: FichaTecnica = { ...f, id: `ft-${Date.now()}`, nombre: `${f.nombre} (copia)`, estado: "borrador", fechaCreacion: new Date().toISOString().slice(0, 10), fechaActualizacion: new Date().toISOString().slice(0, 10), shareToken: undefined, shareEnabled: false, foto: f.foto };
@@ -632,9 +711,13 @@ export function FichasTecnicasView() {
     toast.success("Ficha duplicada");
   };
 
-  const archivar = (id: string) => {
+  const archivar = async (id: string) => {
     setFichas((prev) => ({ ...prev, [empresaActual.id]: (prev[empresaActual.id] ?? []).map((f) => f.id === id ? { ...f, estado: "archivada" as EstadoFicha } : f) }));
     toast.success("Ficha archivada");
+    try {
+      const res = await updateFicha(id, { nombre: undefined });
+      if (!res.ok) loadFichas();
+    } catch { loadFichas(); }
   };
 
   const handleCatChange = (cats: CategoriaFicha[]) => {
@@ -696,6 +779,17 @@ export function FichasTecnicasView() {
   const costeMedio = empresaFichas.length > 0 ? (empresaFichas.reduce((s, f) => s + f.costeTotal, 0) / empresaFichas.length).toFixed(2) : "0.00";
   const pvpMedio = empresaFichas.length > 0 ? (empresaFichas.reduce((s, f) => s + f.pvp, 0) / empresaFichas.length).toFixed(2) : "0.00";
   const margenMedio = empresaFichas.length > 0 ? Math.round(empresaFichas.reduce((s, f) => s + calcularMargen(f.pvp, f.costeTotal), 0) / empresaFichas.length) : 0;
+
+  if (loading) {
+    return (
+      <div className="p-4 md:p-6 flex items-center justify-center min-h-[300px]">
+        <div className="text-center space-y-2">
+          <div className="h-8 w-8 mx-auto animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          <p className="text-sm text-muted-foreground">Cargando fichas técnicas...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-6 space-y-5">

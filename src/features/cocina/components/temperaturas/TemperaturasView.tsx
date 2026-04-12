@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,19 +15,93 @@ import {
   EquipoFrio, RegistroTemperatura, TipoEquipo, EstadoEquipo, AreaTemp,
   evaluarEstado,
 } from "@/features/cocina/data/temperaturas";
+import {
+  listEquipos, createEquipo as serverCreateEquipo, registrarTemperatura, listRegistros,
+} from "@/features/cocina/actions/temperaturas-actions";
+import { toast } from "sonner";
 
 const TIPOS: TipoEquipo[] = ["NEVERA", "CONGELADOR", "CÁMARA", "BOTELLERO", "OTRO"];
 
+// --- Helper: map DB row → EquipoFrio ---
+function mapDbToEquipo(row: Record<string, unknown>): EquipoFrio {
+  return {
+    id: row.id as string,
+    nombre: (row.nombre as string) ?? "",
+    tipo: ((row.tipo as string) ?? "NEVERA") as TipoEquipo,
+    area: ((row.area as string) ?? "COCINA") as AreaTemp,
+    ubicacion: (row.ubicacion as string) ?? "",
+    rangoMin: (row.temp_min as number) ?? 0,
+    rangoMax: (row.temp_max as number) ?? 5,
+    estado: ((row.estado as string) ?? "ACTIVO") as EstadoEquipo,
+    observaciones: (row.observaciones as string) ?? "",
+  };
+}
+
+// --- Helper: map DB row → RegistroTemperatura ---
+function mapDbToRegistro(row: Record<string, unknown>): RegistroTemperatura {
+  const createdAt = (row.created_at as string) ?? "";
+  const fecha = createdAt.slice(0, 10);
+  const hora = createdAt.length >= 16 ? createdAt.slice(11, 16) : "";
+  return {
+    id: row.id as string,
+    equipoId: (row.equipo_id as string) ?? "",
+    fecha,
+    hora,
+    temperatura: (row.temperatura as number) ?? 0,
+    estado: ((row.estado as string) ?? "OK") as "OK" | "ALERTA",
+    empleado: (row.registrado_por as string) ?? "",
+    medidasTomadas: (row.medidas_tomadas as string) ?? "",
+    observaciones: (row.notas as string) ?? "",
+  };
+}
+
 interface Props {
   area: AreaTemp;
-  equiposIniciales: EquipoFrio[];
-  registrosIniciales: RegistroTemperatura[];
+  equiposIniciales?: EquipoFrio[];
+  registrosIniciales?: RegistroTemperatura[];
 }
 
 export default function TemperaturasView({ area, equiposIniciales, registrosIniciales }: Props) {
   const { empresaActual } = useEmpresa();
-  const [equipos, setEquipos] = useState<EquipoFrio[]>(equiposIniciales);
-  const [registros, setRegistros] = useState<RegistroTemperatura[]>(registrosIniciales);
+  const [equipos, setEquipos] = useState<EquipoFrio[]>(equiposIniciales ?? []);
+  const [registros, setRegistros] = useState<RegistroTemperatura[]>(registrosIniciales ?? []);
+  const [loading, setLoading] = useState(true);
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [eqRes, regRes] = await Promise.all([listEquipos(), listRegistros()]);
+      if (eqRes.ok) {
+        const allEquipos = (eqRes.data as Record<string, unknown>[]).map(mapDbToEquipo);
+        setEquipos(allEquipos.filter(e => e.area === area));
+      } else {
+        toast.error("Error al cargar equipos");
+      }
+      if (regRes.ok) {
+        const allRegistros = (regRes.data as Record<string, unknown>[]).map(mapDbToRegistro);
+        // Filter registros to only those belonging to equipos in this area
+        const areaEquipoIds = new Set(equipos.map(e => e.id));
+        // Use fresh equipo data for filtering
+        if (eqRes.ok) {
+          const areaEqs = (eqRes.data as Record<string, unknown>[]).map(mapDbToEquipo).filter(e => e.area === area);
+          const ids = new Set(areaEqs.map(e => e.id));
+          setRegistros(allRegistros.filter(r => ids.has(r.equipoId)));
+        } else {
+          setRegistros(allRegistros.filter(r => areaEquipoIds.has(r.equipoId)));
+        }
+      } else {
+        toast.error("Error al cargar registros");
+      }
+    } catch {
+      toast.error("Error de conexión al cargar datos de temperatura");
+    } finally {
+      setLoading(false);
+    }
+  }, [area]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
   const [busqueda, setBusqueda] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("TODOS");
   const [filtroEquipo, setFiltroEquipo] = useState("TODOS");
@@ -51,19 +125,67 @@ export default function TemperaturasView({ area, equiposIniciales, registrosInic
   const okHoy = registros.filter(r => r.fecha === hoy && r.estado === "OK").length;
   const equiposActivos = equipos.filter(e => e.estado === "ACTIVO").length;
 
+  // --- Server-wired handlers ---
+  const handleCreateEquipo = async (eq: EquipoFrio) => {
+    setEquipos(prev => [...prev, eq]);
+    setShowNuevoEquipo(false);
+    toast.success("Equipo creado");
+    try {
+      const res = await serverCreateEquipo({
+        nombre: eq.nombre,
+        tipo: eq.tipo,
+        ubicacion: eq.ubicacion,
+        temp_min: eq.rangoMin,
+        temp_max: eq.rangoMax,
+      });
+      if (!res.ok) { toast.error("Error al crear equipo en servidor"); loadData(); }
+    } catch {
+      toast.error("Error de conexión al crear equipo");
+      loadData();
+    }
+  };
+
+  const handleRegistrarTemp = async (r: RegistroTemperatura) => {
+    setRegistros(prev => [...prev, r]);
+    setShowNuevoRegistro(false);
+    toast.success("Temperatura registrada");
+    try {
+      const res = await registrarTemperatura({
+        equipo_id: r.equipoId,
+        temperatura: r.temperatura,
+        notas: r.observaciones || r.medidasTomadas || undefined,
+      });
+      if (!res.ok) { toast.error("Error al registrar temperatura en servidor"); loadData(); }
+    } catch {
+      toast.error("Error de conexión al registrar temperatura");
+      loadData();
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-[300px]">
+        <div className="text-center space-y-2">
+          <div className="h-8 w-8 mx-auto animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          <p className="text-sm text-muted-foreground">Cargando datos de temperatura...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-end gap-2">
         <Dialog open={showNuevoEquipo} onOpenChange={setShowNuevoEquipo}>
           <DialogTrigger asChild><Button variant="outline"><Settings2 className="h-4 w-4 mr-2" />Nuevo equipo</Button></DialogTrigger>
           <DialogContent><DialogHeader><DialogTitle>Nuevo equipo</DialogTitle></DialogHeader>
-            <NuevoEquipoForm area={area} onSave={eq => { setEquipos(prev => [...prev, eq]); setShowNuevoEquipo(false); }} onClose={() => setShowNuevoEquipo(false)} />
+            <NuevoEquipoForm area={area} onSave={handleCreateEquipo} onClose={() => setShowNuevoEquipo(false)} />
           </DialogContent>
         </Dialog>
         <Dialog open={showNuevoRegistro} onOpenChange={setShowNuevoRegistro}>
           <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" />Registrar temperatura</Button></DialogTrigger>
           <DialogContent><DialogHeader><DialogTitle>Registrar temperatura</DialogTitle></DialogHeader>
-            <NuevoRegistroForm equipos={equipos.filter(e => e.estado === "ACTIVO")} onSave={r => { setRegistros(prev => [...prev, r]); setShowNuevoRegistro(false); }} onClose={() => setShowNuevoRegistro(false)} />
+            <NuevoRegistroForm equipos={equipos.filter(e => e.estado === "ACTIVO")} onSave={handleRegistrarTemp} onClose={() => setShowNuevoRegistro(false)} />
           </DialogContent>
         </Dialog>
       </div>

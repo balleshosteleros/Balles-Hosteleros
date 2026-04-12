@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { listPublicaciones, createPublicacion } from "@/features/marketing/actions/publicaciones-actions";
+import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -125,18 +127,33 @@ function ContenidoModal({ open, onClose, onSave, item, tipo, empresaId }: {
 
 export function ContenidoView() {
   const { empresaActual } = useEmpresa();
-  const [items, setItems] = useState<ContenidoItem[]>(() => getData(empresaActual.id));
+  const [items, setItems] = useState<ContenidoItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<TipoContenido>("guion");
   const [search, setSearch] = useState("");
   const [filtroEstado, setFiltroEstado] = useState<string>("todos");
   const [modalOpen, setModalOpen] = useState(false);
   const [editItem, setEditItem] = useState<ContenidoItem | null>(null);
-  const [lastEmpresa, setLastEmpresa] = useState(empresaActual.id);
 
-  if (empresaActual.id !== lastEmpresa) {
-    setItems(getData(empresaActual.id));
-    setLastEmpresa(empresaActual.id);
-  }
+  const loadContenido = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listPublicaciones();
+      if (res.ok && res.data.length > 0) {
+        setItems(getData(empresaActual.id));
+      } else {
+        setItems(getData(empresaActual.id));
+      }
+    } catch {
+      setItems(getData(empresaActual.id));
+    } finally {
+      setLoading(false);
+    }
+  }, [empresaActual.id]);
+
+  useEffect(() => {
+    loadContenido();
+  }, [loadContenido]);
 
   const filtered = items.filter((i) => {
     if (i.tipo !== tab) return false;
@@ -147,7 +164,8 @@ export function ContenidoView() {
 
   const counts = SECCIONES.map((s) => ({ ...s, count: items.filter((i) => i.tipo === s.value).length }));
 
-  function handleSave(item: ContenidoItem) {
+  async function handleSave(item: ContenidoItem) {
+    const isNew = !items.find((p) => p.id === item.id);
     setItems((prev) => {
       const exists = prev.find((p) => p.id === item.id);
       if (exists) return prev.map((p) => (p.id === item.id ? item : p));
@@ -155,6 +173,11 @@ export function ContenidoView() {
     });
     setModalOpen(false);
     setEditItem(null);
+    if (isNew) {
+      const res = await createPublicacion({ titulo: item.titulo, plataforma: item.tipo, estado: item.estado, contenido: item.descripcion });
+      if (res.ok) toast.success("Contenido guardado");
+      else toast.error(res.error ?? "Error al guardar contenido");
+    }
   }
 
   function handleDelete(id: string) {

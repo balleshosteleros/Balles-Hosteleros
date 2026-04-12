@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Descuento, ResultadoMensual, buildDefaultDescuentos, buildDefaultResultados } from "@/features/gerencia/data/descuentos";
+import { listDescuentos, createDescuento, updateDescuento, deleteDescuento } from "@/features/gerencia/actions/descuentos-actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,10 +20,22 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, PieChart, Pie, Cell, LineCh
 import { Search, Plus, Pencil, Trash2, Eye, BarChart3, Upload, FileText } from "lucide-react";
 import { toast } from "sonner";
 
-const allDescuentos: Record<string, Descuento[]> = {};
 const allResultados: Record<string, ResultadoMensual[]> = {};
-function getDescuentos(id: string) { if (!allDescuentos[id]) allDescuentos[id] = buildDefaultDescuentos(); return allDescuentos[id]; }
 function getResultados(id: string) { if (!allResultados[id]) allResultados[id] = buildDefaultResultados(); return allResultados[id]; }
+
+function mapDbToDescuento(row: Record<string, unknown>): Descuento {
+  return {
+    id: row.id as string,
+    codigo: (row.nombre as string) ?? "",
+    ejecucion: (row.tipo as string) ?? "",
+    tenerEnCuenta: "",
+    activo: (row.activo as boolean) ?? true,
+    observaciones: "",
+    creadoPor: "",
+    fechaCreacion: ((row.created_at as string) ?? "").slice(0, 10),
+    ultimaActualizacion: ((row.updated_at as string) ?? (row.created_at as string) ?? "").slice(0, 10),
+  };
+}
 
 const PIE_COLORS = [
   "hsl(var(--primary))", "hsl(var(--accent))", "hsl(210 60% 55%)",
@@ -32,8 +45,9 @@ const PIE_COLORS = [
 
 export function DescuentosView() {
   const { empresaActual } = useEmpresa();
-  const [descuentos, setDescuentos] = useState<Descuento[]>(() => getDescuentos(empresaActual.id));
+  const [descuentos, setDescuentos] = useState<Descuento[]>([]);
   const [resultados, setResultados] = useState<ResultadoMensual[]>(() => getResultados(empresaActual.id));
+  const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   const [filtroActivo, setFiltroActivo] = useState<"todos" | "activo" | "inactivo">("todos");
   const [modalOpen, setModalOpen] = useState(false);
@@ -42,10 +56,31 @@ export function DescuentosView() {
   const [detalle, setDetalle] = useState<Descuento | null>(null);
   const [form, setForm] = useState<Partial<Descuento>>({});
 
+  const loadDescuentos = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listDescuentos();
+      if (res.ok) {
+        const mapped = res.data.map(mapDbToDescuento);
+        setDescuentos(mapped.length > 0 ? mapped : buildDefaultDescuentos());
+      } else {
+        setDescuentos(buildDefaultDescuentos());
+      }
+    } catch {
+      setDescuentos(buildDefaultDescuentos());
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadDescuentos();
+  }, [loadDescuentos]);
+
   const [lastEmpresa, setLastEmpresa] = useState(empresaActual.id);
   if (lastEmpresa !== empresaActual.id) {
     setLastEmpresa(empresaActual.id);
-    setDescuentos(getDescuentos(empresaActual.id));
+    loadDescuentos();
     setResultados(getResultados(empresaActual.id));
   }
 
@@ -60,28 +95,39 @@ export function DescuentosView() {
   function openCrear() { setEditando(null); setForm({ codigo: "", ejecucion: "", tenerEnCuenta: "", activo: true, observaciones: "" }); setModalOpen(true); }
   function openEditar(d: Descuento) { setEditando(d); setForm({ ...d }); setModalOpen(true); }
 
-  function guardar() {
+  async function guardar() {
     if (!form.codigo?.trim()) { toast.error("El código es obligatorio"); return; }
     const ahora = new Date().toISOString().slice(0, 10);
     if (editando) {
       const updated = descuentos.map((d) => d.id === editando.id ? { ...d, ...form, ultimaActualizacion: ahora } as Descuento : d);
-      setDescuentos(updated); allDescuentos[empresaActual.id] = updated; toast.success("Descuento actualizado");
+      setDescuentos(updated);
+      setModalOpen(false);
+      const res = await updateDescuento(editando.id, { nombre: form.codigo, tipo: form.ejecucion, activo: form.activo });
+      if (res.ok) toast.success("Descuento actualizado");
+      else { toast.error("Error al actualizar descuento"); loadDescuentos(); }
     } else {
       const nuevo: Descuento = { id: `d-${Date.now()}`, codigo: form.codigo!, ejecucion: form.ejecucion || "", tenerEnCuenta: form.tenerEnCuenta || "", activo: form.activo ?? true, observaciones: form.observaciones || "", creadoPor: "Usuario", fechaCreacion: ahora, ultimaActualizacion: ahora };
-      const updated = [...descuentos, nuevo];
-      setDescuentos(updated); allDescuentos[empresaActual.id] = updated; toast.success("Descuento creado");
+      setDescuentos((prev) => [...prev, nuevo]);
+      setModalOpen(false);
+      const res = await createDescuento({ nombre: form.codigo!, tipo: form.ejecucion || "", valor: 0, activo: form.activo ?? true });
+      if (res.ok) { toast.success("Descuento creado"); loadDescuentos(); }
+      else { toast.error(res.error ?? "Error al crear descuento"); loadDescuentos(); }
     }
-    setModalOpen(false);
   }
 
-  function toggleActivo(d: Descuento) {
+  async function toggleActivo(d: Descuento) {
     const updated = descuentos.map((x) => x.id === d.id ? { ...x, activo: !x.activo, ultimaActualizacion: new Date().toISOString().slice(0, 10) } : x);
-    setDescuentos(updated); allDescuentos[empresaActual.id] = updated;
+    setDescuentos(updated);
+    const res = await updateDescuento(d.id, { activo: !d.activo });
+    if (!res.ok) { toast.error("Error al actualizar estado"); loadDescuentos(); }
   }
 
-  function eliminar(d: Descuento) {
+  async function eliminar(d: Descuento) {
     const updated = descuentos.filter((x) => x.id !== d.id);
-    setDescuentos(updated); allDescuentos[empresaActual.id] = updated; toast.success("Descuento eliminado");
+    setDescuentos(updated);
+    const res = await deleteDescuento(d.id);
+    if (res.ok) toast.success("Descuento eliminado");
+    else { toast.error("Error al eliminar descuento"); loadDescuentos(); }
   }
 
   const chartMensualTotal = useMemo(() => resultados.map((r) => ({ mes: r.etiqueta, total: r.datos.reduce((s, d) => s + d.totalDescontado, 0), usos: r.datos.reduce((s, d) => s + d.usos, 0) })), [resultados]);

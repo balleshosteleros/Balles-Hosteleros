@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -8,15 +8,52 @@ import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Plus, Search, ChevronDown, Download, Sparkles, Paperclip, MoreVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { SAMPLE_TRANSACCIONES, TransaccionContable, FILTROS_CONTABLES } from "@/features/contabilidad/data/contabilidad";
+import { TransaccionContable, TipoTransaccion, FILTROS_CONTABLES } from "@/features/contabilidad/data/contabilidad";
+import { listTransacciones, createTransaccion } from "@/features/contabilidad/actions/contabilidad-actions";
+import { toast } from "sonner";
 
 const TABS = [{ id: "TODAS", label: "Todas" }, { id: "COBRO", label: "Cobros" }, { id: "PAGO", label: "Pagos" }];
+
+function mapDbToTransaccion(row: Record<string, unknown>): TransaccionContable {
+  return {
+    id: row.id as string,
+    concepto: (row.concepto as string) ?? "",
+    banco: (row.banco as string) ?? "",
+    fecha: (row.fecha as string) ?? "",
+    importe: (row.importe as number) ?? 0,
+    tipo: ((row.tipo as string) ?? "PAGO") as TipoTransaccion,
+    etiquetas: Array.isArray(row.etiquetas) ? (row.etiquetas as { categoria: string; detalle: string; color: string }[]) : [],
+    documentos: (row.documentos as number) ?? 0,
+    conciliada: (row.conciliada as boolean) ?? false,
+  };
+}
 
 export function TransaccionesView() {
   const { empresaActual } = useEmpresa();
   const [tab, setTab] = useState("TODAS");
   const [busqueda, setBusqueda] = useState("");
-  const [txs] = useState(SAMPLE_TRANSACCIONES);
+  const [txs, setTxs] = useState<TransaccionContable[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadTransacciones = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listTransacciones();
+      if (res.ok) {
+        setTxs(res.data.map(mapDbToTransaccion));
+      } else {
+        toast.error("Error al cargar transacciones");
+      }
+    } catch {
+      toast.error("Error de conexion al cargar transacciones");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadTransacciones();
+  }, [loadTransacciones]);
 
   const filtradas = useMemo(() => txs.filter(t => {
     const matchTab = tab === "TODAS" || t.tipo === tab;

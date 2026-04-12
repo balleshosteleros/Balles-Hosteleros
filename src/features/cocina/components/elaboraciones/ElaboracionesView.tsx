@@ -1,13 +1,16 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
-  getElaboraciones, getProductosElaboracion, calcularCosteElaboracion,
+  calcularCosteElaboracion,
   CATEGORIAS_ELABORACION, ESTADO_ELABORACION_COLOR, ESTADO_ELABORACION_LABEL,
   type Elaboracion, type ProductoElaboracion, type EstadoElaboracion, type ComponenteElaboracion,
 } from "@/features/logistica/data/elaboraciones";
-import { getStockPorEmpresa, type ProductoStock } from "@/features/logistica/data/stock";
+import { type ProductoStock } from "@/features/logistica/data/stock";
+import {
+  listElaboraciones, createElaboracion, updateElaboracion, deleteElaboracion,
+} from "@/features/cocina/actions/elaboraciones-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -406,17 +409,50 @@ function DetalleElaboracion({
 /* ════════════════════════════════════════════════════════════
    PÁGINA PRINCIPAL
    ════════════════════════════════════════════════════════════ */
+// --- Helper: map DB row → Elaboracion ---
+function mapDbToElaboracion(row: Record<string, unknown>): Elaboracion {
+  return {
+    id: row.id as string,
+    nombre: (row.nombre as string) ?? "",
+    productoElaboracionId: (row.producto_elaboracion_id as string) ?? "",
+    fecha: ((row.fecha as string) ?? (row.created_at as string))?.slice(0, 10) ?? "",
+    cantidadProducida: (row.cantidad_producida as number) ?? 0,
+    unidad: (row.unidad as string) ?? "kg",
+    componentes: Array.isArray(row.componentes) ? row.componentes : [],
+    estado: ((row.estado as string) ?? "borrador") as EstadoElaboracion,
+    creador: (row.responsable as string) ?? (row.created_by as string) ?? "",
+    almacen: ((row.almacen as string) ?? "COCINA") as "COCINA" | "BARRA",
+    observaciones: (row.descripcion as string) ?? (row.observaciones as string) ?? "",
+    empresaId: (row.empresa_id as string) ?? "",
+  };
+}
+
 export function ElaboracionesView() {
   const { empresaActual } = useEmpresa();
-  const [elaboraciones, setElaboraciones] = useState<Elaboracion[]>(() => getElaboraciones(empresaActual.id));
-  const [productosElab, setProductosElab] = useState<ProductoElaboracion[]>(() => getProductosElaboracion(empresaActual.id));
-  const [stock] = useState<ProductoStock[]>(() => getStockPorEmpresa(empresaActual.id));
+  const [elaboraciones, setElaboraciones] = useState<Elaboracion[]>([]);
+  const [productosElab, setProductosElab] = useState<ProductoElaboracion[]>([]);
+  const [stock] = useState<ProductoStock[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Refresh on company change
-  useMemo(() => {
-    setElaboraciones(getElaboraciones(empresaActual.id));
-    setProductosElab(getProductosElaboracion(empresaActual.id));
-  }, [empresaActual.id]);
+  const loadElaboraciones = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listElaboraciones();
+      if (res.ok) {
+        setElaboraciones((res.data as Record<string, unknown>[]).map(mapDbToElaboracion));
+      } else {
+        toast.error("Error al cargar elaboraciones");
+      }
+    } catch {
+      toast.error("Error de conexión al cargar elaboraciones");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadElaboraciones();
+  }, [loadElaboraciones]);
 
   const [search, setSearch] = useState("");
   const [filterEstado, setFilterEstado] = useState(ALL);
@@ -445,8 +481,10 @@ export function ElaboracionesView() {
   const borradores = elaboraciones.filter(e => e.estado === "borrador").length;
   const confirmados = elaboraciones.filter(e => e.estado === "confirmado").length;
 
-  const handleSave = (elab: Elaboracion) => {
+  const handleSave = async (elab: Elaboracion) => {
     elab.empresaId = empresaActual.id;
+    const isNew = !editingElab;
+    // Optimistic update
     if (editingElab) {
       setElaboraciones(prev => prev.map(e => e.id === elab.id ? elab : e));
       toast.success("Elaboración actualizada");
@@ -456,9 +494,33 @@ export function ElaboracionesView() {
     }
     setModalOpen(false);
     setEditingElab(null);
+    // Persist to server
+    try {
+      if (isNew) {
+        const res = await createElaboracion({
+          nombre: elab.nombre,
+          tipo: elab.almacen,
+          descripcion: elab.observaciones || undefined,
+          responsable: elab.creador || undefined,
+        });
+        if (!res.ok) { toast.error("Error al crear elaboración en servidor"); loadElaboraciones(); }
+      } else {
+        const res = await updateElaboracion(elab.id, {
+          nombre: elab.nombre,
+          tipo: elab.almacen,
+          descripcion: elab.observaciones || undefined,
+          responsable: elab.creador || undefined,
+          estado: elab.estado,
+        });
+        if (!res.ok) { toast.error("Error al actualizar elaboración en servidor"); loadElaboraciones(); }
+      }
+    } catch {
+      toast.error("Error de conexión al guardar elaboración");
+      loadElaboraciones();
+    }
   };
 
-  const handleConfirm = (id: string) => {
+  const handleConfirm = async (id: string) => {
     const elab = elaboraciones.find(e => e.id === id);
     if (!elab) return;
     if (elab.componentes.length === 0) {
@@ -473,9 +535,13 @@ export function ElaboracionesView() {
     // Mark confirmed
     setElaboraciones(prev => prev.map(e => e.id === id ? { ...e, estado: "confirmado" as EstadoElaboracion } : e));
     toast.success("Elaboración confirmada — stock actualizado");
+    try {
+      const res = await updateElaboracion(id, { estado: "confirmado" });
+      if (!res.ok) loadElaboraciones();
+    } catch { loadElaboraciones(); }
   };
 
-  const handleRevert = (id: string) => {
+  const handleRevert = async (id: string) => {
     const elab = elaboraciones.find(e => e.id === id);
     if (!elab) return;
     // Revert stock
@@ -485,6 +551,10 @@ export function ElaboracionesView() {
     }));
     setElaboraciones(prev => prev.map(e => e.id === id ? { ...e, estado: "borrador" as EstadoElaboracion } : e));
     toast.info("Confirmación revertida");
+    try {
+      const res = await updateElaboracion(id, { estado: "borrador" });
+      if (!res.ok) loadElaboraciones();
+    } catch { loadElaboraciones(); }
   };
 
   const handleEdit = (elab: Elaboracion) => {
@@ -493,12 +563,31 @@ export function ElaboracionesView() {
     setSelectedId(null);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     const elab = elaboraciones.find(e => e.id === id);
     if (!elab || elab.estado === "confirmado") return;
     setElaboraciones(prev => prev.filter(e => e.id !== id));
     toast.success("Elaboración eliminada");
+    try {
+      const res = await deleteElaboracion(id);
+      if (!res.ok) { toast.error("Error al eliminar elaboración en servidor"); loadElaboraciones(); }
+    } catch {
+      toast.error("Error de conexión al eliminar elaboración");
+      loadElaboraciones();
+    }
   };
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="p-4 md:p-6 flex items-center justify-center min-h-[300px]">
+        <div className="text-center space-y-2">
+          <div className="h-8 w-8 mx-auto animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          <p className="text-sm text-muted-foreground">Cargando elaboraciones...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Detail view
   if (selectedElab) {

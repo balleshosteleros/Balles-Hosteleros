@@ -1,12 +1,15 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
   getProcesosPorEmpresa, ESTADOS_PROCESO, GRAVEDADES_PROCESO, TIPOS_PROCESO, JURIDICOS,
   type ProcesoJuridico, type EstadoProceso, type ActualizacionProceso, type DocumentoProceso,
+  type GravedadProceso, type TipoProceso,
 } from "@/features/juridico/data/procesos-juridicos";
+import { listProcesos, createProceso, updateProceso } from "@/features/juridico/actions/procesos-actions";
+import { toast } from "sonner";
 import { EstadoProcesoBadge, GravedadProcesoBadge } from "@/features/juridico/components/BadgesProceso";
 import { DetalleProceso } from "@/features/juridico/components/DetalleProceso";
 import { ProcesoModal } from "@/features/juridico/components/ProcesoModal";
@@ -20,11 +23,29 @@ import { Plus, Search, Info, FileText, Settings2 } from "lucide-react";
 
 const ALL = "__ALL__";
 
+function mapDbToProceso(row: Record<string, unknown>, empresa: string, empresaId: string): ProcesoJuridico {
+  return {
+    id: row.id as string,
+    titulo: (row.titulo as string) ?? "",
+    empresa,
+    empresaId,
+    tipo: ((row.tipo as string) ?? "Otro") as TipoProceso,
+    juridico: (row.abogado as string) ?? "",
+    fecha: (row.fecha_inicio as string) ?? (row.created_at as string) ?? "",
+    estado: ((row.estado as string)?.toUpperCase() ?? "PENDIENTE") as EstadoProceso,
+    gravedad: ((row.gravedad as string)?.toUpperCase() ?? "MEDIA") as GravedadProceso,
+    descripcion: (row.descripcion as string) ?? "",
+    documentos: Array.isArray(row.documentos) ? row.documentos as DocumentoProceso[] : [],
+    actualizaciones: Array.isArray(row.actualizaciones) ? row.actualizaciones as ActualizacionProceso[] : [],
+  };
+}
+
 export function ProcesosView() {
   const pathname = usePathname();
   useEffect(() => { sessionStorage.setItem("juridico_last", pathname); }, [pathname]);
   const { empresaActual } = useEmpresa();
   const [data, setData] = useState<ProcesoJuridico[]>(() => getProcesosPorEmpresa(empresaActual.id));
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterEstado, setFilterEstado] = useState(ALL);
   const [filterGravedad, setFilterGravedad] = useState(ALL);
@@ -35,9 +56,30 @@ export function ProcesosView() {
   const [editItem, setEditItem] = useState<ProcesoJuridico | null>(null);
   const [detalleItem, setDetalleItem] = useState<ProcesoJuridico | null>(null);
 
-  useMemo(() => {
-    setData(getProcesosPorEmpresa(empresaActual.id));
-  }, [empresaActual.id]);
+  const loadProcesos = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listProcesos();
+      if (res.ok && res.data.length > 0) {
+        setData(res.data.map((r: Record<string, unknown>) => mapDbToProceso(r, empresaActual.nombre, empresaActual.id)));
+      } else if (res.ok && res.data.length === 0) {
+        // Fallback to mock data when DB is empty
+        setData(getProcesosPorEmpresa(empresaActual.id));
+      } else {
+        toast.error("Error al cargar procesos");
+        setData(getProcesosPorEmpresa(empresaActual.id));
+      }
+    } catch {
+      toast.error("Error de conexion al cargar procesos");
+      setData(getProcesosPorEmpresa(empresaActual.id));
+    } finally {
+      setLoading(false);
+    }
+  }, [empresaActual.id, empresaActual.nombre]);
+
+  useEffect(() => {
+    loadProcesos();
+  }, [loadProcesos]);
 
   const isCerrado = (e: EstadoProceso) => e === "CERRADO" || e === "ARCHIVADO";
 
@@ -65,16 +107,66 @@ export function ProcesosView() {
   const gravityCounts: Record<string, number> = {};
   GRAVEDADES_PROCESO.forEach((g) => { gravityCounts[g] = data.filter((p) => p.gravedad === g).length; });
 
-  const handleSave = (item: ProcesoJuridico) => {
+  const handleSave = async (item: ProcesoJuridico) => {
+    const exists = data.find((p) => p.id === item.id);
+    // Optimistic update
     setData((prev) => {
-      const exists = prev.find((p) => p.id === item.id);
       if (exists) return prev.map((p) => (p.id === item.id ? item : p));
       return [item, ...prev];
     });
+
+    try {
+      if (exists) {
+        const res = await updateProceso(item.id, {
+          titulo: item.titulo,
+          tipo: item.tipo,
+          descripcion: item.descripcion,
+          abogado: item.juridico,
+          estado: item.estado,
+        });
+        if (res.ok) {
+          toast.success("Expediente actualizado");
+        } else {
+          toast.error("Error al actualizar expediente");
+          loadProcesos();
+        }
+      } else {
+        const res = await createProceso({
+          titulo: item.titulo,
+          tipo: item.tipo,
+          descripcion: item.descripcion,
+          abogado: item.juridico,
+          fecha_inicio: item.fecha,
+        });
+        if (res.ok) {
+          toast.success("Expediente creado");
+          loadProcesos();
+        } else {
+          toast.error(res.error ?? "Error al crear expediente");
+          loadProcesos();
+        }
+      }
+    } catch {
+      toast.error("Error de conexion");
+      loadProcesos();
+    }
   };
 
-  const updateField = (id: string, field: keyof ProcesoJuridico, value: string) => {
+  const updateField = async (id: string, field: keyof ProcesoJuridico, value: string) => {
     setData((prev) => prev.map((p) => (p.id === id ? { ...p, [field]: value } : p)));
+
+    const fieldMap: Record<string, string> = { estado: "estado", gravedad: "gravedad", juridico: "abogado" };
+    const dbField = fieldMap[field] ?? field;
+    try {
+      const res = await updateProceso(id, { [dbField]: value });
+      if (!res.ok) {
+        toast.error("Error al actualizar campo");
+        loadProcesos();
+      }
+    } catch {
+      toast.error("Error de conexion");
+      loadProcesos();
+    }
   };
 
   const addActualizacion = (procesoId: string, act: ActualizacionProceso) => {

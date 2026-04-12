@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
   Vencimiento, SAMPLE_VENCIMIENTOS, CATEGORIAS, FRECUENCIAS, ESTADOS_VENCIMIENTO,
   TIPOS_VENCIMIENTO, LOCALES_VENCIMIENTO, RESPONSABLES, calcularEstado,
   CategoriaVencimiento, EstadoVencimiento, Frecuencia,
 } from "@/features/gerencia/data/vencimientos";
+import { listVencimientos, createVencimiento, updateVencimiento } from "@/features/gerencia/actions/vencimientos-actions";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +32,24 @@ function buildEmpresaData(): Record<string, Vencimiento[]> {
     out[eid] = SAMPLE_VENCIMIENTOS.map((v) => ({ ...v, id: `${eid}-${v.id}`, historial: v.historial.map((h) => ({ ...h, id: `${eid}-${h.id}` })) }));
   }
   return out;
+}
+
+function mapDbToVencimiento(row: Record<string, unknown>): Vencimiento {
+  return {
+    id: row.id as string,
+    nombre: (row.titulo as string) ?? "",
+    tipo: (row.tipo as string) ?? TIPOS_VENCIMIENTO[0],
+    local: LOCALES_VENCIMIENTO[0],
+    categoria: "PERMISO" as CategoriaVencimiento,
+    fechaVencimiento: ((row.fecha_vencimiento as string) ?? "").slice(0, 10),
+    frecuencia: "ANUAL" as Frecuencia,
+    estado: calcularEstado(((row.fecha_vencimiento as string) ?? "").slice(0, 10)),
+    responsable: RESPONSABLES[0],
+    proveedorExterno: "",
+    observaciones: (row.descripcion as string) ?? "",
+    documentacion: "",
+    historial: [],
+  };
 }
 
 const estadoColor: Record<EstadoVencimiento, string> = {
@@ -58,9 +78,31 @@ const calDotColor: Record<EstadoVencimiento, string> = {
 
 export function VencimientosView() {
   const { empresaActual } = useEmpresa();
-  const [allData, setAllData] = useState<Record<string, Vencimiento[]>>(buildEmpresaData);
-  const datos = allData[empresaActual.id] ?? [];
-  const setDatos = (fn: (prev: Vencimiento[]) => Vencimiento[]) => setAllData((p) => ({ ...p, [empresaActual.id]: fn(p[empresaActual.id] ?? []) }));
+  const [datos, setDatosState] = useState<Vencimiento[]>([]);
+  const [loading, setLoading] = useState(true);
+  const setDatos = (fn: (prev: Vencimiento[]) => Vencimiento[]) => setDatosState((prev) => fn(prev));
+
+  const loadVencimientos = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listVencimientos();
+      if (res.ok && res.data.length > 0) {
+        setDatosState(res.data.map(mapDbToVencimiento));
+      } else {
+        const fallback = buildEmpresaData();
+        setDatosState(fallback[empresaActual.id] ?? []);
+      }
+    } catch {
+      const fallback = buildEmpresaData();
+      setDatosState(fallback[empresaActual.id] ?? []);
+    } finally {
+      setLoading(false);
+    }
+  }, [empresaActual.id]);
+
+  useEffect(() => {
+    loadVencimientos();
+  }, [loadVencimientos]);
 
   const [vista, setVista] = useState<"calendario" | "lista">("lista");
   const [buscar, setBuscar] = useState("");
@@ -86,12 +128,15 @@ export function VencimientosView() {
     return true;
   }).sort((a, b) => new Date(a.fechaVencimiento).getTime() - new Date(b.fechaVencimiento).getTime()), [datosConEstado, buscar, filtroEstado, filtroCategoria]);
 
-  const handleGuardar = () => {
+  const handleGuardar = async () => {
     if (!form.nombre || !form.fechaVencimiento) return;
     const nuevo: Vencimiento = { ...form, id: `${empresaActual.id}-${Date.now()}`, estado: calcularEstado(form.fechaVencimiento), historial: [] };
     setDatos((prev) => [...prev, nuevo]);
     setModalOpen(false);
     setForm(emptyForm());
+    const res = await createVencimiento({ titulo: form.nombre, fecha_vencimiento: form.fechaVencimiento, tipo: form.tipo, descripcion: form.observaciones });
+    if (res.ok) { toast.success("Registro creado"); loadVencimientos(); }
+    else { toast.error(res.error ?? "Error al crear registro"); loadVencimientos(); }
   };
 
   const inicioMes = startOfMonth(mesActual);

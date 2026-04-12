@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Plus, Search, ChevronDown, MoreVertical, Download, Settings2, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { SAMPLE_FACTURAS, FacturaContable } from "@/features/contabilidad/data/contabilidad";
+import { FacturaContable, EstadoFactura, TipoFactura } from "@/features/contabilidad/data/contabilidad";
+import { listFacturas, createFactura, updateFactura } from "@/features/contabilidad/actions/contabilidad-actions";
+import { toast } from "sonner";
 
 const TABS = [{ id: "TODAS", label: "Todas" }, { id: "VENTA", label: "Ventas" }, { id: "COMPRA", label: "Compras" }];
 
@@ -19,11 +21,47 @@ const estadoStyles: Record<string, string> = {
   VENCIDO: "bg-red-100 text-red-800 border-red-300",
 };
 
+function mapDbToFactura(row: Record<string, unknown>): FacturaContable {
+  return {
+    id: row.id as string,
+    tipo: ((row.tipo as string) ?? "COMPRA") as TipoFactura,
+    cliente: (row.contacto_nombre as string) ?? "",
+    numeroFactura: (row.numero as string) ?? "",
+    tipoFactura: "Ordinaria",
+    fechaEmision: (row.fecha as string) ?? "",
+    fechaPago: (row.fecha_cobro as string) ?? "",
+    estado: ((row.estado as string) ?? "PENDIENTE") as EstadoFactura,
+    total: (row.total as number) ?? 0,
+    diasTarde: undefined,
+  };
+}
+
 export function FacturasView() {
   const { empresaActual } = useEmpresa();
   const [tab, setTab] = useState("TODAS");
   const [busqueda, setBusqueda] = useState("");
-  const [facturas] = useState(SAMPLE_FACTURAS);
+  const [facturas, setFacturas] = useState<FacturaContable[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadFacturas = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listFacturas();
+      if (res.ok) {
+        setFacturas(res.data.map(mapDbToFactura));
+      } else {
+        toast.error("Error al cargar facturas");
+      }
+    } catch {
+      toast.error("Error de conexion al cargar facturas");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadFacturas();
+  }, [loadFacturas]);
 
   const filtradas = useMemo(() => facturas.filter(f => {
     const matchTab = tab === "TODAS" || f.tipo === tab;

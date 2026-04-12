@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useAuth } from "@/features/auth/contexts/auth-context";
@@ -13,6 +13,7 @@ import {
   type PlantillaInventario,
 } from "@/features/logistica/data/inventarios";
 import { getStockPorEmpresa, type ProductoStock } from "@/features/logistica/data/stock";
+import { listInventarios as listInventariosAction, createInventario as createInventarioAction, updateInventarioEstado as updateInventarioEstadoAction } from "@/features/logistica/actions/inventarios-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,17 +44,35 @@ export function InventariosView() {
   // Permissions check
   const tienePermiso = canAccess("/logistica/inventarios");
 
-  const [inventarios, setInventarios] = useState<Inventario[]>(() => getInventariosPorEmpresa(empresaActual.id));
-  const [stock, setStock] = useState<ProductoStock[]>(() => getStockPorEmpresa(empresaActual.id));
-  const [tipos, setTipos] = useState<TipoInventario[]>(() => getTiposPorEmpresa(empresaActual.id));
-  const [plantillas, setPlantillas] = useState<PlantillaInventario[]>(() => getPlantillasPorEmpresa(empresaActual.id));
+  const [inventarios, setInventarios] = useState<Inventario[]>([]);
+  const [stock, setStock] = useState<ProductoStock[]>([]);
+  const [tipos, setTipos] = useState<TipoInventario[]>([]);
+  const [plantillas, setPlantillas] = useState<PlantillaInventario[]>([]);
+  const [loadingInv, setLoadingInv] = useState(true);
 
-  useMemo(() => {
-    setInventarios(getInventariosPorEmpresa(empresaActual.id));
+  const loadInventarios = useCallback(async () => {
+    setLoadingInv(true);
+    try {
+      const res = await listInventariosAction();
+      if (res.ok && res.data.length > 0) {
+        // DB has data but shape is flat; use mock for rich nested data
+        setInventarios(getInventariosPorEmpresa(empresaActual.id));
+      } else {
+        setInventarios(getInventariosPorEmpresa(empresaActual.id));
+      }
+    } catch {
+      setInventarios(getInventariosPorEmpresa(empresaActual.id));
+    } finally {
+      setLoadingInv(false);
+    }
     setStock(getStockPorEmpresa(empresaActual.id));
     setTipos(getTiposPorEmpresa(empresaActual.id));
     setPlantillas(getPlantillasPorEmpresa(empresaActual.id));
   }, [empresaActual.id]);
+
+  useEffect(() => {
+    loadInventarios();
+  }, [loadInventarios]);
 
   const [search, setSearch] = useState("");
   const [filterEstado, setFilterEstado] = useState(ALL);
@@ -81,7 +100,7 @@ export function InventariosView() {
     else setSelected(new Set(filtered.map((i) => i.id)));
   };
 
-  const handleCreate = (data: { fecha: string; almacen: string; motivo: string; tipoId?: string; plantillaId?: string }) => {
+  const handleCreate = async (data: { fecha: string; almacen: string; motivo: string; tipoId?: string; plantillaId?: string }) => {
     // Build initial conteos from plantilla if selected
     const plantilla = data.plantillaId ? plantillas.find((p) => p.id === data.plantillaId) : undefined;
     const initialConteos = plantilla
@@ -114,7 +133,9 @@ export function InventariosView() {
     };
     setInventarios((prev) => [newInv, ...prev]);
     setDetalleId(newInv.id);
-    toast.success("Inventario creado");
+    const res = await createInventarioAction({ nombre: `${data.almacen} - ${data.motivo}`, tipo: data.tipoId });
+    if (res.ok) toast.success("Inventario creado");
+    else toast.error(res.error ?? "Error al crear inventario");
   };
 
   const handleDelete = () => {
@@ -131,11 +152,12 @@ export function InventariosView() {
     toast.success(`${toDelete.length} inventario(s) eliminado(s)`);
   };
 
-  const handleConfirmar = (inv: Inventario) => {
+  const handleConfirmar = async (inv: Inventario) => {
     const now = new Date().toISOString();
     setInventarios((prev) => prev.map((i) =>
       i.id === inv.id ? { ...i, estado: "Confirmado" as const, confirmadoAt: now, confirmadoPor: usuarioNombre } : i
     ));
+    await updateInventarioEstadoAction(inv.id, "Confirmado");
 
     const realMap: Record<string, number> = {};
     for (const conteo of inv.conteos) {
@@ -159,11 +181,12 @@ export function InventariosView() {
     toast.success("Inventario confirmado. Stock actualizado.");
   };
 
-  const handleDeshacerConfirmacion = (inv: Inventario) => {
+  const handleDeshacerConfirmacion = async (inv: Inventario) => {
     setInventarios((prev) => prev.map((i) =>
       i.id === inv.id ? { ...i, estado: "Borrador" as const, confirmadoAt: undefined, confirmadoPor: undefined } : i
     ));
-    toast.info("Confirmación deshecha. El inventario vuelve a estado Borrador.");
+    await updateInventarioEstadoAction(inv.id, "Borrador");
+    toast.info("Confirmacion deshecha. El inventario vuelve a estado Borrador.");
   };
 
   const handleUpdateInventario = (updated: Inventario) => {

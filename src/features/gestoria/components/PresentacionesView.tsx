@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
@@ -8,6 +8,8 @@ import {
   DOCUMENTOS_TRIMESTRALES_BASE, DOCUMENTOS_ANUALES_BASE, TIPOS_DOCUMENTO_GESTORIA,
   PeriodoTrimestral, PeriodoAnual, DocumentoRequerido, DocumentoComplementario, EstadoPresentacion,
 } from "@/features/gestoria/data/gestoria-presentaciones";
+import { listPresentaciones, createPresentacion, updatePresentacion } from "@/features/gestoria/actions/presentaciones-actions";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -314,6 +316,28 @@ export function PresentacionesView() {
   useEffect(() => { sessionStorage.setItem("gestoria_last", pathname); }, [pathname]);
   const { empresaActual } = useEmpresa();
   const [anioFilter, setAnioFilter] = useState<string>("2026");
+  const [loading, setLoading] = useState(true);
+  const [dbPresentaciones, setDbPresentaciones] = useState<Record<string, unknown>[]>([]);
+
+  const loadPresentaciones = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listPresentaciones();
+      if (res.ok) {
+        setDbPresentaciones(res.data);
+      } else {
+        toast.error("Error al cargar presentaciones");
+      }
+    } catch {
+      toast.error("Error de conexion al cargar presentaciones");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPresentaciones();
+  }, [loadPresentaciones]);
 
   const trimestrales = useMemo(() => {
     const all = TRIMESTRALES_POR_EMPRESA[empresaActual.id] || [];

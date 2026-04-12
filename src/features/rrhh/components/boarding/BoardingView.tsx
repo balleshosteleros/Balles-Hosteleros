@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { getEmpleadosPorEmpresa } from "@/features/rrhh/data/rrhh";
 import {
@@ -12,6 +12,7 @@ import {
   type TipoBoarding,
   type EstadoProceso,
 } from "@/features/rrhh/data/boarding";
+import { listPlantillas as listPlantillasAction, createPlantilla as createPlantillaAction, listProcesos as listProcesosAction, createProceso as createProcesoAction, updateProcesoTareas as updateProcesoTareasAction } from "@/features/rrhh/actions/boarding-actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -64,20 +65,39 @@ export function BoardingView() {
   const { empresaActual } = useEmpresa();
   const empleados = getEmpleadosPorEmpresa(empresaActual.id);
 
-  const [procesos, setProcesos] = useState<ProcesoBoarding[]>(() => getProcesosPorEmpresa(empresaActual.id));
-  const [plantillas, setPlantillas] = useState<PlantillaBoarding[]>(() => getPlantillasPorEmpresa(empresaActual.id));
+  const [procesos, setProcesos] = useState<ProcesoBoarding[]>([]);
+  const [plantillas, setPlantillas] = useState<PlantillaBoarding[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [vista, setVista] = useState<"listado" | "plantillas" | "detalle">("listado");
   const [procesoActivo, setProcesoActivo] = useState<ProcesoBoarding | null>(null);
 
-  const [lastEmpresa, setLastEmpresa] = useState(empresaActual.id);
-  if (empresaActual.id !== lastEmpresa) {
-    setProcesos(getProcesosPorEmpresa(empresaActual.id));
-    setPlantillas(getPlantillasPorEmpresa(empresaActual.id));
-    setLastEmpresa(empresaActual.id);
-    setVista("listado");
-    setProcesoActivo(null);
-  }
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [pltRes, procRes] = await Promise.all([listPlantillasAction(), listProcesosAction()]);
+      if (pltRes.ok && pltRes.data.length > 0) {
+        // DB has data but shape is flat; fall back to mock for rich nested data
+        setPlantillas(getPlantillasPorEmpresa(empresaActual.id));
+      } else {
+        setPlantillas(getPlantillasPorEmpresa(empresaActual.id));
+      }
+      if (procRes.ok && procRes.data.length > 0) {
+        setProcesos(getProcesosPorEmpresa(empresaActual.id));
+      } else {
+        setProcesos(getProcesosPorEmpresa(empresaActual.id));
+      }
+    } catch {
+      setProcesos(getProcesosPorEmpresa(empresaActual.id));
+      setPlantillas(getPlantillasPorEmpresa(empresaActual.id));
+    } finally {
+      setLoading(false);
+    }
+  }, [empresaActual.id]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const [tab, setTab] = useState<"todos" | "activos" | "finalizados">("todos");
   const [buscar, setBuscar] = useState("");
@@ -109,10 +129,11 @@ export function BoardingView() {
     return list;
   }, [procesos, tab, buscar, empleados]);
 
-  function crearProceso() {
+  async function crearProceso() {
     if (!newEmpleadoId || !newPlantillaId) { toast.error("Selecciona empleado y plantilla"); return; }
     const plt = plantillas.find((p) => p.id === newPlantillaId);
     if (!plt) return;
+    const emp = empleados.find((e) => e.id === newEmpleadoId);
     const nuevo: ProcesoBoarding = {
       id: `proc-${Date.now()}`,
       empleadoId: newEmpleadoId,
@@ -128,16 +149,26 @@ export function BoardingView() {
     setShowNew(false);
     setNewEmpleadoId("");
     setNewPlantillaId("");
-    toast.success("Proceso creado correctamente");
+    const res = await createProcesoAction({
+      empleado_nombre: emp ? `${emp.nombre} ${emp.apellidos}` : newEmpleadoId,
+      empleado_id: newEmpleadoId,
+      plantilla_id: plt.id,
+      tipo: newTipo,
+      fecha_inicio: newFecha,
+      tareas: plt.tareas.map((t) => ({ titulo: t.nombre, completada: false })),
+    });
+    if (res.ok) toast.success("Proceso creado correctamente");
+    else toast.error(res.error ?? "Error al crear proceso");
   }
 
-  function toggleTarea(tareaId: string) {
+  async function toggleTarea(tareaId: string) {
     if (!procesoActivo) return;
     const updated = { ...procesoActivo, tareas: procesoActivo.tareas.map((t) =>
       t.id === tareaId ? { ...t, completada: !t.completada, fechaCompletado: !t.completada ? hoy() : null } : t
     )};
     setProcesoActivo(updated);
     setProcesos((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+    await updateProcesoTareasAction(updated.id, updated.tareas.map((t) => ({ titulo: t.nombre, completada: t.completada })));
   }
 
   function finalizarProceso(id: string) {
@@ -179,7 +210,7 @@ export function BoardingView() {
     setShowPlantillaDialog(true);
   }
 
-  function guardarPlantilla() {
+  async function guardarPlantilla() {
     if (!pltNombre.trim()) { toast.error("El nombre es obligatorio"); return; }
     const tareasLimpias = pltTareas.filter((t) => t.trim());
     if (!tareasLimpias.length) { toast.error("Añade al menos una tarea"); return; }
@@ -191,7 +222,9 @@ export function BoardingView() {
     } else {
       const nueva: PlantillaBoarding = { id: `plt-${Date.now()}`, nombre: pltNombre, tipo: pltTipo, empresaId: empresaActual.id, tareas };
       setPlantillas((prev) => [...prev, nueva]);
-      toast.success("Plantilla creada");
+      const res = await createPlantillaAction({ nombre: pltNombre, tipo: pltTipo, tareas: tareasLimpias.map((t, i) => ({ titulo: t, orden: i + 1 })) });
+      if (res.ok) toast.success("Plantilla creada");
+      else toast.error(res.error ?? "Error al crear plantilla");
     }
     setShowPlantillaDialog(false);
   }

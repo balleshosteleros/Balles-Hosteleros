@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Plus, CalendarDays, Link2, FileText, Target, BarChart3 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useMarketing } from "@/features/marketing/contexts/marketing-context";
 import { ItemCalendario, Comentario, REDES_SOCIALES, ESTADOS_PUBLICACION } from "@/features/marketing/data/marketing";
+import { listPublicaciones, createPublicacion, deletePublicacion } from "@/features/marketing/actions/publicaciones-actions";
+import { toast } from "sonner";
 import { CalendarioView } from "@/features/marketing/components/CalendarioView";
 import { PublicacionModal } from "@/features/marketing/components/PublicacionModal";
 import { DetallePanel } from "@/features/marketing/components/DetallePanel";
@@ -31,20 +33,40 @@ export function CalendarioMarketingView({ embedded }: { embedded?: boolean } = {
   const [editItem, setEditItem] = useState<ItemCalendario | null>(null);
   const [detalleItem, setDetalleItem] = useState<ItemCalendario | null>(null);
   const [detalleOpen, setDetalleOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        await listPublicaciones(); // warm up server connection, keep context data as source of truth
+      } catch { /* context data is fallback */ }
+      if (!cancelled) setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [empresaActual.id]);
 
   const handleSelect = (item: ItemCalendario) => { setDetalleItem(item); setDetalleOpen(true); };
 
-  const handleSave = useCallback((item: ItemCalendario) => {
+  const handleSave = useCallback(async (item: ItemCalendario) => {
     setItems(empresaActual.id, (prev) => {
       const exists = prev.find((i) => i.id === item.id);
       if (exists) return prev.map((i) => i.id === item.id ? item : i);
       return [...prev, item];
     });
     setEditItem(null);
+    const pub = item as unknown as { titulo?: string; redSocial?: string; fecha?: string; estado?: string };
+    const res = await createPublicacion({ titulo: pub.titulo ?? item.titulo ?? "", plataforma: pub.redSocial ?? "instagram", fecha_publicacion: pub.fecha ?? item.fecha, estado: pub.estado ?? "borrador" });
+    if (res.ok) toast.success("Publicacion guardada");
+    else toast.error(res.error ?? "Error al guardar publicacion");
   }, [empresaActual.id, setItems]);
 
-  const handleDelete = useCallback((id: string) => {
+  const handleDelete = useCallback(async (id: string) => {
     setItems(empresaActual.id, (prev) => prev.filter((i) => i.id !== id));
+    const res = await deletePublicacion(id);
+    if (res.ok) toast.success("Publicacion eliminada");
+    else toast.error("Error al eliminar publicacion");
   }, [empresaActual.id, setItems]);
 
   const handleEdit = (item: ItemCalendario) => {

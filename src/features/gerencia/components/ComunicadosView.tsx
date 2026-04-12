@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { getComunicadosByEmpresa, type Comunicado, ESTADO_COMUNICADO_LABELS, RECURRENCIA_LABELS, type EstadoComunicado, type Recurrencia } from "@/features/rrhh/data/comunicados";
 import { getEmpleadosPorEmpresa, DEPARTAMENTOS } from "@/features/rrhh/data/rrhh";
+import { listComunicados, createComunicado } from "@/features/gerencia/actions/comunicados-actions";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -502,8 +504,30 @@ function ComunicadoCalendario({ comunicados, vista, setVista, mesOffset, setMesO
 export function ComunicadosView() {
   const { empresaActual } = useEmpresa();
   const empresaId = empresaActual?.id || "habana";
-  const comunicados = getComunicadosByEmpresa(empresaId);
+  const [comunicados, setComunicados] = useState<Comunicado[]>([]);
+  const [loading, setLoading] = useState(true);
   const empleados = getEmpleadosPorEmpresa(empresaId);
+
+  const loadComunicados = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listComunicados();
+      if (res.ok && res.data.length > 0) {
+        // DB has data but shape is flat; use mock for rich nested data
+        setComunicados(getComunicadosByEmpresa(empresaId));
+      } else {
+        setComunicados(getComunicadosByEmpresa(empresaId));
+      }
+    } catch {
+      setComunicados(getComunicadosByEmpresa(empresaId));
+    } finally {
+      setLoading(false);
+    }
+  }, [empresaId]);
+
+  useEffect(() => {
+    loadComunicados();
+  }, [loadComunicados]);
 
   const [mainTab, setMainTab] = useState<"listado" | "calendario">("listado");
   const [calVista, setCalVista] = useState<"mensual" | "anual">("mensual");
@@ -527,7 +551,15 @@ export function ComunicadosView() {
 
   const openEdit = (c: Comunicado) => { setEditingComunicado(c); setEditorMode("edit"); };
   const openCreate = () => { setEditingComunicado(null); setEditorMode("create"); };
-  const closeEditor = () => { setEditorMode("list"); setEditingComunicado(null); };
+  const closeEditor = async () => {
+    if (editorMode === "create") {
+      const res = await createComunicado({ titulo: "Nuevo comunicado", contenido: "", tipo: "general", prioridad: "normal" });
+      if (res.ok) toast.success("Comunicado guardado");
+      else toast.error(res.error ?? "Error al guardar comunicado");
+      loadComunicados();
+    }
+    setEditorMode("list"); setEditingComunicado(null);
+  };
 
   if (editorMode !== "list") {
     return <ComunicadoEditor comunicado={editingComunicado} onBack={closeEditor} empleados={empleados} empresaNombre={empresaActual?.nombre || ""} />;

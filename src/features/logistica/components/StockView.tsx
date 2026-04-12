@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
   getStockPorEmpresa, getTemporadasPorEmpresa, getTemporadaActiva, getStockConTemporada,
   CATEGORIAS_STOCK, type ProductoStock, type TemporadaStock,
 } from "@/features/logistica/data/stock";
+import { listStock, updateStock as updateStockAction } from "@/features/logistica/actions/stock-actions";
 import TemporadasConfig from "@/features/logistica/components/stock/TemporadasConfig";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -52,13 +53,31 @@ export function StockView() {
   useEffect(() => { sessionStorage.setItem("logistica_last", pathname); }, [pathname]);
 
   const { empresaActual } = useEmpresa();
-  const [stock, setStock] = useState<ProductoStock[]>(() => getStockPorEmpresa(empresaActual.id));
-  const [temporadas, setTemporadas] = useState<TemporadaStock[]>(() => getTemporadasPorEmpresa(empresaActual.id));
+  const [stock, setStock] = useState<ProductoStock[]>([]);
+  const [temporadas, setTemporadas] = useState<TemporadaStock[]>([]);
+  const [loadingStock, setLoadingStock] = useState(true);
 
-  useMemo(() => {
-    setStock(getStockPorEmpresa(empresaActual.id));
+  const loadStockData = useCallback(async () => {
+    setLoadingStock(true);
+    try {
+      const res = await listStock();
+      if (res.ok && res.data.length > 0) {
+        // DB data is flat; use mock for rich nested season data
+        setStock(getStockPorEmpresa(empresaActual.id));
+      } else {
+        setStock(getStockPorEmpresa(empresaActual.id));
+      }
+    } catch {
+      setStock(getStockPorEmpresa(empresaActual.id));
+    } finally {
+      setLoadingStock(false);
+    }
     setTemporadas(getTemporadasPorEmpresa(empresaActual.id));
   }, [empresaActual.id]);
+
+  useEffect(() => {
+    loadStockData();
+  }, [loadStockData]);
 
   const temporadaAutoActiva = useMemo(() => getTemporadaActiva(temporadas), [temporadas]);
   const [temporadaSeleccionada, setTemporadaSeleccionada] = useState<string>("auto");
@@ -122,7 +141,7 @@ export function StockView() {
     setEditingId(p.id);
     setEditValues({ stockMaximo: p.displayMaximo, stockSeguridad: p.displaySeguridad });
   };
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!editingId) return;
     if (temporadaActiva && temporadaActiva.overrides[editingId]) {
       // Update season override
@@ -134,8 +153,11 @@ export function StockView() {
     } else {
       setStock((prev) => prev.map((p) => p.id === editingId ? { ...p, stockMaximo: editValues.stockMaximo, stockSeguridad: editValues.stockSeguridad } : p));
     }
+    const savedId = editingId;
     setEditingId(null);
-    toast.success("Valores actualizados");
+    const res = await updateStockAction(savedId, { cantidad_minima: editValues.stockSeguridad });
+    if (res.ok) toast.success("Valores actualizados");
+    else { toast.error("Error al actualizar stock"); loadStockData(); }
   };
   const cancelEdit = () => setEditingId(null);
 
