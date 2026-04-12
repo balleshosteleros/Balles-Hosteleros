@@ -19,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  ClipboardList, Plus, Trash2, Search, Eye, Settings,
+  Plus, Trash2, Search, Eye, Settings,
 } from "lucide-react";
 import { toast } from "sonner";
 import InventarioModal from "@/features/logistica/components/inventarios/InventarioModal";
@@ -212,12 +212,7 @@ export function InventariosView() {
   return (
     <div className="p-4 md:p-6 space-y-5">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <ClipboardList className="h-7 w-7 text-primary" />
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-foreground">INVENTARIOS</h1>
-          <p className="text-sm text-muted-foreground">Gestión de inventarios y conteos — {empresaActual.nombre}</p>
-        </div>
+      <div className="flex items-center justify-end">
         <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowConfig(true)}>
           <Settings className="h-4 w-4" /> Configuración
         </Button>

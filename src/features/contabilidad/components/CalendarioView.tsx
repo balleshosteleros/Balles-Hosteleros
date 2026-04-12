@@ -46,8 +46,7 @@ export function CalendarioView() {
 
   return (
     <div className="p-6 space-y-6 max-w-[1000px] mx-auto">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Calendario fiscal</h1>
+      <div className="flex items-center justify-end">
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" onClick={prev}><ChevronLeft className="h-4 w-4" /></Button>
           <span className="text-sm font-semibold min-w-[140px] text-center">{MESES[mes]} {ano}</span>

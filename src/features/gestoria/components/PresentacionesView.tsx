@@ -345,15 +345,7 @@ export function PresentacionesView() {
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-6xl mx-auto">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <FileText className="h-6 w-6 text-primary" /> PRESENTACIONES
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Control documental de presentaciones trimestrales y anuales de gestoría
-          </p>
-        </div>
+      <div className="flex items-center justify-end">
         <Select value={anioFilter} onValueChange={setAnioFilter}>
           <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
           <SelectContent>

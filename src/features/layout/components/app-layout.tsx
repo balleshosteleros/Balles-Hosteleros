@@ -218,7 +218,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0">
           <header className="h-14 flex items-center border-b bg-card px-4 shrink-0 gap-3">
-            <SidebarTrigger className="mr-2" />
             {title && (
               <h1 className="flex items-center gap-2 text-sm font-bold tracking-wide text-foreground">
                 {TitleIcon && <TitleIcon className="h-4 w-4" />}

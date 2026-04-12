@@ -53,25 +53,19 @@ export default function TemperaturasView({ area, equiposIniciales, registrosInic
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">TEMPERATURAS — {area}</h1>
-          <p className="text-muted-foreground text-sm">{empresaActual.nombre} — Control de temperaturas y trazabilidad</p>
-        </div>
-        <div className="flex gap-2">
-          <Dialog open={showNuevoEquipo} onOpenChange={setShowNuevoEquipo}>
-            <DialogTrigger asChild><Button variant="outline"><Settings2 className="h-4 w-4 mr-2" />Nuevo equipo</Button></DialogTrigger>
-            <DialogContent><DialogHeader><DialogTitle>Nuevo equipo</DialogTitle></DialogHeader>
-              <NuevoEquipoForm area={area} onSave={eq => { setEquipos(prev => [...prev, eq]); setShowNuevoEquipo(false); }} onClose={() => setShowNuevoEquipo(false)} />
-            </DialogContent>
-          </Dialog>
-          <Dialog open={showNuevoRegistro} onOpenChange={setShowNuevoRegistro}>
-            <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" />Registrar temperatura</Button></DialogTrigger>
-            <DialogContent><DialogHeader><DialogTitle>Registrar temperatura</DialogTitle></DialogHeader>
-              <NuevoRegistroForm equipos={equipos.filter(e => e.estado === "ACTIVO")} onSave={r => { setRegistros(prev => [...prev, r]); setShowNuevoRegistro(false); }} onClose={() => setShowNuevoRegistro(false)} />
-            </DialogContent>
-          </Dialog>
-        </div>
+      <div className="flex items-center justify-end gap-2">
+        <Dialog open={showNuevoEquipo} onOpenChange={setShowNuevoEquipo}>
+          <DialogTrigger asChild><Button variant="outline"><Settings2 className="h-4 w-4 mr-2" />Nuevo equipo</Button></DialogTrigger>
+          <DialogContent><DialogHeader><DialogTitle>Nuevo equipo</DialogTitle></DialogHeader>
+            <NuevoEquipoForm area={area} onSave={eq => { setEquipos(prev => [...prev, eq]); setShowNuevoEquipo(false); }} onClose={() => setShowNuevoEquipo(false)} />
+          </DialogContent>
+        </Dialog>
+        <Dialog open={showNuevoRegistro} onOpenChange={setShowNuevoRegistro}>
+          <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" />Registrar temperatura</Button></DialogTrigger>
+          <DialogContent><DialogHeader><DialogTitle>Registrar temperatura</DialogTitle></DialogHeader>
+            <NuevoRegistroForm equipos={equipos.filter(e => e.estado === "ACTIVO")} onSave={r => { setRegistros(prev => [...prev, r]); setShowNuevoRegistro(false); }} onClose={() => setShowNuevoRegistro(false)} />
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* KPIs */}

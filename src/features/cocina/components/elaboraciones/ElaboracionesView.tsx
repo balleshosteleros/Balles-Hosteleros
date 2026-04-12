@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import {
-  Search, Plus, FlaskConical, Eye, Pencil, Trash2, Check, ArrowLeft,
+  Search, Plus, Eye, Pencil, Trash2, Check, ArrowLeft,
   ChevronDown, Package, AlertTriangle, Table2, LayoutGrid,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -519,14 +519,7 @@ export function ElaboracionesView() {
   return (
     <div className="p-4 md:p-6 space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <FlaskConical className="h-7 w-7 text-primary" />
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">ELABORACIONES</h1>
-            <p className="text-sm text-muted-foreground">Producción interna y transformación de productos</p>
-          </div>
-        </div>
+      <div className="flex items-center justify-end">
         <Button className="gap-1.5" onClick={() => { setEditingElab(null); setModalOpen(true); }}>
           <Plus className="h-4 w-4" /> Nueva elaboración
         </Button>

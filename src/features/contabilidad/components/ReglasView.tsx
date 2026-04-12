@@ -26,11 +26,7 @@ export function ReglasView() {
 
   return (
     <div className="p-6 space-y-6 max-w-[1000px] mx-auto">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold">Reglas automáticas</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Automatiza la categorización de transacciones y operaciones</p>
-        </div>
+      <div className="flex items-center justify-end">
         <Dialog>
           <DialogTrigger asChild>
             <Button className="gap-1.5"><Plus className="h-4 w-4" />Nueva regla</Button>

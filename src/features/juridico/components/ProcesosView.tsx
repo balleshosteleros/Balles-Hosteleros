@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Plus, Search, Scale, Info, FileText, Settings2 } from "lucide-react";
+import { Plus, Search, Info, FileText, Settings2 } from "lucide-react";
 
 const ALL = "__ALL__";
 
@@ -109,14 +109,7 @@ export function ProcesosView() {
 
   return (
     <div className="p-4 md:p-6 space-y-5">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Scale className="h-7 w-7 text-primary" />
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">PROCESOS JURÍDICOS</h1>
-            <p className="text-sm text-muted-foreground">Seguimiento de expedientes y procesos legales — {empresaActual.nombre}</p>
-          </div>
-        </div>
+      <div className="flex items-center justify-end">
         <Button onClick={openNew} className="gap-2"><Plus className="h-4 w-4" /> NUEVO EXPEDIENTE</Button>
       </div>
 

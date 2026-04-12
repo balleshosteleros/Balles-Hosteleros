@@ -18,7 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Search, Plus, Pencil, ArrowLeft, Truck, Phone, Mail, Globe, MapPin, CalendarDays, FileText, AlertTriangle,
+  Search, Plus, Pencil, ArrowLeft, Phone, Mail, Globe, MapPin, CalendarDays, FileText, AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -161,15 +161,7 @@ export function ProveedoresView() {
   // ── Main list view ──
   return (
     <div className="p-4 md:p-6 space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <Truck className="h-7 w-7 text-primary" />
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">PROVEEDORES</h1>
-            <p className="text-sm text-muted-foreground">Gestión de proveedores — {empresaActual.nombre}</p>
-          </div>
-        </div>
-      </div>
+      {/* Header removed — title shown in top bar */}
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">

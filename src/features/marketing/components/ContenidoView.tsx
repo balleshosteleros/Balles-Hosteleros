@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Film, Camera, FileText, ImageIcon, Clock, Plus, Search, FolderOpen, ExternalLink, Trash2, Edit, Video, BookOpen } from "lucide-react";
+import { Film, Camera, FileText, ImageIcon, Clock, Plus, Search, ExternalLink, Trash2, Edit, Video, BookOpen } from "lucide-react";
 
 type TipoContenido = "guion" | "grabacion" | "reel" | "post" | "historia";
 type EstadoContenido = "borrador" | "en_produccion" | "listo" | "publicado" | "archivado";
@@ -163,13 +163,7 @@ export function ContenidoView() {
 
   return (
     <div className="p-4 md:p-6 space-y-5">
-      <div className="flex items-center gap-3">
-        <FolderOpen className="h-7 w-7 text-primary" />
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">CONTENIDO</h1>
-          <p className="text-sm text-muted-foreground">Biblioteca interna de material de marketing</p>
-        </div>
-      </div>
+      {/* Header removed — title shown in top bar */}
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {counts.map((s) => (

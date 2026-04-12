@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { Search, Plus, Users, Star, UserCheck, UserX } from "lucide-react";
+import { Search, Plus, Star, UserCheck, UserX } from "lucide-react";
 import { SAMPLE_CLIENTES, Cliente, ClasificacionCliente } from "@/features/sala/data/clientes";
 
 const clasificacionBadge: Record<ClasificacionCliente, string> = {
@@ -39,11 +39,7 @@ export function ClientesView() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">CLIENTES</h1>
-          <p className="text-muted-foreground text-sm">{empresaActual.nombre} — Base de datos de clientes</p>
-        </div>
+      <div className="flex items-center justify-end">
         <Button><Plus className="h-4 w-4 mr-2" />Nuevo cliente</Button>
       </div>
 

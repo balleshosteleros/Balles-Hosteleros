@@ -70,11 +70,7 @@ export function AccesosView() {
 
   return (
     <div className="p-4 md:p-6 space-y-6 w-full">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Accesos y Herramientas</h1>
-          <p className="text-muted-foreground text-sm mt-1">Centro de credenciales y accesos rápidos a aplicaciones externas — {empresaActual.nombre}</p>
-        </div>
+      <div className="flex items-center justify-end">
         <Button size="sm" className="gap-1.5"><Plus className="h-4 w-4" /> Nuevo acceso</Button>
       </div>
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Megaphone, Plus, CalendarDays, Link2, FileText, Target, BarChart3 } from "lucide-react";
+import { Plus, CalendarDays, Link2, FileText, Target, BarChart3 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,27 +66,11 @@ export function CalendarioMarketingView({ embedded }: { embedded?: boolean } = {
 
   return (
     <div className={embedded ? "space-y-5" : "p-4 md:p-6 space-y-5"}>
-      {!embedded && (
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Megaphone className="h-7 w-7 text-primary" />
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">CALENDARIO</h1>
-              <p className="text-sm text-muted-foreground">Planificación de contenidos y campañas</p>
-            </div>
-          </div>
-          <Button className="gap-1.5" onClick={() => { setEditItem(null); setModalOpen(true); }}>
-            <Plus className="h-4 w-4" /> Nueva publicación
-          </Button>
-        </div>
-      )}
-      {embedded && (
-        <div className="flex items-center justify-end">
-          <Button className="gap-1.5" onClick={() => { setEditItem(null); setModalOpen(true); }}>
-            <Plus className="h-4 w-4" /> Nueva publicación
-          </Button>
-        </div>
-      )}
+      <div className="flex items-center justify-end">
+        <Button className="gap-1.5" onClick={() => { setEditItem(null); setModalOpen(true); }}>
+          <Plus className="h-4 w-4" /> Nueva publicación
+        </Button>
+      </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold text-foreground">{items.length}</p><p className="text-xs text-muted-foreground">Total elementos</p></CardContent></Card>

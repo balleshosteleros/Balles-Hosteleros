@@ -24,7 +24,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Search, Plus, List, LayoutGrid, Settings, ChefHat, Euro, Percent,
-  Copy, Archive, Trash2, GripVertical, Utensils, Printer, Download,
+  Copy, Archive, Trash2, GripVertical, Printer, Download,
   Share2, Link2, LinkIcon, ImageIcon, Upload, X, FileDown, Check,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -700,14 +700,7 @@ export function FichasTecnicasView() {
   return (
     <div className="p-4 md:p-6 space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Utensils className="h-7 w-7 text-primary" />
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">FICHAS TÉCNICAS</h1>
-            <p className="text-sm text-muted-foreground">Gestión de recetas, costes y elaboraciones</p>
-          </div>
-        </div>
+      <div className="flex items-center justify-end">
         <Button className="gap-1.5" onClick={openNew}>
           <Plus className="h-4 w-4" /> Nueva ficha
         </Button>

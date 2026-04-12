@@ -23,7 +23,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Separator } from "@/components/ui/separator";
 import {
   Search, Plus, Table2, LayoutGrid, ShoppingCart, Store, Settings2,
-  Package, FlaskConical, CalendarDays, AlertTriangle,
+  FlaskConical, CalendarDays, AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ImportExportButtons } from "@/features/logistica/components/productos/ImportExportButtons";
@@ -533,14 +533,7 @@ export function ProductosView() {
   return (
     <div className="p-4 md:p-6 space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Package className="h-7 w-7 text-primary" />
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">PRODUCTOS</h1>
-            <p className="text-sm text-muted-foreground">Gestión de productos de compra, venta y elaboraciones</p>
-          </div>
-        </div>
+      <div className="flex items-center justify-end">
         <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setShowConfig(!showConfig)}>
           <Settings2 className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">{showConfig ? "Cerrar config." : "Configuración"}</span>

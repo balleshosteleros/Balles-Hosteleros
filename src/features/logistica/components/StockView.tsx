@@ -18,7 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Search, Warehouse, ArrowUpDown, Pencil, Check, X, Lock, Sun, BarChart3,
+  Search, ArrowUpDown, Pencil, Check, X, Lock, Sun, BarChart3,
 } from "lucide-react";
 import StockAnalytics from "@/features/logistica/components/stock/StockAnalytics";
 import { toast } from "sonner";
@@ -177,14 +177,9 @@ export function StockView() {
   return (
     <div className="p-4 md:p-6 space-y-5">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <Warehouse className="h-7 w-7 text-primary" />
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">STOCK</h1>
-          <p className="text-sm text-muted-foreground">Control de stock de productos — {empresaActual.nombre}</p>
-        </div>
+      <div className="flex items-center justify-end gap-3">
         {temporadas.length > 0 && (
-          <div className="ml-auto flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <span className="text-xs font-medium text-muted-foreground">Temporada:</span>
             <Select value={temporadaSeleccionada} onValueChange={setTemporadaSeleccionada}>
               <SelectTrigger className="w-[200px] h-9">

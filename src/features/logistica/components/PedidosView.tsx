@@ -19,7 +19,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Plus, Copy, Pencil, Trash2, Search, ShoppingCart, Printer, Download, MoreHorizontal, Archive,
+  Plus, Copy, Pencil, Trash2, Search, Printer, Download, MoreHorizontal, Archive,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -219,16 +219,7 @@ export function PedidosView() {
   // ── Main list view ───
   return (
     <div className="p-4 md:p-6 space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <ShoppingCart className="h-7 w-7 text-primary" />
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">PEDIDOS</h1>
-            <p className="text-sm text-muted-foreground">Gestión de pedidos a proveedores — {empresaActual.nombre}</p>
-          </div>
-        </div>
-      </div>
+      {/* Header removed — title shown in top bar */}
 
       {/* Stats */}
       <div className="grid grid-cols-3 md:grid-cols-6 gap-3">

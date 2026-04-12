@@ -23,8 +23,6 @@ export function AdminPanel() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-8 p-8">
-      <h1 className="text-2xl font-bold">Gestión de empleados</h1>
-
       <CreateEmployeeForm onSuccess={loadEmployees} />
 
       <div>

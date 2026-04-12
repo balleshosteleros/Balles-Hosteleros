@@ -17,6 +17,7 @@ import {
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarMenuSub, SidebarMenuSubItem,
   SidebarHeader, SidebarFooter, SidebarRail, useSidebar,
 } from "@/components/ui/sidebar";
+import { PanelLeft } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 const contabilidadSubs = [
@@ -186,18 +187,34 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="px-3 py-2">
-        <button
-          type="button"
-          onClick={toggleSidebar}
-          className="flex w-full items-center justify-center rounded hover:bg-sidebar-accent/40 transition-colors py-1"
-          title={collapsed ? "Expandir menú" : "Colapsar menú"}
-        >
-          <img
-            src="/logo-balles.png"
-            alt="Balles Hosteleros"
-            className={`${collapsed ? "w-7" : "w-24"} transition-all duration-200`}
-          />
-        </button>
+        <div className={`flex items-center ${collapsed ? "justify-center" : "justify-between"} gap-2`}>
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            className="flex items-center justify-center rounded hover:bg-sidebar-accent/40 transition-colors py-1 px-1"
+            title={collapsed ? "Expandir menú" : "Colapsar menú"}
+          >
+            {collapsed ? (
+              <PanelLeft className="h-5 w-5 text-sidebar-foreground/80" />
+            ) : (
+              <img
+                src="/logo-balles.png"
+                alt="Balles Hosteleros"
+                className="w-24 transition-all duration-200"
+              />
+            )}
+          </button>
+          {!collapsed && (
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              className="flex h-7 w-7 items-center justify-center rounded hover:bg-sidebar-accent/40 transition-colors"
+              title="Colapsar menú"
+            >
+              <PanelLeft className="h-4 w-4 text-sidebar-foreground/60" />
+            </button>
+          )}
+        </div>
       </SidebarHeader>
 
       <SidebarContent>

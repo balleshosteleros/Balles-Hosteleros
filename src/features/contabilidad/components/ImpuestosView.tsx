@@ -45,8 +45,7 @@ export function ImpuestosView() {
 
   return (
     <div className="p-6 space-y-6 max-w-[1200px] mx-auto">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Impuestos</h1>
+      <div className="flex items-center justify-end">
         <div className="flex items-center gap-3">
           <Button variant="outline" size="icon"><Download className="h-4 w-4" /></Button>
           <Select value={periodo} onValueChange={setPeriodo}>
