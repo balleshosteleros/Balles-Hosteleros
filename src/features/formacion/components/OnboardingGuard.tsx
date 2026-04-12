@@ -24,7 +24,7 @@ const STORAGE_KEY = "balles:onboarding-completado";
  * en la tabla `profiles` de Supabase, para que la info viaje con el usuario.
  */
 export function OnboardingGuard({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, roles } = useAuth();
   const devBypass = process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true";
   const pathname = usePathname();
   const [completado, setCompletado] = useState(true); // default true para evitar flash
@@ -37,18 +37,17 @@ export function OnboardingGuard({ children }: { children: React.ReactNode }) {
     setCompletado(val === "true");
   }, [user]);
 
-  // Si está en /formacion, dejamos pasar (es donde hace el onboarding)
   const esFormacion = pathname === "/formacion";
-  // Admins y directores no pasan por onboarding obligatorio
-  const esAdmin =
-    devBypass || !user; // en modo dev bypass no bloqueamos
+  // Exentos del onboarding obligatorio:
+  // - Modo dev bypass
+  // - No hay user (aún cargando o bypass)
+  // - Roles admin, director, gerencia (ellos no necesitan el onboarding de empleado)
+  const exento =
+    devBypass ||
+    !user ||
+    roles.some((r) => ["admin", "director", "gerencia"].includes(r));
 
-  // No bloquear si:
-  // - aún no montado (evita flash)
-  // - onboarding ya completado
-  // - está en la ruta /formacion
-  // - es admin/director/devBypass
-  if (!mounted || completado || esFormacion || esAdmin) {
+  if (!mounted || completado || esFormacion || exento) {
     return <>{children}</>;
   }
 

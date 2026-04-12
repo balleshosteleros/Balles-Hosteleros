@@ -40,11 +40,7 @@ export function AperturasView() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">APERTURAS</h1>
-          <p className="text-muted-foreground text-sm">{empresaActual.nombre} — Estudios de viabilidad de nuevas aperturas</p>
-        </div>
+      <div className="flex items-center justify-end">
         <Dialog open={showNew} onOpenChange={setShowNew}>
           <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" />Nuevo estudio</Button></DialogTrigger>
           <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">

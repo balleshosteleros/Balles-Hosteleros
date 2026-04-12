@@ -116,11 +116,7 @@ export function VencimientosView() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground tracking-tight">REVISIONES</h1>
-          <p className="text-sm text-muted-foreground mt-1">Control centralizado de permisos, seguros, revisiones y mantenimientos periódicos</p>
-        </div>
+      <div className="flex items-center justify-end">
         <Button onClick={() => { setForm(emptyForm()); setModalOpen(true); }} className="gap-2"><Plus className="h-4 w-4" /> Nuevo registro</Button>
       </div>
 

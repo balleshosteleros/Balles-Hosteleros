@@ -6,16 +6,6 @@ import { ContactRound } from "lucide-react";
 export function CalidadClientesView() {
   return (
     <div className="space-y-6 p-6">
-      <div className="flex items-center gap-3">
-        <ContactRound className="h-6 w-6 text-primary" />
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">CALIDAD — CLIENTES</h1>
-          <p className="text-sm text-muted-foreground">
-            Satisfacción, reseñas y experiencia del cliente
-          </p>
-        </div>
-      </div>
-
       <Card>
         <CardContent className="flex flex-col items-center justify-center py-16 text-center">
           <ContactRound className="h-12 w-12 text-muted-foreground/50 mb-4" />

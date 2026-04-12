@@ -82,16 +82,9 @@ export function DocumentacionView() {
 
   return (
     <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Documentación</h1>
-          <p className="text-sm text-muted-foreground mt-1">Biblioteca documental confidencial · {empresaActual?.nombre}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm"><FolderPlus className="h-4 w-4 mr-1.5" />Nueva carpeta</Button>
-          <Button size="sm"><Upload className="h-4 w-4 mr-1.5" />Subir documento</Button>
-        </div>
+      <div className="flex items-center justify-end gap-2">
+        <Button variant="outline" size="sm"><FolderPlus className="h-4 w-4 mr-1.5" />Nueva carpeta</Button>
+        <Button size="sm"><Upload className="h-4 w-4 mr-1.5" />Subir documento</Button>
       </div>
 
       {/* Main Tabs */}

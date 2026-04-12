@@ -8,7 +8,6 @@ import {
   ClipboardCheck,
   FileText,
   ShoppingCart,
-  ChefHat,
   Eye,
   Pencil,
   Trash2,
@@ -212,21 +211,7 @@ export function NuevosPlatosView() {
 
   return (
     <div className="p-4 md:p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <div className="rounded-xl bg-orange-600/10 p-2 text-orange-600">
-            <ChefHat className="h-7 w-7" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">
-              NUEVOS PLATOS
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Proponer, catar y aprobar platos para Cocina y Sala
-            </p>
-          </div>
-        </div>
+      <div className="flex justify-end">
         <Button onClick={() => setShowNew(true)}>
           <Plus className="mr-1 h-4 w-4" /> Proponer plato
         </Button>

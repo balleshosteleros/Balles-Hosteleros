@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import {
-  AlertTriangle,
   TrendingUp,
   TrendingDown,
   AlertCircle,
@@ -89,19 +88,6 @@ export function IncidenciasView() {
 
   return (
     <div className="p-4 md:p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="rounded-xl bg-red-600/10 p-2 text-red-600">
-          <AlertTriangle className="h-7 w-7" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">INCIDENCIAS</h1>
-          <p className="text-sm text-muted-foreground">
-            Registra subidas de precio anómalas y otras incidencias con proveedores
-          </p>
-        </div>
-      </div>
-
       {/* Calculadora */}
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">

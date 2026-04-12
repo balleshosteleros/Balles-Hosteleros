@@ -72,19 +72,7 @@ const canales = [
 export function CaptacionView() {
   return (
     <div className="p-4 md:p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <div className="rounded-xl bg-cyan-600/10 p-2 text-cyan-600">
-            <UserPlus className="h-7 w-7" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">CAPTACIÓN</h1>
-            <p className="text-sm text-muted-foreground">
-              Métricas y canales para atraer clientes nuevos al holding
-            </p>
-          </div>
-        </div>
+      <div className="flex justify-end">
         <Badge variant="secondary" className="text-[10px] uppercase tracking-wider">
           En diseño
         </Badge>

@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
-import { MessageSquareWarning, BookPlus, Eye, CheckCircle2, Clock } from "lucide-react";
+import { BookPlus, Eye, CheckCircle2, Clock } from "lucide-react";
 import { toast } from "sonner";
 
 const ROLES = ["Administrador", "Gerencia", "Contabilidad", "Gestoría", "Jurídico", "Recursos Humanos", "Logística", "Marketing", "Solo lectura"];
@@ -66,14 +66,6 @@ export function ConsultasPendientesView() {
 
   return (
     <div className="p-4 md:p-6 space-y-5">
-      <div className="flex items-center gap-3">
-        <MessageSquareWarning className="h-7 w-7 text-primary" />
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">CONSULTAS PENDIENTES</h1>
-          <p className="text-sm text-muted-foreground">Dudas no resueltas del centro de ayuda</p>
-        </div>
-      </div>
-
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-4 text-center">

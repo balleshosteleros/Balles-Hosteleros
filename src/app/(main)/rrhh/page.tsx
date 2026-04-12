@@ -4,7 +4,7 @@ import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { getEmpleadosPorEmpresa } from "@/features/rrhh/data/rrhh";
 import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, UserPlus, UserMinus, DollarSign, AlertTriangle, FileText, TrendingUp, TrendingDown } from "lucide-react";
+import { UserPlus, UserMinus, DollarSign, AlertTriangle, FileText, TrendingUp, TrendingDown } from "lucide-react";
 
 interface KPI {
   label: string;
@@ -45,14 +45,6 @@ export default function RRHHPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center gap-3">
-        <Users className="h-6 w-6 text-primary" />
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Recursos Humanos</h1>
-          <p className="text-sm text-muted-foreground">{empleados.length} empleados en plantilla</p>
-        </div>
-      </div>
-
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {kpis.map((kpi) => (
           <Card key={kpi.label} className="border bg-card">

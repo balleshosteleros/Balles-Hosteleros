@@ -92,11 +92,6 @@ export function DescuentosView() {
   return (
     <div className="flex-1 overflow-auto">
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">DESCUENTOS</h1>
-          <p className="text-sm text-muted-foreground mt-1">Gestión de descuentos operativos del restaurante</p>
-        </div>
-
         <Tabs defaultValue="listado" className="space-y-4">
           <TabsList>
             <TabsTrigger value="listado" className="gap-2"><FileText className="h-4 w-4" /> Listado</TabsTrigger>

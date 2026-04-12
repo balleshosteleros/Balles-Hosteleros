@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { HelpCircle, Search, ChevronRight, UserRound } from "lucide-react";
+import { Search, ChevronRight, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -19,18 +19,6 @@ export function AyudaPortal({ viewerData, adminData }: AyudaPortalProps) {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-6 md:py-8">
-      <div className="mb-6 flex items-center gap-3">
-        <div className="rounded-xl bg-primary/10 p-2 text-primary">
-          <HelpCircle className="h-7 w-7" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Ayuda</h1>
-          <p className="text-sm text-muted-foreground">
-            Busca aquí respuestas a tus dudas. Si no encuentras lo que buscas, pide ayuda a una persona.
-          </p>
-        </div>
-      </div>
-
       {canEdit ? (
         <Tabs defaultValue="ver" className="w-full">
           <TabsList className="mb-4">

@@ -1,6 +1,6 @@
 "use client";
 
-import { Settings, Building2, Users, Shield, Layers, Cog, ClipboardList, HelpCircle, Briefcase, Store } from "lucide-react";
+import { Building2, Users, Shield, Layers, Cog, ClipboardList, HelpCircle, Briefcase, Store } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ResumenGeneral } from "@/features/ajustes/components/ResumenGeneral";
 import { DatosGeneralesTab } from "@/features/ajustes/components/DatosGeneralesTab";
@@ -29,14 +29,6 @@ const tabs = [
 export default function AjustesPage() {
   return (
     <div className="p-4 md:p-6 space-y-5">
-      <div className="flex items-center gap-3">
-        <Settings className="h-7 w-7 text-primary" />
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">AJUSTES</h1>
-          <p className="text-sm text-muted-foreground">Configuración de la empresa</p>
-        </div>
-      </div>
-
       <Tabs defaultValue="resumen" className="space-y-4">
         <TabsList className="flex flex-wrap h-auto gap-1 bg-muted/50 p-1">
           {tabs.map((t) => (

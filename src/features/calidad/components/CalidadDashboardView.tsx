@@ -7,21 +7,9 @@ import { CheckCircle2, ClipboardList, AlertTriangle, TrendingUp } from "lucide-r
 export function CalidadDashboardView() {
   return (
     <div className="space-y-6 p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <CheckCircle2 className="h-6 w-6 text-primary" />
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">CALIDAD</h1>
-            <p className="text-sm text-muted-foreground">
-              Control y mejora continua de los procesos del grupo
-            </p>
-          </div>
-        </div>
-        <Badge variant="outline" className="text-xs">
-          MÓDULO NUEVO
-        </Badge>
-      </div>
+      <Badge variant="outline" className="text-xs self-end">
+        MÓDULO NUEVO
+      </Badge>
 
       {/* KPI Cards (placeholder) */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

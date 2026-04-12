@@ -12,7 +12,7 @@ import { DetalleIncidencia } from "@/features/mantenimiento/components/DetalleIn
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Wrench, CalendarDays, Info } from "lucide-react";
+import { Plus, Search, CalendarDays, Info } from "lucide-react";
 
 const ALL = "__ALL__";
 type FiltroPeriodo = "semana" | "mes" | "trimestre" | "inicio";
@@ -94,14 +94,7 @@ export function MantenimientoView() {
 
   return (
     <div className="p-4 md:p-6 space-y-5">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Wrench className="h-7 w-7 text-primary" />
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">MANTENIMIENTO</h1>
-            <p className="text-sm text-muted-foreground">Control de incidencias y desperfectos</p>
-          </div>
-        </div>
+      <div className="flex items-center justify-end">
         <Button onClick={() => { setEditItem(null); setModalOpen(true); }} className="gap-2">
           <Plus className="h-4 w-4" /> NUEVA INCIDENCIA
         </Button>

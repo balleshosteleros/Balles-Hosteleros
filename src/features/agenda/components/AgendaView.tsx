@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import {
-  ContactRound,
   Search,
   Plus,
   Phone,
@@ -217,19 +216,7 @@ export function AgendaView() {
 
   return (
     <div className="p-4 md:p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <div className="rounded-xl bg-primary/10 p-2 text-primary">
-            <ContactRound className="h-7 w-7" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">AGENDA</h1>
-            <p className="text-sm text-muted-foreground">
-              Base de contactos compartida del holding (mantenimiento, proveedores, servicios…)
-            </p>
-          </div>
-        </div>
+      <div className="flex justify-end">
         <Button onClick={abrirNuevo}>
           <Plus className="mr-1 h-4 w-4" /> Nuevo contacto
         </Button>

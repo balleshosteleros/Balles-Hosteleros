@@ -6,16 +6,6 @@ import { FileSearch } from "lucide-react";
 export function CalidadInspeccionesView() {
   return (
     <div className="space-y-6 p-6">
-      <div className="flex items-center gap-3">
-        <FileSearch className="h-6 w-6 text-primary" />
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">INSPECCIONES</h1>
-          <p className="text-sm text-muted-foreground">
-            Inspecciones sanitarias, técnicas y de seguridad alimentaria
-          </p>
-        </div>
-      </div>
-
       <Card>
         <CardContent className="flex flex-col items-center justify-center py-16 text-center">
           <FileSearch className="h-12 w-12 text-muted-foreground/50 mb-4" />

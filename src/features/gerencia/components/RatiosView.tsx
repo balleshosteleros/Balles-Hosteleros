@@ -43,16 +43,10 @@ export function RatiosView() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">RATIOS DE PERSONAL</h1>
-          <p className="text-sm text-muted-foreground mt-1">Control de costes, previsiones y horas · {semana.fechaInicio} — {semana.fechaFin}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon"><ChevronLeft className="h-4 w-4" /></Button>
-          <span className="text-sm font-medium text-muted-foreground">Semana actual</span>
-          <Button variant="outline" size="icon"><ChevronRight className="h-4 w-4" /></Button>
-        </div>
+      <div className="flex items-center justify-end gap-2">
+        <Button variant="outline" size="icon"><ChevronLeft className="h-4 w-4" /></Button>
+        <span className="text-sm font-medium text-muted-foreground">Semana actual</span>
+        <Button variant="outline" size="icon"><ChevronRight className="h-4 w-4" /></Button>
       </div>
 
       <div className="flex items-center gap-4">
