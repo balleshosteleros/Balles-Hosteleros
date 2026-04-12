@@ -18,22 +18,13 @@ export function GoogleSignInButton({
     setLoading(true)
     const supabase = createClient()
 
+    // OJO: solo scopes básicos. Los de Gmail/Calendar se piden por separado
+    // desde el botón "Conectar Google" del drawer, porque son scopes sensibles
+    // y disparan el bloqueo de verificación de Google si los pedimos en el login.
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/callback?next=${redirectTo}`,
-        scopes: [
-          'email',
-          'profile',
-          'https://www.googleapis.com/auth/gmail.readonly',
-          'https://www.googleapis.com/auth/gmail.send',
-          'https://www.googleapis.com/auth/calendar',
-          'https://www.googleapis.com/auth/calendar.events',
-        ].join(' '),
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'consent',
-        },
       },
     })
 

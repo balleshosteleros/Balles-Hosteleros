@@ -15,6 +15,7 @@ import {
   Calendar as CalendarIcon,
 } from "lucide-react";
 import { FloatingSoporteButton } from "@/features/soporte/components";
+import { OnboardingGuard } from "@/features/formacion/components/OnboardingGuard";
 import { EmpresaSelector } from "@/features/empresa/components/empresa-selector";
 import {
   GmailDrawer,
@@ -50,7 +51,10 @@ const ROUTE_TITLES: Record<string, string> = {
   "/ayuda": "AYUDA",
   "/consultas-pendientes": "CONSULTAS PENDIENTES",
   "/formacion": "ONBOARDING",
+  "/comunicacion": "COMUNICACIÓN",
+  "/reuniones": "REUNIONES",
   "/agenda": "AGENDA",
+  "/cocina/nuevos-platos": "NUEVOS PLATOS",
 };
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -82,13 +86,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="ml-auto flex items-center gap-2">
               {showUi && (
                 <>
-                  {/* Selector de empresa */}
-                  <div className="hidden md:block w-52">
-                    <EmpresaSelector />
-                  </div>
-
-                  <div className="hidden lg:block h-6 w-px bg-border" />
-
                   {/* Email integrado */}
                   <GmailDrawer>
                     <Button
@@ -133,32 +130,53 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
                   <div className="hidden lg:block h-6 w-px bg-border" />
 
-                  {/* Usuario */}
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <UserCircle className="h-4 w-4" />
-                    <span className="hidden 2xl:inline">
-                      {profile?.email ?? user?.email ?? "dev@local"}
-                    </span>
-                    <Badge variant="secondary" className="text-[10px]">
-                      {rolLabel}
-                    </Badge>
+                  {/* Bloque final: empresa + correo + rol + salir */}
+                  <div className="flex items-center gap-2 rounded-full border bg-muted/40 py-1 pl-1 pr-2">
+                    {/* Selector de empresa */}
+                    <div className="w-44 md:w-52">
+                      <EmpresaSelector />
+                    </div>
+
+                    <div className="hidden md:block h-7 w-px bg-border" />
+
+                    {/* Correo + rol */}
+                    <div className="hidden md:flex flex-col leading-tight">
+                      <span
+                        className="max-w-[180px] truncate text-[11px] font-semibold text-foreground"
+                        title={profile?.email ?? user?.email ?? "dev@local"}
+                      >
+                        {profile?.email ?? user?.email ?? "dev@local"}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <UserCircle className="h-3 w-3 text-muted-foreground" />
+                        <Badge
+                          variant="secondary"
+                          className="h-4 px-1.5 text-[9px] font-semibold uppercase tracking-wider"
+                        >
+                          {rolLabel}
+                        </Badge>
+                      </span>
+                    </div>
+
+                    {user && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        onClick={signOut}
+                        title="Cerrar sesión"
+                      >
+                        <LogOut className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </div>
-                  {user && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="gap-1.5 text-xs"
-                      onClick={signOut}
-                    >
-                      <LogOut className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">Salir</span>
-                    </Button>
-                  )}
                 </>
               )}
             </div>
           </header>
-          <main className="flex-1 overflow-auto">{children}</main>
+          <main className="flex-1 overflow-auto">
+            <OnboardingGuard>{children}</OnboardingGuard>
+          </main>
         </div>
         {showUi && <FloatingSoporteButton />}
       </div>

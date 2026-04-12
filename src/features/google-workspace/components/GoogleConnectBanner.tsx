@@ -1,15 +1,15 @@
 "use client";
 
 import { ShieldCheck } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useGoogleConnection } from "./useGoogleConnection";
+import { usePathname } from "next/navigation";
 
 interface Props {
   servicio: string;
 }
 
 export function GoogleConnectBanner({ servicio }: Props) {
-  const { connect } = useGoogleConnection();
+  const pathname = usePathname();
+  const href = `/api/google/connect?next=${encodeURIComponent(pathname || "/dashboard")}`;
 
   return (
     <div className="flex flex-col items-start justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50/60 p-3 sm:flex-row sm:items-center dark:border-blue-900/50 dark:bg-blue-950/30">
@@ -27,13 +27,13 @@ export function GoogleConnectBanner({ servicio }: Props) {
           </p>
         </div>
       </div>
-      <Button
-        size="sm"
-        className="bg-blue-600 text-white hover:bg-blue-700 shrink-0"
-        onClick={() => connect()}
+      {/* Link directo a la ruta server: 1 redirect → Google. Sin JS, sin lag. */}
+      <a
+        href={href}
+        className="inline-flex h-8 shrink-0 items-center justify-center rounded-md bg-blue-600 px-4 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
       >
         Conectar Google
-      </Button>
+      </a>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { GraduationCap } from "lucide-react";
 import { FormacionView } from "@/features/formacion/components/FormacionView";
+import { OnboardingCompleteButton } from "@/features/formacion/components/OnboardingGuard";
 
 export default function FormacionPage() {
   return (
@@ -17,6 +18,9 @@ export default function FormacionPage() {
       </div>
 
       <FormacionView />
+      <div className="px-4 pb-6 md:px-6">
+        <OnboardingCompleteButton />
+      </div>
     </div>
   );
 }

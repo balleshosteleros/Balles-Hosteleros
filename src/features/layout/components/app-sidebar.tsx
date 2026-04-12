@@ -15,7 +15,7 @@ import { NavLink } from "@/features/layout/components/nav-link";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarMenuSub, SidebarMenuSubItem,
-  SidebarHeader, SidebarFooter, useSidebar,
+  SidebarHeader, SidebarFooter, SidebarRail, useSidebar,
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
@@ -44,6 +44,7 @@ const salaSubs = [
   { title: "TEMPERATURAS", url: "/sala/temperaturas", icon: Thermometer },
 ];
 const cocinaSubs = [
+  { title: "NUEVOS PLATOS", url: "/cocina/nuevos-platos", icon: Sparkles },
   { title: "FICHAS TÉCNICAS", url: "/cocina/fichas-tecnicas", icon: Utensils },
   { title: "ELABORACIONES", url: "/cocina/elaboraciones", icon: FlaskConical },
   { title: "PARTIDAS", url: "/cocina/partidas", icon: ChefHat },
@@ -179,25 +180,30 @@ function CollapsibleSection({
 }
 
 export function AppSidebar() {
-  const { state } = useSidebar();
+  const { state, toggleSidebar } = useSidebar();
   const collapsed = state === "collapsed";
 
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="px-3 py-2">
-        <div className="flex items-center justify-center">
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          className="flex w-full items-center justify-center rounded hover:bg-sidebar-accent/40 transition-colors py-1"
+          title={collapsed ? "Expandir menú" : "Colapsar menú"}
+        >
           <img
             src="/logo-balles.png"
             alt="Balles Hosteleros"
             className={`${collapsed ? "w-7" : "w-24"} transition-all duration-200`}
           />
-        </div>
+        </button>
       </SidebarHeader>
 
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs tracking-widest">
-            {!collapsed && "MÓDULOS"}
+            {!collapsed && "DEPARTAMENTOS"}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -225,6 +231,8 @@ export function AppSidebar() {
         )}
         <SidebarMenu>
           {[
+            { href: "/comunicacion", icon: MessageSquareWarning, label: "COMUNICACIÓN" },
+            { href: "/reuniones", icon: Camera, label: "REUNIONES" },
             { href: "/agenda", icon: ContactRound, label: "AGENDA" },
             { href: "/accesos", icon: KeyRound, label: "ACCESOS" },
             { href: "/consultas-pendientes", icon: MessageSquareWarning, label: "CONSULTAS PENDIENTES" },
@@ -246,6 +254,8 @@ export function AppSidebar() {
           ))}
         </SidebarMenu>
       </SidebarFooter>
+      {/* Franja vertical clickeable en el borde — permite expandir/colapsar pulsando el lateral */}
+      <SidebarRail />
     </Sidebar>
   );
 }
