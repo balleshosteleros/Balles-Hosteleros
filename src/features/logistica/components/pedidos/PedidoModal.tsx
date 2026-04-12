@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { PROVEEDORES, ALMACENES, type Pedido, type LineaPedido, calcLineaTotal } from "@/features/logistica/data/pedidos";
+import { ALMACENES, type Pedido, type LineaPedido, calcLineaTotal } from "@/features/logistica/data/pedidos";
+import { listProveedores } from "@/features/logistica/actions/proveedores-actions";
 import { Trash2, Plus } from "lucide-react";
 
 interface Props {
@@ -25,11 +26,24 @@ const emptyLinea = (): LineaPedido => ({
 
 export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNombre }: Props) {
   const isEdit = !!item;
-  const almacenes = ALMACENES[empresaId] || ALMACENES.habana || [];
+  const almacenes = ALMACENES[empresaId] || ALMACENES.habana || ["COCINA", "BARRA"];
+  const [proveedoresList, setProveedoresList] = useState<string[]>([]);
+
+  useEffect(() => {
+    listProveedores().then((res) => {
+      if (res.ok) {
+        const names = (res.data as unknown as Array<Record<string, unknown>>)
+          .map((r) => (r.nombre_comercial as string) ?? (r.nombre as string) ?? "")
+          .filter((n) => !!n)
+          .sort();
+        setProveedoresList(names);
+      }
+    });
+  }, []);
 
   const [form, setForm] = useState(() => item ? { ...item } : {
     id: `ped-${Date.now()}`, numero: `PED-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900) + 100)}`,
-    empresaId, empresa: empresaNombre, proveedor: PROVEEDORES[0] ?? "", docProveedor: "",
+    empresaId, empresa: empresaNombre, proveedor: "", docProveedor: "",
     almacen: almacenes[0] ?? "", fecha: new Date().toISOString().slice(0, 10),
     fechaEntrega: "", estado: "Borrador" as const,
     lineas: [emptyLinea()], dtoPct: 0, dtoEur: 0, notas: "",
@@ -69,7 +83,7 @@ export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNom
           <div><Label className="text-xs font-semibold">Proveedor</Label>
             <Select value={form.proveedor} onValueChange={(v) => setField("proveedor", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{PROVEEDORES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+              <SelectContent>{proveedoresList.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div><Label className="text-xs font-semibold">Doc. Proveedor</Label><Input value={form.docProveedor} onChange={(e) => setField("docProveedor", e.target.value)} /></div>

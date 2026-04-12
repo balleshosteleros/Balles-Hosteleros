@@ -1,24 +1,12 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
+import type { ProveedorImport } from "@/features/logistica/types/import";
+import type { ProveedorRow } from "@/features/logistica/types/db";
 
 async function getContext() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { supabase, user: null, empresaId: null, nombre: null };
-  const { data } = await supabase
-    .from("profiles")
-    .select("empresa_id, nombre, apellidos")
-    .eq("user_id", user.id)
-    .single();
-  return {
-    supabase,
-    user,
-    empresaId: data?.empresa_id ?? null,
-    nombre: data ? data.nombre + " " + data.apellidos : null,
-  };
+  const { supabase, userId, empresaId } = await getLogisticaContext();
+  return { supabase, user: userId ? { id: userId } : null, empresaId };
 }
 
 export async function listProveedores() {
@@ -27,157 +15,173 @@ export async function listProveedores() {
     const query = supabase
       .from("proveedores")
       .select("*")
-      .order("nombre", { ascending: true });
+      .order("nombre_comercial", { ascending: true });
     if (empresaId) query.eq("empresa_id", empresaId);
     const { data, error } = await query;
     if (error) throw error;
-    return { ok: true, data: data ?? [] };
+    return { ok: true as const, data: (data ?? []) as ProveedorRow[] };
   } catch (err) {
     console.error("[proveedores] listProveedores:", err);
-    return { ok: false, data: [] };
+    return { ok: false as const, data: [] as ProveedorRow[] };
   }
 }
 
-export async function createProveedor(input: {
-  nombre: string;
-  nombreComercial?: string;
-  cif?: string;
-  direccion?: string;
-  codigoPostal?: string;
-  ciudad?: string;
-  telefonoPrincipal?: string;
-  telefonoSecundario?: string;
-  emailPrincipal?: string;
-  emailPedidos?: string;
-  emailIncidencias?: string;
-  web?: string;
-  estado?: string;
-  diaPedido?: string;
-  diaEntrega?: string;
-  horaLimite?: string;
-  formaPago?: string;
-  condiciones?: string;
-  notas?: string;
-}) {
+export async function createProveedor(input: ProveedorImport) {
   try {
-    const { supabase, empresaId } = await getContext();
-    if (!empresaId) return { ok: false, error: "No autenticado" };
+    const { supabase, user, empresaId } = await getContext();
+    if (!user || !empresaId) return { ok: false as const, error: "No autenticado" };
+
+    if (!input.nombreComercial?.trim()) {
+      return { ok: false as const, error: "El nombre comercial es obligatorio" };
+    }
+    if (!input.categoria?.trim()) {
+      return { ok: false as const, error: "La categoría es obligatoria" };
+    }
+
     const { error } = await supabase.from("proveedores").insert({
       empresa_id: empresaId,
-      nombre: input.nombre,
-      nombre_comercial: input.nombreComercial ?? null,
-      cif: input.cif ?? null,
-      direccion: input.direccion ?? null,
-      codigo_postal: input.codigoPostal ?? null,
-      ciudad: input.ciudad ?? null,
+      nombre_comercial: input.nombreComercial.trim(),
+      razon_social: input.razonSocial ?? null,
+      cif_nif: input.cifNif ?? null,
+      categoria: input.categoria.trim(),
+      estado: input.estado ?? "Activo",
+      persona_contacto: input.personaContacto ?? null,
       telefono_principal: input.telefonoPrincipal ?? null,
       telefono_secundario: input.telefonoSecundario ?? null,
       email_principal: input.emailPrincipal ?? null,
       email_pedidos: input.emailPedidos ?? null,
       email_incidencias: input.emailIncidencias ?? null,
       web: input.web ?? null,
-      estado: input.estado ?? "Activo",
-      dia_pedido: input.diaPedido ?? null,
-      dia_entrega: input.diaEntrega ?? null,
-      hora_limite: input.horaLimite ?? null,
-      forma_pago: input.formaPago ?? null,
-      condiciones: input.condiciones ?? null,
-      notas: input.notas ?? null,
+      direccion: input.direccion ?? null,
+      ciudad: input.ciudad ?? null,
+      provincia: input.provincia ?? null,
+      pais: input.pais ?? "España",
+      codigo_postal: input.codigoPostal ?? null,
+      dias_reparto: input.diasReparto ?? [],
+      condiciones_pago: input.condicionesPago ?? null,
+      plazo_entrega: input.plazoEntrega ?? null,
+      observaciones: input.observaciones ?? null,
+      comentarios_internos: input.comentariosInternos ?? null,
+      created_by: user.id,
     });
+
     if (error) throw error;
-    return { ok: true };
-  } catch (err: unknown) {
+    return { ok: true as const };
+  } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[proveedores] createProveedor:", msg);
-    return { ok: false, error: msg };
+    return { ok: false as const, error: msg };
   }
 }
 
-export async function updateProveedor(
-  id: string,
-  input: {
-    nombre?: string;
-    nombreComercial?: string;
-    cif?: string;
-    direccion?: string;
-    codigoPostal?: string;
-    ciudad?: string;
-    telefonoPrincipal?: string;
-    telefonoSecundario?: string;
-    emailPrincipal?: string;
-    emailPedidos?: string;
-    emailIncidencias?: string;
-    web?: string;
-    estado?: string;
-    diaPedido?: string;
-    diaEntrega?: string;
-    horaLimite?: string;
-    formaPago?: string;
-    condiciones?: string;
-    notas?: string;
-  }
-) {
+export async function updateProveedor(id: string, input: Partial<ProveedorImport>) {
   try {
     const { supabase } = await getContext();
-    // Convert camelCase inputs to snake_case DB fields
-    const dbUpdates: Record<string, unknown> = {
+    const updates: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     };
-    if (input.nombre !== undefined) dbUpdates.nombre = input.nombre;
-    if (input.nombreComercial !== undefined)
-      dbUpdates.nombre_comercial = input.nombreComercial;
-    if (input.cif !== undefined) dbUpdates.cif = input.cif;
-    if (input.direccion !== undefined) dbUpdates.direccion = input.direccion;
-    if (input.codigoPostal !== undefined)
-      dbUpdates.codigo_postal = input.codigoPostal;
-    if (input.ciudad !== undefined) dbUpdates.ciudad = input.ciudad;
-    if (input.telefonoPrincipal !== undefined)
-      dbUpdates.telefono_principal = input.telefonoPrincipal;
-    if (input.telefonoSecundario !== undefined)
-      dbUpdates.telefono_secundario = input.telefonoSecundario;
-    if (input.emailPrincipal !== undefined)
-      dbUpdates.email_principal = input.emailPrincipal;
-    if (input.emailPedidos !== undefined)
-      dbUpdates.email_pedidos = input.emailPedidos;
-    if (input.emailIncidencias !== undefined)
-      dbUpdates.email_incidencias = input.emailIncidencias;
-    if (input.web !== undefined) dbUpdates.web = input.web;
-    if (input.estado !== undefined) dbUpdates.estado = input.estado;
-    if (input.diaPedido !== undefined) dbUpdates.dia_pedido = input.diaPedido;
-    if (input.diaEntrega !== undefined)
-      dbUpdates.dia_entrega = input.diaEntrega;
-    if (input.horaLimite !== undefined)
-      dbUpdates.hora_limite = input.horaLimite;
-    if (input.formaPago !== undefined) dbUpdates.forma_pago = input.formaPago;
-    if (input.condiciones !== undefined)
-      dbUpdates.condiciones = input.condiciones;
-    if (input.notas !== undefined) dbUpdates.notas = input.notas;
 
-    const { error } = await supabase
-      .from("proveedores")
-      .update(dbUpdates)
-      .eq("id", id);
+    if (input.nombreComercial !== undefined) updates.nombre_comercial = input.nombreComercial;
+    if (input.razonSocial !== undefined) updates.razon_social = input.razonSocial;
+    if (input.cifNif !== undefined) updates.cif_nif = input.cifNif;
+    if (input.categoria !== undefined) updates.categoria = input.categoria;
+    if (input.estado !== undefined) updates.estado = input.estado;
+    if (input.personaContacto !== undefined) updates.persona_contacto = input.personaContacto;
+    if (input.telefonoPrincipal !== undefined) updates.telefono_principal = input.telefonoPrincipal;
+    if (input.telefonoSecundario !== undefined) updates.telefono_secundario = input.telefonoSecundario;
+    if (input.emailPrincipal !== undefined) updates.email_principal = input.emailPrincipal;
+    if (input.emailPedidos !== undefined) updates.email_pedidos = input.emailPedidos;
+    if (input.emailIncidencias !== undefined) updates.email_incidencias = input.emailIncidencias;
+    if (input.web !== undefined) updates.web = input.web;
+    if (input.direccion !== undefined) updates.direccion = input.direccion;
+    if (input.ciudad !== undefined) updates.ciudad = input.ciudad;
+    if (input.provincia !== undefined) updates.provincia = input.provincia;
+    if (input.pais !== undefined) updates.pais = input.pais;
+    if (input.codigoPostal !== undefined) updates.codigo_postal = input.codigoPostal;
+    if (input.diasReparto !== undefined) updates.dias_reparto = input.diasReparto;
+    if (input.condicionesPago !== undefined) updates.condiciones_pago = input.condicionesPago;
+    if (input.plazoEntrega !== undefined) updates.plazo_entrega = input.plazoEntrega;
+    if (input.observaciones !== undefined) updates.observaciones = input.observaciones;
+    if (input.comentariosInternos !== undefined) updates.comentarios_internos = input.comentariosInternos;
+
+    const { error } = await supabase.from("proveedores").update(updates).eq("id", id);
     if (error) throw error;
-    return { ok: true };
-  } catch (err: unknown) {
+    return { ok: true as const };
+  } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[proveedores] updateProveedor:", msg);
-    return { ok: false, error: msg };
+    return { ok: false as const, error: msg };
   }
 }
 
 export async function deleteProveedor(id: string) {
   try {
     const { supabase } = await getContext();
-    const { error } = await supabase
-      .from("proveedores")
-      .delete()
-      .eq("id", id);
+    const { error } = await supabase.from("proveedores").delete().eq("id", id);
     if (error) throw error;
-    return { ok: true };
-  } catch (err: unknown) {
+    return { ok: true as const };
+  } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[proveedores] deleteProveedor:", msg);
-    return { ok: false, error: msg };
+    return { ok: false as const, error: msg };
+  }
+}
+
+/**
+ * Importación masiva de proveedores desde parseo de Excel/CSV.
+ */
+export async function bulkImportProveedores(proveedores: ProveedorImport[]) {
+  try {
+    const { supabase, user, empresaId } = await getContext();
+    if (!user || !empresaId) return { ok: false as const, error: "No autenticado", imported: 0 };
+
+    if (!Array.isArray(proveedores) || proveedores.length === 0) {
+      return { ok: false as const, error: "No hay proveedores para importar", imported: 0 };
+    }
+    if (proveedores.length > 5000) {
+      return { ok: false as const, error: "Máximo 5000 proveedores por importación", imported: 0 };
+    }
+
+    const rows = proveedores
+      .filter((p) => p.nombreComercial && p.categoria)
+      .map((p) => ({
+        empresa_id: empresaId,
+        nombre_comercial: p.nombreComercial.trim(),
+        razon_social: p.razonSocial ?? null,
+        cif_nif: p.cifNif ?? null,
+        categoria: p.categoria.trim(),
+        estado: p.estado ?? "Activo",
+        persona_contacto: p.personaContacto ?? null,
+        telefono_principal: p.telefonoPrincipal ?? null,
+        telefono_secundario: p.telefonoSecundario ?? null,
+        email_principal: p.emailPrincipal ?? null,
+        email_pedidos: p.emailPedidos ?? null,
+        email_incidencias: p.emailIncidencias ?? null,
+        web: p.web ?? null,
+        direccion: p.direccion ?? null,
+        ciudad: p.ciudad ?? null,
+        provincia: p.provincia ?? null,
+        pais: p.pais ?? "España",
+        codigo_postal: p.codigoPostal ?? null,
+        dias_reparto: p.diasReparto ?? [],
+        condiciones_pago: p.condicionesPago ?? null,
+        plazo_entrega: p.plazoEntrega ?? null,
+        observaciones: p.observaciones ?? null,
+        comentarios_internos: p.comentariosInternos ?? null,
+        created_by: user.id,
+      }));
+
+    if (rows.length === 0) {
+      return { ok: false as const, error: "Ninguna fila con nombre comercial y categoría", imported: 0 };
+    }
+
+    const { error } = await supabase.from("proveedores").insert(rows);
+    if (error) throw error;
+
+    return { ok: true as const, imported: rows.length, skipped: proveedores.length - rows.length };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[proveedores] bulkImportProveedores:", msg);
+    return { ok: false as const, error: msg, imported: 0 };
   }
 }

@@ -90,8 +90,12 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, onBack, onUpdateEstado, 
       <div className="flex items-center gap-3 flex-wrap">
         <Button variant="ghost" size="sm" onClick={onBack} className="gap-1"><ArrowLeft className="h-4 w-4" /> Volver</Button>
         <div className="flex-1" />
-        <Button variant="outline" size="sm" className="gap-1" onClick={() => toast.info("Función PDF en desarrollo")}><FileText className="h-4 w-4" /> Guardar PDF</Button>
-        <Button variant="outline" size="sm" className="gap-1" onClick={() => toast.info("Función enviar en desarrollo")}><Send className="h-4 w-4" /> Enviar</Button>
+        <Button variant="outline" size="sm" className="gap-1" onClick={() => window.print()}><FileText className="h-4 w-4" /> Guardar PDF</Button>
+        <Button variant="outline" size="sm" className="gap-1" onClick={() => {
+          const asunto = encodeURIComponent(`Albarán ${albaran.numero}`);
+          const cuerpo = encodeURIComponent(`Adjunto información del albarán ${albaran.numero} (${albaran.proveedor}).\nTotal: ${totales.total.toFixed(2)} €`);
+          window.location.href = `mailto:?subject=${asunto}&body=${cuerpo}`;
+        }}><Send className="h-4 w-4" /> Enviar</Button>
         <Button variant="outline" size="sm" className="gap-1" onClick={() => setUploadOpen(true)}>
           <Paperclip className="h-4 w-4" /> Asociar archivo
         </Button>

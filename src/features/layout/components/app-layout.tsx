@@ -40,6 +40,10 @@ import {
   KeyRound,
   LayoutDashboard,
   HelpCircle,
+  Carrot,
+  ShoppingCart,
+  Warehouse,
+  Apple,
   type LucideIcon,
 } from "lucide-react";
 import { FloatingSoporteButton } from "@/features/soporte/components";
@@ -53,7 +57,8 @@ import {
 const ROUTE_TITLES: Record<string, string> = {
   "/": "DASHBOARD",
   "/gerencia": "GERENCIA",
-  "/direccion/estructura": "ESTRUCTURA JERÁRQUICA",
+  "/direccion/estructura": "ORGANIGRAMA",
+  "/direccion/cronogramas": "CRONOGRAMAS",
   "/gerencia/mantenimiento": "MANTENIMIENTO",
   "/contabilidad": "CONTABILIDAD",
   "/gestoria": "GESTORÍA",
@@ -132,6 +137,7 @@ const ROUTE_ICONS: Record<string, LucideIcon> = {
   "/": LayoutDashboard,
   "/direccion": Crown,
   "/direccion/estructura": Crown,
+  "/direccion/cronogramas": CalendarIcon,
   "/direccion/documentacion": FileText,
   "/direccion/aperturas": Crown,
   "/sala": UtensilsCrossed,
@@ -173,11 +179,11 @@ const ROUTE_ICONS: Record<string, LucideIcon> = {
   "/marketing/contenido": Camera,
   "/marketing/fidelizacion": Heart,
   "/marketing/captacion": UserPlus,
-  "/logistica": Truck,
+  "/logistica": Package,
   "/logistica/proveedores": Truck,
-  "/logistica/productos": Package,
-  "/logistica/pedidos": Truck,
-  "/logistica/stock": Package,
+  "/logistica/productos": Apple,
+  "/logistica/pedidos": ShoppingCart,
+  "/logistica/stock": Warehouse,
   "/logistica/inventarios": ClipboardList,
   "/logistica/incidencias": AlertTriangle,
   "/contabilidad": Calculator,
@@ -224,57 +230,42 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 {title}
               </h1>
             )}
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex items-center gap-3">
               {showUi && (
                 <>
-                  {/* Email integrado */}
-                  <GmailDrawer>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="gap-1.5 px-2"
-                      title="Abrir email"
-                    >
-                      <Mail className="h-4 w-4 text-red-500" />
-                      <span className="hidden xl:inline text-xs">Email</span>
-                    </Button>
-                  </GmailDrawer>
-
-                  {/* Calendario integrado */}
-                  <CalendarDrawer>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="gap-1.5 px-2"
-                      title="Abrir calendario"
-                    >
-                      <CalendarIcon className="h-4 w-4 text-blue-600" />
-                      <span className="hidden xl:inline text-xs">Calendario</span>
-                    </Button>
-                  </CalendarDrawer>
-
-                  <div className="hidden lg:block h-6 w-px bg-border" />
+                  {/* Integraciones: email + calendario agrupados */}
+                  <div className="flex items-center rounded-full border bg-muted/40 px-1 py-0.5">
+                    <GmailDrawer>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Abrir email">
+                        <Mail className="h-4 w-4 text-red-500" />
+                      </Button>
+                    </GmailDrawer>
+                    <CalendarDrawer>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Abrir calendario">
+                        <CalendarIcon className="h-4 w-4 text-blue-600" />
+                      </Button>
+                    </CalendarDrawer>
+                  </div>
 
                   {/* Onboarding */}
                   <Button
                     asChild
                     size="sm"
                     className="gap-1.5 bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-600/20"
+                    title="Onboarding"
                   >
                     <Link href="/formacion">
                       <GraduationCap className="h-4 w-4" />
-                      <span className="hidden lg:inline text-xs font-semibold tracking-wide">
+                      <span className="hidden xl:inline text-xs font-semibold tracking-wide">
                         ONBOARDING
                       </span>
                     </Link>
                   </Button>
 
-                  <div className="hidden lg:block h-6 w-px bg-border" />
-
                   {/* Bloque final: empresa + correo + rol + salir */}
                   <div className="flex items-center gap-2 rounded-full border bg-muted/40 py-1 pl-1 pr-2">
                     {/* Selector de empresa */}
-                    <div className="w-44 md:w-52">
+                    <div className="w-40 md:w-44">
                       <EmpresaSelector />
                     </div>
 

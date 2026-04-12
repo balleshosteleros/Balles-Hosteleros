@@ -36,11 +36,11 @@ const ALL = "__ALL__";
 function mapDbToPedido(row: Record<string, unknown>): Pedido {
   return {
     id: row.id as string,
-    numero: (row.numero as string) ?? "",
+    numero: (row.referencia as string) ?? (row.numero as string) ?? "",
     empresaId: (row.empresa_id as string) ?? "",
     empresa: (row.empresa as string) ?? "",
     proveedor: (row.proveedor_nombre as string) ?? (row.proveedor as string) ?? "",
-    docProveedor: (row.doc_proveedor as string) ?? "",
+    docProveedor: (row.referencia as string) ?? "",
     almacen: (row.almacen as string) ?? "",
     fecha: (row.fecha as string) ?? "",
     fechaEntrega: (row.fecha_entrega as string) ?? "",
@@ -52,8 +52,8 @@ function mapDbToPedido(row: Record<string, unknown>): Pedido {
     albaranId: (row.albaran_id as string | null) ?? null,
     creador: (row.creador as string) ?? (row.created_by as string) ?? "",
     ultimaActualizacion: (row.updated_at as string) ?? "",
-    enviadoAt: (row.enviado_at as string | null) ?? null,
-    enviadoEmail: (row.enviado_email as string | null) ?? null,
+    enviadoAt: null,
+    enviadoEmail: null,
   };
 }
 
@@ -306,29 +306,43 @@ export function PedidosView() {
         {/* PEDIDOS TAB */}
         <TabsContent value="pedidos" className="space-y-4 mt-4">
           {/* Toolbar */}
-          <div className="flex flex-wrap items-center gap-2 bg-card rounded-lg border p-3">
+          <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-3">
             <Button size="sm" className="gap-1" onClick={() => { setEditItem(null); setModalOpen(true); }}><Plus className="h-4 w-4" /> Nuevo</Button>
-            <Button size="sm" variant="outline" className="gap-1" onClick={handleCopy}><Copy className="h-4 w-4" /> Copiar</Button>
-            <Button size="sm" variant="outline" className="gap-1" onClick={() => {
-              if (selected.size !== 1) { toast.info("Selecciona un pedido"); return; }
-              const p = pedidos.find((x) => selected.has(x.id));
-              if (p) { setEditItem(p); setModalOpen(true); }
-            }}><Pencil className="h-4 w-4" /> Editar</Button>
-            <Button size="sm" variant="outline" className="gap-1 text-destructive" onClick={() => {
-              if (selected.size !== 1) { toast.info("Selecciona un pedido"); return; }
-              setDeleteConfirm([...selected][0]);
-            }}><Trash2 className="h-4 w-4" /> Eliminar</Button>
             <DropdownMenu>
-              <DropdownMenuTrigger asChild><Button size="sm" variant="outline"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem onClick={() => toast.info("Función imprimir en desarrollo")}><Printer className="h-4 w-4 mr-2" /> Imprimir</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => toast.info("Función exportar en desarrollo")}><Download className="h-4 w-4 mr-2" /> Exportar</DropdownMenuItem>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="outline" className="gap-1" disabled={selected.size === 0}>
+                  <MoreHorizontal className="h-4 w-4" /> Acciones
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem onClick={handleCopy}><Copy className="h-4 w-4 mr-2" /> Copiar</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => {
+                  if (selected.size !== 1) { toast.info("Selecciona un pedido"); return; }
+                  const p = pedidos.find((x) => selected.has(x.id));
+                  if (p) { setEditItem(p); setModalOpen(true); }
+                }}><Pencil className="h-4 w-4 mr-2" /> Editar</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => window.print()}><Printer className="h-4 w-4 mr-2" /> Imprimir</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => {
+                  const rows = filteredPedidos.filter((p) => selected.size === 0 || selected.has(p.id));
+                  const header = ["Numero","Proveedor","Fecha","Entrega","Almacen","Estado","Total"];
+                  const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+                  const lines = rows.map((p) => {
+                    const t = calcularTotalesLineas(p.lineas);
+                    return [p.numero, p.proveedor, p.fecha, p.fechaEntrega, p.almacen, p.estado, t.total.toFixed(2)].map(esc).join(",");
+                  });
+                  const csv = [header.map(esc).join(","), ...lines].join("\n");
+                  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
+                  const a = document.createElement("a");
+                  a.href = url; a.download = `pedidos-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+                  URL.revokeObjectURL(url);
+                }}><Download className="h-4 w-4 mr-2" /> Exportar CSV</DropdownMenuItem>
+                <DropdownMenuItem className="text-destructive" onClick={() => {
+                  if (selected.size !== 1) { toast.info("Selecciona un pedido"); return; }
+                  setDeleteConfirm([...selected][0]);
+                }}><Trash2 className="h-4 w-4 mr-2" /> Eliminar</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
             <div className="flex-1" />
-            <Button size="sm" variant={showArchived ? "default" : "outline"} className="gap-1" onClick={() => setShowArchived(!showArchived)}>
-              <Archive className="h-4 w-4" /> Archivados
-            </Button>
             <div className="relative min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Buscar pedidos…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
@@ -338,9 +352,12 @@ export function PedidosView() {
               <SelectContent><SelectItem value={ALL}>Todos</SelectItem>{ESTADOS_PEDIDO.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
             </Select>
             <Select value={filterProveedor} onValueChange={setFilterProveedor}>
-              <SelectTrigger className="w-[220px]"><SelectValue placeholder="Proveedor" /></SelectTrigger>
+              <SelectTrigger className="w-[200px]"><SelectValue placeholder="Proveedor" /></SelectTrigger>
               <SelectContent><SelectItem value={ALL}>Todos</SelectItem>{PROVEEDORES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
             </Select>
+            <Button size="sm" variant={showArchived ? "default" : "ghost"} className="gap-1" onClick={() => setShowArchived(!showArchived)} title="Ver archivados">
+              <Archive className="h-4 w-4" />
+            </Button>
           </div>
 
           {/* Table */}

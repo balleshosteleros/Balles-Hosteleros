@@ -9,6 +9,7 @@ import {
   getTiposPorEmpresa,
   getPlantillasPorEmpresa,
   type Inventario,
+  type EstadoInventario,
   type TipoInventario,
   type PlantillaInventario,
 } from "@/features/logistica/data/inventarios";
@@ -54,14 +55,23 @@ export function InventariosView() {
     setLoadingInv(true);
     try {
       const res = await listInventariosAction();
-      if (res.ok && res.data.length > 0) {
-        // DB has data but shape is flat; use mock for rich nested data
-        setInventarios(getInventariosPorEmpresa(empresaActual.id));
+      if (res.ok) {
+        const mapped: Inventario[] = (res.data as Array<Record<string, unknown>>).map((r) => ({
+          id: r.id as string,
+          fecha: ((r.fecha as string) ?? (r.created_at as string) ?? "").slice(0, 10),
+          almacen: (r.tipo as string) ?? "COCINA",
+          motivo: (r.nombre as string) ?? "",
+          estado: ((r.estado as string)?.toLowerCase() === "confirmado" ? "Confirmado" : "Borrador") as EstadoInventario,
+          usuario: (r.created_by_nombre as string) ?? "—",
+          conteos: [],
+          empresaId: empresaActual.id,
+        }));
+        setInventarios(mapped);
       } else {
-        setInventarios(getInventariosPorEmpresa(empresaActual.id));
+        setInventarios([]);
       }
     } catch {
-      setInventarios(getInventariosPorEmpresa(empresaActual.id));
+      setInventarios([]);
     } finally {
       setLoadingInv(false);
     }
@@ -234,13 +244,6 @@ export function InventariosView() {
 
   return (
     <div className="p-4 md:p-6 space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-end">
-        <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowConfig(true)}>
-          <Settings className="h-4 w-4" /> Configuración
-        </Button>
-      </div>
-
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
         <div className="rounded-lg border bg-card p-3 text-center">
@@ -258,29 +261,35 @@ export function InventariosView() {
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2 bg-card rounded-lg border p-3">
-        <Button size="sm" className="gap-1" onClick={() => setCreateOpen(true)} disabled={!tienePermiso}>
+      <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-3">
+        <Button
+          size="sm"
+          className="gap-1"
+          onClick={() => setCreateOpen(true)}
+          disabled={!tienePermiso}
+          title={!tienePermiso ? "Sin permisos para crear inventarios" : undefined}
+        >
           <Plus className="h-4 w-4" /> Nuevo
         </Button>
-        {!tienePermiso && (
-          <span className="text-[10px] text-destructive font-medium">Sin permisos para crear inventarios</span>
-        )}
         <Button size="sm" variant="outline" className="gap-1" disabled={selected.size === 0} onClick={handleDelete}>
           <Trash2 className="h-4 w-4" /> Eliminar
         </Button>
         <div className="flex-1" />
-        <div className="relative min-w-[200px]">
+        <div className="relative min-w-[220px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Buscar…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
         <Select value={filterEstado} onValueChange={setFilterEstado}>
-          <SelectTrigger className="w-[160px]"><SelectValue placeholder="Estado" /></SelectTrigger>
+          <SelectTrigger className="w-[140px]"><SelectValue placeholder="Estado" /></SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>Todos</SelectItem>
             <SelectItem value="Borrador">Borrador</SelectItem>
             <SelectItem value="Confirmado">Confirmado</SelectItem>
           </SelectContent>
         </Select>
+        <Button size="sm" variant="ghost" className="gap-1.5" onClick={() => setShowConfig(true)} title="Configuración de inventarios">
+          <Settings className="h-4 w-4" />
+        </Button>
       </div>
 
       {/* Table */}
@@ -317,8 +326,8 @@ export function InventariosView() {
                 </td>
                 <td className="px-3 py-2.5 text-xs text-muted-foreground">{inv.usuario}</td>
                 <td className="px-3 py-2.5 text-xs font-medium">{inv.conteos.length}</td>
-                <td className="px-3 py-2.5">
-                  <Button size="icon" variant="ghost" className="h-7 w-7">
+                <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                  <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setDetalleId(inv.id)} title="Ver detalle">
                     <Eye className="h-3.5 w-3.5" />
                   </Button>
                 </td>

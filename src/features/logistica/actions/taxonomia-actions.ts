@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
 import type { TipoProducto } from "@/features/logistica/data/productos";
 
 export type TaxonomiaKind = "categoria" | "familia";
@@ -65,7 +66,7 @@ export async function listTaxonomia(tipo: TipoProducto): Promise<{
   familias: TaxonomiaEntry[];
 }> {
   try {
-    const supabase = await createClient();
+    const { supabase } = await getLogisticaContext();
     const { data, error } = await supabase
       .from("producto_taxonomia")
       .select("*")

@@ -40,7 +40,7 @@ function mapDbToProveedor(row: Record<string, unknown>): Proveedor {
     empresaId: (row.empresa_id as string) ?? "",
     nombreComercial: (row.nombre_comercial as string) ?? (row.nombre as string) ?? "",
     razonSocial: (row.razon_social as string) ?? "",
-    cifNif: (row.cif as string) ?? "",
+    cifNif: (row.cif_nif as string) ?? (row.cif as string) ?? "",
     categoria: (row.categoria as string) ?? "",
     estado: (row.estado as EstadoProveedor) ?? "Activo",
     observaciones: (row.observaciones as string) ?? (row.notas as string) ?? "",
@@ -57,8 +57,8 @@ function mapDbToProveedor(row: Record<string, unknown>): Proveedor {
     pais: (row.pais as string) ?? "Espana",
     codigoPostal: (row.codigo_postal as string) ?? "",
     diasReparto: Array.isArray(row.dias_reparto) ? row.dias_reparto as string[] : [],
-    condicionesPago: (row.condiciones as string) ?? (row.forma_pago as string) ?? "",
-    plazo: (row.plazo as string) ?? "",
+    condicionesPago: (row.condiciones_pago as string) ?? (row.condiciones as string) ?? (row.forma_pago as string) ?? "",
+    plazo: (row.plazo_entrega as string) ?? (row.plazo as string) ?? "",
     observacionesLogisticas: (row.observaciones_logisticas as string) ?? "",
     comentariosInternos: (row.comentarios_internos as string) ?? "",
     creador: (row.creador as string) ?? "",
@@ -86,7 +86,7 @@ export function ProveedoresView() {
     try {
       const res = await listProveedores();
       if (res.ok) {
-        setProveedores(res.data.map(mapDbToProveedor));
+        setProveedores((res.data as unknown as Array<Record<string, unknown>>).map(mapDbToProveedor));
       } else {
         toast.error("Error al cargar proveedores");
       }
@@ -123,41 +123,36 @@ export function ProveedoresView() {
       return [item, ...prev];
     });
 
+    const payload = {
+      nombreComercial: item.nombreComercial,
+      razonSocial: item.razonSocial,
+      cifNif: item.cifNif,
+      categoria: item.categoria,
+      estado: item.estado,
+      personaContacto: item.personaContacto,
+      telefonoPrincipal: item.telefonoPrincipal,
+      telefonoSecundario: item.telefonoSecundario,
+      emailPrincipal: item.emailPrincipal,
+      emailPedidos: item.emailPedidos,
+      emailIncidencias: item.emailIncidencias,
+      web: item.web,
+      direccion: item.direccion,
+      ciudad: item.ciudad,
+      provincia: item.provincia,
+      pais: item.pais,
+      codigoPostal: item.codigoPostal,
+      diasReparto: item.diasReparto,
+      condicionesPago: item.condicionesPago,
+      plazoEntrega: item.plazo,
+      observaciones: item.observaciones,
+      comentariosInternos: item.comentariosInternos,
+    };
+
     if (exists) {
-      const res = await updateProveedor(item.id, {
-        nombre: item.nombreComercial,
-        nombreComercial: item.nombreComercial,
-        cif: item.cifNif,
-        direccion: item.direccion,
-        codigoPostal: item.codigoPostal,
-        ciudad: item.ciudad,
-        telefonoPrincipal: item.telefonoPrincipal,
-        telefonoSecundario: item.telefonoSecundario,
-        emailPrincipal: item.emailPrincipal,
-        emailPedidos: item.emailPedidos,
-        emailIncidencias: item.emailIncidencias,
-        web: item.web,
-        estado: item.estado,
-        notas: item.observaciones,
-      });
+      const res = await updateProveedor(item.id, payload);
       if (!res.ok) { toast.error("Error al actualizar proveedor"); loadProveedores(); }
     } else {
-      const res = await createProveedor({
-        nombre: item.nombreComercial,
-        nombreComercial: item.nombreComercial,
-        cif: item.cifNif,
-        direccion: item.direccion,
-        codigoPostal: item.codigoPostal,
-        ciudad: item.ciudad,
-        telefonoPrincipal: item.telefonoPrincipal,
-        telefonoSecundario: item.telefonoSecundario,
-        emailPrincipal: item.emailPrincipal,
-        emailPedidos: item.emailPedidos,
-        emailIncidencias: item.emailIncidencias,
-        web: item.web,
-        estado: item.estado,
-        notas: item.observaciones,
-      });
+      const res = await createProveedor(payload);
       if (res.ok) { loadProveedores(); }
       else { toast.error(res.error ?? "Error al crear proveedor"); loadProveedores(); }
     }
@@ -273,20 +268,20 @@ export function ProveedoresView() {
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2 bg-card rounded-lg border p-3">
+      <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-3">
         <Button size="sm" className="gap-1" onClick={() => { setEditItem(null); setModalOpen(true); }}><Plus className="h-4 w-4" /> Nuevo proveedor</Button>
         <div className="flex-1" />
-        <div className="relative min-w-[200px]">
+        <div className="relative min-w-[240px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Buscar proveedores…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
-        <Select value={filterEstado} onValueChange={setFilterEstado}>
-          <SelectTrigger className="w-[130px]"><SelectValue placeholder="Estado" /></SelectTrigger>
-          <SelectContent><SelectItem value={ALL}>Todos</SelectItem>{ESTADOS_PROVEEDOR.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
-        </Select>
         <Select value={filterCategoria} onValueChange={setFilterCategoria}>
           <SelectTrigger className="w-[200px]"><SelectValue placeholder="Categoría" /></SelectTrigger>
           <SelectContent><SelectItem value={ALL}>Todas</SelectItem>{CATEGORIAS_PROVEEDOR.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+        </Select>
+        <Select value={filterEstado} onValueChange={setFilterEstado}>
+          <SelectTrigger className="w-[130px]"><SelectValue placeholder="Estado" /></SelectTrigger>
+          <SelectContent><SelectItem value={ALL}>Todos</SelectItem>{ESTADOS_PROVEEDOR.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
         </Select>
       </div>
 

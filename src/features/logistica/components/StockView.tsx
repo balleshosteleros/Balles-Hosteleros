@@ -8,6 +8,7 @@ import {
   CATEGORIAS_STOCK, type ProductoStock, type TemporadaStock,
 } from "@/features/logistica/data/stock";
 import { listStock, updateStock as updateStockAction } from "@/features/logistica/actions/stock-actions";
+import { listProductos } from "@/features/logistica/actions/producto-actions";
 import TemporadasConfig from "@/features/logistica/components/stock/TemporadasConfig";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -60,15 +61,42 @@ export function StockView() {
   const loadStockData = useCallback(async () => {
     setLoadingStock(true);
     try {
-      const res = await listStock();
-      if (res.ok && res.data.length > 0) {
-        // DB data is flat; use mock for rich nested season data
-        setStock(getStockPorEmpresa(empresaActual.id));
-      } else {
-        setStock(getStockPorEmpresa(empresaActual.id));
+      const [stockRes, productos] = await Promise.all([
+        listStock(),
+        listProductos("compra"),
+      ]);
+      const stockByProductoId = new Map<string, { id: string; cantidad: number; minima: number }>();
+      const stockByNombre = new Map<string, { id: string; cantidad: number; minima: number }>();
+      if (stockRes.ok) {
+        for (const r of stockRes.data as Array<Record<string, unknown>>) {
+          const entry = {
+            id: r.id as string,
+            cantidad: Number(r.cantidad_actual ?? 0),
+            minima: Number(r.cantidad_minima ?? 0),
+          };
+          if (r.producto_id) stockByProductoId.set(r.producto_id as string, entry);
+          if (r.producto_nombre) stockByNombre.set(String(r.producto_nombre).toLowerCase(), entry);
+        }
       }
-    } catch {
-      setStock(getStockPorEmpresa(empresaActual.id));
+      const merged: ProductoStock[] = productos.map((p) => {
+        const s = stockByProductoId.get(p.id) ?? stockByNombre.get(p.nombre.toLowerCase());
+        return {
+          id: s?.id ?? p.id,
+          nombre: p.nombre,
+          categoria: p.categoria || "Otros",
+          unidad: p.unidad,
+          stockMaximo: 0,
+          stockSeguridad: s?.minima ?? 0,
+          stockActual: s?.cantidad ?? 0,
+          ultimoInventario: 0,
+          ultimoInventarioFecha: null,
+          empresaId: empresaActual.id,
+        };
+      });
+      setStock(merged);
+    } catch (err) {
+      console.error("Error cargando stock:", err);
+      setStock([]);
     } finally {
       setLoadingStock(false);
     }
@@ -198,36 +226,6 @@ export function StockView() {
 
   return (
     <div className="p-4 md:p-6 space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-end gap-3">
-        {temporadas.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-muted-foreground">Temporada:</span>
-            <Select value={temporadaSeleccionada} onValueChange={setTemporadaSeleccionada}>
-              <SelectTrigger className="w-[200px] h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="auto">
-                  Automática{temporadaAutoActiva ? ` (${temporadaAutoActiva.nombre})` : " (base)"}
-                </SelectItem>
-                <SelectItem value="base">Valores base (sin temporada)</SelectItem>
-                {temporadas.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {t.nombre} ({t.fechaInicio} → {t.fechaFin})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {temporadaActiva && (
-              <Badge className="bg-primary/10 text-primary border-primary/30 gap-1">
-                <Sun className="h-3.5 w-3.5" /> {temporadaActiva.nombre}
-              </Badge>
-            )}
-          </div>
-        )}
-      </div>
-
       <Tabs defaultValue="stock" className="space-y-4">
         <TabsList>
           <TabsTrigger value="stock">Stock</TabsTrigger>
@@ -257,24 +255,39 @@ export function StockView() {
           </div>
 
           {/* Toolbar */}
-          <div className="flex flex-wrap items-center gap-2 bg-card rounded-lg border p-3">
+          <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-3">
             <Button size="sm" variant="outline" className="gap-1" disabled={selected.size === 0} onClick={() => setMassOpen(true)}>
-              <ArrowUpDown className="h-4 w-4" /> Edición masiva ({selected.size})
+              <ArrowUpDown className="h-4 w-4" /> Edición masiva{selected.size > 0 ? ` (${selected.size})` : ""}
             </Button>
+            {temporadas.length > 0 && (
+              <Select value={temporadaSeleccionada} onValueChange={setTemporadaSeleccionada}>
+                <SelectTrigger className="w-[220px] gap-1">
+                  <Sun className="h-3.5 w-3.5 text-primary shrink-0" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Automática{temporadaAutoActiva ? ` (${temporadaAutoActiva.nombre})` : " (base)"}</SelectItem>
+                  <SelectItem value="base">Valores base (sin temporada)</SelectItem>
+                  {temporadas.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>{t.nombre} ({t.fechaInicio} → {t.fechaFin})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <div className="flex-1" />
-            <div className="relative min-w-[200px]">
+            <div className="relative min-w-[220px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Buscar producto…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
             </div>
             <Select value={filterCat} onValueChange={setFilterCat}>
-              <SelectTrigger className="w-[180px]"><SelectValue placeholder="Categoría" /></SelectTrigger>
+              <SelectTrigger className="w-[160px]"><SelectValue placeholder="Categoría" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value={ALL}>Todas</SelectItem>
                 {CATEGORIAS_STOCK.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as StockFilter)}>
-              <SelectTrigger className="w-[170px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos</SelectItem>
                 <SelectItem value="bajo">Stock bajo</SelectItem>
@@ -282,12 +295,14 @@ export function StockView() {
                 <SelectItem value="sin_inventario">Sin inventario reciente</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-
-          {/* Info banner */}
-          <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2 text-xs text-muted-foreground">
-            <Lock className="h-3.5 w-3.5 text-primary shrink-0" />
-            <span>El <strong>stock actual</strong> solo se modifica mediante albaranes, ventas, elaboraciones o inventarios confirmados. Desde aquí puedes ajustar el <strong>stock máximo</strong> y <strong>stock de seguridad</strong>.</span>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="gap-1"
+              title="El stock actual solo se modifica mediante albaranes, ventas, elaboraciones o inventarios confirmados. Desde aquí puedes ajustar stock máximo y de seguridad."
+            >
+              <Lock className="h-4 w-4 text-primary" />
+            </Button>
           </div>
 
           {/* Table */}

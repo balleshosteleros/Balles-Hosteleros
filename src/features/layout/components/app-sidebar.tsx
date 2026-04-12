@@ -8,7 +8,7 @@ import {
   Package, FileArchive, KeyRound, Gavel, FileUp, ShoppingCart, Warehouse, FlaskConical,
   GraduationCap, UtensilsCrossed, BookOpen, Contact, Thermometer, Sparkles, FileSearch,
   PenLine, CheckCircle2, BarChart3, Landmark, Tag, Zap, ContactRound,
-  Heart, UserPlus, AlertTriangle,
+  Heart, UserPlus, AlertTriangle, Apple,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { NavLink } from "@/features/layout/components/nav-link";
@@ -53,7 +53,7 @@ const cocinaSubs = [
 ];
 const logisticaSubs = [
   { title: "PROVEEDORES", url: "/logistica/proveedores", icon: Truck },
-  { title: "PRODUCTOS", url: "/logistica/productos", icon: Package },
+  { title: "PRODUCTOS", url: "/logistica/productos", icon: Apple },
   { title: "PEDIDOS", url: "/logistica/pedidos", icon: ShoppingCart },
   { title: "STOCK", url: "/logistica/stock", icon: Warehouse },
   { title: "INVENTARIOS", url: "/logistica/inventarios", icon: ClipboardList },
@@ -66,7 +66,8 @@ const marketingSubs = [
   { title: "CAPTACIÓN", url: "/marketing/captacion", icon: UserPlus },
 ];
 const direccionSubs = [
-  { title: "ESTRUCTURA JERÁRQUICA", url: "/direccion/estructura", icon: Network },
+  { title: "ORGANIGRAMA", url: "/direccion/estructura", icon: Network },
+  { title: "CRONOGRAMAS", url: "/direccion/cronogramas", icon: CalendarDays },
   { title: "DOCUMENTACIÓN", url: "/direccion/documentacion", icon: FileArchive },
   { title: "APERTURAS", url: "/direccion/aperturas", icon: TrendingUp },
 ];
@@ -231,7 +232,7 @@ export function AppSidebar() {
               <CollapsibleSection icon={CheckCircle2} label="CALIDAD" prefix="/calidad" items={calidadSubs} collapsed={collapsed} linkTo="/calidad" />
               <CollapsibleSection icon={User} label="RECURSOS HUMANOS" prefix="/rrhh" items={rrhhSubs} collapsed={collapsed} linkTo="/rrhh" />
               <CollapsibleSection icon={Camera} label="MARKETING" prefix="/marketing" items={marketingSubs} collapsed={collapsed} linkTo="/marketing" />
-              <CollapsibleSection icon={Truck} label="LOGÍSTICA" prefix="/logistica" items={logisticaSubs} collapsed={collapsed} />
+              <CollapsibleSection icon={Package} label="LOGÍSTICA" prefix="/logistica" items={logisticaSubs} collapsed={collapsed} />
               <CollapsibleSection icon={Calculator} label="CONTABILIDAD" prefix="/contabilidad" items={contabilidadSubs} collapsed={collapsed} />
               <CollapsibleSection icon={FileText} label="GESTORÍA" prefix="/gestoria" items={gestoriaSubs} collapsed={collapsed} linkTo="/gestoria" />
               <CollapsibleSection icon={Scale} label="JURÍDICO" prefix="/juridico" items={juridicoSubs} collapsed={collapsed} linkTo="/juridico" />

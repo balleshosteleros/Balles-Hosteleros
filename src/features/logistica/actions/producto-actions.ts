@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
 import type {
   Producto,
   TipoProducto,
@@ -10,7 +11,7 @@ import type {
 } from "@/features/logistica/data/productos";
 
 const ESTADOS = ["Activo", "Inactivo", "Descatalogado", "En revisión"] as const;
-const TIPOS = ["compra", "venta"] as const;
+const TIPOS = ["compra", "venta", "elaboracion"] as const;
 
 const productoInputSchema = z.object({
   nombre: z.string().min(1, "El nombre es obligatorio"),
@@ -65,6 +66,9 @@ function rowToProducto(r: ProductoRow): Producto {
 }
 
 async function requireManagement() {
+  if (process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true") {
+    return { id: "dev-bypass-user" } as { id: string };
+  }
   const supabase = await createClient();
   const {
     data: { user },
@@ -90,6 +94,10 @@ async function requireManagement() {
 }
 
 async function getUserEmpresaId(userId: string): Promise<string | null> {
+  if (process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true") {
+    const { empresaId } = await getLogisticaContext();
+    return empresaId;
+  }
   const supabase = await createClient();
   const { data } = await supabase
     .from("profiles")
@@ -105,12 +113,14 @@ async function getUserEmpresaId(userId: string): Promise<string | null> {
  */
 export async function listProductos(tipo: TipoProducto): Promise<Producto[]> {
   try {
-    const supabase = await createClient();
-    const { data, error } = await supabase
+    const { supabase, empresaId } = await getLogisticaContext();
+    const query = supabase
       .from("productos")
       .select("*")
       .eq("tipo", tipo)
       .order("nombre", { ascending: true });
+    if (empresaId) query.eq("empresa_id", empresaId);
+    const { data, error } = await query;
 
     if (error) {
       console.error("Error listing productos:", error);
@@ -138,7 +148,7 @@ export async function createProducto(
     const empresaId = await getUserEmpresaId(user.id);
     if (!empresaId) return { error: "No tienes empresa asignada" };
 
-    const supabase = await createClient();
+    const { supabase } = await getLogisticaContext();
     const { error } = await supabase.from("productos").insert({
       empresa_id: empresaId,
       nombre: parsed.data.nombre,
@@ -152,7 +162,7 @@ export async function createProducto(
       coste: parsed.data.coste,
       unidad: parsed.data.unidad,
       observaciones: parsed.data.observaciones,
-      created_by: user.id,
+      created_by: process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true" ? null : user.id,
     });
 
     if (error) return { error: error.message };
@@ -237,9 +247,39 @@ export async function deleteProducto(
 ): Promise<{ error?: string; success?: boolean }> {
   try {
     await requireManagement();
-    const supabase = await createClient();
+    const { supabase } = await getLogisticaContext();
     const { error } = await supabase.from("productos").delete().eq("id", id);
 
+    if (error) return { error: error.message };
+
+    revalidatePath("/logistica/productos");
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Error desconocido" };
+  }
+}
+
+export async function updateProducto(
+  id: string,
+  input: Partial<ProductoInput>
+): Promise<{ error?: string; success?: boolean }> {
+  try {
+    await requireManagement();
+    const { supabase } = await getLogisticaContext();
+
+    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (input.nombre !== undefined) updates.nombre = input.nombre;
+    if (input.categoria !== undefined) updates.categoria = input.categoria;
+    if (input.familia !== undefined) updates.familia = input.familia;
+    if (input.estado !== undefined) updates.estado = input.estado;
+    if (input.proveedor !== undefined) updates.proveedor = input.proveedor;
+    if (input.precioCompra !== undefined) updates.precio_compra = input.precioCompra;
+    if (input.precioVenta !== undefined) updates.precio_venta = input.precioVenta;
+    if (input.coste !== undefined) updates.coste = input.coste;
+    if (input.unidad !== undefined) updates.unidad = input.unidad;
+    if (input.observaciones !== undefined) updates.observaciones = input.observaciones;
+
+    const { error } = await supabase.from("productos").update(updates).eq("id", id);
     if (error) return { error: error.message };
 
     revalidatePath("/logistica/productos");

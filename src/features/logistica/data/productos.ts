@@ -1,4 +1,4 @@
-export type TipoProducto = "compra" | "venta";
+export type TipoProducto = "compra" | "venta" | "elaboracion";
 
 export type EstadoProducto = "Activo" | "Inactivo" | "Descatalogado" | "En revisión";
 
@@ -55,10 +55,23 @@ export function getProductosPorEmpresa(_empresaId: string, _tipo: TipoProducto):
   return [];
 }
 
+export const CATEGORIAS_ELABORACION = [
+  "Salsas", "Masas y panes", "Fondos y caldos", "Guarniciones", "Marinados y adobos",
+  "Rellenos", "Postres base", "Otros",
+];
+
+export const FAMILIAS_ELABORACION = [
+  "Preparaciones frías", "Preparaciones calientes", "Bases", "Acompañamientos", "Otros",
+];
+
 export function getCategorias(tipo: TipoProducto): string[] {
-  return tipo === "compra" ? CATEGORIAS_COMPRA : CATEGORIAS_VENTA;
+  if (tipo === "compra") return CATEGORIAS_COMPRA;
+  if (tipo === "elaboracion") return CATEGORIAS_ELABORACION;
+  return CATEGORIAS_VENTA;
 }
 
 export function getFamilias(tipo: TipoProducto): string[] {
-  return tipo === "compra" ? FAMILIAS_COMPRA : FAMILIAS_VENTA;
+  if (tipo === "compra") return FAMILIAS_COMPRA;
+  if (tipo === "elaboracion") return FAMILIAS_ELABORACION;
+  return FAMILIAS_VENTA;
 }

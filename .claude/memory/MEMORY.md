@@ -1,0 +1,6 @@
+- [Estado Logística](project/logistica_estado.md) — BD poblada; pendiente reasignar proveedores y categorizar ingredientes
+- [Escandallos](project/escandallos.md) — son la composición interna del producto de venta, no lista aparte
+- [Modo autónomo](feedback/autonomia.md) — ejecutar sin pedir confirmación; elegir defaults sensatos
+- [Ámbito de carpetas](feedback/scope_carpetas.md) — tocar services/, types/, .claude/migrations/; no components/ ni app/ salvo petición explícita
+- [Reglas SaaS Factory](feedback/saas_factory_rules.md) — agent-first, golden path, PRPs, feature-first
+- [Hola = Pull / Adiós = Push](feedback/git_saludos.md) — sincronizar con GitHub al inicio/fin de sesión
