@@ -1,10 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { HelpCircle, Search } from "lucide-react";
+import { HelpCircle, Search, ChevronRight, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import { FaqAdminPanel } from "./faq-admin-panel";
+import { SoporteDrawer } from "./soporte-drawer";
 import type { Faq, FaqsByCategory } from "@/features/soporte/types";
 
 interface AyudaPortalProps {
@@ -16,13 +18,15 @@ export function AyudaPortal({ viewerData, adminData }: AyudaPortalProps) {
   const canEdit = adminData !== null;
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-6 md:px-6 md:py-8">
+    <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-6 md:py-8">
       <div className="mb-6 flex items-center gap-3">
-        <HelpCircle className="h-7 w-7 text-primary" />
+        <div className="rounded-xl bg-primary/10 p-2 text-primary">
+          <HelpCircle className="h-7 w-7" />
+        </div>
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Centro de Ayuda</h1>
+          <h1 className="text-2xl font-bold text-foreground">Ayuda</h1>
           <p className="text-sm text-muted-foreground">
-            Preguntas frecuentes y documentación
+            Busca aquí respuestas a tus dudas. Si no encuentras lo que buscas, pide ayuda a una persona.
           </p>
         </div>
       </div>
@@ -30,30 +34,30 @@ export function AyudaPortal({ viewerData, adminData }: AyudaPortalProps) {
       {canEdit ? (
         <Tabs defaultValue="ver" className="w-full">
           <TabsList className="mb-4">
-            <TabsTrigger value="ver">Ver FAQs</TabsTrigger>
-            <TabsTrigger value="gestionar">Gestionar contenido</TabsTrigger>
+            <TabsTrigger value="ver">Ver ayuda</TabsTrigger>
+            <TabsTrigger value="gestionar">Editar contenido</TabsTrigger>
           </TabsList>
           <TabsContent value="ver" className="mt-0">
-            <FaqViewer data={viewerData} />
+            <AyudaViewer data={viewerData} />
           </TabsContent>
           <TabsContent value="gestionar" className="mt-0">
             <FaqAdminPanel initialFaqs={adminData!} />
           </TabsContent>
         </Tabs>
       ) : (
-        <FaqViewer data={viewerData} />
+        <AyudaViewer data={viewerData} />
       )}
     </div>
   );
 }
 
-function FaqViewer({ data }: { data: FaqsByCategory[] }) {
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(
+function AyudaViewer({ data }: { data: FaqsByCategory[] }) {
+  const [selectedTema, setSelectedTema] = useState<string | null>(
     data[0]?.categoria ?? null
   );
   const [search, setSearch] = useState("");
 
-  const visibleFaqs = useMemo(() => {
+  const visibleAyudas = useMemo(() => {
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       return data.flatMap((cat) =>
@@ -64,110 +68,142 @@ function FaqViewer({ data }: { data: FaqsByCategory[] }) {
         )
       );
     }
-    if (!selectedCategory) return [];
-    return data.find((cat) => cat.categoria === selectedCategory)?.faqs ?? [];
-  }, [search, selectedCategory, data]);
+    if (!selectedTema) return [];
+    return data.find((cat) => cat.categoria === selectedTema)?.faqs ?? [];
+  }, [search, selectedTema, data]);
 
   if (data.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed bg-muted/30 p-10 text-center text-sm text-muted-foreground">
-        <p className="font-medium text-foreground">
-          No hay preguntas frecuentes disponibles todavía.
-        </p>
-        <p className="mt-2">
-          Contacta con un administrador para añadir contenido.
-        </p>
+      <div className="space-y-4">
+        <div className="rounded-2xl border border-dashed bg-muted/30 p-10 text-center">
+          <p className="text-base font-medium text-foreground">
+            Todavía no hay ayudas escritas.
+          </p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Mientras tanto, pulsa el botón verde de abajo a la derecha para hablar con una persona.
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="rounded-lg border bg-card">
-      {/* Buscador */}
-      <div className="border-b p-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+    <div className="space-y-4">
+      {/* Buscador grande */}
+      <div className="rounded-2xl border bg-card p-4 shadow-sm">
+        <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          ¿Qué necesitas saber?
+        </label>
+        <div className="relative mt-2">
+          <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar en la ayuda..."
-            className="w-full rounded-md border bg-background py-2 pl-9 pr-3 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            placeholder="Escribe lo que quieras buscar… ej: cómo fichar"
+            className="w-full rounded-xl border bg-background py-3 pl-12 pr-4 text-base focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
           />
         </div>
       </div>
 
-      <div className="flex min-h-[400px]">
-        {/* Índice lateral de categorías — oculto en móvil y cuando hay búsqueda activa */}
-        {!search.trim() && (
-          <nav className="hidden w-56 shrink-0 overflow-y-auto border-r bg-muted/30 p-3 md:block">
-            <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Categorías
-            </p>
-            <ul className="space-y-0.5">
-              {data.map((cat) => (
-                <li key={cat.categoria}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedCategory(cat.categoria)}
-                    className={cn(
-                      "w-full rounded-md px-3 py-2 text-left text-xs font-medium transition-colors",
-                      selectedCategory === cat.categoria
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                    )}
-                  >
-                    {cat.categoria}
-                    <span className="ml-1 opacity-60">
-                      ({cat.faqs.length})
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </nav>
-        )}
-
-        {/* Panel de preguntas */}
-        <div className="flex-1 overflow-y-auto p-6">
-          {/* Selector de categoría solo en móvil */}
-          {!search.trim() && (
-            <div className="mb-4 md:hidden">
-              <select
-                value={selectedCategory ?? ""}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+      {/* Tarjetas de temas — solo cuando NO hay búsqueda */}
+      {!search.trim() && (
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Elige un tema
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+            {data.map((cat) => (
+              <button
+                key={cat.categoria}
+                type="button"
+                onClick={() => setSelectedTema(cat.categoria)}
+                className={cn(
+                  "flex items-center justify-between rounded-xl border bg-card p-4 text-left transition-all hover:border-primary hover:shadow-sm",
+                  selectedTema === cat.categoria &&
+                    "border-primary bg-primary/5 shadow-sm",
+                )}
               >
-                {data.map((cat) => (
-                  <option key={cat.categoria} value={cat.categoria}>
-                    {cat.categoria} ({cat.faqs.length})
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    {cat.categoria}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {cat.faqs.length}{" "}
+                    {cat.faqs.length === 1 ? "explicación" : "explicaciones"}
+                  </p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
-          {visibleFaqs.length === 0 ? (
-            <p className="text-center text-sm text-muted-foreground">
-              {search.trim()
-                ? "No se encontraron resultados para tu búsqueda."
-                : "Selecciona una categoría a la izquierda."}
-            </p>
+      {/* Lista de ayudas */}
+      <div className="rounded-2xl border bg-card">
+        <div className="border-b px-5 py-3">
+          <p className="text-sm font-semibold text-foreground">
+            {search.trim()
+              ? `Resultados para "${search}"`
+              : selectedTema ?? "Selecciona un tema"}
+          </p>
+        </div>
+        <div className="p-5">
+          {visibleAyudas.length === 0 ? (
+            <div className="space-y-3 text-center">
+              <p className="text-sm text-muted-foreground">
+                {search.trim()
+                  ? "No hemos encontrado nada con esas palabras."
+                  : "Elige un tema arriba para ver las explicaciones."}
+              </p>
+              {search.trim() && (
+                <SoporteDrawer>
+                  <Button size="sm">
+                    <UserRound className="mr-1 h-4 w-4" />
+                    Hablar con una persona
+                  </Button>
+                </SoporteDrawer>
+              )}
+            </div>
           ) : (
             <ul className="space-y-5">
-              {visibleFaqs.map((faq) => (
-                <li key={faq.id} className="border-b pb-5 last:border-b-0">
-                  <h3 className="text-sm font-semibold text-foreground">
-                    {faq.pregunta}
+              {visibleAyudas.map((ayuda) => (
+                <li key={ayuda.id} className="border-b pb-5 last:border-b-0">
+                  <h3 className="text-base font-semibold text-foreground">
+                    {ayuda.pregunta}
                   </h3>
-                  <div className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
-                    {faq.respuesta}
+                  <div className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
+                    {ayuda.respuesta}
                   </div>
                 </li>
               ))}
             </ul>
           )}
         </div>
+      </div>
+
+      {/* Banner pedir ayuda a una persona */}
+      <div className="flex flex-col items-start justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5 sm:flex-row sm:items-center dark:border-emerald-900/50 dark:bg-emerald-950/30">
+        <div className="flex items-start gap-3">
+          <div className="rounded-full bg-emerald-600 p-2 text-white">
+            <UserRound className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-foreground">
+              ¿No encuentras lo que buscas?
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Habla con una persona. Te responde alguien del equipo.
+            </p>
+          </div>
+        </div>
+        <SoporteDrawer>
+          <Button className="bg-emerald-600 text-white hover:bg-emerald-700">
+            <UserRound className="mr-1 h-4 w-4" />
+            Hablar con una persona
+          </Button>
+        </SoporteDrawer>
       </div>
     </div>
   );

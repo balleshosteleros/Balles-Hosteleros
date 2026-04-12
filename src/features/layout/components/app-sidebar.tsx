@@ -2,12 +2,13 @@
 
 import {
   Briefcase, Calculator, FileText, Scale, User, UsersRound, Truck, Camera,
-  Wrench, ChevronDown, Settings, HelpCircle, MessageSquareWarning, CalendarDays, Utensils,
+  Wrench, ChevronDown, Settings, MessageSquareWarning, CalendarDays, Utensils,
   ChefHat, UserCheck, ClipboardList, Gift, Banknote, Crown, Network, PercentDiamond,
   TrendingUp, FolderOpen, Clock, Calendar, Timer, UserRoundSearch, HandCoins, Megaphone,
   Package, FileArchive, KeyRound, Gavel, FileUp, ShoppingCart, Warehouse, FlaskConical,
   GraduationCap, UtensilsCrossed, BookOpen, Contact, Thermometer, Sparkles, FileSearch,
   PenLine, CheckCircle2, BarChart3, Landmark, Tag, Zap, ContactRound,
+  Heart, UserPlus, AlertTriangle,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { NavLink } from "@/features/layout/components/nav-link";
@@ -17,7 +18,6 @@ import {
   SidebarHeader, SidebarFooter, useSidebar,
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { EmpresaSelector } from "@/features/empresa/components/empresa-selector";
 
 const contabilidadSubs = [
   { title: "CONTACTOS", url: "/contabilidad/contactos", icon: ContactRound },
@@ -55,10 +55,13 @@ const logisticaSubs = [
   { title: "PEDIDOS", url: "/logistica/pedidos", icon: ShoppingCart },
   { title: "STOCK", url: "/logistica/stock", icon: Warehouse },
   { title: "INVENTARIOS", url: "/logistica/inventarios", icon: ClipboardList },
+  { title: "INCIDENCIAS", url: "/logistica/incidencias", icon: AlertTriangle },
 ];
 const marketingSubs = [
   { title: "CALENDARIO", url: "/marketing/calendario", icon: CalendarDays },
   { title: "CONTENIDO", url: "/marketing/contenido", icon: FolderOpen },
+  { title: "FIDELIZACIÓN", url: "/marketing/fidelizacion", icon: Heart },
+  { title: "CAPTACIÓN", url: "/marketing/captacion", icon: UserPlus },
 ];
 const direccionSubs = [
   { title: "ESTRUCTURA JERÁRQUICA", url: "/direccion/estructura", icon: Network },
@@ -181,24 +184,14 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="p-4 pb-2">
-        <div className="flex flex-col items-center gap-1">
+      <SidebarHeader className="px-3 py-2">
+        <div className="flex items-center justify-center">
           <img
             src="/logo-balles.png"
             alt="Balles Hosteleros"
-            className={`${collapsed ? "w-8" : "w-36"} transition-all duration-200`}
+            className={`${collapsed ? "w-7" : "w-24"} transition-all duration-200`}
           />
-          {!collapsed && (
-            <span className="text-[10px] tracking-[0.2em] text-sidebar-foreground/40 font-medium uppercase">
-              Software de gestión
-            </span>
-          )}
         </div>
-        {!collapsed && (
-          <div className="mt-3">
-            <EmpresaSelector />
-          </div>
-        )}
       </SidebarHeader>
 
       <SidebarContent>
@@ -224,12 +217,17 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-2">
+      <SidebarFooter className="border-t border-sidebar-border/60 bg-gradient-to-b from-sidebar-accent/40 via-sidebar-accent/20 to-sidebar-accent/10 px-2 py-3">
+        {!collapsed && (
+          <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-sidebar-foreground/40">
+            Generales
+          </p>
+        )}
         <SidebarMenu>
           {[
+            { href: "/agenda", icon: ContactRound, label: "AGENDA" },
             { href: "/accesos", icon: KeyRound, label: "ACCESOS" },
             { href: "/consultas-pendientes", icon: MessageSquareWarning, label: "CONSULTAS PENDIENTES" },
-            { href: "/ayuda", icon: HelpCircle, label: "AYUDA" },
             { href: "/ajustes", icon: Settings, label: "AJUSTES" },
           ].map(({ href, icon: Icon, label }) => (
             <SidebarMenuItem key={href}>
@@ -237,7 +235,7 @@ export function AppSidebar() {
                 <NavLink
                   href={href}
                   end
-                  className="hover:bg-sidebar-accent/50"
+                  className="hover:bg-sidebar-accent/60"
                   activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold"
                 >
                   <Icon className="mr-2 h-4 w-4 shrink-0" />
