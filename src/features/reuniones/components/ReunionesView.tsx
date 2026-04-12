@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Video,
   FileText,
@@ -28,6 +28,11 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import {
+  listReuniones,
+  createReunion,
+  updateReunion,
+} from "@/features/reuniones/actions/reuniones-actions";
 
 type Reunion = {
   id: string;
@@ -42,32 +47,9 @@ type Reunion = {
   generandoResumen: boolean;
 };
 
-const SEED: Reunion[] = [
-  {
-    id: "r1",
-    titulo: "Reunión semanal de gerencia",
-    fecha: "2026-04-11",
-    duracion: "45 min",
-    participantes: ["Iván", "Pablo", "Marta"],
-    meetLink: "https://meet.google.com/abc-defg-hij",
-    notas: "Revisión ratios, pendiente: pedir presupuesto frigorífico nuevo.",
-    resumenIA:
-      "Se revisaron los ratios de la semana: costes de materia prima un 2% por encima. Pablo reportó que el frigorífico de cocina necesita reemplazo (presupuesto en curso). Marta confirmó que las reservas del fin de semana están al 90%. Acción: Iván pide presupuesto a Frigoríficos Costa antes del jueves.",
-    generandoResumen: false,
-  },
-  {
-    id: "r2",
-    titulo: "Cata nuevos platos primavera",
-    fecha: "2026-04-10",
-    duracion: "1h 20 min",
-    participantes: ["Chef", "Iván", "Laura", "Equipo sala"],
-    notas: "",
-    generandoResumen: false,
-  },
-];
-
 export function ReunionesView() {
-  const [reuniones, setReuniones] = useState<Reunion[]>(SEED);
+  const [reuniones, setReuniones] = useState<Reunion[]>([]);
+  const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({
@@ -79,6 +61,36 @@ export function ReunionesView() {
   });
   const [detalle, setDetalle] = useState<Reunion | null>(null);
 
+  const cargarReuniones = useCallback(async () => {
+    try {
+      setCargando(true);
+      const res = await listReuniones();
+      if (res.ok) {
+        const mapped: Reunion[] = (res.data as Record<string, unknown>[]).map((r) => ({
+          id: r.id as string,
+          titulo: (r.titulo as string) ?? "",
+          fecha: (r.fecha as string) ?? "",
+          duracion: (r.duracion as string) ?? "---",
+          participantes: (r.participantes as string[]) ?? [],
+          meetLink: (r.meet_link as string) || undefined,
+          grabacionUrl: (r.grabacion_url as string) || undefined,
+          notas: (r.notas as string) ?? "",
+          resumenIA: (r.resumen_ia as string) || undefined,
+          generandoResumen: false,
+        }));
+        setReuniones(mapped);
+      }
+    } catch {
+      toast.error("Error al cargar reuniones");
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    cargarReuniones();
+  }, [cargarReuniones]);
+
   const filtradas = busqueda.trim()
     ? reuniones.filter(
         (r) =>
@@ -89,34 +101,36 @@ export function ReunionesView() {
       )
     : reuniones;
 
-  function crear() {
+  async function crear() {
     if (!form.titulo.trim()) {
       toast.error("Falta el título");
       return;
     }
-    const nueva: Reunion = {
-      id: `r-${Date.now()}`,
-      titulo: form.titulo.trim(),
-      fecha: form.fecha,
-      duracion: "—",
-      participantes: form.participantes
-        .split(",")
-        .map((p) => p.trim())
-        .filter(Boolean),
-      meetLink: form.meetLink.trim() || undefined,
-      notas: form.notas.trim(),
-      generandoResumen: false,
-    };
-    setReuniones((prev) => [nueva, ...prev]);
-    setShowNew(false);
-    setForm({
-      titulo: "",
-      fecha: new Date().toISOString().slice(0, 10),
-      participantes: "",
-      notas: "",
-      meetLink: "",
-    });
-    toast.success("Reunión registrada");
+    try {
+      const res = await createReunion({
+        titulo: form.titulo.trim(),
+        fecha: form.fecha,
+        participantes: form.participantes
+          .split(",")
+          .map((p) => p.trim())
+          .filter(Boolean),
+        meet_link: form.meetLink.trim() || undefined,
+        notas: form.notas.trim(),
+      });
+      if (!res.ok) { toast.error(res.error ?? "Error al crear reunión"); return; }
+      setShowNew(false);
+      setForm({
+        titulo: "",
+        fecha: new Date().toISOString().slice(0, 10),
+        participantes: "",
+        notas: "",
+        meetLink: "",
+      });
+      toast.success("Reunión registrada");
+      await cargarReuniones();
+    } catch {
+      toast.error("Error al crear reunión");
+    }
   }
 
   async function generarResumen(id: string) {
@@ -139,6 +153,9 @@ export function ReunionesView() {
       });
       const data = await res.json();
       const resumen = data.texto || "No se pudo generar el resumen.";
+
+      // Persist resumen to DB
+      await updateReunion(id, { resumen_ia: resumen });
 
       setReuniones((prev) =>
         prev.map((r) =>
@@ -186,7 +203,14 @@ export function ReunionesView() {
 
       {/* Lista */}
       <div className="space-y-3">
-        {filtradas.length === 0 && (
+        {cargando && (
+          <Card>
+            <CardContent className="py-12 text-center text-sm text-muted-foreground">
+              Cargando reuniones...
+            </CardContent>
+          </Card>
+        )}
+        {!cargando && filtradas.length === 0 && (
           <Card>
             <CardContent className="py-12 text-center text-sm text-muted-foreground">
               No hay reuniones registradas.

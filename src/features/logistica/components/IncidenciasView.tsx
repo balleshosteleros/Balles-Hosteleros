@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   TrendingUp,
   TrendingDown,
@@ -23,6 +23,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
+import {
+  listIncidencias,
+  createIncidencia,
+} from "@/features/logistica/actions/incidencias-actions";
 
 type Registro = {
   id: string;
@@ -52,6 +56,33 @@ export function IncidenciasView() {
   const [precioActual, setPrecioActual] = useState<string>("");
   const [precioNuevo, setPrecioNuevo] = useState<string>("");
   const [registros, setRegistros] = useState<Registro[]>([]);
+  const [cargando, setCargando] = useState(true);
+
+  const cargarRegistros = useCallback(async () => {
+    try {
+      setCargando(true);
+      const res = await listIncidencias();
+      if (res.ok) {
+        const mapped: Registro[] = (res.data as Record<string, unknown>[]).map((r) => ({
+          id: r.id as string,
+          producto: (r.producto as string) ?? "",
+          proveedor: (r.proveedor as string) ?? "---",
+          precioActual: (r.precio_actual as number) ?? 0,
+          precioNuevo: (r.precio_nuevo as number) ?? 0,
+          fecha: ((r.created_at as string) ?? "").slice(0, 10),
+        }));
+        setRegistros(mapped);
+      }
+    } catch {
+      toast.error("Error al cargar incidencias");
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    cargarRegistros();
+  }, [cargarRegistros]);
 
   const actualNum = parseFloat(precioActual.replace(",", ".")) || 0;
   const nuevoNum = parseFloat(precioNuevo.replace(",", ".")) || 0;
@@ -61,7 +92,7 @@ export function IncidenciasView() {
   const bajo = variacion < 0;
   const muyAlta = Math.abs(variacion) >= 10;
 
-  function registrar() {
+  async function registrar() {
     if (!producto.trim()) {
       toast.error("Indica el producto");
       return;
@@ -70,20 +101,23 @@ export function IncidenciasView() {
       toast.error("Rellena los dos precios");
       return;
     }
-    const r: Registro = {
-      id: `pr-${Date.now()}`,
-      producto: producto.trim(),
-      proveedor: proveedor.trim() || "—",
-      precioActual: actualNum,
-      precioNuevo: nuevoNum,
-      fecha: new Date().toISOString().slice(0, 10),
-    };
-    setRegistros((prev) => [r, ...prev]);
-    setProducto("");
-    setProveedor("");
-    setPrecioActual("");
-    setPrecioNuevo("");
-    toast.success("Subida registrada");
+    try {
+      const res = await createIncidencia({
+        producto: producto.trim(),
+        proveedor: proveedor.trim() || undefined,
+        precio_actual: actualNum,
+        precio_nuevo: nuevoNum,
+      });
+      if (!res.ok) { toast.error(res.error ?? "Error al registrar"); return; }
+      setProducto("");
+      setProveedor("");
+      setPrecioActual("");
+      setPrecioNuevo("");
+      toast.success("Subida registrada");
+      await cargarRegistros();
+    } catch {
+      toast.error("Error al registrar subida");
+    }
   }
 
   return (
@@ -238,7 +272,17 @@ export function IncidenciasView() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {registros.length === 0 && (
+              {cargando && (
+                <TableRow>
+                  <TableCell
+                    colSpan={6}
+                    className="py-10 text-center text-sm text-muted-foreground"
+                  >
+                    Cargando incidencias...
+                  </TableCell>
+                </TableRow>
+              )}
+              {!cargando && registros.length === 0 && (
                 <TableRow>
                   <TableCell
                     colSpan={6}

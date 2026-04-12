@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useEffect } from "react";
+import { useCallback, useMemo, useRef, useState, useEffect } from "react";
 import {
   MessageSquare,
   Send,
@@ -15,6 +15,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import {
+  listCanales,
+  listMensajes,
+  sendMensaje,
+  createCanal,
+} from "@/features/comunicacion/actions/comunicacion-actions";
 
 type Canal = {
   id: string;
@@ -36,35 +43,64 @@ type Mensaje = {
   fijado: boolean;
 };
 
-const CANALES: Canal[] = [
-  { id: "general", nombre: "General", tipo: "departamento", miembros: 24, ultimoMensaje: "Buenos días a todos", sinLeer: 3 },
-  { id: "cocina", nombre: "Cocina", tipo: "departamento", miembros: 8, ultimoMensaje: "El pedido de pescado llega a las 7", sinLeer: 0 },
-  { id: "sala", nombre: "Sala", tipo: "departamento", miembros: 12, ultimoMensaje: "Mesa 8 alérgico a frutos secos", sinLeer: 1 },
-  { id: "gerencia", nombre: "Gerencia", tipo: "departamento", miembros: 4, ultimoMensaje: "Ratios de esta semana actualizados", sinLeer: 0 },
-  { id: "logistica", nombre: "Logística", tipo: "departamento", miembros: 5, ultimoMensaje: "Aceite de oliva subió un 14%", sinLeer: 2 },
-  { id: "mantenimiento", nombre: "Mantenimiento", tipo: "grupo", miembros: 3, ultimoMensaje: "Frigorífico reparado", sinLeer: 0 },
-  { id: "eventos", nombre: "Eventos y reservas", tipo: "grupo", miembros: 6, ultimoMensaje: "Reserva grupo 20 personas sábado", sinLeer: 1 },
+// Default canales to seed if DB is empty
+const DEFAULT_CANALES = [
+  { nombre: "General", tipo: "departamento" },
+  { nombre: "Cocina", tipo: "departamento" },
+  { nombre: "Sala", tipo: "departamento" },
+  { nombre: "Gerencia", tipo: "departamento" },
+  { nombre: "Logistica", tipo: "departamento" },
+  { nombre: "Mantenimiento", tipo: "grupo" },
+  { nombre: "Eventos y reservas", tipo: "grupo" },
 ];
 
-const MENSAJES_SEED: Mensaje[] = [
-  { id: "m1", canalId: "general", autor: "Iván", avatar: "IB", texto: "Buenos días a todos. Recordad que hoy tenemos cata de nuevos platos a las 12:00 en sala.", fecha: "Hoy", hora: "08:15", fijado: true },
-  { id: "m2", canalId: "general", autor: "Marta", avatar: "MG", texto: "¡Buenos días! Allí estaré.", fecha: "Hoy", hora: "08:22", fijado: false },
-  { id: "m3", canalId: "general", autor: "Pablo", avatar: "PE", texto: "Perfecto. ¿Llevo algo preparado o vamos a probar directamente?", fecha: "Hoy", hora: "08:30", fijado: false },
-  { id: "m4", canalId: "cocina", autor: "Chef", avatar: "CH", texto: "El pedido de pescado llega a las 7. Necesito a alguien para recepcionarlo.", fecha: "Hoy", hora: "06:45", fijado: false },
-  { id: "m5", canalId: "sala", autor: "Laura", avatar: "LR", texto: "Mesa 8 alérgico a frutos secos. Avisar a cocina antes de servir.", fecha: "Hoy", hora: "13:10", fijado: true },
-  { id: "m6", canalId: "logistica", autor: "Iván", avatar: "IB", texto: "Aceite de oliva 5L subió de 28€ a 32€. Ya lo registré en Incidencias.", fecha: "Hoy", hora: "10:00", fijado: false },
-];
+function mapDbCanal(r: Record<string, unknown>): Canal {
+  return {
+    id: r.id as string,
+    nombre: (r.nombre as string) ?? "",
+    tipo: (r.tipo as Canal["tipo"]) ?? "grupo",
+    miembros: (r.miembros as number) ?? 0,
+    ultimoMensaje: (r.ultimo_mensaje as string) || undefined,
+    sinLeer: (r.sin_leer as number) ?? 0,
+  };
+}
+
+function mapDbMensaje(r: Record<string, unknown>): Mensaje {
+  const createdAt = r.created_at ? new Date(r.created_at as string) : new Date();
+  const hoy = new Date();
+  const esHoy = createdAt.toDateString() === hoy.toDateString();
+  const nombre = (r.autor_nombre as string) ?? "Anon";
+  const iniciales = nombre
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+  return {
+    id: r.id as string,
+    canalId: (r.canal_id as string) ?? "",
+    autor: nombre,
+    avatar: iniciales,
+    texto: (r.texto as string) ?? "",
+    fecha: esHoy ? "Hoy" : createdAt.toLocaleDateString("es-ES"),
+    hora: createdAt.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }),
+    fijado: (r.fijado as boolean) ?? false,
+  };
+}
 
 export function ComunicacionView() {
-  const [canalActivo, setCanalActivo] = useState("general");
-  const [mensajes, setMensajes] = useState<Mensaje[]>(MENSAJES_SEED);
+  const [canales, setCanales] = useState<Canal[]>([]);
+  const [canalActivo, setCanalActivo] = useState<string | null>(null);
+  const [mensajes, setMensajes] = useState<Mensaje[]>([]);
   const [input, setInput] = useState("");
   const [busqueda, setBusqueda] = useState("");
+  const [cargando, setCargando] = useState(true);
+  const [cargandoMsgs, setCargandoMsgs] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const canal = CANALES.find((c) => c.id === canalActivo)!;
+  const canal = canales.find((c) => c.id === canalActivo) ?? null;
   const msgDelCanal = useMemo(
-    () => mensajes.filter((m) => m.canalId === canalActivo),
+    () => (canalActivo ? mensajes.filter((m) => m.canalId === canalActivo) : []),
     [mensajes, canalActivo],
   );
 
@@ -73,19 +109,79 @@ export function ComunicacionView() {
   }, [msgDelCanal.length]);
 
   const canalesFiltrados = busqueda.trim()
-    ? CANALES.filter((c) =>
+    ? canales.filter((c) =>
         c.nombre.toLowerCase().includes(busqueda.toLowerCase()),
       )
-    : CANALES;
+    : canales;
 
-  function enviar() {
-    if (!input.trim()) return;
-    const nuevo: Mensaje = {
+  // Load canales on mount; seed defaults if empty
+  const cargarCanales = useCallback(async () => {
+    try {
+      setCargando(true);
+      const res = await listCanales();
+      if (!res.ok) return;
+      let data = res.data as Record<string, unknown>[];
+
+      // Seed default canales if DB is empty
+      if (data.length === 0) {
+        for (const def of DEFAULT_CANALES) {
+          await createCanal(def.nombre, def.tipo);
+        }
+        const retry = await listCanales();
+        if (retry.ok) data = retry.data as Record<string, unknown>[];
+      }
+
+      const mapped = data.map(mapDbCanal);
+      setCanales(mapped);
+      if (mapped.length > 0 && !canalActivo) {
+        setCanalActivo(mapped[0].id);
+      }
+    } catch {
+      toast.error("Error al cargar canales");
+    } finally {
+      setCargando(false);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    cargarCanales();
+  }, [cargarCanales]);
+
+  // Load messages when active channel changes
+  const cargarMensajes = useCallback(async (cId: string) => {
+    try {
+      setCargandoMsgs(true);
+      const res = await listMensajes(cId);
+      if (res.ok) {
+        setMensajes((prev) => {
+          const otroCanal = prev.filter((m) => m.canalId !== cId);
+          const nuevos = (res.data as Record<string, unknown>[]).map(mapDbMensaje);
+          return [...otroCanal, ...nuevos];
+        });
+      }
+    } catch {
+      toast.error("Error al cargar mensajes");
+    } finally {
+      setCargandoMsgs(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (canalActivo) cargarMensajes(canalActivo);
+  }, [canalActivo, cargarMensajes]);
+
+  async function enviar() {
+    if (!input.trim() || !canalActivo) return;
+    const texto = input.trim();
+    setInput("");
+
+    // Optimistic append
+    const optimistic: Mensaje = {
       id: `m-${Date.now()}`,
       canalId: canalActivo,
-      autor: "Tú",
+      autor: "Tu",
       avatar: "TU",
-      texto: input.trim(),
+      texto,
       fecha: "Hoy",
       hora: new Date().toLocaleTimeString("es-ES", {
         hour: "2-digit",
@@ -93,8 +189,28 @@ export function ComunicacionView() {
       }),
       fijado: false,
     };
-    setMensajes((prev) => [...prev, nuevo]);
-    setInput("");
+    setMensajes((prev) => [...prev, optimistic]);
+
+    try {
+      const res = await sendMensaje(canalActivo, texto);
+      if (!res.ok) {
+        toast.error(res.error ?? "Error al enviar mensaje");
+        // Remove optimistic
+        setMensajes((prev) => prev.filter((m) => m.id !== optimistic.id));
+        return;
+      }
+      // Replace optimistic with real data
+      if (res.data) {
+        const real = mapDbMensaje(res.data as Record<string, unknown>);
+        setMensajes((prev) =>
+          prev.map((m) => (m.id === optimistic.id ? real : m)),
+        );
+      }
+      toast.success("Mensaje enviado");
+    } catch {
+      toast.error("Error al enviar mensaje");
+      setMensajes((prev) => prev.filter((m) => m.id !== optimistic.id));
+    }
   }
 
   return (
@@ -123,6 +239,11 @@ export function ComunicacionView() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+          {cargando && (
+            <p className="px-3 py-4 text-xs text-muted-foreground text-center">
+              Cargando canales...
+            </p>
+          )}
           {["departamento", "grupo"].map((tipo) => {
             const lista = canalesFiltrados.filter((c) => c.tipo === tipo);
             if (!lista.length) return null;
@@ -164,11 +285,13 @@ export function ComunicacionView() {
           <div className="flex items-center gap-2">
             <Hash className="h-5 w-5 text-muted-foreground" />
             <h2 className="text-base font-bold text-foreground">
-              {canal.nombre}
+              {canal?.nombre ?? "Selecciona un canal"}
             </h2>
-            <Badge variant="secondary" className="text-[10px]">
-              <Users className="mr-1 h-3 w-3" /> {canal.miembros}
-            </Badge>
+            {canal && (
+              <Badge variant="secondary" className="text-[10px]">
+                <Users className="mr-1 h-3 w-3" /> {canal.miembros}
+              </Badge>
+            )}
           </div>
           <Button variant="ghost" size="sm" className="text-xs gap-1">
             <Pin className="h-3.5 w-3.5" /> Fijados
@@ -177,6 +300,16 @@ export function ComunicacionView() {
 
         {/* Mensajes */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 space-y-4">
+          {cargandoMsgs && (
+            <div className="py-12 text-center text-sm text-muted-foreground">
+              Cargando mensajes...
+            </div>
+          )}
+          {!cargandoMsgs && msgDelCanal.length === 0 && (
+            <div className="py-12 text-center text-sm text-muted-foreground">
+              No hay mensajes en este canal.
+            </div>
+          )}
           {msgDelCanal.map((m) => (
             <div
               key={m.id}
@@ -218,7 +351,7 @@ export function ComunicacionView() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && enviar()}
-              placeholder={`Escribe en #${canal.nombre}…`}
+              placeholder={`Escribe en #${canal?.nombre ?? "canal"}…`}
               className="flex-1"
             />
             <Button

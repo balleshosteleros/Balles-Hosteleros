@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Search,
   Plus,
@@ -44,6 +44,12 @@ import {
   type ContactoInput,
 } from "@/features/agenda/types";
 import { toast } from "sonner";
+import {
+  listContactos,
+  createContacto,
+  updateContacto,
+  deleteContacto,
+} from "@/features/agenda/actions/contactos-actions";
 
 const CATEGORIA_ICON: Record<ContactoCategoria, React.ElementType> = {
   mantenimiento: Wrench,
@@ -61,39 +67,6 @@ const CATEGORIA_COLOR: Record<ContactoCategoria, string> = {
   otros: "bg-gray-100 text-gray-700 border-gray-200",
 };
 
-const SEED: Contacto[] = [
-  {
-    id: "c-1",
-    empresa_id: null,
-    nombre: "Frigoríficos Costa",
-    empresa_contacto: "Costa SL",
-    categoria: "mantenimiento",
-    telefono: "+34 600 123 456",
-    email: "averias@frigoscosta.es",
-    whatsapp: "+34 600 123 456",
-    direccion: "Madrid",
-    notas: "Servicio 24h. Pedir presupuesto antes de aceptar.",
-    created_at: "2026-01-12",
-    updated_at: "2026-01-12",
-    created_by: null,
-  },
-  {
-    id: "c-2",
-    empresa_id: null,
-    nombre: "Distribuciones Hermanos Ruiz",
-    empresa_contacto: "Hermanos Ruiz S.A.",
-    categoria: "proveedores",
-    telefono: "+34 911 555 222",
-    email: "pedidos@hruiz.com",
-    whatsapp: null,
-    direccion: "Polígono Sur, nave 4",
-    notas: "Reparto martes y viernes. Cierre pedidos: día anterior 18h.",
-    created_at: "2026-01-15",
-    updated_at: "2026-01-15",
-    created_by: null,
-  },
-];
-
 const EMPTY_FORM: ContactoInput = {
   nombre: "",
   empresa_contacto: "",
@@ -106,13 +79,30 @@ const EMPTY_FORM: ContactoInput = {
 };
 
 export function AgendaView() {
-  const [contactos, setContactos] = useState<Contacto[]>(SEED);
+  const [contactos, setContactos] = useState<Contacto[]>([]);
+  const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   const [tab, setTab] = useState<ContactoCategoria | "todos">("todos");
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<ContactoInput>(EMPTY_FORM);
+
+  const cargarContactos = useCallback(async () => {
+    try {
+      setCargando(true);
+      const data = await listContactos();
+      setContactos(data);
+    } catch {
+      toast.error("Error al cargar contactos");
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    cargarContactos();
+  }, [cargarContactos]);
 
   const filtrados = useMemo(() => {
     let lista = contactos;
@@ -162,56 +152,37 @@ export function AgendaView() {
     setDialogOpen(true);
   }
 
-  function guardar() {
+  async function guardar() {
     if (!form.nombre.trim()) {
       toast.error("El nombre es obligatorio");
       return;
     }
-    const ahora = new Date().toISOString().slice(0, 10);
-    if (editId) {
-      setContactos((prev) =>
-        prev.map((c) =>
-          c.id === editId
-            ? {
-                ...c,
-                ...form,
-                empresa_contacto: form.empresa_contacto?.trim() || null,
-                telefono: form.telefono?.trim() || null,
-                email: form.email?.trim() || null,
-                whatsapp: form.whatsapp?.trim() || null,
-                direccion: form.direccion?.trim() || null,
-                notas: form.notas?.trim() || null,
-                updated_at: ahora,
-              }
-            : c,
-        ),
-      );
-      toast.success("Contacto actualizado");
-    } else {
-      const nuevo: Contacto = {
-        id: `c-${Date.now()}`,
-        empresa_id: null,
-        nombre: form.nombre.trim(),
-        empresa_contacto: form.empresa_contacto?.trim() || null,
-        categoria: form.categoria,
-        telefono: form.telefono?.trim() || null,
-        email: form.email?.trim() || null,
-        whatsapp: form.whatsapp?.trim() || null,
-        direccion: form.direccion?.trim() || null,
-        notas: form.notas?.trim() || null,
-        created_at: ahora,
-        updated_at: ahora,
-        created_by: null,
-      };
-      setContactos((prev) => [nuevo, ...prev]);
-      toast.success("Contacto creado");
+    try {
+      if (editId) {
+        const res = await updateContacto(editId, form);
+        if (!res.ok) { toast.error(res.error ?? "Error al actualizar"); return; }
+        toast.success("Contacto actualizado");
+      } else {
+        const res = await createContacto(form);
+        if (!res.ok) { toast.error(res.error ?? "Error al crear"); return; }
+        toast.success("Contacto creado");
+      }
+      setDialogOpen(false);
+      await cargarContactos();
+    } catch {
+      toast.error("Error al guardar contacto");
     }
-    setDialogOpen(false);
   }
 
-  function eliminar(id: string) {
-    setContactos((prev) => prev.filter((c) => c.id !== id));
-    toast.success("Contacto eliminado");
+  async function eliminar(id: string) {
+    try {
+      const res = await deleteContacto(id);
+      if (!res.ok) { toast.error(res.error ?? "Error al eliminar"); return; }
+      setContactos((prev) => prev.filter((c) => c.id !== id));
+      toast.success("Contacto eliminado");
+    } catch {
+      toast.error("Error al eliminar contacto");
+    }
   }
 
   return (
@@ -247,7 +218,14 @@ export function AgendaView() {
 
       {/* Lista */}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {filtrados.length === 0 && (
+        {cargando && (
+          <Card className="md:col-span-2 xl:col-span-3">
+            <CardContent className="py-16 text-center text-sm text-muted-foreground">
+              Cargando contactos...
+            </CardContent>
+          </Card>
+        )}
+        {!cargando && filtrados.length === 0 && (
           <Card className="md:col-span-2 xl:col-span-3">
             <CardContent className="py-16 text-center text-sm text-muted-foreground">
               No hay contactos que coincidan con tu búsqueda.

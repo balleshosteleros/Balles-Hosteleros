@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Plus,
   Search,
@@ -38,6 +38,13 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import {
+  listNuevosPlatos,
+  createNuevoPlato,
+  updatePlatoPasos,
+  updatePlatoEstado,
+  deleteNuevoPlato,
+} from "@/features/cocina/actions/nuevos-platos-actions";
 
 type Estado = "propuesto" | "en_cata" | "aprobado" | "rechazado" | "en_carta";
 type Destino = "cocina" | "sala" | "ambos";
@@ -98,25 +105,6 @@ function progreso(pasos: NuevoPlato["pasos"]): number {
   return Math.round((completados / total) * 100);
 }
 
-const SEED: NuevoPlato[] = [
-  {
-    id: "np-1",
-    nombre: "Tataki de atún con wakame",
-    descripcion: "Tataki de atún rojo sobre alga wakame con vinagreta de sésamo tostado.",
-    destino: "ambos",
-    estado: "en_cata",
-    propuestoPor: "Chef principal",
-    fecha: "2026-04-10",
-    pasos: {
-      fotosMarketing: true,
-      cata1: true,
-      cata2: false,
-      grabarProducto: false,
-      fichaProveedor: true,
-    },
-  },
-];
-
 type FormData = {
   nombre: string;
   descripcion: string;
@@ -124,7 +112,8 @@ type FormData = {
 };
 
 export function NuevosPlatosView() {
-  const [platos, setPlatos] = useState<NuevoPlato[]>(SEED);
+  const [platos, setPlatos] = useState<NuevoPlato[]>([]);
+  const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   const [filtroEstado, setFiltroEstado] = useState<Estado | "todos">("todos");
   const [showNew, setShowNew] = useState(false);
@@ -134,6 +123,44 @@ export function NuevosPlatosView() {
     destino: "ambos",
   });
   const [detalle, setDetalle] = useState<NuevoPlato | null>(null);
+
+  // Map DB row (snake_case) to component type (camelCase)
+  function mapDbPlato(r: Record<string, unknown>): NuevoPlato {
+    return {
+      id: r.id as string,
+      nombre: (r.nombre as string) ?? "",
+      descripcion: (r.descripcion as string) ?? "",
+      destino: (r.destino as Destino) ?? "ambos",
+      estado: (r.estado as Estado) ?? "propuesto",
+      propuestoPor: (r.propuesto_por_nombre as string) ?? "Desconocido",
+      fecha: ((r.created_at as string) ?? "").slice(0, 10),
+      pasos: {
+        fotosMarketing: (r.fotos_marketing as boolean) ?? false,
+        cata1: (r.cata_1 as boolean) ?? false,
+        cata2: (r.cata_2 as boolean) ?? false,
+        grabarProducto: (r.grabar_producto as boolean) ?? false,
+        fichaProveedor: (r.ficha_proveedor as boolean) ?? false,
+      },
+    };
+  }
+
+  const cargarPlatos = useCallback(async () => {
+    try {
+      setCargando(true);
+      const res = await listNuevosPlatos();
+      if (res.ok) {
+        setPlatos((res.data as Record<string, unknown>[]).map(mapDbPlato));
+      }
+    } catch {
+      toast.error("Error al cargar platos");
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    cargarPlatos();
+  }, [cargarPlatos]);
 
   const filtrados = useMemo(() => {
     let list = platos;
@@ -150,63 +177,101 @@ export function NuevosPlatosView() {
     return list;
   }, [platos, filtroEstado, busqueda]);
 
-  function crear() {
+  async function crear() {
     if (!form.nombre.trim()) {
       toast.error("Falta el nombre del plato");
       return;
     }
-    const nuevo: NuevoPlato = {
-      id: `np-${Date.now()}`,
-      nombre: form.nombre.trim(),
-      descripcion: form.descripcion.trim(),
-      destino: form.destino,
-      estado: "propuesto",
-      propuestoPor: "Tú",
-      fecha: new Date().toISOString().slice(0, 10),
-      pasos: {
-        fotosMarketing: false,
-        cata1: false,
-        cata2: false,
-        grabarProducto: false,
-        fichaProveedor: false,
-      },
-    };
-    setPlatos((prev) => [nuevo, ...prev]);
-    setShowNew(false);
-    setForm({ nombre: "", descripcion: "", destino: "ambos" });
-    toast.success("Plato propuesto");
+    try {
+      const res = await createNuevoPlato({
+        nombre: form.nombre.trim(),
+        descripcion: form.descripcion.trim(),
+        destino: form.destino,
+      });
+      if (!res.ok) { toast.error(res.error ?? "Error al crear plato"); return; }
+      setShowNew(false);
+      setForm({ nombre: "", descripcion: "", destino: "ambos" });
+      toast.success("Plato propuesto");
+      await cargarPlatos();
+    } catch {
+      toast.error("Error al crear plato");
+    }
   }
 
-  function togglePaso(platoId: string, paso: keyof NuevoPlato["pasos"]) {
+  // Map camelCase paso keys to snake_case DB column names
+  const PASO_TO_DB: Record<keyof NuevoPlato["pasos"], string> = {
+    fotosMarketing: "fotos_marketing",
+    cata1: "cata_1",
+    cata2: "cata_2",
+    grabarProducto: "grabar_producto",
+    fichaProveedor: "ficha_proveedor",
+  };
+
+  async function togglePaso(platoId: string, paso: keyof NuevoPlato["pasos"]) {
+    const plato = platos.find((p) => p.id === platoId);
+    if (!plato) return;
+    const newValue = !plato.pasos[paso];
+
+    // Optimistic update
     setPlatos((prev) =>
       prev.map((p) =>
         p.id === platoId
-          ? { ...p, pasos: { ...p.pasos, [paso]: !p.pasos[paso] } }
+          ? { ...p, pasos: { ...p.pasos, [paso]: newValue } }
           : p,
       ),
     );
     if (detalle?.id === platoId) {
       setDetalle((prev) =>
         prev
-          ? { ...prev, pasos: { ...prev.pasos, [paso]: !prev.pasos[paso] } }
+          ? { ...prev, pasos: { ...prev.pasos, [paso]: newValue } }
           : prev,
       );
     }
+
+    try {
+      const dbKey = PASO_TO_DB[paso];
+      const res = await updatePlatoPasos(platoId, { [dbKey]: newValue });
+      if (!res.ok) {
+        toast.error(res.error ?? "Error al actualizar paso");
+        // Revert optimistic update
+        setPlatos((prev) =>
+          prev.map((p) =>
+            p.id === platoId
+              ? { ...p, pasos: { ...p.pasos, [paso]: !newValue } }
+              : p,
+          ),
+        );
+      }
+    } catch {
+      toast.error("Error al actualizar paso");
+    }
   }
 
-  function cambiarEstado(platoId: string, estado: Estado) {
-    setPlatos((prev) =>
-      prev.map((p) => (p.id === platoId ? { ...p, estado } : p)),
-    );
-    if (detalle?.id === platoId)
-      setDetalle((prev) => (prev ? { ...prev, estado } : prev));
-    toast.success(`Estado cambiado a "${ESTADO_CONFIG[estado].label}"`);
+  async function cambiarEstado(platoId: string, estado: Estado) {
+    try {
+      const res = await updatePlatoEstado(platoId, estado);
+      if (!res.ok) { toast.error(res.error ?? "Error al cambiar estado"); return; }
+      setPlatos((prev) =>
+        prev.map((p) => (p.id === platoId ? { ...p, estado } : p)),
+      );
+      if (detalle?.id === platoId)
+        setDetalle((prev) => (prev ? { ...prev, estado } : prev));
+      toast.success(`Estado cambiado a "${ESTADO_CONFIG[estado].label}"`);
+    } catch {
+      toast.error("Error al cambiar estado");
+    }
   }
 
-  function eliminar(id: string) {
-    setPlatos((prev) => prev.filter((p) => p.id !== id));
-    if (detalle?.id === id) setDetalle(null);
-    toast.success("Plato eliminado");
+  async function eliminar(id: string) {
+    try {
+      const res = await deleteNuevoPlato(id);
+      if (!res.ok) { toast.error(res.error ?? "Error al eliminar"); return; }
+      setPlatos((prev) => prev.filter((p) => p.id !== id));
+      if (detalle?.id === id) setDetalle(null);
+      toast.success("Plato eliminado");
+    } catch {
+      toast.error("Error al eliminar plato");
+    }
   }
 
   return (
@@ -248,7 +313,14 @@ export function NuevosPlatosView() {
 
       {/* Lista */}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {filtrados.length === 0 && (
+        {cargando && (
+          <Card className="md:col-span-2 xl:col-span-3">
+            <CardContent className="py-12 text-center text-sm text-muted-foreground">
+              Cargando platos...
+            </CardContent>
+          </Card>
+        )}
+        {!cargando && filtrados.length === 0 && (
           <Card className="md:col-span-2 xl:col-span-3">
             <CardContent className="py-12 text-center text-sm text-muted-foreground">
               No hay platos que coincidan.
