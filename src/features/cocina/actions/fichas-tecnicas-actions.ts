@@ -1,24 +1,10 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
-
-async function getContext() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { supabase, user: null, empresaId: null };
-  const { data } = await supabase
-    .from("profiles")
-    .select("empresa_id")
-    .eq("user_id", user.id)
-    .single();
-  return { supabase, user, empresaId: data?.empresa_id ?? null };
-}
+import { getAppContext } from "@/lib/supabase/get-context";
 
 export async function listFichas() {
   try {
-    const { supabase, empresaId } = await getContext();
+    const { supabase, empresaId } = await getAppContext();
     const query = supabase
       .from("fichas_tecnicas")
       .select("*")
@@ -42,7 +28,7 @@ export async function createFicha(input: {
   ingredientes?: { producto_nombre: string; cantidad: number; unidad?: string; coste?: number }[];
 }) {
   try {
-    const { supabase, user, empresaId } = await getContext();
+    const { supabase, userId, empresaId } = await getAppContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
 
     const { data: ficha, error: fichaErr } = await supabase
@@ -51,10 +37,9 @@ export async function createFicha(input: {
         empresa_id: empresaId,
         nombre: input.nombre,
         categoria: input.categoria ?? null,
-        raciones: input.raciones ?? null,
-        tiempo_elaboracion: input.tiempo_elaboracion ?? null,
+        porciones: input.raciones ?? null,
+        tiempo_preparacion: input.tiempo_elaboracion ? String(input.tiempo_elaboracion) + " min" : null,
         notas: input.notas ?? null,
-        created_by: user?.id ?? null,
       })
       .select()
       .single();
@@ -63,10 +48,11 @@ export async function createFicha(input: {
     if (input.ingredientes && input.ingredientes.length > 0) {
       const rows = input.ingredientes.map((ing) => ({
         ficha_id: ficha.id,
-        producto_nombre: ing.producto_nombre,
+        nombre: ing.producto_nombre,
         cantidad: ing.cantidad,
         unidad: ing.unidad ?? "kg",
-        coste: ing.coste ?? 0,
+        coste_unitario: ing.coste ?? 0,
+        coste_total: (ing.coste ?? 0) * ing.cantidad,
       }));
       const { error: ingErr } = await supabase
         .from("ingredientes_ficha")
@@ -93,10 +79,17 @@ export async function updateFicha(
   }
 ) {
   try {
-    const { supabase } = await getContext();
+    const { supabase } = await getAppContext();
+    const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (input.nombre !== undefined) payload.nombre = input.nombre;
+    if (input.categoria !== undefined) payload.categoria = input.categoria;
+    if (input.raciones !== undefined) payload.porciones = input.raciones;
+    if (input.tiempo_elaboracion !== undefined) payload.tiempo_preparacion = String(input.tiempo_elaboracion) + " min";
+    if (input.notas !== undefined) payload.notas = input.notas;
+
     const { error } = await supabase
       .from("fichas_tecnicas")
-      .update({ ...input, updated_at: new Date().toISOString() })
+      .update(payload)
       .eq("id", id);
     if (error) throw error;
     return { ok: true };
@@ -109,7 +102,7 @@ export async function updateFicha(
 
 export async function deleteFicha(id: string) {
   try {
-    const { supabase } = await getContext();
+    const { supabase } = await getAppContext();
     const { error } = await supabase
       .from("fichas_tecnicas")
       .delete()

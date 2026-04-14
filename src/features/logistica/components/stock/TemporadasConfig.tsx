@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { type TemporadaStock, type ProductoStock, temporadasSolapan } from "@/features/logistica/data/stock";
+import { createTemporada, updateTemporada, deleteTemporada } from "@/features/logistica/actions/temporadas-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,24 +38,30 @@ export default function TemporadasConfig({ temporadas, setTemporadas, productos,
     setModalOpen(true);
   };
 
-  const save = () => {
+  const save = async () => {
     if (!form.nombre || !form.fechaInicio || !form.fechaFin) { toast.error("Completa nombre y fechas"); return; }
     if (form.fechaFin < form.fechaInicio) { toast.error("La fecha de fin debe ser posterior a la de inicio"); return; }
     const check = { fechaInicio: form.fechaInicio, fechaFin: form.fechaFin, id: editId || undefined };
     if (temporadasSolapan(check, temporadas)) { toast.error("Las fechas se solapan con otra temporada existente"); return; }
 
     if (editId) {
+      const res = await updateTemporada(editId, { nombre: form.nombre, fechaInicio: form.fechaInicio, fechaFin: form.fechaFin, overrides: form.overrides });
+      if (!res.ok) { toast.error(`Error al actualizar: ${res.error}`); return; }
       setTemporadas((prev) => prev.map((t) => t.id === editId ? { ...t, nombre: form.nombre, fechaInicio: form.fechaInicio, fechaFin: form.fechaFin, overrides: form.overrides } : t));
       toast.success("Temporada actualizada");
     } else {
-      const nueva: TemporadaStock = { ...form, id: `temp-${Date.now()}`, empresaId, overrides: form.overrides };
+      const res = await createTemporada({ nombre: form.nombre, fechaInicio: form.fechaInicio, fechaFin: form.fechaFin, overrides: form.overrides });
+      if (!res.ok) { toast.error(`Error al crear: ${res.error}`); return; }
+      const nueva: TemporadaStock = { ...form, id: res.id!, empresaId, overrides: form.overrides };
       setTemporadas((prev) => [...prev, nueva]);
       toast.success("Temporada creada");
     }
     setModalOpen(false);
   };
 
-  const remove = (id: string) => {
+  const remove = async (id: string) => {
+    const res = await deleteTemporada(id);
+    if (!res.ok) { toast.error(`Error al eliminar: ${res.error}`); return; }
     setTemporadas((prev) => prev.filter((t) => t.id !== id));
     toast.success("Temporada eliminada");
   };

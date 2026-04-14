@@ -4,10 +4,11 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
-  getTemporadasPorEmpresa, getStockConTemporada,
+  getStockConTemporada,
   CATEGORIAS_STOCK, type ProductoStock, type TemporadaStock,
 } from "@/features/logistica/data/stock";
-import { listStock, updateStock as updateStockAction } from "@/features/logistica/actions/stock-actions";
+import { listTemporadas } from "@/features/logistica/actions/temporadas-actions";
+import { listStock, updateStock as updateStockAction, updateStockBatch } from "@/features/logistica/actions/stock-actions";
 import { listProductos } from "@/features/logistica/actions/producto-actions";
 import TemporadasConfig from "@/features/logistica/components/stock/TemporadasConfig";
 import { Input } from "@/components/ui/input";
@@ -66,14 +67,15 @@ export function StockView() {
         listStock(),
         listProductos("compra"),
       ]);
-      const stockByProductoId = new Map<string, { id: string; cantidad: number; minima: number }>();
-      const stockByNombre = new Map<string, { id: string; cantidad: number; minima: number }>();
+      const stockByProductoId = new Map<string, { id: string; cantidad: number; minima: number; maxima: number }>();
+      const stockByNombre = new Map<string, { id: string; cantidad: number; minima: number; maxima: number }>();
       if (stockRes.ok) {
         for (const r of stockRes.data as Array<Record<string, unknown>>) {
           const entry = {
             id: r.id as string,
             cantidad: Number(r.cantidad_actual ?? 0),
             minima: Number(r.cantidad_minima ?? 0),
+            maxima: Number(r.cantidad_maxima ?? 0),
           };
           if (r.producto_id) stockByProductoId.set(r.producto_id as string, entry);
           if (r.producto_nombre) stockByNombre.set(String(r.producto_nombre).toLowerCase(), entry);
@@ -86,7 +88,7 @@ export function StockView() {
           nombre: p.nombre,
           categoria: p.categoria || "Otros",
           unidad: p.unidad,
-          stockMaximo: 0,
+          stockMaximo: s?.maxima ?? 0,
           stockSeguridad: s?.minima ?? 0,
           stockActual: s?.cantidad ?? 0,
           ultimoInventario: 0,
@@ -101,7 +103,9 @@ export function StockView() {
     } finally {
       setLoadingStock(false);
     }
-    setTemporadas(getTemporadasPorEmpresa(empresaActual.id));
+    listTemporadas().then((res) => {
+      if (res.ok) setTemporadas(res.data);
+    });
   }, [empresaActual.id]);
 
   useEffect(() => { loadStockData(); }, [loadStockData]);
@@ -194,17 +198,20 @@ export function StockView() {
     }
     const savedId = editingId;
     setEditingId(null);
-    const res = await updateStockAction(savedId, { cantidad_minima: editValues.stockSeguridad });
+    const res = await updateStockAction(savedId, {
+      cantidad_minima: editValues.stockSeguridad,
+      cantidad_maxima: editValues.stockMaximo,
+    });
     if (res.ok) toast.success("Valores actualizados");
     else { toast.error("Error al actualizar stock"); loadStockData(); }
   };
   const cancelEdit = () => setEditingId(null);
 
   // Mass edit
-  const applyMassEdit = () => {
+  const applyMassEdit = async () => {
     if (selected.size === 0) { toast.info("Selecciona al menos un producto"); return; }
 
-    // Copy between temporadas
+    // Copy between temporadas (solo local — temporadas son configuración visual)
     if (massAction === "copiar-temporada") {
       if (!massCopyTempFrom || !massCopyTempTo) { toast.error("Selecciona temporada origen y destino"); return; }
       if (massCopyTempFrom === massCopyTempTo) { toast.error("Origen y destino deben ser diferentes"); return; }
@@ -234,7 +241,9 @@ export function StockView() {
       return current;
     };
 
-    setStock((prev) => prev.map((p) => {
+    // Calcular nuevos valores primero para poder persistirlos
+    const updates: { id: string; cantidad_minima: number; cantidad_maxima: number }[] = [];
+    const updatedStock = stock.map((p) => {
       if (!selected.has(p.id)) return p;
       const updated = { ...p };
       if (massAction === "copy") {
@@ -249,12 +258,21 @@ export function StockView() {
       } else {
         updated[massField] = apply(updated[massField]);
       }
+      updates.push({ id: p.id, cantidad_minima: updated.stockSeguridad, cantidad_maxima: updated.stockMaximo });
       return updated;
-    }));
+    });
 
+    setStock(updatedStock);
     setMassOpen(false);
     setMassValue("");
-    toast.success(`Edición masiva aplicada a ${selected.size} producto(s)`);
+
+    const res = await updateStockBatch(updates);
+    if (res.ok) {
+      toast.success(`Edición masiva guardada para ${selected.size} producto(s)`);
+    } else {
+      toast.error("Error al guardar en base de datos");
+      loadStockData();
+    }
   };
 
   return (

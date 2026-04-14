@@ -128,13 +128,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
-    const supabase = getSupabase();
-    if (!supabase) return;
-    await supabase.auth.signOut();
+    // Limpiar estado local inmediatamente
     setUser(null);
     setSession(null);
     setProfile(null);
     setRoles([]);
+
+    // Llamar a la ruta server-side que limpia las cookies de Supabase SSR
+    // y luego hacer un hard redirect para que el navegador empiece limpio
+    try {
+      await fetch("/api/auth/signout", { method: "POST" });
+    } catch {
+      // Si falla el fetch, igual redirigimos
+    }
+    window.location.href = "/";
   }, []);
 
   const hasRole = useCallback((role: AppRole) => roles.includes(role), [roles]);

@@ -45,7 +45,7 @@ function mapDbToProveedor(row: Record<string, unknown>): Proveedor {
     nombreComercial: (row.nombre_comercial as string) ?? (row.nombre as string) ?? "",
     razonSocial: (row.razon_social as string) ?? "",
     cifNif: (row.cif_nif as string) ?? (row.cif as string) ?? "",
-    categoria: (row.categoria as string) ?? "",
+    categoria: (row.categoria as string) || CATEGORIAS_PROVEEDOR[0],
     estado: (row.estado as EstadoProveedor) ?? "Activo",
     observaciones: (row.observaciones as string) ?? (row.notas as string) ?? "",
     personaContacto: (row.persona_contacto as string) ?? "",
@@ -393,7 +393,7 @@ function ProveedorModal({ open, onClose, onSave, item, empresaId }: { open: bool
               <div><Label>CIF/NIF</Label><Input value={form.cifNif} onChange={(e) => upd("cifNif", e.target.value)} /></div>
               <div>
                 <Label>Categoría</Label>
-                <Select value={form.categoria} onValueChange={(v) => upd("categoria", v)}>
+                <Select value={form.categoria || CATEGORIAS_PROVEEDOR[0]} onValueChange={(v) => upd("categoria", v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>{CATEGORIAS_PROVEEDOR.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                 </Select>

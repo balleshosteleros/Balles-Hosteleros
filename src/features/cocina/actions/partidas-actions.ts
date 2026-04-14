@@ -1,28 +1,14 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
-
-async function getContext() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { supabase, user: null, empresaId: null };
-  const { data } = await supabase
-    .from("profiles")
-    .select("empresa_id")
-    .eq("user_id", user.id)
-    .single();
-  return { supabase, user, empresaId: data?.empresa_id ?? null };
-}
+import { getAppContext } from "@/lib/supabase/get-context";
 
 export async function listPartidas() {
   try {
-    const { supabase, empresaId } = await getContext();
+    const { supabase, empresaId } = await getAppContext();
     const query = supabase
       .from("partidas")
       .select("*")
-      .order("orden", { ascending: true });
+      .order("nombre", { ascending: true });   // tabla no tiene columna 'orden'
     if (empresaId) query.eq("empresa_id", empresaId);
     const { data, error } = await query;
     if (error) throw error;
@@ -39,7 +25,7 @@ export async function createPartida(input: {
   responsable?: string;
 }) {
   try {
-    const { supabase, user, empresaId } = await getContext();
+    const { supabase, empresaId } = await getAppContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
 
     const { data, error } = await supabase
@@ -47,9 +33,7 @@ export async function createPartida(input: {
       .insert({
         empresa_id: empresaId,
         nombre: input.nombre,
-        orden: input.orden ?? 0,
         responsable: input.responsable ?? null,
-        created_by: user?.id ?? null,
       })
       .select()
       .single();
@@ -67,10 +51,14 @@ export async function updatePartida(
   input: { nombre?: string; orden?: number; responsable?: string }
 ) {
   try {
-    const { supabase } = await getContext();
+    const { supabase } = await getAppContext();
+    const payload: Record<string, unknown> = {};
+    if (input.nombre !== undefined) payload.nombre = input.nombre;
+    if (input.responsable !== undefined) payload.responsable = input.responsable;
+
     const { error } = await supabase
       .from("partidas")
-      .update({ ...input, updated_at: new Date().toISOString() })
+      .update(payload)
       .eq("id", id);
     if (error) throw error;
     return { ok: true };

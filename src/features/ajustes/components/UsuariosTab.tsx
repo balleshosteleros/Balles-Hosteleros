@@ -1,9 +1,8 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { getEmpleadosPorEmpresa } from "@/features/rrhh/data/rrhh";
 import {
   AccesoPortal, EstadoAcceso, ROLES_PORTAL,
-  crearAccesoDesdeEmpleado, permisosDesdeRol,
+  permisosDesdeRol,
 } from "@/features/rrhh/data/accesos-portal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,10 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Search, ShieldCheck, ShieldOff, KeyRound, Pencil, UserCog,
-  Power, PowerOff, Lock, Eye, PenLine, Users, UserPlus, Plus,
+  Search, ShieldCheck, KeyRound, Pencil, UserCog,
+  Power, PowerOff, Eye, PenLine, UserPlus, Plus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { createEmployee, resetEmployeePassword, getEmployees } from "@/actions/admin";
@@ -23,7 +21,6 @@ import { createEmployee, resetEmployeePassword, getEmployees } from "@/actions/a
 const ESTADO_STYLES: Record<EstadoAcceso, string> = {
   Activo: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
   Inactivo: "bg-muted text-muted-foreground border-muted-foreground/30",
-  Bloqueado: "bg-destructive/10 text-destructive border-destructive/30",
   Pendiente: "bg-amber-500/10 text-amber-600 border-amber-500/30",
 };
 
@@ -42,22 +39,37 @@ type SupabaseProfile = {
   avatar_url: string | null;
   empresa_id: string | null;
   role?: string;
+  estado_acceso?: string;
   created_at: string;
   updated_at: string;
 };
 
 const ROLE_DB_TO_UI: Record<string, string> = {
   admin: "Administrador",
+  administrador: "Administrador",
   director: "Director",
+  direccion: "Dirección",
+  rrhh: "RRHH",
+  recursos_humanos: "RRHH",
+  logistica: "Logística",
+  cocina: "Cocina",
   gerencia: "Gerencia",
-  responsable: "Responsable",
+  contabilidad: "Contabilidad",
+  gestoria: "Gestoría",
+  juridico: "Jurídico",
+  marketing: "Marketing",
   empleado: "Empleado",
+  responsable: "Empleado",
   solo_lectura: "Solo lectura",
 };
 
 function profileToAcceso(p: SupabaseProfile, empresa: { id: string; nombre: string }): AccesoPortal {
   const rolUI = ROLE_DB_TO_UI[p.role ?? "empleado"] ?? "Empleado";
   const fullName = [p.nombre, p.apellidos].filter(Boolean).join(" ").trim() || p.full_name || p.email;
+  const validEstados: EstadoAcceso[] = ["Activo", "Inactivo", "Pendiente"];
+  const estadoAcceso: EstadoAcceso = validEstados.includes(p.estado_acceso as EstadoAcceso)
+    ? (p.estado_acceso as EstadoAcceso)
+    : "Activo";
   return {
     id: `sup-${p.id}`,
     empleadoId: p.id,
@@ -66,7 +78,7 @@ function profileToAcceso(p: SupabaseProfile, empresa: { id: string; nombre: stri
     empresa: empresa.nombre,
     empresaId: empresa.id,
     rol: rolUI,
-    estadoAcceso: "Activo",
+    estadoAcceso,
     ultimaConexion: "—",
     fechaCreacion: p.created_at?.slice(0, 10) ?? "",
     permisos: permisosDesdeRol(rolUI),
@@ -75,7 +87,6 @@ function profileToAcceso(p: SupabaseProfile, empresa: { id: string; nombre: stri
 
 export function UsuariosTab() {
   const { empresaActual } = useEmpresa();
-  const empleados = useMemo(() => getEmpleadosPorEmpresa(empresaActual.id), [empresaActual.id]);
 
   const [accesos, setAccesos] = useState<AccesoPortal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -122,12 +133,6 @@ export function UsuariosTab() {
     });
   }, [accesos, busqueda, filtroEstado]);
 
-  // Employees without access
-  const sinAcceso = useMemo(() => {
-    const idsConAcceso = new Set(accesos.map((a) => a.empleadoId));
-    return empleados.filter((e) => !idsConAcceso.has(e.id));
-  }, [empleados, accesos]);
-
   const activar = (id: string) => {
     setAccesos((prev) => prev.map((a) => a.id === id ? { ...a, estadoAcceso: "Activo" as EstadoAcceso } : a));
     toast.success("Acceso activado");
@@ -136,10 +141,7 @@ export function UsuariosTab() {
     setAccesos((prev) => prev.map((a) => a.id === id ? { ...a, estadoAcceso: "Inactivo" as EstadoAcceso } : a));
     toast.success("Acceso desactivado");
   };
-  const bloquear = (id: string) => {
-    setAccesos((prev) => prev.map((a) => a.id === id ? { ...a, estadoAcceso: "Bloqueado" as EstadoAcceso } : a));
-    toast.success("Acceso bloqueado");
-  };
+
   const handleResetPassword = async (formData: FormData) => {
     if (!resetModal) return;
     setResetLoading(true);
@@ -152,16 +154,6 @@ export function UsuariosTab() {
       setResetModal(null);
     }
     setResetLoading(false);
-  };
-  const darAcceso = (empId: string) => {
-    const emp = empleados.find((e) => e.id === empId);
-    if (!emp) return;
-    const nuevo = crearAccesoDesdeEmpleado(
-      emp.id, `${emp.nombre} ${emp.apellidos}`, emp.emailEmpresa,
-      empresaActual.nombre, empresaActual.id,
-    );
-    setAccesos((prev) => [...prev, nuevo]);
-    toast.success(`Acceso creado para ${emp.nombre} ${emp.apellidos}`);
   };
 
   const guardarEdicion = (updated: AccesoPortal) => {
@@ -179,9 +171,7 @@ export function UsuariosTab() {
   const handleCreateUser = async (formData: FormData) => {
     setCreateLoading(true);
     setCreateError(null);
-
     const result = await createEmployee(formData);
-
     if (result?.error) {
       setCreateError(result.error);
       setCreateLoading(false);
@@ -189,7 +179,6 @@ export function UsuariosTab() {
       toast.success("Usuario creado correctamente en Supabase");
       setShowCreateModal(false);
       setCreateLoading(false);
-      // Recarga real desde Supabase (no estado local, que se pierde al refrescar)
       await loadAccesos();
     }
   };
@@ -215,13 +204,12 @@ export function UsuariosTab() {
             <SelectItem value="todos">Todos los estados</SelectItem>
             <SelectItem value="Activo">Activo</SelectItem>
             <SelectItem value="Inactivo">Inactivo</SelectItem>
-            <SelectItem value="Bloqueado">Bloqueado</SelectItem>
             <SelectItem value="Pendiente">Pendiente</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      {/* Users table */}
+      {/* Users table — todos los usuarios de Supabase en una única tabla */}
       <div className="bg-card rounded-lg border overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -244,11 +232,9 @@ export function UsuariosTab() {
                 <td className="px-3 py-2.5"><EstadoBadge estado={acc.estadoAcceso} /></td>
                 <td className="px-3 py-2.5 text-muted-foreground text-xs">{acc.ultimaConexion}</td>
                 <td className="px-3 py-2.5">
-                  <div className="flex gap-1">
-                    <span className="text-[10px] text-muted-foreground">
-                      {acc.permisos.filter((p) => p.ver).length} ver · {acc.permisos.filter((p) => p.editar).length} editar
-                    </span>
-                  </div>
+                  <span className="text-[10px] text-muted-foreground">
+                    {acc.permisos.filter((p) => p.ver).length} ver · {acc.permisos.filter((p) => p.editar).length} editar
+                  </span>
                 </td>
                 <td className="px-3 py-2.5">
                   <div className="flex gap-1">
@@ -260,11 +246,6 @@ export function UsuariosTab() {
                     {acc.estadoAcceso === "Activo" && (
                       <Button variant="ghost" size="icon" className="h-7 w-7" title="Desactivar" onClick={() => desactivar(acc.id)}>
                         <PowerOff className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                    {acc.estadoAcceso !== "Bloqueado" && (
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" title="Bloquear" onClick={() => bloquear(acc.id)}>
-                        <Lock className="h-3.5 w-3.5" />
                       </Button>
                     )}
                     <Button variant="ghost" size="icon" className="h-7 w-7" title="Resetear contraseña" onClick={() => setResetModal({ id: acc.empleadoId, nombre: acc.nombreEmpleado })}>
@@ -290,45 +271,11 @@ export function UsuariosTab() {
         </table>
       </div>
 
-      {/* Employees without access */}
-      {sinAcceso.length > 0 && (
-        <div className="space-y-2">
-          <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
-            <ShieldOff className="h-4 w-4 text-muted-foreground" />
-            EMPLEADOS SIN ACCESO AL PORTAL ({sinAcceso.length})
-          </h4>
-          <div className="bg-card rounded-lg border overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  {["EMPLEADO", "DEPARTAMENTO", "EMAIL", "ACCIÓN"].map((h) => (
-                    <th key={h} className="text-left px-3 py-2.5 text-xs font-bold text-muted-foreground whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {sinAcceso.map((emp) => (
-                  <tr key={emp.id} className="border-b hover:bg-muted/30">
-                    <td className="px-3 py-2.5 font-medium text-foreground">{emp.nombre} {emp.apellidos}</td>
-                    <td className="px-3 py-2.5 text-muted-foreground">{emp.departamento}</td>
-                    <td className="px-3 py-2.5 text-muted-foreground">{emp.emailEmpresa}</td>
-                    <td className="px-3 py-2.5">
-                      <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => darAcceso(emp.id)}>
-                        <ShieldCheck className="h-3 w-3" /> Dar acceso
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
       {/* Edit modal */}
       {editModal && (
         <EditarUsuarioModal
           acceso={editModal}
+          roles={ROLES_PORTAL}
           onClose={() => setEditModal(null)}
           onSave={guardarEdicion}
         />
@@ -411,7 +358,7 @@ export function UsuariosTab() {
 }
 
 /* ─── EDIT MODAL ─── */
-function EditarUsuarioModal({ acceso, onClose, onSave }: { acceso: AccesoPortal; onClose: () => void; onSave: (a: AccesoPortal) => void }) {
+function EditarUsuarioModal({ acceso, roles, onClose, onSave }: { acceso: AccesoPortal; roles: string[]; onClose: () => void; onSave: (a: AccesoPortal) => void }) {
   const [form, setForm] = useState({ ...acceso });
 
   const cambiarRol = (rol: string) => {
@@ -431,7 +378,7 @@ function EditarUsuarioModal({ acceso, onClose, onSave }: { acceso: AccesoPortal;
             <Label className="text-xs font-bold">ROL</Label>
             <Select value={form.rol} onValueChange={cambiarRol}>
               <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{ROLES_PORTAL.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
+              <SelectContent>{roles.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div>
@@ -441,7 +388,6 @@ function EditarUsuarioModal({ acceso, onClose, onSave }: { acceso: AccesoPortal;
               <SelectContent>
                 <SelectItem value="Activo">Activo</SelectItem>
                 <SelectItem value="Inactivo">Inactivo</SelectItem>
-                <SelectItem value="Bloqueado">Bloqueado</SelectItem>
                 <SelectItem value="Pendiente">Pendiente</SelectItem>
               </SelectContent>
             </Select>

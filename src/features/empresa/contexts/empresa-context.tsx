@@ -31,13 +31,21 @@ function buildInitialData(): Record<string, Incidencia[]> {
 
 const AJUSTES_STORAGE_KEY = "balles_ajustes_v1";
 
+const ROLES_OBSOLETOS = ["Administrador", "Solo lectura", "Dirección"];
+
+function migrateRoles(storedRoles: AjustesEmpresa["roles"], defaultRoles: AjustesEmpresa["roles"]): AjustesEmpresa["roles"] {
+  const tieneRolesObsoletos = storedRoles.some((r) => ROLES_OBSOLETOS.includes(r.nombre));
+  return tieneRolesObsoletos ? defaultRoles : storedRoles;
+}
+
 function mergeWithDefaults(stored: AjustesEmpresa, nombre: string): AjustesEmpresa {
   const defaults = buildDefaultAjustes(nombre);
+  const storedRoles = stored.roles ?? [];
   return {
     ...defaults,
     ...stored,
     departamentos: stored.departamentos ?? defaults.departamentos,
-    roles: stored.roles?.length ? stored.roles : defaults.roles,
+    roles: storedRoles.length ? migrateRoles(storedRoles, defaults.roles) : defaults.roles,
     usuarios: stored.usuarios ?? defaults.usuarios,
     auditoria: stored.auditoria ?? defaults.auditoria,
   };

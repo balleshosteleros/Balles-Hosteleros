@@ -57,7 +57,6 @@ export function DetallePedido({ pedido, albaran, onBack, onUpdateEstado, onConfi
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div><span className="text-muted-foreground text-xs block">Proveedor</span><span className="font-semibold">{pedido.proveedor}</span></div>
             <div><span className="text-muted-foreground text-xs block">Email proveedor</span><span className="font-medium">{proveedorEmail || <span className="text-destructive">Sin email configurado</span>}</span></div>
-            <div><span className="text-muted-foreground text-xs block">Doc. Proveedor</span><span className="font-medium">{pedido.docProveedor || "—"}</span></div>
             <div><span className="text-muted-foreground text-xs block">Almacén</span><span className="font-medium">{pedido.almacen}</span></div>
             <div><span className="text-muted-foreground text-xs block">Fecha</span><span className="font-medium">{pedido.fecha}</span></div>
             <div><span className="text-muted-foreground text-xs block">Fecha Entrega</span><span className="font-medium">{pedido.fechaEntrega || "—"}</span></div>

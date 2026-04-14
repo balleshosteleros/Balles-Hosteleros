@@ -1,7 +1,5 @@
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { ConfigOperativa } from "@/features/ajustes/data/ajustes";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -72,27 +70,6 @@ export function ConfigOperativaTab() {
                 <SelectItem value="Domingo">Domingo</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-base">Personalización</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label className="text-xs font-bold uppercase">Locales o sedes asociados</Label>
-            <Input value={c.localesAsociados} onChange={(e) => set("localesAsociados", e.target.value)} placeholder="Ej: Local 1, Local 2..." className="mt-1" />
-          </div>
-          <div>
-            <Label className="text-xs font-bold uppercase">Etiquetas internas</Label>
-            <Input value={c.etiquetasInternas} onChange={(e) => set("etiquetasInternas", e.target.value)} placeholder="Ej: VIP, Franquicia..." className="mt-1" />
-          </div>
-          <div>
-            <Label className="text-xs font-bold uppercase">Color primario de la empresa</Label>
-            <div className="flex items-center gap-2 mt-1">
-              <input type="color" value={c.colorPrimario} onChange={(e) => set("colorPrimario", e.target.value)} className="h-9 w-12 rounded cursor-pointer border" />
-              <Input value={c.colorPrimario} onChange={(e) => set("colorPrimario", e.target.value)} className="flex-1" />
-            </div>
           </div>
         </CardContent>
       </Card>

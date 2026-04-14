@@ -1,6 +1,6 @@
 // Portal access records linking employees to user accounts
 
-export type EstadoAcceso = "Activo" | "Inactivo" | "Bloqueado" | "Pendiente";
+export type EstadoAcceso = "Activo" | "Inactivo" | "Pendiente";
 
 export interface AccesoPortal {
   id: string;
@@ -23,19 +23,48 @@ export interface PermisoPortal {
 }
 
 const MODULOS_PORTAL = [
-  "Dashboard", "Gerencia", "Contabilidad", "Gestoría", "Jurídico",
-  "RRHH", "Marketing", "Mantenimiento", "Ajustes",
+  "Dashboard", "Dirección", "RRHH", "Logística", "Cocina",
+  "Gerencia", "Contabilidad", "Gestoría", "Jurídico",
+  "Marketing", "Ajustes",
 ];
 
+// Mapa rol → módulo propio (solo ese módulo + Dashboard)
+const ROL_MODULO: Record<string, string> = {
+  "Dirección": "Dirección",
+  "RRHH": "RRHH",
+  "Logística": "Logística",
+  "Cocina": "Cocina",
+  "Gerencia": "Gerencia",
+  "Contabilidad": "Contabilidad",
+  "Gestoría": "Gestoría",
+  "Jurídico": "Jurídico",
+  "Marketing": "Marketing",
+};
+
 export function permisosDesdeRol(rol: string): PermisoPortal[] {
-  return MODULOS_PORTAL.map((m) => {
-    if (rol === "Administrador") return { modulo: m, ver: true, editar: true };
-    if (rol === "Solo lectura" || rol === "Empleado") return { modulo: m, ver: m === "RRHH" || m === "Dashboard", editar: false };
-    if (rol === "Responsable") return { modulo: m, ver: true, editar: m === "RRHH" || m === "Dashboard" };
-    if (rol === "Director") return { modulo: m, ver: true, editar: true };
-    if (rol === "Gerencia") return { modulo: m, ver: true, editar: m === "Gerencia" || m === "Dashboard" || m === "RRHH" };
-    return { modulo: m, ver: false, editar: false };
-  });
+  // Acceso total
+  if (rol === "Administrador" || rol === "Director") {
+    return MODULOS_PORTAL.map((m) => ({ modulo: m, ver: true, editar: true }));
+  }
+  // Solo lectura global
+  if (rol === "Solo lectura") {
+    return MODULOS_PORTAL.map((m) => ({ modulo: m, ver: true, editar: false }));
+  }
+  // Empleado: solo su ficha RRHH y Dashboard
+  if (rol === "Empleado") {
+    return MODULOS_PORTAL.map((m) => ({ modulo: m, ver: m === "RRHH" || m === "Dashboard", editar: false }));
+  }
+  // Roles departamentales: solo su propio módulo + Dashboard
+  const moduloPropio = ROL_MODULO[rol];
+  if (moduloPropio) {
+    return MODULOS_PORTAL.map((m) => ({
+      modulo: m,
+      ver: m === "Dashboard" || m === moduloPropio,
+      editar: m === moduloPropio,
+    }));
+  }
+  // Fallback sin permisos
+  return MODULOS_PORTAL.map((m) => ({ modulo: m, ver: false, editar: false }));
 }
 
 export function crearAccesoDesdeEmpleado(
@@ -74,7 +103,7 @@ const BACANAL_ACCESOS: AccesoPortal[] = [
   { id: "acc-b1", empleadoId: "b1", nombreEmpleado: "Andrés Jiménez Ramos", emailUsuario: "andres.jimenez@bacanal.es", empresa: "BACANAL", empresaId: "bacanal", rol: "Administrador", estadoAcceso: "Activo", ultimaConexion: "2026-04-07 08:00", fechaCreacion: "2018-01-10", permisos: permisosDesdeRol("Administrador") },
   { id: "acc-b2", empleadoId: "b2", nombreEmpleado: "Lucía Pérez Ortega", emailUsuario: "lucia.perez@bacanal.es", empresa: "BACANAL", empresaId: "bacanal", rol: "Responsable", estadoAcceso: "Activo", ultimaConexion: "2026-04-06 21:00", fechaCreacion: "2019-09-01", permisos: permisosDesdeRol("Responsable") },
   { id: "acc-b6", empleadoId: "b6", nombreEmpleado: "Isabel Domínguez Lara", emailUsuario: "isabel.dominguez@bacanal.es", empresa: "BACANAL", empresaId: "bacanal", rol: "Empleado", estadoAcceso: "Activo", ultimaConexion: "2026-04-05 17:30", fechaCreacion: "2022-03-01", permisos: permisosDesdeRol("Empleado") },
-  { id: "acc-b3", empleadoId: "b3", nombreEmpleado: "Miguel Santos Gil", emailUsuario: "miguel.santos@bacanal.es", empresa: "BACANAL", empresaId: "bacanal", rol: "Empleado", estadoAcceso: "Bloqueado", ultimaConexion: "2026-02-10 12:00", fechaCreacion: "2023-05-01", permisos: permisosDesdeRol("Empleado") },
+  { id: "acc-b3", empleadoId: "b3", nombreEmpleado: "Miguel Santos Gil", emailUsuario: "miguel.santos@bacanal.es", empresa: "BACANAL", empresaId: "bacanal", rol: "Empleado", estadoAcceso: "Inactivo", ultimaConexion: "2026-02-10 12:00", fechaCreacion: "2023-05-01", permisos: permisosDesdeRol("Empleado") },
 ];
 
 export function getAccesosPorEmpresa(empresaId: string): AccesoPortal[] {
@@ -88,4 +117,18 @@ export function getAccesoDeEmpleado(empresaId: string, empleadoId: string): Acce
   return accesos.find((a) => a.empleadoId === empleadoId);
 }
 
-export const ROLES_PORTAL = ["Administrador", "Director", "Gerencia", "Responsable", "Empleado", "Solo lectura"];
+export const ROLES_PORTAL = [
+  "Administrador",
+  "Director",
+  "Dirección",
+  "RRHH",
+  "Logística",
+  "Cocina",
+  "Gerencia",
+  "Contabilidad",
+  "Gestoría",
+  "Jurídico",
+  "Marketing",
+  "Empleado",
+  "Solo lectura",
+];

@@ -161,6 +161,64 @@ export async function bulkImportEscandallos(escandallos: EscandalloImport[]) {
 }
 
 /**
+ * Lista los escandallos de un plato incluyendo el precio preferido de cada ingrediente
+ * (de la tabla ingredientes_proveedor donde es_preferido = true).
+ * Usado para mostrar Precio/u y Subtotal en la ficha del producto.
+ */
+export async function listEscandallosConPrecios(productoVentaId: string) {
+  try {
+    const { supabase } = await getContext();
+
+    const { data, error } = await supabase
+      .from("escandallos")
+      .select("id, ingrediente_id, cantidad, merma_pct, ingrediente:ingrediente_id(id, nombre, unidad, factor_conversion)")
+      .eq("producto_venta_id", productoVentaId);
+
+    if (error) throw error;
+    if (!data?.length) return { ok: true as const, data: [] };
+
+    // Obtener precios preferidos de cada ingrediente en una sola query
+    const ingredienteIds = data.map((r) => r.ingrediente_id);
+    const { data: precios } = await supabase
+      .from("ingredientes_proveedor")
+      .select("producto_id, precio_unitario")
+      .in("producto_id", ingredienteIds)
+      .eq("es_preferido", true);
+
+    const precioMap = new Map<string, number>();
+    for (const p of precios ?? []) {
+      precioMap.set(p.producto_id, Number(p.precio_unitario ?? 0));
+    }
+
+    const result = data.map((r) => {
+      const ing = r.ingrediente as unknown as { id: string; nombre: string; unidad: string; factor_conversion: number } | null;
+      const cantidad = Number(r.cantidad ?? 0);
+      const mermaPct = Number(r.merma_pct ?? 0);
+      const factorConversion = Number(ing?.factor_conversion ?? 1) || 1;
+      const precioUnitario = precioMap.get(r.ingrediente_id) ?? 0;
+      const real = cantidad * (1 + mermaPct / 100);
+      const subtotal = (real * precioUnitario) / factorConversion;
+
+      return {
+        id: r.id,
+        ingredienteId: r.ingrediente_id,
+        ingredienteNombre: ing?.nombre ?? "—",
+        ingredienteUnidad: ing?.unidad ?? "",
+        cantidad,
+        mermaPct,
+        precioUnitario,
+        subtotal: Math.round(subtotal * 1000) / 1000,
+      };
+    });
+
+    return { ok: true as const, data: result };
+  } catch (err) {
+    console.error("[escandallos] listEscandallosConPrecios:", err);
+    return { ok: false as const, data: [] };
+  }
+}
+
+/**
  * Calcula el food cost de un plato llamando a la función SQL coste_escandallo().
  */
 export async function getCosteEscandallo(productoVentaId: string) {

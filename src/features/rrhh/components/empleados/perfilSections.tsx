@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Plus, GraduationCap, Milestone, ShieldCheck, UserCog, Zap, Settings, FileText, Power, PowerOff, Lock, KeyRound, Eye, PenLine } from "lucide-react";
+import { Plus, GraduationCap, Milestone, ShieldCheck, UserCog, Zap, Settings, FileText, Power, PowerOff, KeyRound, Eye, PenLine } from "lucide-react";
 import type { FichaEmpleado } from "@/features/rrhh/data/empleados-ficha";
 import { getAccesoDeEmpleado, AccesoPortal, ROLES_PORTAL, permisosDesdeRol } from "@/features/rrhh/data/accesos-portal";
 import { toast } from "sonner";
@@ -188,7 +188,6 @@ export function AccesosSection({ ficha, empresaId }: { ficha: FichaEmpleado; emp
 
   const activar = () => { setEstado("Activo"); toast.success("Acceso activado"); };
   const desactivar = () => { setEstado("Inactivo"); toast.success("Acceso desactivado"); };
-  const bloquear = () => { setEstado("Bloqueado"); toast.success("Acceso bloqueado"); };
 
   if (!acceso) {
     return (
@@ -205,7 +204,6 @@ export function AccesosSection({ ficha, empresaId }: { ficha: FichaEmpleado; emp
   const estadoColor: Record<string, string> = {
     Activo: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
     Inactivo: "bg-muted text-muted-foreground border-muted-foreground/30",
-    Bloqueado: "bg-destructive/10 text-destructive border-destructive/30",
     Pendiente: "bg-amber-500/10 text-amber-600 border-amber-500/30",
   };
 
@@ -250,11 +248,6 @@ export function AccesosSection({ ficha, empresaId }: { ficha: FichaEmpleado; emp
           {estado === "Activo" && (
             <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={desactivar}>
               <PowerOff className="h-3 w-3" /> Desactivar acceso
-            </Button>
-          )}
-          {estado !== "Bloqueado" && (
-            <Button variant="outline" size="sm" className="gap-1.5 text-xs text-destructive" onClick={bloquear}>
-              <Lock className="h-3 w-3" /> Bloquear
             </Button>
           )}
           <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => toast.success("Contraseña reseteada")}>

@@ -115,15 +115,15 @@ async function getUserEmpresaId(userId: string): Promise<string | null> {
  * Lista productos del usuario autenticado filtrados por tipo.
  * RLS de Supabase se encarga del filtrado por empresa.
  */
-export async function listProductos(tipo: TipoProducto): Promise<Producto[]> {
+export async function listProductos(tipo?: TipoProducto): Promise<Producto[]> {
   try {
     const { supabase, empresaId } = await getLogisticaContext();
-    const query = supabase
+    let query = supabase
       .from("productos")
       .select("*")
-      .eq("tipo", tipo)
       .order("nombre", { ascending: true });
-    if (empresaId) query.eq("empresa_id", empresaId);
+    if (tipo) query = query.eq("tipo", tipo) as typeof query;
+    if (empresaId) query = query.eq("empresa_id", empresaId) as typeof query;
     const { data, error } = await query;
 
     if (error) {

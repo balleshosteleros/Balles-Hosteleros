@@ -13,7 +13,14 @@ function normalizeRole(input: string | null | undefined): AppRole {
   return (VALID_ROLES as readonly string[]).includes(r) ? (r as AppRole) : 'empleado'
 }
 
+const ADMIN_ROLES = ['admin', 'director'] as const
+
 async function requireAdmin() {
+  // En modo dev bypass, permitir acceso sin autenticación real
+  if (process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === 'true') {
+    return { id: 'dev-bypass', email: 'dev@local' }
+  }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -24,8 +31,10 @@ async function requireAdmin() {
     .select('role')
     .eq('user_id', user.id)
 
-  const isAdmin = (roles ?? []).some((r: { role: string }) => r.role === 'admin')
-  if (!isAdmin) throw new Error('Not authorized')
+  const hasAccess = (roles ?? []).some((r: { role: string }) =>
+    (ADMIN_ROLES as readonly string[]).includes(r.role)
+  )
+  if (!hasAccess) throw new Error('Not authorized')
 
   return user
 }
@@ -33,7 +42,12 @@ async function requireAdmin() {
 export async function createEmployee(formData: FormData) {
   await requireAdmin()
 
-  const admin = createAdminClient()
+  let admin: ReturnType<typeof createAdminClient>
+  try {
+    admin = createAdminClient()
+  } catch {
+    return { error: 'Supabase admin no configurado. Configura SUPABASE_SERVICE_ROLE_KEY.' }
+  }
 
   const email = formData.get('email') as string
   const password = formData.get('password') as string
@@ -73,7 +87,13 @@ export async function createEmployee(formData: FormData) {
 export async function getEmployees() {
   await requireAdmin()
 
-  const admin = createAdminClient()
+  let admin: ReturnType<typeof createAdminClient>
+  try {
+    admin = createAdminClient()
+  } catch {
+    // Sin Supabase admin configurado (dev bypass): devolver lista vacía
+    return { data: [] }
+  }
 
   const { data: profiles, error } = await admin
     .from('profiles')
@@ -107,7 +127,12 @@ export async function getEmployees() {
 export async function resetEmployeePassword(userId: string, newPassword: string) {
   await requireAdmin()
 
-  const admin = createAdminClient()
+  let admin: ReturnType<typeof createAdminClient>
+  try {
+    admin = createAdminClient()
+  } catch {
+    return { error: 'Supabase admin no configurado. Configura SUPABASE_SERVICE_ROLE_KEY.' }
+  }
 
   const { error } = await admin.auth.admin.updateUserById(userId, {
     password: newPassword,
@@ -121,7 +146,12 @@ export async function resetEmployeePassword(userId: string, newPassword: string)
 export async function deleteEmployee(userId: string) {
   await requireAdmin()
 
-  const admin = createAdminClient()
+  let admin: ReturnType<typeof createAdminClient>
+  try {
+    admin = createAdminClient()
+  } catch {
+    return { error: 'Supabase admin no configurado. Configura SUPABASE_SERVICE_ROLE_KEY.' }
+  }
 
   const { error } = await admin.auth.admin.deleteUser(userId)
 

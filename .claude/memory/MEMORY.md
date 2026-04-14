@@ -9,3 +9,6 @@
 - [Estándar UI — Botones](feedback/ui_standard_buttons.md) — `<Button variant="primary" size="lg">` con icono, posición `top-4 right-4`
 - [Protocolo Guardado Supabase](feedback/protocolo_guardado_supabase.md) — try/catch + logs en toda escritura; localStorage prohibido para datos críticos
 - [Regla Seguridad Ágora](feedback/regla_seguridad_agora.md) — ante error con Ágora o fallo BD: detenerse, mostrar error exacto, pedir aprobación antes de actuar
+- [Reglas PedidoModal](feedback/pedido_modal_reglas.md) — Combobox Popover (no input libre), IVA desde ficha (no editable), resumen IVA diferenciado, proveedor obligatorio, notas NOT NULL
+- [Flujo Logística](LOGISTICA_PROCESO.md) — flujo completo de compra/stock/Ágora, dead ends activos y reglas de negocio confirmadas
+- [Spec Logística COMPLETA](project/logistica_spec_completa.md) — plan 6 fases: F1-F3 ✅, F4 ✅ (Ágora activo 2026-04-14), F5 pendiente, F6 pendiente

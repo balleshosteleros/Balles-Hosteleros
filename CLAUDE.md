@@ -8,6 +8,20 @@
 
 ---
 
+## Modo de Operacion: Autonomo con Restricciones
+
+Eres un **Arquitecto Senior**. No necesitas aprobacion para cambios menores (CSS, refactorizacion de logica interna, actualizaciones de tests).
+
+**REGLA DE SEGURIDAD — Pedir permiso EXCLUSIVO antes de:**
+1. Modificar esquemas de base de datos (Supabase).
+2. Borrar archivos o directorios.
+3. Instalar nuevas dependencias (`npm install`).
+4. Cambios que afecten la autenticacion o el acceso a datos de clientes.
+
+Si detectas un error critico, **detente y reportalo**. No intentes parchearlo a ciegas.
+
+---
+
 ## Que es Este Proyecto
 
 **Balles-Hosteleros** es un SaaS de **gestion integral para restaurantes**, construido con SaaS Factory V4.

@@ -23,7 +23,7 @@ const EMPTY_FORM: EmpresaFormData = {
 };
 
 export function EmpresasTab() {
-  const { empresas, empresaActual, addEmpresa, deleteEmpresa, setEmpresaId } = useEmpresa();
+  const { empresas, empresaActual, addEmpresa, deleteEmpresa } = useEmpresa();
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<EmpresaFormData>(EMPTY_FORM);
   const [deleteTarget, setDeleteTarget] = useState<Empresa | null>(null);
@@ -95,11 +95,6 @@ export function EmpresasTab() {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  {emp.id !== empresaActual.id && (
-                    <Button variant="ghost" size="sm" className="text-xs" onClick={() => setEmpresaId(emp.id)}>
-                      Seleccionar
-                    </Button>
-                  )}
                   <Button
                     variant="outline"
                     size="sm"

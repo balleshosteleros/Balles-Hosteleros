@@ -468,18 +468,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         className="w-52"
                         onMouseLeave={() => setUserMenuOpen(false)}
                       >
-                        <DropdownMenuLabel className="pb-0">
-                          <p className="text-xs font-semibold text-foreground truncate max-w-[180px]" title={userEmail}>
-                            {userEmail}
-                          </p>
-                          <Badge
-                            variant="secondary"
-                            className="mt-1 h-4 px-1.5 text-[9px] font-semibold uppercase tracking-wider"
-                          >
-                            {rolLabel}
-                          </Badge>
-                        </DropdownMenuLabel>
-                        <DropdownMenuSeparator />
                         <DropdownMenuItem
                           onSelect={() => router.push("/ajustes")}
                           className="cursor-pointer gap-2"
@@ -488,15 +476,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                           Ajustes
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        {user && (
-                          <DropdownMenuItem
-                            onSelect={signOut}
-                            className="text-destructive focus:text-destructive cursor-pointer gap-2"
-                          >
-                            <LogOut className="h-3.5 w-3.5" />
-                            Cerrar sesión
-                          </DropdownMenuItem>
-                        )}
+                        <DropdownMenuItem
+                          onSelect={signOut}
+                          className="text-destructive focus:text-destructive cursor-pointer gap-2"
+                        >
+                          <LogOut className="h-3.5 w-3.5" />
+                          Cerrar sesión
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>

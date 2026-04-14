@@ -37,7 +37,7 @@ export interface Usuario {
   telefono: string;
   rol: string;
   departamento: string;
-  estado: "Activo" | "Invitado" | "Bloqueado";
+  estado: "Activo" | "Invitado" | "Pendiente";
   fechaAlta: string;
   ultimaConexion: string;
 }
@@ -111,38 +111,55 @@ export interface AjustesEmpresa {
   auditoria: EntradaAuditoria[];
 }
 
-const MODULOS = ["Dashboard", "Gerencia", "Contabilidad", "Gestoría", "Jurídico", "RRHH", "Logística", "Marketing", "Mantenimiento", "Ajustes"];
+const MODULOS = [
+  "Dashboard", "Dirección", "RRHH", "Logística", "Cocina",
+  "Gerencia", "Contabilidad", "Gestoría", "Jurídico",
+  "Marketing", "Ajustes",
+];
+
+const ROLE_MODULE_MAP: Record<string, string> = {
+  "Dirección": "Dirección",
+  "RRHH": "RRHH",
+  "Logística": "Logística",
+  "Cocina": "Cocina",
+  "Gerencia": "Gerencia",
+  "Contabilidad": "Contabilidad",
+  "Gestoría": "Gestoría",
+  "Jurídico": "Jurídico",
+  "Marketing": "Marketing",
+};
 
 function buildRoles(): Rol[] {
   const roleNames = [
     { nombre: "Administrador", desc: "Acceso total a todos los módulos" },
-    { nombre: "Gerencia", desc: "Gestión general y supervisión" },
-    { nombre: "Contabilidad", desc: "Acceso a módulos financieros" },
+    { nombre: "Director", desc: "Acceso total a todos los módulos" },
+    { nombre: "Dirección", desc: "Gestión de aperturas y cronogramas" },
+    { nombre: "RRHH", desc: "Gestión de personal y nóminas" },
+    { nombre: "Logística", desc: "Proveedores, productos e inventario" },
+    { nombre: "Cocina", desc: "Fichas técnicas y producción" },
+    { nombre: "Gerencia", desc: "Supervisión general y cuadros de mando" },
+    { nombre: "Contabilidad", desc: "Facturas, operaciones y tesorería" },
     { nombre: "Gestoría", desc: "Gestión documental y fiscal" },
-    { nombre: "Jurídico", desc: "Acceso legal y normativo" },
-    { nombre: "Recursos Humanos", desc: "Gestión de personal" },
-    { nombre: "Logística", desc: "Operaciones y mantenimiento" },
-    { nombre: "Marketing", desc: "Comunicación y campañas" },
+    { nombre: "Jurídico", desc: "Procesos legales y normativa" },
+    { nombre: "Marketing", desc: "Comunicación, campañas y reservas" },
+    { nombre: "Empleado", desc: "Acceso básico a ficha personal" },
     { nombre: "Solo lectura", desc: "Visualización sin edición" },
   ];
-  return roleNames.map((r, i) => ({
-    id: `rol-${i}`,
-    nombre: r.nombre,
-    descripcion: r.desc,
-    permisos: MODULOS.map((m) => ({
-      modulo: m,
-      ver: true,
-      editar: r.nombre === "Administrador" || r.nombre === "Solo lectura" ? r.nombre === "Administrador" : m.toLowerCase().includes(r.nombre.toLowerCase().slice(0, 4)),
-    })),
-  }));
-}
-
-// Fix: Administrador can edit all, Solo lectura can view all but edit none
-function fixRoles(roles: Rol[]): Rol[] {
-  return roles.map((r) => {
-    if (r.nombre === "Administrador") return { ...r, permisos: r.permisos.map((p) => ({ ...p, ver: true, editar: true })) };
-    if (r.nombre === "Solo lectura") return { ...r, permisos: r.permisos.map((p) => ({ ...p, ver: true, editar: false })) };
-    return r;
+  return roleNames.map((r, i) => {
+    const isTotal = r.nombre === "Administrador" || r.nombre === "Director";
+    const isSoloLectura = r.nombre === "Solo lectura";
+    const isEmpleado = r.nombre === "Empleado";
+    const moduloPropio = ROLE_MODULE_MAP[r.nombre];
+    return {
+      id: `rol-${i}`,
+      nombre: r.nombre,
+      descripcion: r.desc,
+      permisos: MODULOS.map((m) => ({
+        modulo: m,
+        ver: isTotal || isSoloLectura || (isEmpleado ? m === "RRHH" || m === "Dashboard" : m === "Dashboard" || m === moduloPropio),
+        editar: isTotal || (!isSoloLectura && !isEmpleado && m === moduloPropio),
+      })),
+    };
   });
 }
 
@@ -197,7 +214,7 @@ export function buildDefaultAjustes(empresaNombre: string): AjustesEmpresa {
       { id: "u2", nombre: "María López", email: `maria@${empresaNombre.toLowerCase()}.es`, telefono: "", rol: "Gerencia", departamento: "GERENCIA", estado: "Activo", fechaAlta: "2026-02-01", ultimaConexion: "2026-04-05" },
     ],
     departamentos: buildDepts(),
-    roles: fixRoles(buildRoles()),
+    roles: buildRoles(),
     contactos: {
       correoGeneral: "", correoReservas: "", correoAdmin: "", correoRrhh: "",
       correoContabilidad: "", correoMarketing: "", correoJuridico: "", correoIncidencias: "",

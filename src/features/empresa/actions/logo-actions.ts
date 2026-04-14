@@ -66,3 +66,23 @@ export async function getLogoUrls(): Promise<Record<string, string>> {
   }
   return result;
 }
+
+/** Guarda el color primario de la empresa en Supabase. */
+export async function saveEmpresaColor(empresaSlug: string, color: string): Promise<void> {
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("empresa_logos")
+    .upsert({ empresa_slug: empresaSlug, color_primario: color, updated_at: new Date().toISOString() });
+  if (error) throw new Error(`Error al guardar color: ${error.message}`);
+}
+
+/** Devuelve un mapa slug → color_primario de todas las empresas. */
+export async function getEmpresaColors(): Promise<Record<string, string>> {
+  const supabase = createAdminClient();
+  const { data } = await supabase.from("empresa_logos").select("empresa_slug, color_primario");
+  const result: Record<string, string> = {};
+  for (const row of data ?? []) {
+    if (row.color_primario) result[row.empresa_slug] = row.color_primario;
+  }
+  return result;
+}

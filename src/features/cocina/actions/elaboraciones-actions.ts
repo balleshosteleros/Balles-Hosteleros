@@ -1,24 +1,10 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
-
-async function getContext() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { supabase, user: null, empresaId: null };
-  const { data } = await supabase
-    .from("profiles")
-    .select("empresa_id")
-    .eq("user_id", user.id)
-    .single();
-  return { supabase, user, empresaId: data?.empresa_id ?? null };
-}
+import { getAppContext } from "@/lib/supabase/get-context";
 
 export async function listElaboraciones() {
   try {
-    const { supabase, empresaId } = await getContext();
+    const { supabase, empresaId } = await getAppContext();
     const query = supabase
       .from("elaboraciones")
       .select("*")
@@ -41,7 +27,7 @@ export async function createElaboracion(input: {
   responsable?: string;
 }) {
   try {
-    const { supabase, user, empresaId } = await getContext();
+    const { supabase, empresaId } = await getAppContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
 
     const { data, error } = await supabase
@@ -49,11 +35,9 @@ export async function createElaboracion(input: {
       .insert({
         empresa_id: empresaId,
         nombre: input.nombre,
-        tipo: input.tipo ?? null,
+        categoria: input.tipo ?? null,          // tipo → categoria
         descripcion: input.descripcion ?? null,
-        tiempo_estimado: input.tiempo_estimado ?? null,
-        responsable: input.responsable ?? null,
-        created_by: user?.id ?? null,
+        tiempo: input.tiempo_estimado ? String(input.tiempo_estimado) + " min" : null,
       })
       .select()
       .single();
@@ -78,10 +62,17 @@ export async function updateElaboracion(
   }
 ) {
   try {
-    const { supabase } = await getContext();
+    const { supabase } = await getAppContext();
+    const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (input.nombre !== undefined) payload.nombre = input.nombre;
+    if (input.tipo !== undefined) payload.categoria = input.tipo;
+    if (input.descripcion !== undefined) payload.descripcion = input.descripcion;
+    if (input.tiempo_estimado !== undefined) payload.tiempo = String(input.tiempo_estimado) + " min";
+    if (input.estado !== undefined) payload.estado = input.estado;
+
     const { error } = await supabase
       .from("elaboraciones")
-      .update({ ...input, updated_at: new Date().toISOString() })
+      .update(payload)
       .eq("id", id);
     if (error) throw error;
     return { ok: true };
@@ -94,7 +85,7 @@ export async function updateElaboracion(
 
 export async function deleteElaboracion(id: string) {
   try {
-    const { supabase } = await getContext();
+    const { supabase } = await getAppContext();
     const { error } = await supabase
       .from("elaboraciones")
       .delete()

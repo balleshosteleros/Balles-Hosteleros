@@ -8,7 +8,9 @@ import {
   ESTADOS_PEDIDO, PROVEEDORES, PROVEEDOR_EMAILS,
   type Pedido, type Albaran, type EstadoPedido, type EstadoAlbaran,
 } from "@/features/logistica/data/pedidos";
-import { listPedidos, createPedido, updatePedidoEstado as serverUpdatePedidoEstado, deletePedido as serverDeletePedido } from "@/features/logistica/actions/pedidos-actions";
+import { listPedidos, getPedido, createPedido, updatePedidoEstado as serverUpdatePedidoEstado, deletePedido as serverDeletePedido } from "@/features/logistica/actions/pedidos-actions";
+import { listAlbaranes, createAlbaran, updateAlbaranEstado as serverUpdateAlbaranEstado } from "@/features/logistica/actions/albaranes-actions";
+import { sumarStockDesdeAlbaran } from "@/features/logistica/actions/stock-actions";
 import { EstadoPedidoBadge } from "@/features/logistica/components/pedidos/BadgesPedido";
 import { DetallePedido } from "@/features/logistica/components/pedidos/DetallePedido";
 import { DetalleAlbaran } from "@/features/logistica/components/pedidos/DetalleAlbaran";
@@ -38,19 +40,35 @@ import {
 const ALL = "__ALL__";
 type CampoPedido = "estado" | "proveedor" | "almacen" | "fecha" | "fechaEntrega";
 
+function mapDbLinea(l: Record<string, unknown>, idx: number): import("@/features/logistica/data/pedidos").LineaPedido {
+  return {
+    id: (l.id as string) ?? `lp-${idx}`,
+    productoId: (l.producto_id as string) ?? (l.productoId as string) ?? "",
+    producto: (l.producto_nombre as string) ?? (l.producto as string) ?? "",
+    cantidad: Number(l.cantidad) || 0,
+    unidad: (l.unidad as string) ?? "ud",
+    servida: Number(l.servida) || 0,
+    precioUC: Number(l.precio_unitario ?? l.precioUC) || 0,
+    impuesto: Number(l.impuesto ?? l.iva_pct) || 0,
+    dtoPct: Number(l.dto_pct ?? l.dtoPct) || 0,
+    dtoEur: Number(l.dto_eur ?? l.dtoEur) || 0,
+    total: Number(l.total) || 0,
+  };
+}
+
 function mapDbToPedido(row: Record<string, unknown>): Pedido {
+  const rawLineas = Array.isArray(row.lineas) ? row.lineas as Record<string, unknown>[] : [];
   return {
     id: row.id as string,
-    numero: (row.referencia as string) ?? (row.numero as string) ?? "",
+    numero: (row.numero as string) ?? (row.id as string)?.slice(0, 8).toUpperCase() ?? "",
     empresaId: (row.empresa_id as string) ?? "",
     empresa: (row.empresa as string) ?? "",
     proveedor: (row.proveedor_nombre as string) ?? (row.proveedor as string) ?? "",
-    docProveedor: (row.referencia as string) ?? "",
     almacen: (row.almacen as string) ?? "",
     fecha: (row.fecha as string) ?? "",
     fechaEntrega: (row.fecha_entrega as string) ?? "",
     estado: (row.estado as EstadoPedido) ?? "Borrador",
-    lineas: Array.isArray(row.lineas) ? row.lineas : [],
+    lineas: rawLineas.map(mapDbLinea),
     dtoPct: (row.dto_pct as number) ?? 0,
     dtoEur: (row.dto_eur as number) ?? 0,
     notas: (row.notas as string) ?? "",
@@ -98,9 +116,40 @@ export function PedidosView() {
     }
   }, []);
 
+  const loadAlbaranes = useCallback(async () => {
+    try {
+      const res = await listAlbaranes();
+      if (res.ok) {
+        const mapped: Albaran[] = (res.data as Record<string, unknown>[]).map((r) => ({
+          id: r.id as string,
+          numero: (r.numero as string) ?? "",
+          empresaId: (r.empresa_id as string) ?? "",
+          empresa: "",
+          proveedor: (r.proveedor_nombre as string) ?? "",
+          documento: (r.documento as string) ?? "",
+          factura: (r.factura_ref as string) ?? "",
+          almacen: (r.almacen as string) ?? "",
+          fecha: (r.fecha as string) ?? "",
+          estado: (r.estado as Albaran["estado"]) ?? "Pendiente",
+          lineas: Array.isArray(r.lineas) ? r.lineas : [],
+          dtoPct: (r.dto_pct as number) ?? 0,
+          dtoEur: (r.dto_eur as number) ?? 0,
+          notas: (r.notas as string) ?? "",
+          pedidoId: (r.pedido_id as string) ?? "",
+          creador: (r.creador as string) ?? "",
+          ultimaActualizacion: (r.updated_at as string) ?? "",
+        }));
+        setAlbaranes(mapped);
+      }
+    } catch {
+      // Error silencioso — albaranes no es bloqueante
+    }
+  }, []);
+
   useEffect(() => {
     loadPedidos();
-  }, [loadPedidos]);
+    loadAlbaranes();
+  }, [loadPedidos, loadAlbaranes]);
 
   // Campos y opciones de filtro
   const camposFiltro = useMemo((): CampoFiltro<CampoPedido>[] => {
@@ -133,7 +182,7 @@ export function PedidosView() {
       }
       if (search) {
         const s = search.toLowerCase();
-        return p.numero.toLowerCase().includes(s) || p.proveedor.toLowerCase().includes(s) || p.docProveedor.toLowerCase().includes(s);
+        return p.numero.toLowerCase().includes(s) || p.proveedor.toLowerCase().includes(s);
       }
       return true;
     });
@@ -158,9 +207,11 @@ export function PedidosView() {
     } else {
       const res = await createPedido({
         proveedorNombre: item.proveedor,
+        numero: item.numero || undefined,
         fechaEntrega: item.fechaEntrega || undefined,
         notas: item.notas || undefined,
         lineas: item.lineas.map(l => ({
+          productoId: l.productoId,
           productoNombre: l.producto,
           cantidad: l.cantidad,
           unidad: l.unidad,
@@ -220,27 +271,67 @@ export function PedidosView() {
     toast.success("Pedido copiado como borrador");
   };
 
-  const handleConfirmarPedido = (ped: Pedido) => {
-    const albId = `alb-${Date.now()}`;
+  const handleConfirmarPedido = async (ped: Pedido) => {
     const albNumero = `ALB-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900) + 100)}`;
+    const fecha = new Date().toISOString().slice(0, 10);
+
+    const res = await createAlbaran({
+      numero: albNumero,
+      pedidoId: ped.id,
+      proveedorNombre: ped.proveedor,
+      almacen: ped.almacen,
+      documento: `ALB-${ped.numero}`,
+      fecha,
+      dtoPct: ped.dtoPct,
+      dtoEur: ped.dtoEur,
+      notas: ped.notas,
+      creador: ped.creador,
+      lineas: ped.lineas.map((l) => ({ ...l, docPedido: ped.numero })),
+    });
+
+    if (!res.ok) {
+      toast.error("Error al crear el albarán");
+      return;
+    }
+
+    const albId = res.id!;
     const newAlbaran: Albaran = {
       id: albId, numero: albNumero, empresaId: ped.empresaId, empresa: ped.empresa,
-      proveedor: ped.proveedor, documento: `ALB-${ped.docProveedor}`, factura: "",
-      almacen: ped.almacen, fecha: new Date().toISOString().slice(0, 10), estado: "Pendiente",
+      proveedor: ped.proveedor, documento: `ALB-${ped.numero}`, factura: "",
+      almacen: ped.almacen, fecha, estado: "Pendiente",
       lineas: ped.lineas.map((l) => ({ ...l, docPedido: ped.numero })),
       dtoPct: ped.dtoPct, dtoEur: ped.dtoEur, notas: ped.notas,
-      pedidoId: ped.id, creador: ped.creador, ultimaActualizacion: new Date().toISOString().slice(0, 10),
+      pedidoId: ped.id, creador: ped.creador, ultimaActualizacion: fecha,
     };
+
     setPedidos((prev) => prev.map((p) => p.id === ped.id ? { ...p, estado: "Confirmado" as EstadoPedido, albaranId: albId } : p));
     setAlbaranes((prev) => [newAlbaran, ...prev]);
     setDetallePedido((prev) => prev && prev.id === ped.id ? { ...prev, estado: "Confirmado", albaranId: albId } : prev);
-    toast.success(`Pedido confirmado. Albarán ${albNumero} creado automáticamente.`);
+
+    await serverUpdatePedidoEstado(ped.id, "Confirmado");
+    toast.success(`Pedido confirmado. Albarán ${albNumero} creado.`);
   };
 
-  const handleConfirmarAlbaran = (alb: Albaran) => {
+  const handleConfirmarAlbaran = async (alb: Albaran) => {
+    // Actualizar estado en BD
+    const res = await serverUpdateAlbaranEstado(alb.id, "Confirmado");
+    if (!res.ok) { toast.error("Error al confirmar albarán"); return; }
+
+    // Sumar cantidades al stock (usar productoId cuando está disponible)
+    const lineasStock = alb.lineas.map((l) => ({
+      productoId: l.productoId || undefined,
+      productoNombre: l.producto,
+      cantidad: l.cantidad,
+      unidad: l.unidad,
+    }));
+    const stockRes = await sumarStockDesdeAlbaran(lineasStock);
+
+    // Actualizar estado local
     setAlbaranes((prev) => prev.map((a) => a.id === alb.id ? { ...a, estado: "Confirmado" as EstadoAlbaran } : a));
     setDetalleAlbaran((prev) => prev && prev.id === alb.id ? { ...prev, estado: "Confirmado" } : prev);
-    toast.success("Albarán confirmado");
+
+    if (stockRes.ok) toast.success("Albarán confirmado — stock actualizado");
+    else toast.warning("Albarán confirmado, pero hubo un error al actualizar el stock");
   };
 
   const updatePedidoEstado = async (id: string, estado: string) => {
@@ -405,7 +496,7 @@ export function PedidosView() {
             <table className="w-full text-sm">
               <thead><tr className="border-b bg-muted/50">
                 <th className="px-3 py-3 w-10"><Checkbox checked={selected.size === filteredPedidos.length && filteredPedidos.length > 0} onCheckedChange={toggleAll} /></th>
-                {["Nº", "Doc. Prov.", "Fecha", "F. Entrega", "Almacén", "Proveedor", "Estado", "Base (€)", "Total (€)"].map((h) => (
+                {["Nº", "Fecha", "F. Entrega", "Almacén", "Proveedor", "Estado", "Base (€)", "Total (€)"].map((h) => (
                   <th key={h} className="px-3 py-3 text-left text-xs font-bold text-muted-foreground whitespace-nowrap">{h}</th>
                 ))}
               </tr></thead>
@@ -413,12 +504,14 @@ export function PedidosView() {
                 {filteredPedidos.map((p) => {
                   const t = calcularTotalesLineas(p.lineas);
                   return (
-                    <tr key={p.id} className="border-b hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setDetallePedido(p)}>
+                    <tr key={p.id} className="border-b hover:bg-muted/30 transition-colors cursor-pointer" onClick={async () => {
+                        const res = await getPedido(p.id);
+                        setDetallePedido(res.ok && res.data ? mapDbToPedido(res.data as Record<string, unknown>) : p);
+                      }}>
                       <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                         <Checkbox checked={selected.has(p.id)} onCheckedChange={() => toggleSelect(p.id)} />
                       </td>
                       <td className="px-3 py-2.5 font-semibold text-primary whitespace-nowrap">{p.numero}</td>
-                      <td className="px-3 py-2.5 text-xs">{p.docProveedor || "—"}</td>
                       <td className="px-3 py-2.5 text-xs whitespace-nowrap">{p.fecha}</td>
                       <td className="px-3 py-2.5 text-xs whitespace-nowrap">{p.fechaEntrega || "—"}</td>
                       <td className="px-3 py-2.5 text-xs">{p.almacen}</td>
@@ -435,7 +528,7 @@ export function PedidosView() {
                   );
                 })}
                 {filteredPedidos.length === 0 && (
-                  <tr><td colSpan={10} className="text-center py-12 text-muted-foreground">No se encontraron pedidos.</td></tr>
+                  <tr><td colSpan={9} className="text-center py-12 text-muted-foreground">No se encontraron pedidos.</td></tr>
                 )}
               </tbody>
             </table>

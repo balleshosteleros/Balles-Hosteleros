@@ -65,7 +65,6 @@ export interface Pedido {
   empresaId: string;
   empresa: string;
   proveedor: string;
-  docProveedor: string;
   almacen: string;
   fecha: string;
   fechaEntrega: string;

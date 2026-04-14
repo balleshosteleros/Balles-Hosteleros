@@ -1,5 +1,6 @@
 "use server";
 
+import { getAppContext } from "@/lib/supabase/get-context";
 import { createClient } from "@/lib/supabase/server";
 
 type PlatoInput = {
@@ -17,20 +18,18 @@ type PasoUpdate = {
 };
 
 async function getContext() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { supabase, user: null, empresaId: null, nombre: null };
-  const { data } = await supabase
-    .from("profiles")
-    .select("empresa_id, nombre, apellidos")
-    .eq("user_id", user.id)
-    .single();
-  return {
-    supabase,
-    user,
-    empresaId: data?.empresa_id ?? null,
-    nombre: data ? `${data.nombre} ${data.apellidos}` : null,
-  };
+  const { supabase, userId, empresaId } = await getAppContext();
+  // Intentar obtener nombre del perfil si hay userId
+  let nombre: string | null = null;
+  if (userId) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("nombre, apellidos")
+      .eq("user_id", userId)
+      .single();
+    if (data) nombre = `${data.nombre} ${data.apellidos}`;
+  }
+  return { supabase, userId, empresaId, nombre };
 }
 
 export async function listNuevosPlatos() {
@@ -52,11 +51,11 @@ export async function listNuevosPlatos() {
 
 export async function createNuevoPlato(input: PlatoInput) {
   try {
-    const { supabase, user, empresaId, nombre } = await getContext();
+    const { supabase, userId, empresaId, nombre } = await getContext();
     const { error } = await supabase.from("nuevos_platos").insert({
       ...input,
       empresa_id: empresaId ?? "",
-      propuesto_por: user?.id ?? null,
+      propuesto_por: userId ?? null,
       propuesto_por_nombre: nombre ?? "Desconocido",
     });
     if (error) throw error;

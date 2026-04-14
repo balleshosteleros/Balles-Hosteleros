@@ -1,13 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { ALMACENES, type Pedido, type LineaPedido, calcLineaTotal } from "@/features/logistica/data/pedidos";
 import { listProveedores } from "@/features/logistica/actions/proveedores-actions";
-import { Trash2, Plus } from "lucide-react";
+import { listProductos } from "@/features/logistica/actions/producto-actions";
+import type { Producto } from "@/features/logistica/data/productos";
+import { Trash2, Plus, Check, ChevronsUpDown } from "lucide-react";
 
 interface Props {
   open: boolean;
@@ -24,10 +28,136 @@ const emptyLinea = (): LineaPedido => ({
   precioUC: 0, impuesto: 10, dtoPct: 0, dtoEur: 0, total: 0,
 });
 
+// ── Buscador de producto — Combobox con Popover (evita clipping del modal) ──────
+interface ProductoSearchProps {
+  value: string;       // nombre del producto seleccionado
+  productoId: string;  // id del producto ("" = sin seleccionar)
+  onSelectProduct: (nombre: string, unidad: string, precio: number, id: string, iva: number) => void;
+  onClear: () => void;
+  proveedor: string;
+  productos: Producto[];
+}
+
+function ProductoSearch({ value, productoId, onSelectProduct, onClear, proveedor, productos }: ProductoSearchProps) {
+  const [open, setOpen] = useState(false);
+  const [soloProveedor, setSoloProveedor] = useState(false);
+  const [query, setQuery] = useState("");
+
+  // Resetear query al abrir
+  const handleOpen = (v: boolean) => {
+    if (v) setQuery("");
+    setOpen(v);
+  };
+
+  const filtered = useMemo(() => {
+    let list = productos;
+    if (soloProveedor && proveedor) {
+      list = list.filter((p) => p.proveedor?.toLowerCase() === proveedor.toLowerCase());
+    }
+    if (query.trim()) {
+      const s = query.toLowerCase();
+      list = list.filter((p) => p.nombre.toLowerCase().includes(s));
+    }
+    return list.slice(0, 30);
+  }, [productos, soloProveedor, proveedor, query]);
+
+  const isSelected = !!productoId;
+
+  return (
+    <Popover open={open} onOpenChange={handleOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={`flex h-8 w-full min-w-[180px] items-center justify-between rounded-md border px-2 text-xs transition-colors
+            ${isSelected ? "border-green-500 bg-green-50/30 dark:bg-green-950/20" : "border-input bg-background hover:bg-muted/30"}
+          `}
+        >
+          <span className={`truncate ${!value ? "text-muted-foreground" : ""}`}>
+            {value || "Seleccionar producto..."}
+          </span>
+          <span className="ml-1 shrink-0">
+            {isSelected
+              ? <Check className="h-3 w-3 text-green-500" />
+              : <ChevronsUpDown className="h-3 w-3 text-muted-foreground" />
+            }
+          </span>
+        </button>
+      </PopoverTrigger>
+
+      <PopoverContent className="w-80 p-0" align="start" side="bottom" sideOffset={4}>
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder="Buscar producto..."
+            value={query}
+            onValueChange={setQuery}
+            className="text-xs"
+          />
+
+          {/* Filtro por proveedor */}
+          {proveedor && (
+            <div className="border-b px-3 py-2">
+              <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={soloProveedor}
+                  onChange={(e) => setSoloProveedor(e.target.checked)}
+                  className="h-3 w-3"
+                />
+                <span>Solo de <span className="font-semibold text-foreground">{proveedor}</span></span>
+              </label>
+            </div>
+          )}
+
+          <CommandList className="max-h-56">
+            <CommandEmpty className="py-3 text-center text-xs text-muted-foreground">
+              Sin resultados
+            </CommandEmpty>
+            <CommandGroup>
+              {filtered.map((p) => (
+                <CommandItem
+                  key={p.id}
+                  value={p.id}
+                  onSelect={() => {
+                    const precio = parseFloat(p.precioCompra ?? "0") || 0;
+                    const iva = parseFloat(p.iva ?? "10") || 10;
+                    onSelectProduct(p.nombre, p.unidad, precio, p.id, iva);
+                    setOpen(false);
+                  }}
+                  className="flex items-center justify-between gap-2 text-xs cursor-pointer"
+                >
+                  <span className="truncate font-medium">{p.nombre}</span>
+                  <span className="text-muted-foreground shrink-0">{p.unidad}</span>
+                  {p.id === productoId && <Check className="h-3 w-3 text-green-500 shrink-0" />}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+
+          {/* Limpiar selección */}
+          {isSelected && (
+            <div className="border-t p-1">
+              <button
+                type="button"
+                onClick={() => { onClear(); setOpen(false); }}
+                className="w-full rounded px-2 py-1.5 text-xs text-destructive hover:bg-destructive/10 transition-colors text-left"
+              >
+                Quitar producto
+              </button>
+            </div>
+          )}
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ── Modal principal ────────────────────────────────────────────────────────────
 export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNombre }: Props) {
+  const [saveError, setSaveError] = useState<string | null>(null);
   const isEdit = !!item;
   const almacenes = ALMACENES[empresaId] || ALMACENES.habana || ["COCINA", "BARRA"];
   const [proveedoresList, setProveedoresList] = useState<string[]>([]);
+  const [productosList, setProductosList] = useState<Producto[]>([]);
 
   useEffect(() => {
     listProveedores().then((res) => {
@@ -39,11 +169,23 @@ export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNom
         setProveedoresList(names);
       }
     });
+    listProductos().then((list) => {
+      setProductosList(list);
+      // Backfill productoId en líneas existentes que no lo tengan
+      setForm((prev) => ({
+        ...prev,
+        lineas: prev.lineas.map((l) => {
+          if (l.productoId) return l;
+          const match = list.find((p) => p.nombre.toLowerCase() === l.producto.toLowerCase());
+          return match ? { ...l, productoId: match.id } : l;
+        }),
+      }));
+    });
   }, []);
 
   const [form, setForm] = useState(() => item ? { ...item } : {
     id: `ped-${Date.now()}`, numero: `PED-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900) + 100)}`,
-    empresaId, empresa: empresaNombre, proveedor: "", docProveedor: "",
+    empresaId, empresa: empresaNombre, proveedor: "",
     almacen: almacenes[0] ?? "", fecha: new Date().toISOString().slice(0, 10),
     fechaEntrega: "", estado: "Borrador" as const,
     lineas: [emptyLinea()], dtoPct: 0, dtoEur: 0, notas: "",
@@ -62,10 +204,50 @@ export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNom
     });
   };
 
+  const updateLineaFields = (idx: number, fields: Partial<LineaPedido>) => {
+    setForm((prev) => {
+      const lineas = [...prev.lineas];
+      const l = { ...lineas[idx], ...fields };
+      l.total = calcLineaTotal(l);
+      lineas[idx] = l;
+      return { ...prev, lineas };
+    });
+  };
+
   const addLinea = () => setForm((p) => ({ ...p, lineas: [...p.lineas, emptyLinea()] }));
   const removeLinea = (idx: number) => setForm((p) => ({ ...p, lineas: p.lineas.filter((_, i) => i !== idx) }));
 
+  // ── Resumen IVA ──────────────────────────────────────────────────────────────
+  const resumenIva = useMemo(() => {
+    const byRate: Record<number, { base: number; cuota: number }> = {};
+    for (const l of form.lineas) {
+      if (!l.productoId) continue;
+      const base = calcLineaTotal(l);
+      const rate = l.impuesto ?? 0;
+      if (!byRate[rate]) byRate[rate] = { base: 0, cuota: 0 };
+      byRate[rate].base += base;
+      byRate[rate].cuota += Math.round(base * (rate / 100) * 100) / 100;
+    }
+    // Descuentos globales sobre base total
+    const baseTotal = Object.values(byRate).reduce((s, v) => s + v.base, 0);
+    const dtoGlobal = Math.round((baseTotal * ((form.dtoPct ?? 0) / 100) + (form.dtoEur ?? 0)) * 100) / 100;
+    const baseConDto = Math.round((baseTotal - dtoGlobal) * 100) / 100;
+    const cuotaTotal = Object.values(byRate).reduce((s, v) => s + v.cuota, 0);
+    const totalConIva = Math.round((baseConDto + cuotaTotal) * 100) / 100;
+    return { byRate, baseTotal, dtoGlobal, baseConDto, cuotaTotal, totalConIva };
+  }, [form.lineas, form.dtoPct, form.dtoEur]);
+
   const handleSave = () => {
+    setSaveError(null);
+    if (!form.proveedor) {
+      setSaveError("Debes seleccionar un proveedor antes de guardar el pedido.");
+      return;
+    }
+    const invalidLines = form.lineas.filter((l) => !l.productoId || !l.producto.trim());
+    if (invalidLines.length > 0) {
+      setSaveError(`Hay ${invalidLines.length} línea(s) sin producto válido. Selecciona productos de la lista.`);
+      return;
+    }
     const updated = { ...form, ultimaActualizacion: new Date().toISOString().slice(0, 10) };
     onSave(updated as Pedido);
     onClose();
@@ -80,13 +262,17 @@ export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNom
 
         {/* Header fields */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          <div><Label className="text-xs font-semibold">Proveedor</Label>
-            <Select value={form.proveedor} onValueChange={(v) => setField("proveedor", v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+          <div>
+            <Label className="text-xs font-semibold">
+              Proveedor <span className="text-destructive">*</span>
+            </Label>
+            <Select value={form.proveedor} onValueChange={(v) => { setField("proveedor", v); setSaveError(null); }}>
+              <SelectTrigger className={!form.proveedor ? "border-destructive" : ""}>
+                <SelectValue placeholder="Seleccionar proveedor..." />
+              </SelectTrigger>
               <SelectContent>{proveedoresList.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
             </Select>
           </div>
-          <div><Label className="text-xs font-semibold">Doc. Proveedor</Label><Input value={form.docProveedor} onChange={(e) => setField("docProveedor", e.target.value)} /></div>
           <div><Label className="text-xs font-semibold">Almacén</Label>
             <Select value={form.almacen} onValueChange={(v) => setField("almacen", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
@@ -113,11 +299,26 @@ export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNom
               <tbody>
                 {form.lineas.map((l, i) => (
                   <tr key={l.id} className="border-b">
-                    <td className="px-2 py-1"><Input className="h-8 text-xs" value={l.producto} onChange={(e) => updateLinea(i, "producto", e.target.value)} /></td>
+                    <td className="px-2 py-1">
+                      <ProductoSearch
+                        value={l.producto}
+                        productoId={l.productoId}
+                        onSelectProduct={(nombre, unidad, precio, id, iva) =>
+                          updateLineaFields(i, { producto: nombre, unidad, precioUC: precio, productoId: id, impuesto: iva })
+                        }
+                        onClear={() => updateLineaFields(i, { producto: "", productoId: "", impuesto: 0 })}
+                        proveedor={form.proveedor}
+                        productos={productosList}
+                      />
+                    </td>
                     <td className="px-2 py-1"><Input className="h-8 text-xs w-16" type="number" value={l.cantidad} onChange={(e) => updateLinea(i, "cantidad", +e.target.value)} /></td>
                     <td className="px-2 py-1"><Input className="h-8 text-xs w-14" value={l.unidad} onChange={(e) => updateLinea(i, "unidad", e.target.value)} /></td>
                     <td className="px-2 py-1"><Input className="h-8 text-xs w-20" type="number" step="0.01" value={l.precioUC} onChange={(e) => updateLinea(i, "precioUC", +e.target.value)} /></td>
-                    <td className="px-2 py-1"><Input className="h-8 text-xs w-14" type="number" value={l.impuesto} onChange={(e) => updateLinea(i, "impuesto", +e.target.value)} /></td>
+                    <td className="px-2 py-1">
+                      <span className="inline-flex h-8 w-14 items-center justify-center rounded-md bg-muted/50 text-xs font-medium text-muted-foreground border border-border">
+                        {l.impuesto}%
+                      </span>
+                    </td>
                     <td className="px-2 py-1"><Input className="h-8 text-xs w-14" type="number" value={l.dtoPct} onChange={(e) => updateLinea(i, "dtoPct", +e.target.value)} /></td>
                     <td className="px-2 py-1"><Input className="h-8 text-xs w-16" type="number" step="0.01" value={l.dtoEur} onChange={(e) => updateLinea(i, "dtoEur", +e.target.value)} /></td>
                     <td className="px-2 py-1 font-semibold text-foreground">{calcLineaTotal(l).toFixed(2)}</td>
@@ -129,16 +330,65 @@ export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNom
           </div>
         </div>
 
-        {/* Pie */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
-          <div><Label className="text-xs font-semibold">Dto % global</Label><Input type="number" value={form.dtoPct} onChange={(e) => setField("dtoPct", +e.target.value)} /></div>
-          <div><Label className="text-xs font-semibold">Dto € global</Label><Input type="number" step="0.01" value={form.dtoEur} onChange={(e) => setField("dtoEur", +e.target.value)} /></div>
-        </div>
-        <div><Label className="text-xs font-semibold">Notas</Label><Textarea value={form.notas} onChange={(e) => setField("notas", e.target.value)} rows={2} /></div>
+        {/* Pie — descuentos globales + notas + resumen IVA */}
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Izquierda: descuentos y notas */}
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs font-semibold">Dto % global</Label><Input type="number" value={form.dtoPct} onChange={(e) => setField("dtoPct", +e.target.value)} /></div>
+              <div><Label className="text-xs font-semibold">Dto € global</Label><Input type="number" step="0.01" value={form.dtoEur} onChange={(e) => setField("dtoEur", +e.target.value)} /></div>
+            </div>
+            <div><Label className="text-xs font-semibold">Notas</Label><Textarea value={form.notas} onChange={(e) => setField("notas", e.target.value)} rows={3} /></div>
+          </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSave}>{isEdit ? "Guardar cambios" : "Crear pedido"}</Button>
+          {/* Derecha: resumen IVA */}
+          <div className="rounded-lg border bg-muted/20 p-4 space-y-1.5 text-xs self-start">
+            <p className="font-bold text-sm mb-2">Resumen</p>
+
+            {/* Base bruta */}
+            <div className="flex justify-between text-muted-foreground">
+              <span>Base imponible</span>
+              <span className="font-medium text-foreground">{resumenIva.baseTotal.toFixed(2)} €</span>
+            </div>
+
+            {/* Descuentos globales */}
+            {resumenIva.dtoGlobal > 0 && (
+              <div className="flex justify-between text-muted-foreground">
+                <span>Descuentos globales</span>
+                <span className="font-medium text-destructive">-{resumenIva.dtoGlobal.toFixed(2)} €</span>
+              </div>
+            )}
+
+            {/* IVA desglosado por tipo */}
+            {Object.entries(resumenIva.byRate)
+              .sort(([a], [b]) => Number(a) - Number(b))
+              .map(([rate, { cuota }]) => (
+                <div key={rate} className="flex justify-between text-muted-foreground">
+                  <span>IVA {rate}%</span>
+                  <span className="font-medium text-foreground">{cuota.toFixed(2)} €</span>
+                </div>
+              ))
+            }
+
+            {/* Separador */}
+            <div className="border-t my-1.5" />
+
+            {/* Total con IVA */}
+            <div className="flex justify-between text-base font-bold">
+              <span>TOTAL</span>
+              <span>{resumenIva.totalConIva.toFixed(2)} €</span>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter className="flex-col items-end gap-2">
+          {saveError && (
+            <p className="text-xs text-destructive w-full text-right">{saveError}</p>
+          )}
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose}>Cancelar</Button>
+            <Button onClick={handleSave}>{isEdit ? "Guardar cambios" : "Crear pedido"}</Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

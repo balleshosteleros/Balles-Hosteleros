@@ -24,11 +24,11 @@ async function getContext() {
 export async function listPedidos() {
   try {
     const { supabase, empresaId } = await getContext();
-    const query = supabase
+    let query = supabase
       .from("pedidos")
       .select("*")
       .order("fecha", { ascending: false });
-    if (empresaId) query.eq("empresa_id", empresaId);
+    if (empresaId) query = query.eq("empresa_id", empresaId);
     const { data, error } = await query;
     if (error) throw error;
     return { ok: true, data: data ?? [] };
@@ -66,9 +66,11 @@ export async function getPedido(id: string) {
 export async function createPedido(input: {
   proveedorId?: string;
   proveedorNombre: string;
+  numero?: string;
   fechaEntrega?: string;
   notas?: string;
   lineas: {
+    productoId: string;
     productoNombre: string;
     cantidad: number;
     unidad?: string;
@@ -79,8 +81,22 @@ export async function createPedido(input: {
     const { supabase, user, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
 
+    // Validar que todos los productoId existen en la BD
+    const productoIds = input.lineas.map((l) => l.productoId);
+    const { data: productosExistentes, error: checkErr } = await supabase
+      .from("productos")
+      .select("id")
+      .in("id", productoIds);
+    if (checkErr) throw checkErr;
+    const idsEncontrados = new Set((productosExistentes ?? []).map((p: { id: string }) => p.id));
+    const noExisten = productoIds.filter((id) => !idsEncontrados.has(id));
+    if (noExisten.length > 0) {
+      return { ok: false, error: `Los siguientes productos no existen en el catálogo: ${noExisten.join(", ")}` };
+    }
+
     // Calculate total from lineas
     const lineasConTotal = input.lineas.map((l, i) => ({
+      producto_id: l.productoId,
       producto_nombre: l.productoNombre,
       cantidad: l.cantidad,
       unidad: l.unidad ?? "ud",
@@ -97,9 +113,10 @@ export async function createPedido(input: {
         empresa_id: empresaId,
         proveedor_id: input.proveedorId ?? null,
         proveedor_nombre: input.proveedorNombre,
+        numero: input.numero ?? null,
         fecha: new Date().toISOString().split("T")[0],
         fecha_entrega: input.fechaEntrega ?? null,
-        notas: input.notas ?? null,
+        notas: input.notas ?? "",
         total,
         created_by: user?.id ?? null,
       })
@@ -121,8 +138,12 @@ export async function createPedido(input: {
 
     return { ok: true, data: pedido };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[pedidos] createPedido:", msg);
+    const msg =
+      err instanceof Error ? err.message
+      : typeof err === "object" && err !== null && "message" in err
+        ? String((err as { message: unknown }).message)
+        : JSON.stringify(err) ?? "Error desconocido";
+    console.error("[pedidos] createPedido:", msg, err);
     return { ok: false, error: msg };
   }
 }

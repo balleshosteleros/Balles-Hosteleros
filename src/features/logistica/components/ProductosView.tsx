@@ -12,7 +12,7 @@ import {
 import {
   getProductoConfigSection, saveProductoConfigSection,
 } from "@/features/logistica/actions/config-actions";
-import { listEscandallos, addEscandallo, removeEscandallo } from "@/features/logistica/actions/escandallos-actions";
+import { listEscandallosConPrecios, addEscandallo, removeEscandallo, getCosteEscandallo } from "@/features/logistica/actions/escandallos-actions";
 import { UNIDADES_STOCK } from "@/features/logistica/data/stock";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,11 +44,14 @@ type EscandalloLinea = {
   ingredienteUnidad: string;
   cantidad: number;
   mermaPct: number;
+  precioUnitario: number;
+  subtotal: number;
 };
 
 /* ─── COMPOSICIÓN (escandallo de un producto de venta) ─── */
-function Composicion({ productoVentaId }: { productoVentaId: string }) {
+function Composicion({ productoVentaId, precioVenta }: { productoVentaId: string; precioVenta?: string }) {
   const [lineas, setLineas] = useState<EscandalloLinea[]>([]);
+  const [costeTotal, setCosteTotal] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [ingredientes, setIngredientes] = useState<Ingrediente[]>([]);
   const [addOpen, setAddOpen] = useState(false);
@@ -58,24 +61,12 @@ function Composicion({ productoVentaId }: { productoVentaId: string }) {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await listEscandallos(productoVentaId);
-    if (res.ok) {
-      const mapped: EscandalloLinea[] = (res.data as unknown as Array<{
-        id: string;
-        ingrediente_id: string;
-        cantidad: number;
-        merma_pct: number;
-        ingrediente: { id: string; nombre: string; unidad: string } | null;
-      }>).map((r) => ({
-        id: r.id,
-        ingredienteId: r.ingrediente_id,
-        ingredienteNombre: r.ingrediente?.nombre ?? "—",
-        ingredienteUnidad: r.ingrediente?.unidad ?? "",
-        cantidad: Number(r.cantidad),
-        mermaPct: Number(r.merma_pct ?? 0),
-      }));
-      setLineas(mapped);
-    }
+    const [escandalloRes, costeRes] = await Promise.all([
+      listEscandallosConPrecios(productoVentaId),
+      getCosteEscandallo(productoVentaId),
+    ]);
+    if (escandalloRes.ok) setLineas(escandalloRes.data);
+    if (costeRes.ok) setCosteTotal(costeRes.coste);
     setLoading(false);
   }, [productoVentaId]);
 
@@ -136,36 +127,78 @@ function Composicion({ productoVentaId }: { productoVentaId: string }) {
             Este plato no tiene composición. Añade ingredientes para definir el escandallo.
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-xs text-muted-foreground">
-                  <th className="text-left py-2 font-bold">INGREDIENTE</th>
-                  <th className="text-right py-2 font-bold">CANTIDAD</th>
-                  <th className="text-right py-2 font-bold">MERMA %</th>
-                  <th className="text-right py-2 font-bold">REAL</th>
-                  <th className="py-2"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {lineas.map((l) => {
-                  const real = l.cantidad * (1 + l.mermaPct / 100);
-                  return (
-                    <tr key={l.id} className="border-b">
-                      <td className="py-2 font-medium">{l.ingredienteNombre}</td>
-                      <td className="py-2 text-right">{l.cantidad} {l.ingredienteUnidad}</td>
-                      <td className="py-2 text-right">{l.mermaPct}%</td>
-                      <td className="py-2 text-right text-muted-foreground">{real.toFixed(3)} {l.ingredienteUnidad}</td>
-                      <td className="py-2 text-right">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRemove(l.id)}>
-                          <X className="h-3.5 w-3.5" />
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="space-y-3">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-xs text-muted-foreground">
+                    <th className="text-left py-2 font-bold">INGREDIENTE</th>
+                    <th className="text-right py-2 font-bold">CANTIDAD</th>
+                    <th className="text-right py-2 font-bold">MERMA %</th>
+                    <th className="text-right py-2 font-bold">REAL</th>
+                    <th className="text-right py-2 font-bold">PRECIO/U</th>
+                    <th className="text-right py-2 font-bold">SUBTOTAL</th>
+                    <th className="py-2"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lineas.map((l) => {
+                    const real = l.cantidad * (1 + l.mermaPct / 100);
+                    return (
+                      <tr key={l.id} className="border-b">
+                        <td className="py-2 font-medium">{l.ingredienteNombre}</td>
+                        <td className="py-2 text-right">{l.cantidad} {l.ingredienteUnidad}</td>
+                        <td className="py-2 text-right">{l.mermaPct}%</td>
+                        <td className="py-2 text-right text-muted-foreground">{real.toFixed(3)} {l.ingredienteUnidad}</td>
+                        <td className="py-2 text-right">
+                          {l.precioUnitario > 0
+                            ? <span className="text-muted-foreground">{l.precioUnitario.toFixed(2)} €</span>
+                            : <span className="text-muted-foreground/50 text-xs">sin precio</span>
+                          }
+                        </td>
+                        <td className="py-2 text-right font-medium">
+                          {l.subtotal > 0 ? `${l.subtotal.toFixed(3)} €` : "—"}
+                        </td>
+                        <td className="py-2 text-right">
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRemove(l.id)}>
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Resumen food cost */}
+            {costeTotal > 0 && (() => {
+              const pvNum = parseFloat(String(precioVenta ?? "").replace(/[^0-9.,]/g, "").replace(",", ".")) || 0;
+              const margen = pvNum > 0 ? ((pvNum - costeTotal) / pvNum) * 100 : null;
+              return (
+                <div className="flex flex-wrap gap-3 pt-1 border-t">
+                  <div className="flex items-center gap-2 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 px-3 py-1.5">
+                    <ChefHat className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                    <span className="text-xs text-muted-foreground">Food cost:</span>
+                    <span className="text-sm font-bold text-amber-700 dark:text-amber-300">{costeTotal.toFixed(2)} €</span>
+                  </div>
+                  {pvNum > 0 && (
+                    <div className="flex items-center gap-2 rounded-md bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 px-3 py-1.5">
+                      <span className="text-xs text-muted-foreground">P.V.P:</span>
+                      <span className="text-sm font-bold">{pvNum.toFixed(2)} €</span>
+                    </div>
+                  )}
+                  {margen !== null && (
+                    <div className={`flex items-center gap-2 rounded-md px-3 py-1.5 border ${margen >= 65 ? "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-700" : margen >= 50 ? "bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700" : "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700"}`}>
+                      <span className="text-xs text-muted-foreground">Margen:</span>
+                      <span className={`text-sm font-bold ${margen >= 65 ? "text-emerald-700 dark:text-emerald-300" : margen >= 50 ? "text-amber-700 dark:text-amber-300" : "text-red-700 dark:text-red-300"}`}>
+                        {margen.toFixed(1)}%
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
       </CardContent>
@@ -273,7 +306,7 @@ function ProductoDetalle({
 
       {/* Composición para productos de venta y elaboraciones */}
       {(producto.tipo === "venta" || producto.tipo === "elaboracion") && (
-        <Composicion productoVentaId={producto.id} />
+        <Composicion productoVentaId={producto.id} precioVenta={producto.precioVenta ?? undefined} />
       )}
     </div>
   );
