@@ -1,9 +1,19 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
-  AccesoPortal, EstadoAcceso, ROLES_PORTAL,
+  AccesoPortal, EstadoAcceso,
   permisosDesdeRol,
 } from "@/features/rrhh/data/accesos-portal";
+
+// Roles reales del enum app_role de Supabase
+const ROLES_DB = [
+  { value: "admin",        label: "Administrador" },
+  { value: "director",     label: "Director" },
+  { value: "gerencia",     label: "Gerencia" },
+  { value: "responsable",  label: "Responsable" },
+  { value: "empleado",     label: "Empleado" },
+  { value: "solo_lectura", label: "Solo lectura" },
+] as const;
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,7 +26,7 @@ import {
   Power, PowerOff, Eye, PenLine, UserPlus, Plus,
 } from "lucide-react";
 import { toast } from "sonner";
-import { createEmployee, resetEmployeePassword, getEmployees } from "@/actions/admin";
+import { createEmployee, resetEmployeePassword, getEmployees, updateEmployeeStatus } from "@/actions/admin";
 
 const ESTADO_STYLES: Record<EstadoAcceso, string> = {
   Activo: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
@@ -133,13 +143,25 @@ export function UsuariosTab() {
     });
   }, [accesos, busqueda, filtroEstado]);
 
-  const activar = (id: string) => {
-    setAccesos((prev) => prev.map((a) => a.id === id ? { ...a, estadoAcceso: "Activo" as EstadoAcceso } : a));
-    toast.success("Acceso activado");
+  const activar = async (acc: AccesoPortal) => {
+    setAccesos((prev) => prev.map((a) => a.id === acc.id ? { ...a, estadoAcceso: "Activo" as EstadoAcceso } : a));
+    const result = await updateEmployeeStatus(acc.empleadoId, "Activo");
+    if (result?.error) {
+      toast.error(result.error);
+      setAccesos((prev) => prev.map((a) => a.id === acc.id ? { ...a, estadoAcceso: acc.estadoAcceso } : a));
+    } else {
+      toast.success("Acceso activado");
+    }
   };
-  const desactivar = (id: string) => {
-    setAccesos((prev) => prev.map((a) => a.id === id ? { ...a, estadoAcceso: "Inactivo" as EstadoAcceso } : a));
-    toast.success("Acceso desactivado");
+  const desactivar = async (acc: AccesoPortal) => {
+    setAccesos((prev) => prev.map((a) => a.id === acc.id ? { ...a, estadoAcceso: "Inactivo" as EstadoAcceso } : a));
+    const result = await updateEmployeeStatus(acc.empleadoId, "Inactivo");
+    if (result?.error) {
+      toast.error(result.error);
+      setAccesos((prev) => prev.map((a) => a.id === acc.id ? { ...a, estadoAcceso: acc.estadoAcceso } : a));
+    } else {
+      toast.success("Acceso desactivado");
+    }
   };
 
   const handleResetPassword = async (formData: FormData) => {
@@ -239,12 +261,12 @@ export function UsuariosTab() {
                 <td className="px-3 py-2.5">
                   <div className="flex gap-1">
                     {acc.estadoAcceso !== "Activo" && (
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-600" title="Activar" onClick={() => activar(acc.id)}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-600" title="Activar" onClick={() => activar(acc)}>
                         <Power className="h-3.5 w-3.5" />
                       </Button>
                     )}
                     {acc.estadoAcceso === "Activo" && (
-                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Desactivar" onClick={() => desactivar(acc.id)}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Desactivar" onClick={() => desactivar(acc)}>
                         <PowerOff className="h-3.5 w-3.5" />
                       </Button>
                     )}
@@ -275,7 +297,7 @@ export function UsuariosTab() {
       {editModal && (
         <EditarUsuarioModal
           acceso={editModal}
-          roles={ROLES_PORTAL}
+          roles={ROLES_DB}
           onClose={() => setEditModal(null)}
           onSave={guardarEdicion}
         />
@@ -322,9 +344,15 @@ export function UsuariosTab() {
             </DialogTitle>
           </DialogHeader>
           <form action={handleCreateUser} className="space-y-2">
-            <div>
-              <Label className="text-xs font-bold">Nombre completo</Label>
-              <Input name="full_name" required />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-bold">Nombre</Label>
+                <Input name="nombre" required />
+              </div>
+              <div>
+                <Label className="text-xs font-bold">Apellidos</Label>
+                <Input name="apellidos" required />
+              </div>
             </div>
             <div>
               <Label className="text-xs font-bold">Email</Label>
@@ -336,10 +364,10 @@ export function UsuariosTab() {
             </div>
             <div>
               <Label className="text-xs font-bold">Rol</Label>
-              <Select name="role" defaultValue="Empleado">
+              <Select name="role" defaultValue="empleado">
                 <SelectTrigger><SelectValue placeholder="Selecciona rol" /></SelectTrigger>
                 <SelectContent>
-                  {ROLES_PORTAL.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                  {ROLES_DB.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -358,7 +386,7 @@ export function UsuariosTab() {
 }
 
 /* ─── EDIT MODAL ─── */
-function EditarUsuarioModal({ acceso, roles, onClose, onSave }: { acceso: AccesoPortal; roles: string[]; onClose: () => void; onSave: (a: AccesoPortal) => void }) {
+function EditarUsuarioModal({ acceso, roles, onClose, onSave }: { acceso: AccesoPortal; roles: readonly { value: string; label: string }[]; onClose: () => void; onSave: (a: AccesoPortal) => void }) {
   const [form, setForm] = useState({ ...acceso });
 
   const cambiarRol = (rol: string) => {
@@ -378,7 +406,7 @@ function EditarUsuarioModal({ acceso, roles, onClose, onSave }: { acceso: Acceso
             <Label className="text-xs font-bold">ROL</Label>
             <Select value={form.rol} onValueChange={cambiarRol}>
               <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{roles.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
+              <SelectContent>{roles.map((r) => <SelectItem key={r.value} value={r.label}>{r.label}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div>

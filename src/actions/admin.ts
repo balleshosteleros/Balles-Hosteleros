@@ -51,7 +51,9 @@ export async function createEmployee(formData: FormData) {
 
   const email = formData.get('email') as string
   const password = formData.get('password') as string
-  const fullName = capitalizeText((formData.get('full_name') as string) ?? '')
+  const nombre = capitalizeText((formData.get('nombre') as string) ?? '')
+  const apellidos = capitalizeText((formData.get('apellidos') as string) ?? '')
+  const fullName = [nombre, apellidos].filter(Boolean).join(' ')
   const role = normalizeRole(formData.get('role') as string)
 
   // Crear usuario en auth (el trigger handle_new_user crea el profile automáticamente)
@@ -67,7 +69,7 @@ export async function createEmployee(formData: FormData) {
   // Completar nombre en el profile
   const { error: profileError } = await admin
     .from('profiles')
-    .update({ full_name: fullName, nombre: fullName })
+    .update({ full_name: fullName, nombre, apellidos })
     .eq('id', data.user.id)
 
   if (profileError) return { error: profileError.message }
@@ -140,6 +142,27 @@ export async function resetEmployeePassword(userId: string, newPassword: string)
 
   if (error) return { error: error.message }
 
+  return { success: true }
+}
+
+export async function updateEmployeeStatus(profileId: string, estado: 'Activo' | 'Inactivo' | 'Pendiente') {
+  await requireAdmin()
+
+  let admin: ReturnType<typeof createAdminClient>
+  try {
+    admin = createAdminClient()
+  } catch {
+    return { error: 'Supabase admin no configurado. Configura SUPABASE_SERVICE_ROLE_KEY.' }
+  }
+
+  const { error } = await admin
+    .from('profiles')
+    .update({ estado_acceso: estado })
+    .eq('id', profileId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/ajustes')
   return { success: true }
 }
 
