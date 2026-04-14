@@ -16,6 +16,7 @@
 import { revalidatePath } from "next/cache";
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
 import { syncVentasAgora } from "@/features/logistica/services/agora-sync";
+import { descontarStockPorVentasAgora } from "@/features/logistica/services/agora-ventas-sync";
 import type { AgoraSyncStatus } from "@/features/logistica/types/agora";
 
 // ─── TIPOS DE RESPUESTA ───────────────────────────────────────────────────────
@@ -137,6 +138,68 @@ export async function getLastSyncLog(): Promise<{
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     return { data: null, error: `Error al consultar sync log: ${errorMessage}` };
+  }
+}
+
+// ─── DESCUENTO STOCK POR VENTAS ÁGORA ────────────────────────────────────────
+
+/**
+ * Descuenta stock según lo vendido en Ágora POS para una fecha dada.
+ * Si no se pasa fecha, usa el día de hoy.
+ *
+ * Cumple Regla Seguridad Ágora: cualquier error se devuelve exacto, sin swallow.
+ */
+export async function syncVentasYDescontarStockAction(fecha?: string): Promise<{
+  ok: boolean;
+  mensaje: string;
+  detalle?: {
+    businessDay: string;
+    totalLineas: number;
+    lineasProcesadas: number;
+    lineasSinMatch: number;
+    ingredientesDescontados: number;
+    errores: string[];
+  };
+  errorDetail?: unknown;
+}> {
+  try {
+    const { empresaId, userId } = await getLogisticaContext();
+
+    if (!empresaId) {
+      return {
+        ok: false,
+        mensaje: "No se pudo obtener el empresa_id del usuario autenticado.",
+      };
+    }
+
+    const result = await descontarStockPorVentasAgora(empresaId, userId ?? null, fecha);
+
+    revalidatePath("/logistica");
+
+    const mensaje = result.success
+      ? `Stock actualizado: ${result.ingredientesDescontados} movimientos de ${result.lineasProcesadas} líneas vendidas (día ${result.businessDay}).`
+      : `Descuento de stock parcial o fallido en día ${result.businessDay}: ${result.errores[0] ?? "Error desconocido"}`;
+
+    return {
+      ok: result.success,
+      mensaje,
+      detalle: {
+        businessDay: result.businessDay,
+        totalLineas: result.totalLineas,
+        lineasProcesadas: result.lineasProcesadas,
+        lineasSinMatch: result.lineasSinMatch,
+        ingredientesDescontados: result.ingredientesDescontados,
+        errores: result.errores,
+      },
+    };
+  } catch (err) {
+    // Regla Seguridad Ágora: error exacto
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    return {
+      ok: false,
+      mensaje: `Balles, el descuento de stock desde Ágora ha fallado: ${errorMessage}`,
+      errorDetail: err,
+    };
   }
 }
 
