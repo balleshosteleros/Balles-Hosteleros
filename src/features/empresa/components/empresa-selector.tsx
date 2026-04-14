@@ -1,27 +1,31 @@
 "use client";
 
+import { useState } from "react";
+import { Check } from "lucide-react";
 import { useEmpresa, type Empresa } from "@/features/empresa/contexts/empresa-context";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
-function EmpresaAvatar({ empresa, logoUrl }: { empresa: Empresa; logoUrl?: string }) {
+function EmpresaAvatar({ empresa, logoUrl, size = "md" }: { empresa: Empresa; logoUrl?: string; size?: "sm" | "md" }) {
+  const cls = size === "sm" ? "h-5 w-5 text-[9px]" : "h-7 w-7 text-[10px]";
   if (logoUrl) {
     return (
       <img
         src={logoUrl}
         alt={empresa.nombre}
-        className="h-7 w-7 rounded-md object-contain shrink-0"
+        className={`${cls} rounded-md object-contain shrink-0`}
       />
     );
   }
   return (
     <div
-      className="h-7 w-7 text-[10px] rounded-md flex items-center justify-center font-bold text-white shrink-0"
+      className={`${cls} rounded-md flex items-center justify-center font-bold text-white shrink-0`}
       style={{ backgroundColor: empresa.color }}
     >
       {empresa.iniciales}
@@ -31,30 +35,41 @@ function EmpresaAvatar({ empresa, logoUrl }: { empresa: Empresa; logoUrl?: strin
 
 export function EmpresaSelector() {
   const { empresas, empresaActual, setEmpresaId, getLogoUrl } = useEmpresa();
+  const [open, setOpen] = useState(false);
 
   return (
-    <Select value={empresaActual.id} onValueChange={setEmpresaId}>
-      <SelectTrigger className="w-full h-10 bg-sidebar-accent/30 border-sidebar-border/30 hover:bg-sidebar-accent/50 transition-colors">
-        <div className="flex items-center gap-2 min-w-0">
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          onMouseEnter={() => setOpen(true)}
+          className="flex items-center justify-center rounded-lg p-0.5 hover:bg-sidebar-accent/50 transition-colors focus:outline-none"
+          title={empresaActual.nombre}
+        >
           <EmpresaAvatar empresa={empresaActual} logoUrl={getLogoUrl(empresaActual.id)} />
-          <span className="text-xs font-bold text-sidebar-foreground truncate">
-            {empresaActual.nombre}
-          </span>
-        </div>
-      </SelectTrigger>
-      <SelectContent>
-        <div className="px-2 py-1.5 text-[10px] font-bold text-muted-foreground tracking-widest">
-          SELECCIONAR EMPRESA
-        </div>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        className="w-48"
+        onMouseLeave={() => setOpen(false)}
+      >
+        <DropdownMenuLabel className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+          Cambiar empresa
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
         {empresas.map((e) => (
-          <SelectItem key={e.id} value={e.id}>
-            <div className="flex items-center gap-2">
-              <EmpresaAvatar empresa={e} logoUrl={getLogoUrl(e.id)} />
-              <span className="font-semibold text-sm">{e.nombre}</span>
-            </div>
-          </SelectItem>
+          <DropdownMenuItem
+            key={e.id}
+            onSelect={() => { setEmpresaId(e.id); setOpen(false); }}
+            className="flex items-center gap-2 cursor-pointer"
+          >
+            <EmpresaAvatar empresa={e} logoUrl={getLogoUrl(e.id)} size="sm" />
+            <span className="text-sm font-medium flex-1 truncate">{e.nombre}</span>
+            {e.id === empresaActual.id && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+          </DropdownMenuItem>
         ))}
-      </SelectContent>
-    </Select>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

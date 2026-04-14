@@ -1,53 +1,35 @@
 import { useState } from "react";
 import { useEmpresa, type Empresa } from "@/features/empresa/contexts/empresa-context";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Building2, Plus, Pencil, Image, Info } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Building2, Plus, Trash2, Image, Info } from "lucide-react";
 import { toast } from "sonner";
 
 interface EmpresaFormData {
   nombre: string;
   iniciales: string;
   color: string;
-  activa: boolean;
-  observaciones: string;
 }
 
 const EMPTY_FORM: EmpresaFormData = {
   nombre: "",
   iniciales: "",
   color: "hsl(210 70% 50%)",
-  activa: true,
-  observaciones: "",
 };
 
 export function EmpresasTab() {
-  const { empresas, empresaActual, addEmpresa, updateEmpresa, setEmpresaId } = useEmpresa();
+  const { empresas, empresaActual, addEmpresa, deleteEmpresa, setEmpresaId } = useEmpresa();
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<EmpresaFormData>(EMPTY_FORM);
+  const [deleteTarget, setDeleteTarget] = useState<Empresa | null>(null);
 
   const openNew = () => {
-    setEditingId(null);
     setForm(EMPTY_FORM);
-    setModalOpen(true);
-  };
-
-  const openEdit = (e: Empresa) => {
-    setEditingId(e.id);
-    setForm({
-      nombre: e.nombre,
-      iniciales: e.iniciales,
-      color: e.color,
-      activa: true,
-      observaciones: "",
-    });
     setModalOpen(true);
   };
 
@@ -61,40 +43,35 @@ export function EmpresasTab() {
       return;
     }
 
-    if (editingId) {
-      updateEmpresa(editingId, {
-        nombre: form.nombre.toUpperCase(),
-        iniciales: form.iniciales.toUpperCase(),
-        color: form.color,
-      });
-      toast.success("Empresa actualizada correctamente");
-    } else {
-      const id = form.nombre.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-      addEmpresa({
-        id,
-        nombre: form.nombre.toUpperCase(),
-        iniciales: form.iniciales.toUpperCase().slice(0, 2),
-        color: form.color,
-      });
-      toast.success("Nueva empresa creada. Se ha generado toda la estructura base.");
-    }
+    const id = form.nombre.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+    addEmpresa({
+      id,
+      nombre: form.nombre.toUpperCase(),
+      iniciales: form.iniciales.toUpperCase().slice(0, 2),
+      color: form.color,
+    });
+    toast.success("Nueva empresa creada. Se ha generado toda la estructura base.");
     setModalOpen(false);
   };
 
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="font-bold text-foreground">GESTIÓN DE EMPRESAS</h3>
-        <Button size="sm" className="gap-1.5" onClick={openNew}>
-          <Plus className="h-4 w-4" /> Nueva empresa
-        </Button>
-      </div>
+  const handleDelete = () => {
+    if (!deleteTarget) return;
+    if (deleteTarget.id === empresaActual.id) {
+      toast.error("No puedes borrar la empresa activa");
+      setDeleteTarget(null);
+      return;
+    }
+    deleteEmpresa(deleteTarget.id);
+    toast.success(`Empresa "${deleteTarget.nombre}" eliminada`);
+    setDeleteTarget(null);
+  };
 
-      <div className="flex items-start gap-3 px-4 py-3 rounded-lg border border-primary/20 bg-primary/5">
-        <Info className="h-5 w-5 text-primary mt-0.5 shrink-0" />
-        <p className="text-sm text-muted-foreground">
-          Al crear una nueva empresa, el sistema generará automáticamente toda la estructura base del SaaS con todos los módulos, submódulos y datos de ejemplo independientes.
-        </p>
+  return (
+    <div className="space-y-2">
+      <div className="flex justify-end">
+        <Button size="sm" className="gap-1.5" onClick={openNew}>
+          <Plus className="h-4 w-4" />Nuevo
+        </Button>
       </div>
 
       <div className="grid gap-3">
@@ -118,14 +95,20 @@ export function EmpresasTab() {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => openEdit(emp)}>
-                    <Pencil className="h-3.5 w-3.5" /> Editar
-                  </Button>
                   {emp.id !== empresaActual.id && (
                     <Button variant="ghost" size="sm" className="text-xs" onClick={() => setEmpresaId(emp.id)}>
                       Seleccionar
                     </Button>
                   )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 text-xs text-destructive hover:text-destructive"
+                    onClick={() => setDeleteTarget(emp)}
+                    disabled={emp.id === empresaActual.id}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> Borrar
+                  </Button>
                 </div>
               </div>
             </CardContent>
@@ -133,17 +116,17 @@ export function EmpresasTab() {
         ))}
       </div>
 
-      {/* Modal crear/editar */}
+      {/* Modal nueva empresa */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5 text-primary" />
-              {editingId ? "Editar empresa" : "Nueva empresa"}
+              Nueva empresa
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-3 py-2">
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Nombre comercial *</Label>
                 <Input
@@ -188,22 +171,31 @@ export function EmpresasTab() {
                 </p>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Observaciones</Label>
-              <Textarea
-                value={form.observaciones}
-                onChange={(e) => setForm({ ...form, observaciones: e.target.value })}
-                placeholder="Notas internas..."
-                rows={2}
-              />
-            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave}>{editingId ? "Guardar cambios" : "Crear empresa"}</Button>
+            <Button onClick={handleSave}>Crear empresa</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Confirmación borrar */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Borrar empresa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se eliminará <strong>{deleteTarget?.nombre}</strong> y todos sus datos. Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Borrar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

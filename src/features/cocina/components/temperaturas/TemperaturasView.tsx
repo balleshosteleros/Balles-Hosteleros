@@ -183,7 +183,7 @@ export default function TemperaturasView({ area, equiposIniciales, registrosInic
           </DialogContent>
         </Dialog>
         <Dialog open={showNuevoRegistro} onOpenChange={setShowNuevoRegistro}>
-          <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" />Registrar temperatura</Button></DialogTrigger>
+          <DialogTrigger asChild><Button variant="primary" size="sm"><Plus className="h-4 w-4" />Nuevo</Button></DialogTrigger>
           <DialogContent><DialogHeader><DialogTitle>Registrar temperatura</DialogTitle></DialogHeader>
             <NuevoRegistroForm equipos={equipos.filter(e => e.estado === "ACTIVO")} onSave={handleRegistrarTemp} onClose={() => setShowNuevoRegistro(false)} />
           </DialogContent>

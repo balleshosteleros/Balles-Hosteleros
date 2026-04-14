@@ -162,7 +162,7 @@ export function VencimientosView() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-end">
-        <Button onClick={() => { setForm(emptyForm()); setModalOpen(true); }} className="gap-2"><Plus className="h-4 w-4" /> Nuevo registro</Button>
+        <Button variant="primary" size="sm" onClick={() => { setForm(emptyForm()); setModalOpen(true); }}><Plus className="h-4 w-4" />Nuevo</Button>
       </div>
 
       <div className="grid grid-cols-4 gap-4">

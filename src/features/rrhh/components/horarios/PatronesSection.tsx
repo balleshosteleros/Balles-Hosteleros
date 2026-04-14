@@ -27,7 +27,7 @@ export function PatronesSection({ empresaId }: { empresaId: string }) {
           <h2 className="text-lg font-semibold flex items-center gap-2"><Layers className="h-5 w-5 text-primary" />Patrones</h2>
           <p className="text-sm text-muted-foreground">Combinaciones de turnos para asignar fácilmente</p>
         </div>
-        <Button size="sm" className="gap-1" onClick={() => { setEditando(null); setShowModal(true); }}><Plus className="h-4 w-4" />Crear patrón</Button>
+        <Button variant="primary" size="sm" onClick={() => { setEditando(null); setShowModal(true); }}><Plus className="h-4 w-4" />Nuevo</Button>
       </div>
 
       <div className="relative max-w-sm">

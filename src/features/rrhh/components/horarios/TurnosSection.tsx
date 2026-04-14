@@ -26,7 +26,7 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
           <h2 className="text-lg font-semibold flex items-center gap-2"><Clock className="h-5 w-5 text-primary" />Turnos</h2>
           <p className="text-sm text-muted-foreground">Configura los tipos de turno disponibles en la empresa</p>
         </div>
-        <Button size="sm" className="gap-1" onClick={() => { setEditando(null); setShowModal(true); }}><Plus className="h-4 w-4" />Crear turno</Button>
+        <Button variant="primary" size="sm" onClick={() => { setEditando(null); setShowModal(true); }}><Plus className="h-4 w-4" />Nuevo</Button>
       </div>
 
       <div className="relative max-w-sm">

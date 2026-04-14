@@ -82,7 +82,7 @@ export function AmortizacionTab({ lineas, onChange }: Props) {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Amortización y seguimiento financiero</CardTitle>
-          <Button size="sm" onClick={openNew}><Plus className="h-4 w-4 mr-1" />Añadir</Button>
+          <Button variant="primary" size="sm" onClick={openNew}><Plus className="h-4 w-4" />Nuevo</Button>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">

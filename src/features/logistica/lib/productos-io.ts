@@ -109,9 +109,8 @@ export async function parseFileToProductos(
 
     // Normalizar estado (si viene en minúsculas o traducido)
     const estadoRaw = mapped.estado?.toLowerCase?.() ?? "";
-    let estado: "Activo" | "Inactivo" | "Descatalogado" | "En revisión" = "Activo";
+    let estado: "Activo" | "Inactivo" | "En revisión" = "Activo";
     if (estadoRaw.startsWith("inactiv")) estado = "Inactivo";
-    else if (estadoRaw.startsWith("descatalog")) estado = "Descatalogado";
     else if (estadoRaw.startsWith("revis") || estadoRaw.startsWith("pending"))
       estado = "En revisión";
 

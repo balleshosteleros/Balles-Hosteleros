@@ -580,7 +580,7 @@ export function ComunicadosView() {
             <TabsTrigger value="listado"><FileText className="h-4 w-4 mr-1" />Comunicados</TabsTrigger>
             <TabsTrigger value="calendario"><CalendarDays className="h-4 w-4 mr-1" />Calendario</TabsTrigger>
           </TabsList>
-          <Button size="sm" onClick={openCreate}><Plus className="h-4 w-4 mr-1" />Crear</Button>
+          <Button variant="primary" size="sm" onClick={openCreate}><Plus className="h-4 w-4" />Nuevo</Button>
         </div>
 
         <TabsContent value="listado">

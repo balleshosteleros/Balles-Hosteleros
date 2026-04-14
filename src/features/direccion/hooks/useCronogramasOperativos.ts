@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-export type Frecuencia = "DIARIO" | "SEMANAL" | "MENSUAL" | "TRIMESTRAL" | "POR NECESIDAD" | "OTRO";
+export type Frecuencia = "DIARIO" | "SEMANAL" | "MENSUAL" | "TRIMESTRAL" | "ANUAL" | "POR NECESIDAD" | "OTRO";
 
 export interface CronogramaOperativo {
   id: string;
@@ -13,6 +13,11 @@ export interface CronogramaOperativo {
   formacion?: string;
   tiempo_requerido?: string;
   id_tarea_original?: string;
+  resumen?: string | null;
+  video_url?: string | null;
+  id_visible?: string | null;
+  parent_id?: string | null;
+  orden?: number;
 }
 
 import { fallbackCronogramas } from "../data/cronogramasMockData";
@@ -27,6 +32,8 @@ export function useCronogramasOperativos() {
     const { data: result, error } = await supabase
       .from("cronogramas_operativos")
       .select("*")
+      .order("rol", { ascending: true })
+      .order("orden", { ascending: true })
       .order("created_at", { ascending: true });
 
     if (!error && result && result.length > 0) {

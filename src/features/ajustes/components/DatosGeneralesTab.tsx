@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { DatosGenerales } from "@/features/ajustes/data/ajustes";
-import { Upload, Trash2, Info, ImageIcon } from "lucide-react";
+import { Upload, Trash2, Info, ImageIcon, Loader2 } from "lucide-react";
+import { uploadLogo, deleteLogo } from "@/features/empresa/actions/logo-actions";
 
 function Field({ label, value, onChange, type = "text", placeholder = "" }: { label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string }) {
   return (
@@ -20,24 +21,47 @@ function Field({ label, value, onChange, type = "text", placeholder = "" }: { la
 }
 
 export function DatosGeneralesTab() {
-  const { ajustes, setAjustes } = useEmpresa();
+  const { ajustes, setAjustes, empresaActual, getLogoUrl, setLogoUrl } = useEmpresa();
   const d = ajustes.datosGenerales;
   const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const logoUrl = getLogoUrl(empresaActual.id);
 
   const set = (k: keyof DatosGenerales, v: string) => {
     setAjustes((prev) => ({ ...prev, datosGenerales: { ...prev.datosGenerales, [k]: v } }));
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      set("logoUrl", reader.result as string);
-      toast.success("Logotipo actualizado");
-    };
-    reader.readAsDataURL(file);
     e.target.value = "";
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const publicUrl = await uploadLogo(empresaActual.id, formData);
+      setLogoUrl(empresaActual.id, publicUrl);
+      toast.success("Logotipo guardado en Supabase");
+    } catch (err) {
+      toast.error("Error al subir el logotipo. Inténtalo de nuevo.");
+      console.error(err);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteLogo = async () => {
+    setUploading(true);
+    try {
+      await deleteLogo(empresaActual.id);
+      setLogoUrl(empresaActual.id, "");
+      toast.success("Logotipo eliminado");
+    } catch {
+      toast.error("Error al eliminar el logotipo.");
+    } finally {
+      setUploading(false);
+    }
   };
 
   const save = () => {
@@ -107,8 +131,8 @@ export function DatosGeneralesTab() {
           <div className="flex items-start gap-6">
             {/* Preview */}
             <div className="shrink-0 w-32 h-32 rounded-lg border-2 border-dashed border-muted-foreground/20 bg-muted/30 flex items-center justify-center overflow-hidden">
-              {d.logoUrl ? (
-                <img src={d.logoUrl} alt="Logo" className="w-full h-full object-contain p-2" />
+              {logoUrl ? (
+                <img src={logoUrl} alt="Logo" className="w-full h-full object-contain p-2" />
               ) : (
                 <ImageIcon className="h-10 w-10 text-muted-foreground/30" />
               )}
@@ -116,17 +140,30 @@ export function DatosGeneralesTab() {
             {/* Actions */}
             <div className="flex-1 space-y-3">
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => fileRef.current?.click()}>
-                  <Upload className="h-3.5 w-3.5" /> {d.logoUrl ? "CAMBIAR LOGOTIPO" : "SUBIR LOGOTIPO"}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={uploading}
+                >
+                  {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                  {logoUrl ? "CAMBIAR LOGOTIPO" : "SUBIR LOGOTIPO"}
                 </Button>
-                {d.logoUrl && (
-                  <Button variant="outline" size="sm" className="gap-1.5 text-destructive hover:text-destructive" onClick={() => { set("logoUrl", ""); toast.success("Logotipo eliminado"); }}>
+                {logoUrl && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 text-destructive hover:text-destructive"
+                    onClick={handleDeleteLogo}
+                    disabled={uploading}
+                  >
                     <Trash2 className="h-3.5 w-3.5" /> ELIMINAR
                   </Button>
                 )}
               </div>
               <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
-              <p className="text-xs text-muted-foreground">Formatos aceptados: PNG, JPG, SVG. Tamaño máximo recomendado: 1 MB.</p>
+              <p className="text-xs text-muted-foreground">Formatos aceptados: PNG, JPG, SVG, WEBP. Tamaño máximo: 2 MB. Guardado en Supabase Storage.</p>
             </div>
           </div>
 

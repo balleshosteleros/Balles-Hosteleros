@@ -202,7 +202,7 @@ export function ProcesosView() {
   return (
     <div className="p-4 md:p-6 space-y-5">
       <div className="flex items-center justify-end">
-        <Button onClick={openNew} className="gap-2"><Plus className="h-4 w-4" /> NUEVO EXPEDIENTE</Button>
+        <Button variant="primary" size="sm" onClick={openNew}><Plus className="h-4 w-4" />Nuevo</Button>
       </div>
 
       <div className="grid grid-cols-3 md:grid-cols-6 gap-3">

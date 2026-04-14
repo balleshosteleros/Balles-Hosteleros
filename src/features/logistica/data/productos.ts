@@ -1,6 +1,9 @@
 export type TipoProducto = "compra" | "venta" | "elaboracion";
 
-export type EstadoProducto = "Activo" | "Inactivo" | "Descatalogado" | "En revisión";
+export type EstadoProducto = "Activo" | "Inactivo" | "En revisión";
+
+export const IVA_OPCIONES = ["0%", "4%", "10%", "21%"] as const;
+export type IvaOpcion = typeof IVA_OPCIONES[number];
 
 export interface Producto {
   id: string;
@@ -13,6 +16,7 @@ export interface Producto {
   precioCompra?: string;
   precioVenta?: string;
   coste?: string;
+  iva?: string;
   unidad: string;
   ultimaActualizacion: string;
   observaciones?: string;
@@ -38,12 +42,11 @@ export const FAMILIAS_VENTA = [
   "Menú degustación", "Menú del día", "Extras",
 ];
 
-export const ESTADOS_PRODUCTO: EstadoProducto[] = ["Activo", "Inactivo", "Descatalogado", "En revisión"];
+export const ESTADOS_PRODUCTO: EstadoProducto[] = ["Activo", "Inactivo", "En revisión"];
 
 export const ESTADO_COLOR: Record<EstadoProducto, string> = {
   Activo: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
   Inactivo: "bg-muted text-muted-foreground border-muted-foreground/30",
-  Descatalogado: "bg-destructive/10 text-destructive border-destructive/30",
   "En revisión": "bg-amber-500/10 text-amber-600 border-amber-500/30",
 };
 

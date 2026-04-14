@@ -55,7 +55,7 @@ function ListadoBonus({ bonus, onSelect, onCrear }: {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-end">
-        <Button onClick={onCrear}><Plus className="h-4 w-4 mr-1" />Crear bonus</Button>
+        <Button variant="primary" size="sm" onClick={onCrear}><Plus className="h-4 w-4" />Nuevo</Button>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">

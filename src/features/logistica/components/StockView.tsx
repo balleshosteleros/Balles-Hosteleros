@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
-  getStockPorEmpresa, getTemporadasPorEmpresa, getTemporadaActiva, getStockConTemporada,
+  getTemporadasPorEmpresa, getStockConTemporada,
   CATEGORIAS_STOCK, type ProductoStock, type TemporadaStock,
 } from "@/features/logistica/data/stock";
 import { listStock, updateStock as updateStockAction } from "@/features/logistica/actions/stock-actions";
@@ -18,16 +18,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Popover, PopoverContent, PopoverTrigger } from "@/shared/components/ui/popover";
 import {
-  Search, ArrowUpDown, Pencil, Check, X, Lock, Sun, BarChart3,
+  Search, ArrowUpDown, Pencil, Check, X, Sun, Settings, ChevronDown,
 } from "lucide-react";
-import StockAnalytics from "@/features/logistica/components/stock/StockAnalytics";
+import { FiltrosAvanzados, type FiltroActivo, type CampoFiltro } from "@/features/logistica/components/FiltrosAvanzados";
+import { ImportExportButton } from "@/features/logistica/components/ImportExportButton";
+import { exportToCSV, exportToXLSX } from "@/features/logistica/lib/export-utils";
 import { toast } from "sonner";
 
-const ALL = "__ALL__";
-type StockFilter = "todos" | "bajo" | "alto" | "sin_inventario";
-type MassAction = "pct" | "fixed" | "set" | "copy" | "consumption";
+type CampoStock = "categoria" | "estadoStock" | "unidad";
+type MassAction = "pct" | "fixed" | "set" | "copy" | "copiar-temporada" | "consumption";
 type MassField = "stockMaximo" | "stockSeguridad";
 
 function stockStatus(actual: number, seguridad: number): "critical" | "warning" | "ok" {
@@ -103,23 +104,24 @@ export function StockView() {
     setTemporadas(getTemporadasPorEmpresa(empresaActual.id));
   }, [empresaActual.id]);
 
-  useEffect(() => {
-    loadStockData();
-  }, [loadStockData]);
+  useEffect(() => { loadStockData(); }, [loadStockData]);
 
-  const temporadaAutoActiva = useMemo(() => getTemporadaActiva(temporadas), [temporadas]);
-  const [temporadaSeleccionada, setTemporadaSeleccionada] = useState<string>("auto");
+  const [temporadaSeleccionada, setTemporadaSeleccionada] = useState<string>("base");
+  const [tempPopoverOpen, setTempPopoverOpen] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
 
-  // If "auto", use detected season; otherwise use manual selection
   const temporadaActiva = useMemo(() => {
-    if (temporadaSeleccionada === "auto") return temporadaAutoActiva;
     if (temporadaSeleccionada === "base") return null;
     return temporadas.find((t) => t.id === temporadaSeleccionada) || null;
-  }, [temporadaSeleccionada, temporadaAutoActiva, temporadas]);
+  }, [temporadaSeleccionada, temporadas]);
+
+  const temporadaLabel = useMemo(() => {
+    if (temporadaSeleccionada === "base") return "Base";
+    return temporadas.find((t) => t.id === temporadaSeleccionada)?.nombre ?? "Base";
+  }, [temporadaSeleccionada, temporadas]);
 
   const [search, setSearch] = useState("");
-  const [filterCat, setFilterCat] = useState(ALL);
-  const [filterStatus, setFilterStatus] = useState<StockFilter>("todos");
+  const [filtros, setFiltros] = useState<FiltroActivo<CampoStock>[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<{ stockMaximo: number; stockSeguridad: number }>({ stockMaximo: 0, stockSeguridad: 0 });
@@ -131,6 +133,8 @@ export function StockView() {
   const [massValue, setMassValue] = useState("");
   const [massCopyFrom, setMassCopyFrom] = useState<MassField>("stockMaximo");
   const [massCopyTo, setMassCopyTo] = useState<MassField>("stockSeguridad");
+  const [massCopyTempFrom, setMassCopyTempFrom] = useState<string>("");
+  const [massCopyTempTo, setMassCopyTempTo] = useState<string>("");
 
   // Enrich stock with season overrides for display
   const enriched = useMemo(() => stock.map((p) => {
@@ -138,25 +142,33 @@ export function StockView() {
     return { ...p, displayMaximo: s.stockMaximo, displaySeguridad: s.stockSeguridad, esTemporada: s.esTemporada };
   }), [stock, temporadaActiva]);
 
+  const camposFiltro = useMemo((): CampoFiltro<CampoStock>[] => {
+    const uniq = (arr: string[]) => [...new Set(arr.filter(Boolean))].sort();
+    return [
+      { campo: "categoria", label: "Categoría", tipo: "lista", opciones: CATEGORIAS_STOCK as string[] },
+      { campo: "estadoStock", label: "Estado stock", tipo: "lista", opciones: ["Stock bajo", "Atención", "Correcto"] },
+      { campo: "unidad", label: "Unidad", tipo: "lista", opciones: uniq(enriched.map((p) => p.unidad)) },
+    ];
+  }, [enriched]);
+
   const filtered = useMemo(() => {
     return enriched.filter((p) => {
-      if (filterCat !== ALL && p.categoria !== filterCat) return false;
       const st = stockStatus(p.stockActual, p.displaySeguridad);
-      if (filterStatus === "bajo" && st !== "critical") return false;
-      if (filterStatus === "alto" && p.stockActual < p.displayMaximo * 0.85) return false;
-      if (filterStatus === "sin_inventario" && p.ultimoInventarioFecha) return false;
+      for (const f of filtros) {
+        if (f.campo === "categoria" && f.valores?.length && !f.valores.includes(p.categoria)) return false;
+        if (f.campo === "unidad" && f.valores?.length && !f.valores.includes(p.unidad)) return false;
+        if (f.campo === "estadoStock" && f.valores?.length) {
+          const label = st === "critical" ? "Stock bajo" : st === "warning" ? "Atención" : "Correcto";
+          if (!f.valores.includes(label)) return false;
+        }
+      }
       if (search) {
         const s = search.toLowerCase();
         return p.nombre.toLowerCase().includes(s) || p.categoria.toLowerCase().includes(s);
       }
       return true;
     });
-  }, [enriched, search, filterCat, filterStatus]);
-
-  const totalProducts = enriched.length;
-  const criticalCount = enriched.filter((p) => stockStatus(p.stockActual, p.displaySeguridad) === "critical").length;
-  const warningCount = enriched.filter((p) => stockStatus(p.stockActual, p.displaySeguridad) === "warning").length;
-  const okCount = enriched.filter((p) => stockStatus(p.stockActual, p.displaySeguridad) === "ok").length;
+  }, [enriched, search, filtros]);
 
   const toggleSelect = (id: string) => setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const toggleAll = () => {
@@ -164,7 +176,7 @@ export function StockView() {
     else setSelected(new Set(filtered.map((p) => p.id)));
   };
 
-  // Inline edit – only stockMaximo & stockSeguridad
+  // Inline edit
   const startEdit = (p: typeof enriched[0]) => {
     setEditingId(p.id);
     setEditValues({ stockMaximo: p.displayMaximo, stockSeguridad: p.displaySeguridad });
@@ -172,7 +184,6 @@ export function StockView() {
   const saveEdit = async () => {
     if (!editingId) return;
     if (temporadaActiva && temporadaActiva.overrides[editingId]) {
-      // Update season override
       setTemporadas((prev) => prev.map((t) =>
         t.id === temporadaActiva.id
           ? { ...t, overrides: { ...t.overrides, [editingId]: { stockMaximo: editValues.stockMaximo, stockSeguridad: editValues.stockSeguridad } } }
@@ -189,11 +200,33 @@ export function StockView() {
   };
   const cancelEdit = () => setEditingId(null);
 
-  // Mass edit – only stockMaximo & stockSeguridad
+  // Mass edit
   const applyMassEdit = () => {
     if (selected.size === 0) { toast.info("Selecciona al menos un producto"); return; }
-    const val = parseFloat(massValue);
 
+    // Copy between temporadas
+    if (massAction === "copiar-temporada") {
+      if (!massCopyTempFrom || !massCopyTempTo) { toast.error("Selecciona temporada origen y destino"); return; }
+      if (massCopyTempFrom === massCopyTempTo) { toast.error("Origen y destino deben ser diferentes"); return; }
+      const sourceTemp = massCopyTempFrom === "base" ? null : temporadas.find((t) => t.id === massCopyTempFrom);
+      setTemporadas((prev) => prev.map((t) => {
+        if (t.id !== massCopyTempTo) return t;
+        const newOverrides = { ...t.overrides };
+        for (const prodId of selected) {
+          const prod = stock.find((p) => p.id === prodId);
+          if (!prod) continue;
+          const srcVal = sourceTemp?.overrides[prodId] ?? { stockMaximo: prod.stockMaximo, stockSeguridad: prod.stockSeguridad };
+          newOverrides[prodId] = { ...srcVal };
+        }
+        return { ...t, overrides: newOverrides };
+      }));
+      const targetName = temporadas.find((t) => t.id === massCopyTempTo)?.nombre ?? "temporada";
+      toast.success(`Stock copiado a ${targetName} para ${selected.size} producto(s)`);
+      setMassOpen(false);
+      return;
+    }
+
+    const val = parseFloat(massValue);
     const apply = (current: number): number => {
       if (massAction === "pct" && !isNaN(val)) return Math.max(0, Math.round(current * (1 + val / 100) * 100) / 100);
       if (massAction === "fixed" && !isNaN(val)) return Math.max(0, Math.round((current + val) * 100) / 100);
@@ -226,168 +259,190 @@ export function StockView() {
 
   return (
     <div className="p-4 md:p-6 space-y-5">
-      <Tabs defaultValue="stock" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="stock">Stock</TabsTrigger>
-          <TabsTrigger value="analitica" className="gap-1"><BarChart3 className="h-3.5 w-3.5" /> Analítica</TabsTrigger>
-          <TabsTrigger value="temporadas">Temporadas</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="stock" className="space-y-4">
-          {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="rounded-lg border bg-card p-3 text-center">
-              <div className="text-2xl font-black text-foreground">{totalProducts}</div>
-              <div className="text-xs text-muted-foreground font-medium">PRODUCTOS</div>
-            </div>
-            <div className="rounded-lg border bg-card p-3 text-center">
-              <div className="text-2xl font-black text-red-600 dark:text-red-400">{criticalCount}</div>
-              <div className="text-xs text-muted-foreground font-medium">STOCK BAJO</div>
-            </div>
-            <div className="rounded-lg border bg-card p-3 text-center">
-              <div className="text-2xl font-black text-amber-600 dark:text-amber-400">{warningCount}</div>
-              <div className="text-xs text-muted-foreground font-medium">ATENCIÓN</div>
-            </div>
-            <div className="rounded-lg border bg-card p-3 text-center">
-              <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{okCount}</div>
-              <div className="text-xs text-muted-foreground font-medium">CORRECTO</div>
-            </div>
-          </div>
-
+      <div className="space-y-4">
           {/* Toolbar */}
           <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-3">
+            {/* Temporada picker */}
+            <Popover open={tempPopoverOpen} onOpenChange={setTempPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button size="sm" className="gap-1.5">
+                  <ChevronDown className="h-4 w-4" />
+                  {temporadaLabel === "Base" ? "Temporada" : temporadaLabel}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-52 p-2" align="start">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1.5">Ver temporada</p>
+                {/* Valores base siempre disponible */}
+                <button
+                  onClick={() => { setTemporadaSeleccionada("base"); setTempPopoverOpen(false); }}
+                  className={`w-full text-left text-sm px-2.5 py-1.5 rounded-md transition-colors ${
+                    temporadaSeleccionada === "base" || !temporadas.find((t) => t.id === temporadaSeleccionada)
+                      ? "bg-primary/10 text-primary font-semibold"
+                      : "hover:bg-muted"
+                  }`}
+                >
+                  Base
+                </button>
+                {temporadas.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => { setTemporadaSeleccionada(t.id); setTempPopoverOpen(false); }}
+                    className={`w-full text-left text-sm px-2.5 py-1.5 rounded-md transition-colors ${
+                      temporadaSeleccionada === t.id
+                        ? "bg-primary/10 text-primary font-semibold"
+                        : "hover:bg-muted"
+                    }`}
+                  >
+                    {t.nombre}
+                  </button>
+                ))}
+                {temporadas.length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-2 italic">Sin temporadas — configura una con ⚙️</p>
+                )}
+              </PopoverContent>
+            </Popover>
+
+            {/* Edición masiva */}
             <Button size="sm" variant="outline" className="gap-1" disabled={selected.size === 0} onClick={() => setMassOpen(true)}>
-              <ArrowUpDown className="h-4 w-4" /> Edición masiva{selected.size > 0 ? ` (${selected.size})` : ""}
+              <ArrowUpDown className="h-4 w-4" />
+              Edición masiva{selected.size > 0 ? ` (${selected.size})` : ""}
             </Button>
-            {temporadas.length > 0 && (
-              <Select value={temporadaSeleccionada} onValueChange={setTemporadaSeleccionada}>
-                <SelectTrigger className="w-[220px] gap-1">
-                  <Sun className="h-3.5 w-3.5 text-primary shrink-0" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="auto">Automática{temporadaAutoActiva ? ` (${temporadaAutoActiva.nombre})` : " (base)"}</SelectItem>
-                  <SelectItem value="base">Valores base (sin temporada)</SelectItem>
-                  {temporadas.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>{t.nombre} ({t.fechaInicio} → {t.fechaFin})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+
             <div className="flex-1" />
+
+            {/* Búsqueda */}
             <div className="relative min-w-[220px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Buscar producto…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
             </div>
-            <Select value={filterCat} onValueChange={setFilterCat}>
-              <SelectTrigger className="w-[160px]"><SelectValue placeholder="Categoría" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>Todas</SelectItem>
-                {CATEGORIAS_STOCK.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as StockFilter)}>
-              <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                <SelectItem value="bajo">Stock bajo</SelectItem>
-                <SelectItem value="alto">Cerca de máximo</SelectItem>
-                <SelectItem value="sin_inventario">Sin inventario reciente</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="gap-1"
-              title="El stock actual solo se modifica mediante albaranes, ventas, elaboraciones o inventarios confirmados. Desde aquí puedes ajustar stock máximo y de seguridad."
-            >
-              <Lock className="h-4 w-4 text-primary" />
+
+            {/* Filtros */}
+            <FiltrosAvanzados campos={camposFiltro} filtros={filtros} onChange={setFiltros} />
+
+            {/* Importar / Exportar */}
+            <ImportExportButton
+              onExport={(format) => {
+                const ts = new Date().toISOString().slice(0, 10);
+                const rows = filtered.map((p) => ({
+                  Producto: p.nombre, Categoría: p.categoria, Unidad: p.unidad,
+                  "Stock Máximo": p.displayMaximo, "Stock Mínimo": p.displaySeguridad,
+                  "Stock Actual": p.stockActual, "Stock Reposición": Math.max(0, p.displayMaximo - p.stockActual),
+                }));
+                if (rows.length === 0) { toast.info("No hay datos para exportar."); return; }
+                if (format === "csv") exportToCSV(rows, `stock-${ts}.csv`);
+                else exportToXLSX(rows, `stock-${ts}.xlsx`);
+                toast.success(`${rows.length} filas exportadas en ${format.toUpperCase()}`);
+              }}
+            />
+
+            {/* Configuración temporadas */}
+            <Button size="icon" variant={showConfig ? "default" : "ghost"} className="h-8 w-8" onClick={() => setShowConfig((v) => !v)} title="Configurar temporadas">
+              <Settings className="h-4 w-4" />
             </Button>
           </div>
 
-          {/* Table */}
-          <div className="bg-card rounded-lg border overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  <th className="px-3 py-3 w-10"><Checkbox checked={selected.size === filtered.length && filtered.length > 0} onCheckedChange={toggleAll} /></th>
-                  {["Producto", "Categoría", "Unidad", "Stock Máximo", "Stock Seguridad", "Stock Actual", "Estado", "Últ. Inventario", "Fecha Inv.", ""].map((h) => (
-                    <th key={h} className="px-3 py-3 text-left text-xs font-bold text-muted-foreground whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((p) => {
-                  const st = stockStatus(p.stockActual, p.displaySeguridad);
-                  const isEditing = editingId === p.id;
-                  return (
-                    <tr key={p.id} className="border-b hover:bg-muted/30 transition-colors">
-                      <td className="px-3 py-2.5"><Checkbox checked={selected.has(p.id)} onCheckedChange={() => toggleSelect(p.id)} /></td>
-                      <td className="px-3 py-2.5 font-semibold text-foreground">
-                        {p.nombre}
-                        {p.esTemporada && <Sun className="inline h-3 w-3 ml-1 text-primary" />}
-                      </td>
-                      <td className="px-3 py-2.5 text-xs">{p.categoria}</td>
-                      <td className="px-3 py-2.5 text-xs">{p.unidad}</td>
-                      <td className="px-3 py-2.5 text-xs">
-                        {isEditing
-                          ? <Input type="number" className="h-7 w-20 text-xs" value={editValues.stockMaximo} onChange={(e) => setEditValues((v) => ({ ...v, stockMaximo: +e.target.value }))} />
-                          : <span className="font-medium">{p.displayMaximo}</span>}
-                      </td>
-                      <td className="px-3 py-2.5 text-xs">
-                        {isEditing
-                          ? <Input type="number" className="h-7 w-20 text-xs" value={editValues.stockSeguridad} onChange={(e) => setEditValues((v) => ({ ...v, stockSeguridad: +e.target.value }))} />
-                          : <span className="font-medium">{p.displaySeguridad}</span>}
-                      </td>
-                      <td className="px-3 py-2.5 text-xs">
-                        <span className="font-bold text-foreground flex items-center gap-1">
-                          <Lock className="h-3 w-3 text-muted-foreground" />
-                          {p.stockActual}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <Badge variant="outline" className={`text-[11px] font-bold px-2 py-0.5 ${statusColors[st]}`}>{statusLabels[st]}</Badge>
-                      </td>
-                      <td className="px-3 py-2.5 text-xs"><InventarioBadge value={p.ultimoInventario} /></td>
-                      <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{p.ultimoInventarioFecha || "—"}</td>
-                      <td className="px-3 py-2.5">
-                        {isEditing ? (
-                          <div className="flex gap-1">
-                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={saveEdit}><Check className="h-3.5 w-3.5 text-emerald-600" /></Button>
-                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={cancelEdit}><X className="h-3.5 w-3.5 text-destructive" /></Button>
-                          </div>
-                        ) : (
-                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => startEdit(p)}><Pencil className="h-3.5 w-3.5" /></Button>
-                        )}
-                      </td>
+          {showConfig ? (
+            <div className="bg-card border rounded-lg p-5">
+              <TemporadasConfig
+                temporadas={temporadas}
+                setTemporadas={setTemporadas}
+                productos={stock}
+                empresaId={empresaActual.id}
+                temporadaActiva={temporadaActiva}
+              />
+            </div>
+          ) : (
+            <>
+              {/* Indicador temporada activa */}
+              {temporadaActiva && (
+                <div className="flex items-center gap-2 text-xs text-primary bg-primary/5 border border-primary/20 rounded-md px-3 py-1.5">
+                  <Sun className="h-3.5 w-3.5 shrink-0" />
+                  <span>Mostrando valores de temporada <strong>{temporadaActiva.nombre}</strong> ({temporadaActiva.fechaInicio} → {temporadaActiva.fechaFin}). Los valores con <Sun className="inline h-3 w-3" /> son específicos de esta temporada.</span>
+                </div>
+              )}
+
+              {/* Table */}
+              <div className="bg-card rounded-lg border overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/50">
+                      <th className="px-3 py-3 w-10">
+                        <Checkbox checked={selected.size === filtered.length && filtered.length > 0} onCheckedChange={toggleAll} />
+                      </th>
+                      {["Producto", "Categoría", "Unidad", "Stock Máximo", "Stock Mínimo", "Stock Actual", "Stock Reposición", "Estado", "Últ. Inventario", "Fecha Inv.", ""].map((h) => (
+                        <th key={h} className="px-3 py-3 text-left text-xs font-bold text-muted-foreground whitespace-nowrap">{h}</th>
+                      ))}
                     </tr>
-                  );
-                })}
-                {filtered.length === 0 && (
-                  <tr><td colSpan={11} className="text-center py-12 text-muted-foreground">No se encontraron productos.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          <div className="text-xs text-muted-foreground text-right">{filtered.length} de {enriched.length} productos</div>
-        </TabsContent>
+                  </thead>
+                  <tbody>
+                    {filtered.map((p) => {
+                      const st = stockStatus(p.stockActual, p.displaySeguridad);
+                      const isEditing = editingId === p.id;
+                      const reposicion = Math.max(0, p.displayMaximo - p.stockActual);
+                      return (
+                        <tr key={p.id} className="border-b hover:bg-muted/30 transition-colors">
+                          <td className="px-3 py-2.5">
+                            <Checkbox checked={selected.has(p.id)} onCheckedChange={() => toggleSelect(p.id)} />
+                          </td>
+                          <td className="px-3 py-2.5 font-semibold text-foreground">
+                            {p.nombre}
+                            {p.esTemporada && <Sun className="inline h-3 w-3 ml-1 text-primary" />}
+                          </td>
+                          <td className="px-3 py-2.5 text-xs">{p.categoria}</td>
+                          <td className="px-3 py-2.5 text-xs">{p.unidad}</td>
+                          {/* Stock Máximo */}
+                          <td className="px-3 py-2.5 text-xs">
+                            {isEditing
+                              ? <Input type="number" className="h-7 w-20 text-xs" value={editValues.stockMaximo} onChange={(e) => setEditValues((v) => ({ ...v, stockMaximo: +e.target.value }))} />
+                              : <span className="font-medium">{p.displayMaximo}</span>}
+                          </td>
+                          {/* Stock Mínimo */}
+                          <td className="px-3 py-2.5 text-xs">
+                            {isEditing
+                              ? <Input type="number" className="h-7 w-20 text-xs" value={editValues.stockSeguridad} onChange={(e) => setEditValues((v) => ({ ...v, stockSeguridad: +e.target.value }))} />
+                              : <span className="font-medium">{p.displaySeguridad}</span>}
+                          </td>
+                          {/* Stock Actual */}
+                          <td className="px-3 py-2.5 text-xs">
+                            <span className="font-bold text-foreground">{p.stockActual}</span>
+                          </td>
+                          {/* Stock Reposición */}
+                          <td className="px-3 py-2.5 text-xs">
+                            {reposicion > 0
+                              ? <span className="font-medium text-amber-600 dark:text-amber-400">{reposicion}</span>
+                              : <span className="text-muted-foreground">—</span>}
+                          </td>
+                          {/* Estado */}
+                          <td className="px-3 py-2.5">
+                            <Badge variant="outline" className={`text-[11px] font-bold px-2 py-0.5 ${statusColors[st]}`}>{statusLabels[st]}</Badge>
+                          </td>
+                          <td className="px-3 py-2.5 text-xs"><InventarioBadge value={p.ultimoInventario} /></td>
+                          <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{p.ultimoInventarioFecha || "—"}</td>
+                          <td className="px-3 py-2.5">
+                            {isEditing ? (
+                              <div className="flex gap-1">
+                                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={saveEdit}><Check className="h-3.5 w-3.5 text-emerald-600" /></Button>
+                                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={cancelEdit}><X className="h-3.5 w-3.5 text-destructive" /></Button>
+                              </div>
+                            ) : (
+                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => startEdit(p)}><Pencil className="h-3.5 w-3.5" /></Button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {filtered.length === 0 && (
+                      <tr><td colSpan={12} className="text-center py-12 text-muted-foreground">No se encontraron productos.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <div className="text-xs text-muted-foreground text-right">{filtered.length} de {enriched.length} productos</div>
+            </>
+          )}
+      </div>
 
-        <TabsContent value="analitica">
-          <StockAnalytics stock={stock} temporadaActiva={temporadaActiva} />
-        </TabsContent>
-
-        <TabsContent value="temporadas">
-          <TemporadasConfig
-            temporadas={temporadas}
-            setTemporadas={setTemporadas}
-            productos={stock}
-            empresaId={empresaActual.id}
-            temporadaActiva={temporadaActiva}
-          />
-        </TabsContent>
-      </Tabs>
-
-      {/* Mass Edit Dialog – only stockMaximo & stockSeguridad */}
+      {/* Mass Edit Dialog */}
       <Dialog open={massOpen} onOpenChange={setMassOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -395,8 +450,7 @@ export function StockView() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
-              <Lock className="h-3.5 w-3.5 text-primary shrink-0" />
-              Solo se pueden modificar Stock Máximo y Stock Seguridad.
+              Modifica Stock Máximo y/o Stock Mínimo de los productos seleccionados.
             </div>
 
             <div>
@@ -407,7 +461,8 @@ export function StockView() {
                   <SelectItem value="pct">Por porcentaje (%)</SelectItem>
                   <SelectItem value="fixed">Por cantidad fija</SelectItem>
                   <SelectItem value="set">Igualar valor</SelectItem>
-                  <SelectItem value="copy">Copiar referencia</SelectItem>
+                  <SelectItem value="copy">Copiar campo</SelectItem>
+                  {temporadas.length >= 2 && <SelectItem value="copiar-temporada">Copiar entre temporadas</SelectItem>}
                   <SelectItem value="consumption">Ajustar según consumo</SelectItem>
                 </SelectContent>
               </Select>
@@ -421,7 +476,7 @@ export function StockView() {
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="stockMaximo">Stock Máximo</SelectItem>
-                      <SelectItem value="stockSeguridad">Stock Seguridad</SelectItem>
+                      <SelectItem value="stockSeguridad">Stock Mínimo</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -444,7 +499,7 @@ export function StockView() {
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="stockMaximo">Stock Máximo</SelectItem>
-                      <SelectItem value="stockSeguridad">Stock Seguridad</SelectItem>
+                      <SelectItem value="stockSeguridad">Stock Mínimo</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -454,7 +509,34 @@ export function StockView() {
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="stockMaximo">Stock Máximo</SelectItem>
-                      <SelectItem value="stockSeguridad">Stock Seguridad</SelectItem>
+                      <SelectItem value="stockSeguridad">Stock Mínimo</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
+            {massAction === "copiar-temporada" && (
+              <div className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  Copia los valores de Stock Máximo y Stock Mínimo de los productos seleccionados desde una temporada a otra.
+                </p>
+                <div>
+                  <Label className="text-xs font-bold">Temporada origen</Label>
+                  <Select value={massCopyTempFrom} onValueChange={setMassCopyTempFrom}>
+                    <SelectTrigger><SelectValue placeholder="Seleccionar origen…" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="base">Valores base</SelectItem>
+                      {temporadas.map((t) => <SelectItem key={t.id} value={t.id}>{t.nombre}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs font-bold">Temporada destino</Label>
+                  <Select value={massCopyTempTo} onValueChange={setMassCopyTempTo}>
+                    <SelectTrigger><SelectValue placeholder="Seleccionar destino…" /></SelectTrigger>
+                    <SelectContent>
+                      {temporadas.map((t) => <SelectItem key={t.id} value={t.id}>{t.nombre}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -463,7 +545,7 @@ export function StockView() {
 
             {massAction === "consumption" && (
               <p className="text-sm text-muted-foreground">
-                Ajuste inteligente: aumenta stock máximo (+20%) y seguridad (+15%) en productos con stock actual por debajo de seguridad. Reduce stock máximo (-10%) en productos con stock cerca del máximo.
+                Ajuste inteligente: aumenta stock máximo (+20%) y mínimo (+15%) en productos con stock actual por debajo del mínimo. Reduce stock máximo (-10%) en productos con stock cerca del máximo.
               </p>
             )}
           </div>
@@ -474,6 +556,7 @@ export function StockView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
     </div>
   );
 }

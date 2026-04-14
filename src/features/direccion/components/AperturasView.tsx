@@ -42,7 +42,7 @@ export function AperturasView() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-end">
         <Dialog open={showNew} onOpenChange={setShowNew}>
-          <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" />Nuevo estudio</Button></DialogTrigger>
+          <DialogTrigger asChild><Button variant="primary" size="sm"><Plus className="h-4 w-4" />Nuevo</Button></DialogTrigger>
           <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Nuevo estudio de apertura</DialogTitle></DialogHeader>
             <NuevoEstudioForm onSave={(e) => { setEstudios(prev => [...prev, e]); setShowNew(false); }} onClose={() => setShowNew(false)} />

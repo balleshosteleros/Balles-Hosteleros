@@ -112,7 +112,7 @@ export default function InventarioConfigView({
         <TabsContent value="tipos" className="space-y-3 mt-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">Define los tipos de inventario disponibles.</p>
-            <Button size="sm" className="gap-1" onClick={openNewTipo}><Plus className="h-3.5 w-3.5" /> Nuevo tipo</Button>
+            <Button variant="primary" size="sm" onClick={openNewTipo}><Plus className="h-4 w-4" />Nuevo</Button>
           </div>
           <div className="border rounded-lg bg-card divide-y">
             {tipos.length === 0 && <p className="text-sm text-muted-foreground p-4 text-center">Sin tipos. Crea uno.</p>}
@@ -132,7 +132,7 @@ export default function InventarioConfigView({
         <TabsContent value="plantillas" className="space-y-3 mt-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">Las plantillas definen qué productos deben contarse obligatoriamente.</p>
-            <Button size="sm" className="gap-1" onClick={openNewPlantilla}><Plus className="h-3.5 w-3.5" /> Nueva plantilla</Button>
+            <Button variant="primary" size="sm" onClick={openNewPlantilla}><Plus className="h-4 w-4" />Nuevo</Button>
           </div>
           <div className="border rounded-lg bg-card divide-y">
             {plantillas.length === 0 && <p className="text-sm text-muted-foreground p-4 text-center">Sin plantillas.</p>}

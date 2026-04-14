@@ -44,5 +44,17 @@ export default async function AyudaPage() {
     }
   }
 
-  return <AyudaPortal viewerData={viewerData} adminData={adminData} />;
+  // Obtener roles del usuario para filtrar la vista de formación
+  let userRoles: string[] = [];
+  if (user) {
+    const { data: rolesData } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id);
+    userRoles = (rolesData ?? []).map((r: { role: string }) => r.role);
+  } else if (devBypass) {
+    userRoles = ["admin"];
+  }
+
+  return <AyudaPortal viewerData={viewerData} adminData={adminData} userRoles={userRoles} />;
 }

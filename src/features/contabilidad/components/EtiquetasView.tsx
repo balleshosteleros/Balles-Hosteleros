@@ -96,7 +96,7 @@ export function EtiquetasView() {
           </div>
           <Dialog>
             <DialogTrigger asChild>
-              <Button variant="outline" className="gap-1.5 shrink-0"><Plus className="h-4 w-4" />Crear etiqueta</Button>
+              <Button variant="primary" size="sm"><Plus className="h-4 w-4" />Nuevo</Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>Crear etiqueta</DialogTitle></DialogHeader>

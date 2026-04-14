@@ -381,7 +381,7 @@ function ConfigView({ puestos, normas, onBack }: { puestos: PuestoSalarial[]; no
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-3">
               <CardTitle className="text-base">Todos los puestos</CardTitle>
-              <Button size="sm"><Plus className="h-4 w-4 mr-1" /> Crear puesto</Button>
+              <Button variant="primary" size="sm"><Plus className="h-4 w-4" />Nuevo</Button>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
@@ -418,7 +418,7 @@ function ConfigView({ puestos, normas, onBack }: { puestos: PuestoSalarial[]; no
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-3">
               <CardTitle className="text-base">Departamentos disponibles</CardTitle>
-              <Button size="sm"><Plus className="h-4 w-4 mr-1" /> Crear departamento</Button>
+              <Button variant="primary" size="sm"><Plus className="h-4 w-4" />Nuevo</Button>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -440,7 +440,7 @@ function ConfigView({ puestos, normas, onBack }: { puestos: PuestoSalarial[]; no
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-3">
               <CardTitle className="text-base">Normas y cláusulas</CardTitle>
-              <Button size="sm"><Plus className="h-4 w-4 mr-1" /> Añadir norma</Button>
+              <Button variant="primary" size="sm"><Plus className="h-4 w-4" />Nuevo</Button>
             </CardHeader>
             <CardContent className="space-y-4">
               {normas.map((n) => (

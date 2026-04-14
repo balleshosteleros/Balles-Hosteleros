@@ -1,16 +1,9 @@
 "use client";
 
-import { useState, useRef, useTransition } from "react";
-import { Upload, Download, FileSpreadsheet, FileText, FileDown, ChevronDown, CheckCircle2, AlertCircle } from "lucide-react";
+import { useState, useTransition } from "react";
+import { CheckCircle2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { ImportExportButton } from "@/features/logistica/components/ImportExportButton";
 import {
   Dialog,
   DialogContent,
@@ -35,11 +28,7 @@ interface ImportExportButtonsProps {
   onImportSuccess?: () => void;
 }
 
-export function ImportExportButtons({
-  tipo,
-  onImportSuccess,
-}: ImportExportButtonsProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+export function ImportExportButtons({ tipo, onImportSuccess }: ImportExportButtonsProps) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [parsed, setParsed] = useState<ProductoInput[]>([]);
   const [fileName, setFileName] = useState<string>("");
@@ -47,17 +36,10 @@ export function ImportExportButtons({
   const [isPending, startTransition] = useTransition();
   const [isExporting, setIsExporting] = useState(false);
 
-  function triggerFilePicker() {
-    fileInputRef.current?.click();
-  }
-
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  async function handleImport(file: File) {
     setFileName(file.name);
     setParseError(null);
     setParsed([]);
-
     try {
       const productos = await parseFileToProductos(file, tipo);
       if (productos.length === 0) {
@@ -65,28 +47,17 @@ export function ImportExportButtons({
       } else {
         setParsed(productos);
       }
-      setPreviewOpen(true);
     } catch (err) {
-      setParseError(
-        err instanceof Error ? err.message : "No se pudo procesar el archivo."
-      );
-      setPreviewOpen(true);
-    } finally {
-      // limpiar input para permitir re-seleccionar el mismo archivo
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      setParseError(err instanceof Error ? err.message : "No se pudo procesar el archivo.");
     }
+    setPreviewOpen(true);
   }
 
   function confirmImport() {
     startTransition(async () => {
       const result = await bulkImportProductos(parsed);
-      if (result.error) {
-        toast.error(`Error al importar: ${result.error}`);
-        return;
-      }
-      toast.success(
-        `${result.imported} producto${result.imported === 1 ? "" : "s"} importado${result.imported === 1 ? "" : "s"} correctamente`
-      );
+      if (result.error) { toast.error(`Error al importar: ${result.error}`); return; }
+      toast.success(`${result.imported} producto${result.imported === 1 ? "" : "s"} importado${result.imported === 1 ? "" : "s"} correctamente`);
       setPreviewOpen(false);
       setParsed([]);
       setFileName("");
@@ -98,10 +69,7 @@ export function ImportExportButtons({
     setIsExporting(true);
     try {
       const productos = await listProductos(tipo);
-      if (productos.length === 0) {
-        toast.info("No hay productos para exportar todavía.");
-        return;
-      }
+      if (productos.length === 0) { toast.info("No hay productos para exportar todavía."); return; }
       const ts = new Date().toISOString().slice(0, 10);
       if (format === "csv") {
         exportProductosToCSV(productos, `productos-${tipo}-${ts}.csv`);
@@ -110,9 +78,7 @@ export function ImportExportButtons({
       }
       toast.success(`${productos.length} productos exportados en ${format.toUpperCase()}`);
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Error al exportar"
-      );
+      toast.error(err instanceof Error ? err.message : "Error al exportar");
     } finally {
       setIsExporting(false);
     }
@@ -120,80 +86,22 @@ export function ImportExportButtons({
 
   return (
     <>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-        onChange={handleFileChange}
-        className="hidden"
+      <ImportExportButton
+        onImport={handleImport}
+        onExport={handleExport}
+        onDownloadTemplate={downloadTemplateCSV}
+        disabled={isExporting}
       />
 
-      {/* Botón Importar con dropdown */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button size="sm" variant="outline" className="gap-1.5">
-            <Upload className="h-3.5 w-3.5" />
-            Importar
-            <ChevronDown className="h-3 w-3 opacity-60" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuLabel className="text-xs">Importar desde archivo</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={triggerFilePicker} className="gap-2 text-xs">
-            <FileText className="h-3.5 w-3.5" />
-            CSV (.csv)
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={triggerFilePicker} className="gap-2 text-xs">
-            <FileSpreadsheet className="h-3.5 w-3.5" />
-            Excel (.xlsx, .xls)
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={downloadTemplateCSV} className="gap-2 text-xs text-muted-foreground">
-            <FileDown className="h-3.5 w-3.5" />
-            Descargar plantilla
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      {/* Botón Exportar con dropdown */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button size="sm" variant="outline" className="gap-1.5" disabled={isExporting}>
-            <Download className="h-3.5 w-3.5" />
-            {isExporting ? "Exportando..." : "Exportar"}
-            <ChevronDown className="h-3 w-3 opacity-60" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48">
-          <DropdownMenuLabel className="text-xs">Exportar a</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => handleExport("csv")} className="gap-2 text-xs">
-            <FileText className="h-3.5 w-3.5" />
-            CSV (.csv)
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => handleExport("xlsx")} className="gap-2 text-xs">
-            <FileSpreadsheet className="h-3.5 w-3.5" />
-            Excel (.xlsx)
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      {/* Modal de preview */}
+      {/* Modal de preview de importación */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {parseError ? (
-                <>
-                  <AlertCircle className="h-5 w-5 text-destructive" />
-                  Error al procesar el archivo
-                </>
+                <><AlertCircle className="h-5 w-5 text-destructive" />Error al procesar el archivo</>
               ) : (
-                <>
-                  <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                  Vista previa de importación
-                </>
+                <><CheckCircle2 className="h-5 w-5 text-emerald-500" />Vista previa de importación</>
               )}
             </DialogTitle>
             <DialogDescription className="text-xs">
@@ -207,8 +115,7 @@ export function ImportExportButtons({
             <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
               {parseError}
               <p className="mt-3 text-xs text-muted-foreground">
-                Tip: descarga la plantilla desde el menú Importar → Descargar plantilla
-                para ver el formato esperado.
+                Tip: descarga la plantilla desde el menú Importar → Descargar plantilla para ver el formato esperado.
               </p>
             </div>
           ) : (
@@ -268,9 +175,7 @@ export function ImportExportButtons({
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPreviewOpen(false)}>
-              Cancelar
-            </Button>
+            <Button variant="outline" onClick={() => setPreviewOpen(false)}>Cancelar</Button>
             {!parseError && parsed.length > 0 && (
               <Button onClick={confirmImport} disabled={isPending}>
                 {isPending ? "Importando..." : `Importar ${parsed.length} producto${parsed.length === 1 ? "" : "s"}`}

@@ -19,31 +19,31 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Plus, Trash2, Search, Eye, Settings,
+  Plus, Search, Eye, Settings,
 } from "lucide-react";
+import { ImportExportButton } from "@/features/logistica/components/ImportExportButton";
+import { exportToCSV, exportToXLSX } from "@/features/logistica/lib/export-utils";
+import { FiltrosAvanzados, type FiltroActivo, type CampoFiltro } from "@/features/logistica/components/FiltrosAvanzados";
 import { toast } from "sonner";
 import InventarioModal from "@/features/logistica/components/inventarios/InventarioModal";
 import DetalleInventario from "@/features/logistica/components/inventarios/DetalleInventario";
 import InventarioConfigView from "@/features/logistica/components/inventarios/InventarioConfigView";
 
 const ALL = "__ALL__";
+type CampoInventario = "estado" | "almacen" | "motivo" | "fecha";
 
 export function InventariosView() {
   const pathname = usePathname();
   useEffect(() => { sessionStorage.setItem("logistica_last", pathname); }, [pathname]);
 
   const { empresaActual } = useEmpresa();
-  const { profile, canAccess } = useAuth();
+  const { profile } = useAuth();
 
   // Nombre del usuario automático
   const usuarioNombre = profile
     ? `${profile.nombre} ${profile.apellidos}`.trim() || profile.email
     : "Usuario actual";
-
-  // Permissions check
-  const tienePermiso = canAccess("/logistica/inventarios");
 
   const [inventarios, setInventarios] = useState<Inventario[]>([]);
   const [stock, setStock] = useState<ProductoStock[]>([]);
@@ -59,10 +59,10 @@ export function InventariosView() {
         const mapped: Inventario[] = (res.data as Array<Record<string, unknown>>).map((r) => ({
           id: r.id as string,
           fecha: ((r.fecha as string) ?? (r.created_at as string) ?? "").slice(0, 10),
-          almacen: (r.tipo as string) ?? "COCINA",
-          motivo: (r.nombre as string) ?? "",
+          almacen: (r.almacen as string) ?? (r.tipo as string) ?? "COCINA",
+          motivo: (r.motivo as string) ?? (r.nombre as string) ?? "",
           estado: ((r.estado as string)?.toLowerCase() === "confirmado" ? "Confirmado" : "Borrador") as EstadoInventario,
-          usuario: (r.created_by_nombre as string) ?? "—",
+          usuario: (r.usuario as string) || (r.created_by_nombre as string) || "—",
           conteos: [],
           empresaId: empresaActual.id,
         }));
@@ -85,22 +85,40 @@ export function InventariosView() {
   }, [loadInventarios]);
 
   const [search, setSearch] = useState("");
-  const [filterEstado, setFilterEstado] = useState(ALL);
+  const [filtros, setFiltros] = useState<FiltroActivo<CampoInventario>[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [createOpen, setCreateOpen] = useState(false);
   const [detalleId, setDetalleId] = useState<string | null>(null);
   const [showConfig, setShowConfig] = useState(false);
 
+  const camposFiltro = useMemo((): CampoFiltro<CampoInventario>[] => {
+    const uniq = (arr: string[]) => [...new Set(arr.filter(Boolean))].sort();
+    return [
+      { campo: "estado", label: "Estado", tipo: "lista", opciones: ["Borrador", "Confirmado"] },
+      { campo: "almacen", label: "Almacén", tipo: "lista", opciones: uniq(inventarios.map((i) => i.almacen)) },
+      { campo: "motivo", label: "Motivo", tipo: "lista", opciones: uniq(inventarios.map((i) => i.motivo)) },
+      { campo: "fecha", label: "Fecha", tipo: "fecha" },
+    ];
+  }, [inventarios]);
+
   const filtered = useMemo(() => {
     return inventarios.filter((inv) => {
-      if (filterEstado !== ALL && inv.estado !== filterEstado) return false;
+      for (const f of filtros) {
+        if (f.campo === "estado" && f.valores?.length && !f.valores.includes(inv.estado)) return false;
+        if (f.campo === "almacen" && f.valores?.length && !f.valores.includes(inv.almacen)) return false;
+        if (f.campo === "motivo" && f.valores?.length && !f.valores.includes(inv.motivo)) return false;
+        if (f.campo === "fecha") {
+          if (f.desde && inv.fecha < f.desde) return false;
+          if (f.hasta && inv.fecha > f.hasta) return false;
+        }
+      }
       if (search) {
         const s = search.toLowerCase();
         return inv.almacen.toLowerCase().includes(s) || inv.motivo.toLowerCase().includes(s) || inv.usuario.toLowerCase().includes(s);
       }
       return true;
     });
-  }, [inventarios, search, filterEstado]);
+  }, [inventarios, search, filtros]);
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -143,7 +161,15 @@ export function InventariosView() {
     };
     setInventarios((prev) => [newInv, ...prev]);
     setDetalleId(newInv.id);
-    const res = await createInventarioAction({ nombre: `${data.almacen} - ${data.motivo}`, tipo: data.tipoId });
+    const res = await createInventarioAction({
+      nombre: `${data.almacen} - ${data.motivo}`,
+      fecha: data.fecha,
+      almacen: data.almacen,
+      motivo: data.motivo,
+      plantillaId: data.plantillaId,
+      usuario: usuarioNombre,
+      tipo: data.tipoId,
+    });
     if (res.ok) toast.success("Inventario creado");
     else toast.error(res.error ?? "Error al crear inventario");
   };
@@ -244,50 +270,36 @@ export function InventariosView() {
 
   return (
     <div className="p-4 md:p-6 space-y-5">
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-lg border bg-card p-3 text-center">
-          <div className="text-2xl font-black text-foreground">{inventarios.length}</div>
-          <div className="text-xs text-muted-foreground font-medium">INVENTARIOS</div>
-        </div>
-        <div className="rounded-lg border bg-card p-3 text-center">
-          <div className="text-2xl font-black text-amber-600 dark:text-amber-400">{borradorCount}</div>
-          <div className="text-xs text-muted-foreground font-medium">BORRADOR</div>
-        </div>
-        <div className="rounded-lg border bg-card p-3 text-center">
-          <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{confirmadoCount}</div>
-          <div className="text-xs text-muted-foreground font-medium">CONFIRMADOS</div>
-        </div>
-      </div>
-
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-3">
         <Button
           size="sm"
+          variant="primary"
           className="gap-1"
           onClick={() => setCreateOpen(true)}
-          disabled={!tienePermiso}
-          title={!tienePermiso ? "Sin permisos para crear inventarios" : undefined}
         >
           <Plus className="h-4 w-4" /> Nuevo
-        </Button>
-        <Button size="sm" variant="outline" className="gap-1" disabled={selected.size === 0} onClick={handleDelete}>
-          <Trash2 className="h-4 w-4" /> Eliminar
         </Button>
         <div className="flex-1" />
         <div className="relative min-w-[220px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Buscar…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
-        <Select value={filterEstado} onValueChange={setFilterEstado}>
-          <SelectTrigger className="w-[140px]"><SelectValue placeholder="Estado" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>Todos</SelectItem>
-            <SelectItem value="Borrador">Borrador</SelectItem>
-            <SelectItem value="Confirmado">Confirmado</SelectItem>
-          </SelectContent>
-        </Select>
-        <Button size="sm" variant="ghost" className="gap-1.5" onClick={() => setShowConfig(true)} title="Configuración de inventarios">
+        <FiltrosAvanzados campos={camposFiltro} filtros={filtros} onChange={setFiltros} />
+        <ImportExportButton
+          onExport={(format) => {
+            const ts = new Date().toISOString().slice(0, 10);
+            const rows = filtered.map((i) => ({
+              Fecha: i.fecha, Almacén: i.almacen, Motivo: i.motivo,
+              Estado: i.estado, Usuario: i.usuario, Conteos: i.conteos.length,
+            }));
+            if (rows.length === 0) { toast.info("No hay datos para exportar."); return; }
+            if (format === "csv") exportToCSV(rows, `inventarios-${ts}.csv`);
+            else exportToXLSX(rows, `inventarios-${ts}.xlsx`);
+            toast.success(`${rows.length} inventarios exportados en ${format.toUpperCase()}`);
+          }}
+        />
+        <Button size="icon" variant={showConfig ? "default" : "ghost"} className="h-8 w-8" onClick={() => setShowConfig((v) => !v)} title="Configuración de inventarios">
           <Settings className="h-4 w-4" />
         </Button>
       </div>

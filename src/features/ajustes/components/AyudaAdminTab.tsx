@@ -79,8 +79,8 @@ export function AyudaAdminTab() {
             <BookOpen className="h-4 w-4 text-primary" />
             Base de conocimiento
           </CardTitle>
-          <Button size="sm" className="gap-1" onClick={() => abrir()}>
-            <Plus className="h-4 w-4" /> Nuevo artículo
+          <Button size="sm" className="gap-1.5" onClick={() => abrir()}>
+            <Plus className="h-4 w-4" />Nuevo
           </Button>
         </CardHeader>
         <CardContent>

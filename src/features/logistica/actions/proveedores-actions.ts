@@ -3,6 +3,7 @@
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
 import type { ProveedorImport } from "@/features/logistica/types/import";
 import type { ProveedorRow } from "@/features/logistica/types/db";
+import { capitalizeText } from "@/shared/lib/utils";
 
 async function getContext() {
   const { supabase, userId, empresaId } = await getLogisticaContext();
@@ -40,22 +41,22 @@ export async function createProveedor(input: ProveedorImport) {
 
     const { error } = await supabase.from("proveedores").insert({
       empresa_id: empresaId,
-      nombre_comercial: input.nombreComercial.trim(),
-      razon_social: input.razonSocial ?? null,
+      nombre_comercial: capitalizeText(input.nombreComercial.trim()),
+      razon_social: input.razonSocial ? capitalizeText(input.razonSocial) : null,
       cif_nif: input.cifNif ?? null,
-      categoria: input.categoria.trim(),
+      categoria: capitalizeText(input.categoria.trim()),
       estado: input.estado ?? "Activo",
-      persona_contacto: input.personaContacto ?? null,
+      persona_contacto: input.personaContacto ? capitalizeText(input.personaContacto) : null,
       telefono_principal: input.telefonoPrincipal ?? null,
       telefono_secundario: input.telefonoSecundario ?? null,
       email_principal: input.emailPrincipal ?? null,
       email_pedidos: input.emailPedidos ?? null,
       email_incidencias: input.emailIncidencias ?? null,
       web: input.web ?? null,
-      direccion: input.direccion ?? null,
-      ciudad: input.ciudad ?? null,
-      provincia: input.provincia ?? null,
-      pais: input.pais ?? "España",
+      direccion: input.direccion ? capitalizeText(input.direccion) : null,
+      ciudad: input.ciudad ? capitalizeText(input.ciudad) : null,
+      provincia: input.provincia ? capitalizeText(input.provincia) : null,
+      pais: input.pais ? capitalizeText(input.pais) : "España",
       codigo_postal: input.codigoPostal ?? null,
       dias_reparto: input.diasReparto ?? [],
       condiciones_pago: input.condicionesPago ?? null,
@@ -81,22 +82,22 @@ export async function updateProveedor(id: string, input: Partial<ProveedorImport
       updated_at: new Date().toISOString(),
     };
 
-    if (input.nombreComercial !== undefined) updates.nombre_comercial = input.nombreComercial;
-    if (input.razonSocial !== undefined) updates.razon_social = input.razonSocial;
+    if (input.nombreComercial !== undefined) updates.nombre_comercial = input.nombreComercial ? capitalizeText(input.nombreComercial) : input.nombreComercial;
+    if (input.razonSocial !== undefined) updates.razon_social = input.razonSocial ? capitalizeText(input.razonSocial) : input.razonSocial;
     if (input.cifNif !== undefined) updates.cif_nif = input.cifNif;
-    if (input.categoria !== undefined) updates.categoria = input.categoria;
+    if (input.categoria !== undefined) updates.categoria = input.categoria ? capitalizeText(input.categoria) : input.categoria;
     if (input.estado !== undefined) updates.estado = input.estado;
-    if (input.personaContacto !== undefined) updates.persona_contacto = input.personaContacto;
+    if (input.personaContacto !== undefined) updates.persona_contacto = input.personaContacto ? capitalizeText(input.personaContacto) : input.personaContacto;
     if (input.telefonoPrincipal !== undefined) updates.telefono_principal = input.telefonoPrincipal;
     if (input.telefonoSecundario !== undefined) updates.telefono_secundario = input.telefonoSecundario;
     if (input.emailPrincipal !== undefined) updates.email_principal = input.emailPrincipal;
     if (input.emailPedidos !== undefined) updates.email_pedidos = input.emailPedidos;
     if (input.emailIncidencias !== undefined) updates.email_incidencias = input.emailIncidencias;
     if (input.web !== undefined) updates.web = input.web;
-    if (input.direccion !== undefined) updates.direccion = input.direccion;
-    if (input.ciudad !== undefined) updates.ciudad = input.ciudad;
-    if (input.provincia !== undefined) updates.provincia = input.provincia;
-    if (input.pais !== undefined) updates.pais = input.pais;
+    if (input.direccion !== undefined) updates.direccion = input.direccion ? capitalizeText(input.direccion) : input.direccion;
+    if (input.ciudad !== undefined) updates.ciudad = input.ciudad ? capitalizeText(input.ciudad) : input.ciudad;
+    if (input.provincia !== undefined) updates.provincia = input.provincia ? capitalizeText(input.provincia) : input.provincia;
+    if (input.pais !== undefined) updates.pais = input.pais ? capitalizeText(input.pais) : input.pais;
     if (input.codigoPostal !== undefined) updates.codigo_postal = input.codigoPostal;
     if (input.diasReparto !== undefined) updates.dias_reparto = input.diasReparto;
     if (input.condicionesPago !== undefined) updates.condiciones_pago = input.condicionesPago;
@@ -146,22 +147,22 @@ export async function bulkImportProveedores(proveedores: ProveedorImport[]) {
       .filter((p) => p.nombreComercial && p.categoria)
       .map((p) => ({
         empresa_id: empresaId,
-        nombre_comercial: p.nombreComercial.trim(),
-        razon_social: p.razonSocial ?? null,
+        nombre_comercial: capitalizeText(p.nombreComercial.trim()),
+        razon_social: p.razonSocial ? capitalizeText(p.razonSocial) : null,
         cif_nif: p.cifNif ?? null,
-        categoria: p.categoria.trim(),
+        categoria: capitalizeText(p.categoria.trim()),
         estado: p.estado ?? "Activo",
-        persona_contacto: p.personaContacto ?? null,
+        persona_contacto: p.personaContacto ? capitalizeText(p.personaContacto) : null,
         telefono_principal: p.telefonoPrincipal ?? null,
         telefono_secundario: p.telefonoSecundario ?? null,
         email_principal: p.emailPrincipal ?? null,
         email_pedidos: p.emailPedidos ?? null,
         email_incidencias: p.emailIncidencias ?? null,
         web: p.web ?? null,
-        direccion: p.direccion ?? null,
-        ciudad: p.ciudad ?? null,
-        provincia: p.provincia ?? null,
-        pais: p.pais ?? "España",
+        direccion: p.direccion ? capitalizeText(p.direccion) : null,
+        ciudad: p.ciudad ? capitalizeText(p.ciudad) : null,
+        provincia: p.provincia ? capitalizeText(p.provincia) : null,
+        pais: p.pais ? capitalizeText(p.pais) : "España",
         codigo_postal: p.codigoPostal ?? null,
         dias_reparto: p.diasReparto ?? [],
         condiciones_pago: p.condicionesPago ?? null,

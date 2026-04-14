@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { capitalizeText } from "@/shared/lib/utils";
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
 import type {
   Producto,
@@ -10,19 +11,20 @@ import type {
   EstadoProducto,
 } from "@/features/logistica/data/productos";
 
-const ESTADOS = ["Activo", "Inactivo", "Descatalogado", "En revisión"] as const;
+const ESTADOS = ["Activo", "Inactivo", "En revisión"] as const;
 const TIPOS = ["compra", "venta", "elaboracion"] as const;
 
 const productoInputSchema = z.object({
-  nombre: z.string().min(1, "El nombre es obligatorio"),
+  nombre: z.string().min(1, "El nombre es obligatorio").transform(capitalizeText),
   tipo: z.enum(TIPOS),
-  categoria: z.string().min(1, "La categoría es obligatoria"),
-  familia: z.string().nullable().optional(),
+  categoria: z.string().min(1, "La categoría es obligatoria").transform(capitalizeText),
+  familia: z.string().nullable().optional().transform((v) => v ? capitalizeText(v) : v),
   estado: z.enum(ESTADOS).default("Activo"),
-  proveedor: z.string().nullable().optional(),
+  proveedor: z.string().nullable().optional().transform((v) => v ? capitalizeText(v) : v),
   precioCompra: z.string().nullable().optional(),
   precioVenta: z.string().nullable().optional(),
   coste: z.string().nullable().optional(),
+  iva: z.string().nullable().optional(),
   unidad: z.string().default("ud"),
   observaciones: z.string().nullable().optional(),
 });
@@ -42,6 +44,7 @@ type ProductoRow = {
   precio_compra: string | null;
   precio_venta: string | null;
   coste: string | null;
+  iva: string | null;
   unidad: string;
   observaciones: string | null;
   updated_at: string;
@@ -59,6 +62,7 @@ function rowToProducto(r: ProductoRow): Producto {
     precioCompra: r.precio_compra ?? undefined,
     precioVenta: r.precio_venta ?? undefined,
     coste: r.coste ?? undefined,
+    iva: r.iva ?? undefined,
     unidad: r.unidad,
     observaciones: r.observaciones ?? undefined,
     ultimaActualizacion: r.updated_at?.slice(0, 10) ?? "",
@@ -160,6 +164,7 @@ export async function createProducto(
       precio_compra: parsed.data.precioCompra,
       precio_venta: parsed.data.precioVenta,
       coste: parsed.data.coste,
+      iva: parsed.data.iva,
       unidad: parsed.data.unidad,
       observaciones: parsed.data.observaciones,
       created_by: process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true" ? null : user.id,
@@ -226,6 +231,7 @@ export async function bulkImportProductos(
       precio_compra: p.precioCompra ?? null,
       precio_venta: p.precioVenta ?? null,
       coste: p.coste ?? null,
+      iva: p.iva ?? null,
       unidad: p.unidad,
       observaciones: p.observaciones ?? null,
       created_by: user.id,
@@ -268,14 +274,15 @@ export async function updateProducto(
     const { supabase } = await getLogisticaContext();
 
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
-    if (input.nombre !== undefined) updates.nombre = input.nombre;
-    if (input.categoria !== undefined) updates.categoria = input.categoria;
-    if (input.familia !== undefined) updates.familia = input.familia;
+    if (input.nombre !== undefined) updates.nombre = input.nombre ? capitalizeText(input.nombre) : input.nombre;
+    if (input.categoria !== undefined) updates.categoria = input.categoria ? capitalizeText(input.categoria) : input.categoria;
+    if (input.familia !== undefined) updates.familia = input.familia ? capitalizeText(input.familia) : input.familia;
     if (input.estado !== undefined) updates.estado = input.estado;
-    if (input.proveedor !== undefined) updates.proveedor = input.proveedor;
+    if (input.proveedor !== undefined) updates.proveedor = input.proveedor ? capitalizeText(input.proveedor) : input.proveedor;
     if (input.precioCompra !== undefined) updates.precio_compra = input.precioCompra;
     if (input.precioVenta !== undefined) updates.precio_venta = input.precioVenta;
     if (input.coste !== undefined) updates.coste = input.coste;
+    if (input.iva !== undefined) updates.iva = input.iva;
     if (input.unidad !== undefined) updates.unidad = input.unidad;
     if (input.observaciones !== undefined) updates.observaciones = input.observaciones;
 

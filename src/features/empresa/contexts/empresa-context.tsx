@@ -1,8 +1,9 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode, useCallback } from "react";
+import { createContext, useContext, useState, ReactNode, useCallback, useEffect } from "react";
 import { Incidencia, SAMPLE_DATA } from "@/features/empresa/data/mantenimiento";
-import { AjustesEmpresa, buildDefaultAjustes } from "@/features/empresa/data/ajustes";
+import { AjustesEmpresa, buildDefaultAjustes } from "@/features/ajustes/data/ajustes";
+import { getLogoUrls } from "@/features/empresa/actions/logo-actions";
 
 export interface Empresa {
   id: string;
@@ -28,7 +29,35 @@ function buildInitialData(): Record<string, Incidencia[]> {
   return out;
 }
 
+const AJUSTES_STORAGE_KEY = "balles_ajustes_v1";
+
+function mergeWithDefaults(stored: AjustesEmpresa, nombre: string): AjustesEmpresa {
+  const defaults = buildDefaultAjustes(nombre);
+  return {
+    ...defaults,
+    ...stored,
+    departamentos: stored.departamentos ?? defaults.departamentos,
+    roles: stored.roles?.length ? stored.roles : defaults.roles,
+    usuarios: stored.usuarios ?? defaults.usuarios,
+    auditoria: stored.auditoria ?? defaults.auditoria,
+  };
+}
+
 function buildInitialAjustes(): Record<string, AjustesEmpresa> {
+  if (typeof window !== "undefined") {
+    try {
+      const stored = localStorage.getItem(AJUSTES_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored) as Record<string, AjustesEmpresa>;
+        const migrated: Record<string, AjustesEmpresa> = {};
+        for (const [id, data] of Object.entries(parsed)) {
+          const nombre = data.datosGenerales?.nombreComercial ?? id.toUpperCase();
+          migrated[id] = mergeWithDefaults(data, nombre);
+        }
+        return migrated;
+      }
+    } catch {}
+  }
   const out: Record<string, AjustesEmpresa> = {};
   for (const e of EMPRESAS) {
     out[e.id] = buildDefaultAjustes(e.nombre);
@@ -45,8 +74,10 @@ interface EmpresaContextValue {
   ajustes: AjustesEmpresa;
   setAjustes: (updater: (prev: AjustesEmpresa) => AjustesEmpresa) => void;
   getLogoUrl: (empresaId: string) => string;
+  setLogoUrl: (empresaSlug: string, url: string) => void;
   addEmpresa: (empresa: Empresa) => void;
   updateEmpresa: (id: string, data: Partial<Empresa>) => void;
+  deleteEmpresa: (id: string) => void;
 }
 
 const EmpresaContext = createContext<EmpresaContextValue | null>(null);
@@ -56,10 +87,25 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
   const [empresaId, setEmpresaId] = useState(EMPRESAS[0].id);
   const [allData, setAllData] = useState<Record<string, Incidencia[]>>(buildInitialData);
   const [allAjustes, setAllAjustes] = useState<Record<string, AjustesEmpresa>>(buildInitialAjustes);
+  // Logo URLs cargadas desde Supabase Storage (fuente de verdad)
+  const [logoUrls, setLogoUrls] = useState<Record<string, string>>({});
+
+  // Cargar logos desde Supabase al montar
+  useEffect(() => {
+    getLogoUrls().then(setLogoUrls).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(AJUSTES_STORAGE_KEY, JSON.stringify(allAjustes));
+    } catch {}
+  }, [allAjustes]);
 
   const empresaActual = empresasList.find((e) => e.id === empresaId) ?? empresasList[0];
   const datos = allData[empresaId] ?? [];
-  const ajustes = allAjustes[empresaId] ?? buildDefaultAjustes(empresaActual.nombre);
+  const ajustes = allAjustes[empresaId]
+    ? mergeWithDefaults(allAjustes[empresaId], empresaActual.nombre)
+    : buildDefaultAjustes(empresaActual.nombre);
 
   const setDatos = useCallback(
     (updater: (prev: Incidencia[]) => Incidencia[]) => {
@@ -70,18 +116,37 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
 
   const setAjustes = useCallback(
     (updater: (prev: AjustesEmpresa) => AjustesEmpresa) => {
-      setAllAjustes((prev) => ({
-        ...prev,
-        [empresaId]: updater(prev[empresaId] ?? buildDefaultAjustes(empresaActual.nombre)),
-      }));
+      setAllAjustes((prev) => {
+        const base = prev[empresaId]
+          ? mergeWithDefaults(prev[empresaId], empresaActual.nombre)
+          : buildDefaultAjustes(empresaActual.nombre);
+        return { ...prev, [empresaId]: updater(base) };
+      });
     },
     [empresaId, empresaActual.nombre],
   );
 
+  // Supabase es la fuente de verdad; localStorage es fallback temporal
   const getLogoUrl = useCallback(
-    (eid: string) => allAjustes[eid]?.datosGenerales?.logoUrl ?? "",
-    [allAjustes],
+    (eid: string) => logoUrls[eid] ?? allAjustes[eid]?.datosGenerales?.logoUrl ?? "",
+    [logoUrls, allAjustes],
   );
+
+  // Actualiza el logo en el contexto inmediatamente tras subir/eliminar
+  const setLogoUrl = useCallback((empresaSlug: string, url: string) => {
+    setLogoUrls((prev) => ({ ...prev, [empresaSlug]: url }));
+    // Sincronizar también en ajustes para coherencia interna
+    setAllAjustes((prev) => ({
+      ...prev,
+      [empresaSlug]: {
+        ...(prev[empresaSlug] ?? buildDefaultAjustes(empresaSlug.toUpperCase())),
+        datosGenerales: {
+          ...(prev[empresaSlug]?.datosGenerales ?? buildDefaultAjustes(empresaSlug.toUpperCase()).datosGenerales),
+          logoUrl: url,
+        },
+      },
+    }));
+  }, []);
 
   const addEmpresa = useCallback((empresa: Empresa) => {
     setEmpresasList((prev) => [...prev, empresa]);
@@ -100,9 +165,15 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
     setEmpresasList((prev) => prev.map((e) => (e.id === id ? { ...e, ...data } : e)));
   }, []);
 
+  const deleteEmpresa = useCallback((id: string) => {
+    setEmpresasList((prev) => prev.filter((e) => e.id !== id));
+    setAllData((prev) => { const next = { ...prev }; delete next[id]; return next; });
+    setAllAjustes((prev) => { const next = { ...prev }; delete next[id]; return next; });
+  }, []);
+
   return (
     <EmpresaContext.Provider
-      value={{ empresas: empresasList, empresaActual, setEmpresaId, datos, setDatos, ajustes, setAjustes, getLogoUrl, addEmpresa, updateEmpresa }}
+      value={{ empresas: empresasList, empresaActual, setEmpresaId, datos, setDatos, ajustes, setAjustes, getLogoUrl, setLogoUrl, addEmpresa, updateEmpresa, deleteEmpresa }}
     >
       {children}
     </EmpresaContext.Provider>

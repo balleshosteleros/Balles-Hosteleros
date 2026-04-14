@@ -29,7 +29,7 @@ export function ReglasView() {
       <div className="flex items-center justify-end">
         <Dialog>
           <DialogTrigger asChild>
-            <Button className="gap-1.5"><Plus className="h-4 w-4" />Nueva regla</Button>
+            <Button variant="primary" size="sm"><Plus className="h-4 w-4" />Nuevo</Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader><DialogTitle>Crear regla automática</DialogTitle></DialogHeader>

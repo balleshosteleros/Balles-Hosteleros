@@ -99,7 +99,7 @@ export default function TemporadasConfig({ temporadas, setTemporadas, productos,
             </Badge>
           )}
         </div>
-        <Button size="sm" onClick={openNew} className="gap-1"><Plus className="h-4 w-4" /> Nueva temporada</Button>
+        <Button variant="primary" size="sm" onClick={openNew}><Plus className="h-4 w-4" />Nuevo</Button>
       </div>
 
       {temporadas.length === 0 ? (

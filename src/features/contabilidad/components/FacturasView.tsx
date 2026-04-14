@@ -98,7 +98,7 @@ export function FacturasView() {
         </div>
         <div className="px-6 py-3 flex items-center gap-3">
           <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Buscar por descripción, número..." className="pl-9" value={busqueda} onChange={e => setBusqueda(e.target.value)} /></div>
-          <Button className="gap-1.5"><Plus className="h-4 w-4" />Nueva factura</Button>
+          <Button variant="primary" size="sm"><Plus className="h-4 w-4" />Nuevo</Button>
           <Button variant="outline" size="icon"><Download className="h-4 w-4" /></Button>
           <Button variant="outline" size="icon"><Settings2 className="h-4 w-4" /></Button>
           <Button variant="outline" size="sm" className="text-xs">Desde el inicio</Button>

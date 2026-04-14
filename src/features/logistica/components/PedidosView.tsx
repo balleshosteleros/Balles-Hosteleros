@@ -18,13 +18,17 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Plus, Copy, Pencil, Trash2, Search, Printer, Download, MoreHorizontal, Archive,
+  Plus, Copy, Pencil, Trash2, Search, Printer, Download, MoreHorizontal, ClipboardList, Truck,
+  ChevronDown, FileText, Settings,
 } from "lucide-react";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
+  DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { FiltrosAvanzados, type FiltroActivo, type CampoFiltro } from "@/features/logistica/components/FiltrosAvanzados";
+import { ImportExportButton } from "@/features/logistica/components/ImportExportButton";
+import { exportToCSV, exportToXLSX } from "@/features/logistica/lib/export-utils";
 import { toast } from "sonner";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -32,6 +36,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 const ALL = "__ALL__";
+type CampoPedido = "estado" | "proveedor" | "almacen" | "fecha" | "fechaEntrega";
 
 function mapDbToPedido(row: Record<string, unknown>): Pedido {
   return {
@@ -67,9 +72,8 @@ export function PedidosView() {
   const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState("");
-  const [filterEstado, setFilterEstado] = useState(ALL);
-  const [showArchived, setShowArchived] = useState(false);
-  const [filterProveedor, setFilterProveedor] = useState(ALL);
+  const [filtros, setFiltros] = useState<FiltroActivo<CampoPedido>[]>([]);
+  const [showConfig, setShowConfig] = useState(false);
   const [tab, setTab] = useState<"pedidos" | "albaranes">("pedidos");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [modalOpen, setModalOpen] = useState(false);
@@ -98,20 +102,42 @@ export function PedidosView() {
     loadPedidos();
   }, [loadPedidos]);
 
+  // Campos y opciones de filtro
+  const camposFiltro = useMemo((): CampoFiltro<CampoPedido>[] => {
+    const uniq = (arr: string[]) => [...new Set(arr.filter(Boolean))].sort();
+    return [
+      { campo: "estado", label: "Estado", tipo: "lista", opciones: ESTADOS_PEDIDO.filter((e) => e !== "Archivado") },
+      { campo: "proveedor", label: "Proveedor", tipo: "lista", opciones: uniq(pedidos.map((p) => p.proveedor)) },
+      { campo: "almacen", label: "Almacén", tipo: "lista", opciones: uniq(pedidos.map((p) => p.almacen).filter(Boolean)) },
+      { campo: "fecha", label: "Fecha pedido", tipo: "fecha" },
+      { campo: "fechaEntrega", label: "Fecha entrega", tipo: "fecha" },
+    ];
+  }, [pedidos]);
+
   // Filtered pedidos
   const filteredPedidos = useMemo(() => {
     return pedidos.filter((p) => {
-      if (!showArchived && p.estado === "Archivado") return false;
-      if (showArchived && p.estado !== "Archivado") return false;
-      if (filterEstado !== ALL && p.estado !== filterEstado) return false;
-      if (filterProveedor !== ALL && p.proveedor !== filterProveedor) return false;
+      if (p.estado === "Archivado") return false;
+      for (const f of filtros) {
+        if (f.campo === "estado" && f.valores?.length && !f.valores.includes(p.estado)) return false;
+        if (f.campo === "proveedor" && f.valores?.length && !f.valores.includes(p.proveedor)) return false;
+        if (f.campo === "almacen" && f.valores?.length && !f.valores.includes(p.almacen)) return false;
+        if (f.campo === "fecha") {
+          if (f.desde && p.fecha < f.desde) return false;
+          if (f.hasta && p.fecha > f.hasta) return false;
+        }
+        if (f.campo === "fechaEntrega") {
+          if (f.desde && p.fechaEntrega < f.desde) return false;
+          if (f.hasta && p.fechaEntrega > f.hasta) return false;
+        }
+      }
       if (search) {
         const s = search.toLowerCase();
         return p.numero.toLowerCase().includes(s) || p.proveedor.toLowerCase().includes(s) || p.docProveedor.toLowerCase().includes(s);
       }
       return true;
     });
-  }, [pedidos, search, filterEstado, filterProveedor, showArchived]);
+  }, [pedidos, search, filtros]);
 
   // Stats
   const statCounts: Record<string, number> = {};
@@ -153,10 +179,10 @@ export function PedidosView() {
       return;
     }
     if (ped?.enviadoAt) {
-      toast.error("No se puede eliminar un pedido enviado. Puedes archivarlo.");
+      toast.error("No se puede eliminar un pedido enviado.");
       return;
     }
-    if (ped?.estado === "Enviado" || ped?.estado === "Archivado") {
+    if (ped?.estado === "Enviado") {
       toast.error("No se puede eliminar un pedido en estado " + ped.estado);
       return;
     }
@@ -178,12 +204,6 @@ export function PedidosView() {
     setPedidos((prev) => prev.map((p) => p.id === ped.id ? { ...p, estado: "Enviado" as EstadoPedido, enviadoAt: now, enviadoEmail: email, ultimaActualizacion: now.slice(0, 10) } : p));
     setDetallePedido((prev) => prev && prev.id === ped.id ? { ...prev, estado: "Enviado", enviadoAt: now, enviadoEmail: email } : prev);
     toast.success(`Pedido enviado a ${email}`);
-  };
-
-  const handleArchivar = (ped: Pedido) => {
-    setPedidos((prev) => prev.map((p) => p.id === ped.id ? { ...p, estado: "Archivado" as EstadoPedido } : p));
-    setDetallePedido((prev) => prev && prev.id === ped.id ? { ...prev, estado: "Archivado" } : prev);
-    toast.success("Pedido archivado");
   };
 
   const handleCopy = () => {
@@ -261,7 +281,6 @@ export function PedidosView() {
           onConfirmar={handleConfirmarPedido}
           onOpenAlbaran={openAlbaran}
           onEnviarProveedor={handleEnviarProveedor}
-          onArchivar={handleArchivar}
         />
       </div>
     );
@@ -286,79 +305,100 @@ export function PedidosView() {
     <div className="p-4 md:p-6 space-y-5">
       {/* Header removed — title shown in top bar */}
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
-        {ESTADOS_PEDIDO.map((e) => (
-          <div key={e} className="rounded-lg border bg-card p-3 text-center">
-            <div className="text-2xl font-black text-foreground">{statCounts[e]}</div>
-            <EstadoPedidoBadge value={e} />
-          </div>
-        ))}
-      </div>
-
       {/* Tabs */}
-      <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
-        <TabsList>
-          <TabsTrigger value="pedidos">Pedidos <Badge variant="secondary" className="ml-1 text-[10px] px-1.5">{pedidos.length}</Badge></TabsTrigger>
-          <TabsTrigger value="albaranes">Albaranes <Badge variant="secondary" className="ml-1 text-[10px] px-1.5">{albaranes.length}</Badge></TabsTrigger>
-        </TabsList>
+      <div className="space-y-4">
+        <div className="flex gap-2">
+          <Button
+            variant={tab === "pedidos" ? "default" : "outline"}
+            className="gap-2"
+            onClick={() => setTab("pedidos")}
+          >
+            <ClipboardList className="h-4 w-4" />
+            PEDIDOS
+            <Badge variant="secondary" className="text-[10px] ml-1">{pedidos.length}</Badge>
+          </Button>
+          <Button
+            variant={tab === "albaranes" ? "default" : "outline"}
+            className="gap-2"
+            onClick={() => setTab("albaranes")}
+          >
+            <Truck className="h-4 w-4" />
+            ALBARANES
+            <Badge variant="secondary" className="text-[10px] ml-1">{albaranes.length}</Badge>
+          </Button>
+        </div>
 
         {/* PEDIDOS TAB */}
-        <TabsContent value="pedidos" className="space-y-4 mt-4">
+        {tab === "pedidos" && <div className="space-y-4">
           {/* Toolbar */}
           <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-3">
-            <Button size="sm" className="gap-1" onClick={() => { setEditItem(null); setModalOpen(true); }}><Plus className="h-4 w-4" /> Nuevo</Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="outline" className="gap-1" disabled={selected.size === 0}>
-                  <MoreHorizontal className="h-4 w-4" /> Acciones
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuItem onClick={handleCopy}><Copy className="h-4 w-4 mr-2" /> Copiar</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => {
-                  if (selected.size !== 1) { toast.info("Selecciona un pedido"); return; }
-                  const p = pedidos.find((x) => selected.has(x.id));
-                  if (p) { setEditItem(p); setModalOpen(true); }
-                }}><Pencil className="h-4 w-4 mr-2" /> Editar</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => window.print()}><Printer className="h-4 w-4 mr-2" /> Imprimir</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => {
-                  const rows = filteredPedidos.filter((p) => selected.size === 0 || selected.has(p.id));
-                  const header = ["Numero","Proveedor","Fecha","Entrega","Almacen","Estado","Total"];
-                  const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-                  const lines = rows.map((p) => {
-                    const t = calcularTotalesLineas(p.lineas);
-                    return [p.numero, p.proveedor, p.fecha, p.fechaEntrega, p.almacen, p.estado, t.total.toFixed(2)].map(esc).join(",");
-                  });
-                  const csv = [header.map(esc).join(","), ...lines].join("\n");
-                  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
-                  const a = document.createElement("a");
-                  a.href = url; a.download = `pedidos-${new Date().toISOString().slice(0,10)}.csv`; a.click();
-                  URL.revokeObjectURL(url);
-                }}><Download className="h-4 w-4 mr-2" /> Exportar CSV</DropdownMenuItem>
-                <DropdownMenuItem className="text-destructive" onClick={() => {
-                  if (selected.size !== 1) { toast.info("Selecciona un pedido"); return; }
-                  setDeleteConfirm([...selected][0]);
-                }}><Trash2 className="h-4 w-4 mr-2" /> Eliminar</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Button variant="primary" size="sm" onClick={() => { setEditItem(null); setModalOpen(true); }}>
+              <Plus className="h-4 w-4" />Nuevo
+            </Button>
+
+            {/* Acciones de selección — solo visible cuando hay items seleccionados */}
+            {selected.size > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="outline" className="gap-1.5">
+                    <MoreHorizontal className="h-4 w-4" /> Acciones
+                    <ChevronDown className="h-3 w-3 opacity-60" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuLabel className="text-xs">Seleccionados ({selected.size})</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleCopy}><Copy className="h-4 w-4 mr-2" /> Copiar</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => {
+                    if (selected.size !== 1) { toast.info("Selecciona un pedido"); return; }
+                    const p = pedidos.find((x) => selected.has(x.id));
+                    if (p) { setEditItem(p); setModalOpen(true); }
+                  }}><Pencil className="h-4 w-4 mr-2" /> Editar</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => window.print()}><Printer className="h-4 w-4 mr-2" /> Imprimir</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="text-destructive" onClick={() => {
+                    if (selected.size !== 1) { toast.info("Selecciona un pedido"); return; }
+                    setDeleteConfirm([...selected][0]);
+                  }}><Trash2 className="h-4 w-4 mr-2" /> Eliminar</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
             <div className="flex-1" />
-            <div className="relative min-w-[200px]">
+
+            {/* Búsqueda */}
+            <div className="relative min-w-[220px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Buscar pedidos…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+              <Input placeholder="Buscar por nombre..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
             </div>
-            <Select value={filterEstado} onValueChange={setFilterEstado}>
-              <SelectTrigger className="w-[140px]"><SelectValue placeholder="Estado" /></SelectTrigger>
-              <SelectContent><SelectItem value={ALL}>Todos</SelectItem>{ESTADOS_PEDIDO.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
-            </Select>
-            <Select value={filterProveedor} onValueChange={setFilterProveedor}>
-              <SelectTrigger className="w-[200px]"><SelectValue placeholder="Proveedor" /></SelectTrigger>
-              <SelectContent><SelectItem value={ALL}>Todos</SelectItem>{PROVEEDORES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
-            </Select>
-            <Button size="sm" variant={showArchived ? "default" : "ghost"} className="gap-1" onClick={() => setShowArchived(!showArchived)} title="Ver archivados">
-              <Archive className="h-4 w-4" />
+
+            {/* Filtrar */}
+            <FiltrosAvanzados campos={camposFiltro} filtros={filtros} onChange={setFiltros} />
+            <ImportExportButton
+              onExport={(format) => {
+                const ts = new Date().toISOString().slice(0, 10);
+                const rows = filteredPedidos
+                  .filter((p) => selected.size === 0 || selected.has(p.id))
+                  .map((p) => {
+                    const t = calcularTotalesLineas(p.lineas);
+                    return { Número: p.numero, Proveedor: p.proveedor, Fecha: p.fecha, Entrega: p.fechaEntrega, Almacén: p.almacen, Estado: p.estado, Total: t.total.toFixed(2) };
+                  });
+                if (rows.length === 0) { toast.info("No hay datos para exportar."); return; }
+                if (format === "csv") exportToCSV(rows, `pedidos-${ts}.csv`);
+                else exportToXLSX(rows, `pedidos-${ts}.xlsx`);
+                toast.success(`${rows.length} pedidos exportados en ${format.toUpperCase()}`);
+              }}
+            />
+            <Button size="icon" variant={showConfig ? "default" : "ghost"} className="h-8 w-8" onClick={() => setShowConfig((v) => !v)} title="Configuración de pedidos">
+              <Settings className="h-4 w-4" />
             </Button>
           </div>
+
+          {showConfig && (
+            <div className="rounded-xl border bg-card p-5">
+              <p className="text-sm text-muted-foreground">Configuración de pedidos — próximamente.</p>
+            </div>
+          )}
 
           {/* Table */}
           <div className="bg-card rounded-lg border overflow-x-auto">
@@ -401,10 +441,10 @@ export function PedidosView() {
             </table>
           </div>
           <div className="text-xs text-muted-foreground text-right">{filteredPedidos.length} de {pedidos.length} pedidos</div>
-        </TabsContent>
+        </div>}
 
         {/* ALBARANES TAB */}
-        <TabsContent value="albaranes" className="space-y-4 mt-4">
+        {tab === "albaranes" && <div className="space-y-4">
           <div className="bg-card rounded-lg border overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="border-b bg-muted/50">
@@ -436,8 +476,8 @@ export function PedidosView() {
               </tbody>
             </table>
           </div>
-        </TabsContent>
-      </Tabs>
+        </div>}
+      </div>
 
       {/* Modal */}
       <PedidoModal open={modalOpen} onClose={() => setModalOpen(false)} onSave={handleSave} item={editItem} empresaId={empresaActual.id} empresaNombre={empresaActual.nombre} />
@@ -451,15 +491,15 @@ export function PedidosView() {
               {(() => {
                 const ped = pedidos.find((p) => p.id === deleteConfirm);
                 if (ped?.albaranId) return "Este pedido tiene un albarán vinculado y no puede eliminarse.";
-                if (ped?.enviadoAt || ped?.estado === "Enviado") return "Este pedido fue enviado al proveedor y no puede eliminarse. Puedes archivarlo.";
-                if (ped?.estado === "Archivado") return "Este pedido está archivado y no puede eliminarse.";
+                if (ped?.enviadoAt || ped?.estado === "Enviado") return "Este pedido fue enviado al proveedor y no puede eliminarse.";
+                if (ped?.estado === "Archivado") return "Este pedido no puede eliminarse.";
                 return "Esta acción no se puede deshacer.";
               })()}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            {(() => { const ped = pedidos.find((p) => p.id === deleteConfirm); const blocked = ped?.albaranId || ped?.enviadoAt || ped?.estado === "Enviado" || ped?.estado === "Archivado"; return blocked ? null : <AlertDialogAction onClick={() => deleteConfirm && handleDelete(deleteConfirm)}>Eliminar</AlertDialogAction>; })()}
+            {(() => { const ped = pedidos.find((p) => p.id === deleteConfirm); const blocked = ped?.albaranId || ped?.enviadoAt || ped?.estado === "Enviado"; return blocked ? null : <AlertDialogAction onClick={() => deleteConfirm && handleDelete(deleteConfirm)}>Eliminar</AlertDialogAction>; })()}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

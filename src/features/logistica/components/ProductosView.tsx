@@ -4,11 +4,14 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
   TipoProducto, getCategorias, getFamilias,
-  ESTADOS_PRODUCTO, ESTADO_COLOR, EstadoProducto, type Producto,
+  ESTADOS_PRODUCTO, ESTADO_COLOR, EstadoProducto, type Producto, IVA_OPCIONES,
 } from "@/features/logistica/data/productos";
 import {
   listProductos, createProducto, updateProducto, deleteProducto,
 } from "@/features/logistica/actions/producto-actions";
+import {
+  getProductoConfigSection, saveProductoConfigSection,
+} from "@/features/logistica/actions/config-actions";
 import { listEscandallos, addEscandallo, removeEscandallo } from "@/features/logistica/actions/escandallos-actions";
 import { UNIDADES_STOCK } from "@/features/logistica/data/stock";
 import { Badge } from "@/components/ui/badge";
@@ -20,11 +23,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import {
-  Search, Plus, Table2, LayoutGrid, ShoppingCart, Store, Settings2,
+  Search, Plus, ShoppingCart, Store, Settings2, Settings,
   ArrowLeft, Pencil, Trash2, AlertTriangle, ChefHat, X, FlaskConical,
+  SlidersHorizontal, ChevronLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ImportExportButtons } from "@/features/logistica/components/productos/ImportExportButtons";
+import { Popover, PopoverContent, PopoverTrigger } from "@/shared/components/ui/popover";
 
 function EstadoBadge({ estado }: { estado: EstadoProducto }) {
   return <Badge variant="outline" className={`text-[10px] ${ESTADO_COLOR[estado]}`}>{estado}</Badge>;
@@ -257,6 +262,7 @@ function ProductoDetalle({
                 <div><span className="text-muted-foreground text-xs block">Coste</span><span className="font-medium">{producto.coste || "—"}</span></div>
               </>
             )}
+            <div><span className="text-muted-foreground text-xs block">IVA</span><span className="font-medium">{producto.iva || "—"}</span></div>
             <div><span className="text-muted-foreground text-xs block">Últ. actualización</span><span className="font-medium">{producto.ultimaActualizacion}</span></div>
           </div>
           {producto.observaciones && (
@@ -273,14 +279,221 @@ function ProductoDetalle({
   );
 }
 
+/* ─── FILTROS AVANZADOS ─── */
+type CampoFiltro = "categoria" | "familia" | "estado" | "proveedor" | "unidad" | "precio" | "fecha";
+
+type FiltroActivo = {
+  id: string;
+  campo: CampoFiltro;
+  etiqueta: string;
+  valores?: string[];
+  operador?: "mayor" | "menor" | "igual";
+  precioVal?: number;
+  desde?: string;
+  hasta?: string;
+};
+
+function FiltrosAvanzados({
+  productos,
+  esCompra,
+  filtros,
+  onChange,
+}: {
+  productos: Producto[];
+  esCompra: boolean;
+  filtros: FiltroActivo[];
+  onChange: (f: FiltroActivo[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [paso, setPaso] = useState<"campo" | "valor">("campo");
+  const [campoActual, setCampoActual] = useState<CampoFiltro | null>(null);
+  const [tempValores, setTempValores] = useState<string[]>([]);
+  const [tempOperador, setTempOperador] = useState<"mayor" | "menor" | "igual">("mayor");
+  const [tempPrecio, setTempPrecio] = useState("");
+  const [tempDesde, setTempDesde] = useState("");
+  const [tempHasta, setTempHasta] = useState("");
+
+  const opcionesLista = useMemo(() => {
+    const uniq = (arr: (string | undefined)[]) =>
+      [...new Set(arr.filter(Boolean) as string[])].sort();
+    return {
+      categoria: uniq(productos.map((p) => p.categoria)),
+      familia: uniq(productos.map((p) => p.familia)),
+      estado: ESTADOS_PRODUCTO as string[],
+      proveedor: uniq(productos.map((p) => p.proveedor)),
+      unidad: uniq(productos.map((p) => p.unidad)),
+    };
+  }, [productos]);
+
+  const CAMPOS: { campo: CampoFiltro; label: string; tipo: "lista" | "precio" | "fecha" }[] = [
+    { campo: "categoria", label: "Categoría", tipo: "lista" },
+    { campo: "familia", label: "Familia", tipo: "lista" },
+    { campo: "estado", label: "Estado", tipo: "lista" },
+    ...(esCompra ? [{ campo: "proveedor" as CampoFiltro, label: "Proveedor", tipo: "lista" as const }] : []),
+    { campo: "unidad", label: "Unidad", tipo: "lista" },
+    { campo: "precio", label: esCompra ? "Precio compra" : "Precio de Venta", tipo: "precio" },
+    { campo: "fecha", label: "Últ. actualización", tipo: "fecha" },
+  ];
+
+  function abrirCampo(c: CampoFiltro) {
+    setCampoActual(c);
+    setTempValores([]); setTempOperador("mayor"); setTempPrecio(""); setTempDesde(""); setTempHasta("");
+    setPaso("valor");
+  }
+
+  function confirmarFiltro() {
+    if (!campoActual) return;
+    const def = CAMPOS.find((c) => c.campo === campoActual)!;
+    let nuevo: FiltroActivo | null = null;
+    if (def.tipo === "lista" && tempValores.length > 0) {
+      nuevo = { id: crypto.randomUUID(), campo: campoActual, etiqueta: def.label, valores: tempValores };
+    } else if (def.tipo === "precio" && tempPrecio) {
+      nuevo = { id: crypto.randomUUID(), campo: campoActual, etiqueta: def.label, operador: tempOperador, precioVal: parseFloat(tempPrecio) };
+    } else if (def.tipo === "fecha" && (tempDesde || tempHasta)) {
+      nuevo = { id: crypto.randomUUID(), campo: campoActual, etiqueta: def.label, desde: tempDesde || undefined, hasta: tempHasta || undefined };
+    }
+    if (nuevo) onChange([...filtros, nuevo]);
+    setOpen(false); setPaso("campo");
+  }
+
+  function labelFiltro(f: FiltroActivo) {
+    if (f.valores?.length) return `${f.etiqueta}: ${f.valores.join(", ")}`;
+    if (f.operador) {
+      const op = f.operador === "mayor" ? ">" : f.operador === "menor" ? "<" : "=";
+      return `${f.etiqueta} ${op} ${f.precioVal}`;
+    }
+    const partes: string[] = [];
+    if (f.desde) partes.push(`desde ${f.desde}`);
+    if (f.hasta) partes.push(`hasta ${f.hasta}`);
+    return `${f.etiqueta}: ${partes.join(" ")}`;
+  }
+
+  const campoDef = campoActual ? CAMPOS.find((c) => c.campo === campoActual) : null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Popover open={open} onOpenChange={(v) => { setOpen(v); if (!v) setPaso("campo"); }}>
+        <PopoverTrigger asChild>
+          <Button variant="outline" size="sm" className="gap-1.5">
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            Filtrar
+            {filtros.length > 0 && (
+              <Badge className="ml-0.5 h-4 min-w-[16px] px-1 text-[10px] rounded-full">{filtros.length}</Badge>
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-72 p-3" align="start">
+          {paso === "campo" ? (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Filtrar por columna</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {CAMPOS.map((c) => (
+                  <button
+                    key={c.campo}
+                    onClick={() => abrirCampo(c.campo)}
+                    className="text-left text-sm px-2.5 py-1.5 rounded-md hover:bg-muted transition-colors border border-transparent hover:border-border"
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center gap-1.5">
+                <button onClick={() => setPaso("campo")} className="text-muted-foreground hover:text-foreground">
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <p className="text-sm font-semibold">{campoDef?.label}</p>
+              </div>
+
+              {campoDef?.tipo === "lista" && (
+                <div className="space-y-0.5 max-h-52 overflow-y-auto pr-1">
+                  {(opcionesLista[campoActual as keyof typeof opcionesLista] ?? []).map((opt) => (
+                    <label key={opt} className="flex items-center gap-2 text-sm px-1.5 py-1 rounded hover:bg-muted cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={tempValores.includes(opt)}
+                        onChange={(e) =>
+                          setTempValores(e.target.checked ? [...tempValores, opt] : tempValores.filter((v) => v !== opt))
+                        }
+                        className="rounded accent-primary"
+                      />
+                      {opt}
+                    </label>
+                  ))}
+                  {(opcionesLista[campoActual as keyof typeof opcionesLista] ?? []).length === 0 && (
+                    <p className="text-xs text-muted-foreground text-center py-2">Sin opciones disponibles</p>
+                  )}
+                </div>
+              )}
+
+              {campoDef?.tipo === "precio" && (
+                <div className="space-y-2">
+                  <Select value={tempOperador} onValueChange={(v) => setTempOperador(v as typeof tempOperador)}>
+                    <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="mayor">Mayor que (&gt;)</SelectItem>
+                      <SelectItem value="menor">Menor que (&lt;)</SelectItem>
+                      <SelectItem value="igual">Igual a (=)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="number"
+                    placeholder="Introducir precio..."
+                    value={tempPrecio}
+                    onChange={(e) => setTempPrecio(e.target.value)}
+                    className="h-8"
+                  />
+                </div>
+              )}
+
+              {campoDef?.tipo === "fecha" && (
+                <div className="space-y-2">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Desde</Label>
+                    <Input type="date" value={tempDesde} onChange={(e) => setTempDesde(e.target.value)} className="h-8 mt-0.5" />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Hasta</Label>
+                    <Input type="date" value={tempHasta} onChange={(e) => setTempHasta(e.target.value)} className="h-8 mt-0.5" />
+                  </div>
+                </div>
+              )}
+
+              <Button size="sm" className="w-full" onClick={confirmarFiltro}>Aplicar filtro</Button>
+            </div>
+          )}
+        </PopoverContent>
+      </Popover>
+
+      {filtros.map((f) => (
+        <span key={f.id} className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary border border-primary/20 rounded-full px-2.5 py-0.5">
+          {labelFiltro(f)}
+          <button onClick={() => onChange(filtros.filter((x) => x.id !== f.id))} className="hover:text-destructive ml-0.5">
+            <X className="h-3 w-3" />
+          </button>
+        </span>
+      ))}
+      {filtros.length > 1 && (
+        <button onClick={() => onChange([])} className="text-xs text-muted-foreground hover:text-foreground underline">
+          Limpiar todo
+        </button>
+      )}
+    </div>
+  );
+}
+
 /* ─── TABLA ─── */
 function TablaProductos({
-  tipo, onAddClick, onRowClick, reloadKey,
+  tipo, onAddClick, onRowClick, reloadKey, showConfig, onToggleConfig,
 }: {
   tipo: TipoProducto;
   onAddClick: () => void;
   onRowClick: (p: Producto) => void;
   reloadKey: number;
+  showConfig: boolean;
+  onToggleConfig: () => void;
 }) {
   const { empresaActual } = useEmpresa();
   const [productos, setProductos] = useState<Producto[]>([]);
@@ -297,51 +510,52 @@ function TablaProductos({
   }, [tipo, empresaActual.id, reloadKey]);
 
   const [busqueda, setBusqueda] = useState("");
-  const [filtroCategoria, setFiltroCategoria] = useState("todas");
-  const [filtroEstado, setFiltroEstado] = useState("todos");
+  const [filtros, setFiltros] = useState<FiltroActivo[]>([]);
 
-  const categoriasDisponibles = useMemo(() => {
-    const set = new Set<string>();
-    productos.forEach((p) => { if (p.categoria) set.add(p.categoria); });
-    return Array.from(set).sort();
-  }, [productos]);
+  const esCompra = tipo === "compra";
 
   const filtrados = useMemo(() => {
     return productos.filter((p) => {
-      const texto = `${p.nombre} ${p.categoria} ${p.familia} ${p.proveedor ?? ""}`.toLowerCase();
-      if (busqueda && !texto.includes(busqueda.toLowerCase())) return false;
-      if (filtroCategoria !== "todas" && p.categoria !== filtroCategoria) return false;
-      if (filtroEstado !== "todos" && p.estado !== filtroEstado) return false;
+      if (busqueda && !p.nombre.toLowerCase().includes(busqueda.toLowerCase())) return false;
+      for (const f of filtros) {
+        if (f.campo === "categoria" && f.valores?.length && !f.valores.includes(p.categoria)) return false;
+        if (f.campo === "familia" && f.valores?.length && !f.valores.includes(p.familia)) return false;
+        if (f.campo === "estado" && f.valores?.length && !f.valores.includes(p.estado)) return false;
+        if (f.campo === "proveedor" && f.valores?.length && !f.valores.includes(p.proveedor ?? "")) return false;
+        if (f.campo === "unidad" && f.valores?.length && !f.valores.includes(p.unidad)) return false;
+        if (f.campo === "precio" && f.precioVal !== undefined) {
+          const raw = esCompra ? p.precioCompra : p.precioVenta;
+          const val = parseFloat(raw ?? "");
+          if (!isNaN(val)) {
+            if (f.operador === "mayor" && !(val > f.precioVal)) return false;
+            if (f.operador === "menor" && !(val < f.precioVal)) return false;
+            if (f.operador === "igual" && val !== f.precioVal) return false;
+          }
+        }
+        if (f.campo === "fecha") {
+          const fecha = p.ultimaActualizacion;
+          if (f.desde && fecha < f.desde) return false;
+          if (f.hasta && fecha > f.hasta) return false;
+        }
+      }
       return true;
     });
-  }, [productos, busqueda, filtroCategoria, filtroEstado]);
-
-  const esCompra = tipo === "compra";
+  }, [productos, busqueda, filtros, esCompra]);
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-3">
-        <Button size="sm" className="gap-1.5" onClick={onAddClick}><Plus className="h-3.5 w-3.5" /> Añadir producto</Button>
-        <ImportExportButtons tipo={tipo} onImportSuccess={() => window.location.reload()} />
+        <Button variant="primary" size="sm" onClick={onAddClick}><Plus className="h-4 w-4" />Nuevo</Button>
         <div className="flex-1" />
         <div className="relative min-w-[220px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar producto..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} className="pl-9" />
+          <Input placeholder="Buscar por nombre..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} className="pl-9" />
         </div>
-        <Select value={filtroCategoria} onValueChange={setFiltroCategoria}>
-          <SelectTrigger className="w-[170px]"><SelectValue placeholder="Categoría" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todas">Todas las categorías</SelectItem>
-            {categoriasDisponibles.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-          <SelectTrigger className="w-[140px]"><SelectValue placeholder="Estado" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos</SelectItem>
-            {ESTADOS_PRODUCTO.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <FiltrosAvanzados productos={productos} esCompra={esCompra} filtros={filtros} onChange={setFiltros} />
+        <ImportExportButtons tipo={tipo} onImportSuccess={() => window.location.reload()} />
+        <Button size="icon" variant={showConfig ? "default" : "ghost"} className="h-8 w-8" onClick={onToggleConfig} title={showConfig ? "Cerrar configuración" : "Configuración"}>
+          <Settings className="h-4 w-4" />
+        </Button>
       </div>
 
       <div className="bg-card rounded-lg border overflow-x-auto">
@@ -350,10 +564,10 @@ function TablaProductos({
             <tr className="border-b bg-muted/50">
               {[
                 "NOMBRE", "CATEGORÍA", "FAMILIA", "ESTADO",
-                ...(esCompra ? ["PROVEEDOR", "PRECIO COMPRA"] : ["PVP", "COSTE"]),
-                "UNIDAD", "ACTUALIZACIÓN",
+                ...(esCompra ? ["PROVEEDOR", "PRECIO COMPRA"] : ["PRECIO DE VENTA", "COSTE"]),
+                "IVA", "UNIDAD", "ACTUALIZACIÓN",
               ].map((h) => (
-                <th key={h} className="text-left px-3 py-2.5 text-xs font-bold text-muted-foreground whitespace-nowrap">{h}</th>
+                <th key={h} className="text-left px-3 py-1.5 text-xs font-bold text-muted-foreground whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
@@ -362,23 +576,24 @@ function TablaProductos({
               <tr key={p.id}
                 className="border-b hover:bg-muted/30 cursor-pointer transition-colors"
                 onClick={() => onRowClick(p)}>
-                <td className="px-3 py-2.5 font-semibold text-primary whitespace-nowrap">{p.nombre}</td>
-                <td className="px-3 py-2.5 text-muted-foreground">{p.categoria || "—"}</td>
-                <td className="px-3 py-2.5 text-muted-foreground">{p.familia || "—"}</td>
-                <td className="px-3 py-2.5"><EstadoBadge estado={p.estado} /></td>
+                <td className="px-3 py-1.5 font-semibold text-primary whitespace-nowrap">{p.nombre}</td>
+                <td className="px-3 py-1.5 text-muted-foreground">{p.categoria || "—"}</td>
+                <td className="px-3 py-1.5 text-muted-foreground">{p.familia || "—"}</td>
+                <td className="px-3 py-1.5"><EstadoBadge estado={p.estado} /></td>
                 {esCompra ? (
                   <>
-                    <td className="px-3 py-2.5 text-muted-foreground">{p.proveedor ?? "—"}</td>
-                    <td className="px-3 py-2.5 font-medium text-foreground">{p.precioCompra ?? "—"}</td>
+                    <td className="px-3 py-1.5 text-muted-foreground">{p.proveedor ?? "—"}</td>
+                    <td className="px-3 py-1.5 font-medium text-foreground">{p.precioCompra ?? "—"}</td>
                   </>
                 ) : (
                   <>
-                    <td className="px-3 py-2.5 font-medium text-foreground">{p.precioVenta ?? "—"}</td>
-                    <td className="px-3 py-2.5 text-muted-foreground">{p.coste ?? "—"}</td>
+                    <td className="px-3 py-1.5 font-medium text-foreground">{p.precioVenta ?? "—"}</td>
+                    <td className="px-3 py-1.5 text-muted-foreground">{p.coste ?? "—"}</td>
                   </>
                 )}
-                <td className="px-3 py-2.5 text-muted-foreground">{p.unidad}</td>
-                <td className="px-3 py-2.5 text-xs text-muted-foreground">{p.ultimaActualizacion}</td>
+                <td className="px-3 py-1.5 text-muted-foreground">{p.iva ?? "—"}</td>
+                <td className="px-3 py-1.5 text-muted-foreground">{p.unidad}</td>
+                <td className="px-3 py-1.5 text-xs text-muted-foreground">{p.ultimaActualizacion}</td>
               </tr>
             ))}
             {loading && productos.length === 0 && (
@@ -478,47 +693,178 @@ function PipelineProductos({ tipo, onCardClick, reloadKey }: {
 }
 
 /* ─── CONFIGURACIÓN ─── */
-function ConfigProductos({ tipo }: { tipo: TipoProducto }) {
-  const categorias = getCategorias(tipo);
-  const familias = getFamilias(tipo);
+/* ─── HOOK: config persistente en Supabase ─── */
+function useProductConfig(tipo: TipoProducto) {
+  const [categorias, setCatRaw] = useState<string[]>(getCategorias(tipo));
+  const [familias, setFamRaw] = useState<string[]>(getFamilias(tipo));
+  const [estados, setEstRaw] = useState<string[]>([...ESTADOS_PRODUCTO]);
+
+  // Cargar desde BD al montar o cambiar tipo
+  useEffect(() => {
+    Promise.all([
+      getProductoConfigSection(tipo, "categorias"),
+      getProductoConfigSection(tipo, "familias"),
+      getProductoConfigSection("global", "estados"),
+    ]).then(([cats, fams, ests]) => {
+      setCatRaw(cats);
+      setFamRaw(fams);
+      setEstRaw(ests);
+    });
+  }, [tipo]);
+
+  const setCategorias = async (v: string[]) => {
+    setCatRaw(v);
+    await saveProductoConfigSection(tipo, "categorias", v);
+  };
+  const setFamilias = async (v: string[]) => {
+    setFamRaw(v);
+    await saveProductoConfigSection(tipo, "familias", v);
+  };
+  const setEstados = async (v: string[]) => {
+    setEstRaw(v);
+    await saveProductoConfigSection("global", "estados", v);
+  };
+
+  return { categorias, setCategorias, familias, setFamilias, estados, setEstados };
+}
+
+/* ─── LIST MANAGER: sección editable (categorías / familias / estados) ─── */
+function ListManager({ title, items, onChange }: {
+  title: string;
+  items: string[];
+  onChange: (v: string[]) => void;
+}) {
+  const [editIdx, setEditIdx] = useState<number | null>(null);
+  const [editVal, setEditVal] = useState("");
+  const [newVal, setNewVal] = useState("");
+
+  const startEdit = (i: number) => { setEditIdx(i); setEditVal(items[i]); };
+  const confirmEdit = () => {
+    if (editIdx === null) return;
+    const trimmed = editVal.trim();
+    if (!trimmed) return;
+    const next = [...items];
+    next[editIdx] = trimmed;
+    onChange(next);
+    setEditIdx(null);
+  };
+  const remove = (i: number) => onChange(items.filter((_, idx) => idx !== i));
+  const add = () => {
+    const trimmed = newVal.trim();
+    if (!trimmed || items.includes(trimmed)) return;
+    onChange([...items, trimmed]);
+    setNewVal("");
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-3">
-        <h4 className="text-sm font-bold text-foreground">CATEGORÍAS</h4>
-        <div className="flex flex-wrap gap-2">
-          {categorias.map((c) => <Badge key={c} variant="outline">{c}</Badge>)}
-        </div>
-      </div>
-      <div className="space-y-3">
-        <h4 className="text-sm font-bold text-foreground">FAMILIAS</h4>
-        <div className="flex flex-wrap gap-2">
-          {familias.map((f) => <Badge key={f} variant="secondary">{f}</Badge>)}
-        </div>
-      </div>
-      <div className="space-y-3">
-        <h4 className="text-sm font-bold text-foreground">ESTADOS</h4>
-        <div className="flex flex-wrap gap-2">
-          {ESTADOS_PRODUCTO.map((e) => <EstadoBadge key={e} estado={e} />)}
+    <div className="space-y-2">
+      <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{title}</h4>
+      <div className="rounded-md border divide-y">
+        {items.map((item, i) => (
+          <div key={i} className="flex items-center gap-2 px-3 py-1.5">
+            {editIdx === i ? (
+              <>
+                <Input
+                  autoFocus
+                  value={editVal}
+                  onChange={(e) => setEditVal(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") confirmEdit(); if (e.key === "Escape") setEditIdx(null); }}
+                  className="h-7 text-sm flex-1"
+                />
+                <Button size="sm" className="h-7 px-2 text-xs" onClick={confirmEdit}>Guardar</Button>
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setEditIdx(null)}>
+                  <X className="h-3 w-3" />
+                </Button>
+              </>
+            ) : (
+              <>
+                <span className="flex-1 text-sm">{item}</span>
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => startEdit(i)}>
+                  <Pencil className="h-3 w-3" />
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => remove(i)}>
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </>
+            )}
+          </div>
+        ))}
+        <div className="flex items-center gap-2 px-3 py-1.5">
+          <Input
+            value={newVal}
+            onChange={(e) => setNewVal(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") add(); }}
+            placeholder={`Nueva ${title.toLowerCase().replace(/s$/, "")}…`}
+            className="h-7 text-sm flex-1"
+          />
+          <Button size="sm" className="h-7 px-3 text-xs gap-1" onClick={add}>
+            <Plus className="h-3 w-3" /> Añadir
+          </Button>
         </div>
       </div>
     </div>
   );
 }
 
+function ConfigProductos({ tipo, categorias, familias, estados, setCategorias, setFamilias, setEstados }: {
+  tipo: TipoProducto;
+  categorias: string[];
+  familias: string[];
+  estados: string[];
+  setCategorias: (v: string[]) => void;
+  setFamilias: (v: string[]) => void;
+  setEstados: (v: string[]) => void;
+}) {
+  return (
+    <div className="space-y-5">
+      <ListManager title="Categorías" items={categorias} onChange={setCategorias} />
+      <ListManager title="Familias" items={familias} onChange={setFamilias} />
+      <ListManager title="Estados" items={estados} onChange={setEstados} />
+    </div>
+  );
+}
+
+/* ─── MODAL ATENCIÓN (validación) ─── */
+function AtenciónModal({ messages, onClose }: { messages: string[]; onClose: () => void }) {
+  return (
+    <Dialog open={messages.length > 0} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-amber-500" />
+            Atención
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-1 py-1">
+          {messages.map((m, i) => (
+            <p key={i} className="text-sm text-foreground">{m}</p>
+          ))}
+        </div>
+        <DialogFooter>
+          <Button onClick={onClose}>Aceptar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /* ─── MODAL CREAR / EDITAR PRODUCTO ─── */
 function ProductoModal({
-  open, onClose, tipo, editItem, onSaved,
+  open, onClose, tipo, editItem, onSaved, categoriasOpts, familiasOpts, estadosOpts,
 }: {
   open: boolean;
   onClose: () => void;
   tipo: TipoProducto;
   editItem: Producto | null;
   onSaved: () => void;
+  categoriasOpts?: string[];
+  familiasOpts?: string[];
+  estadosOpts?: string[];
 }) {
   const esCompra = tipo === "compra";
-  const categorias = getCategorias(tipo);
-  const familias = getFamilias(tipo);
+  const categorias = categoriasOpts ?? getCategorias(tipo);
+  const familias = familiasOpts ?? getFamilias(tipo);
+  const estadosList = estadosOpts ?? [...ESTADOS_PRODUCTO];
   const isEdit = !!editItem;
 
   const [nombre, setNombre] = useState("");
@@ -530,6 +876,7 @@ function ProductoModal({
   const [precioCompra, setPrecioCompra] = useState("");
   const [precioVenta, setPrecioVenta] = useState("");
   const [coste, setCoste] = useState("");
+  const [iva, setIva] = useState("");
   const [observaciones, setObservaciones] = useState("");
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -545,11 +892,12 @@ function ProductoModal({
       setPrecioCompra(editItem.precioCompra ?? "");
       setPrecioVenta(editItem.precioVenta ?? "");
       setCoste(editItem.coste ?? "");
+      setIva(editItem.iva ?? "");
       setObservaciones(editItem.observaciones ?? "");
     } else {
       setNombre(""); setCategoria(""); setFamilia(""); setUnidad("ud");
       setEstado("Activo"); setProveedor(""); setPrecioCompra(""); setPrecioVenta("");
-      setCoste(""); setObservaciones("");
+      setCoste(""); setIva(""); setObservaciones("");
     }
     setErrors([]);
   }, [editItem, open]);
@@ -572,6 +920,7 @@ function ProductoModal({
       precioCompra: esCompra ? (precioCompra || null) : null,
       precioVenta: !esCompra ? (precioVenta || null) : null,
       coste: !esCompra ? (coste || null) : null,
+      iva: iva || null,
       unidad,
       observaciones: observaciones || null,
     };
@@ -615,7 +964,7 @@ function ProductoModal({
               <Select value={estado} onValueChange={(v) => setEstado(v as EstadoProducto)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {ESTADOS_PRODUCTO.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+                  {estadosList.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -660,20 +1009,23 @@ function ProductoModal({
                 </div>
               </>
             )}
+            <div>
+              <Label className="text-xs font-bold">IVA</Label>
+              <Select value={iva} onValueChange={setIva}>
+                <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Sin especificar</SelectItem>
+                  {IVA_OPCIONES.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="md:col-span-2">
               <Label className="text-xs font-bold">Observaciones</Label>
               <Input value={observaciones} onChange={(e) => setObservaciones(e.target.value)} />
             </div>
           </div>
 
-          {errors.length > 0 && (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 space-y-1">
-              <div className="flex items-center gap-1.5 text-destructive text-xs font-bold">
-                <AlertTriangle className="h-3.5 w-3.5" /> Corrige los siguientes errores:
-              </div>
-              {errors.map((e, i) => <p key={i} className="text-xs text-destructive/80 ml-5">• {e}</p>)}
-            </div>
-          )}
+          <AtenciónModal messages={errors} onClose={() => setErrors([])} />
         </div>
         <Separator />
         <DialogFooter>
@@ -690,12 +1042,12 @@ function ProductoModal({
 /* ─── PÁGINA PRINCIPAL ─── */
 export function ProductosView() {
   const [tipoActivo, setTipoActivo] = useState<TipoProducto>("compra");
-  const [vistaActiva, setVistaActiva] = useState<"tabla" | "pipeline">("tabla");
   const [showConfig, setShowConfig] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editItem, setEditItem] = useState<Producto | null>(null);
   const [detalle, setDetalle] = useState<Producto | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const config = useProductConfig(tipoActivo);
 
   const [countCompra, setCountCompra] = useState(0);
   const [countVenta, setCountVenta] = useState(0);
@@ -730,14 +1082,7 @@ export function ProductosView() {
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-5">
-      <div className="flex items-center justify-end">
-        <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setShowConfig(!showConfig)}>
-          <Settings2 className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">{showConfig ? "Cerrar config." : "Configuración"}</span>
-        </Button>
-      </div>
-
+    <div className="p-4 md:p-6 space-y-3">
       <div className="flex items-center gap-2 flex-wrap">
         <Button
           variant={tipoActivo === "compra" ? "default" : "outline"}
@@ -767,26 +1112,6 @@ export function ProductosView() {
           <Badge variant="secondary" className="text-[10px] ml-1">{countElab}</Badge>
         </Button>
 
-        {!showConfig && (
-          <div className="ml-auto flex items-center gap-1 bg-muted/50 rounded-md p-0.5">
-            <Button
-              variant={vistaActiva === "tabla" ? "secondary" : "ghost"}
-              size="sm"
-              className="gap-1.5 h-8"
-              onClick={() => setVistaActiva("tabla")}
-            >
-              <Table2 className="h-3.5 w-3.5" /> Tabla
-            </Button>
-            <Button
-              variant={vistaActiva === "pipeline" ? "secondary" : "ghost"}
-              size="sm"
-              className="gap-1.5 h-8"
-              onClick={() => setVistaActiva("pipeline")}
-            >
-              <LayoutGrid className="h-3.5 w-3.5" /> Pipeline
-            </Button>
-          </div>
-        )}
       </div>
 
       {showConfig ? (
@@ -794,17 +1119,25 @@ export function ProductosView() {
           <h3 className="text-sm font-bold text-foreground mb-4">
             CONFIGURACIÓN — {tipoActivo === "compra" ? "PRODUCTOS DE COMPRA" : tipoActivo === "venta" ? "PRODUCTOS DE VENTA" : "ELABORACIONES"}
           </h3>
-          <ConfigProductos tipo={tipoActivo} />
+          <ConfigProductos
+            tipo={tipoActivo}
+            categorias={config.categorias}
+            familias={config.familias}
+            estados={config.estados}
+            setCategorias={config.setCategorias}
+            setFamilias={config.setFamilias}
+            setEstados={config.setEstados}
+          />
         </div>
-      ) : vistaActiva === "tabla" ? (
+      ) : (
         <TablaProductos
           tipo={tipoActivo}
           onAddClick={() => { setEditItem(null); setModalOpen(true); }}
           onRowClick={(p) => setDetalle(p)}
           reloadKey={reloadKey}
+          showConfig={showConfig}
+          onToggleConfig={() => setShowConfig((v) => !v)}
         />
-      ) : (
-        <PipelineProductos tipo={tipoActivo} onCardClick={(p) => setDetalle(p)} reloadKey={reloadKey} />
       )}
 
       <ProductoModal
@@ -813,6 +1146,9 @@ export function ProductosView() {
         tipo={tipoActivo}
         editItem={editItem}
         onSaved={triggerReload}
+        categoriasOpts={config.categorias}
+        familiasOpts={config.familias}
+        estadosOpts={config.estados}
       />
     </div>
   );

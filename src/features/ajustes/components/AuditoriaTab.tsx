@@ -7,8 +7,7 @@ export function AuditoriaTab() {
 
   return (
     <div className="space-y-4">
-      <h3 className="font-bold text-foreground">HISTORIAL DE AUDITORÍA</h3>
-      {ajustes.auditoria.length === 0 && (
+{ajustes.auditoria.length === 0 && (
         <p className="text-sm text-muted-foreground text-center py-8">No hay registros de auditoría.</p>
       )}
       <div className="space-y-0">

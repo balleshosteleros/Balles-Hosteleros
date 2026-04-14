@@ -49,7 +49,6 @@ function getModuloFromPath(path: string): string {
     logistica: "logistica",
     ajustes: "ajustes",
     ayuda: "ayuda",
-    "consultas-pendientes": "dashboard",
   };
   return map[seg] ?? "dashboard";
 }

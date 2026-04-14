@@ -158,7 +158,7 @@ export function DescuentosView() {
                   <SelectItem value="inactivo">Inactivos</SelectItem>
                 </SelectContent>
               </Select>
-              <Button onClick={openCrear} size="sm" className="gap-2"><Plus className="h-4 w-4" /> Nuevo descuento</Button>
+              <Button variant="primary" size="sm" onClick={openCrear}><Plus className="h-4 w-4" />Nuevo</Button>
             </div>
 
             <Card>

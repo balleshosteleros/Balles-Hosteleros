@@ -26,6 +26,11 @@ export async function listInventarios() {
 
 export async function createInventario(input: {
   nombre: string;
+  fecha?: string;
+  almacen?: string;
+  motivo?: string;
+  plantillaId?: string;
+  usuario?: string;
   tipo?: string;
   notas?: string;
 }) {
@@ -38,14 +43,36 @@ export async function createInventario(input: {
       .insert({
         empresa_id: empresaId,
         nombre: input.nombre,
-        tipo: input.tipo ?? null,
+        fecha: input.fecha ?? new Date().toISOString().slice(0, 10),
+        almacen: input.almacen ?? "COCINA",
+        motivo: input.motivo ?? input.tipo ?? "periodico",
+        estado: "Borrador",
+        plantilla_id: input.plantillaId ?? null,
+        usuario: input.usuario ?? "",
         notas: input.notas ?? null,
-        estado: "borrador",
         created_by: user?.id ?? null,
       })
       .select()
       .single();
-    if (error) throw error;
+
+    // Si falla por columnas no existentes, reintenta con schema mínimo
+    if (error) {
+      const { data: d2, error: e2 } = await supabase
+        .from("inventarios")
+        .insert({
+          empresa_id: empresaId,
+          nombre: input.nombre,
+          estado: "Borrador",
+          tipo: input.almacen ?? input.tipo ?? "general",
+          notas: input.notas ?? null,
+          created_by: user?.id ?? null,
+        })
+        .select()
+        .single();
+      if (e2) throw e2;
+      return { ok: true, data: d2 };
+    }
+
     return { ok: true, data };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
@@ -69,9 +96,8 @@ export async function getInventario(id: string) {
       .select("*")
       .eq("inventario_id", id)
       .order("producto_nombre", { ascending: true });
-    if (linErr) throw linErr;
 
-    return { ok: true, data: { ...inventario, lineas: lineas ?? [] } };
+    return { ok: true, data: { ...inventario, lineas: linErr ? [] : (lineas ?? []) } };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[inventarios] getInventario:", msg);

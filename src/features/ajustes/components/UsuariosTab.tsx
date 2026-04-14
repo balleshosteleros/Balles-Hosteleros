@@ -15,7 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Search, ShieldCheck, ShieldOff, KeyRound, Pencil, UserCog,
-  Power, PowerOff, Lock, Eye, PenLine, Users, UserPlus,
+  Power, PowerOff, Lock, Eye, PenLine, Users, UserPlus, Plus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { createEmployee, resetEmployeePassword, getEmployees } from "@/actions/admin";
@@ -195,18 +195,11 @@ export function UsuariosTab() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-2">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Users className="h-5 w-5 text-primary" />
-          <div>
-            <h3 className="font-bold text-foreground">USUARIOS Y ACCESOS AL PORTAL</h3>
-            <p className="text-xs text-muted-foreground">{accesos.length} usuarios · {accesos.filter((a) => a.estadoAcceso === "Activo").length} activos · {sinAcceso.length} sin acceso</p>
-          </div>
-        </div>
+      <div className="flex justify-end">
         <Button size="sm" className="gap-1.5" onClick={() => setShowCreateModal(true)}>
-          <UserPlus className="h-4 w-4" /> Nuevo usuario
+          <Plus className="h-4 w-4" />Nuevo
         </Button>
       </div>
 
@@ -299,7 +292,7 @@ export function UsuariosTab() {
 
       {/* Employees without access */}
       {sinAcceso.length > 0 && (
-        <div className="space-y-3">
+        <div className="space-y-2">
           <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
             <ShieldOff className="h-4 w-4 text-muted-foreground" />
             EMPLEADOS SIN ACCESO AL PORTAL ({sinAcceso.length})
@@ -358,7 +351,7 @@ export function UsuariosTab() {
               <KeyRound className="h-5 w-5" /> Resetear contraseña — {resetModal?.nombre}
             </DialogTitle>
           </DialogHeader>
-          <form action={handleResetPassword} className="space-y-4">
+          <form action={handleResetPassword} className="space-y-2">
             <div>
               <Label className="text-xs font-bold">Nueva contraseña</Label>
               <Input name="new_password" type="password" required minLength={6} placeholder="Mínimo 6 caracteres" />
@@ -381,7 +374,7 @@ export function UsuariosTab() {
               <UserPlus className="h-5 w-5" /> Nuevo usuario
             </DialogTitle>
           </DialogHeader>
-          <form action={handleCreateUser} className="space-y-4">
+          <form action={handleCreateUser} className="space-y-2">
             <div>
               <Label className="text-xs font-bold">Nombre completo</Label>
               <Input name="full_name" required />

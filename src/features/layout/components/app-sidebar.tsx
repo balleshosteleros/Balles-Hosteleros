@@ -2,14 +2,37 @@
 
 import {
   Briefcase, Calculator, FileText, Scale, User, UsersRound, Truck, Camera,
-  Wrench, ChevronDown, Settings, MessageSquareWarning, CalendarDays, Utensils,
+  Wrench, ChevronDown, Settings, CalendarDays, Utensils,
   ChefHat, UserCheck, ClipboardList, Gift, Banknote, Crown, Network, PercentDiamond,
   TrendingUp, FolderOpen, Clock, Calendar, Timer, UserRoundSearch, HandCoins, Megaphone,
   Package, FileArchive, KeyRound, Gavel, FileUp, ShoppingCart, Warehouse, FlaskConical,
   GraduationCap, UtensilsCrossed, BookOpen, Contact, Thermometer, Sparkles, FileSearch,
   PenLine, CheckCircle2, BarChart3, Landmark, Tag, Zap, ContactRound,
-  Heart, UserPlus, AlertTriangle, Apple,
+  Heart, UserPlus, Apple,
 } from "lucide-react";
+
+// Icono compuesto: cuadrícula de apps + candado de seguridad
+function AccesosIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      {/* 3 cuadrados de apps */}
+      <rect x="3" y="3" width="7" height="7" rx="1.2" />
+      <rect x="14" y="3" width="7" height="7" rx="1.2" />
+      <rect x="3" y="14" width="7" height="7" rx="1.2" />
+      {/* Candado en posición 4 */}
+      <rect x="14.5" y="17.5" width="5" height="3.5" rx="0.8" />
+      <path d="M15.5 17.5v-1.2a1.5 1.5 0 0 1 3 0v1.2" />
+    </svg>
+  );
+}
 import { usePathname } from "next/navigation";
 import { NavLink } from "@/features/layout/components/nav-link";
 import {
@@ -57,7 +80,6 @@ const logisticaSubs = [
   { title: "PEDIDOS", url: "/logistica/pedidos", icon: ShoppingCart },
   { title: "STOCK", url: "/logistica/stock", icon: Warehouse },
   { title: "INVENTARIOS", url: "/logistica/inventarios", icon: ClipboardList },
-  { title: "INCIDENCIAS", url: "/logistica/incidencias", icon: AlertTriangle },
 ];
 const marketingSubs = [
   { title: "CALENDARIO", url: "/marketing/calendario", icon: CalendarDays },
@@ -232,7 +254,7 @@ export function AppSidebar() {
               <CollapsibleSection icon={CheckCircle2} label="CALIDAD" prefix="/calidad" items={calidadSubs} collapsed={collapsed} linkTo="/calidad" />
               <CollapsibleSection icon={User} label="RECURSOS HUMANOS" prefix="/rrhh" items={rrhhSubs} collapsed={collapsed} linkTo="/rrhh" />
               <CollapsibleSection icon={Camera} label="MARKETING" prefix="/marketing" items={marketingSubs} collapsed={collapsed} linkTo="/marketing" />
-              <CollapsibleSection icon={Package} label="LOGÍSTICA" prefix="/logistica" items={logisticaSubs} collapsed={collapsed} />
+              <CollapsibleSection icon={Package} label="LOGÍSTICA" prefix="/logistica" items={logisticaSubs} collapsed={collapsed} linkTo="/logistica" />
               <CollapsibleSection icon={Calculator} label="CONTABILIDAD" prefix="/contabilidad" items={contabilidadSubs} collapsed={collapsed} />
               <CollapsibleSection icon={FileText} label="GESTORÍA" prefix="/gestoria" items={gestoriaSubs} collapsed={collapsed} linkTo="/gestoria" />
               <CollapsibleSection icon={Scale} label="JURÍDICO" prefix="/juridico" items={juridicoSubs} collapsed={collapsed} linkTo="/juridico" />
@@ -241,37 +263,7 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border/60 bg-gradient-to-b from-sidebar-accent/40 via-sidebar-accent/20 to-sidebar-accent/10 px-2 py-3">
-        {!collapsed && (
-          <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-sidebar-foreground/40">
-            Generales
-          </p>
-        )}
-        <SidebarMenu>
-          {[
-            { href: "/comunicacion", icon: MessageSquareWarning, label: "COMUNICACIÓN" },
-            { href: "/reuniones", icon: Camera, label: "REUNIONES" },
-            { href: "/agenda", icon: ContactRound, label: "AGENDA" },
-            { href: "/accesos", icon: KeyRound, label: "ACCESOS" },
-            { href: "/consultas-pendientes", icon: MessageSquareWarning, label: "CONSULTAS PENDIENTES" },
-            { href: "/ajustes", icon: Settings, label: "AJUSTES" },
-          ].map(({ href, icon: Icon, label }) => (
-            <SidebarMenuItem key={href}>
-              <SidebarMenuButton asChild>
-                <NavLink
-                  href={href}
-                  end
-                  className="hover:bg-sidebar-accent/60"
-                  activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold"
-                >
-                  <Icon className="mr-2 h-4 w-4 shrink-0" />
-                  {!collapsed && <span className="text-sm">{label}</span>}
-                </NavLink>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
-        </SidebarMenu>
-      </SidebarFooter>
+      <SidebarFooter className="border-t border-sidebar-border/60" />
       {/* Franja vertical clickeable en el borde — permite expandir/colapsar pulsando el lateral */}
       <SidebarRail />
     </Sidebar>

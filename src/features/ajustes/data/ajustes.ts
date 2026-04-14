@@ -115,7 +115,7 @@ const MODULOS = ["Dashboard", "Gerencia", "Contabilidad", "Gestoría", "Jurídic
 
 function buildRoles(): Rol[] {
   const roleNames = [
-    { nombre: "Administrador", desc: "Acceso total a todos los módulos" },
+    { nombre: "Dirección", desc: "Acceso total a todos los módulos" },
     { nombre: "Gerencia", desc: "Gestión general y supervisión" },
     { nombre: "Contabilidad", desc: "Acceso a módulos financieros" },
     { nombre: "Gestoría", desc: "Gestión documental y fiscal" },
@@ -123,7 +123,6 @@ function buildRoles(): Rol[] {
     { nombre: "Recursos Humanos", desc: "Gestión de personal" },
     { nombre: "Logística", desc: "Operaciones y mantenimiento" },
     { nombre: "Marketing", desc: "Comunicación y campañas" },
-    { nombre: "Solo lectura", desc: "Visualización sin edición" },
   ];
   return roleNames.map((r, i) => ({
     id: `rol-${i}`,
@@ -132,16 +131,15 @@ function buildRoles(): Rol[] {
     permisos: MODULOS.map((m) => ({
       modulo: m,
       ver: true,
-      editar: r.nombre === "Administrador" || r.nombre === "Solo lectura" ? r.nombre === "Administrador" : m.toLowerCase().includes(r.nombre.toLowerCase().slice(0, 4)),
+      editar: r.nombre === "Dirección" ? true : m.toLowerCase().includes(r.nombre.toLowerCase().slice(0, 4)),
     })),
   }));
 }
 
-// Fix: Administrador can edit all, Solo lectura can view all but edit none
+// Fix: Dirección can edit all modules
 function fixRoles(roles: Rol[]): Rol[] {
   return roles.map((r) => {
-    if (r.nombre === "Administrador") return { ...r, permisos: r.permisos.map((p) => ({ ...p, ver: true, editar: true })) };
-    if (r.nombre === "Solo lectura") return { ...r, permisos: r.permisos.map((p) => ({ ...p, ver: true, editar: false })) };
+    if (r.nombre === "Dirección") return { ...r, permisos: r.permisos.map((p) => ({ ...p, ver: true, editar: true })) };
     return r;
   });
 }
@@ -193,7 +191,7 @@ export function buildDefaultAjustes(empresaNombre: string): AjustesEmpresa {
       logoUrl: "",
     },
     usuarios: [
-      { id: "u1", nombre: "Admin Principal", email: `admin@${empresaNombre.toLowerCase()}.es`, telefono: "", rol: "Administrador", departamento: "GERENCIA", estado: "Activo", fechaAlta: "2026-01-15", ultimaConexion: "2026-04-06" },
+      { id: "u1", nombre: "Admin Principal", email: `admin@${empresaNombre.toLowerCase()}.es`, telefono: "", rol: "Dirección", departamento: "GERENCIA", estado: "Activo", fechaAlta: "2026-01-15", ultimaConexion: "2026-04-06" },
       { id: "u2", nombre: "María López", email: `maria@${empresaNombre.toLowerCase()}.es`, telefono: "", rol: "Gerencia", departamento: "GERENCIA", estado: "Activo", fechaAlta: "2026-02-01", ultimaConexion: "2026-04-05" },
     ],
     departamentos: buildDepts(),

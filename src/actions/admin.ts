@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { capitalizeText } from '@/shared/lib/utils'
 
 const VALID_ROLES = ['admin', 'director', 'gerencia', 'responsable', 'empleado', 'solo_lectura'] as const
 type AppRole = typeof VALID_ROLES[number]
@@ -36,7 +37,7 @@ export async function createEmployee(formData: FormData) {
 
   const email = formData.get('email') as string
   const password = formData.get('password') as string
-  const fullName = formData.get('full_name') as string
+  const fullName = capitalizeText((formData.get('full_name') as string) ?? '')
   const role = normalizeRole(formData.get('role') as string)
 
   // Crear usuario en auth (el trigger handle_new_user crea el profile automáticamente)

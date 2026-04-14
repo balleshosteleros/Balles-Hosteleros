@@ -1,15 +1,18 @@
-# Balles-Hosteleros — SaaS de Gestion para Hosteleria
+# Balles-Hosteleros — SaaS de Gestion Integral para Restaurantes
 
 > Eres el **cerebro de una fabrica de software inteligente**.
 > El humano dice QUE quiere. Tu decides COMO construirlo.
 > El humano NO necesita saber nada tecnico. Tu sabes todo.
 
+> **INSTRUCCION PRIORITARIA:** Lee `.claude/memory/MEMORY.md` al inicio de cada sesión. Contiene reglas activas de UI, guardado, arquitectura y contexto del proyecto.
+
 ---
 
 ## Que es Este Proyecto
 
-**Balles-Hosteleros** es un SaaS de gestion para hosteleria, construido con SaaS Factory V4.
-El directorio raiz es `C:\Proyectos\Balles-Hosteleros`.
+**Balles-Hosteleros** es un SaaS de **gestion integral para restaurantes**, construido con SaaS Factory V4.
+Cubre todas las areas operativas de un restaurante moderno: direccion, RRHH, logistica, cocina, contabilidad, gerencia y juridico.
+El directorio raiz es `/Users/ivanballesteros/Desktop/Balles Hosteleros`.
 
 **Estructura del proyecto:**
 
@@ -169,16 +172,13 @@ src/
 
 ## Reglas de Codigo
 
-- **KISS**: Soluciones simples
-- **YAGNI**: Solo lo necesario
-- **DRY**: Sin duplicacion
+Ver `.claude/memory/MEMORY.md` para reglas de codigo activas (estándar UI, protocolo guardado, ámbito de carpetas).
+
+Principios base:
+- **KISS / YAGNI / DRY** — simple, solo lo necesario, sin duplicacion
 - Archivos max 500 lineas, funciones max 50 lineas
-- Variables/Functions: `camelCase`, Components: `PascalCase`, Files: `kebab-case`
-- NUNCA usar `any` (usar `unknown`)
-- SIEMPRE validar entradas de usuario con Zod
-- SIEMPRE habilitar RLS en tablas Supabase
-- NUNCA exponer secrets en codigo
-- SIEMPRE usar `npm run dev` (auto-detecta puerto 3000-3006)
+- `camelCase` variables, `PascalCase` components, `kebab-case` files
+- NUNCA `any`, SIEMPRE Zod en inputs de usuario, SIEMPRE RLS en Supabase
 
 ---
 
@@ -206,4 +206,19 @@ src/
 
 ---
 
-*Balles-Hosteleros: SaaS de Gestion para Hosteleria. Powered by SaaS Factory V4.*
+## Modulos del Producto
+
+| Modulo | Descripcion |
+|--------|-------------|
+| Direccion | Aperturas, cronogramas operativos, cuadros de mando |
+| RRHH | Empleados, contratos, nominas, turnos, vacaciones |
+| Logistica | Proveedores, productos, escandallos, inventario, pedidos |
+| Cocina | Fichas tecnicas, temperaturas APPCC, mermas, produccion |
+| Contabilidad | Facturas, operaciones, transacciones, contactos, etiquetas |
+| Gerencia | Comunicados, descuentos, encuestas, vencimientos |
+| Ajustes | Empresas, usuarios, roles, departamentos, auditoria |
+| Juridico | Procesos legales y documentacion |
+
+---
+
+*Balles-Hosteleros: SaaS de Gestion Integral para Restaurantes. Powered by SaaS Factory V4.*

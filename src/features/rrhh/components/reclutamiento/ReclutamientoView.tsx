@@ -432,19 +432,6 @@ export function ReclutamientoView() {
           </div>
         </div>
 
-        <div className="flex items-start gap-3 px-4 py-3 rounded-lg border border-primary/20 bg-primary/5 mt-2">
-          <Info className="h-4 w-4 shrink-0 text-primary mt-0.5" />
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-foreground">Las vacantes se generan automáticamente a partir de los roles creados en Ajustes</p>
-            <p className="text-xs text-muted-foreground">
-              Para crear una nueva vacante, primero debes crear un nuevo rol desde{" "}
-              <button onClick={() => router.push("/ajustes")} className="text-primary font-medium hover:underline">
-                Ajustes → Puestos de empresa
-              </button>.
-              Cada rol genera automáticamente su vacante asociada.
-            </p>
-          </div>
-        </div>
 
         <TabsContent value="vacantes" className="space-y-4 mt-4">
           <div className="flex flex-wrap items-center gap-3">

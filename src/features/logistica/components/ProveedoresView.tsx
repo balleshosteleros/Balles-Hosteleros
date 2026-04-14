@@ -19,11 +19,15 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Search, Plus, Pencil, ArrowLeft, Phone, Mail, Globe, MapPin, CalendarDays, FileText, AlertTriangle,
+  Search, Plus, Pencil, ArrowLeft, Phone, Mail, Globe, MapPin, CalendarDays, FileText, AlertTriangle, Settings,
 } from "lucide-react";
+import { FiltrosAvanzados, type FiltroActivo, type CampoFiltro } from "@/features/logistica/components/FiltrosAvanzados";
+import { ImportExportButton } from "@/features/logistica/components/ImportExportButton";
+import { exportToCSV, exportToXLSX } from "@/features/logistica/lib/export-utils";
 import { toast } from "sonner";
 
 const ALL = "__ALL__";
+type CampoProveedor = "estado" | "categoria" | "ciudad" | "provincia" | "diasReparto";
 
 function EstadoBadge({ value }: { value: EstadoProveedor }) {
   const cls: Record<string, string> = {
@@ -75,11 +79,11 @@ export function ProveedoresView() {
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [filterEstado, setFilterEstado] = useState(ALL);
-  const [filterCategoria, setFilterCategoria] = useState(ALL);
+  const [filtros, setFiltros] = useState<FiltroActivo<CampoProveedor>[]>([]);
   const [detalleProveedor, setDetalleProveedor] = useState<Proveedor | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editItem, setEditItem] = useState<Proveedor | null>(null);
+  const [showConfig, setShowConfig] = useState(false);
 
   const loadProveedores = useCallback(async () => {
     setLoading(true);
@@ -101,17 +105,33 @@ export function ProveedoresView() {
     loadProveedores();
   }, [loadProveedores]);
 
+  const camposFiltro = useMemo((): CampoFiltro<CampoProveedor>[] => {
+    const uniq = (arr: string[]) => [...new Set(arr.filter(Boolean))].sort();
+    return [
+      { campo: "estado", label: "Estado", tipo: "lista", opciones: ESTADOS_PROVEEDOR as string[] },
+      { campo: "categoria", label: "Categoría", tipo: "lista", opciones: CATEGORIAS_PROVEEDOR as string[] },
+      { campo: "ciudad", label: "Ciudad", tipo: "lista", opciones: uniq(proveedores.map((p) => p.ciudad)) },
+      { campo: "provincia", label: "Provincia", tipo: "lista", opciones: uniq(proveedores.map((p) => p.provincia)) },
+      { campo: "diasReparto", label: "Día reparto", tipo: "lista", opciones: DIAS_REPARTO as string[] },
+    ];
+  }, [proveedores]);
+
   const filtered = useMemo(() => {
     return proveedores.filter((p) => {
-      if (filterEstado !== ALL && p.estado !== filterEstado) return false;
-      if (filterCategoria !== ALL && p.categoria !== filterCategoria) return false;
+      for (const f of filtros) {
+        if (f.campo === "estado" && f.valores?.length && !f.valores.includes(p.estado)) return false;
+        if (f.campo === "categoria" && f.valores?.length && !f.valores.includes(p.categoria)) return false;
+        if (f.campo === "ciudad" && f.valores?.length && !f.valores.includes(p.ciudad)) return false;
+        if (f.campo === "provincia" && f.valores?.length && !f.valores.includes(p.provincia)) return false;
+        if (f.campo === "diasReparto" && f.valores?.length && !f.valores.some((d) => p.diasReparto.includes(d))) return false;
+      }
       if (search) {
         const s = search.toLowerCase();
         return p.nombreComercial.toLowerCase().includes(s) || p.personaContacto.toLowerCase().includes(s) || p.emailPrincipal.toLowerCase().includes(s);
       }
       return true;
     });
-  }, [proveedores, search, filterEstado, filterCategoria]);
+  }, [proveedores, search, filtros]);
 
   const stats = { total: proveedores.length, activos: proveedores.filter((p) => p.estado === "Activo").length, inactivos: proveedores.filter((p) => p.estado === "Inactivo").length };
 
@@ -251,39 +271,40 @@ export function ProveedoresView() {
     <div className="p-4 md:p-6 space-y-5">
       {/* Header removed — title shown in top bar */}
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-lg border bg-card p-3 text-center">
-          <div className="text-2xl font-black text-foreground">{stats.total}</div>
-          <p className="text-xs text-muted-foreground font-medium">Total</p>
-        </div>
-        <div className="rounded-lg border bg-card p-3 text-center">
-          <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{stats.activos}</div>
-          <p className="text-xs text-muted-foreground font-medium">Activos</p>
-        </div>
-        <div className="rounded-lg border bg-card p-3 text-center">
-          <div className="text-2xl font-black text-amber-600 dark:text-amber-400">{stats.inactivos}</div>
-          <p className="text-xs text-muted-foreground font-medium">Inactivos</p>
-        </div>
-      </div>
-
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-3">
-        <Button size="sm" className="gap-1" onClick={() => { setEditItem(null); setModalOpen(true); }}><Plus className="h-4 w-4" /> Nuevo proveedor</Button>
+        <Button variant="primary" size="sm" onClick={() => { setEditItem(null); setModalOpen(true); }}><Plus className="h-4 w-4" />Nuevo</Button>
         <div className="flex-1" />
         <div className="relative min-w-[240px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Buscar proveedores…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
-        <Select value={filterCategoria} onValueChange={setFilterCategoria}>
-          <SelectTrigger className="w-[200px]"><SelectValue placeholder="Categoría" /></SelectTrigger>
-          <SelectContent><SelectItem value={ALL}>Todas</SelectItem>{CATEGORIAS_PROVEEDOR.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-        </Select>
-        <Select value={filterEstado} onValueChange={setFilterEstado}>
-          <SelectTrigger className="w-[130px]"><SelectValue placeholder="Estado" /></SelectTrigger>
-          <SelectContent><SelectItem value={ALL}>Todos</SelectItem>{ESTADOS_PROVEEDOR.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
-        </Select>
+        <FiltrosAvanzados campos={camposFiltro} filtros={filtros} onChange={setFiltros} />
+        <ImportExportButton
+          onExport={(format) => {
+            const ts = new Date().toISOString().slice(0, 10);
+            const rows = filtered.map((p) => ({
+              Nombre: p.nombreComercial, Estado: p.estado, Categoría: p.categoria,
+              Ciudad: p.ciudad, Provincia: p.provincia,
+              "Email pedidos": p.emailPedidos, "Email principal": p.emailPrincipal,
+              Teléfono: p.telefonoPrincipal,
+            }));
+            if (rows.length === 0) { toast.info("No hay datos para exportar."); return; }
+            if (format === "csv") exportToCSV(rows, `proveedores-${ts}.csv`);
+            else exportToXLSX(rows, `proveedores-${ts}.xlsx`);
+            toast.success(`${rows.length} proveedores exportados en ${format.toUpperCase()}`);
+          }}
+        />
+        <Button size="icon" variant={showConfig ? "default" : "ghost"} className="h-8 w-8" onClick={() => setShowConfig((v) => !v)} title="Configuración de proveedores">
+          <Settings className="h-4 w-4" />
+        </Button>
       </div>
+
+      {showConfig && (
+        <div className="rounded-xl border bg-card p-5">
+          <p className="text-sm text-muted-foreground">Configuración de proveedores — próximamente.</p>
+        </div>
+      )}
 
       {/* Table */}
       <div className="bg-card rounded-lg border overflow-x-auto">

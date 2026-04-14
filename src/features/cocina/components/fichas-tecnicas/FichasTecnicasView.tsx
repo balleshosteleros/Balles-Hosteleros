@@ -506,7 +506,7 @@ function FichaDetalle({
                 <Card className="border bg-card">
                   <CardContent className="p-4 text-center">
                     <Euro className="h-5 w-5 mx-auto text-primary mb-1" />
-                    <p className="text-xs text-muted-foreground">PVP</p>
+                    <p className="text-xs text-muted-foreground">Precio de Venta</p>
                     <Input className="mt-1 text-center font-bold h-9" type="number" step="0.01"
                       value={form.pvp} onChange={(e) => update({ pvp: +e.target.value })} />
                   </CardContent>
@@ -812,7 +812,7 @@ export function FichasTecnicasView() {
         </CardContent></Card>
         <Card><CardContent className="p-4 text-center">
           <p className="text-2xl font-bold text-foreground">{costeMedio}€ / {pvpMedio}€</p>
-          <p className="text-xs text-muted-foreground">Coste / PVP medio</p>
+          <p className="text-xs text-muted-foreground">Coste / Precio de Venta medio</p>
         </CardContent></Card>
         <Card><CardContent className="p-4 text-center">
           <p className="text-2xl font-bold text-primary">{margenMedio}%</p>
@@ -886,7 +886,7 @@ export function FichasTecnicasView() {
                     <TableHead className="text-xs min-w-[200px]">Ficha técnica</TableHead>
                     <TableHead className="text-xs">Categoría</TableHead>
                     <TableHead className="text-xs text-right">Coste</TableHead>
-                    <TableHead className="text-xs text-right">PVP</TableHead>
+                    <TableHead className="text-xs text-right">Precio de Venta</TableHead>
                     <TableHead className="text-xs text-right">Margen</TableHead>
                     <TableHead className="text-xs text-center">Estado</TableHead>
                     <TableHead className="text-xs">Actualización</TableHead>

@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, UserPlus } from "lucide-react";
+import { Search, UserPlus, Plus } from "lucide-react";
 
 const AVATAR_COLORS = [
   "hsl(var(--primary))", "hsl(25 80% 55%)", "hsl(280 60% 55%)", "hsl(160 55% 42%)",
@@ -79,7 +79,7 @@ export function EmpleadosView() {
   return (
     <div className="space-y-4 p-4 md:p-6">
       <div className="flex items-center justify-end">
-        <Button size="sm" className="gap-2"><UserPlus className="h-4 w-4" /> Añadir empleado</Button>
+        <Button variant="primary" size="sm"><Plus className="h-4 w-4" />Nuevo</Button>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">

@@ -22,3 +22,18 @@ export type {
   ImportResult,
   ImportError,
 } from "./import";
+
+export type {
+  AgoraVentaRaw,
+  AgoraVentaValidada,
+  AgoraBatchResult,
+  AgoraRegistroError,
+  AgoraSyncStatus,
+  AgoraSyncLogEntry,
+} from "./agora";
+
+export {
+  agoraVentaRawSchema,
+  agoraVentaValidadaSchema,
+  validarLoteAgora,
+} from "./agora";

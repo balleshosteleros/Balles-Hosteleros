@@ -66,6 +66,23 @@ export function getStockPorEmpresa(_empresaId: string): ProductoStock[] {
   return [];
 }
 
-export function getTemporadasPorEmpresa(_empresaId: string): TemporadaStock[] {
-  return [];
+export function getTemporadasPorEmpresa(empresaId: string): TemporadaStock[] {
+  return [
+    {
+      id: "temp-verano",
+      nombre: "Verano",
+      fechaInicio: "2025-06-01",
+      fechaFin: "2025-09-30",
+      empresaId,
+      overrides: {},
+    },
+    {
+      id: "temp-invierno",
+      nombre: "Invierno",
+      fechaInicio: "2025-12-01",
+      fechaFin: "2026-02-28",
+      empresaId,
+      overrides: {},
+    },
+  ];
 }

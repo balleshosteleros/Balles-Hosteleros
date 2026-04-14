@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/features/layout/components/app-sidebar";
 import { useAuth } from "@/features/auth/contexts/auth-context";
@@ -28,6 +27,9 @@ import {
   MessageSquareWarning,
   ContactRound,
   Video,
+  CheckSquare2,
+  Phone,
+  MessageSquare,
   ClipboardList,
   Clock,
   Timer,
@@ -46,13 +48,30 @@ import {
   Apple,
   type LucideIcon,
 } from "lucide-react";
+import { useState } from "react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { FloatingSoporteButton } from "@/features/soporte/components";
 import { OnboardingGuard } from "@/features/formacion/components/OnboardingGuard";
 import { EmpresaSelector } from "@/features/empresa/components/empresa-selector";
 import {
   GmailDrawer,
   CalendarDrawer,
+  MeetDrawer,
+  TareasDrawer,
+  ChatDrawer,
+  TelefonoDrawer,
+  useDailyCounts,
 } from "@/features/google-workspace/components";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { getAccesosAppsPorEmpresa } from "@/features/rrhh/data/accesos-apps";
+import { ExternalLink } from "lucide-react";
 
 const ROUTE_TITLES: Record<string, string> = {
   "/": "DASHBOARD",
@@ -82,8 +101,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/logistica/incidencias": "INCIDENCIAS",
   "/ajustes": "AJUSTES",
   "/ayuda": "AYUDA",
-  "/consultas-pendientes": "CONSULTAS PENDIENTES",
-  "/formacion": "ONBOARDING",
+"/formacion": "ONBOARDING",
   "/comunicacion": "COMUNICACIÓN",
   "/reuniones": "REUNIONES",
   "/agenda": "AGENDA",
@@ -130,7 +148,6 @@ const ROUTE_TITLES: Record<string, string> = {
   "/contabilidad/reglas": "REGLAS AUTOMÁTICAS",
   "/gestoria/presentaciones": "PRESENTACIONES",
   "/juridico/procesos": "PROCESOS",
-  "/accesos": "ACCESOS",
 };
 
 const ROUTE_ICONS: Record<string, LucideIcon> = {
@@ -193,19 +210,51 @@ const ROUTE_ICONS: Record<string, LucideIcon> = {
   "/juridico/procesos": Scale,
   "/ajustes": Settings,
   "/ayuda": HelpCircle,
-  "/consultas-pendientes": MessageSquareWarning,
-  "/formacion": GraduationCap,
+"/formacion": GraduationCap,
   "/comunicacion": MessageSquareWarning,
   "/reuniones": Video,
   "/agenda": ContactRound,
-  "/accesos": KeyRound,
 };
+
+function AccesosIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <rect x="3" y="3" width="7" height="7" rx="1.2" />
+      <rect x="14" y="3" width="7" height="7" rx="1.2" />
+      <rect x="3" y="14" width="7" height="7" rx="1.2" />
+      <rect x="14.5" y="17.5" width="5" height="3.5" rx="0.8" />
+      <path d="M15.5 17.5v-1.2a1.5 1.5 0 0 1 3 0v1.2" />
+    </svg>
+  );
+}
+
+function NavBadge({ count, color = "blue" }: { count: number; color?: string }) {
+  if (count === 0) return null;
+  return (
+    <span
+      className={`absolute -top-0.5 -right-0.5 flex items-center justify-center h-3.5 min-w-3.5 px-0.5 rounded-full text-white text-[8px] font-bold leading-none ${
+        color === "blue" ? "bg-blue-600" : color === "emerald" ? "bg-emerald-600" : "bg-violet-600"
+      }`}
+    >
+      {count > 9 ? "9+" : count}
+    </span>
+  );
+}
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, profile, roles, signOut } = useAuth();
   const devBypass = process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true";
   const showUi = !!user || devBypass;
+  const counts = useDailyCounts();
 
   let title = ROUTE_TITLES[pathname] ?? "";
   if (!title && pathname.startsWith("/rrhh/empleados/")) title = "FICHA EMPLEADO";
@@ -215,8 +264,24 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     roles.length > 0
       ? roles[0].charAt(0).toUpperCase() + roles[0].slice(1)
       : devBypass
-        ? "Dev"
+        ? "Director"
         : "—";
+
+  const router = useRouter();
+  const userEmail = profile?.email ?? user?.email ?? "dev@local";
+  const userInitial = userEmail[0].toUpperCase();
+  const userName = profile?.nombre
+    ? profile.apellidos
+      ? `${profile.nombre} ${profile.apellidos}`
+      : profile.nombre
+    : devBypass
+      ? "Ivan Ballesteros"
+      : userEmail.split("@")[0];
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [appsMenuOpen, setAppsMenuOpen] = useState(false);
+  const { empresaActual } = useEmpresa();
+  const accesosApps = getAccesosAppsPorEmpresa(empresaActual.id).filter((a) => a.estado === "Activo");
+  const appsCategories = Array.from(new Set(accesosApps.map((a) => a.categoria)));
 
   return (
     <SidebarProvider>
@@ -233,74 +298,207 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="ml-auto flex items-center gap-3">
               {showUi && (
                 <>
-                  {/* Integraciones: email + calendario agrupados */}
-                  <div className="flex items-center rounded-full border bg-muted/40 px-1 py-0.5">
+                  {/* Integraciones: email + calendario + meet + tareas */}
+                  <div className="flex items-center rounded-full border bg-muted/40 px-1 py-0.5 gap-0.5">
+                    {/* Email */}
                     <GmailDrawer>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Abrir email">
+                      <Button
+                        variant="ghost" size="icon"
+                        className="relative h-7 w-7"
+                        title="Correo"
+                      >
                         <Mail className="h-4 w-4 text-red-500" />
+                        <NavBadge count={counts.emails} color="blue" />
                       </Button>
                     </GmailDrawer>
+
+                    {/* Calendario */}
                     <CalendarDrawer>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Abrir calendario">
+                      <Button
+                        variant="ghost" size="icon"
+                        className="relative h-7 w-7"
+                        title="Calendario"
+                      >
                         <CalendarIcon className="h-4 w-4 text-blue-600" />
+                        <NavBadge count={counts.events} color="blue" />
                       </Button>
                     </CalendarDrawer>
+
+                    {/* Google Meet */}
+                    <MeetDrawer>
+                      <Button
+                        variant="ghost" size="icon"
+                        className="relative h-7 w-7"
+                        title="Reuniones Meet"
+                      >
+                        <Video className="h-4 w-4 text-emerald-600" />
+                        <NavBadge count={counts.meetings} color="emerald" />
+                      </Button>
+                    </MeetDrawer>
+
+                    {/* Tareas */}
+                    <TareasDrawer>
+                      <Button
+                        variant="ghost" size="icon"
+                        className="relative h-7 w-7"
+                        title="Mis tareas"
+                      >
+                        <CheckSquare2 className="h-4 w-4 text-violet-600" />
+                        <NavBadge count={counts.tasks} color="violet" />
+                      </Button>
+                    </TareasDrawer>
+
+                    {/* Separador visual */}
+                    <span className="w-px h-5 bg-border mx-0.5" />
+
+                    {/* Chat / Comunicación */}
+                    <ChatDrawer>
+                      <Button
+                        variant="ghost" size="icon"
+                        className="relative h-7 w-7"
+                        title="Comunicación interna"
+                      >
+                        <MessageSquare className="h-4 w-4 text-blue-500" />
+                      </Button>
+                    </ChatDrawer>
+
+                    {/* Teléfono VoIP */}
+                    <TelefonoDrawer>
+                      <Button
+                        variant="ghost" size="icon"
+                        className="relative h-7 w-7"
+                        title="Teléfono"
+                      >
+                        <Phone className="h-4 w-4 text-sky-600" />
+                      </Button>
+                    </TelefonoDrawer>
+
+                    {/* Accesos a apps externas */}
+                    <DropdownMenu open={appsMenuOpen} onOpenChange={setAppsMenuOpen}>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost" size="icon"
+                          className="relative h-7 w-7"
+                          title="Accesos a aplicaciones"
+                          onMouseEnter={() => setAppsMenuOpen(true)}
+                        >
+                          <AccesosIcon className="h-4 w-4 text-amber-600" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="end"
+                        className="w-72 max-h-[480px] overflow-y-auto"
+                        onMouseLeave={() => setAppsMenuOpen(false)}
+                      >
+                        <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 py-2">
+                          Aplicaciones — {empresaActual.nombre}
+                        </DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {appsCategories.map((cat) => (
+                          <div key={cat}>
+                            <p className="px-3 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                              {cat}
+                            </p>
+                            {accesosApps
+                              .filter((a) => a.categoria === cat)
+                              .map((app) => (
+                                <DropdownMenuItem
+                                  key={app.id}
+                                  className="cursor-pointer gap-2 px-3 py-1.5"
+                                  onSelect={() => window.open(app.url, "_blank", "noopener,noreferrer")}
+                                >
+                                  {app.logoUrl ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={app.logoUrl} alt="" className="h-4 w-4 rounded object-contain shrink-0" />
+                                  ) : (
+                                    <span className="text-sm leading-none shrink-0">{app.icono}</span>
+                                  )}
+                                  <span className="flex-1 text-xs font-medium truncate">{app.nombre}</span>
+                                  <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
+                                </DropdownMenuItem>
+                              ))}
+                            <DropdownMenuSeparator />
+                          </div>
+                        ))}
+                        <DropdownMenuItem
+                          className="cursor-pointer gap-2 px-3 py-2 text-xs text-muted-foreground"
+                          onSelect={() => router.push("/accesos")}
+                        >
+                          Ver todos los accesos →
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
 
-                  {/* Onboarding */}
-                  <Button
-                    asChild
-                    size="sm"
-                    className="gap-1.5 bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-600/20"
-                    title="Onboarding"
-                  >
-                    <Link href="/formacion">
-                      <GraduationCap className="h-4 w-4" />
-                      <span className="hidden xl:inline text-xs font-semibold tracking-wide">
-                        ONBOARDING
-                      </span>
-                    </Link>
-                  </Button>
+                  {/* Bloque final: empresa + nombre + ajustes + avatar — todo en un pill */}
+                  <div className="flex items-center gap-0.5 rounded-full border bg-muted/40 py-1 px-1.5">
+                    {/* Logo empresa */}
+                    <EmpresaSelector />
 
-                  {/* Bloque final: empresa + correo + rol + salir */}
-                  <div className="flex items-center gap-2 rounded-full border bg-muted/40 py-1 pl-1 pr-2">
-                    {/* Selector de empresa */}
-                    <div className="w-40 md:w-44">
-                      <EmpresaSelector />
-                    </div>
+                    <div className="h-5 w-px bg-border mx-1" />
 
-                    <div className="hidden md:block h-7 w-px bg-border" />
-
-                    {/* Correo + rol */}
-                    <div className="hidden md:flex flex-col leading-tight">
+                    {/* Nombre + Rol del empleado */}
+                    <div className="hidden md:flex flex-col justify-center px-1 max-w-[140px]">
                       <span
-                        className="max-w-[180px] truncate text-[11px] font-semibold text-foreground"
-                        title={profile?.email ?? user?.email ?? "dev@local"}
+                        className="text-xs font-semibold text-foreground leading-tight truncate"
+                        title={userName}
                       >
-                        {profile?.email ?? user?.email ?? "dev@local"}
+                        {userName}
                       </span>
-                      <span className="flex items-center gap-1">
-                        <UserCircle className="h-3 w-3 text-muted-foreground" />
-                        <Badge
-                          variant="secondary"
-                          className="h-4 px-1.5 text-[9px] font-semibold uppercase tracking-wider"
-                        >
-                          {rolLabel}
-                        </Badge>
+                      <span className="text-[10px] font-medium text-muted-foreground leading-tight truncate uppercase tracking-wide">
+                        {rolLabel}
                       </span>
                     </div>
 
-                    {user && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                        onClick={signOut}
-                        title="Cerrar sesión"
+                    {/* Engranaje Ajustes */}
+                    <DropdownMenu open={userMenuOpen} onOpenChange={setUserMenuOpen}>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                          title="Ajustes"
+                          onMouseEnter={() => setUserMenuOpen(true)}
+                        >
+                          <Settings className="h-3.5 w-3.5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="end"
+                        className="w-52"
+                        onMouseLeave={() => setUserMenuOpen(false)}
                       >
-                        <LogOut className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
+                        <DropdownMenuLabel className="pb-0">
+                          <p className="text-xs font-semibold text-foreground truncate max-w-[180px]" title={userEmail}>
+                            {userEmail}
+                          </p>
+                          <Badge
+                            variant="secondary"
+                            className="mt-1 h-4 px-1.5 text-[9px] font-semibold uppercase tracking-wider"
+                          >
+                            {rolLabel}
+                          </Badge>
+                        </DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onSelect={() => router.push("/ajustes")}
+                          className="cursor-pointer gap-2"
+                        >
+                          <Settings className="h-3.5 w-3.5" />
+                          Ajustes
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        {user && (
+                          <DropdownMenuItem
+                            onSelect={signOut}
+                            className="text-destructive focus:text-destructive cursor-pointer gap-2"
+                          >
+                            <LogOut className="h-3.5 w-3.5" />
+                            Cerrar sesión
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </>
               )}

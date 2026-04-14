@@ -26,7 +26,7 @@ export function DescansosSection({ empresaId }: { empresaId: string }) {
           <h2 className="text-lg font-semibold flex items-center gap-2"><Coffee className="h-5 w-5 text-primary" />Descansos</h2>
           <p className="text-sm text-muted-foreground">Configura los descansos dentro de los turnos o la jornada</p>
         </div>
-        <Button size="sm" className="gap-1" onClick={() => { setEditando(null); setShowModal(true); }}><Plus className="h-4 w-4" />Crear descanso</Button>
+        <Button variant="primary" size="sm" onClick={() => { setEditando(null); setShowModal(true); }}><Plus className="h-4 w-4" />Nuevo</Button>
       </div>
 
       <div className="relative max-w-sm">

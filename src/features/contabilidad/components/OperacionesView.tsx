@@ -54,7 +54,7 @@ export function OperacionesView() {
         </div>
         <div className="px-6 py-3 flex items-center gap-3">
           <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Buscar..." className="pl-9" value={busqueda} onChange={e => setBusqueda(e.target.value)} /></div>
-          <Button className="gap-1.5"><Plus className="h-4 w-4" />Añadir operación</Button>
+          <Button variant="primary" size="sm"><Plus className="h-4 w-4" />Nuevo</Button>
         </div>
         <div className="flex-1 overflow-auto px-6">
           <table className="w-full text-sm">

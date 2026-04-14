@@ -95,7 +95,7 @@ export function DestinoTab({ lineas, onChange, totalCapital }: Props) {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Destino de la inversión</CardTitle>
-          <Button size="sm" onClick={openNew}><Plus className="h-4 w-4 mr-1" />Añadir</Button>
+          <Button variant="primary" size="sm" onClick={openNew}><Plus className="h-4 w-4" />Nuevo</Button>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">

@@ -322,7 +322,7 @@ export function BoardingView() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="flex-1" />
-          <Button onClick={openNewPlantilla}><Plus className="h-4 w-4 mr-1" /> Nueva plantilla</Button>
+          <Button variant="primary" size="sm" onClick={openNewPlantilla}><Plus className="h-4 w-4" />Nuevo</Button>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -432,8 +432,8 @@ export function BoardingView() {
           <Button variant="outline" onClick={() => setVista("plantillas")}>
             <ClipboardList className="h-4 w-4 mr-1" /> Plantillas
           </Button>
-          <Button onClick={() => setShowNew(true)}>
-            <Plus className="h-4 w-4 mr-1" /> Nuevo proceso
+          <Button size="sm" className="gap-1.5" onClick={() => setShowNew(true)}>
+            <Plus className="h-4 w-4" />Nuevo
           </Button>
         </div>
       </div>

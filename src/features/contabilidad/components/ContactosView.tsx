@@ -113,7 +113,7 @@ export function ContactosView() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Buscar..." className="pl-9" value={busqueda} onChange={e => setBusqueda(e.target.value)} />
           </div>
-          <Button className="gap-1.5"><Plus className="h-4 w-4" />Crear contacto</Button>
+          <Button variant="primary" size="sm"><Plus className="h-4 w-4" />Nuevo</Button>
         </div>
 
         {/* Table */}

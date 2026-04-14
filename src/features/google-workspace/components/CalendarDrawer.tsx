@@ -286,6 +286,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
     const fmt = (d: Date) =>
       `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
     setForm({
+      ...FORM_VACIO,
       id: ev.id,
       calendarId: ev.calendarId,
       titulo: ev.titulo,

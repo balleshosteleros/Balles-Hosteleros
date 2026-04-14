@@ -18,7 +18,7 @@ export function ResumenGeneral() {
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
       {cards.map((c) => (
         <Card key={c.label}>
           <CardContent className="p-4 flex items-start gap-3">

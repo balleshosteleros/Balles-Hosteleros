@@ -76,7 +76,7 @@ export function AdminUsuariosTab() {
           <p className="text-sm text-muted-foreground">Crea y gestiona los accesos de tus empleados</p>
         </div>
         <Button size="sm" className="gap-1.5" onClick={() => setShowForm(true)}>
-          <UserPlus className="h-4 w-4" /> Nuevo usuario
+          <Plus className="h-4 w-4" />Nuevo
         </Button>
       </div>
 

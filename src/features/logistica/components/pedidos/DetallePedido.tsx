@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { EstadoPedidoBadge } from "./BadgesPedido";
 import { ESTADOS_PEDIDO, PROVEEDOR_EMAILS, calcularTotalesLineas, type Pedido, type Albaran } from "@/features/logistica/data/pedidos";
-import { ArrowLeft, FileText, Send, CheckCircle2, AlertTriangle, PackageCheck, Mail, Archive } from "lucide-react";
+import { ArrowLeft, FileText, Send, CheckCircle2, AlertTriangle, PackageCheck, Mail } from "lucide-react";
 import { toast } from "sonner";
 
 interface Props {
@@ -15,14 +15,12 @@ interface Props {
   onConfirmar: (pedido: Pedido) => void;
   onOpenAlbaran: (albaranId: string) => void;
   onEnviarProveedor: (pedido: Pedido) => void;
-  onArchivar: (pedido: Pedido) => void;
 }
 
-export function DetallePedido({ pedido, albaran, onBack, onUpdateEstado, onConfirmar, onOpenAlbaran, onEnviarProveedor, onArchivar }: Props) {
+export function DetallePedido({ pedido, albaran, onBack, onUpdateEstado, onConfirmar, onOpenAlbaran, onEnviarProveedor }: Props) {
   const totales = calcularTotalesLineas(pedido.lineas);
   const canConfirm = pedido.estado === "Borrador" || pedido.estado === "Pendiente";
-  const canSend = pedido.estado !== "Borrador" && pedido.estado !== "Cancelado" && pedido.estado !== "Archivado" && !pedido.enviadoAt;
-  const canArchive = pedido.estado !== "Archivado" && pedido.estado !== "Borrador";
+  const canSend = pedido.estado !== "Borrador" && pedido.estado !== "Cancelado" && !pedido.enviadoAt;
   const proveedorEmail = PROVEEDOR_EMAILS[pedido.proveedor] || "";
 
   return (
@@ -40,11 +38,6 @@ export function DetallePedido({ pedido, albaran, onBack, onUpdateEstado, onConfi
         {canSend && (
           <Button size="sm" variant="outline" className="gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-900/20" onClick={() => onEnviarProveedor(pedido)}>
             <Mail className="h-4 w-4" /> Enviar al proveedor
-          </Button>
-        )}
-        {canArchive && (
-          <Button size="sm" variant="outline" className="gap-1" onClick={() => onArchivar(pedido)}>
-            <Archive className="h-4 w-4" /> Archivar
           </Button>
         )}
         {canConfirm && (
@@ -159,13 +152,7 @@ export function DetallePedido({ pedido, albaran, onBack, onUpdateEstado, onConfi
       {pedido.enviadoAt && !pedido.albaranId && (
         <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg px-4 py-3">
           <Mail className="h-4 w-4 shrink-0" />
-          Este pedido fue enviado al proveedor y no puede eliminarse. Puedes archivarlo.
-        </div>
-      )}
-      {pedido.estado === "Archivado" && (
-        <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3">
-          <Archive className="h-4 w-4 shrink-0" />
-          Este pedido está archivado.
+          Este pedido fue enviado al proveedor y no puede eliminarse.
         </div>
       )}
     </div>

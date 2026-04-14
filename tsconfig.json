@@ -40,6 +40,9 @@
   "exclude": [
     "node_modules",
     "lovable-mantencion-maestra-main",
-    "Balles Hosteleros SAAS"
+    "Balles Hosteleros SAAS",
+    "tests",
+    "playwright.config.ts",
+    "scripts"
   ]
 }

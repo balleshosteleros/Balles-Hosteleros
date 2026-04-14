@@ -48,8 +48,8 @@ export function RolesTab() {
   };
 
   const eliminarRol = (rolId: string, nombre: string) => {
-    if (nombre === "Administrador" || nombre === "Solo lectura") {
-      toast.error("No se puede eliminar un rol del sistema");
+    if (nombre === "Dirección") {
+      toast.error("No se puede eliminar el rol de Dirección");
       return;
     }
     if (!confirm(`¿Eliminar el rol "${nombre}"?`)) return;
@@ -58,31 +58,18 @@ export function RolesTab() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="font-bold text-foreground">ROLES Y PERMISOS</h3>
+    <div className="space-y-2">
+      <div className="flex justify-end">
         <Button size="sm" className="gap-1.5" onClick={() => setShowCreateModal(true)}>
-          <Plus className="h-4 w-4" /> Nuevo rol
+          <Plus className="h-4 w-4" />Nuevo
         </Button>
-      </div>
-
-      {/* Info banner: auto-generation notice */}
-      <div className="flex items-start gap-3 px-4 py-3 rounded-lg border border-amber-500/30 bg-amber-500/5">
-        <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 shrink-0" />
-        <div className="space-y-1">
-          <p className="text-sm font-medium text-foreground">Vinculación automática con Reclutamiento</p>
-          <p className="text-sm text-muted-foreground">
-            Al crear un nuevo rol, el sistema generará automáticamente una nueva vacante en <strong>Recursos Humanos → Reclutamiento</strong>.
-            Cada rol está vinculado a su vacante correspondiente. No es posible crear vacantes sin un rol asociado.
-          </p>
-        </div>
       </div>
 
       {ajustes.roles.map((rol) => {
         const isOpen = expandedRol === rol.id;
         return (
           <Card key={rol.id}>
-            <CardHeader className="py-3 px-4 cursor-pointer" onClick={() => setExpandedRol(isOpen ? null : rol.id)}>
+            <CardHeader className="py-2 px-4 cursor-pointer" onClick={() => setExpandedRol(isOpen ? null : rol.id)}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
@@ -91,7 +78,7 @@ export function RolesTab() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">{rol.permisos.filter((p) => p.editar).length}/{rol.permisos.length} módulos editables</span>
-                  {rol.nombre !== "Administrador" && rol.nombre !== "Solo lectura" && (
+                  {rol.nombre !== "Dirección" && (
                     <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={(e) => { e.stopPropagation(); eliminarRol(rol.id, rol.nombre); }}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
@@ -130,7 +117,7 @@ export function RolesTab() {
           <DialogHeader>
             <DialogTitle>Nuevo rol</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-2">
             <div>
               <Label className="text-xs font-bold">Nombre del rol</Label>
               <Input value={nuevoNombre} onChange={(e) => setNuevoNombre(e.target.value)} placeholder="Ej: Encargado de sala" />

@@ -22,11 +22,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Search } from "lucide-react";
 import { toast } from "sonner";
 import {
   listIncidencias,
   createIncidencia,
 } from "@/features/logistica/actions/incidencias-actions";
+import { FiltrosAvanzados, type FiltroActivo, type CampoFiltro } from "@/features/logistica/components/FiltrosAvanzados";
+
+type CampoIncidencia = "proveedor" | "variacion" | "fecha";
 
 type Registro = {
   id: string;
@@ -57,6 +61,8 @@ export function IncidenciasView() {
   const [precioNuevo, setPrecioNuevo] = useState<string>("");
   const [registros, setRegistros] = useState<Registro[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [search, setSearch] = useState("");
+  const [filtros, setFiltros] = useState<FiltroActivo<CampoIncidencia>[]>([]);
 
   const cargarRegistros = useCallback(async () => {
     try {
@@ -91,6 +97,38 @@ export function IncidenciasView() {
   const subio = variacion > 0;
   const bajo = variacion < 0;
   const muyAlta = Math.abs(variacion) >= 10;
+
+  const camposFiltro = useMemo((): CampoFiltro<CampoIncidencia>[] => {
+    const uniq = (arr: string[]) => [...new Set(arr.filter(Boolean))].sort();
+    return [
+      { campo: "proveedor", label: "Proveedor", tipo: "lista", opciones: uniq(registros.map((r) => r.proveedor)) },
+      { campo: "variacion", label: "Variación", tipo: "numero" },
+      { campo: "fecha", label: "Fecha", tipo: "fecha" },
+    ];
+  }, [registros]);
+
+  const filteredRegistros = useMemo(() => {
+    return registros.filter((r) => {
+      for (const f of filtros) {
+        if (f.campo === "proveedor" && f.valores?.length && !f.valores.includes(r.proveedor)) return false;
+        if (f.campo === "variacion" && f.operador !== undefined && f.numVal !== undefined) {
+          const v = pct(r.precioActual, r.precioNuevo);
+          if (f.operador === "mayor" && v <= f.numVal) return false;
+          if (f.operador === "menor" && v >= f.numVal) return false;
+          if (f.operador === "igual" && Math.abs(v - f.numVal) > 0.01) return false;
+        }
+        if (f.campo === "fecha") {
+          if (f.desde && r.fecha < f.desde) return false;
+          if (f.hasta && r.fecha > f.hasta) return false;
+        }
+      }
+      if (search) {
+        const s = search.toLowerCase();
+        return r.producto.toLowerCase().includes(s) || r.proveedor.toLowerCase().includes(s);
+      }
+      return true;
+    });
+  }, [registros, filtros, search]);
 
   async function registrar() {
     if (!producto.trim()) {
@@ -256,8 +294,16 @@ export function IncidenciasView() {
 
       {/* Histórico */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Subidas registradas</CardTitle>
+        <CardHeader className="pb-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <CardTitle className="text-base">Subidas registradas</CardTitle>
+            <div className="flex-1" />
+            <div className="relative min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Buscar producto o proveedor…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-8 text-sm" />
+            </div>
+            <FiltrosAvanzados campos={camposFiltro} filtros={filtros} onChange={setFiltros} />
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -282,17 +328,17 @@ export function IncidenciasView() {
                   </TableCell>
                 </TableRow>
               )}
-              {!cargando && registros.length === 0 && (
+              {!cargando && filteredRegistros.length === 0 && (
                 <TableRow>
                   <TableCell
                     colSpan={6}
                     className="py-10 text-center text-sm text-muted-foreground"
                   >
-                    Todavía no has registrado ninguna subida.
+                    {registros.length === 0 ? "Todavía no has registrado ninguna subida." : "No se encontraron resultados."}
                   </TableCell>
                 </TableRow>
               )}
-              {registros.map((r) => {
+              {filteredRegistros.map((r) => {
                 const v = pct(r.precioActual, r.precioNuevo);
                 return (
                   <TableRow key={r.id}>

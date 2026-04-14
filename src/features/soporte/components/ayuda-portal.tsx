@@ -1,40 +1,52 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search, ChevronRight, UserRound } from "lucide-react";
+import { Search, ChevronRight, UserRound, GraduationCap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { FaqAdminPanel } from "./faq-admin-panel";
 import { SoporteDrawer } from "./soporte-drawer";
+import { FormacionRolViewer } from "@/features/formacion/components/FormacionRolViewer";
 import type { Faq, FaqsByCategory } from "@/features/soporte/types";
 
 interface AyudaPortalProps {
   viewerData: FaqsByCategory[];
   adminData: Faq[] | null; // null si el usuario no puede editar
+  userRoles?: string[];    // roles del usuario para filtrar formación
 }
 
-export function AyudaPortal({ viewerData, adminData }: AyudaPortalProps) {
+export function AyudaPortal({ viewerData, adminData, userRoles = [] }: AyudaPortalProps) {
   const canEdit = adminData !== null;
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-6 md:py-8">
-      {canEdit ? (
-        <Tabs defaultValue="ver" className="w-full">
-          <TabsList className="mb-4">
-            <TabsTrigger value="ver">Ver ayuda</TabsTrigger>
+      <Tabs defaultValue="ver" className="w-full">
+        <TabsList className="mb-4">
+          <TabsTrigger value="ver">Ver ayuda</TabsTrigger>
+          <TabsTrigger value="formacion" className="gap-1.5">
+            <GraduationCap className="h-3.5 w-3.5" />
+            Ver Formación Inicial de nuevo
+          </TabsTrigger>
+          {canEdit && (
             <TabsTrigger value="gestionar">Editar contenido</TabsTrigger>
-          </TabsList>
-          <TabsContent value="ver" className="mt-0">
-            <AyudaViewer data={viewerData} />
-          </TabsContent>
+          )}
+        </TabsList>
+
+        <TabsContent value="ver" className="mt-0">
+          <AyudaViewer data={viewerData} />
+        </TabsContent>
+
+        <TabsContent value="formacion" className="mt-0">
+          <FormacionRolViewer userRoles={userRoles} />
+        </TabsContent>
+
+        {canEdit && (
           <TabsContent value="gestionar" className="mt-0">
             <FaqAdminPanel initialFaqs={adminData!} />
           </TabsContent>
-        </Tabs>
-      ) : (
-        <AyudaViewer data={viewerData} />
-      )}
+        )}
+      </Tabs>
     </div>
   );
 }

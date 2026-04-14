@@ -9,7 +9,8 @@ export interface AccesoApp {
   nombre: string;
   descripcion: string;
   url: string;
-  icono: string; // emoji or icon key
+  icono: string;        // emoji fallback
+  logoUrl?: string;     // logo de marca (clearbit / directo)
   categoria: string;
   departamentos: string[];
   rolesAutorizados: string[];
@@ -24,6 +25,10 @@ export interface AccesoApp {
 }
 
 export const CATEGORIAS_APP = [
+  "Sistemas de gestión",
+  "Banca y finanzas",
+  "Redes sociales",
+  "Presencia digital",
   "Fichaje y control horario",
   "Nóminas y RRHH",
   "Contabilidad y finanzas",
@@ -34,6 +39,9 @@ export const CATEGORIAS_APP = [
   "Gestión y ERP",
   "Logística y proveedores",
   "Legal y compliance",
+  "Hosting y web",
+  "Marketplace y servicios",
+  "IA y productividad",
   "Otros",
 ];
 
@@ -50,34 +58,363 @@ export const DEPARTAMENTOS = [
   "Todos",
 ];
 
-// --- HABANA ---
+// ─── Helpers de logos ────────────────────────────────────────────────────────
+// icon.horse: agrega de múltiples fuentes, funciona para ~90% de dominios
+const logo = (domain: string) => `https://icon.horse/icon/${domain}`;
+// Simple Icons CDN: SVGs vectoriales oficiales de marcas conocidas
+const si = (slug: string, hex = "000000") => `https://cdn.simpleicons.org/${slug}/${hex}`;
+// Google Favicon 256px: fallback para marcas pequeñas sin icono en icon.horse
+const gfav = (domain: string) =>
+  `https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://${domain}&size=256`;
+const today = "2026-04-13";
+
+// ─── HABANA ──────────────────────────────────────────────────────────────────
 const HABANA_APPS: AccesoApp[] = [
-  { id: "ha-1", nombre: "Factorial", descripcion: "Gestión de RRHH, fichajes y nóminas", url: "https://app.factorialhr.com", icono: "👤", categoria: "Nóminas y RRHH", departamentos: ["RRHH", "Dirección"], rolesAutorizados: ["Administrador", "Director", "Responsable"], usuario: "admin@habana.es", contrasena: "Hab*2026!Fact", estado: "Activo", responsable: "María García", notas: "Plan Business. Renovación anual en septiembre.", tipoIntegracion: "enlace", empresaId: "habana", ultimaActualizacion: "2026-04-01" },
-  { id: "ha-2", nombre: "A3 Nóminas", descripcion: "Software de nóminas y seguros sociales", url: "https://a3.wolterskluwer.es", icono: "💰", categoria: "Nóminas y RRHH", departamentos: ["RRHH", "Gestoría"], rolesAutorizados: ["Administrador", "Director"], usuario: "habana_nominas", contrasena: "A3nom*2026", estado: "Activo", responsable: "Laura Sánchez", notas: "Licencia compartida con gestoría.", tipoIntegracion: "enlace", empresaId: "habana", ultimaActualizacion: "2026-03-15" },
-  { id: "ha-3", nombre: "Meta Business Suite", descripcion: "Gestión de Facebook e Instagram", url: "https://business.facebook.com", icono: "📱", categoria: "Marketing y redes", departamentos: ["Marketing"], rolesAutorizados: ["Administrador", "Director", "Responsable"], usuario: "marketing@habana.es", contrasena: "MetaHab*2026", estado: "Activo", responsable: "Carlos Martínez", notas: "Cuentas de IG y FB vinculadas.", tipoIntegracion: "oauth", empresaId: "habana", ultimaActualizacion: "2026-04-05" },
-  { id: "ha-4", nombre: "Canva Pro", descripcion: "Diseño gráfico y creatividades", url: "https://www.canva.com", icono: "🎨", categoria: "Diseño y contenido", departamentos: ["Marketing"], rolesAutorizados: ["Administrador", "Director", "Responsable", "Empleado"], usuario: "diseno@habana.es", contrasena: "CanvaHab*26", estado: "Activo", responsable: "Carlos Martínez", notas: "5 licencias activas.", tipoIntegracion: "enlace", empresaId: "habana", ultimaActualizacion: "2026-03-28" },
-  { id: "ha-5", nombre: "Google Drive", descripcion: "Almacenamiento y documentación", url: "https://drive.google.com", icono: "📁", categoria: "Almacenamiento y docs", departamentos: ["Todos"], rolesAutorizados: ["Administrador", "Director", "Responsable", "Empleado"], usuario: "admin@habana.es", contrasena: "GDrive*Hab26", estado: "Activo", responsable: "Laura Sánchez", notas: "Workspace Business Standard.", tipoIntegracion: "oauth", empresaId: "habana", ultimaActualizacion: "2026-04-07" },
-  { id: "ha-6", nombre: "Bankinter Empresas", descripcion: "Banca online empresarial", url: "https://empresas.bankinter.com", icono: "🏦", categoria: "Contabilidad y finanzas", departamentos: ["Contabilidad", "Dirección", "Gerencia"], rolesAutorizados: ["Administrador", "Director"], usuario: "habana_empresa", contrasena: "Bk*Hab2026!!", estado: "Activo", responsable: "Pedro Ruiz", notas: "Doble factor obligatorio.", tipoIntegracion: "enlace", empresaId: "habana", ultimaActualizacion: "2026-04-02" },
-  { id: "ha-7", nombre: "Slack", descripcion: "Comunicación interna del equipo", url: "https://habana-team.slack.com", icono: "💬", categoria: "Comunicación", departamentos: ["Todos"], rolesAutorizados: ["Administrador", "Director", "Responsable", "Empleado"], usuario: "—", contrasena: "—", estado: "Activo", responsable: "María García", notas: "Cada usuario tiene su propia cuenta.", tipoIntegracion: "sso", empresaId: "habana", ultimaActualizacion: "2026-04-06" },
-  { id: "ha-8", nombre: "Holded", descripcion: "Facturación y contabilidad", url: "https://app.holded.com", icono: "📊", categoria: "Contabilidad y finanzas", departamentos: ["Contabilidad", "Gestoría", "Dirección"], rolesAutorizados: ["Administrador", "Director", "Responsable"], usuario: "admin@habana.es", contrasena: "Hold*Hab26!", estado: "Activo", responsable: "Pedro Ruiz", notas: "Plan Premium.", tipoIntegracion: "enlace", empresaId: "habana", ultimaActualizacion: "2026-03-20" },
-  { id: "ha-9", nombre: "Signaturit", descripcion: "Firma digital de contratos", url: "https://app.signaturit.com", icono: "✍️", categoria: "Legal y compliance", departamentos: ["RRHH", "Jurídico", "Dirección"], rolesAutorizados: ["Administrador", "Director"], usuario: "legal@habana.es", contrasena: "Sign*Hab26!", estado: "Activo", responsable: "Laura Sánchez", notas: "500 firmas/año contratadas.", tipoIntegracion: "enlace", empresaId: "habana", ultimaActualizacion: "2026-02-10" },
-  { id: "ha-10", nombre: "Uber Eats Manager", descripcion: "Gestión de pedidos delivery", url: "https://merchants.ubereats.com", icono: "🛵", categoria: "Logística y proveedores", departamentos: ["Logística", "Gerencia"], rolesAutorizados: ["Administrador", "Director", "Responsable"], usuario: "habana@ubereats.com", contrasena: "UE*Hab2026", estado: "Inactivo", responsable: "Pedro Ruiz", notas: "Desactivado temporalmente. Revisar en mayo.", tipoIntegracion: "enlace", empresaId: "habana", ultimaActualizacion: "2026-01-15" },
+  // SISTEMAS DE GESTIÓN
+  {
+    id: "ha-sg1", nombre: "Banktrack", descripcion: "Control financiero y tesorería empresarial",
+    url: "https://app.banktrack.com", icono: "🏦", logoUrl: gfav("banktrack.com"),
+    categoria: "Sistemas de gestión", departamentos: ["Contabilidad", "Dirección"],
+    rolesAutorizados: ["Dirección", "Gerencia"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Pedro Ruiz", notas: "", tipoIntegracion: "enlace",
+    empresaId: "habana", ultimaActualizacion: today,
+  },
+  {
+    id: "ha-sg2", nombre: "Ágora", descripcion: "Software TPV para hostelería",
+    url: "https://www.agora-pv.com", icono: "🍽️", logoUrl: gfav("agora-pv.com"),
+    categoria: "Sistemas de gestión", departamentos: ["Gerencia", "Dirección"],
+    rolesAutorizados: ["Dirección", "Gerencia"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "María García", notas: "", tipoIntegracion: "enlace",
+    empresaId: "habana", ultimaActualizacion: today,
+  },
+  {
+    id: "ha-sg3", nombre: "Sesame", descripcion: "RRHH, fichajes y gestión de personal",
+    url: "https://app.sesamehr.es", icono: "👥", logoUrl: logo("sesamehr.com"),
+    categoria: "Sistemas de gestión", departamentos: ["RRHH", "Dirección"],
+    rolesAutorizados: ["Dirección", "Gerencia", "RRHH"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "María García", notas: "", tipoIntegracion: "enlace",
+    empresaId: "habana", ultimaActualizacion: today,
+  },
+  {
+    id: "ha-sg4", nombre: "Cover Manager", descripcion: "Gestión de reservas para restaurantes",
+    url: "https://www.covermanager.com", icono: "📅", logoUrl: gfav("covermanager.com"),
+    categoria: "Sistemas de gestión", departamentos: ["Gerencia", "Dirección"],
+    rolesAutorizados: ["Dirección", "Gerencia"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Carlos Martínez", notas: "", tipoIntegracion: "enlace",
+    empresaId: "habana", ultimaActualizacion: today,
+  },
+  {
+    id: "ha-sg5", nombre: "B2com", descripcion: "Plataforma de gestión para hostelería",
+    url: "https://www.b2com.es", icono: "🏢", logoUrl: gfav("b2com.es"), // icon.horse no tiene cobertura de este dominio
+    categoria: "Sistemas de gestión", departamentos: ["Dirección"],
+    rolesAutorizados: ["Dirección"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Pedro Ruiz", notas: "", tipoIntegracion: "enlace",
+    empresaId: "habana", ultimaActualizacion: today,
+  },
+  {
+    id: "ha-sg6", nombre: "Joombo", descripcion: "Gestión integral de restaurante",
+    url: "https://www.joombo.com", icono: "🍴", logoUrl: gfav("joombo.com"), // icon.horse no tiene cobertura de este dominio
+    categoria: "Sistemas de gestión", departamentos: ["Gerencia", "Dirección"],
+    rolesAutorizados: ["Dirección", "Gerencia"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Carlos Martínez", notas: "", tipoIntegracion: "enlace",
+    empresaId: "habana", ultimaActualizacion: today,
+  },
+  {
+    id: "ha-sg7", nombre: "High Level", descripcion: "CRM y marketing automation",
+    url: "https://app.gohighlevel.com", icono: "📊", logoUrl: logo("gohighlevel.com"),
+    categoria: "Sistemas de gestión", departamentos: ["Marketing", "Dirección"],
+    rolesAutorizados: ["Dirección", "Marketing"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Carlos Martínez", notas: "", tipoIntegracion: "enlace",
+    empresaId: "habana", ultimaActualizacion: today,
+  },
+
+  // BANCA Y FINANZAS
+  {
+    id: "ha-bf1", nombre: "BBVA Net Cash", descripcion: "Banca online empresarial BBVA",
+    url: "https://www.bbva.es/empresas/productos/banca-electronica/net-cash.html", icono: "💳",
+    logoUrl: si("bbva", "004481"), categoria: "Banca y finanzas",
+    departamentos: ["Contabilidad", "Dirección"], rolesAutorizados: ["Dirección"],
+    usuario: "", contrasena: "", estado: "Activo", responsable: "Pedro Ruiz",
+    notas: "Doble factor obligatorio.", tipoIntegracion: "enlace",
+    empresaId: "habana", ultimaActualizacion: today,
+  },
+  {
+    id: "ha-bf2", nombre: "Revolut", descripcion: "Banca digital personal y gastos",
+    url: "https://app.revolut.com", icono: "💸", logoUrl: si("revolut", "0666EB"),
+    categoria: "Banca y finanzas", departamentos: ["Contabilidad", "Dirección"],
+    rolesAutorizados: ["Dirección"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Pedro Ruiz", notas: "", tipoIntegracion: "enlace",
+    empresaId: "habana", ultimaActualizacion: today,
+  },
+  {
+    id: "ha-bf3", nombre: "Revolut Business", descripcion: "Banca digital empresarial Revolut",
+    url: "https://business.revolut.com", icono: "💼", logoUrl: si("revolut", "0666EB"),
+    categoria: "Banca y finanzas", departamentos: ["Contabilidad", "Dirección"],
+    rolesAutorizados: ["Dirección"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Pedro Ruiz", notas: "", tipoIntegracion: "enlace",
+    empresaId: "habana", ultimaActualizacion: today,
+  },
+  {
+    id: "ha-bf4", nombre: "Stripe", descripcion: "Pasarela de pagos online",
+    url: "https://dashboard.stripe.com", icono: "⚡", logoUrl: si("stripe", "635BFF"),
+    categoria: "Banca y finanzas", departamentos: ["Contabilidad", "Dirección"],
+    rolesAutorizados: ["Dirección", "Gerencia"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Pedro Ruiz", notas: "", tipoIntegracion: "oauth",
+    empresaId: "habana", ultimaActualizacion: today,
+  },
+  {
+    id: "ha-bf5", nombre: "Adyen", descripcion: "Plataforma de pagos empresarial",
+    url: "https://ca-live.adyen.com", icono: "💳", logoUrl: si("adyen", "0ABF53"),
+    categoria: "Banca y finanzas", departamentos: ["Contabilidad", "Dirección"],
+    rolesAutorizados: ["Dirección"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Pedro Ruiz", notas: "", tipoIntegracion: "enlace",
+    empresaId: "habana", ultimaActualizacion: today,
+  },
+
+  // MARKETPLACE Y SERVICIOS
+  {
+    id: "ha-ms1", nombre: "Amazon", descripcion: "Marketplace y compras de suministros",
+    url: "https://www.amazon.es", icono: "📦", logoUrl: si("amazon", "FF9900"),
+    categoria: "Marketplace y servicios", departamentos: ["Logística", "Gerencia"],
+    rolesAutorizados: ["Dirección", "Gerencia", "Logística"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Carlos Martínez", notas: "", tipoIntegracion: "enlace",
+    empresaId: "habana", ultimaActualizacion: today,
+  },
+  {
+    id: "ha-ms2", nombre: "SiteGround", descripcion: "Hosting y dominio web",
+    url: "https://my.siteground.com", icono: "🌐", logoUrl: si("siteground", "FF4B00"),
+    categoria: "Hosting y web", departamentos: ["Marketing", "Dirección"],
+    rolesAutorizados: ["Dirección", "Marketing"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Carlos Martínez", notas: "Plan GrowBig.", tipoIntegracion: "enlace",
+    empresaId: "habana", ultimaActualizacion: today,
+  },
+  {
+    id: "ha-ms3", nombre: "Mercadona", descripcion: "Proveedor de alimentación y limpieza",
+    url: "https://www.mercadona.es", icono: "🛒", logoUrl: logo("mercadona.es"),
+    categoria: "Logística y proveedores", departamentos: ["Logística"],
+    rolesAutorizados: ["Dirección", "Gerencia", "Logística"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Carlos Martínez", notas: "", tipoIntegracion: "enlace",
+    empresaId: "habana", ultimaActualizacion: today,
+  },
+  {
+    id: "ha-ms4", nombre: "Infojobs", descripcion: "Portal de empleo y reclutamiento",
+    url: "https://www.infojobs.net", icono: "💼", logoUrl: "https://media.infojobs.net/portales/ij/appgrade/svgs/ij-logo-default_primary.svg",
+    categoria: "Nóminas y RRHH", departamentos: ["RRHH", "Dirección"],
+    rolesAutorizados: ["Dirección", "RRHH"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "María García", notas: "", tipoIntegracion: "enlace",
+    empresaId: "habana", ultimaActualizacion: today,
+  },
+  {
+    id: "ha-ms5", nombre: "Jace AI", descripcion: "Asistente de IA para productividad",
+    url: "https://jace.ai", icono: "🤖", logoUrl: "https://jace.ai/favicons/web-app-manifest-512x512.png",
+    categoria: "IA y productividad", departamentos: ["Todos"],
+    rolesAutorizados: ["Dirección", "Gerencia"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "María García", notas: "", tipoIntegracion: "enlace",
+    empresaId: "habana", ultimaActualizacion: today,
+  },
+  {
+    id: "ha-ms6", nombre: "Mi Cuenta", descripcion: "Gestión de cuenta corporativa",
+    url: "#", icono: "👤",
+    categoria: "Otros", departamentos: ["Dirección"],
+    rolesAutorizados: ["Dirección"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Pedro Ruiz", notas: "", tipoIntegracion: "enlace",
+    empresaId: "habana", ultimaActualizacion: today,
+  },
+  {
+    id: "ha-ms7", nombre: "Fiverr", descripcion: "Plataforma de servicios freelance",
+    url: "https://www.fiverr.com", icono: "🎯", logoUrl: si("fiverr", "1DBF73"),
+    categoria: "Marketplace y servicios", departamentos: ["Marketing", "Dirección"],
+    rolesAutorizados: ["Dirección", "Marketing"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Carlos Martínez", notas: "", tipoIntegracion: "enlace",
+    empresaId: "habana", ultimaActualizacion: today,
+  },
+
+  // REDES SOCIALES
+  {
+    id: "ha-rs1", nombre: "Instagram", descripcion: "Perfil de Instagram de La Habana",
+    url: "https://www.instagram.com", icono: "📸", logoUrl: si("instagram", "E4405F"),
+    categoria: "Redes sociales", departamentos: ["Marketing"],
+    rolesAutorizados: ["Dirección", "Marketing"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Carlos Martínez", notas: "", tipoIntegracion: "enlace",
+    empresaId: "habana", ultimaActualizacion: today,
+  },
+  {
+    id: "ha-rs2", nombre: "Facebook", descripcion: "Página de Facebook de La Habana",
+    url: "https://www.facebook.com", icono: "👍", logoUrl: si("facebook", "1877F2"),
+    categoria: "Redes sociales", departamentos: ["Marketing"],
+    rolesAutorizados: ["Dirección", "Marketing"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Carlos Martínez", notas: "", tipoIntegracion: "oauth",
+    empresaId: "habana", ultimaActualizacion: today,
+  },
+  {
+    id: "ha-rs3", nombre: "TikTok", descripcion: "Cuenta TikTok de La Habana",
+    url: "https://www.tiktok.com", icono: "🎵", logoUrl: si("tiktok", "000000"),
+    categoria: "Redes sociales", departamentos: ["Marketing"],
+    rolesAutorizados: ["Dirección", "Marketing"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Carlos Martínez", notas: "", tipoIntegracion: "enlace",
+    empresaId: "habana", ultimaActualizacion: today,
+  },
+  {
+    id: "ha-rs4", nombre: "LinkedIn", descripcion: "Perfil LinkedIn corporativo",
+    url: "https://www.linkedin.com", icono: "🔗", logoUrl: si("linkedin", "0A66C2"),
+    categoria: "Redes sociales", departamentos: ["RRHH", "Dirección", "Marketing"],
+    rolesAutorizados: ["Dirección", "RRHH", "Marketing"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "María García", notas: "", tipoIntegracion: "enlace",
+    empresaId: "habana", ultimaActualizacion: today,
+  },
+  {
+    id: "ha-rs5", nombre: "Twitter / X", descripcion: "Cuenta X (Twitter) de La Habana",
+    url: "https://x.com", icono: "🐦", logoUrl: si("x", "000000"),
+    categoria: "Redes sociales", departamentos: ["Marketing"],
+    rolesAutorizados: ["Dirección", "Marketing"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Carlos Martínez", notas: "", tipoIntegracion: "enlace",
+    empresaId: "habana", ultimaActualizacion: today,
+  },
+
+  // PRESENCIA DIGITAL
+  {
+    id: "ha-pd1", nombre: "Página Web", descripcion: "Sitio web oficial de La Habana",
+    url: "https://www.lahabana.es", icono: "🌐",
+    categoria: "Presencia digital", departamentos: ["Marketing", "Dirección"],
+    rolesAutorizados: ["Dirección", "Marketing"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Carlos Martínez", notas: "Alojada en SiteGround.", tipoIntegracion: "enlace",
+    empresaId: "habana", ultimaActualizacion: today,
+  },
+  {
+    id: "ha-pd2", nombre: "Ficha Google", descripcion: "Google Business Profile de La Habana",
+    url: "https://business.google.com", icono: "📍", logoUrl: si("google", "4285F4"),
+    categoria: "Presencia digital", departamentos: ["Marketing", "Dirección"],
+    rolesAutorizados: ["Dirección", "Marketing"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Carlos Martínez", notas: "Reseñas y horarios actualizados.", tipoIntegracion: "oauth",
+    empresaId: "habana", ultimaActualizacion: today,
+  },
 ];
 
-// --- BACANAL ---
+// ─── BACANAL ─────────────────────────────────────────────────────────────────
 const BACANAL_APPS: AccesoApp[] = [
-  { id: "ba-1", nombre: "Factorial", descripcion: "Gestión de RRHH, fichajes y nóminas", url: "https://app.factorialhr.com", icono: "👤", categoria: "Nóminas y RRHH", departamentos: ["RRHH", "Dirección"], rolesAutorizados: ["Administrador", "Director", "Responsable"], usuario: "admin@bacanal.es", contrasena: "Bac*2026!Fact", estado: "Activo", responsable: "Lucía Pérez", notas: "Plan Business.", tipoIntegracion: "enlace", empresaId: "bacanal", ultimaActualizacion: "2026-04-01" },
-  { id: "ba-2", nombre: "Meta Business Suite", descripcion: "Gestión de Facebook e Instagram", url: "https://business.facebook.com", icono: "📱", categoria: "Marketing y redes", departamentos: ["Marketing"], rolesAutorizados: ["Administrador", "Director"], usuario: "marketing@bacanal.es", contrasena: "MetaBac*2026", estado: "Activo", responsable: "Andrés Jiménez", notas: "Página FB + cuenta IG.", tipoIntegracion: "oauth", empresaId: "bacanal", ultimaActualizacion: "2026-04-04" },
-  { id: "ba-3", nombre: "Google Drive", descripcion: "Almacenamiento y documentación", url: "https://drive.google.com", icono: "📁", categoria: "Almacenamiento y docs", departamentos: ["Todos"], rolesAutorizados: ["Administrador", "Director", "Responsable", "Empleado"], usuario: "admin@bacanal.es", contrasena: "GDrive*Bac26", estado: "Activo", responsable: "Andrés Jiménez", notas: "Workspace Starter.", tipoIntegracion: "oauth", empresaId: "bacanal", ultimaActualizacion: "2026-04-07" },
-  { id: "ba-4", nombre: "CaixaBank Empresas", descripcion: "Banca online empresarial", url: "https://empresas.caixabank.es", icono: "🏦", categoria: "Contabilidad y finanzas", departamentos: ["Contabilidad", "Dirección"], rolesAutorizados: ["Administrador", "Director"], usuario: "bacanal_emp", contrasena: "CxB*Bac2026!", estado: "Activo", responsable: "Andrés Jiménez", notas: "Coordinadora + firma mancomunada.", tipoIntegracion: "enlace", empresaId: "bacanal", ultimaActualizacion: "2026-03-30" },
-  { id: "ba-5", nombre: "Glovo Partners", descripcion: "Gestión de pedidos delivery", url: "https://partners.glovoapp.com", icono: "🛵", categoria: "Logística y proveedores", departamentos: ["Logística", "Gerencia"], rolesAutorizados: ["Administrador", "Director", "Responsable"], usuario: "bacanal@glovo.com", contrasena: "Glv*Bac26!", estado: "Activo", responsable: "Lucía Pérez", notas: "Comisión negociada al 22%.", tipoIntegracion: "enlace", empresaId: "bacanal", ultimaActualizacion: "2026-04-03" },
-  { id: "ba-6", nombre: "Canva Pro", descripcion: "Diseño gráfico y creatividades", url: "https://www.canva.com", icono: "🎨", categoria: "Diseño y contenido", departamentos: ["Marketing"], rolesAutorizados: ["Administrador", "Director", "Responsable"], usuario: "diseno@bacanal.es", contrasena: "CanvaBac*26", estado: "Activo", responsable: "Andrés Jiménez", notas: "3 licencias.", tipoIntegracion: "enlace", empresaId: "bacanal", ultimaActualizacion: "2026-03-20" },
+  // SISTEMAS DE GESTIÓN
+  {
+    id: "ba-sg1", nombre: "Banktrack", descripcion: "Control financiero y tesorería empresarial",
+    url: "https://app.banktrack.com", icono: "🏦", logoUrl: gfav("banktrack.com"),
+    categoria: "Sistemas de gestión", departamentos: ["Contabilidad", "Dirección"],
+    rolesAutorizados: ["Dirección", "Gerencia"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Lucía Pérez", notas: "", tipoIntegracion: "enlace",
+    empresaId: "bacanal", ultimaActualizacion: today,
+  },
+  {
+    id: "ba-sg2", nombre: "Ágora", descripcion: "Software TPV para hostelería",
+    url: "https://www.agora-pv.com", icono: "🍽️", logoUrl: gfav("agora-pv.com"),
+    categoria: "Sistemas de gestión", departamentos: ["Gerencia", "Dirección"],
+    rolesAutorizados: ["Dirección", "Gerencia"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Andrés Jiménez", notas: "", tipoIntegracion: "enlace",
+    empresaId: "bacanal", ultimaActualizacion: today,
+  },
+  {
+    id: "ba-sg3", nombre: "Sesame", descripcion: "RRHH, fichajes y gestión de personal",
+    url: "https://app.sesamehr.es", icono: "👥", logoUrl: logo("sesamehr.com"),
+    categoria: "Sistemas de gestión", departamentos: ["RRHH", "Dirección"],
+    rolesAutorizados: ["Dirección", "Gerencia", "RRHH"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Lucía Pérez", notas: "", tipoIntegracion: "enlace",
+    empresaId: "bacanal", ultimaActualizacion: today,
+  },
+  {
+    id: "ba-sg4", nombre: "Cover Manager", descripcion: "Gestión de reservas para restaurantes",
+    url: "https://www.covermanager.com", icono: "📅", logoUrl: gfav("covermanager.com"),
+    categoria: "Sistemas de gestión", departamentos: ["Gerencia", "Dirección"],
+    rolesAutorizados: ["Dirección", "Gerencia"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Andrés Jiménez", notas: "", tipoIntegracion: "enlace",
+    empresaId: "bacanal", ultimaActualizacion: today,
+  },
+  {
+    id: "ba-sg5", nombre: "High Level", descripcion: "CRM y marketing automation",
+    url: "https://app.gohighlevel.com", icono: "📊", logoUrl: logo("gohighlevel.com"),
+    categoria: "Sistemas de gestión", departamentos: ["Marketing", "Dirección"],
+    rolesAutorizados: ["Dirección", "Marketing"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Andrés Jiménez", notas: "", tipoIntegracion: "enlace",
+    empresaId: "bacanal", ultimaActualizacion: today,
+  },
+
+  // BANCA Y FINANZAS
+  {
+    id: "ba-bf1", nombre: "BBVA Net Cash", descripcion: "Banca online empresarial BBVA",
+    url: "https://www.bbva.es/empresas/productos/banca-electronica/net-cash.html", icono: "💳",
+    logoUrl: si("bbva", "004481"), categoria: "Banca y finanzas",
+    departamentos: ["Contabilidad", "Dirección"], rolesAutorizados: ["Dirección"],
+    usuario: "", contrasena: "", estado: "Activo", responsable: "Andrés Jiménez",
+    notas: "Doble factor obligatorio.", tipoIntegracion: "enlace",
+    empresaId: "bacanal", ultimaActualizacion: today,
+  },
+  {
+    id: "ba-bf2", nombre: "Revolut Business", descripcion: "Banca digital empresarial Revolut",
+    url: "https://business.revolut.com", icono: "💼", logoUrl: si("revolut", "0666EB"),
+    categoria: "Banca y finanzas", departamentos: ["Contabilidad", "Dirección"],
+    rolesAutorizados: ["Dirección"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Andrés Jiménez", notas: "", tipoIntegracion: "enlace",
+    empresaId: "bacanal", ultimaActualizacion: today,
+  },
+  {
+    id: "ba-bf3", nombre: "Stripe", descripcion: "Pasarela de pagos online",
+    url: "https://dashboard.stripe.com", icono: "⚡", logoUrl: si("stripe", "635BFF"),
+    categoria: "Banca y finanzas", departamentos: ["Contabilidad", "Dirección"],
+    rolesAutorizados: ["Dirección", "Gerencia"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Andrés Jiménez", notas: "", tipoIntegracion: "oauth",
+    empresaId: "bacanal", ultimaActualizacion: today,
+  },
+
+  // REDES SOCIALES
+  {
+    id: "ba-rs1", nombre: "Instagram", descripcion: "Perfil de Instagram de Bacanal",
+    url: "https://www.instagram.com", icono: "📸", logoUrl: si("instagram", "E4405F"),
+    categoria: "Redes sociales", departamentos: ["Marketing"],
+    rolesAutorizados: ["Dirección", "Marketing"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Andrés Jiménez", notas: "", tipoIntegracion: "enlace",
+    empresaId: "bacanal", ultimaActualizacion: today,
+  },
+  {
+    id: "ba-rs2", nombre: "Facebook", descripcion: "Página de Facebook de Bacanal",
+    url: "https://www.facebook.com", icono: "👍", logoUrl: si("facebook", "1877F2"),
+    categoria: "Redes sociales", departamentos: ["Marketing"],
+    rolesAutorizados: ["Dirección", "Marketing"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Andrés Jiménez", notas: "", tipoIntegracion: "oauth",
+    empresaId: "bacanal", ultimaActualizacion: today,
+  },
+  {
+    id: "ba-rs3", nombre: "TikTok", descripcion: "Cuenta TikTok de Bacanal",
+    url: "https://www.tiktok.com", icono: "🎵", logoUrl: si("tiktok", "000000"),
+    categoria: "Redes sociales", departamentos: ["Marketing"],
+    rolesAutorizados: ["Dirección", "Marketing"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Andrés Jiménez", notas: "", tipoIntegracion: "enlace",
+    empresaId: "bacanal", ultimaActualizacion: today,
+  },
+
+  // PRESENCIA DIGITAL
+  {
+    id: "ba-pd1", nombre: "Página Web", descripcion: "Sitio web oficial de Bacanal",
+    url: "https://www.bacanal.es", icono: "🌐",
+    categoria: "Presencia digital", departamentos: ["Marketing", "Dirección"],
+    rolesAutorizados: ["Dirección", "Marketing"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Andrés Jiménez", notas: "", tipoIntegracion: "enlace",
+    empresaId: "bacanal", ultimaActualizacion: today,
+  },
+  {
+    id: "ba-pd2", nombre: "Ficha Google", descripcion: "Google Business Profile de Bacanal",
+    url: "https://business.google.com", icono: "📍", logoUrl: si("google", "4285F4"),
+    categoria: "Presencia digital", departamentos: ["Marketing", "Dirección"],
+    rolesAutorizados: ["Dirección", "Marketing"], usuario: "", contrasena: "",
+    estado: "Activo", responsable: "Andrés Jiménez", notas: "", tipoIntegracion: "oauth",
+    empresaId: "bacanal", ultimaActualizacion: today,
+  },
 ];
 
+// ─── Public API ──────────────────────────────────────────────────────────────
 export function getAccesosAppsPorEmpresa(empresaId: string): AccesoApp[] {
   if (empresaId === "habana") return [...HABANA_APPS];
   if (empresaId === "bacanal") return [...BACANAL_APPS];
   return [];
+}
+
+export function getAllAccesosApps(): AccesoApp[] {
+  return [...HABANA_APPS, ...BACANAL_APPS];
 }
 
 export function getAccesosAppsPorDepartamento(empresaId: string, departamento: string): AccesoApp[] {
