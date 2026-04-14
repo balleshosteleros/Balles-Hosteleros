@@ -68,3 +68,5 @@ supabase/.temp
 
 # Lovable original (no subir al repo)
 Balles Hosteleros SAAS/
+*.xlsx
+*.pdf
