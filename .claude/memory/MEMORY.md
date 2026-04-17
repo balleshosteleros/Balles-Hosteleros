@@ -12,3 +12,8 @@
 - [Reglas PedidoModal](feedback/pedido_modal_reglas.md) — Combobox Popover (no input libre), IVA desde ficha (no editable), resumen IVA diferenciado, proveedor obligatorio, notas NOT NULL
 - [Flujo Logística](LOGISTICA_PROCESO.md) — flujo completo de compra/stock/Ágora, dead ends activos y reglas de negocio confirmadas
 - [Spec Logística COMPLETA](project/logistica_spec_completa.md) — plan 6 fases: F1-F3 ✅, F4 ✅ (Ágora activo 2026-04-14), F5 pendiente, F6 pendiente
+- [Presentaciones (Gemini)](project/presentaciones_gemini.md) — submódulo Dirección operativo desde 2026-04-18; motor Gemini free, branding por empresa con snapshot
+- [Carta Digital en Marketing](project/carta_digital.md) — feature movida de sala/ a marketing/; rutas /marketing/carta-digital y /carta/[slug]
+- [Cocina NUEVAS RECETAS](project/cocina_recetas.md) — renombrado de NUEVOS PLATOS (2026-04-18); tabla nuevas_recetas, ruta /cocina/nuevas-recetas
+- [Tipos reales BD Supabase](feedback/supabase_tipos_reales.md) — profiles.empresa_id es uuid, profiles.user_id sin UNIQUE; usar 035/038 como modelo, no 008
+- [RLS join anon](feedback/rls_join_anon.md) — `using (... exists(select from otra_tabla ...))` falla silencioso si el rol no puede leer otra_tabla; alternativas: policy explícita, RPC security definer, denormalizar, o service-role en server component

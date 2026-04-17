@@ -5,6 +5,16 @@ const nextConfig: NextConfig = {
   experimental: {
     mcpServer: true,
   },
+  images: {
+    remotePatterns: [
+      // Supabase Storage: bucket carta-fotos (PRP-028 Carta Digital pública)
+      {
+        protocol: 'https',
+        hostname: '*.supabase.co',
+        pathname: '/storage/v1/object/public/**',
+      },
+    ],
+  },
 }
 
 export default nextConfig

@@ -8,7 +8,7 @@ import {
   Package, FileArchive, KeyRound, Gavel, FileUp, ShoppingCart, Warehouse, FlaskConical,
   GraduationCap, UtensilsCrossed, BookOpen, Contact, Thermometer, Sparkles, FileSearch,
   PenLine, CheckCircle2, BarChart3, Landmark, Tag, Zap, ContactRound,
-  Heart, UserPlus, Apple,
+  Heart, UserPlus, Apple, CreditCard, Presentation, QrCode,
 } from "lucide-react";
 
 // Icono compuesto: cuadrícula de apps + candado de seguridad
@@ -57,18 +57,20 @@ const contabilidadSubs = [
   { title: "REGLAS AUTOMÁTICAS", url: "/contabilidad/reglas", icon: Zap },
 ];
 const gestoriaSubs = [
+  { title: "MODELOS", url: "/gestoria/modelos", icon: FileSearch },
   { title: "PRESENTACIONES", url: "/gestoria/presentaciones", icon: FileUp },
 ];
 const juridicoSubs = [
   { title: "PROCESOS", url: "/juridico/procesos", icon: Gavel },
 ];
 const salaSubs = [
+  { title: "PUNTO DE VENTA", url: "/sala/pos", icon: CreditCard },
   { title: "RESERVAS", url: "/sala/reservas", icon: BookOpen },
   { title: "CLIENTES", url: "/sala/clientes", icon: Contact },
-  { title: "TEMPERATURAS", url: "/sala/temperaturas", icon: Thermometer },
 ];
 const cocinaSubs = [
-  { title: "NUEVOS PLATOS", url: "/cocina/nuevos-platos", icon: Sparkles },
+  { title: "COMANDAS", url: "/cocina/comandas", icon: Timer },
+  { title: "NUEVAS RECETAS", url: "/cocina/nuevas-recetas", icon: Sparkles },
   { title: "FICHAS TÉCNICAS", url: "/cocina/fichas-tecnicas", icon: Utensils },
   { title: "ELABORACIONES", url: "/cocina/elaboraciones", icon: FlaskConical },
   { title: "PARTIDAS", url: "/cocina/partidas", icon: ChefHat },
@@ -84,6 +86,7 @@ const logisticaSubs = [
 const marketingSubs = [
   { title: "CALENDARIO", url: "/marketing/calendario", icon: CalendarDays },
   { title: "CONTENIDO", url: "/marketing/contenido", icon: FolderOpen },
+  { title: "CARTA DIGITAL", url: "/marketing/carta-digital", icon: QrCode },
   { title: "FIDELIZACIÓN", url: "/marketing/fidelizacion", icon: Heart },
   { title: "CAPTACIÓN", url: "/marketing/captacion", icon: UserPlus },
 ];
@@ -92,6 +95,7 @@ const direccionSubs = [
   { title: "CRONOGRAMAS", url: "/direccion/cronogramas", icon: CalendarDays },
   { title: "DOCUMENTACIÓN", url: "/direccion/documentacion", icon: FileArchive },
   { title: "APERTURAS", url: "/direccion/aperturas", icon: TrendingUp },
+  { title: "PRESENTACIONES", url: "/direccion/presentaciones", icon: Presentation },
 ];
 const gerenciaSubs = [
   { title: "MANTENIMIENTO", url: "/gerencia/mantenimiento", icon: Wrench },

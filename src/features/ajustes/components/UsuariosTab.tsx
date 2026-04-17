@@ -23,10 +23,10 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import {
   Search, ShieldCheck, KeyRound, Pencil, UserCog,
-  Power, PowerOff, Eye, PenLine, UserPlus, Plus,
+  Power, PowerOff, Eye, PenLine, UserPlus, Plus, UserCheck,
 } from "lucide-react";
 import { toast } from "sonner";
-import { createEmployee, resetEmployeePassword, getEmployees, updateEmployeeStatus } from "@/actions/admin";
+import { createEmployee, resetEmployeePassword, getEmployees, updateEmployeeStatus, getEmpleadosSinAcceso } from "@/actions/admin";
 
 const ESTADO_STYLES: Record<EstadoAcceso, string> = {
   Activo: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
@@ -37,6 +37,15 @@ const ESTADO_STYLES: Record<EstadoAcceso, string> = {
 function EstadoBadge({ estado }: { estado: EstadoAcceso }) {
   return <Badge variant="outline" className={`text-[10px] ${ESTADO_STYLES[estado]}`}>{estado}</Badge>;
 }
+
+type EmpleadoSinAcceso = {
+  id: string;
+  nombre: string;
+  apellidos: string | null;
+  email_personal: string | null;
+  email_empresa: string | null;
+  departamentos: { nombre: string } | null;
+};
 
 // ─── Tipo del row real de Supabase (tabla profiles + role joineado de user_roles) ───
 type SupabaseProfile = {
@@ -99,12 +108,14 @@ export function UsuariosTab() {
   const { empresaActual } = useEmpresa();
 
   const [accesos, setAccesos] = useState<AccesoPortal[]>([]);
+  const [sinAcceso, setSinAcceso] = useState<EmpleadoSinAcceso[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("todos");
   const [editModal, setEditModal] = useState<AccesoPortal | null>(null);
   const [permisosModal, setPermisosModal] = useState<AccesoPortal | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createPrefill, setCreatePrefill] = useState<{ nombre: string; apellidos: string; email: string } | null>(null);
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [resetModal, setResetModal] = useState<{ id: string; nombre: string } | null>(null);
@@ -114,14 +125,18 @@ export function UsuariosTab() {
   const loadAccesos = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await getEmployees();
-      if (result.error) {
-        toast.error(result.error);
+      const [empResult, sinResult] = await Promise.all([
+        getEmployees(),
+        getEmpleadosSinAcceso(),
+      ]);
+      if (empResult.error) {
+        toast.error(empResult.error);
         setAccesos([]);
-        return;
+      } else {
+        const profiles = (empResult.data ?? []) as SupabaseProfile[];
+        setAccesos(profiles.map((p) => profileToAcceso(p, empresaActual)));
       }
-      const profiles = (result.data ?? []) as SupabaseProfile[];
-      setAccesos(profiles.map((p) => profileToAcceso(p, empresaActual)));
+      setSinAcceso((sinResult.data ?? []) as EmpleadoSinAcceso[]);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error cargando usuarios");
       setAccesos([]);
@@ -200,9 +215,19 @@ export function UsuariosTab() {
     } else {
       toast.success("Usuario creado correctamente en Supabase");
       setShowCreateModal(false);
+      setCreatePrefill(null);
       setCreateLoading(false);
       await loadAccesos();
     }
+  };
+
+  const darAcceso = (emp: EmpleadoSinAcceso) => {
+    setCreatePrefill({
+      nombre: emp.nombre,
+      apellidos: emp.apellidos ?? "",
+      email: emp.email_empresa ?? emp.email_personal ?? "",
+    });
+    setShowCreateModal(true);
   };
 
   return (
@@ -293,6 +318,49 @@ export function UsuariosTab() {
         </table>
       </div>
 
+      {/* Empleados sin acceso al portal */}
+      {!loading && sinAcceso.length > 0 && (
+        <div className="mt-4">
+          <div className="flex items-center gap-2 mb-2">
+            <UserCheck className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-bold text-muted-foreground">
+              EMPLEADOS SIN ACCESO AL PORTAL ({sinAcceso.length})
+            </span>
+          </div>
+          <div className="bg-card rounded-lg border overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  {["EMPLEADO", "DEPARTAMENTO", "EMAIL", "ACCIÓN"].map((h) => (
+                    <th key={h} className="text-left px-3 py-2.5 text-xs font-bold text-muted-foreground whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {sinAcceso.map((emp) => (
+                  <tr key={emp.id} className="border-b last:border-0 hover:bg-muted/30">
+                    <td className="px-3 py-2.5 font-medium text-foreground whitespace-nowrap">
+                      {[emp.nombre, emp.apellidos].filter(Boolean).join(" ")}
+                    </td>
+                    <td className="px-3 py-2.5 text-muted-foreground text-xs">
+                      {emp.departamentos?.nombre ?? "—"}
+                    </td>
+                    <td className="px-3 py-2.5 text-muted-foreground text-xs">
+                      {emp.email_empresa ?? emp.email_personal ?? "—"}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs" onClick={() => darAcceso(emp)}>
+                        <UserPlus className="h-3.5 w-3.5" /> Dar acceso
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Edit modal */}
       {editModal && (
         <EditarUsuarioModal
@@ -336,7 +404,7 @@ export function UsuariosTab() {
       </Dialog>
 
       {/* Create user modal (Supabase) */}
-      <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
+      <Dialog open={showCreateModal} onOpenChange={(o) => { setShowCreateModal(o); if (!o) setCreatePrefill(null); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -347,16 +415,16 @@ export function UsuariosTab() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs font-bold">Nombre</Label>
-                <Input name="nombre" required />
+                <Input name="nombre" required defaultValue={createPrefill?.nombre ?? ""} />
               </div>
               <div>
                 <Label className="text-xs font-bold">Apellidos</Label>
-                <Input name="apellidos" required />
+                <Input name="apellidos" required defaultValue={createPrefill?.apellidos ?? ""} />
               </div>
             </div>
             <div>
               <Label className="text-xs font-bold">Email</Label>
-              <Input name="email" type="email" required />
+              <Input name="email" type="email" required defaultValue={createPrefill?.email ?? ""} />
             </div>
             <div>
               <Label className="text-xs font-bold">Contraseña</Label>
@@ -373,7 +441,7 @@ export function UsuariosTab() {
             </div>
             {createError && <p className="text-sm text-red-600">{createError}</p>}
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setShowCreateModal(false)}>Cancelar</Button>
+              <Button type="button" variant="outline" onClick={() => { setShowCreateModal(false); setCreatePrefill(null); }}>Cancelar</Button>
               <Button type="submit" disabled={createLoading}>
                 {createLoading ? "Creando..." : "Crear usuario"}
               </Button>

@@ -70,3 +70,7 @@ supabase/.temp
 Balles Hosteleros SAAS/
 *.xlsx
 *.pdf
+
+# Capturas de pantalla (no subir al repo)
+Capturas/
+tsconfig.tsbuildinfo

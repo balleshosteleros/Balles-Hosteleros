@@ -166,6 +166,31 @@ export async function updateEmployeeStatus(profileId: string, estado: 'Activo' |
   return { success: true }
 }
 
+export async function getEmpleadosSinAcceso() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { data: [] }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('empresa_id')
+    .eq('user_id', user.id)
+    .single()
+
+  if (!profile?.empresa_id) return { data: [] }
+
+  const { data, error } = await supabase
+    .from('empleados')
+    .select('id, nombre, apellidos, email_personal, email_empresa, departamentos(nombre)')
+    .eq('empresa_id', profile.empresa_id)
+    .eq('estado', 'Activo')
+    .is('profile_id', null)
+    .order('nombre')
+
+  if (error) return { error: error.message, data: [] }
+  return { data: data ?? [] }
+}
+
 export async function deleteEmployee(userId: string) {
   await requireAdmin()
 

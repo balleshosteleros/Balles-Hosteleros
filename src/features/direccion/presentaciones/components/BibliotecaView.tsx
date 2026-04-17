@@ -1,0 +1,333 @@
+"use client";
+
+import { useEffect, useState, useMemo, useCallback } from "react";
+import Link from "next/link";
+import { toast } from "sonner";
+import {
+  Plus, Search, Sparkles, Archive, Trash2, Eye, Pencil, Palette, Filter,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  listPresentaciones, archivarPresentacion, eliminarPresentacion, renombrarPresentacion,
+} from "../actions/presentaciones-actions";
+import { NuevaPresentacionModal } from "./NuevaPresentacionModal";
+import type { Presentacion, Estado } from "../types/presentaciones";
+
+const ESTADO_LABEL: Record<Estado, string> = {
+  borrador: "Borrador",
+  generando: "Generando…",
+  listo: "Lista",
+  fallida: "Fallida",
+  archivada: "Archivada",
+};
+const ESTADO_COLOR: Record<Estado, string> = {
+  borrador: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
+  generando: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
+  listo: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
+  fallida: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
+  archivada: "bg-muted text-muted-foreground",
+};
+
+export function BibliotecaView() {
+  const [items, setItems] = useState<Presentacion[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [estadoFilter, setEstadoFilter] = useState<Estado | "todas">("todas");
+  const [nuevaOpen, setNuevaOpen] = useState(false);
+  const [confirmar, setConfirmar] = useState<
+    { tipo: "archivar" | "eliminar"; id: string; titulo: string } | null
+  >(null);
+  const [renombrando, setRenombrando] = useState<{ id: string; titulo: string } | null>(null);
+
+  const cargar = useCallback(async () => {
+    setLoading(true);
+    const res = await listPresentaciones();
+    if (res.ok) setItems(res.data);
+    else toast.error("Error al cargar presentaciones");
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    cargar();
+  }, [cargar]);
+
+  const filtered = useMemo(() => {
+    let r = items;
+    if (estadoFilter !== "todas") r = r.filter((p) => p.estado === estadoFilter);
+    if (search) {
+      const s = search.toLowerCase();
+      r = r.filter(
+        (p) =>
+          p.titulo.toLowerCase().includes(s) ||
+          p.prompt_original.toLowerCase().includes(s),
+      );
+    }
+    return r;
+  }, [items, search, estadoFilter]);
+
+  const onConfirmar = async () => {
+    if (!confirmar) return;
+    const res =
+      confirmar.tipo === "archivar"
+        ? await archivarPresentacion(confirmar.id)
+        : await eliminarPresentacion(confirmar.id);
+    if (res.ok) {
+      toast.success(confirmar.tipo === "archivar" ? "Archivada" : "Eliminada");
+      cargar();
+    } else {
+      toast.error(res.error ?? "Error");
+    }
+    setConfirmar(null);
+  };
+
+  const onRenombrar = async () => {
+    if (!renombrando || !renombrando.titulo.trim()) return;
+    const res = await renombrarPresentacion(renombrando.id, renombrando.titulo.trim());
+    if (res.ok) {
+      toast.success("Renombrada");
+      cargar();
+    } else {
+      toast.error(res.error ?? "Error");
+    }
+    setRenombrando(null);
+  };
+
+  return (
+    <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Sparkles className="h-6 w-6" /> Presentaciones
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Genera presentaciones con IA manteniendo tu imagen de marca.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Link href="/direccion/presentaciones/branding">
+            <Button variant="outline" size="lg">
+              <Palette className="h-4 w-4 mr-2" /> Imagen de marca
+            </Button>
+          </Link>
+          <Button variant="primary" size="lg" onClick={() => setNuevaOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" /> Nueva presentación
+          </Button>
+        </div>
+      </div>
+
+      {/* Filtros */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[220px] max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por título o prompt…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Select
+          value={estadoFilter}
+          onValueChange={(v) => setEstadoFilter(v as Estado | "todas")}
+        >
+          <SelectTrigger className="w-[180px]">
+            <Filter className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+            <SelectValue placeholder="Estado" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todas">Todos los estados</SelectItem>
+            <SelectItem value="listo">Listas</SelectItem>
+            <SelectItem value="borrador">Borradores</SelectItem>
+            <SelectItem value="generando">Generando</SelectItem>
+            <SelectItem value="fallida">Fallidas</SelectItem>
+            <SelectItem value="archivada">Archivadas</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground ml-auto">
+          {filtered.length} presentación{filtered.length !== 1 ? "es" : ""}
+        </p>
+      </div>
+
+      {/* Tabla */}
+      <Card>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Título</TableHead>
+              <TableHead>Audiencia</TableHead>
+              <TableHead>Slides</TableHead>
+              <TableHead>Estado</TableHead>
+              <TableHead>Fecha</TableHead>
+              <TableHead className="text-right">Acciones</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading && (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                  Cargando…
+                </TableCell>
+              </TableRow>
+            )}
+            {!loading && filtered.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center py-12">
+                  <div className="flex flex-col items-center gap-3">
+                    <Sparkles className="h-10 w-10 text-muted-foreground/40" />
+                    <p className="text-sm text-muted-foreground">
+                      No hay presentaciones todavía
+                    </p>
+                    <Button
+                      variant="primary"
+                      size="lg"
+                      onClick={() => setNuevaOpen(true)}
+                    >
+                      <Plus className="h-4 w-4 mr-2" /> Crear la primera
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            )}
+            {!loading &&
+              filtered.map((p) => (
+                <TableRow key={p.id} className="hover:bg-muted/30">
+                  <TableCell className="font-medium max-w-[320px] truncate">
+                    <Link
+                      href={`/direccion/presentaciones/${p.id}`}
+                      className="hover:underline"
+                    >
+                      {p.titulo}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground max-w-[240px] truncate">
+                    {p.audiencia ?? "—"}
+                  </TableCell>
+                  <TableCell>{p.num_slides}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={ESTADO_COLOR[p.estado]}>
+                      {ESTADO_LABEL[p.estado]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                    {new Date(p.created_at).toLocaleDateString("es-ES", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-1">
+                      <Link href={`/direccion/presentaciones/${p.id}`}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Abrir">
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </Link>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        title="Renombrar"
+                        onClick={() => setRenombrando({ id: p.id, titulo: p.titulo })}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      {p.estado !== "archivada" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          title="Archivar"
+                          onClick={() =>
+                            setConfirmar({ tipo: "archivar", id: p.id, titulo: p.titulo })
+                          }
+                        >
+                          <Archive className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-red-600 hover:text-red-700"
+                        title="Eliminar"
+                        onClick={() =>
+                          setConfirmar({ tipo: "eliminar", id: p.id, titulo: p.titulo })
+                        }
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+          </TableBody>
+        </Table>
+      </Card>
+
+      {/* Modal crear */}
+      <NuevaPresentacionModal open={nuevaOpen} onOpenChange={setNuevaOpen} />
+
+      {/* Confirmación archivar/eliminar */}
+      <AlertDialog open={!!confirmar} onOpenChange={(o) => !o && setConfirmar(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmar?.tipo === "archivar" ? "¿Archivar presentación?" : "¿Eliminar definitivamente?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmar?.tipo === "archivar"
+                ? `"${confirmar.titulo}" quedará en el filtro Archivadas. Podrás recuperarla.`
+                : `"${confirmar?.titulo}" se eliminará permanentemente con todas sus slides.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={onConfirmar}
+              className={
+                confirmar?.tipo === "eliminar"
+                  ? "bg-red-600 hover:bg-red-700 text-white"
+                  : undefined
+              }
+            >
+              {confirmar?.tipo === "archivar" ? "Archivar" : "Eliminar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Renombrar */}
+      <AlertDialog open={!!renombrando} onOpenChange={(o) => !o && setRenombrando(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Renombrar presentación</AlertDialogTitle>
+          </AlertDialogHeader>
+          <Input
+            value={renombrando?.titulo ?? ""}
+            onChange={(e) =>
+              setRenombrando((r) => (r ? { ...r, titulo: e.target.value } : null))
+            }
+            className="mt-2"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={onRenombrar}>Guardar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}

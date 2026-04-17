@@ -3,23 +3,23 @@
  *
  * FLUJO:
  *   1. Fetch GET /api/export/tickets?businessDay=YYYYMMDD  (con api-token header)
- *   2. Por cada línea vendida:
- *      a. Buscar producto en BD por agora_id
- *      b. Si tiene escandallo → descontar cada ingrediente del stock
- *         consumo = cantidad_vendida × cantidad_escandallo × (1 + merma_pct/100)
- *      c. Si no tiene escandallo y tipo='compra' → descontar producto directamente
- *   3. Log en agora_sync_log
+ *   2. Resolver cada línea: agora_id → producto_id (BD)
+ *   3. Delegar el descuento al servicio compartido `descontarStockPorVentas`
+ *      (ver `src/features/sala/pos/services/descontar-stock-por-ventas.ts`)
+ *   4. Guardar log en agora_sync_log
  *
  * FORMATO REAL DE ÁGORA (confirmado 2026-04-14):
  *   { "Tickets": [...] }  ← PascalCase en la clave raíz
- *   Dentro de cada ticket se espera PascalCase: Lines, ProductId, Quantity, Name
- *   Se acepta también camelCase como fallback por compatibilidad futura.
  *
  * REGLA DE SEGURIDAD ÁGORA (obligatoria):
  *   Ante cualquier error: detener, devolver error exacto, NO swallow.
  */
 
 import { createClient } from "@supabase/supabase-js";
+import {
+  descontarStockPorVentas,
+  type LineaVentaResuelta,
+} from "@/features/sala/pos/services/descontar-stock-por-ventas";
 
 // ─── CONSTANTES ───────────────────────────────────────────────────────────────
 
@@ -298,10 +298,10 @@ export async function descontarStockPorVentasAgora(
     };
   }
 
-  // ─── 2. Cargar catálogo de productos de la empresa ────────────────────────
+  // ─── 2. Mapear agora_id → producto_id ────────────────────────────────────
   const { data: productos, error: errProductos } = await supabase
     .from("productos")
-    .select("id, nombre, tipo, agora_id")
+    .select("id, nombre, agora_id")
     .eq("empresa_id", empresaId)
     .not("agora_id", "is", null);
 
@@ -309,173 +309,41 @@ export async function descontarStockPorVentasAgora(
     throw new Error(`Error cargando productos desde BD: ${errProductos.message}`);
   }
 
-  const productosByAgoraId = new Map<string, { id: string; nombre: string; tipo: string }>();
+  const productosByAgoraId = new Map<string, { id: string; nombre: string }>();
   for (const p of productos ?? []) {
     if (p.agora_id) {
-      productosByAgoraId.set(String(p.agora_id).trim(), {
-        id: p.id,
-        nombre: p.nombre,
-        tipo: p.tipo,
-      });
+      productosByAgoraId.set(String(p.agora_id).trim(), { id: p.id, nombre: p.nombre });
     }
   }
 
-  // ─── 3. Cargar todos los escandallos de la empresa ────────────────────────
-  const productoVentaIds = Array.from(productosByAgoraId.values())
-    .filter((p) => p.tipo === "venta")
-    .map((p) => p.id);
-
-  const escandallosPorProducto = new Map<
-    string,
-    { ingredienteId: string; ingredienteNombre: string; cantidad: number; mermaPct: number }[]
-  >();
-
-  if (productoVentaIds.length > 0) {
-    const { data: escandallos, error: errEsc } = await supabase
-      .from("escandallos")
-      .select(
-        "producto_venta_id, ingrediente_id, cantidad, merma_pct, ingrediente:ingrediente_id(id, nombre)"
-      )
-      .in("producto_venta_id", productoVentaIds);
-
-    if (errEsc) {
-      throw new Error(`Error cargando escandallos desde BD: ${errEsc.message}`);
-    }
-
-    for (const e of escandallos ?? []) {
-      const ing = (e.ingrediente as unknown) as { id: string; nombre: string } | null;
-      const lineas = escandallosPorProducto.get(e.producto_venta_id) ?? [];
-      lineas.push({
-        ingredienteId: e.ingrediente_id,
-        ingredienteNombre: ing?.nombre ?? "",
-        cantidad: Number(e.cantidad ?? 0),
-        mermaPct: Number(e.merma_pct ?? 0),
-      });
-      escandallosPorProducto.set(e.producto_venta_id, lineas);
-    }
-  }
-
-  // ─── 4. Cargar stock actual ───────────────────────────────────────────────
-  const { data: stockRows, error: errStock } = await supabase
-    .from("stock")
-    .select("id, producto_id, producto_nombre, cantidad_actual")
-    .eq("empresa_id", empresaId);
-
-  if (errStock) {
-    throw new Error(`Error cargando stock desde BD: ${errStock.message}`);
-  }
-
-  const stockByProductoId = new Map<string, { id: string; cantidad_actual: number }>();
-  for (const s of stockRows ?? []) {
-    if (s.producto_id) {
-      stockByProductoId.set(s.producto_id, {
-        id: s.id,
-        cantidad_actual: Number(s.cantidad_actual ?? 0),
-      });
-    }
-  }
-
-  // ─── 5. Calcular y acumular descuentos ───────────────────────────────────
-  const now = new Date().toISOString();
-  const descuentosAcumulados = new Map<string, number>();
-
-  for (const linea of lineasVenta) {
-    const producto = productosByAgoraId.get(linea.agoraId);
-
+  const lineasResueltas: LineaVentaResuelta[] = [];
+  for (const l of lineasVenta) {
+    const producto = productosByAgoraId.get(l.agoraId);
     if (!producto) {
       lineasSinMatch++;
-      errores.push(`agora_id "${linea.agoraId}" (${linea.nombre || "sin nombre"}) sin match en productos.`);
+      errores.push(`agora_id "${l.agoraId}" (${l.nombre || "sin nombre"}) sin match en productos.`);
       continue;
     }
-
-    const escandallos = escandallosPorProducto.get(producto.id);
-
-    if (escandallos && escandallos.length > 0) {
-      // Producto de venta con escandallo → descontar ingredientes
-      for (const e of escandallos) {
-        const consumo = linea.cantidadVendida * e.cantidad * (1 + e.mermaPct / 100);
-        const stockIng = stockByProductoId.get(e.ingredienteId);
-
-        if (!stockIng) {
-          // Crear fila de stock si no existe (nuevo ingrediente añadido después de la migración)
-          const { data: newRow, error: errInsert } = await supabase
-            .from("stock")
-            .insert({
-              empresa_id: empresaId,
-              producto_id: e.ingredienteId,
-              producto_nombre: e.ingredienteNombre,
-              cantidad_actual: 0,
-              unidad: "ud",
-              ultimo_movimiento: now,
-            })
-            .select("id, cantidad_actual")
-            .single();
-
-          if (errInsert || !newRow) {
-            errores.push(
-              `Sin stock para ingrediente "${e.ingredienteNombre}" y no se pudo crear: ${errInsert?.message ?? "error desconocido"}`
-            );
-            continue;
-          }
-          // Añadir al índice local para esta ejecución
-          stockByProductoId.set(e.ingredienteId, { id: newRow.id, cantidad_actual: 0 });
-          stockRows?.push({ id: newRow.id, producto_id: e.ingredienteId, producto_nombre: e.ingredienteNombre, cantidad_actual: 0 });
-          const stockIngNew = stockByProductoId.get(e.ingredienteId)!;
-          descuentosAcumulados.set(
-            stockIngNew.id,
-            (descuentosAcumulados.get(stockIngNew.id) ?? 0) + consumo
-          );
-          ingredientesDescontados++;
-          continue;
-        }
-
-        descuentosAcumulados.set(
-          stockIng.id,
-          (descuentosAcumulados.get(stockIng.id) ?? 0) + consumo
-        );
-        ingredientesDescontados++;
-      }
-      lineasProcesadas++;
-    } else if (producto.tipo === "compra") {
-      // Sin escandallo, producto de compra → descontar directamente
-      const stockProd = stockByProductoId.get(producto.id);
-      if (!stockProd) {
-        errores.push(`Sin fila de stock para producto "${producto.nombre}" (compra, sin escandallo).`);
-        lineasSinMatch++;
-        continue;
-      }
-      descuentosAcumulados.set(
-        stockProd.id,
-        (descuentosAcumulados.get(stockProd.id) ?? 0) + linea.cantidadVendida
-      );
-      ingredientesDescontados++;
-      lineasProcesadas++;
-    } else {
-      // Producto de venta sin escandallo → no se puede descontar
-      lineasSinMatch++;
-      errores.push(
-        `Producto "${producto.nombre}" (venta, agora_id=${linea.agoraId}) sin escandallo — omitido.`
-      );
-    }
+    lineasResueltas.push({
+      productoId: producto.id,
+      nombre: producto.nombre,
+      cantidad: l.cantidadVendida,
+    });
   }
 
-  // ─── 6. Escribir descuentos en BD ────────────────────────────────────────
-  for (const [stockId, totalDescontar] of descuentosAcumulados.entries()) {
-    const stockActual = stockRows?.find((s) => s.id === stockId);
-    const cantidadActual = Number(stockActual?.cantidad_actual ?? 0);
-    const nuevaCantidad = Math.max(0, cantidadActual - totalDescontar);
+  // ─── 3. Delegar descuento al servicio compartido ─────────────────────────
+  const resultado = await descontarStockPorVentas(supabase, {
+    empresaId,
+    lineas: lineasResueltas,
+    signo: 1,
+  });
 
-    const { error: errUpdate } = await supabase
-      .from("stock")
-      .update({ cantidad_actual: nuevaCantidad, ultimo_movimiento: now })
-      .eq("id", stockId);
+  lineasProcesadas = resultado.lineasProcesadas;
+  lineasSinMatch += resultado.lineasOmitidas;
+  ingredientesDescontados = resultado.ingredientesAfectados;
+  errores.push(...resultado.errores);
 
-    if (errUpdate) {
-      errores.push(`Error actualizando stock ${stockId}: ${errUpdate.message}`);
-    }
-  }
-
-  // ─── 7. Guardar log ───────────────────────────────────────────────────────
+  // ─── 4. Guardar log ───────────────────────────────────────────────────────
   const status = errores.length === 0 ? "ok" : lineasProcesadas > 0 ? "partial" : "error";
 
   await guardarLogDescuento(supabase, {
