@@ -26,4 +26,4 @@ La carga inicial de la carta pública (`fetchCartaPorSlug` en `services/carta-fe
 
 **Solución**: como el server component se ejecuta server-side y nunca expone la `service_role_key` al navegador, usamos service-role para todas las queries (empresa + categorías + items). Ventaja: no requiere migración nueva. Desventaja: el realtime client-side (`useLikesRealtime`) sigue usando anon — funciona porque la suscripción a `carta_items` no necesita join con empresas para los UPDATEs de `likes_count`.
 
-**Migración 040 (RPC) creada pero NO aplicada** — alternativa por si en el futuro se quiere evitar service-role en este flujo.
+Si en el futuro se quiere evitar service-role en este flujo, alternativas: (a) RPC `security definer` que devuelva la carta completa, (b) policy explícita `to anon` en `empresas` con scope mínimo, (c) denormalizar `carta_publicada` a las tablas hijas.

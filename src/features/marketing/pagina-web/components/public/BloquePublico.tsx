@@ -10,8 +10,15 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Bloque } from "../../types";
+import type { PaginaContexto } from "./PaginaPublicaShell";
 
-export function BloquePublico({ bloque }: { bloque: Bloque }) {
+export function BloquePublico({
+  bloque,
+  contexto,
+}: {
+  bloque: Bloque;
+  contexto?: PaginaContexto;
+}) {
   if (!bloque.visible) return null;
 
   switch (bloque.tipo) {
@@ -28,7 +35,7 @@ export function BloquePublico({ bloque }: { bloque: Bloque }) {
     case "cta":
       return <CtaPublico bloque={bloque} />;
     case "formulario":
-      return <FormularioPublico bloque={bloque} />;
+      return <FormularioPublico bloque={bloque} contexto={contexto} />;
     case "mapa":
       return <MapaPublico bloque={bloque} />;
     case "footer":
@@ -316,47 +323,109 @@ function CtaPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "cta" }> }) {
 
 function FormularioPublico({
   bloque,
+  contexto,
 }: {
   bloque: Extract<Bloque, { tipo: "formulario" }>;
+  contexto?: PaginaContexto;
 }) {
-  const { titulo, campos } = bloque.datos;
+  const { titulo, campos, mensaje_exito } = bloque.datos;
+  const [enviando, setEnviando] = useState(false);
+  const [enviado, setEnviado] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!contexto?.empresaId) {
+      setErrorMsg("Formulario no disponible en modo vista previa.");
+      return;
+    }
+    setEnviando(true);
+    setErrorMsg(null);
+    const fd = new FormData(e.currentTarget);
+    const payload: Record<string, string> = {};
+    for (const [k, v] of fd.entries()) {
+      if (typeof v === "string") payload[k] = v;
+    }
+    try {
+      const search = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+      const utm = search
+        ? {
+            source: search.get("utm_source") ?? undefined,
+            medium: search.get("utm_medium") ?? undefined,
+            campaign: search.get("utm_campaign") ?? undefined,
+          }
+        : undefined;
+      const res = await fetch("/api/pagina-web/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          empresaId: contexto.empresaId,
+          paginaId: contexto.paginaId,
+          bloqueId: bloque.id,
+          payload,
+          utm: utm && (utm.source || utm.medium || utm.campaign) ? utm : null,
+          referrer: typeof document !== "undefined" ? document.referrer || null : null,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        setErrorMsg(json.error ?? "Error al enviar");
+      } else {
+        setEnviado(true);
+      }
+    } catch {
+      setErrorMsg("Error de red. Inténtalo de nuevo.");
+    } finally {
+      setEnviando(false);
+    }
+  };
+
   return (
     <section className="py-12 px-4 max-w-xl mx-auto">
       <h2 className="text-2xl font-bold mb-4">{titulo}</h2>
-      <form className="space-y-3" onSubmit={(e) => e.preventDefault()}>
-        {campos.map((c) => (
-          <div key={c.name}>
-            <label className="block text-sm mb-1">
-              {c.label}
-              {c.required ? " *" : ""}
-            </label>
-            {c.tipo === "textarea" ? (
-              <textarea
-                name={c.name}
-                className="w-full rounded border px-3 py-2 text-sm"
-                rows={3}
-                required={c.required}
-              />
-            ) : (
-              <input
-                type={c.tipo}
-                name={c.name}
-                className="w-full rounded border px-3 py-2 text-sm"
-                required={c.required}
-              />
-            )}
-          </div>
-        ))}
-        <button
-          type="submit"
-          className="rounded-md bg-black text-white px-5 py-2 font-semibold text-sm"
-        >
-          Enviar
-        </button>
-      </form>
-      <p className="text-[11px] text-muted-foreground mt-2">
-        Preview — envío real operativo tras Fase 7.
-      </p>
+      {enviado ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
+          {mensaje_exito}
+        </div>
+      ) : (
+        <form className="space-y-3" onSubmit={onSubmit}>
+          {campos.map((c) => (
+            <div key={c.name}>
+              <label className="block text-sm mb-1">
+                {c.label}
+                {c.required ? " *" : ""}
+              </label>
+              {c.tipo === "textarea" ? (
+                <textarea
+                  name={c.name}
+                  className="w-full rounded border px-3 py-2 text-sm"
+                  rows={3}
+                  required={c.required}
+                  disabled={enviando}
+                />
+              ) : (
+                <input
+                  type={c.tipo}
+                  name={c.name}
+                  className="w-full rounded border px-3 py-2 text-sm"
+                  required={c.required}
+                  disabled={enviando}
+                />
+              )}
+            </div>
+          ))}
+          {errorMsg ? (
+            <p className="text-sm text-red-600">{errorMsg}</p>
+          ) : null}
+          <button
+            type="submit"
+            disabled={enviando}
+            className="rounded-md bg-black text-white px-5 py-2 font-semibold text-sm disabled:opacity-50"
+          >
+            {enviando ? "Enviando…" : "Enviar"}
+          </button>
+        </form>
+      )}
     </section>
   );
 }

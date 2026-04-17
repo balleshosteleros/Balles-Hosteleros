@@ -22,7 +22,10 @@ export async function guardarBloques(
     const { supabase, empresaId } = await getAppContext();
     if (!empresaId) return { ok: false, error: "Sin empresa." };
 
-    const parsed = bloquesArraySchema.safeParse(bloques);
+    // Sanitizar HTML de bloques texto_libre ANTES de validar + persistir
+    const sanitizados = bloques.map((b) => sanitizarBloqueTextoLibre(b));
+
+    const parsed = bloquesArraySchema.safeParse(sanitizados);
     if (!parsed.success) {
       console.error("[pagina-web][guardarBloques] validation:", parsed.error.issues);
       return { ok: false, error: "Validación fallida en alguno de los bloques." };
