@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileSearch, RefreshCw } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { FileSearch, RefreshCw, AlertTriangle, Plus } from "lucide-react";
 import {
   asegurarModelosDelPeriodo,
   listModelos,
@@ -24,17 +25,27 @@ export function ModelosView() {
   const [ejercicio, setEjercicio] = useState<number>(AÑO_ACTUAL);
   const [modelos, setModelos] = useState<ModeloAeat[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   async function refrescar(año: number) {
     setLoading(true);
+    setError(null);
     const asegurar = await asegurarModelosDelPeriodo(año);
     if (!asegurar.ok) {
-      console.error(asegurar.error);
+      setError(
+        `No se pudieron crear los modelos: ${asegurar.error ?? "error desconocido"}`,
+      );
+      console.error("[modelos] asegurar:", asegurar.error);
     }
     const res = await listModelos(año);
     if (res.ok) setModelos(res.data);
+    else setError(`Error al listar modelos: ${res.error ?? "desconocido"}`);
     setLoading(false);
+  }
+
+  async function crearModelosManual() {
+    await refrescar(ejercicio);
   }
 
   useEffect(() => {
@@ -100,9 +111,39 @@ export function ModelosView() {
         </div>
       </div>
 
+      {error ? (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Error al cargar los modelos</AlertTitle>
+          <AlertDescription className="space-y-2">
+            <p>{error}</p>
+            <p className="text-xs">
+              Si es un error de permisos RLS, aplica el fix del SQL Editor y vuelve a pulsar
+              &quot;Crear modelos&quot;.
+            </p>
+            <Button size="sm" variant="outline" onClick={crearModelosManual} disabled={isPending}>
+              <Plus className="h-4 w-4 mr-1" />
+              Reintentar / Crear modelos ahora
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {!error && !loading && modelos.length === 0 ? (
+        <div className="text-center py-12 space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Aún no hay modelos para el ejercicio {ejercicio}.
+          </p>
+          <Button onClick={crearModelosManual} disabled={isPending}>
+            <Plus className="h-4 w-4 mr-2" />
+            Crear los 18 modelos del ejercicio
+          </Button>
+        </div>
+      ) : null}
+
       {loading ? (
         <div className="text-center py-12 text-muted-foreground">Cargando modelos...</div>
-      ) : (
+      ) : modelos.length === 0 ? null : (
         <>
           <section className="space-y-3">
             <h2 className="text-lg font-semibold border-b pb-2">Modelos trimestrales</h2>

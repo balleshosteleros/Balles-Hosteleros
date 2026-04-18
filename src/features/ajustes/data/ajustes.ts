@@ -2,6 +2,7 @@ export interface DatosGenerales {
   nombreComercial: string;
   razonSocial: string;
   cif: string;
+  epigrafeIae: string;
   direccionFiscal: string;
   direccionLocal: string;
   telefonoPrincipal: string;
@@ -179,6 +180,7 @@ export function buildDefaultAjustes(empresaNombre: string): AjustesEmpresa {
       nombreComercial: empresaNombre,
       razonSocial: `${empresaNombre} S.L.`,
       cif: "",
+      epigrafeIae: "",
       direccionFiscal: "",
       direccionLocal: "",
       telefonoPrincipal: "",

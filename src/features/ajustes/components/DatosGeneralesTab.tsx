@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,10 @@ import { toast } from "sonner";
 import { DatosGenerales } from "@/features/ajustes/data/ajustes";
 import { Upload, Trash2, Info, ImageIcon, Loader2, ChevronDown, Check } from "lucide-react";
 import { uploadLogo, deleteLogo, saveEmpresaColor } from "@/features/empresa/actions/logo-actions";
+import {
+  getDatosFiscales,
+  saveDatosFiscales,
+} from "@/features/empresa/actions/datos-fiscales-actions";
 
 const BRAND_COLORS = [
   { hex: "#EF4444", nombre: "Rojo" },
@@ -50,10 +54,34 @@ export function DatosGeneralesTab() {
 
   const logoUrl = getLogoUrl(empresaActual.id);
   const currentColor = empresaActual.color ?? "#3B82F6";
+  const [savingFiscales, setSavingFiscales] = useState(false);
 
   const set = (k: keyof DatosGenerales, v: string) => {
     setAjustes((prev) => ({ ...prev, datosGenerales: { ...prev.datosGenerales, [k]: v } }));
   };
+
+  // Cargar datos fiscales desde BD al montar y rellenar los vacíos
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const res = await getDatosFiscales();
+      if (cancelled || !res.ok || !res.data) return;
+      setAjustes((prev) => ({
+        ...prev,
+        datosGenerales: {
+          ...prev.datosGenerales,
+          razonSocial: prev.datosGenerales.razonSocial || res.data!.razon_social,
+          cif: prev.datosGenerales.cif || res.data!.nif,
+          direccionFiscal: prev.datosGenerales.direccionFiscal || res.data!.direccion,
+          epigrafeIae: prev.datosGenerales.epigrafeIae || res.data!.epigrafe_iae,
+        },
+      }));
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empresaActual.id]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -101,8 +129,24 @@ export function DatosGeneralesTab() {
     }
   };
 
-  const save = () => {
-    toast.success("Datos generales guardados correctamente");
+  const save = async () => {
+    setSavingFiscales(true);
+    try {
+      const res = await saveDatosFiscales({
+        razon_social: d.razonSocial,
+        nif: d.cif,
+        direccion: d.direccionFiscal,
+        epigrafe_iae: d.epigrafeIae ?? "",
+      });
+      if (!res.ok) throw new Error(res.error ?? "Error al guardar");
+      toast.success("Datos generales guardados en Supabase");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Error desconocido";
+      toast.error(`No se pudieron guardar los datos fiscales: ${msg}`);
+      console.error("[datos-fiscales] save:", err);
+    } finally {
+      setSavingFiscales(false);
+    }
   };
 
   return (
@@ -112,7 +156,8 @@ export function DatosGeneralesTab() {
         <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <Field label="Nombre comercial" value={d.nombreComercial} onChange={(v) => set("nombreComercial", v)} />
           <Field label="Razón social" value={d.razonSocial} onChange={(v) => set("razonSocial", v)} />
-          <Field label="CIF" value={d.cif} onChange={(v) => set("cif", v)} />
+          <Field label="CIF / NIF" value={d.cif} onChange={(v) => set("cif", v)} placeholder="B12345678" />
+          <Field label="Epígrafe IAE" value={d.epigrafeIae ?? ""} onChange={(v) => set("epigrafeIae", v)} placeholder="6712" />
           <Field label="Dirección fiscal" value={d.direccionFiscal} onChange={(v) => set("direccionFiscal", v)} />
           <Field label="Ciudad" value={d.ciudad} onChange={(v) => set("ciudad", v)} />
           <Field label="Provincia" value={d.provincia} onChange={(v) => set("provincia", v)} />
@@ -235,7 +280,10 @@ export function DatosGeneralesTab() {
       </Card>
 
       <div className="flex justify-end">
-        <Button onClick={save}>GUARDAR DATOS GENERALES</Button>
+        <Button onClick={save} disabled={savingFiscales}>
+          {savingFiscales ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+          GUARDAR DATOS GENERALES
+        </Button>
       </div>
     </div>
   );

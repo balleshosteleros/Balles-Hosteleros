@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { getAppContext } from "@/lib/supabase/get-context";
 import type {
   FacturaParaModelo,
   ModeloAeat,
@@ -17,17 +17,8 @@ import { calcular115 } from "../services/calculo-115";
 import { calcular390 } from "../services/calculo-390";
 
 async function getContext() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { supabase, user: null, empresaId: null };
-  const { data } = await supabase
-    .from("profiles")
-    .select("empresa_id")
-    .eq("user_id", user.id)
-    .single();
-  return { supabase, user, empresaId: data?.empresa_id ?? null };
+  const { supabase, userId, empresaId } = await getAppContext();
+  return { supabase, user: userId ? { id: userId } : null, empresaId };
 }
 
 export async function listModelos(

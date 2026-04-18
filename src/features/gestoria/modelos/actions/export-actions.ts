@@ -2,27 +2,18 @@
 
 import { createHash } from "node:crypto";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { getAppContext } from "@/lib/supabase/get-context";
 import type { ModeloAeat, SnapshotEmpresa } from "../types/modelos";
 
 async function getContext() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { supabase, user: null, empresaId: null };
-  const { data } = await supabase
-    .from("profiles")
-    .select("empresa_id")
-    .eq("user_id", user.id)
-    .single();
-  return { supabase, user, empresaId: data?.empresa_id ?? null };
+  const { supabase, userId, empresaId } = await getAppContext();
+  return { supabase, user: userId ? { id: userId } : null, empresaId };
 }
 
 export async function construirSnapshotEmpresa(
   empresaId: string,
 ): Promise<SnapshotEmpresa> {
-  const supabase = await createClient();
+  const { supabase } = await getAppContext();
   const { data } = await supabase
     .from("empresas")
     .select("nombre, razon_social, nif, direccion, epigrafe_iae, logo_url")

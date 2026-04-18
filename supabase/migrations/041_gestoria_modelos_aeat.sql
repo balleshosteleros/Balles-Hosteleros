@@ -123,13 +123,24 @@ alter table public.reglas_categorizacion_ia enable row level security;
 
 drop policy if exists "modelos_aeat_empresa" on public.modelos_aeat;
 create policy "modelos_aeat_empresa" on public.modelos_aeat
-  for all using (
+  for all to authenticated
+  using (
+    empresa_id in (select empresa_id from public.profiles where user_id = auth.uid())
+  )
+  with check (
     empresa_id in (select empresa_id from public.profiles where user_id = auth.uid())
   );
 
 drop policy if exists "asignaciones_modelo_empresa" on public.asignaciones_modelo;
 create policy "asignaciones_modelo_empresa" on public.asignaciones_modelo
-  for all using (
+  for all to authenticated
+  using (
+    modelo_id in (
+      select id from public.modelos_aeat
+      where empresa_id in (select empresa_id from public.profiles where user_id = auth.uid())
+    )
+  )
+  with check (
     modelo_id in (
       select id from public.modelos_aeat
       where empresa_id in (select empresa_id from public.profiles where user_id = auth.uid())
@@ -138,7 +149,11 @@ create policy "asignaciones_modelo_empresa" on public.asignaciones_modelo
 
 drop policy if exists "reglas_categorizacion_empresa" on public.reglas_categorizacion_ia;
 create policy "reglas_categorizacion_empresa" on public.reglas_categorizacion_ia
-  for all using (
+  for all to authenticated
+  using (
+    empresa_id in (select empresa_id from public.profiles where user_id = auth.uid())
+  )
+  with check (
     empresa_id in (select empresa_id from public.profiles where user_id = auth.uid())
   );
 
