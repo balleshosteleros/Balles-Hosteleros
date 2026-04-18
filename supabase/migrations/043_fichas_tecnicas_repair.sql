@@ -88,13 +88,18 @@ create policy "if_write" on public.ingredientes_ficha for all to authenticated
 
 -- ────────────────────────────────────────────────────────────
 -- 4. Ahora que fichas_tecnicas existe, cerrar el FK pendiente de 042
+--    Usa pg_constraint (fiable) en vez de information_schema.
 -- ────────────────────────────────────────────────────────────
 do $$
 begin
   if not exists (
-    select 1 from information_schema.constraint_column_usage
-    where table_name='nuevas_recetas'
-      and constraint_name='nuevas_recetas_ficha_tecnica_id_fkey'
+    select 1
+    from pg_constraint c
+    join pg_class t on c.conrelid = t.oid
+    join pg_namespace n on t.relnamespace = n.oid
+    where c.conname = 'nuevas_recetas_ficha_tecnica_id_fkey'
+      and t.relname = 'nuevas_recetas'
+      and n.nspname = 'public'
   ) then
     alter table public.nuevas_recetas
       add constraint nuevas_recetas_ficha_tecnica_id_fkey
