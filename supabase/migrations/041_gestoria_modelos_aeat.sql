@@ -53,10 +53,12 @@ create index if not exists idx_modelos_aeat_estado on public.modelos_aeat(empres
 -- ─── 2. ASIGNACIONES factura → casilla ─────────────────────
 -- Una fila por cada factura que entra en un modelo (con su casilla)
 
+-- Nota: factura_id es uuid sin FK porque la tabla facturas puede no existir aún
+-- en todas las instalaciones. La integridad se garantiza desde la app.
 create table if not exists public.asignaciones_modelo (
   id              uuid primary key default gen_random_uuid(),
   modelo_id       uuid not null references public.modelos_aeat(id) on delete cascade,
-  factura_id      uuid not null references public.facturas(id) on delete cascade,
+  factura_id      uuid not null,
   casilla         text not null,
   importe         numeric not null default 0,
   tipo_aporte     text not null default 'base',
@@ -88,11 +90,16 @@ create index if not exists idx_reglas_categorizacion_empresa
   on public.reglas_categorizacion_ia(empresa_id);
 
 -- ─── 4. CAMPO IVA DEDUCIBLE PARCIAL EN FACTURAS ────────────
--- Para vehículos al 50 %, gastos mixtos etc. (gotcha del PRP)
+-- Para vehículos al 50 %, gastos mixtos etc. (gotcha del PRP).
+-- Sólo se añade si la tabla facturas existe ya.
 
-do $$ begin
-  alter table public.facturas
-    add column if not exists iva_deducible_pct numeric not null default 100;
+do $$
+begin
+  if exists (select 1 from information_schema.tables
+             where table_schema = 'public' and table_name = 'facturas') then
+    alter table public.facturas
+      add column if not exists iva_deducible_pct numeric not null default 100;
+  end if;
 exception when others then null;
 end $$;
 
@@ -117,7 +124,7 @@ alter table public.reglas_categorizacion_ia enable row level security;
 drop policy if exists "modelos_aeat_empresa" on public.modelos_aeat;
 create policy "modelos_aeat_empresa" on public.modelos_aeat
   for all using (
-    empresa_id in (select empresa_id from public.profiles where id = auth.uid())
+    empresa_id in (select empresa_id from public.profiles where user_id = auth.uid())
   );
 
 drop policy if exists "asignaciones_modelo_empresa" on public.asignaciones_modelo;
@@ -125,14 +132,14 @@ create policy "asignaciones_modelo_empresa" on public.asignaciones_modelo
   for all using (
     modelo_id in (
       select id from public.modelos_aeat
-      where empresa_id in (select empresa_id from public.profiles where id = auth.uid())
+      where empresa_id in (select empresa_id from public.profiles where user_id = auth.uid())
     )
   );
 
 drop policy if exists "reglas_categorizacion_empresa" on public.reglas_categorizacion_ia;
 create policy "reglas_categorizacion_empresa" on public.reglas_categorizacion_ia
   for all using (
-    empresa_id in (select empresa_id from public.profiles where id = auth.uid())
+    empresa_id in (select empresa_id from public.profiles where user_id = auth.uid())
   );
 
 -- ─── 6. TRIGGERS updated_at ────────────────────────────────

@@ -1,7 +1,26 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { esHostPrincipal } from '@/features/marketing/pagina-web/services/hostname-resolver'
 
 export async function updateSession(request: NextRequest) {
+  // ── Hostname rewrite: dominios custom de páginas web ────────────────
+  // Si el host NO es el principal del SaaS, reescribimos a (public-site)
+  // para que el catch-all resuelva por hostname.
+  const rawHost =
+    request.headers.get('x-forwarded-host') ?? request.headers.get('host') ?? ''
+  if (rawHost && !esHostPrincipal(rawHost)) {
+    // Rewrite a /__site/{path} para aislar las rutas públicas del panel
+    const pathname = request.nextUrl.pathname
+    const isAsset = /\.[a-z0-9]+$/i.test(pathname) || pathname.startsWith('/api/') || pathname.startsWith('/_next/')
+    if (!isAsset) {
+      const target = request.nextUrl.clone()
+      target.pathname = `/__site${pathname === '/' ? '' : pathname}`
+      const res = NextResponse.rewrite(target)
+      res.headers.set('x-paginas-web-host', rawHost)
+      return res
+    }
+  }
+
   let supabaseResponse = NextResponse.next({ request })
 
   // DEV bypass — sin redirecciones ni guard

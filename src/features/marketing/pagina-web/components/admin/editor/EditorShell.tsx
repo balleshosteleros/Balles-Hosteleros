@@ -2,18 +2,20 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Eye, EyeOff, Globe, Loader2 } from "lucide-react";
+import { ArrowLeft, Download, Eye, EyeOff, Globe, Link2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useEditorStore } from "../../../hooks/useEditorStore";
 import { useAutosave } from "../../../hooks/useAutosave";
 import { useBroadcastBloques } from "../../../hooks/useLivePreview";
 import { obtenerPagina } from "../../../actions/paginas-actions";
+import { despublicarPagina, publicarPagina } from "../../../actions/publicar-actions";
 import { BloqueLibrary } from "./BloqueLibrary";
 import { Canvas } from "./Canvas";
 import { PropiedadesPanel } from "./PropiedadesPanel";
 import { AutosaveIndicator } from "./AutosaveIndicator";
 import { PreviewPane } from "./PreviewPane";
+import { ImportarDeUrlDialog } from "./ImportarDeUrlDialog";
 
 interface Props {
   paginaId: string;
@@ -26,6 +28,9 @@ export function EditorShell({ paginaId }: Props) {
   const bloques = useEditorStore((s) => s.bloques);
   const [loading, setLoading] = useState(true);
   const [showPreview, setShowPreview] = useState(false);
+  const [estadoPagina, setEstadoPagina] = useState<"BORRADOR" | "PUBLICADA" | "ARCHIVADA">("BORRADOR");
+  const [publicando, setPublicando] = useState(false);
+  const [showImportar, setShowImportar] = useState(false);
   const { estado: estadoAutosave, ultimoGuardado } = useAutosave(paginaId);
 
   // Emitir bloques por BroadcastChannel al iframe de preview
@@ -43,6 +48,7 @@ export function EditorShell({ paginaId }: Props) {
         return;
       }
       hydrate(res.data);
+      setEstadoPagina(res.data.estado);
       setLoading(false);
     })();
     return () => {
@@ -72,6 +78,14 @@ export function EditorShell({ paginaId }: Props) {
         <span className="font-medium text-sm truncate">{nombre}</span>
         <AutosaveIndicator estado={estadoAutosave} ultimoGuardado={ultimoGuardado} />
         <div className="ml-auto flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setShowImportar(true)}>
+            <Download className="h-4 w-4 mr-1" /> Importar URL
+          </Button>
+          <Link href={`/marketing/pagina-web/${paginaId}/dominios`}>
+            <Button variant="ghost" size="sm">
+              <Link2 className="h-4 w-4 mr-1" /> Dominios
+            </Button>
+          </Link>
           <Button
             variant={showPreview ? "default" : "outline"}
             size="sm"
@@ -87,9 +101,43 @@ export function EditorShell({ paginaId }: Props) {
               </>
             )}
           </Button>
-          <Button variant="primary" size="sm" disabled>
-            Publicar
-          </Button>
+          {estadoPagina === "PUBLICADA" ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={publicando}
+              onClick={async () => {
+                setPublicando(true);
+                const r = await despublicarPagina(paginaId);
+                if (r.ok) {
+                  setEstadoPagina("BORRADOR");
+                  toast.success("Página despublicada");
+                } else toast.error(r.error);
+                setPublicando(false);
+              }}
+            >
+              {publicando ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
+              Despublicar
+            </Button>
+          ) : (
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={publicando}
+              onClick={async () => {
+                setPublicando(true);
+                const r = await publicarPagina(paginaId);
+                if (r.ok) {
+                  setEstadoPagina("PUBLICADA");
+                  toast.success("¡Página publicada!");
+                } else toast.error(r.error);
+                setPublicando(false);
+              }}
+            >
+              {publicando ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
+              Publicar
+            </Button>
+          )}
         </div>
       </header>
 
@@ -103,6 +151,16 @@ export function EditorShell({ paginaId }: Props) {
           <PropiedadesPanel />
         )}
       </div>
+
+      <ImportarDeUrlDialog
+        open={showImportar}
+        onOpenChange={setShowImportar}
+        paginaId={paginaId}
+        onImported={async () => {
+          const r = await obtenerPagina(paginaId);
+          if (r.ok) hydrate(r.data);
+        }}
+      />
     </div>
   );
 }

@@ -8,7 +8,7 @@ import {
   Package, FileArchive, KeyRound, Gavel, FileUp, ShoppingCart, Warehouse, FlaskConical,
   GraduationCap, UtensilsCrossed, BookOpen, Contact, Thermometer, Sparkles, FileSearch,
   PenLine, CheckCircle2, BarChart3, Landmark, Tag, Zap, ContactRound,
-  Heart, UserPlus, Apple, CreditCard, Presentation, QrCode,
+  Heart, UserPlus, Apple, CreditCard, Presentation, QrCode, Globe,
 } from "lucide-react";
 
 // Icono compuesto: cuadrícula de apps + candado de seguridad
@@ -87,6 +87,7 @@ const marketingSubs = [
   { title: "CALENDARIO", url: "/marketing/calendario", icon: CalendarDays },
   { title: "CONTENIDO", url: "/marketing/contenido", icon: FolderOpen },
   { title: "CARTA DIGITAL", url: "/marketing/carta-digital", icon: QrCode },
+  { title: "PÁGINA WEB", url: "/marketing/pagina-web", icon: Globe },
   { title: "FIDELIZACIÓN", url: "/marketing/fidelizacion", icon: Heart },
   { title: "CAPTACIÓN", url: "/marketing/captacion", icon: UserPlus },
 ];
