@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { isToday, parseISO, startOfDay, endOfDay } from "date-fns";
+import { startOfDay, endOfDay } from "date-fns";
 import { useGoogleConnection } from "./useGoogleConnection";
-import { loadTareas } from "./TareasDrawer";
+import { contarPendientesHoy } from "@/features/tareas/actions/tareas-actions";
 
 export interface DailyCounts {
   emails: number;   // correos no leídos hoy
@@ -24,12 +24,11 @@ export function useDailyCounts(): DailyCounts {
   });
 
   const fetchCounts = useCallback(async () => {
-    // Tareas locales (localStorage)
+    // Tareas de BD (no localStorage)
     let tasks = 0;
     try {
-      tasks = loadTareas().filter(
-        (t) => !t.hecha && isToday(parseISO(t.fecha))
-      ).length;
+      const res = await contarPendientesHoy();
+      if (res.ok) tasks = res.data;
     } catch {
       /* ignore */
     }

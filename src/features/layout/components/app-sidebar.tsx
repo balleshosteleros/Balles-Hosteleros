@@ -33,6 +33,7 @@ function AccesosIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { NavLink } from "@/features/layout/components/nav-link";
 import {
@@ -156,6 +157,8 @@ function CollapsibleSection({
   items,
   collapsed,
   linkTo,
+  open,
+  onOpenChange,
 }: {
   icon: React.ElementType;
   label: string;
@@ -163,10 +166,9 @@ function CollapsibleSection({
   items: SubItem[];
   collapsed: boolean;
   linkTo?: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
-  const pathname = usePathname();
-  const isActive = pathname.startsWith(prefix);
-
   const trigger = linkTo ? (
     <SidebarMenuButton asChild>
       <NavLink
@@ -198,7 +200,7 @@ function CollapsibleSection({
 
   return (
     <SidebarMenuItem>
-      <Collapsible defaultOpen={isActive}>
+      <Collapsible open={open} onOpenChange={onOpenChange}>
         <CollapsibleTrigger asChild>{trigger}</CollapsibleTrigger>
         <CollapsibleContent>
           <SubMenu items={items} collapsed={collapsed} />
@@ -211,6 +213,24 @@ function CollapsibleSection({
 export function AppSidebar() {
   const { state, toggleSidebar } = useSidebar();
   const collapsed = state === "collapsed";
+  const pathname = usePathname();
+
+  const sections = [
+    { key: "direccion", icon: Crown, label: "DIRECCIÓN", prefix: "/direccion", items: direccionSubs },
+    { key: "sala", icon: UtensilsCrossed, label: "SALA", prefix: "/sala", items: salaSubs },
+    { key: "cocina", icon: ChefHat, label: "COCINA", prefix: "/cocina", items: cocinaSubs },
+    { key: "gerencia", icon: Briefcase, label: "GERENCIA", prefix: "/gerencia", items: gerenciaSubs },
+    { key: "calidad", icon: CheckCircle2, label: "CALIDAD", prefix: "/calidad", items: calidadSubs, linkTo: "/calidad" },
+    { key: "rrhh", icon: User, label: "RECURSOS HUMANOS", prefix: "/rrhh", items: rrhhSubs, linkTo: "/rrhh" },
+    { key: "marketing", icon: Camera, label: "MARKETING", prefix: "/marketing", items: marketingSubs, linkTo: "/marketing" },
+    { key: "logistica", icon: Package, label: "LOGÍSTICA", prefix: "/logistica", items: logisticaSubs, linkTo: "/logistica" },
+    { key: "contabilidad", icon: Calculator, label: "CONTABILIDAD", prefix: "/contabilidad", items: contabilidadSubs },
+    { key: "gestoria", icon: FileText, label: "GESTORÍA", prefix: "/gestoria", items: gestoriaSubs, linkTo: "/gestoria" },
+    { key: "juridico", icon: Scale, label: "JURÍDICO", prefix: "/juridico", items: juridicoSubs, linkTo: "/juridico" },
+  ] as const;
+
+  const activeKey = sections.find((s) => pathname.startsWith(s.prefix))?.key ?? null;
+  const [openKey, setOpenKey] = useState<string | null>(activeKey);
 
   return (
     <Sidebar collapsible="icon">
@@ -252,17 +272,19 @@ export function AppSidebar() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              <CollapsibleSection icon={Crown} label="DIRECCIÓN" prefix="/direccion" items={direccionSubs} collapsed={collapsed} />
-              <CollapsibleSection icon={UtensilsCrossed} label="SALA" prefix="/sala" items={salaSubs} collapsed={collapsed} />
-              <CollapsibleSection icon={ChefHat} label="COCINA" prefix="/cocina" items={cocinaSubs} collapsed={collapsed} />
-              <CollapsibleSection icon={Briefcase} label="GERENCIA" prefix="/gerencia" items={gerenciaSubs} collapsed={collapsed} />
-              <CollapsibleSection icon={CheckCircle2} label="CALIDAD" prefix="/calidad" items={calidadSubs} collapsed={collapsed} linkTo="/calidad" />
-              <CollapsibleSection icon={User} label="RECURSOS HUMANOS" prefix="/rrhh" items={rrhhSubs} collapsed={collapsed} linkTo="/rrhh" />
-              <CollapsibleSection icon={Camera} label="MARKETING" prefix="/marketing" items={marketingSubs} collapsed={collapsed} linkTo="/marketing" />
-              <CollapsibleSection icon={Package} label="LOGÍSTICA" prefix="/logistica" items={logisticaSubs} collapsed={collapsed} linkTo="/logistica" />
-              <CollapsibleSection icon={Calculator} label="CONTABILIDAD" prefix="/contabilidad" items={contabilidadSubs} collapsed={collapsed} />
-              <CollapsibleSection icon={FileText} label="GESTORÍA" prefix="/gestoria" items={gestoriaSubs} collapsed={collapsed} linkTo="/gestoria" />
-              <CollapsibleSection icon={Scale} label="JURÍDICO" prefix="/juridico" items={juridicoSubs} collapsed={collapsed} linkTo="/juridico" />
+              {sections.map((s) => (
+                <CollapsibleSection
+                  key={s.key}
+                  icon={s.icon}
+                  label={s.label}
+                  prefix={s.prefix}
+                  items={s.items}
+                  collapsed={collapsed}
+                  linkTo={"linkTo" in s ? s.linkTo : undefined}
+                  open={openKey === s.key}
+                  onOpenChange={(isOpen) => setOpenKey(isOpen ? s.key : null)}
+                />
+              ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

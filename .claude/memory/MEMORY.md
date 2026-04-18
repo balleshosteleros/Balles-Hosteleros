@@ -14,9 +14,10 @@
 - [Spec Logística COMPLETA](project/logistica_spec_completa.md) — plan 6 fases: F1-F3 ✅, F4 ✅ (Ágora activo 2026-04-14), F5 pendiente, F6 pendiente
 - [Presentaciones (Gemini)](project/presentaciones_gemini.md) — submódulo Dirección operativo desde 2026-04-18; motor Gemini free, branding por empresa con snapshot
 - [Carta Digital en Marketing](project/carta_digital.md) — feature movida de sala/ a marketing/; rutas /marketing/carta-digital y /carta/[slug]
-- [Cocina NUEVAS RECETAS](project/cocina_recetas.md) — renombrado de NUEVOS PLATOS (2026-04-18); tabla nuevas_recetas, ruta /cocina/nuevas-recetas
+- [Cocina NUEVAS RECETAS](project/cocina_recetas.md) — pipeline kanban con fases editables (PRP-031, 2026-04-18); receta = ficha técnica borrador hasta publicar oficial
 - [Tipos reales BD Supabase](feedback/supabase_tipos_reales.md) — profiles.empresa_id es uuid, profiles.user_id sin UNIQUE; usar 035/038 como modelo, no 008
 - [RLS join anon](feedback/rls_join_anon.md) — `using (... exists(select from otra_tabla ...))` falla silencioso si el rol no puede leer otra_tabla; alternativas: policy explícita, RPC security definer, denormalizar, o service-role en server component
 - [Página Web — CMS multi-tenant](project/pagina_web_cms.md) — Marketing > Página Web (PRP-029) operativo 2026-04-18; editor de bloques, preview live, Vercel Domains, importador Bacanal
 - [Panel Comandas KDS](project/cocina_comandas_kds.md) — kanban realtime en /cocina/comandas; extiende pos_ticket_lineas con estado_cocina; POS persiste al enviar a cocina
 - [Supabase Realtime](feedback/supabase_realtime.md) — patrón publication + channel + RLS; cronómetro global único vía context; primer uso en PRP-027
+- [Sidebar acordeón](feedback/sidebar_acordeon.md) — solo un módulo de DEPARTAMENTOS abierto a la vez; abrir uno cierra el anterior
