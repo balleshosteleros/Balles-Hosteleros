@@ -128,19 +128,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
-    // Limpiar estado local inmediatamente
+    const supabase = getSupabase();
+
+    try {
+      if (supabase) {
+        await supabase.auth.signOut();
+      }
+    } catch {
+      // Ignoramos; seguimos con la limpieza de servidor
+    }
+
     setUser(null);
     setSession(null);
     setProfile(null);
     setRoles([]);
 
-    // Llamar a la ruta server-side que limpia las cookies de Supabase SSR
-    // y luego hacer un hard redirect para que el navegador empiece limpio
     try {
-      await fetch("/api/auth/signout", { method: "POST" });
+      await fetch("/api/auth/signout", { method: "POST", credentials: "include" });
     } catch {
       // Si falla el fetch, igual redirigimos
     }
+
     window.location.href = "/";
   }, []);
 

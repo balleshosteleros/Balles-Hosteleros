@@ -1,16 +1,32 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 
 export async function POST(request: Request) {
   const { origin } = new URL(request.url);
-  const supabase = await createClient();
-
-  // Cierra sesión en el servidor — esto limpia las cookies de Supabase SSR
-  await supabase.auth.signOut();
+  const cookieStore = await cookies();
 
   const response = NextResponse.redirect(`${origin}/`, { status: 302 });
 
-  // Limpiar también las cookies de Google que se crean en el callback OAuth
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options);
+          });
+        },
+      },
+    }
+  );
+
+  await supabase.auth.signOut();
+
   response.cookies.delete("g_access_token");
   response.cookies.delete("g_refresh_token");
   response.cookies.delete("g_email");

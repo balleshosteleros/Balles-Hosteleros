@@ -42,7 +42,7 @@ export default function AuthLayout({
         {/* Contenido central: logo + wordmark */}
         <div className="relative z-10 flex w-full flex-col items-center justify-center px-12">
           <div className="flex items-center gap-6">
-            <div className="relative h-28 w-28 shrink-0">
+            <div className="relative h-44 w-44 shrink-0">
               <Image
                 src="/logo-balles.png"
                 alt="Balles Hosteleros"
@@ -51,18 +51,10 @@ export default function AuthLayout({
                 className="object-contain"
               />
             </div>
-            <div className="h-24 w-px bg-white/30" />
-            <div className="flex flex-col">
-              <span className="text-3xl font-bold uppercase tracking-wide text-white">
-                Balles
-              </span>
-              <span className="text-sm font-light uppercase tracking-[0.3em] text-blue-200">
-                Hosteleros
-              </span>
-              <span className="mt-2 text-xs font-light uppercase tracking-[0.2em] text-blue-300/70">
-                Sistema de Gestión
-              </span>
-            </div>
+            <div className="h-32 w-px bg-white/30" />
+            <span className="text-sm font-light uppercase tracking-[0.28em] text-blue-200/80">
+              Software de Gestión
+            </span>
           </div>
         </div>
       </div>

@@ -9,6 +9,7 @@ import {
   GraduationCap, UtensilsCrossed, BookOpen, Contact, Thermometer, Sparkles, FileSearch,
   PenLine, CheckCircle2, BarChart3, Landmark, Tag, Zap, ContactRound,
   Heart, UserPlus, Apple, CreditCard, Presentation, QrCode, Globe,
+  Send,
 } from "lucide-react";
 
 // Icono compuesto: cuadrícula de apps + candado de seguridad
@@ -87,6 +88,7 @@ const logisticaSubs = [
 const marketingSubs = [
   { title: "CALENDARIO", url: "/marketing/calendario", icon: CalendarDays },
   { title: "CONTENIDO", url: "/marketing/contenido", icon: FolderOpen },
+  { title: "CAMPAÑAS", url: "/marketing/campanas", icon: Send },
   { title: "CARTA DIGITAL", url: "/marketing/carta-digital", icon: QrCode },
   { title: "PÁGINA WEB", url: "/marketing/pagina-web", icon: Globe },
   { title: "FIDELIZACIÓN", url: "/marketing/fidelizacion", icon: Heart },
@@ -234,35 +236,38 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="px-3 py-2">
-        <div className={`flex items-center ${collapsed ? "justify-center" : "justify-between"} gap-2`}>
-          <button
-            type="button"
-            onClick={toggleSidebar}
-            className="flex items-center justify-center rounded hover:bg-sidebar-accent/40 transition-colors py-1 px-1"
-            title={collapsed ? "Expandir menú" : "Colapsar menú"}
-          >
-            {collapsed ? (
-              <PanelLeft className="h-5 w-5 text-sidebar-foreground/80" />
-            ) : (
-              <img
-                src="/logo-balles.png"
-                alt="Balles Hosteleros"
-                className="w-24 transition-all duration-200"
-              />
-            )}
-          </button>
-          {!collapsed && (
+      <SidebarHeader className="px-3 py-3">
+        {collapsed ? (
+          <div className="flex items-center justify-center">
             <button
               type="button"
               onClick={toggleSidebar}
-              className="flex h-7 w-7 items-center justify-center rounded hover:bg-sidebar-accent/40 transition-colors"
+              className="flex items-center justify-center rounded hover:bg-sidebar-accent/40 transition-colors py-1 px-1"
+              title="Expandir menú"
+            >
+              <PanelLeft className="h-5 w-5 text-sidebar-foreground/80" />
+            </button>
+          </div>
+        ) : (
+          <div className="relative flex flex-col items-center gap-1.5">
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              className="absolute right-0 top-0 flex h-7 w-7 items-center justify-center rounded hover:bg-sidebar-accent/40 transition-colors"
               title="Colapsar menú"
             >
               <PanelLeft className="h-4 w-4 text-sidebar-foreground/60" />
             </button>
-          )}
-        </div>
+            <img
+              src="/logo-balles.png"
+              alt="Balles Hosteleros"
+              className="w-36 transition-all duration-200"
+            />
+            <span className="text-[10px] font-light uppercase tracking-[0.28em] text-sidebar-foreground/60">
+              Software de Gestión
+            </span>
+          </div>
+        )}
       </SidebarHeader>
 
       <SidebarContent>
