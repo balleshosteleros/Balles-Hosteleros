@@ -1,12 +1,8 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
 import { LoginForm } from '@/features/auth/components'
 
 export default function LoginPage() {
-  if (process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === 'true') {
-    redirect('/dashboard')
-  }
   return (
     <div className="space-y-8">
       <div>
