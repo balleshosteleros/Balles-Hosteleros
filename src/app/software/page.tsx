@@ -126,11 +126,10 @@ function Navbar() {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-[#0b1120]/80 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-        <Link href="/" className="text-lg font-bold tracking-tight text-white">
+        <Link href="/software" className="text-lg font-bold tracking-tight text-white">
           Balles Hosteleros
         </Link>
 
-        {/* Desktop */}
         <div className="hidden items-center gap-8 md:flex">
           <a href="#modulos" className="text-sm text-slate-400 transition hover:text-white">
             Módulos
@@ -141,21 +140,17 @@ function Navbar() {
           <a href="#faq" className="text-sm text-slate-400 transition hover:text-white">
             FAQ
           </a>
-          <Link
-            href="/auth/login"
-            className="text-sm text-slate-400 transition hover:text-white"
-          >
+          <Link href="/" className="text-sm text-slate-400 transition hover:text-white">
             Iniciar sesión
           </Link>
           <Link
-            href="/auth/signup"
+            href="/signup"
             className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-blue-500"
           >
             Empezar gratis
           </Link>
         </div>
 
-        {/* Mobile toggle */}
         <button
           onClick={() => setOpen(!open)}
           className="text-slate-400 md:hidden"
@@ -165,7 +160,6 @@ function Navbar() {
         </button>
       </div>
 
-      {/* Mobile menu */}
       {open && (
         <div className="border-t border-white/5 bg-[#0b1120] px-6 pb-6 pt-4 md:hidden">
           <div className="flex flex-col gap-4">
@@ -178,11 +172,11 @@ function Navbar() {
             <a href="#faq" onClick={() => setOpen(false)} className="text-sm text-slate-300">
               FAQ
             </a>
-            <Link href="/auth/login" className="text-sm text-slate-300">
+            <Link href="/" className="text-sm text-slate-300">
               Iniciar sesión
             </Link>
             <Link
-              href="/auth/signup"
+              href="/signup"
               className="mt-2 rounded-lg bg-blue-600 px-5 py-2.5 text-center text-sm font-medium text-white"
             >
               Empezar gratis
@@ -226,14 +220,13 @@ function FaqItem({ q, a }: { q: string; a: string }) {
    PAGE
    ───────────────────────────────────────────── */
 
-export default function LandingPage() {
+export default function SoftwareLanding() {
   return (
     <div className="min-h-screen bg-[#0b1120] text-white antialiased">
       <Navbar />
 
-      {/* ── HERO ── */}
+      {/* HERO */}
       <section className="relative flex min-h-[90vh] items-center justify-center overflow-hidden px-6 pt-16">
-        {/* Subtle gradient orb */}
         <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
           <div className="h-[600px] w-[600px] rounded-full bg-blue-600/[0.07] blur-[120px]" />
         </div>
@@ -254,7 +247,7 @@ export default function LandingPage() {
           </p>
           <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
             <Link
-              href="/auth/signup"
+              href="/signup"
               className="group inline-flex items-center gap-2 rounded-lg bg-blue-600 px-7 py-3.5 text-sm font-semibold text-white transition hover:bg-blue-500"
             >
               Empieza gratis
@@ -270,7 +263,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── PROBLEMA ── */}
+      {/* PROBLEMA */}
       <section className="px-6 py-28">
         <div className="mx-auto max-w-3xl text-center">
           <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
@@ -287,7 +280,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── SOLUCIÓN ── */}
+      {/* SOLUCIÓN */}
       <section className="px-6 py-28">
         <div className="mx-auto max-w-3xl text-center">
           <p className="mb-4 text-sm font-medium tracking-widest text-blue-400 uppercase">
@@ -306,7 +299,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── MÓDULOS ── */}
+      {/* MÓDULOS */}
       <section id="modulos" className="scroll-mt-20 px-6 py-28">
         <div className="mx-auto max-w-5xl">
           <div className="mb-16 text-center">
@@ -336,7 +329,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── PLANES ── */}
+      {/* PLANES */}
       <section id="planes" className="scroll-mt-20 px-6 py-28">
         <div className="mx-auto max-w-5xl">
           <div className="mb-16 text-center">
@@ -381,7 +374,7 @@ export default function LandingPage() {
                   ))}
                 </ul>
                 <Link
-                  href="/auth/signup"
+                  href="/signup"
                   className={`mt-8 block rounded-lg py-3 text-center text-sm font-semibold transition ${
                     plan.popular
                       ? "bg-blue-600 text-white hover:bg-blue-500"
@@ -396,7 +389,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── FAQ ── */}
+      {/* FAQ */}
       <section id="faq" className="scroll-mt-20 px-6 py-28">
         <div className="mx-auto max-w-2xl">
           <div className="mb-12 text-center">
@@ -412,7 +405,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── CTA FINAL ── */}
+      {/* CTA FINAL */}
       <section className="px-6 py-28">
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
@@ -424,7 +417,7 @@ export default function LandingPage() {
             Empieza gratis. Sin tarjeta. Sin compromiso.
           </p>
           <Link
-            href="/auth/signup"
+            href="/signup"
             className="group mt-8 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-8 py-3.5 text-sm font-semibold text-white transition hover:bg-blue-500"
           >
             Empieza ahora
@@ -433,7 +426,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── FOOTER ── */}
+      {/* FOOTER */}
       <footer className="border-t border-white/5 px-6 py-12">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 sm:flex-row">
           <div>
@@ -443,10 +436,15 @@ export default function LandingPage() {
             </p>
           </div>
           <div className="flex gap-6 text-sm text-slate-500">
-            <a href="https://balleshosteleros.com" target="_blank" rel="noopener noreferrer" className="transition hover:text-slate-300">
+            <a
+              href="https://balleshosteleros.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="transition hover:text-slate-300"
+            >
               balleshosteleros.com
             </a>
-            <Link href="/auth/login" className="transition hover:text-slate-300">
+            <Link href="/" className="transition hover:text-slate-300">
               Acceder
             </Link>
           </div>
