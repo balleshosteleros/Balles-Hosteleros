@@ -51,6 +51,13 @@ export async function updateSession(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
+  // Host demo: el formulario de demo debe mostrarse siempre en "/",
+  // incluso si hay sesión activa. Así cada visitante empieza limpio.
+  const normalizedHost = (rawHost || '').toLowerCase().split(':')[0]
+  const isDemoHost =
+    normalizedHost === 'demo.balleshosteleros.com' ||
+    normalizedHost.startsWith('demo.')
+
   // Rutas protegidas
   const pathname = request.nextUrl.pathname
   const isProtectedRoute = pathname.startsWith('/dashboard')
@@ -66,7 +73,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
-  if (isAuthRoute && user) {
+  if (isAuthRoute && user && !isDemoHost) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 

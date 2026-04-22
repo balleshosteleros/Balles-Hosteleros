@@ -32,6 +32,10 @@ export async function loginAsDemo(_formData: FormData) {
 
   const supabase = await createClient()
 
+  // Limpia cualquier sesión previa (local) antes de entrar al demo
+  // para que cada visitante empiece con una pizarra en blanco.
+  await supabase.auth.signOut({ scope: 'local' })
+
   const { error } = await supabase.auth.signInWithPassword({ email, password })
 
   if (error) {
