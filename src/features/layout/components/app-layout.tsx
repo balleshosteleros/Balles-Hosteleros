@@ -49,7 +49,7 @@ import {
   Apple,
   type LucideIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -258,7 +258,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, profile, roles, signOut } = useAuth();
   const devBypass = process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true";
-  const showUi = !!user || devBypass;
+  const [isDemoHost, setIsDemoHost] = useState(false);
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setIsDemoHost(window.location.hostname.startsWith("demo."));
+    }
+  }, []);
+  const showUi = !!user || devBypass || isDemoHost;
   const counts = useDailyCounts();
 
   let title = ROUTE_TITLES[pathname] ?? "";
