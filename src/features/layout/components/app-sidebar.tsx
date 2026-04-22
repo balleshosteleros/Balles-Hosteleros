@@ -259,9 +259,9 @@ export function AppSidebar() {
               <PanelLeft className="h-4 w-4 text-sidebar-foreground/60" />
             </button>
             <img
-              src="/logo-balles.png"
-              alt="Balles Hosteleros"
-              className="w-36 transition-all duration-200"
+              src="/isotipo-balles.png"
+              alt="Balles"
+              className="h-20 w-20 rounded-xl transition-all duration-200"
             />
             <span className="text-[10px] font-light uppercase tracking-[0.28em] text-sidebar-foreground/60">
               Software de Gestión

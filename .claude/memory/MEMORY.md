@@ -21,3 +21,4 @@
 - [Panel Comandas KDS](project/cocina_comandas_kds.md) — kanban realtime en /cocina/comandas; extiende pos_ticket_lineas con estado_cocina; POS persiste al enviar a cocina
 - [Supabase Realtime](feedback/supabase_realtime.md) — patrón publication + channel + RLS; cronómetro global único vía context; primer uso en PRP-027
 - [Sidebar acordeón](feedback/sidebar_acordeon.md) — solo un módulo de DEPARTAMENTOS abierto a la vez; abrir uno cierra el anterior
+- [Migración 010 parcial](project/migracion_010_parcial.md) — de sus 25 tablas sólo 3 están en BD; el resto hay que crearlas de cero con tipos correctos (uuid, no text)

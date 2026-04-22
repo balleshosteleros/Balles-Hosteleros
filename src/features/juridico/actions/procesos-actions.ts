@@ -21,7 +21,11 @@ export async function listProcesos() {
     const { supabase, empresaId } = await getContext();
     const query = supabase
       .from("procesos_juridicos")
-      .select("*")
+      .select(
+        `*,
+         actualizaciones:actualizaciones_juridicas(id, texto, fecha, apuntado_por),
+         documentos:documentos_juridicos(id, nombre, descripcion, categoria, url, tipo_mime, subido_por, fecha_documento)`
+      )
       .order("created_at", { ascending: false });
     if (empresaId) query.eq("empresa_id", empresaId);
     const { data, error } = await query;

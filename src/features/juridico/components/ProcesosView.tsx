@@ -24,6 +24,8 @@ import { Plus, Search, Info, FileText, Settings2 } from "lucide-react";
 const ALL = "__ALL__";
 
 function mapDbToProceso(row: Record<string, unknown>, empresa: string, empresaId: string): ProcesoJuridico {
+  const docsDb = Array.isArray(row.documentos) ? (row.documentos as Array<Record<string, unknown>>) : [];
+  const actsDb = Array.isArray(row.actualizaciones) ? (row.actualizaciones as Array<Record<string, unknown>>) : [];
   return {
     id: row.id as string,
     titulo: (row.titulo as string) ?? "",
@@ -35,8 +37,26 @@ function mapDbToProceso(row: Record<string, unknown>, empresa: string, empresaId
     estado: ((row.estado as string)?.toUpperCase() ?? "PENDIENTE") as EstadoProceso,
     gravedad: ((row.gravedad as string)?.toUpperCase() ?? "MEDIA") as GravedadProceso,
     descripcion: (row.descripcion as string) ?? "",
-    documentos: Array.isArray(row.documentos) ? row.documentos as DocumentoProceso[] : [],
-    actualizaciones: Array.isArray(row.actualizaciones) ? row.actualizaciones as ActualizacionProceso[] : [],
+    documentos: docsDb.map((d) => ({
+      id: d.id as string,
+      nombre: (d.nombre as string) ?? "",
+      descripcion: (d.descripcion as string) ?? "",
+      categoria: ((d.categoria as string) ?? "Otro") as DocumentoProceso["categoria"],
+      url: (d.url as string) ?? "#",
+      tipo: (d.tipo_mime as string) ?? "pdf",
+      subidoPor: (d.subido_por as string) ?? "",
+      fechaSubida: (d.fecha_documento as string) ?? "",
+    })),
+    actualizaciones: actsDb
+      .slice()
+      .sort((a, b) => ((a.fecha as string) ?? "").localeCompare((b.fecha as string) ?? ""))
+      .map((a) => ({
+        id: a.id as string,
+        texto: (a.texto as string) ?? "",
+        fecha: (a.fecha as string) ?? "",
+        apuntadoPor: (a.apuntado_por as string) ?? "",
+        documentos: [],
+      })),
   };
 }
 
