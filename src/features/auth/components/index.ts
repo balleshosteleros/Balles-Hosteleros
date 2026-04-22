@@ -1,4 +1,5 @@
 export { LoginForm } from './LoginForm'
+export { DemoLoginForm } from './DemoLoginForm'
 export { SignupForm } from './SignupForm'
 export { GoogleSignInButton } from './GoogleSignInButton'
 export { AuthDivider } from './AuthDivider'

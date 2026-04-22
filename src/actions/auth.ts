@@ -20,6 +20,28 @@ export async function login(formData: FormData) {
   redirect('/dashboard')
 }
 
+export async function loginAsDemo(_formData: FormData) {
+  const email = process.env.DEMO_EMAIL
+  const password = process.env.DEMO_PASSWORD
+
+  if (!email || !password) {
+    return {
+      error: 'El modo demo no está configurado. Contacta con el administrador.',
+    }
+  }
+
+  const supabase = await createClient()
+
+  const { error } = await supabase.auth.signInWithPassword({ email, password })
+
+  if (error) {
+    return { error: 'No se pudo acceder al demo. Inténtalo de nuevo en unos minutos.' }
+  }
+
+  revalidatePath('/', 'layout')
+  redirect('/dashboard')
+}
+
 export async function signup(formData: FormData) {
   const supabase = await createClient()
 
@@ -38,7 +60,12 @@ export async function signup(formData: FormData) {
 
 export async function signout() {
   const supabase = await createClient()
-  await supabase.auth.signOut()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  const isDemo = !!(user?.email && process.env.DEMO_EMAIL && user.email === process.env.DEMO_EMAIL)
+
+  await supabase.auth.signOut(isDemo ? { scope: 'local' } : undefined)
+
   revalidatePath('/', 'layout')
   redirect('/')
 }
