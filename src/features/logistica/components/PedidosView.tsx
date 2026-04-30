@@ -15,6 +15,7 @@ import { EstadoPedidoBadge } from "@/features/logistica/components/pedidos/Badge
 import { DetallePedido } from "@/features/logistica/components/pedidos/DetallePedido";
 import { DetalleAlbaran } from "@/features/logistica/components/pedidos/DetalleAlbaran";
 import { PedidoModal } from "@/features/logistica/components/pedidos/PedidoModal";
+import { SugerenciasPedidoModal } from "@/features/logistica/components/pedidos/SugerenciasPedidoModal";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +23,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Plus, Copy, Pencil, Trash2, Search, Printer, Download, MoreHorizontal, ClipboardList, Truck,
-  ChevronDown, FileText, Settings,
+  ChevronDown, FileText, Settings, Package,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
@@ -99,6 +100,7 @@ export function PedidosView() {
   const [detallePedido, setDetallePedido] = useState<Pedido | null>(null);
   const [detalleAlbaran, setDetalleAlbaran] = useState<Albaran | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [sugerenciasOpen, setSugerenciasOpen] = useState(false);
 
   const loadPedidos = useCallback(async () => {
     setLoading(true);
@@ -426,6 +428,9 @@ export function PedidosView() {
             <Button variant="primary" size="sm" onClick={() => { setEditItem(null); setModalOpen(true); }}>
               <Plus className="h-4 w-4" />Nuevo
             </Button>
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => setSugerenciasOpen(true)}>
+              <Package className="h-4 w-4 text-primary" /> Sugerir pedido
+            </Button>
 
             {/* Acciones de selección — solo visible cuando hay items seleccionados */}
             {selected.size > 0 && (
@@ -574,6 +579,15 @@ export function PedidosView() {
 
       {/* Modal */}
       <PedidoModal open={modalOpen} onClose={() => setModalOpen(false)} onSave={handleSave} item={editItem} empresaId={empresaActual.id} empresaNombre={empresaActual.nombre} />
+
+      <SugerenciasPedidoModal
+        open={sugerenciasOpen}
+        onClose={() => setSugerenciasOpen(false)}
+        onOrdersCreated={() => {
+          loadPedidos();
+          setTab("pedidos");
+        }}
+      />
 
       {/* Delete confirm */}
       <AlertDialog open={!!deleteConfirm} onOpenChange={(o) => !o && setDeleteConfirm(null)}>

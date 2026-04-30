@@ -295,3 +295,54 @@ export async function updateProducto(
     return { error: err instanceof Error ? err.message : "Error desconocido" };
   }
 }
+
+/**
+ * Recalcula el coste de todos los productos de venta/elaboración
+ * llamando a la función RPC coste_escandallo para cada uno.
+ */
+export async function recalculateAllCosts(): Promise<{ error?: string; updated?: number }> {
+  try {
+    const { supabase, empresaId } = await getLogisticaContext();
+    if (!empresaId) throw new Error("No empresa context");
+
+    // 1. Obtener todos los productos que no son de compra
+    const { data: prods, error: pErr } = await supabase
+      .from("productos")
+      .select("id, tipo")
+      .eq("empresa_id", empresaId)
+      .in("tipo", ["venta", "elaboracion"]);
+
+    if (pErr) throw pErr;
+    if (!prods?.length) return { updated: 0 };
+
+    let updatedCount = 0;
+    for (const p of prods) {
+      // 2. Calcular coste via RPC
+      const { data: newCost, error: rpcErr } = await supabase.rpc("coste_escandallo", {
+        p_producto_venta_id: p.id,
+      });
+
+      if (rpcErr) {
+        console.error(`Error calculando coste para ${p.id}:`, rpcErr);
+        continue;
+      }
+
+      // 3. Actualizar la tabla productos con el nuevo coste (como string para mantener compatibilidad)
+      const { error: updErr } = await supabase
+        .from("productos")
+        .update({
+          coste: Number(newCost || 0).toFixed(2),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", p.id);
+
+      if (!updErr) updatedCount++;
+    }
+
+    revalidatePath("/logistica/productos");
+    return { updated: updatedCount };
+  } catch (err) {
+    console.error("recalculateAllCosts failed:", err);
+    return { error: err instanceof Error ? err.message : "Error desconocido" };
+  }
+}
