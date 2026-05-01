@@ -60,17 +60,19 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const carpeta = url.searchParams.get("carpeta") ?? "inbox";
+  // Si se pasa labelId explícito (etiqueta del usuario), tiene prioridad
+  const labelIdParam = url.searchParams.get("labelId");
   const labelMap: Record<string, string> = {
     inbox: "INBOX",
     enviados: "SENT",
     borradores: "DRAFT",
     papelera: "TRASH",
   };
-  const label = labelMap[carpeta] ?? "INBOX";
+  const label = labelIdParam ?? labelMap[carpeta] ?? "INBOX";
 
   // 1) Listado de IDs
   const list = await googleFetch<GmailListResponse>(
-    `https://gmail.googleapis.com/gmail/v1/users/me/messages?labelIds=${label}&maxResults=20`,
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages?labelIds=${encodeURIComponent(label)}&maxResults=30`,
     accessToken,
   );
   if (!list || !list.messages) {
@@ -79,7 +81,7 @@ export async function GET(request: Request) {
 
   // 2) Detalles en paralelo (metadata + snippet)
   const detalles = await Promise.all(
-    list.messages.slice(0, 20).map((m) =>
+    list.messages.slice(0, 30).map((m) =>
       googleFetch<GmailMessage>(
         `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
         accessToken,

@@ -4,6 +4,7 @@ import { ReactNode, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   CheckSquare2, Square, Plus, Trash2, ChevronLeft, ChevronRight, Link2, Sparkles,
+  CalendarClock,
 } from "lucide-react";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
@@ -21,6 +22,7 @@ import {
   listTareasMias, crearTareaManual,
   toggleTareaHecha as toggleTareaHechaAction,
   deleteTarea as deleteTareaAction,
+  seedTareasCronogramaHoy,
   type TareaRow,
 } from "@/features/tareas/actions/tareas-actions";
 
@@ -52,6 +54,7 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
   const [newPrio, setNewPrio] = useState<Tarea["prioridad"]>("media");
   const [refDate, setRefDate] = useState(new Date());
   const [open, setOpen] = useState(false);
+  const [rolUsuario, setRolUsuario] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     const res = await listTareasMias();
@@ -59,7 +62,16 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (open) cargar();
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      const seed = await seedTareasCronogramaHoy();
+      if (!cancelled && seed.ok) setRolUsuario(seed.data.rol);
+      await cargar();
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [open, cargar]);
 
   const addTarea = async () => {
@@ -231,9 +243,44 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
                   <p className="text-xs mt-1 opacity-70">Añade una tarea o espera asignaciones de otros</p>
                 </div>
               ) : (
-                <div className="divide-y flex-1">
-                  {tareasHoy.map((t) => <TareaItem key={t.id} t={t} />)}
-                </div>
+                (() => {
+                  const cron = tareasHoy.filter((t) => t.tipo === "cronograma");
+                  const otras = tareasHoy.filter((t) => t.tipo !== "cronograma");
+                  return (
+                    <div className="flex-1">
+                      {cron.length > 0 && (
+                        <>
+                          <div className="px-5 py-2 bg-violet-50/70 border-b border-violet-100 flex items-center gap-2">
+                            <CalendarClock className="h-3.5 w-3.5 text-violet-700" />
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-violet-800">
+                              Tareas del cronograma{rolUsuario ? ` · ${rolUsuario}` : ""}
+                            </span>
+                            <Badge variant="secondary" className="ml-auto text-[10px] h-4 px-1.5">
+                              {cron.filter((t) => !t.hecha).length} pendientes
+                            </Badge>
+                          </div>
+                          <div className="divide-y bg-violet-50/20">
+                            {cron.map((t) => <TareaItem key={t.id} t={t} />)}
+                          </div>
+                        </>
+                      )}
+                      {otras.length > 0 && (
+                        <>
+                          {cron.length > 0 && (
+                            <div className="px-5 py-2 bg-muted/30 border-b">
+                              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                                Otras tareas
+                              </span>
+                            </div>
+                          )}
+                          <div className="divide-y">
+                            {otras.map((t) => <TareaItem key={t.id} t={t} />)}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })()
               )}
             </>
           )}

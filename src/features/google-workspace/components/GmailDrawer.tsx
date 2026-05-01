@@ -16,7 +16,18 @@ import {
   Pencil,
   X,
   Check,
+  Folder,
+  FolderInput,
+  AlertTriangle,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Sheet,
   SheetContent,
@@ -44,9 +55,11 @@ type Mensaje = {
   fecha: string;
   leido: boolean;
   estrella: boolean;
-  carpeta: "inbox" | "enviados" | "borradores" | "papelera";
+  carpeta: string;
   cuerpo: string;
 };
+
+type CarpetaUsuario = { id: string; nombre: string };
 
 const MOCK_MENSAJES: Mensaje[] = [
   {
@@ -83,22 +96,35 @@ type ComposeState = {
   threadId?: string;
 };
 
+type Filtro =
+  | { tipo: "sistema"; id: "inbox" | "enviados" | "borradores" | "papelera" }
+  | { tipo: "label"; id: string; nombre: string };
+
 export function GmailDrawer({ children }: GmailDrawerProps) {
   const { connected } = useGoogleConnection();
-  const [carpeta, setCarpeta] = useState<(typeof CARPETAS)[number]["id"]>("inbox");
+  const [filtro, setFiltro] = useState<Filtro>({ tipo: "sistema", id: "inbox" });
   const [seleccionado, setSeleccionado] = useState<Mensaje | null>(null);
   const [busqueda, setBusqueda] = useState("");
   const [mensajesReales, setMensajesReales] = useState<Mensaje[] | null>(null);
   const [cargando, setCargando] = useState(false);
+  const [carpetasUsuario, setCarpetasUsuario] = useState<CarpetaUsuario[]>([]);
 
   // Compose
   const [compose, setCompose] = useState<ComposeState | null>(null);
   const [enviando, setEnviando] = useState(false);
 
+  // Para retro-compatibilidad con el resto del componente
+  const carpeta =
+    filtro.tipo === "sistema" ? filtro.id : (`label:${filtro.id}` as string);
+
   function recargar() {
     if (!connected) return;
     setCargando(true);
-    fetch(`/api/google/gmail/messages?carpeta=${carpeta}`)
+    const url =
+      filtro.tipo === "sistema"
+        ? `/api/google/gmail/messages?carpeta=${filtro.id}`
+        : `/api/google/gmail/messages?labelId=${encodeURIComponent(filtro.id)}`;
+    fetch(url)
       .then((r) => r.json())
       .then((data) => {
         if (data.connected && Array.isArray(data.mensajes)) {
@@ -114,6 +140,20 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
       .finally(() => setCargando(false));
   }
 
+  // Cargar etiquetas/carpetas del usuario una vez al conectar
+  useEffect(() => {
+    if (!connected) {
+      setCarpetasUsuario([]);
+      return;
+    }
+    fetch("/api/google/gmail/labels")
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data.carpetas)) setCarpetasUsuario(data.carpetas);
+      })
+      .catch(() => setCarpetasUsuario([]));
+  }, [connected]);
+
   useEffect(() => {
     if (!connected) {
       setMensajesReales(null);
@@ -121,7 +161,7 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
     }
     recargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connected, carpeta]);
+  }, [connected, filtro]);
 
   useEffect(() => {
     if (!connected || !seleccionado || seleccionado.cuerpo) return;
@@ -151,7 +191,7 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
   }, [connected, seleccionado]);
 
   // Acciones
-  async function actuar(action: string, id: string) {
+  async function actuar(action: string, id: string, labelId?: string) {
     if (!connected) {
       toast.error("Conecta Google primero");
       return;
@@ -159,7 +199,7 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
     const res = await fetch("/api/google/gmail/modify", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, action }),
+      body: JSON.stringify({ id, action, labelId }),
     });
     if (res.ok) {
       const labels: Record<string, string> = {
@@ -167,12 +207,21 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
         unstar: "Sin marcar",
         archive: "Archivado",
         trash: "Movido a la papelera",
+        delete: "Eliminado definitivamente",
         read: "Marcado como leído",
         unread: "Marcado como no leído",
+        moveToLabel: "Movido a la carpeta",
+        addLabel: "Etiqueta añadida",
+        removeLabel: "Etiqueta quitada",
       };
       toast.success(labels[action] ?? "Hecho");
-      // Si es archivar/papelera, lo quitamos del listado y cerramos el panel
-      if (action === "archive" || action === "trash") {
+      // Estas acciones sacan el mensaje del listado actual
+      const sacaDelListado =
+        action === "archive" ||
+        action === "trash" ||
+        action === "delete" ||
+        action === "moveToLabel";
+      if (sacaDelListado) {
         setMensajesReales((prev) =>
           prev ? prev.filter((m) => m.id !== id) : prev,
         );
@@ -183,6 +232,14 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
     } else {
       toast.error("No se pudo aplicar");
     }
+  }
+
+  async function eliminarDefinitivo(id: string) {
+    const ok = window.confirm(
+      "¿Eliminar este correo de forma definitiva? No podrás recuperarlo desde la papelera.",
+    );
+    if (!ok) return;
+    await actuar("delete", id);
   }
 
   function abrirRedactar() {
@@ -279,7 +336,7 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
 
         <div className="flex flex-1 min-h-0">
           {/* Carpetas */}
-          <aside className="w-44 border-r bg-muted/20 p-3">
+          <aside className="w-52 border-r bg-muted/20 p-3 overflow-y-auto">
             <Button
               className="w-full mb-3 bg-red-500 hover:bg-red-600"
               size="sm"
@@ -293,12 +350,12 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
                 <li key={id}>
                   <button
                     onClick={() => {
-                      setCarpeta(id);
+                      setFiltro({ tipo: "sistema", id });
                       setSeleccionado(null);
                     }}
                     className={cn(
                       "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors",
-                      carpeta === id
+                      filtro.tipo === "sistema" && filtro.id === id
                         ? "bg-red-50 font-semibold text-red-700 dark:bg-red-950/40 dark:text-red-300"
                         : "text-muted-foreground hover:bg-muted/70",
                     )}
@@ -309,6 +366,37 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
                 </li>
               ))}
             </ul>
+
+            {carpetasUsuario.length > 0 && (
+              <>
+                <p className="mt-4 mb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Mis carpetas
+                </p>
+                <ul className="space-y-0.5">
+                  {carpetasUsuario.map((c) => (
+                    <li key={c.id}>
+                      <button
+                        onClick={() => {
+                          setFiltro({ tipo: "label", id: c.id, nombre: c.nombre });
+                          setSeleccionado(null);
+                        }}
+                        className={cn(
+                          "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors",
+                          filtro.tipo === "label" && filtro.id === c.id
+                            ? "bg-red-50 font-semibold text-red-700 dark:bg-red-950/40 dark:text-red-300"
+                            : "text-muted-foreground hover:bg-muted/70",
+                        )}
+                      >
+                        <Folder className="h-4 w-4 shrink-0" />
+                        <span className="truncate" title={c.nombre}>
+                          {c.nombre}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
           </aside>
 
           {/* Lista de mensajes */}
@@ -430,11 +518,41 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
                   <Button size="sm" variant="outline" onClick={abrirReenviar}>
                     <Forward className="mr-1 h-3.5 w-3.5" /> Reenviar
                   </Button>
+
+                  {carpetasUsuario.length > 0 && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="sm" variant="outline" className="ml-auto">
+                          <FolderInput className="mr-1 h-3.5 w-3.5" />
+                          Mover a…
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="end"
+                        className="max-h-72 w-56 overflow-y-auto"
+                      >
+                        <DropdownMenuLabel>Mis carpetas de Gmail</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {carpetasUsuario.map((c) => (
+                          <DropdownMenuItem
+                            key={c.id}
+                            onClick={() =>
+                              actuar("moveToLabel", seleccionado.id, c.id)
+                            }
+                          >
+                            <Folder className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+                            <span className="truncate">{c.nombre}</span>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={() => actuar("archive", seleccionado.id)}
-                    className="ml-auto"
+                    className={carpetasUsuario.length > 0 ? "" : "ml-auto"}
                   >
                     <Archive className="mr-1 h-3.5 w-3.5" /> Archivar
                   </Button>
@@ -445,6 +563,15 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
                     onClick={() => actuar("trash", seleccionado.id)}
                   >
                     <Trash2 className="mr-1 h-3.5 w-3.5" /> Papelera
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                    onClick={() => eliminarDefinitivo(seleccionado.id)}
+                    title="Borrar definitivamente sin pasar por la papelera"
+                  >
+                    <AlertTriangle className="mr-1 h-3.5 w-3.5" /> Eliminar
                   </Button>
                 </div>
               </>

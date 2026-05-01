@@ -4,8 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 const SCOPES = [
   "email",
   "profile",
-  "https://www.googleapis.com/auth/gmail.readonly",
-  "https://www.googleapis.com/auth/gmail.send",
+  // mail.google.com/ engloba lectura, envío, modificación de etiquetas y
+  // borrado permanente. Reemplaza a gmail.readonly + gmail.send.
+  "https://mail.google.com/",
+  // Necesario para leer la firma corporativa configurada en Gmail.
+  "https://www.googleapis.com/auth/gmail.settings.basic",
   "https://www.googleapis.com/auth/calendar",
   "https://www.googleapis.com/auth/calendar.events",
 ].join(" ");

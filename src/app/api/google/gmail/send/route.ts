@@ -1,11 +1,46 @@
 import { NextResponse } from "next/server";
-import { getGoogleTokens } from "@/lib/google/api";
+import { getGoogleTokens, googleFetchAuto } from "@/lib/google/api";
+
+type SendAs = {
+  sendAsEmail: string;
+  signature?: string;
+  isPrimary?: boolean;
+  isDefault?: boolean;
+};
+type SendAsList = { sendAs?: SendAs[] };
+
+async function leerFirmaCorporativa(): Promise<string> {
+  try {
+    const r = await googleFetchAuto<SendAsList>(
+      "https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs",
+    );
+    if (r.needsReauth) return "";
+    const sendAs = r.data?.sendAs ?? [];
+    const principal =
+      sendAs.find((s) => s.isPrimary) ??
+      sendAs.find((s) => s.isDefault) ??
+      sendAs[0];
+    return principal?.signature ?? "";
+  } catch (err) {
+    console.error("[gmail/send] no se pudo leer la firma:", err);
+    return "";
+  }
+}
+
+function escaparHtml(texto: string): string {
+  return texto
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\n/g, "<br>");
+}
 
 /**
  * Envía un email con la API de Gmail.
  *
- * Body esperado: { to, subject, body, replyTo?, threadId? }
- * Construye un mensaje RFC2822 y lo codifica en base64url para Gmail.
+ * Body esperado: { to, subject, body, replyTo?, threadId?, inReplyTo?, sinFirma? }
+ * Construye un mensaje RFC2822 en HTML, añade la firma corporativa configurada
+ * en Gmail (a menos que `sinFirma=true`) y lo codifica en base64url.
  */
 export async function POST(request: Request) {
   const { accessToken, email } = await getGoogleTokens();
@@ -23,6 +58,7 @@ export async function POST(request: Request) {
     replyTo?: string;
     threadId?: string;
     inReplyTo?: string;
+    sinFirma?: boolean;
   };
 
   if (!body.to || !body.subject) {
@@ -32,7 +68,13 @@ export async function POST(request: Request) {
     );
   }
 
-  // Construimos el mensaje RFC 2822
+  const cuerpoHtml = escaparHtml(body.body ?? "");
+  const firma = body.sinFirma ? "" : await leerFirmaCorporativa();
+  const htmlFinal = firma
+    ? `<div>${cuerpoHtml}</div><br><br><div>--<br>${firma}</div>`
+    : `<div>${cuerpoHtml}</div>`;
+
+  // Construimos el mensaje RFC 2822 en HTML
   const lines: string[] = [];
   lines.push(`From: ${email ?? "me"}`);
   lines.push(`To: ${body.to}`);
@@ -43,10 +85,10 @@ export async function POST(request: Request) {
     lines.push(`References: ${body.inReplyTo}`);
   }
   lines.push("MIME-Version: 1.0");
-  lines.push('Content-Type: text/plain; charset="UTF-8"');
+  lines.push('Content-Type: text/html; charset="UTF-8"');
   lines.push("Content-Transfer-Encoding: 7bit");
   lines.push("");
-  lines.push(body.body ?? "");
+  lines.push(htmlFinal);
 
   const raw = Buffer.from(lines.join("\r\n"))
     .toString("base64")

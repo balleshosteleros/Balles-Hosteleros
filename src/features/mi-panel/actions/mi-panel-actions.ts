@@ -179,6 +179,89 @@ export async function finalizarPausaPersonal(fichajeId: string) {
   }
 }
 
+export async function listarMisFichajes(limite = 60): Promise<{
+  ok: boolean;
+  data: MiFichajeHoy[];
+  error?: string;
+}> {
+  try {
+    const { supabase, user, empresaId } = await getContext();
+    if (!user || !empresaId) return { ok: false, data: [], error: "No autenticado" };
+    const { data, error } = await supabase
+      .from("fichajes")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .eq("empleado_id", user.id)
+      .order("fecha", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(limite);
+    if (error) throw error;
+    return {
+      ok: true,
+      data: (data ?? []).map((f: Record<string, unknown>) => ({
+        id: f.id as string,
+        fecha: f.fecha as string,
+        horaEntrada: (f.hora_entrada as string | null) ?? null,
+        horaSalida: (f.hora_salida as string | null) ?? null,
+        pausaInicio: (f.pausa_inicio as string | null) ?? null,
+        pausaFin: (f.pausa_fin as string | null) ?? null,
+        horasTotales: (f.horas_totales as number | null) ?? 0,
+        estado: (f.estado as string | null) ?? "pendiente",
+      })),
+    };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[mi-panel] listarMisFichajes:", msg);
+    return { ok: false, data: [], error: msg };
+  }
+}
+
+export interface ComunicadoVisible {
+  id: string;
+  titulo: string;
+  contenido: string;
+  tipo: string;
+  prioridad: string;
+  createdAt: string;
+}
+
+export async function listarComunicadosVisibles(): Promise<{
+  ok: boolean;
+  data: ComunicadoVisible[];
+  error?: string;
+}> {
+  try {
+    const { supabase, user, empresaId } = await getContext();
+    if (!user || !empresaId) return { ok: false, data: [], error: "No autenticado" };
+    const { data, error } = await supabase
+      .from("comunicados")
+      .select("id, titulo, contenido, tipo, prioridad, created_at, estado")
+      .eq("empresa_id", empresaId)
+      .order("created_at", { ascending: false })
+      .limit(60);
+    if (error) throw error;
+    const rows = (data ?? []).filter((c: Record<string, unknown>) => {
+      const estado = (c.estado as string | undefined) ?? "publicado";
+      return estado !== "borrador" && estado !== "archivado";
+    });
+    return {
+      ok: true,
+      data: rows.map((c: Record<string, unknown>) => ({
+        id: c.id as string,
+        titulo: (c.titulo as string) ?? "",
+        contenido: (c.contenido as string) ?? "",
+        tipo: (c.tipo as string) ?? "general",
+        prioridad: (c.prioridad as string) ?? "normal",
+        createdAt: c.created_at as string,
+      })),
+    };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[mi-panel] listarComunicadosVisibles:", msg);
+    return { ok: false, data: [], error: msg };
+  }
+}
+
 // ─── CALENDARIO MENSUAL ──────────────────────────────────────
 
 export async function getMiCalendarioMes(

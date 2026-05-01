@@ -116,6 +116,18 @@ const calidadSubs = [
   { title: "CLIENTES", url: "/calidad/clientes", icon: ContactRound },
   { title: "INSPECCIONES", url: "/calidad/inspecciones", icon: FileSearch },
 ];
+const miPanelSubs = [
+  { title: "EQUIPO", url: "/mi-panel/equipo", icon: Network },
+  { title: "CALENDARIO", url: "/mi-panel/calendario", icon: CalendarDays },
+  { title: "HORARIO", url: "/mi-panel/horario", icon: Timer },
+  { title: "CONDICIONES", url: "/mi-panel/condiciones", icon: FileText },
+  { title: "CUESTIONARIOS", url: "/mi-panel/cuestionarios", icon: ClipboardList },
+  { title: "FICHAJES", url: "/mi-panel/fichajes", icon: Clock },
+  { title: "AUSENCIAS", url: "/mi-panel/ausencias", icon: Calendar },
+  { title: "COMUNICADOS", url: "/mi-panel/comunicados", icon: Megaphone },
+  { title: "DOCUMENTOS", url: "/mi-panel/documentos", icon: FileArchive },
+  { title: "FORMACIÓN", url: "/mi-panel/formacion", icon: GraduationCap },
+];
 const rrhhSubs = [
   { title: "EMPLEADOS", url: "/rrhh/empleados", icon: UsersRound },
   { title: "FICHAJES", url: "/rrhh/fichajes", icon: Clock },
@@ -235,6 +247,7 @@ export function AppSidebar() {
 
   const activeKey = sections.find((s) => pathname.startsWith(s.prefix))?.key ?? null;
   const [openKey, setOpenKey] = useState<string | null>(activeKey);
+  const [miPanelOpen, setMiPanelOpen] = useState<boolean>(pathname.startsWith("/mi-panel"));
 
   return (
     <Sidebar collapsible="icon">
@@ -261,9 +274,9 @@ export function AppSidebar() {
               <PanelLeft className="h-4 w-4 text-sidebar-foreground/60" />
             </button>
             <img
-              src="/isotipo-balles.png"
-              alt="Balles"
-              className="h-20 w-20 rounded-xl transition-all duration-200"
+              src="/logo-balles.png"
+              alt="Balles Hosteleros"
+              className="w-36 transition-all duration-200"
             />
             <span className="text-[10px] font-light uppercase tracking-[0.28em] text-sidebar-foreground/60">
               Software de Gestión
@@ -279,19 +292,16 @@ export function AppSidebar() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <NavLink
-                    href="/mi-panel"
-                    end
-                    className="hover:bg-sidebar-accent/50"
-                    activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold"
-                  >
-                    <LayoutDashboard className="mr-2 h-4 w-4 shrink-0" />
-                    {!collapsed && <span className="text-sm">MI PANEL</span>}
-                  </NavLink>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              <CollapsibleSection
+                icon={LayoutDashboard}
+                label="MI PANEL"
+                prefix="/mi-panel"
+                items={miPanelSubs}
+                collapsed={collapsed}
+                linkTo="/mi-panel"
+                open={miPanelOpen}
+                onOpenChange={setMiPanelOpen}
+              />
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
