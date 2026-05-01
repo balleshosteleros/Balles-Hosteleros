@@ -12,6 +12,7 @@ import {
   UserCircle,
   Mail,
   Calendar as CalendarIcon,
+  CalendarDays,
   Crown,
   UtensilsCrossed,
   ChefHat,
@@ -50,6 +51,33 @@ import {
   FileSearch,
   Gavel,
   Wallet,
+  Network,
+  FileArchive,
+  TrendingUp,
+  Presentation,
+  Utensils,
+  Thermometer,
+  FlaskConical,
+  BookOpen,
+  Contact,
+  CreditCard,
+  Wrench,
+  PercentDiamond,
+  Megaphone,
+  UsersRound,
+  UserCheck,
+  Gift,
+  Banknote,
+  HandCoins,
+  FolderOpen,
+  Send,
+  QrCode,
+  Tag,
+  Zap,
+  Landmark,
+  BarChart3,
+  PenLine,
+  FileUp,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -71,6 +99,7 @@ import {
   TareasDrawer,
   ChatDrawer,
   TelefonoDrawer,
+  GoogleHeaderPill,
   useDailyCounts,
 } from "@/features/google-workspace/components";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
@@ -219,54 +248,76 @@ function getDynamicTitle(pathname: string): string {
 const ROUTE_ICONS: Record<string, LucideIcon> = {
   "/": LayoutDashboard,
   "/mi-panel": LayoutDashboard,
+
+  // DIRECCIÓN
   "/direccion": Crown,
-  "/direccion/estructura": Crown,
-  "/direccion/cronogramas": CalendarIcon,
-  "/direccion/documentacion": FileText,
-  "/direccion/aperturas": Crown,
+  "/direccion/estructura": Network,
+  "/direccion/cronogramas": CalendarDays,
+  "/direccion/documentacion": FileArchive,
+  "/direccion/aperturas": TrendingUp,
+  "/direccion/presentaciones": Presentation,
+
+  // SALA
   "/sala": UtensilsCrossed,
-  "/sala/reservas": UtensilsCrossed,
-  "/sala/clientes": UtensilsCrossed,
+  "/sala/pos": CreditCard,
+  "/sala/reservas": BookOpen,
+  "/sala/clientes": Contact,
+
+  // COCINA
   "/cocina": ChefHat,
   "/cocina/comandas": Timer,
   "/cocina/nuevas-recetas": Sparkles,
-  "/cocina/fichas-tecnicas": ChefHat,
-  "/cocina/elaboraciones": ChefHat,
+  "/cocina/fichas-tecnicas": Utensils,
+  "/cocina/elaboraciones": FlaskConical,
   "/cocina/partidas": ChefHat,
-  "/cocina/temperaturas": ChefHat,
+  "/cocina/temperaturas": Thermometer,
+
+  // GERENCIA
   "/gerencia": Briefcase,
-  "/gerencia/mantenimiento": Briefcase,
+  "/gerencia/mantenimiento": Wrench,
+  "/gerencia/vencimientos": CalendarDays,
   "/gerencia/cierres": Wallet,
-  "/gerencia/descuentos": Briefcase,
-  "/gerencia/ratios": Briefcase,
-  "/gerencia/comunicados": Briefcase,
-  "/gerencia/encuestas": Briefcase,
-  "/gerencia/vencimientos": Briefcase,
+  "/gerencia/descuentos": PercentDiamond,
+  "/gerencia/ratios": TrendingUp,
+  "/gerencia/comunicados": Megaphone,
+  "/gerencia/encuestas": ClipboardList,
+
+  // CALIDAD
   "/calidad": CheckCircle2,
   "/calidad/auditorias": ClipboardList,
-  "/calidad/empleados": CheckCircle2,
-  "/calidad/clientes": CheckCircle2,
-  "/calidad/inspecciones": CheckCircle2,
+  "/calidad/empleados": UsersRound,
+  "/calidad/clientes": ContactRound,
+  "/calidad/inspecciones": FileSearch,
+
+  // RRHH
   "/rrhh": User,
-  "/rrhh/empleados": User,
+  "/rrhh/empleados": UsersRound,
   "/rrhh/fichajes": Clock,
   "/rrhh/solicitudes": ClipboardList,
   "/rrhh/calendarios": CalendarIcon,
   "/rrhh/horarios": Timer,
   "/rrhh/reclutamiento": UserRoundSearch,
-  "/rrhh/boarding": User,
-  "/rrhh/bonus": User,
-  "/rrhh/salarios": User,
-  "/rrhh/pagos": User,
+  "/rrhh/boarding": UserCheck,
+  "/rrhh/bonus": Gift,
+  "/rrhh/salarios": Banknote,
+  "/rrhh/pagos": HandCoins,
   "/rrhh/formacion": GraduationCap,
-  "/rrhh/comunicados": Briefcase,
+  "/rrhh/comunicados": Megaphone,
+
+  // MARKETING
   "/marketing": Camera,
-  "/marketing/calendario": CalendarIcon,
-  "/marketing/contenido": Camera,
-  "/marketing/carta-digital": Camera,
+  "/marketing/calendario": CalendarDays,
+  "/marketing/contenido": FolderOpen,
+  "/marketing/campanas": Send,
+  "/marketing/campanas/email": Mail,
+  "/marketing/campanas/meta": Send,
+  "/marketing/campanas/whatsapp": MessageSquare,
+  "/marketing/carta-digital": QrCode,
   "/marketing/pagina-web": Globe,
   "/marketing/fidelizacion": Heart,
   "/marketing/captacion": UserPlus,
+
+  // LOGÍSTICA
   "/logistica": Package,
   "/logistica/proveedores": Truck,
   "/logistica/productos": Apple,
@@ -274,12 +325,31 @@ const ROUTE_ICONS: Record<string, LucideIcon> = {
   "/logistica/stock": Warehouse,
   "/logistica/inventarios": ClipboardList,
   "/logistica/incidencias": AlertTriangle,
+
+  // CONTABILIDAD
   "/contabilidad": Calculator,
+  "/contabilidad/contactos": ContactRound,
+  "/contabilidad/operaciones": Sparkles,
+  "/contabilidad/facturas": FileText,
+  "/contabilidad/impuestos": FileSearch,
+  "/contabilidad/transacciones": PenLine,
+  "/contabilidad/conciliacion": CheckCircle2,
+  "/contabilidad/calendario": CalendarDays,
+  "/contabilidad/escenarios": BarChart3,
+  "/contabilidad/bancos": Landmark,
+  "/contabilidad/etiquetas": Tag,
+  "/contabilidad/reglas": Zap,
+
+  // GESTORÍA
   "/gestoria": FileText,
-  "/gestoria/presentaciones": FileText,
   "/gestoria/modelos": FileSearch,
+  "/gestoria/presentaciones": FileUp,
+
+  // JURÍDICO
   "/juridico": Scale,
   "/juridico/procesos": Gavel,
+
+  // OTROS
   "/ajustes": Settings,
   "/ayuda": HelpCircle,
   "/accesos": KeyRound,
@@ -338,7 +408,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const modulePath = getModulePath(pathname);
   const ModuleIcon: LucideIcon | null =
-    ROUTE_ICONS[modulePath] ?? ROUTE_ICONS[pathname] ?? null;
+    ROUTE_ICONS[pathname] ?? ROUTE_ICONS[modulePath] ?? null;
   const moduleShort = MODULE_LABELS[modulePath] ?? ROUTE_TITLES[modulePath] ?? "";
   let submoduleTitle = ROUTE_TITLES[pathname] ?? "";
   if (!submoduleTitle) submoduleTitle = getDynamicTitle(pathname);
@@ -369,6 +439,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0">
           <header className="h-14 flex items-center border-b bg-card px-4 shrink-0 gap-3">
+            <SidebarTrigger className="md:hidden -ml-1" />
             {(headerLabel || ModuleIcon !== null) && (
               <h1 className="flex items-center gap-2 text-sm font-bold tracking-wide text-foreground">
                 {ModuleIcon !== null && <ModuleIcon className="h-4 w-4 shrink-0" />}
@@ -378,6 +449,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="ml-auto flex items-center gap-3">
               {showUi && (
                 <>
+                  {/* Estado conexión Google (email + calendario reales) */}
+                  <GoogleHeaderPill />
+
                   {/* Integraciones: email + calendario + meet + tareas */}
                   <div className="flex items-center rounded-full border bg-muted/40 px-1 py-0.5 gap-0.5">
                     {/* Email */}

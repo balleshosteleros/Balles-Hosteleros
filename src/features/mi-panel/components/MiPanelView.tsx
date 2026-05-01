@@ -9,6 +9,7 @@ import { CalendarioPersonal } from "@/features/mi-panel/components/CalendarioPer
 import { SolicitudModal } from "@/features/mi-panel/components/SolicitudModal";
 import { MisSolicitudesList } from "@/features/mi-panel/components/MisSolicitudesList";
 import { AccesosRapidos } from "@/features/mi-panel/components/AccesosRapidos";
+import { MisTareasCronogramaWidget } from "@/features/mi-panel/components/MisTareasCronogramaWidget";
 
 const MESES_LARGOS = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
@@ -67,6 +68,9 @@ export function MiPanelView() {
 
       {/* Barra de fichaje */}
       <FichajeBar onChange={handleRefresh} />
+
+      {/* Tareas del cronograma del rol del usuario — pinned al top */}
+      <MisTareasCronogramaWidget />
 
       {/* Grid principal */}
       <div className="grid gap-5 lg:grid-cols-3">

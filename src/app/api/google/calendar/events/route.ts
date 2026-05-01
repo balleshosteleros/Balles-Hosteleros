@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getGoogleTokens, googleFetch } from "@/lib/google/api";
+import { getGoogleTokens, googleFetchAuto } from "@/lib/google/api";
 
 type CalendarListResponse = {
   items?: CalendarEvent[];
@@ -19,6 +19,10 @@ type CalendarEvent = {
   conferenceData?: {
     entryPoints?: { entryPointType: string; uri: string }[];
   };
+};
+
+type UserCalendarList = {
+  items?: { id: string; selected?: boolean; primary?: boolean }[];
 };
 
 const COLORS = ["blue", "emerald", "orange", "violet", "red"] as const;
@@ -42,15 +46,40 @@ function getInicioSemana(base?: Date): Date {
 export async function GET(request: Request) {
   const { accessToken } = await getGoogleTokens();
   if (!accessToken) {
-    return NextResponse.json({ connected: false, eventos: [] });
+    return NextResponse.json({
+      connected: false,
+      needsReauth: false,
+      eventos: [],
+    });
   }
 
   const url = new URL(request.url);
-  // Permite pedir varios calendarios separados por coma
-  const calendarIds =
-    url.searchParams.get("calendarIds")?.split(",").filter(Boolean) ?? [
-      "primary",
-    ];
+
+  // Si el caller pasa calendarIds explícitos los respetamos; si no, listamos
+  // todos los calendarios del usuario (primary + secundarios + compartidos)
+  // para no perder reuniones a las que ha sido invitado fuera de "primary".
+  let calendarIds = url.searchParams
+    .get("calendarIds")
+    ?.split(",")
+    .filter(Boolean);
+
+  if (!calendarIds || calendarIds.length === 0) {
+    const list = await googleFetchAuto<UserCalendarList>(
+      "https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader",
+    );
+    if (list.needsReauth) {
+      return NextResponse.json({
+        connected: true,
+        needsReauth: true,
+        eventos: [],
+      });
+    }
+    const items = list.data?.items ?? [];
+    calendarIds =
+      items.length > 0
+        ? items.filter((c) => c.selected !== false).map((c) => c.id)
+        : ["primary"];
+  }
 
   // Vista (day | week | month) y fecha de referencia (yyyy-mm-dd)
   const vista = url.searchParams.get("view") ?? "week";
@@ -85,13 +114,20 @@ export async function GET(request: Request) {
   // Pedimos los eventos de TODOS los calendarios seleccionados en paralelo
   const responses = await Promise.all(
     calendarIds.map(async (calId) => {
-      const data = await googleFetch<CalendarListResponse>(
+      const r = await googleFetchAuto<CalendarListResponse>(
         `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?${params}`,
-        accessToken,
       );
-      return { calId, items: data?.items ?? [] };
+      return { calId, items: r.data?.items ?? [], needsReauth: r.needsReauth };
     }),
   );
+
+  if (responses.some((r) => r.needsReauth)) {
+    return NextResponse.json({
+      connected: true,
+      needsReauth: true,
+      eventos: [],
+    });
+  }
 
   // Aplanamos manteniendo el calendarId de origen
   const data: CalendarListResponse = {
@@ -101,7 +137,11 @@ export async function GET(request: Request) {
   };
 
   if (!data || !data.items) {
-    return NextResponse.json({ connected: true, eventos: [] });
+    return NextResponse.json({
+      connected: true,
+      needsReauth: false,
+      eventos: [],
+    });
   }
 
   const eventos = data.items.map((ev) => {
@@ -164,5 +204,9 @@ export async function GET(request: Request) {
     };
   });
 
-  return NextResponse.json({ connected: true, eventos });
+  return NextResponse.json({
+    connected: true,
+    needsReauth: false,
+    eventos,
+  });
 }
