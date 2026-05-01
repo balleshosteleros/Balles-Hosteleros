@@ -138,7 +138,7 @@ export function DocumentacionView() {
           <TabsTrigger value="biblioteca"><FolderOpen className="h-4 w-4 mr-1.5" />Biblioteca</TabsTrigger>
           <TabsTrigger value="permisos"><Shield className="h-4 w-4 mr-1.5" />Permisos</TabsTrigger>
           <TabsTrigger value="drive"><HardDrive className="h-4 w-4 mr-1.5" />Conexión Drive</TabsTrigger>
-          <TabsTrigger value="config"><Settings className="h-4 w-4 mr-1.5" />Configuración</TabsTrigger>
+          <TabsTrigger value="config" aria-label="Configuración" className="ml-auto"><Settings className="h-4 w-4" strokeWidth={1.75} /></TabsTrigger>
         </TabsList>
 
         {/* ─── BIBLIOTECA ─── */}

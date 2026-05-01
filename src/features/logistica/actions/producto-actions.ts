@@ -70,9 +70,6 @@ function rowToProducto(r: ProductoRow): Producto {
 }
 
 async function requireManagement() {
-  if (process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true") {
-    return { id: "dev-bypass-user" } as { id: string };
-  }
   const supabase = await createClient();
   const {
     data: { user },
@@ -98,10 +95,6 @@ async function requireManagement() {
 }
 
 async function getUserEmpresaId(userId: string): Promise<string | null> {
-  if (process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true") {
-    const { empresaId } = await getLogisticaContext();
-    return empresaId;
-  }
   const supabase = await createClient();
   const { data } = await supabase
     .from("profiles")
@@ -167,7 +160,7 @@ export async function createProducto(
       iva: parsed.data.iva,
       unidad: parsed.data.unidad,
       observaciones: parsed.data.observaciones,
-      created_by: process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true" ? null : user.id,
+      created_by: user.id,
     });
 
     if (error) return { error: error.message };

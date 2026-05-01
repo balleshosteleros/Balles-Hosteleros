@@ -10,6 +10,7 @@ export interface AccesoPortal {
   empresa: string;
   empresaId: string;
   rol: string;
+  departamento?: string;
   estadoAcceso: EstadoAcceso;
   ultimaConexion: string;
   fechaCreacion: string;

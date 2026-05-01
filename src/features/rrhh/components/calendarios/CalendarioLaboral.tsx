@@ -5,7 +5,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronLeft, ChevronRight, Plus, Users, Clock, Search, Settings2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Users, Clock, Search } from "lucide-react";
+import { ConfigButton } from "@/shared/components/config-button";
 import { CalendarioConfig } from "./CalendarioConfig";
 
 const HORAS = Array.from({ length: 24 }, (_, i) => i);
@@ -78,7 +79,7 @@ export function CalendarioLaboral({ empresaId }: { empresaId: string }) {
           </SelectContent>
         </Select>
         <Button size="sm" className="gap-1"><Plus className="h-4 w-4" />Asignar turno</Button>
-        <Button size="sm" variant="outline" className="gap-1" onClick={() => setShowConfig(true)}><Settings2 className="h-4 w-4" />Configuración</Button>
+        <ConfigButton onClick={() => setShowConfig(true)} className="ml-auto" />
       </div>
 
       <Card>

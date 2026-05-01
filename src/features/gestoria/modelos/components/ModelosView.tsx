@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { FileSearch, RefreshCw, AlertTriangle, Plus } from "lucide-react";
+import { RefreshCw, AlertTriangle, Plus } from "lucide-react";
 import {
   asegurarModelosDelPeriodo,
   listModelos,
@@ -73,42 +73,32 @@ export function ModelosView() {
 
   return (
     <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <FileSearch className="h-8 w-8 text-primary" />
-            Modelos AEAT
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Borradores oficiales listos para presentar a la Agencia Tributaria.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Select
-            value={String(ejercicio)}
-            onValueChange={(v) => setEjercicio(Number.parseInt(v, 10))}
-          >
-            <SelectTrigger className="w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {AÑOS.map((a) => (
-                <SelectItem key={a} value={String(a)}>
-                  Ejercicio {a}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => startTransition(() => refrescar(ejercicio))}
-            disabled={isPending || loading}
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isPending ? "animate-spin" : ""}`} />
-            Refrescar
-          </Button>
-        </div>
+      <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-3">
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={() => startTransition(() => refrescar(ejercicio))}
+          disabled={isPending || loading}
+        >
+          <RefreshCw className={`h-4 w-4 ${isPending ? "animate-spin" : ""}`} />
+          Refrescar
+        </Button>
+        <div className="flex-1" />
+        <Select
+          value={String(ejercicio)}
+          onValueChange={(v) => setEjercicio(Number.parseInt(v, 10))}
+        >
+          <SelectTrigger className="w-32 h-9 shrink-0">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {AÑOS.map((a) => (
+              <SelectItem key={a} value={String(a)}>
+                Ejercicio {a}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {error ? (

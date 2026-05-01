@@ -109,7 +109,7 @@ export function AccesosView() {
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="apps" className="gap-1.5"><Globe className="h-4 w-4" /> Aplicaciones</TabsTrigger>
-<TabsTrigger value="config" className="gap-1.5"><Settings2 className="h-4 w-4" /> Configuración</TabsTrigger>
+<TabsTrigger value="config" aria-label="Configuración" className="ml-auto"><Settings2 className="h-4 w-4" strokeWidth={1.75} /></TabsTrigger>
         </TabsList>
 
         <TabsContent value="apps" className="space-y-4 mt-4">

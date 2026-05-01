@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Departamento } from "@/features/ajustes/data/ajustes";
 import { getEmployees } from "@/actions/admin";
+import { addRolEmpresa, deleteRolEmpresa } from "@/features/ajustes/actions/roles-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -70,16 +71,29 @@ export function DepartamentosTab() {
     });
     setModalOpen(false);
     toast.success(editDept ? "Departamento actualizado" : "Departamento creado");
+
+    // Sincronizar con empresa_roles: cada departamento debe tener un rol homónimo.
+    if (!editDept) {
+      addRolEmpresa(d.nombre).then((res) => {
+        if (res.error) toast.error(`No se pudo crear rol: ${res.error}`);
+        else toast.success(`Rol "${d.nombre}" creado en pestaña Roles`);
+      });
+    }
   };
 
   const confirmDelete = () => {
     if (!deleteDept) return;
+    const nombreBorrado = deleteDept.nombre;
     setAjustes((prev) => ({
       ...prev,
       departamentos: prev.departamentos.filter((d) => d.id !== deleteDept.id),
     }));
     toast.success("Departamento eliminado");
     setDeleteDept(null);
+    // Borrar también el rol asociado (si existe).
+    deleteRolEmpresa(nombreBorrado).then((res) => {
+      if (res.error) toast.error(`No se pudo borrar rol asociado: ${res.error}`);
+    });
   };
 
   const toggleEstado = (id: string) => {

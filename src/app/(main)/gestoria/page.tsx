@@ -1,5 +1,3 @@
-import { redirect } from "next/navigation";
-
 export default function GestoriaPage() {
-  redirect("/gestoria/presentaciones");
+  return <div className="p-4 md:p-6" />;
 }

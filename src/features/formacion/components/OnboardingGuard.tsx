@@ -24,26 +24,25 @@ const STORAGE_KEY = "balles:onboarding-completado";
  * en la tabla `profiles` de Supabase, para que la info viaje con el usuario.
  */
 export function OnboardingGuard({ children }: { children: React.ReactNode }) {
-  const { user, roles } = useAuth();
-  const devBypass = process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true";
+  const { user, roles, loading } = useAuth();
   const pathname = usePathname();
   const [completado, setCompletado] = useState(true); // default true para evitar flash
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    const uid = user?.id ?? "dev";
-    const val = localStorage.getItem(`${STORAGE_KEY}-${uid}`);
+    if (!user) return;
+    const val = localStorage.getItem(`${STORAGE_KEY}-${user.id}`);
     setCompletado(val === "true");
   }, [user]);
 
   const esFormacion = pathname === "/formacion";
   // Exentos del onboarding obligatorio:
-  // - Modo dev bypass
-  // - No hay user (aún cargando o bypass)
+  // - Auth todavía cargando (evita flash mientras llegan los roles)
+  // - No hay user
   // - Roles admin, director, gerencia (ellos no necesitan el onboarding de empleado)
   const exento =
-    devBypass ||
+    loading ||
     !user ||
     roles.some((r) => ["admin", "director", "gerencia"].includes(r));
 
@@ -103,9 +102,9 @@ export function OnboardingCompleteButton() {
   const { user } = useAuth();
 
   function completar() {
-    const uid = user?.id ?? "dev";
-    localStorage.setItem(`${STORAGE_KEY}-${uid}`, "true");
-    window.location.href = "/dashboard";
+    if (!user) return;
+    localStorage.setItem(`${STORAGE_KEY}-${user.id}`, "true");
+    window.location.href = "/";
   }
 
   return (

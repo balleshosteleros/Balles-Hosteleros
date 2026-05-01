@@ -21,7 +21,7 @@ export function GoogleAccountButton() {
     // Si no está conectado, mostramos un botón directo de "Conectar Google"
     return (
       <a
-        href={`/api/google/connect?next=${encodeURIComponent(pathname || "/dashboard")}`}
+        href={`/api/google/connect?next=${encodeURIComponent(pathname || "/")}`}
         className="inline-flex h-8 items-center gap-1.5 rounded-md border bg-card px-3 text-xs font-semibold text-foreground shadow-sm transition-colors hover:bg-muted"
       >
         <svg className="h-3.5 w-3.5" viewBox="0 0 24 24">
@@ -68,7 +68,7 @@ export function GoogleAccountButton() {
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <a
-            href={`/api/google/connect?next=${encodeURIComponent(pathname || "/dashboard")}&switch=1`}
+            href={`/api/google/connect?next=${encodeURIComponent(pathname || "/")}&switch=1`}
             className="cursor-pointer"
           >
             <RefreshCw className="mr-2 h-4 w-4" />

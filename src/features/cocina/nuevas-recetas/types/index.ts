@@ -218,3 +218,35 @@ export const ESTADO_GENERAL_LABELS: Record<EstadoGeneral, string> = {
   aprobada:    "Aprobada",
   archivada:   "Archivada",
 };
+
+// ──────────────────────────────────────────────────────────────
+// Calendario CAMBIOS DE CARTA
+// ──────────────────────────────────────────────────────────────
+export interface CambioCarta {
+  id: string;
+  empresa_id: string;
+  nombre: string;
+  fecha_inicio: string;
+  fecha_oficial: string;
+  notas: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CambioCartaSemana {
+  id: string;
+  cambio_carta_id: string;
+  fase_id: string | null;
+  fase_nombre: string;
+  color: FaseColor;
+  orden: number;
+  fecha_inicio: string;
+  fecha_fin: string;
+  es_oficial: boolean;
+  notas: string | null;
+}
+
+export interface CambioCartaConSemanas extends CambioCarta {
+  semanas: CambioCartaSemana[];
+}

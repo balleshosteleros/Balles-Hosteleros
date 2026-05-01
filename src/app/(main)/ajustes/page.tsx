@@ -9,11 +9,11 @@ import { DepartamentosTab } from "@/features/ajustes/components/DepartamentosTab
 import { EmpresasTab } from "@/features/ajustes/components/EmpresasTab";
 
 const tabs = [
-  { id: "empresas",       label: "Empresas",        icon: Store },
-  { id: "usuarios",       label: "Usuarios",        icon: Users },
-  { id: "roles",          label: "Roles",           icon: Shield },
-  { id: "departamentos",  label: "Departamentos",   icon: Layers },
-  { id: "configuracion",  label: "Configuración",   icon: Settings },
+  { id: "empresas",       label: "Empresas",        icon: Store,    isConfig: false },
+  { id: "usuarios",       label: "Usuarios",        icon: Users,    isConfig: false },
+  { id: "roles",          label: "Roles",           icon: Shield,   isConfig: false },
+  { id: "departamentos",  label: "Departamentos",   icon: Layers,   isConfig: false },
+  { id: "configuracion",  label: "Configuración",   icon: Settings, isConfig: true  },
 ];
 
 export default function AjustesPage() {
@@ -25,10 +25,11 @@ export default function AjustesPage() {
             <TabsTrigger
               key={t.id}
               value={t.id}
-              className="gap-1.5 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+              aria-label={t.label}
+              className={`gap-1.5 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm ${t.isConfig ? "ml-auto" : ""}`}
             >
-              <t.icon className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">{t.label}</span>
+              <t.icon className="h-3.5 w-3.5" strokeWidth={t.isConfig ? 1.75 : undefined} />
+              {!t.isConfig && <span className="hidden sm:inline">{t.label}</span>}
             </TabsTrigger>
           ))}
         </TabsList>

@@ -5,8 +5,9 @@ import {
   MessageSquare, Send, Hash, Users, Plus, Search, Pin, Smile,
 } from "lucide-react";
 import {
-  Sheet, SheetContent, SheetTrigger,
+  Sheet, SheetContent, SheetTitle, SheetTrigger,
 } from "@/components/ui/sheet";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -196,6 +197,9 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
       </SheetTrigger>
 
       <SheetContent side="right" className="w-full max-w-4xl flex flex-col gap-0 p-0 overflow-hidden">
+        <VisuallyHidden>
+          <SheetTitle>Comunicación interna</SheetTitle>
+        </VisuallyHidden>
         {/* Layout chat: sidebar de canales + área de mensajes */}
         <div className="flex h-full">
           {/* Sidebar canales */}

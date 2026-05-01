@@ -565,7 +565,7 @@ function DetalleBonus({ bonus: initial, config, empresaId, onBack, initialTab = 
         <TabsList>
           <TabsTrigger value="detalles" className="gap-1.5"><FileText className="h-4 w-4" />Ver detalles</TabsTrigger>
           <TabsTrigger value="resultados" className="gap-1.5"><BarChart3 className="h-4 w-4" />Ver resultados</TabsTrigger>
-          <TabsTrigger value="config" className="gap-1.5"><Settings2 className="h-4 w-4" />Configuración</TabsTrigger>
+          <TabsTrigger value="config" aria-label="Configuración" className="ml-auto"><Settings2 className="h-4 w-4" strokeWidth={1.75} /></TabsTrigger>
         </TabsList>
 
         <TabsContent value="detalles">
