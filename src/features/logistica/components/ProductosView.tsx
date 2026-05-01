@@ -7,7 +7,7 @@ import {
   ESTADOS_PRODUCTO, ESTADO_COLOR, EstadoProducto, type Producto, IVA_OPCIONES,
 } from "@/features/logistica/data/productos";
 import {
-  listProductos, createProducto, updateProducto, deleteProducto,
+  listProductos, createProducto, updateProducto, deleteProducto, recalculateAllCosts,
 } from "@/features/logistica/actions/producto-actions";
 import {
   getProductoConfigSection, saveProductoConfigSection,
@@ -579,6 +579,25 @@ function TablaProductos({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-3">
         <Button variant="primary" size="sm" onClick={onAddClick}><Plus className="h-4 w-4" />Nuevo</Button>
+        {!esCompra && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={async () => {
+              const t = toast.loading("Recalculando costes...");
+              const res = await recalculateAllCosts();
+              if (res.error) toast.error(res.error, { id: t });
+              else {
+                toast.success(`Costes actualizados (${res.updated} productos)`, { id: t });
+                window.location.reload();
+              }
+            }}
+          >
+            <Settings2 className="h-4 w-4" />
+            Recalcular costes
+          </Button>
+        )}
         <div className="flex-1" />
         <div className="relative min-w-[220px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -1047,7 +1066,7 @@ function ProductoModal({
               <Select value={iva} onValueChange={setIva}>
                 <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Sin especificar</SelectItem>
+                  <SelectItem value="none">Sin especificar</SelectItem>
                   {IVA_OPCIONES.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
                 </SelectContent>
               </Select>
