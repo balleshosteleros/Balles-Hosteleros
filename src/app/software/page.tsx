@@ -15,7 +15,6 @@ import {
   Check,
   Menu,
   X,
-  Sparkles,
   Lock,
   Database,
   LifeBuoy,
@@ -220,26 +219,33 @@ function Navbar() {
   const [open, setOpen] = useState(false);
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-[#0b1120]/80 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-        <Link href="/software" className="text-lg font-bold tracking-tight text-white">
-          Balles Hosteleros
+    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-[#0a1d4a]/90 backdrop-blur-xl">
+      <div className="mx-auto flex h-20 max-w-6xl items-center justify-between px-6">
+        <Link href="/software" className="flex items-center" aria-label="Balles Hosteleros">
+          <Image
+            src="/logo-balles.png"
+            alt="Balles Hosteleros"
+            width={160}
+            height={48}
+            priority
+            className="h-12 w-auto"
+          />
         </Link>
 
         <div className="hidden items-center gap-8 md:flex">
-          <a href="#modulos" className="text-sm text-slate-400 transition hover:text-white">
+          <a href="#modulos" className="text-sm text-white/80 transition hover:text-white">
             Módulos
           </a>
-          <a href="#como-funciona" className="text-sm text-slate-400 transition hover:text-white">
+          <a href="#como-funciona" className="text-sm text-white/80 transition hover:text-white">
             Cómo funciona
           </a>
-          <a href="#planes" className="text-sm text-slate-400 transition hover:text-white">
+          <a href="#planes" className="text-sm text-white/80 transition hover:text-white">
             Planes
           </a>
-          <a href="#faq" className="text-sm text-slate-400 transition hover:text-white">
+          <a href="#faq" className="text-sm text-white/80 transition hover:text-white">
             FAQ
           </a>
-          <Link href="/" className="text-sm text-slate-400 transition hover:text-white">
+          <Link href="/" className="text-sm text-white/80 transition hover:text-white">
             Iniciar sesión
           </Link>
           <Link
@@ -252,7 +258,7 @@ function Navbar() {
 
         <button
           onClick={() => setOpen(!open)}
-          className="text-slate-400 md:hidden"
+          className="text-white/80 md:hidden"
           aria-label="Menú"
         >
           {open ? <X size={22} /> : <Menu size={22} />}
@@ -260,25 +266,25 @@ function Navbar() {
       </div>
 
       {open && (
-        <div className="border-t border-white/5 bg-[#0b1120] px-6 pb-6 pt-4 md:hidden">
+        <div className="border-t border-white/10 bg-[#0a1d4a] px-6 pb-6 pt-4 md:hidden">
           <div className="flex flex-col gap-4">
-            <a href="#modulos" onClick={() => setOpen(false)} className="text-sm text-slate-300">
+            <a href="#modulos" onClick={() => setOpen(false)} className="text-sm text-white/85">
               Módulos
             </a>
             <a
               href="#como-funciona"
               onClick={() => setOpen(false)}
-              className="text-sm text-slate-300"
+              className="text-sm text-white/85"
             >
               Cómo funciona
             </a>
-            <a href="#planes" onClick={() => setOpen(false)} className="text-sm text-slate-300">
+            <a href="#planes" onClick={() => setOpen(false)} className="text-sm text-white/85">
               Planes
             </a>
-            <a href="#faq" onClick={() => setOpen(false)} className="text-sm text-slate-300">
+            <a href="#faq" onClick={() => setOpen(false)} className="text-sm text-white/85">
               FAQ
             </a>
-            <Link href="/" className="text-sm text-slate-300">
+            <Link href="/" className="text-sm text-white/85">
               Iniciar sesión
             </Link>
             <Link
@@ -370,7 +376,7 @@ export default function SoftwareLanding() {
       <Navbar />
 
       {/* HERO */}
-      <section className="relative flex min-h-[92vh] items-center justify-center overflow-hidden px-6 pt-16">
+      <section className="relative flex min-h-[92vh] items-center justify-center overflow-hidden px-6 pt-20">
         <div className="pointer-events-none absolute inset-0">
           <Image
             src="/images/landing/hero.jpg"
@@ -378,25 +384,26 @@ export default function SoftwareLanding() {
             fill
             priority
             sizes="100vw"
-            className="object-cover opacity-30"
+            className="object-cover opacity-25"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#0b1120]/70 via-[#0b1120]/85 to-[#0b1120]" />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#0a1d4a] via-[#0a1d4a]/85 to-[#0b1120]" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#0a1d4a]/90 via-[#0a1d4a]/40 to-transparent" />
         </div>
 
-        <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-          <div className="h-[600px] w-[600px] rounded-full bg-blue-600/[0.12] blur-[120px]" />
+        <div className="pointer-events-none absolute top-1/3 left-1/4 -translate-x-1/2 -translate-y-1/2">
+          <div className="h-[600px] w-[600px] rounded-full bg-blue-500/[0.18] blur-[140px]" />
         </div>
 
         <div className="relative z-10 mx-auto max-w-3xl text-center">
-          <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-1.5 text-xs font-medium tracking-widest text-blue-300 uppercase">
-            <Sparkles size={12} /> Software de gestión para hostelería
+          <p className="mb-6 text-base font-medium italic tracking-tight text-blue-300 sm:text-lg">
+            Software de gestión para hosteleros que quieren dejar de improvisar :
           </p>
-          <h1 className="text-4xl font-bold leading-[1.1] tracking-tight sm:text-5xl lg:text-6xl">
+          <h1 className="text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl">
             El control de tu negocio,
             <br />
             <span className="text-blue-400">en un solo lugar</span>
           </h1>
-          <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-slate-300">
+          <p className="mx-auto mt-8 max-w-xl text-lg leading-relaxed text-slate-200">
             Cocina, equipo, proveedores, números y operativa. Todo conectado,
             todo medido, todo bajo control. Para que tu negocio funcione sin
             depender solo de ti.
@@ -411,13 +418,13 @@ export default function SoftwareLanding() {
             </Link>
             <a
               href="#modulos"
-              className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-7 py-3.5 text-sm font-medium text-slate-200 backdrop-blur transition hover:border-white/20 hover:bg-white/[0.06]"
+              className="inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/[0.04] px-7 py-3.5 text-sm font-medium text-white backdrop-blur transition hover:border-white/25 hover:bg-white/[0.08]"
             >
               Ver módulos
             </a>
           </div>
 
-          <p className="mt-8 text-xs text-slate-500">
+          <p className="mt-8 text-xs text-blue-200/70">
             14 días de prueba · Sin tarjeta · Sin permanencia
           </p>
         </div>
