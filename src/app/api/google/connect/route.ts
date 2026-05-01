@@ -11,6 +11,10 @@ const SCOPES = [
   "https://www.googleapis.com/auth/gmail.settings.basic",
   "https://www.googleapis.com/auth/calendar",
   "https://www.googleapis.com/auth/calendar.events",
+  // Necesario para resolver fotos de perfil de los contactos por email
+  // (people:searchContacts y otherContacts:search).
+  "https://www.googleapis.com/auth/contacts.readonly",
+  "https://www.googleapis.com/auth/contacts.other.readonly",
 ].join(" ");
 
 /**

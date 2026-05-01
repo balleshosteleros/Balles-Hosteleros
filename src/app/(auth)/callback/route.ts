@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getRedirectByRolLabel } from '@/features/auth/lib/role-redirect'
+import {
+  readAccounts,
+  upsertAccount,
+  writeAccountsTo,
+} from '@/lib/google/accounts'
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
@@ -28,6 +33,11 @@ export async function GET(request: Request) {
       const providerToken = data.session.provider_token
       const providerRefreshToken = data.session.provider_refresh_token
       const email = data.session.user?.email
+      const meta = data.session.user?.user_metadata as
+        | { avatar_url?: string; picture?: string; full_name?: string; name?: string }
+        | undefined
+      const picture = meta?.avatar_url || meta?.picture || ''
+      const fullName = meta?.full_name || meta?.name || ''
 
       const cookieOpts = {
         httpOnly: true,
@@ -49,6 +59,32 @@ export async function GET(request: Request) {
           ...cookieOpts,
           httpOnly: false, // este sí lo lee el cliente para mostrar
         })
+      }
+      if (picture) {
+        response.cookies.set('g_picture', picture, {
+          ...cookieOpts,
+          httpOnly: false,
+        })
+      }
+      if (fullName) {
+        response.cookies.set('g_name', fullName, {
+          ...cookieOpts,
+          httpOnly: false,
+        })
+      }
+
+      // Roster multi-cuenta: si esta sesión trae refresh token, lo guardamos
+      // junto a las demás cuentas conectadas (dedupe por email). La cuenta
+      // recién logueada queda como activa en las cookies `g_*` de arriba.
+      if (email && providerRefreshToken) {
+        const previas = await readAccounts()
+        const actualizadas = upsertAccount(previas, {
+          email,
+          name: fullName,
+          picture,
+          refreshToken: providerRefreshToken,
+        })
+        writeAccountsTo(response.cookies, actualizadas)
       }
 
       return response

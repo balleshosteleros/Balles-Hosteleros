@@ -22,7 +22,13 @@ type CalendarEvent = {
 };
 
 type UserCalendarList = {
-  items?: { id: string; selected?: boolean; primary?: boolean }[];
+  items?: {
+    id: string;
+    selected?: boolean;
+    primary?: boolean;
+    backgroundColor?: string;
+    foregroundColor?: string;
+  }[];
 };
 
 const COLORS = ["blue", "emerald", "orange", "violet", "red"] as const;
@@ -33,6 +39,24 @@ function colorFromId(colorId?: string): Color {
   const idx = parseInt(colorId, 10) % COLORS.length;
   return COLORS[Math.abs(idx)] || "blue";
 }
+
+// Paleta oficial de Google para eventos cuando tienen colorId (override)
+// https://developers.google.com/calendar/api/v3/reference/colors
+const GOOGLE_EVENT_COLORS: Record<string, string> = {
+  "1": "#7986cb", // Lavender
+  "2": "#33b679", // Sage
+  "3": "#8e24aa", // Grape
+  "4": "#e67c73", // Flamingo
+  "5": "#f6bf26", // Banana
+  "6": "#f4511e", // Tangerine
+  "7": "#039be5", // Peacock
+  "8": "#616161", // Graphite
+  "9": "#3f51b5", // Blueberry
+  "10": "#0b8043", // Basil
+  "11": "#d50000", // Tomato
+};
+
+const DEFAULT_EVENT_COLOR = "#039be5";
 
 function getInicioSemana(base?: Date): Date {
   const hoy = base ? new Date(base) : new Date();
@@ -55,29 +79,34 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
 
-  // Si el caller pasa calendarIds explícitos los respetamos; si no, listamos
-  // todos los calendarios del usuario (primary + secundarios + compartidos)
-  // para no perder reuniones a las que ha sido invitado fuera de "primary".
+  // Siempre cargamos la lista de calendarios para conocer el color real
+  // (backgroundColor) de cada uno y poder pintar los eventos como en
+  // Google Calendar.
+  const list = await googleFetchAuto<UserCalendarList>(
+    "https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader",
+  );
+  if (list.needsReauth) {
+    return NextResponse.json({
+      connected: true,
+      needsReauth: true,
+      eventos: [],
+    });
+  }
+  const calItems = list.data?.items ?? [];
+  const calColorMap = new Map<string, string>();
+  for (const c of calItems) {
+    if (c.id && c.backgroundColor) calColorMap.set(c.id, c.backgroundColor);
+  }
+
   let calendarIds = url.searchParams
     .get("calendarIds")
     ?.split(",")
     .filter(Boolean);
 
   if (!calendarIds || calendarIds.length === 0) {
-    const list = await googleFetchAuto<UserCalendarList>(
-      "https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader",
-    );
-    if (list.needsReauth) {
-      return NextResponse.json({
-        connected: true,
-        needsReauth: true,
-        eventos: [],
-      });
-    }
-    const items = list.data?.items ?? [];
     calendarIds =
-      items.length > 0
-        ? items.filter((c) => c.selected !== false).map((c) => c.id)
+      calItems.length > 0
+        ? calItems.filter((c) => c.selected !== false).map((c) => c.id)
         : ["primary"];
   }
 
@@ -170,9 +199,15 @@ export async function GET(request: Request) {
         ? `${horas}h${mins ? ` ${mins}m` : ""}`
         : `${mins}m`;
 
+    const calId = ev._calId ?? "primary";
+    const colorHex =
+      (ev.colorId && GOOGLE_EVENT_COLORS[ev.colorId]) ||
+      calColorMap.get(calId) ||
+      DEFAULT_EVENT_COLOR;
+
     return {
       id: ev.id,
-      calendarId: ev._calId ?? "primary",
+      calendarId: calId,
       titulo: ev.summary || "(Sin título)",
       descripcion: ev.description ?? "",
       hora: allDay
@@ -185,6 +220,7 @@ export async function GET(request: Request) {
       lugar: ev.location,
       participantes: ev.attendees?.map((a) => a.displayName || a.email),
       color: colorFromId(ev.colorId),
+      colorHex,
       diaIndex,
       inicioMin,
       duracionMin,
