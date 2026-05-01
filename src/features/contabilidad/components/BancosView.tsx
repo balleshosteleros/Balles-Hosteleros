@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Plus, Search, RefreshCw, Settings2, Trash2, ChevronDown, Landmark } from "lucide-react";
+import { Plus, Search, RefreshCw, Settings, Trash2, ChevronDown, Landmark } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SAMPLE_BANCOS, BancoConectado } from "@/features/contabilidad/data/contabilidad";
 
@@ -60,7 +60,7 @@ export function BancosView() {
               <Button variant="ghost" size="icon" className="h-8 w-8"><Search className="h-4 w-4" /></Button>
               {b.sincronizacion === "AUTOMATICA" && <Button variant="ghost" size="icon" className="h-8 w-8"><RefreshCw className="h-4 w-4" /></Button>}
               {b.sincronizacion === "MANUAL" && <Button variant="ghost" size="icon" className="h-8 w-8"><Plus className="h-4 w-4" /></Button>}
-              <Button variant="ghost" size="icon" className="h-8 w-8"><Settings2 className="h-4 w-4" /></Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Configuración"><Settings className="h-4 w-4" strokeWidth={1.75} /></Button>
               <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive"><Trash2 className="h-4 w-4" /></Button>
             </div>
           </div>

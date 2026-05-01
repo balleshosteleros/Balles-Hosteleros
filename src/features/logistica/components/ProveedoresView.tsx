@@ -295,8 +295,8 @@ export function ProveedoresView() {
             toast.success(`${rows.length} proveedores exportados en ${format.toUpperCase()}`);
           }}
         />
-        <Button size="icon" variant={showConfig ? "default" : "ghost"} className="h-8 w-8" onClick={() => setShowConfig((v) => !v)} title="Configuración de proveedores">
-          <Settings className="h-4 w-4" />
+        <Button size="icon" variant={showConfig ? "default" : "ghost"} className="h-8 w-8" onClick={() => setShowConfig((v) => !v)} title="Configuración" aria-label="Configuración">
+          <Settings className="h-4 w-4" strokeWidth={1.75} />
         </Button>
       </div>
 

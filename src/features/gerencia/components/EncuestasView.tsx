@@ -228,7 +228,7 @@ function DetalleEncuesta({
         <TabsList>
           <TabsTrigger value="cuestionario" className="gap-1"><ClipboardList className="h-4 w-4" />Cuestionario</TabsTrigger>
           <TabsTrigger value="empleados" className="gap-1"><Users className="h-4 w-4" />Empleados</TabsTrigger>
-          <TabsTrigger value="configuracion" className="gap-1"><Settings2 className="h-4 w-4" />Configuración</TabsTrigger>
+          <TabsTrigger value="configuracion" aria-label="Configuración" className="ml-auto"><Settings2 className="h-4 w-4" strokeWidth={1.75} /></TabsTrigger>
           <TabsTrigger value="resultados" className="gap-1"><BarChart3 className="h-4 w-4" />Resultados</TabsTrigger>
         </TabsList>
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, Fragment, useRef } from "react";
+import { useRouter } from "next/navigation";
 import {
   useCronogramasOperativos,
   CronogramaOperativo,
@@ -13,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Plus, Trash2, CalendarDays, Edit2, ChevronDown, ChevronRight, Video, Upload, X,
+  Plus, Trash2, CalendarDays, Edit2, ChevronDown, ChevronRight, Video, Upload, X, ArrowLeft,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -24,6 +25,8 @@ import { toast } from "sonner";
 import {
   uploadCronogramaVideo, deleteCronogramaVideo, updateCronogramaResumen,
 } from "../../actions/cronograma-video-actions";
+import { CronogramasHome } from "./CronogramasHome";
+import { SelectorDiasTarea, BadgesDiasTarea } from "./SelectorDiasTarea";
 
 const ORDERED_FREQUENCIES: Frecuencia[] = [
   "DIARIO", "SEMANAL", "MENSUAL", "TRIMESTRAL", "ANUAL", "POR NECESIDAD",
@@ -35,6 +38,7 @@ interface Grupo {
 }
 
 export function CronogramasView() {
+  const router = useRouter();
   const { data, isLoading, addTarea, updateTarea, deleteTarea, refresh } = useCronogramasOperativos();
   const [selectedRol, setSelectedRol] = useState<string>("");
   const [showNewDialog, setShowNewDialog] = useState(false);
@@ -226,10 +230,23 @@ export function CronogramasView() {
                 className="text-sm bg-background border-primary h-12 resize-none w-full"
               />
             ) : (
-              <span className={`flex-1 ${!isSub ? "font-medium text-foreground" : ""}`}>
-                {item.tarea}
-                {item.video_url && <Video className="inline-block ml-2 h-3.5 w-3.5 text-emerald-600" />}
-              </span>
+              <div className={`flex-1 ${!isSub ? "font-medium text-foreground" : ""}`}>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span>{item.tarea}</span>
+                  {item.video_url && <Video className="inline-block h-3.5 w-3.5 text-emerald-600" />}
+                </div>
+                {!isSub && (
+                  <div className="mt-1.5">
+                    <BadgesDiasTarea
+                      frecuencia={item.frecuencia}
+                      dia_semana={item.dia_semana}
+                      dia_mes={item.dia_mes}
+                      fecha_anual={item.fecha_anual}
+                      meses_trimestrales={item.meses_trimestrales}
+                    />
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </td>
@@ -288,17 +305,78 @@ export function CronogramasView() {
     );
   };
 
+  // HOME (cards por departamento) cuando no hay rol seleccionado
+  if (!selectedRol) {
+    return (
+      <>
+        <CronogramasHome
+          data={data}
+          isLoading={isLoading}
+          onSelect={setSelectedRol}
+          onCrearCronograma={() => setShowNewDialog(true)}
+          onIrProductividad={() => router.push("/direccion/cronogramas/productividad")}
+        />
+        {/* DIALOG NUEVO CRONOGRAMA (reutilizado) */}
+        <Dialog open={showNewDialog} onOpenChange={setShowNewDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Crear un nuevo cronograma</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <Label>Departamento/Rol</Label>
+              <Input
+                value={newRolName}
+                onChange={(e) => setNewRolName(e.target.value.toUpperCase())}
+                className="mt-2"
+                placeholder="Ej. GERENCIA DE BARRA"
+                autoFocus
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowNewDialog(false)}>Cancelar</Button>
+              <Button onClick={() => {
+                if (newRolName) {
+                  addTarea({
+                    rol: newRolName,
+                    tarea: "Añadir misión de " + newRolName,
+                    frecuencia: "OTRO",
+                    tiempo_requerido: "",
+                    id_visible: "1",
+                    orden: 1,
+                    parent_id: null,
+                  });
+                  setSelectedRol(newRolName);
+                  setShowNewDialog(false);
+                  setNewRolName("");
+                }
+              }}>Crear</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+  }
+
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-muted/20">
       <div className="flex flex-col md:flex-row md:items-center gap-4 px-6 py-4 border-b bg-card">
         <div className="flex-1 flex flex-col sm:flex-row items-center gap-3">
+          <Button
+            type="button" variant="ghost" size="sm"
+            onClick={() => setSelectedRol("")}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4 mr-1.5" />
+            Volver
+          </Button>
+
           <div className="flex items-center gap-1 group">
             <Select
               value={rolActivo}
               onValueChange={setSelectedRol}
               disabled={isLoading || rolesDisponibles.length === 0}
             >
-              <SelectTrigger className="w-[300px] bg-background">
+              <SelectTrigger className="w-[280px] bg-background">
                 <SelectValue placeholder={isLoading ? "Cargando..." : "Selecciona Departamento"} />
               </SelectTrigger>
               <SelectContent>
@@ -441,6 +519,7 @@ export function CronogramasView() {
           tarea={detalle}
           onClose={() => setDetalle(null)}
           onSaved={() => { refresh(); }}
+          onUpdateTarea={updateTarea}
         />
       )}
     </div>
@@ -450,15 +529,24 @@ export function CronogramasView() {
 /* ───────────── DETALLE DE TAREA (dialog con resumen + video) ───────────── */
 
 function DetalleTareaDialog({
-  tarea, onClose, onSaved,
+  tarea, onClose, onSaved, onUpdateTarea,
 }: {
   tarea: CronogramaOperativo;
   onClose: () => void;
   onSaved: () => void;
+  onUpdateTarea: (id: string, patch: Partial<CronogramaOperativo>) => Promise<unknown>;
 }) {
   const [resumen, setResumen] = useState(tarea.resumen ?? "");
   const [videoUrl, setVideoUrl] = useState(tarea.video_url ?? "");
   const [uploading, setUploading] = useState(false);
+  const [cal, setCal] = useState({
+    frecuencia: tarea.frecuencia as Frecuencia,
+    dia_semana: tarea.dia_semana ?? null,
+    dia_mes: tarea.dia_mes ?? null,
+    fecha_anual: tarea.fecha_anual ?? null,
+    meses_trimestrales: tarea.meses_trimestrales ?? null,
+    tiempo_requerido: tarea.tiempo_requerido ?? "",
+  });
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const handleSaveResumen = async () => {
@@ -509,19 +597,55 @@ function DetalleTareaDialog({
 
         <div className="space-y-5 py-2">
           {/* Metadatos */}
-          <div className="grid grid-cols-3 gap-3 text-sm">
+          <div className="grid grid-cols-2 gap-3 text-sm">
             <div className="rounded-lg border bg-muted/30 p-3">
               <span className="text-xs text-muted-foreground block">Departamento</span>
               <span className="font-medium">{tarea.rol}</span>
             </div>
             <div className="rounded-lg border bg-muted/30 p-3">
-              <span className="text-xs text-muted-foreground block">Frecuencia</span>
-              <span className="font-medium">{tarea.frecuencia}</span>
+              <span className="text-xs text-muted-foreground block">Calendario actual</span>
+              <BadgesDiasTarea
+                frecuencia={cal.frecuencia}
+                dia_semana={cal.dia_semana}
+                dia_mes={cal.dia_mes}
+                fecha_anual={cal.fecha_anual}
+                meses_trimestrales={cal.meses_trimestrales}
+              />
             </div>
-            <div className="rounded-lg border bg-muted/30 p-3">
-              <span className="text-xs text-muted-foreground block">Tiempo</span>
-              <span className="font-medium">{tarea.tiempo_requerido || "—"}</span>
+          </div>
+
+          {/* Calendario / Frecuencia */}
+          <div className="rounded-lg border bg-card p-4">
+            <div className="flex items-center justify-between mb-3">
+              <Label className="text-sm font-bold">Programación</Label>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={async () => {
+                  await onUpdateTarea(tarea.id, {
+                    frecuencia: cal.frecuencia,
+                    dia_semana: cal.dia_semana,
+                    dia_mes: cal.dia_mes,
+                    fecha_anual: cal.fecha_anual,
+                    meses_trimestrales: cal.meses_trimestrales,
+                    tiempo_requerido: cal.tiempo_requerido,
+                  });
+                  toast.success("Programación guardada");
+                  onSaved();
+                }}
+              >
+                Guardar programación
+              </Button>
             </div>
+            <SelectorDiasTarea
+              frecuencia={cal.frecuencia}
+              dia_semana={cal.dia_semana}
+              dia_mes={cal.dia_mes}
+              fecha_anual={cal.fecha_anual}
+              meses_trimestrales={cal.meses_trimestrales}
+              tiempo_requerido={cal.tiempo_requerido}
+              onChange={(patch) => setCal((prev) => ({ ...prev, ...patch }))}
+            />
           </div>
 
           {/* Resumen */}

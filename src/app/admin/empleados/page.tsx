@@ -14,7 +14,7 @@ export default async function EmpleadosPage() {
     .eq('id', user.id)
     .single()
 
-  if (profile?.role !== 'admin') redirect('/dashboard')
+  if (profile?.role !== 'admin') redirect('/')
 
   return <AdminPanel />
 }

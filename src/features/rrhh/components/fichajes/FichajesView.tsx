@@ -119,7 +119,7 @@ export function FichajesView() {
           <TabsTrigger value="fichajes" className="gap-1"><ClipboardList className="h-4 w-4" />Fichajes</TabsTrigger>
           <TabsTrigger value="historial" className="gap-1"><History className="h-4 w-4" />Historial</TabsTrigger>
           <TabsTrigger value="incidencias" className="gap-1"><AlertTriangle className="h-4 w-4" />Incidencias</TabsTrigger>
-          <TabsTrigger value="config" className="gap-1"><Settings2 className="h-4 w-4" />Configuración</TabsTrigger>
+          <TabsTrigger value="config" aria-label="Configuración" className="ml-auto"><Settings2 className="h-4 w-4" strokeWidth={1.75} /></TabsTrigger>
         </TabsList>
 
         <TabsContent value="fichajes" className="space-y-4">

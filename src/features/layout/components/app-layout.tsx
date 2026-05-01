@@ -47,6 +47,9 @@ import {
   ShoppingCart,
   Warehouse,
   Apple,
+  FileSearch,
+  Gavel,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -75,10 +78,13 @@ import { getAccesosAppsPorEmpresa } from "@/features/rrhh/data/accesos-apps";
 import { ExternalLink } from "lucide-react";
 
 const ROUTE_TITLES: Record<string, string> = {
-  "/": "DASHBOARD",
+  "/mi-panel": "MI PANEL",
   "/gerencia": "GERENCIA",
   "/direccion/estructura": "ORGANIGRAMA",
   "/direccion/cronogramas": "CRONOGRAMAS",
+  "/direccion/cronogramas/productividad": "PRODUCTIVIDAD",
+  "/direccion/presentaciones": "PRESENTACIONES",
+  "/direccion/presentaciones/branding": "BRANDING",
   "/gerencia/mantenimiento": "MANTENIMIENTO",
   "/contabilidad": "CONTABILIDAD",
   "/gestoria": "GESTORÍA",
@@ -86,6 +92,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/rrhh": "RECURSOS HUMANOS",
   "/rrhh/empleados": "EMPLEADOS",
   "/rrhh/fichajes": "FICHAJES",
+  "/rrhh/solicitudes": "SOLICITUDES",
   "/rrhh/calendarios": "CALENDARIOS",
   "/rrhh/horarios": "HORARIOS",
   "/rrhh/reclutamiento": "RECLUTAMIENTO",
@@ -101,13 +108,20 @@ const ROUTE_TITLES: Record<string, string> = {
   "/marketing/pagina-web": "PÁGINA WEB",
   "/marketing/fidelizacion": "FIDELIZACIÓN",
   "/marketing/captacion": "CAPTACIÓN",
+  "/marketing/campanas": "CAMPAÑAS",
+  "/marketing/campanas/email": "CAMPAÑAS — EMAIL",
+  "/marketing/campanas/meta": "CAMPAÑAS — META",
+  "/marketing/campanas/whatsapp": "CAMPAÑAS — WHATSAPP",
   "/logistica/incidencias": "INCIDENCIAS",
   "/ajustes": "AJUSTES",
   "/ayuda": "AYUDA",
-"/formacion": "ONBOARDING",
+  "/accesos": "ACCESOS",
+  "/consultas-pendientes": "CONSULTAS PENDIENTES",
+  "/formacion": "ONBOARDING",
   "/comunicacion": "COMUNICACIÓN",
   "/reuniones": "REUNIONES",
   "/agenda": "AGENDA",
+  "/cocina": "COCINA",
   "/cocina/comandas": "COMANDAS",
   "/cocina/nuevas-recetas": "NUEVAS RECETAS",
   "/cocina/fichas-tecnicas": "FICHAS TÉCNICAS",
@@ -117,6 +131,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/sala": "SALA",
   "/sala/reservas": "RESERVAS",
   "/sala/clientes": "CLIENTES",
+  "/sala/pos": "POS",
   "/direccion": "DIRECCIÓN",
   "/direccion/documentacion": "DOCUMENTACIÓN",
   "/direccion/aperturas": "APERTURAS",
@@ -125,6 +140,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/calidad/empleados": "CALIDAD — EMPLEADOS",
   "/calidad/clientes": "CALIDAD — CLIENTES",
   "/calidad/inspecciones": "INSPECCIONES",
+  "/gerencia/cierres": "CIERRES",
   "/gerencia/descuentos": "DESCUENTOS",
   "/gerencia/ratios": "RATIOS",
   "/gerencia/comunicados": "COMUNICADOS",
@@ -143,6 +159,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/contabilidad/facturas": "FACTURAS",
   "/contabilidad/impuestos": "IMPUESTOS",
   "/contabilidad/transacciones": "TRANSACCIONES",
+  "/contabilidad/operaciones": "OPERACIONES",
   "/contabilidad/conciliacion": "CONCILIACIÓN",
   "/contabilidad/calendario": "CALENDARIO",
   "/contabilidad/escenarios": "ESCENARIOS",
@@ -150,11 +167,58 @@ const ROUTE_TITLES: Record<string, string> = {
   "/contabilidad/etiquetas": "ETIQUETAS",
   "/contabilidad/reglas": "REGLAS AUTOMÁTICAS",
   "/gestoria/presentaciones": "PRESENTACIONES",
+  "/gestoria/modelos": "MODELOS",
   "/juridico/procesos": "PROCESOS",
 };
 
+const MODULE_LABELS: Record<string, string> = {
+  "/mi-panel": "MI PANEL",
+  "/direccion": "DIRECCIÓN",
+  "/sala": "SALA",
+  "/cocina": "COCINA",
+  "/gerencia": "GERENCIA",
+  "/calidad": "CALIDAD",
+  "/rrhh": "RRHH",
+  "/marketing": "MARKETING",
+  "/logistica": "LOGÍSTICA",
+  "/contabilidad": "CONTABILIDAD",
+  "/gestoria": "GESTORÍA",
+  "/juridico": "JURÍDICO",
+  "/ajustes": "AJUSTES",
+  "/ayuda": "AYUDA",
+  "/accesos": "ACCESOS",
+  "/consultas-pendientes": "CONSULTAS",
+  "/formacion": "FORMACIÓN",
+  "/comunicacion": "COMUNICACIÓN",
+  "/reuniones": "REUNIONES",
+  "/agenda": "AGENDA",
+};
+
+function getModulePath(pathname: string): string {
+  if (pathname === "/") return "/";
+  const segments = pathname.split("/").filter(Boolean);
+  return segments.length > 0 ? `/${segments[0]}` : "/";
+}
+
+function getDynamicTitle(pathname: string): string {
+  if (pathname.startsWith("/rrhh/empleados/")) return "FICHA EMPLEADO";
+  if (pathname.startsWith("/gestoria/modelos/")) return "MODELO";
+  if (pathname.startsWith("/direccion/presentaciones/")) {
+    if (pathname.endsWith("/present")) return "PRESENTAR";
+    if (pathname.endsWith("/print")) return "IMPRIMIR";
+    return "PRESENTACIÓN";
+  }
+  if (pathname.startsWith("/marketing/pagina-web/")) {
+    if (pathname.endsWith("/preview")) return "PREVIEW";
+    if (pathname.endsWith("/dominios")) return "DOMINIOS";
+    return "PÁGINA WEB";
+  }
+  return "";
+}
+
 const ROUTE_ICONS: Record<string, LucideIcon> = {
   "/": LayoutDashboard,
+  "/mi-panel": LayoutDashboard,
   "/direccion": Crown,
   "/direccion/estructura": Crown,
   "/direccion/cronogramas": CalendarIcon,
@@ -172,6 +236,7 @@ const ROUTE_ICONS: Record<string, LucideIcon> = {
   "/cocina/temperaturas": ChefHat,
   "/gerencia": Briefcase,
   "/gerencia/mantenimiento": Briefcase,
+  "/gerencia/cierres": Wallet,
   "/gerencia/descuentos": Briefcase,
   "/gerencia/ratios": Briefcase,
   "/gerencia/comunicados": Briefcase,
@@ -185,6 +250,7 @@ const ROUTE_ICONS: Record<string, LucideIcon> = {
   "/rrhh": User,
   "/rrhh/empleados": User,
   "/rrhh/fichajes": Clock,
+  "/rrhh/solicitudes": ClipboardList,
   "/rrhh/calendarios": CalendarIcon,
   "/rrhh/horarios": Timer,
   "/rrhh/reclutamiento": UserRoundSearch,
@@ -211,11 +277,14 @@ const ROUTE_ICONS: Record<string, LucideIcon> = {
   "/contabilidad": Calculator,
   "/gestoria": FileText,
   "/gestoria/presentaciones": FileText,
+  "/gestoria/modelos": FileSearch,
   "/juridico": Scale,
-  "/juridico/procesos": Scale,
+  "/juridico/procesos": Gavel,
   "/ajustes": Settings,
   "/ayuda": HelpCircle,
-"/formacion": GraduationCap,
+  "/accesos": KeyRound,
+  "/consultas-pendientes": MessageSquareWarning,
+  "/formacion": GraduationCap,
   "/comunicacion": MessageSquareWarning,
   "/reuniones": Video,
   "/agenda": ContactRound,
@@ -267,27 +336,27 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const showUi = !!user || devBypass || isDemoHost;
   const counts = useDailyCounts();
 
-  let title = ROUTE_TITLES[pathname] ?? "";
-  if (!title && pathname.startsWith("/rrhh/empleados/")) title = "FICHA EMPLEADO";
-  const TitleIcon = ROUTE_ICONS[pathname] ?? null;
+  const modulePath = getModulePath(pathname);
+  const ModuleIcon: LucideIcon | null =
+    ROUTE_ICONS[modulePath] ?? ROUTE_ICONS[pathname] ?? null;
+  const moduleShort = MODULE_LABELS[modulePath] ?? ROUTE_TITLES[modulePath] ?? "";
+  let submoduleTitle = ROUTE_TITLES[pathname] ?? "";
+  if (!submoduleTitle) submoduleTitle = getDynamicTitle(pathname);
+  const headerLabel = submoduleTitle || moduleShort;
 
   const rolLabel =
     roles.length > 0
       ? roles[0].charAt(0).toUpperCase() + roles[0].slice(1)
-      : devBypass
-        ? "Director"
-        : "—";
+      : "—";
 
   const router = useRouter();
-  const userEmail = profile?.email ?? user?.email ?? "dev@local";
-  const userInitial = userEmail[0].toUpperCase();
+  const userEmail = profile?.email ?? user?.email ?? "";
+  const userInitial = userEmail ? userEmail[0].toUpperCase() : "?";
   const userName = profile?.nombre
     ? profile.apellidos
       ? `${profile.nombre} ${profile.apellidos}`
       : profile.nombre
-    : devBypass
-      ? "Ivan Ballesteros"
-      : userEmail.split("@")[0];
+    : (userEmail.split("@")[0] || "—");
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [appsMenuOpen, setAppsMenuOpen] = useState(false);
   const { empresaActual } = useEmpresa();
@@ -300,10 +369,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0">
           <header className="h-14 flex items-center border-b bg-card px-4 shrink-0 gap-3">
-            {title && (
+            {(headerLabel || ModuleIcon !== null) && (
               <h1 className="flex items-center gap-2 text-sm font-bold tracking-wide text-foreground">
-                {TitleIcon && <TitleIcon className="h-4 w-4" />}
-                {title}
+                {ModuleIcon !== null && <ModuleIcon className="h-4 w-4 shrink-0" />}
+                <span className="truncate">{headerLabel}</span>
               </h1>
             )}
             <div className="ml-auto flex items-center gap-3">
@@ -468,10 +537,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                          title="Ajustes"
+                          title="Configuración"
+                          aria-label="Configuración"
                           onMouseEnter={() => setUserMenuOpen(true)}
                         >
-                          <Settings className="h-3.5 w-3.5" />
+                          <Settings className="h-3.5 w-3.5" strokeWidth={1.75} />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent

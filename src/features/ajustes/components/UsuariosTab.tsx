@@ -4,16 +4,7 @@ import {
   AccesoPortal, EstadoAcceso,
   permisosDesdeRol,
 } from "@/features/rrhh/data/accesos-portal";
-
-// Roles reales del enum app_role de Supabase
-const ROLES_DB = [
-  { value: "admin",        label: "Administrador" },
-  { value: "director",     label: "Director" },
-  { value: "gerencia",     label: "Gerencia" },
-  { value: "responsable",  label: "Responsable" },
-  { value: "empleado",     label: "Empleado" },
-  { value: "solo_lectura", label: "Solo lectura" },
-] as const;
+import { getRolesEmpresaNombres } from "@/features/ajustes/actions/roles-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,7 +17,10 @@ import {
   Power, PowerOff, Eye, PenLine, UserPlus, Plus, UserCheck,
 } from "lucide-react";
 import { toast } from "sonner";
-import { createEmployee, resetEmployeePassword, getEmployees, updateEmployeeStatus, getEmpleadosSinAcceso } from "@/actions/admin";
+import {
+  createEmployee, resetEmployeePassword, getEmployees, updateEmployeeStatus,
+  getEmpleadosSinAcceso, updateEmployeeProfile, getDepartamentosDisponibles,
+} from "@/actions/admin";
 
 const ESTADO_STYLES: Record<EstadoAcceso, string> = {
   Activo: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
@@ -57,33 +51,30 @@ type SupabaseProfile = {
   apellidos: string | null;
   avatar_url: string | null;
   empresa_id: string | null;
+  departamento: string | null;
   role?: string;
+  rol_label?: string | null;
   estado_acceso?: string;
   created_at: string;
   updated_at: string;
 };
 
+// Fallback solo para perfiles sin rol_label (datos viejos): mapeo enum → texto.
 const ROLE_DB_TO_UI: Record<string, string> = {
   admin: "Administrador",
-  administrador: "Administrador",
   director: "Director",
-  direccion: "Dirección",
-  rrhh: "RRHH",
-  recursos_humanos: "RRHH",
-  logistica: "Logística",
-  cocina: "Cocina",
   gerencia: "Gerencia",
-  contabilidad: "Contabilidad",
-  gestoria: "Gestoría",
-  juridico: "Jurídico",
-  marketing: "Marketing",
+  responsable: "Responsable",
   empleado: "Empleado",
-  responsable: "Empleado",
   solo_lectura: "Solo lectura",
 };
 
 function profileToAcceso(p: SupabaseProfile, empresa: { id: string; nombre: string }): AccesoPortal {
-  const rolUI = ROLE_DB_TO_UI[p.role ?? "empleado"] ?? "Empleado";
+  // Preferimos el nombre custom de empresa_roles guardado en rol_label.
+  // Si no existe (perfil legado), usamos el mapeo del enum app_role.
+  const rolUI = (p.rol_label && p.rol_label.trim())
+    ? p.rol_label.trim()
+    : (ROLE_DB_TO_UI[p.role ?? "empleado"] ?? "Empleado");
   const fullName = [p.nombre, p.apellidos].filter(Boolean).join(" ").trim() || p.full_name || p.email;
   const validEstados: EstadoAcceso[] = ["Activo", "Inactivo", "Pendiente"];
   const estadoAcceso: EstadoAcceso = validEstados.includes(p.estado_acceso as EstadoAcceso)
@@ -97,6 +88,7 @@ function profileToAcceso(p: SupabaseProfile, empresa: { id: string; nombre: stri
     empresa: empresa.nombre,
     empresaId: empresa.id,
     rol: rolUI,
+    departamento: p.departamento ?? "",
     estadoAcceso,
     ultimaConexion: "—",
     fechaCreacion: p.created_at?.slice(0, 10) ?? "",
@@ -109,6 +101,8 @@ export function UsuariosTab() {
 
   const [accesos, setAccesos] = useState<AccesoPortal[]>([]);
   const [sinAcceso, setSinAcceso] = useState<EmpleadoSinAcceso[]>([]);
+  const [departamentos, setDepartamentos] = useState<string[]>([]);
+  const [rolesEmpresa, setRolesEmpresa] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("todos");
@@ -149,9 +143,22 @@ export function UsuariosTab() {
     loadAccesos();
   }, [loadAccesos]);
 
+  useEffect(() => {
+    getDepartamentosDisponibles().then((r) => setDepartamentos(r.data));
+  }, []);
+
+  // Roles vienen de empresa_roles (misma fuente que la pestaña Roles).
+  const loadRoles = useCallback(async () => {
+    const nombres = await getRolesEmpresaNombres();
+    setRolesEmpresa(nombres);
+  }, []);
+  useEffect(() => {
+    loadRoles();
+  }, [loadRoles]);
+
   const filtrados = useMemo(() => {
     return accesos.filter((a) => {
-      const texto = `${a.nombreEmpleado} ${a.emailUsuario} ${a.rol}`.toLowerCase();
+      const texto = `${a.nombreEmpleado} ${a.emailUsuario} ${a.rol} ${a.departamento}`.toLowerCase();
       if (busqueda && !texto.includes(busqueda.toLowerCase())) return false;
       if (filtroEstado !== "todos" && a.estadoAcceso !== filtroEstado) return false;
       return true;
@@ -193,7 +200,17 @@ export function UsuariosTab() {
     setResetLoading(false);
   };
 
-  const guardarEdicion = (updated: AccesoPortal) => {
+  const guardarEdicion = async (updated: AccesoPortal) => {
+    // Enviamos el nombre custom del rol; el server action lo guarda en rol_label
+    // y deriva el app_role para user_roles.
+    const res = await updateEmployeeProfile(updated.empleadoId, {
+      departamento: updated.departamento,
+      role: updated.rol,
+    });
+    if (res.error) {
+      toast.error(res.error);
+      return;
+    }
     setAccesos((prev) => prev.map((a) => a.id === updated.id ? updated : a));
     setEditModal(null);
     toast.success("Usuario actualizado");
@@ -261,7 +278,7 @@ export function UsuariosTab() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-muted/50">
-              {["EMPLEADO", "USUARIO", "ROL", "ESTADO", "ÚLTIMA CONEXIÓN", "PERMISOS", "ACCIONES"].map((h) => (
+              {["EMPLEADO", "USUARIO", "DEPARTAMENTO", "ROL", "ESTADO", "ÚLTIMA CONEXIÓN", "PERMISOS", "ACCIONES"].map((h) => (
                 <th key={h} className="text-left px-3 py-2.5 text-xs font-bold text-muted-foreground whitespace-nowrap">{h}</th>
               ))}
             </tr>
@@ -271,6 +288,15 @@ export function UsuariosTab() {
               <tr key={acc.id} className="border-b hover:bg-muted/30">
                 <td className="px-3 py-2.5 font-medium text-foreground whitespace-nowrap">{acc.nombreEmpleado}</td>
                 <td className="px-3 py-2.5 text-muted-foreground">{acc.emailUsuario}</td>
+                <td className="px-3 py-2.5">
+                  {acc.departamento ? (
+                    <Badge variant="outline" className="text-[10px]">{acc.departamento}</Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-300">
+                      Sin departamento
+                    </Badge>
+                  )}
+                </td>
                 <td className="px-3 py-2.5">
                   <Badge variant="secondary" className="text-[10px] gap-1">
                     <UserCog className="h-3 w-3" />{acc.rol}
@@ -309,10 +335,10 @@ export function UsuariosTab() {
               </tr>
             ))}
             {loading && (
-              <tr><td colSpan={7} className="text-center py-8 text-muted-foreground">Cargando usuarios desde Supabase…</td></tr>
+              <tr><td colSpan={8} className="text-center py-8 text-muted-foreground">Cargando usuarios desde Supabase…</td></tr>
             )}
             {!loading && filtrados.length === 0 && (
-              <tr><td colSpan={7} className="text-center py-8 text-muted-foreground">No se encontraron usuarios.</td></tr>
+              <tr><td colSpan={8} className="text-center py-8 text-muted-foreground">No se encontraron usuarios.</td></tr>
             )}
           </tbody>
         </table>
@@ -365,7 +391,8 @@ export function UsuariosTab() {
       {editModal && (
         <EditarUsuarioModal
           acceso={editModal}
-          roles={ROLES_DB}
+          roles={rolesEmpresa}
+          departamentos={departamentos}
           onClose={() => setEditModal(null)}
           onSave={guardarEdicion}
         />
@@ -430,14 +457,34 @@ export function UsuariosTab() {
               <Label className="text-xs font-bold">Contraseña</Label>
               <Input name="password" type="password" required minLength={6} />
             </div>
-            <div>
-              <Label className="text-xs font-bold">Rol</Label>
-              <Select name="role" defaultValue="empleado">
-                <SelectTrigger><SelectValue placeholder="Selecciona rol" /></SelectTrigger>
-                <SelectContent>
-                  {ROLES_DB.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-bold">Departamento *</Label>
+                <Select name="departamento" required>
+                  <SelectTrigger><SelectValue placeholder="Selecciona depto" /></SelectTrigger>
+                  <SelectContent>
+                    {departamentos.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Determina qué tareas de cronograma recibirá este usuario.
+                </p>
+              </div>
+              <div>
+                <Label className="text-xs font-bold">Rol *</Label>
+                <Select name="role" defaultValue={rolesEmpresa[0] ?? ""}>
+                  <SelectTrigger><SelectValue placeholder="Selecciona rol" /></SelectTrigger>
+                  <SelectContent>
+                    {rolesEmpresa.length === 0
+                      ? <SelectItem value="__none__" disabled>No hay roles definidos</SelectItem>
+                      : rolesEmpresa.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)
+                    }
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Definido en la pestaña Roles.
+                </p>
+              </div>
             </div>
             {createError && <p className="text-sm text-red-600">{createError}</p>}
             <div className="flex justify-end gap-2">
@@ -454,12 +501,24 @@ export function UsuariosTab() {
 }
 
 /* ─── EDIT MODAL ─── */
-function EditarUsuarioModal({ acceso, roles, onClose, onSave }: { acceso: AccesoPortal; roles: readonly { value: string; label: string }[]; onClose: () => void; onSave: (a: AccesoPortal) => void }) {
+function EditarUsuarioModal({
+  acceso, roles, departamentos, onClose, onSave,
+}: {
+  acceso: AccesoPortal;
+  roles: string[];
+  departamentos: string[];
+  onClose: () => void;
+  onSave: (a: AccesoPortal) => void;
+}) {
   const [form, setForm] = useState({ ...acceso });
 
   const cambiarRol = (rol: string) => {
     setForm((p) => ({ ...p, rol, permisos: permisosDesdeRol(rol) }));
   };
+
+  // Si el rol actual del usuario no está en la lista (rol viejo borrado), lo añadimos
+  // a la lista visible para no perder la selección.
+  const rolesVisibles = roles.includes(form.rol) || !form.rol ? roles : [form.rol, ...roles];
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -470,11 +529,33 @@ function EditarUsuarioModal({ acceso, roles, onClose, onSave }: { acceso: Acceso
             <Label className="text-xs font-bold">EMAIL / USUARIO</Label>
             <Input value={form.emailUsuario} onChange={(e) => setForm((p) => ({ ...p, emailUsuario: e.target.value }))} />
           </div>
+          <div className="col-span-2">
+            <Label className="text-xs font-bold">DEPARTAMENTO *</Label>
+            <Select
+              value={form.departamento || undefined}
+              onValueChange={(v) => setForm((p) => ({ ...p, departamento: v }))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecciona departamento" />
+              </SelectTrigger>
+              <SelectContent>
+                {departamentos.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Determina qué tareas de cronograma recibe.
+            </p>
+          </div>
           <div>
             <Label className="text-xs font-bold">ROL</Label>
             <Select value={form.rol} onValueChange={cambiarRol}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{roles.map((r) => <SelectItem key={r.value} value={r.label}>{r.label}</SelectItem>)}</SelectContent>
+              <SelectTrigger><SelectValue placeholder="Selecciona rol" /></SelectTrigger>
+              <SelectContent>
+                {rolesVisibles.length === 0
+                  ? <SelectItem value="__none__" disabled>No hay roles definidos en pestaña Roles</SelectItem>
+                  : rolesVisibles.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)
+                }
+              </SelectContent>
             </Select>
           </div>
           <div>
@@ -491,7 +572,17 @@ function EditarUsuarioModal({ acceso, roles, onClose, onSave }: { acceso: Acceso
         </div>
         <div className="flex justify-end gap-2 mt-4">
           <Button variant="outline" onClick={onClose}>CANCELAR</Button>
-          <Button onClick={() => onSave(form)}>GUARDAR</Button>
+          <Button
+            onClick={() => {
+              if (!form.departamento) {
+                toast.error("El departamento es obligatorio");
+                return;
+              }
+              onSave(form);
+            }}
+          >
+            GUARDAR
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

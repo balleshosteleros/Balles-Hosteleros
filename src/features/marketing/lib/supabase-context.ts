@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 type Ctx = {
@@ -9,23 +8,6 @@ type Ctx = {
 };
 
 export async function getMarketingContext(): Promise<Ctx> {
-  const devBypass = process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true";
-
-  if (devBypass) {
-    const admin = createAdminClient();
-    const { data } = await admin
-      .from("empresas")
-      .select("id")
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    return {
-      supabase: admin as unknown as SupabaseClient,
-      userId: null,
-      empresaId: data?.id ?? null,
-    };
-  }
-
   const supabase = await createClient();
   const {
     data: { user },

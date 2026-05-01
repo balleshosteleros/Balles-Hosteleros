@@ -111,7 +111,7 @@ export interface AjustesEmpresa {
 }
 
 const MODULOS = [
-  "Dashboard", "Dirección", "RRHH", "Logística", "Cocina",
+  "Dirección", "RRHH", "Logística", "Cocina",
   "Gerencia", "Contabilidad", "Gestoría", "Jurídico",
   "Marketing", "Ajustes",
 ];
@@ -131,8 +131,6 @@ const ROLE_MODULE_MAP: Record<string, string> = {
 
 function buildRoles(): Rol[] {
   const roleNames = [
-    { nombre: "Administrador", desc: "Acceso total a todos los módulos" },
-    { nombre: "Director", desc: "Acceso total a todos los módulos" },
     { nombre: "Dirección", desc: "Gestión de aperturas y cronogramas" },
     { nombre: "RRHH", desc: "Gestión de personal y nóminas" },
     { nombre: "Logística", desc: "Proveedores, productos e inventario" },
@@ -142,13 +140,8 @@ function buildRoles(): Rol[] {
     { nombre: "Gestoría", desc: "Gestión documental y fiscal" },
     { nombre: "Jurídico", desc: "Procesos legales y normativa" },
     { nombre: "Marketing", desc: "Comunicación, campañas y reservas" },
-    { nombre: "Empleado", desc: "Acceso básico a ficha personal" },
-    { nombre: "Solo lectura", desc: "Visualización sin edición" },
   ];
   return roleNames.map((r, i) => {
-    const isTotal = r.nombre === "Administrador" || r.nombre === "Director";
-    const isSoloLectura = r.nombre === "Solo lectura";
-    const isEmpleado = r.nombre === "Empleado";
     const moduloPropio = ROLE_MODULE_MAP[r.nombre];
     return {
       id: `rol-${i}`,
@@ -156,8 +149,8 @@ function buildRoles(): Rol[] {
       descripcion: r.desc,
       permisos: MODULOS.map((m) => ({
         modulo: m,
-        ver: isTotal || isSoloLectura || (isEmpleado ? m === "RRHH" || m === "Dashboard" : m === "Dashboard" || m === moduloPropio),
-        editar: isTotal || (!isSoloLectura && !isEmpleado && m === moduloPropio),
+        ver: m === moduloPropio,
+        editar: m === moduloPropio,
       })),
     };
   });

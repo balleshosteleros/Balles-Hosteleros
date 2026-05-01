@@ -49,13 +49,34 @@ export function RolesTab() {
   const [nuevoNombre, setNuevoNombre] = useState("");
   const [isPending, startTransition] = useTransition();
 
-  // Cargar desde Supabase al montar; sincronizar con localStorage como fallback
+  // Cargar desde Supabase al montar; sincronizar con localStorage como fallback.
+  // Además garantiza que cada departamento existente tenga un rol homónimo en empresa_roles.
   useEffect(() => {
-    loadRolesFromSupabase().then((rolesRemote) => {
-      if (rolesRemote && rolesRemote.length > 0) {
+    (async () => {
+      const rolesRemote = await loadRolesFromSupabase();
+      const departamentos = ajustes.departamentos.map((d) => d.nombre).filter(Boolean);
+      const existentes = (rolesRemote ?? []).map((r) => r.nombre.toLowerCase());
+      const faltantes = departamentos.filter((d) => !existentes.includes(d.toLowerCase()));
+
+      if (faltantes.length > 0) {
+        // Crear los roles faltantes en lote (uno por cada departamento sin rol).
+        const nuevos: Rol[] = faltantes.map((nombre, i) => ({
+          id: `rol-auto-${Date.now()}-${i}`,
+          nombre,
+          descripcion: `Rol del departamento ${nombre}`,
+          permisos: [...MODULOS_NAV, MODULO_AJUSTES].map((m) => ({ modulo: m, ver: false, editar: false })),
+        }));
+        const todosLosRoles = [...(rolesRemote ?? []), ...nuevos];
+        setAjustes((prev) => ({ ...prev, roles: todosLosRoles }));
+        startTransition(async () => {
+          const { error } = await saveRolesToSupabase(todosLosRoles);
+          if (error) toast.error(`Error sincronizando roles con departamentos: ${error}`);
+        });
+      } else if (rolesRemote && rolesRemote.length > 0) {
         setAjustes((prev) => ({ ...prev, roles: rolesRemote }));
       }
-    });
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const persistRoles = (roles: Rol[]) => {

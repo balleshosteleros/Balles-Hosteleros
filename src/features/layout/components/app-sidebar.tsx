@@ -9,7 +9,7 @@ import {
   GraduationCap, UtensilsCrossed, BookOpen, Contact, Thermometer, Sparkles, FileSearch,
   PenLine, CheckCircle2, BarChart3, Landmark, Tag, Zap, ContactRound,
   Heart, UserPlus, Apple, CreditCard, Presentation, QrCode, Globe,
-  Send,
+  Send, Wallet, LayoutDashboard,
 } from "lucide-react";
 
 // Icono compuesto: cuadrícula de apps + candado de seguridad
@@ -104,6 +104,7 @@ const direccionSubs = [
 const gerenciaSubs = [
   { title: "MANTENIMIENTO", url: "/gerencia/mantenimiento", icon: Wrench },
   { title: "REVISIONES", url: "/gerencia/vencimientos", icon: CalendarDays },
+  { title: "CIERRES", url: "/gerencia/cierres", icon: Wallet },
   { title: "DESCUENTOS", url: "/gerencia/descuentos", icon: PercentDiamond },
   { title: "RATIOS", url: "/gerencia/ratios", icon: TrendingUp },
   { title: "COMUNICADOS", url: "/gerencia/comunicados", icon: Megaphone },
@@ -118,6 +119,7 @@ const calidadSubs = [
 const rrhhSubs = [
   { title: "EMPLEADOS", url: "/rrhh/empleados", icon: UsersRound },
   { title: "FICHAJES", url: "/rrhh/fichajes", icon: Clock },
+  { title: "SOLICITUDES", url: "/rrhh/solicitudes", icon: ClipboardList },
   { title: "CALENDARIOS", url: "/rrhh/calendarios", icon: Calendar },
   { title: "HORARIOS", url: "/rrhh/horarios", icon: Timer },
   { title: "RECLUTAMIENTO", url: "/rrhh/reclutamiento", icon: UserRoundSearch },
@@ -218,15 +220,15 @@ export function AppSidebar() {
   const pathname = usePathname();
 
   const sections = [
-    { key: "direccion", icon: Crown, label: "DIRECCIÓN", prefix: "/direccion", items: direccionSubs },
-    { key: "sala", icon: UtensilsCrossed, label: "SALA", prefix: "/sala", items: salaSubs },
-    { key: "cocina", icon: ChefHat, label: "COCINA", prefix: "/cocina", items: cocinaSubs },
-    { key: "gerencia", icon: Briefcase, label: "GERENCIA", prefix: "/gerencia", items: gerenciaSubs },
+    { key: "direccion", icon: Crown, label: "DIRECCIÓN", prefix: "/direccion", items: direccionSubs, linkTo: "/direccion" },
+    { key: "sala", icon: UtensilsCrossed, label: "SALA", prefix: "/sala", items: salaSubs, linkTo: "/sala" },
+    { key: "cocina", icon: ChefHat, label: "COCINA", prefix: "/cocina", items: cocinaSubs, linkTo: "/cocina" },
+    { key: "gerencia", icon: Briefcase, label: "GERENCIA", prefix: "/gerencia", items: gerenciaSubs, linkTo: "/gerencia" },
     { key: "calidad", icon: CheckCircle2, label: "CALIDAD", prefix: "/calidad", items: calidadSubs, linkTo: "/calidad" },
     { key: "rrhh", icon: User, label: "RECURSOS HUMANOS", prefix: "/rrhh", items: rrhhSubs, linkTo: "/rrhh" },
     { key: "marketing", icon: Camera, label: "MARKETING", prefix: "/marketing", items: marketingSubs, linkTo: "/marketing" },
     { key: "logistica", icon: Package, label: "LOGÍSTICA", prefix: "/logistica", items: logisticaSubs, linkTo: "/logistica" },
-    { key: "contabilidad", icon: Calculator, label: "CONTABILIDAD", prefix: "/contabilidad", items: contabilidadSubs },
+    { key: "contabilidad", icon: Calculator, label: "CONTABILIDAD", prefix: "/contabilidad", items: contabilidadSubs, linkTo: "/contabilidad" },
     { key: "gestoria", icon: FileText, label: "GESTORÍA", prefix: "/gestoria", items: gestoriaSubs, linkTo: "/gestoria" },
     { key: "juridico", icon: Scale, label: "JURÍDICO", prefix: "/juridico", items: juridicoSubs, linkTo: "/juridico" },
   ] as const;
@@ -271,6 +273,29 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs tracking-widest">
+            {!collapsed && "PERSONAL"}
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <NavLink
+                    href="/mi-panel"
+                    end
+                    className="hover:bg-sidebar-accent/50"
+                    activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold"
+                  >
+                    <LayoutDashboard className="mr-2 h-4 w-4 shrink-0" />
+                    {!collapsed && <span className="text-sm">MI PANEL</span>}
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
         <SidebarGroup>
           <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs tracking-widest">
             {!collapsed && "DEPARTAMENTOS"}

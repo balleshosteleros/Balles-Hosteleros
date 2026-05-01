@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { ConfigButton } from "@/shared/components/config-button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -96,9 +97,7 @@ function ListView({
           <Button variant="outline" size="sm" onClick={onNormas}>
             <AlertTriangle className="h-4 w-4 mr-1" /> Normas y cláusulas
           </Button>
-          <Button variant="outline" size="sm" onClick={onConfig}>
-            <Settings2 className="h-4 w-4 mr-1" /> Configuración
-          </Button>
+          <ConfigButton onClick={onConfig} />
           <Button size="sm">
             <Plus className="h-4 w-4 mr-1" /> Crear puesto
           </Button>

@@ -17,9 +17,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Plus, Search, Info, FileText, Settings2 } from "lucide-react";
+import { Plus, Search, Info, FileText, Settings, SlidersHorizontal, X } from "lucide-react";
 
 const ALL = "__ALL__";
 
@@ -34,8 +34,8 @@ function mapDbToProceso(row: Record<string, unknown>, empresa: string, empresaId
     tipo: ((row.tipo as string) ?? "Otro") as TipoProceso,
     juridico: (row.abogado as string) ?? "",
     fecha: (row.fecha_inicio as string) ?? (row.created_at as string) ?? "",
-    estado: ((row.estado as string)?.toUpperCase() ?? "PENDIENTE") as EstadoProceso,
-    gravedad: ((row.gravedad as string)?.toUpperCase() ?? "MEDIA") as GravedadProceso,
+    estado: ((row.estado as string)?.toUpperCase() ?? "ABIERTO") as EstadoProceso,
+    gravedad: ((row.gravedad as string)?.toUpperCase() ?? "LEVE") as GravedadProceso,
     descripcion: (row.descripcion as string) ?? "",
     documentos: docsDb.map((d) => ({
       id: d.id as string,
@@ -71,7 +71,9 @@ export function ProcesosView() {
   const [filterGravedad, setFilterGravedad] = useState(ALL);
   const [filterTipo, setFilterTipo] = useState(ALL);
   const [filterJuridico, setFilterJuridico] = useState(ALL);
-  const [tab, setTab] = useState<"abiertos" | "cerrados" | "config">("abiertos");
+  const [estadoExpediente, setEstadoExpediente] = useState<"abiertos" | "cerrados" | "todos">("abiertos");
+  const [showConfig, setShowConfig] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editItem, setEditItem] = useState<ProcesoJuridico | null>(null);
   const [detalleItem, setDetalleItem] = useState<ProcesoJuridico | null>(null);
@@ -101,9 +103,34 @@ export function ProcesosView() {
     loadProcesos();
   }, [loadProcesos]);
 
-  const isCerrado = (e: EstadoProceso) => e === "CERRADO" || e === "ARCHIVADO";
+  const isCerrado = (e: EstadoProceso) => e === "CERRADO";
 
-  const baseData = tab === "cerrados" ? data.filter((p) => isCerrado(p.estado)) : tab === "abiertos" ? data.filter((p) => !isCerrado(p.estado)) : data;
+  const baseData = estadoExpediente === "cerrados"
+    ? data.filter((p) => isCerrado(p.estado))
+    : estadoExpediente === "abiertos"
+    ? data.filter((p) => !isCerrado(p.estado))
+    : data;
+
+  const properCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+  const countIn = <T,>(arr: ProcesoJuridico[], key: (p: ProcesoJuridico) => T, value: T) =>
+    arr.filter((p) => key(p) === value).length;
+
+  const activeFilterCount =
+    (search ? 1 : 0) +
+    (filterEstado !== ALL ? 1 : 0) +
+    (filterGravedad !== ALL ? 1 : 0) +
+    (filterTipo !== ALL ? 1 : 0) +
+    (filterJuridico !== ALL ? 1 : 0) +
+    (estadoExpediente !== "abiertos" ? 1 : 0);
+
+  const resetFilters = () => {
+    setSearch("");
+    setFilterEstado(ALL);
+    setFilterGravedad(ALL);
+    setFilterTipo(ALL);
+    setFilterJuridico(ALL);
+    setEstadoExpediente("abiertos");
+  };
 
   const filtered = useMemo(() => {
     return baseData.filter((p) => {
@@ -121,11 +148,6 @@ export function ProcesosView() {
 
   const abiertos = data.filter((p) => !isCerrado(p.estado));
   const cerrados = data.filter((p) => isCerrado(p.estado));
-
-  const counts: Record<string, number> = {};
-  ESTADOS_PROCESO.forEach((e) => { counts[e] = data.filter((p) => p.estado === e).length; });
-  const gravityCounts: Record<string, number> = {};
-  GRAVEDADES_PROCESO.forEach((g) => { gravityCounts[g] = data.filter((p) => p.gravedad === g).length; });
 
   const handleSave = async (item: ProcesoJuridico) => {
     const exists = data.find((p) => p.id === item.id);
@@ -207,95 +229,186 @@ export function ProcesosView() {
     }));
   };
 
+  const removeDocumento = (procesoId: string, docId: string) => {
+    setData((prev) => prev.map((p) => {
+      if (p.id !== procesoId) return p;
+      const updated = { ...p, documentos: p.documentos.filter((d) => d.id !== docId) };
+      setDetalleItem(updated);
+      return updated;
+    }));
+  };
+
+  const replaceDocumentos = (procesoId: string, docs: DocumentoProceso[]) => {
+    setData((prev) => prev.map((p) => {
+      if (p.id !== procesoId) return p;
+      const updated = { ...p, documentos: docs };
+      setDetalleItem(updated);
+      return updated;
+    }));
+  };
+
   const openEdit = (item: ProcesoJuridico) => { setEditItem(item); setModalOpen(true); };
   const openNew = () => { setEditItem(null); setModalOpen(true); };
 
-  const estadoCards: { key: EstadoProceso; color: string }[] = [
-    { key: "PENDIENTE", color: "border-status-pending bg-status-pending/10 text-status-pending" },
-    { key: "EN PROCESO", color: "border-status-progress bg-status-progress/10 text-status-progress" },
-    { key: "REVISIÓN", color: "border-blue-400 bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300" },
-    { key: "ESCALADO", color: "border-status-escalated bg-status-escalated/10 text-status-escalated" },
-    { key: "CERRADO", color: "border-status-done bg-status-done/10 text-status-done" },
-    { key: "ARCHIVADO", color: "border-border bg-muted text-muted-foreground" },
-  ];
-
   return (
     <div className="p-4 md:p-6 space-y-5">
-      <div className="flex items-center justify-end">
-        <Button variant="primary" size="sm" onClick={openNew}><Plus className="h-4 w-4" />Nuevo</Button>
-      </div>
-
-      <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
-        {estadoCards.map((s) => (
-          <div key={s.key} className={`rounded-lg border-2 p-3 text-center ${s.color}`}>
-            <div className="text-2xl font-black">{counts[s.key]}</div>
-            <div className="text-[10px] font-bold mt-0.5">{s.key}</div>
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-3">
+          <Button variant="primary" size="sm" onClick={openNew}><Plus className="h-4 w-4" />Nuevo</Button>
+          <div className="flex-1" />
+          <div className="relative min-w-[240px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar expedientes…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
           </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {GRAVEDADES_PROCESO.map((g) => (
-          <div key={g} className="rounded-lg border bg-card p-3 text-center">
-            <GravedadProcesoBadge value={g} />
-            <div className="text-xl font-bold mt-1 text-foreground">{gravityCounts[g]}</div>
-          </div>
-        ))}
-      </div>
-
-      <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
-        <TabsList>
-          <TabsTrigger value="abiertos" className="gap-1.5">
-            Abiertos <Badge variant="secondary" className="ml-1 text-[10px] px-1.5">{abiertos.length}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="cerrados" className="gap-1.5">
-            Cerrados <Badge variant="secondary" className="ml-1 text-[10px] px-1.5">{cerrados.length}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="config" className="gap-1.5"><Settings2 className="h-4 w-4" /> Configuración</TabsTrigger>
-        </TabsList>
-
-        {(["abiertos", "cerrados"] as const).map((t) => (
-          <TabsContent key={t} value={t} className="space-y-4 mt-4">
-            <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-3">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Buscar expedientes…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+          <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1.5" aria-label="Filtrar">
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                Filtrar
+                {activeFilterCount > 0 && (
+                  <Badge className="ml-0.5 h-4 min-w-[16px] px-1 text-[10px] rounded-full">{activeFilterCount}</Badge>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-80 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold">Filtros</span>
+                {activeFilterCount > 0 && (
+                  <Button variant="ghost" size="sm" onClick={resetFilters} className="h-7 px-2 text-xs gap-1">
+                    <X className="h-3 w-3" /> Limpiar
+                  </Button>
+                )}
               </div>
-              <Select value={filterEstado} onValueChange={setFilterEstado}>
-                <SelectTrigger className="w-[150px]"><SelectValue placeholder="Estado" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Todos</SelectItem>
-                  {ESTADOS_PROCESO.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={filterGravedad} onValueChange={setFilterGravedad}>
-                <SelectTrigger className="w-[140px]"><SelectValue placeholder="Gravedad" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Todas</SelectItem>
-                  {GRAVEDADES_PROCESO.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={filterTipo} onValueChange={setFilterTipo}>
-                <SelectTrigger className="w-[200px]"><SelectValue placeholder="Tipo" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Todos</SelectItem>
-                  {TIPOS_PROCESO.map((t2) => <SelectItem key={t2} value={t2}>{t2}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={filterJuridico} onValueChange={setFilterJuridico}>
-                <SelectTrigger className="w-[210px]"><SelectValue placeholder="Jurídico" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Todos</SelectItem>
-                  {JURIDICOS.map((j) => <SelectItem key={j} value={j}>{j}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
 
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Expedientes</label>
+                <Select value={estadoExpediente} onValueChange={(v) => setEstadoExpediente(v as typeof estadoExpediente)}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="abiertos">Abierto ({abiertos.length})</SelectItem>
+                    <SelectItem value="cerrados">Cerrado ({cerrados.length})</SelectItem>
+                    <SelectItem value="todos">Todos ({data.length})</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Estado</label>
+                <Select value={filterEstado} onValueChange={setFilterEstado}>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL}>Todos ({baseData.length})</SelectItem>
+                    {ESTADOS_PROCESO.map((e) => (
+                      <SelectItem key={e} value={e}>{properCase(e)} ({countIn(baseData, (p) => p.estado, e)})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Gravedad</label>
+                <Select value={filterGravedad} onValueChange={setFilterGravedad}>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="Todas" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL}>Todas ({baseData.length})</SelectItem>
+                    {GRAVEDADES_PROCESO.map((g) => (
+                      <SelectItem key={g} value={g}>{properCase(g)} ({countIn(baseData, (p) => p.gravedad, g)})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Tipo</label>
+                <Select value={filterTipo} onValueChange={setFilterTipo}>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL}>Todos ({baseData.length})</SelectItem>
+                    {TIPOS_PROCESO.map((t2) => (
+                      <SelectItem key={t2} value={t2}>{t2} ({countIn(baseData, (p) => p.tipo, t2)})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Responsable</label>
+                <Select value={filterJuridico} onValueChange={setFilterJuridico}>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL}>Todos ({baseData.length})</SelectItem>
+                    {JURIDICOS.map((j) => (
+                      <SelectItem key={j} value={j}>{j} ({countIn(baseData, (p) => p.juridico, j)})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          <Button
+            size="icon"
+            variant={showConfig ? "default" : "ghost"}
+            className="h-8 w-8"
+            onClick={() => setShowConfig((v) => !v)}
+            title="Configuración"
+            aria-label="Configuración"
+          >
+            <Settings className="h-4 w-4" strokeWidth={1.75} />
+          </Button>
+        </div>
+
+        {showConfig ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Estados</CardTitle>
+                <CardDescription className="text-xs">Estados disponibles para los expedientes.</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-2">
+                {ESTADOS_PROCESO.map((e) => <EstadoProcesoBadge key={e} value={e} />)}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Gravedad</CardTitle>
+                <CardDescription className="text-xs">Niveles de gravedad para priorización.</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-2">
+                {GRAVEDADES_PROCESO.map((g) => <GravedadProcesoBadge key={g} value={g} />)}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Tipos de proceso</CardTitle>
+                <CardDescription className="text-xs">Clasificación de expedientes jurídicos.</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-2">
+                {TIPOS_PROCESO.map((t2) => <Badge key={t2} variant="outline">{t2}</Badge>)}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Responsables jurídicos</CardTitle>
+                <CardDescription className="text-xs">Abogados y despachos asignados.</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-2">
+                {JURIDICOS.map((j) => <Badge key={j} variant="outline">{j}</Badge>)}
+              </CardContent>
+            </Card>
+          </div>
+        ) : (
+          <>
             <div className="bg-card rounded-lg border overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted/50">
-                    {["EXPEDIENTE", "TIPO", "JURÍDICO", "FECHA", "ESTADO", "GRAVEDAD", "PDF", ""].map((h) => (
+                    {["EXPEDIENTE", "TIPO", "RESPONSABLE", "FECHA", "ESTADO", "GRAVEDAD", "PDF", ""].map((h) => (
                       <th key={h || "actions"} className="text-left px-3 py-3 text-xs font-bold text-muted-foreground tracking-wide whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -347,54 +460,21 @@ export function ProcesosView() {
               </table>
             </div>
             <div className="text-xs text-muted-foreground text-right">{filtered.length} de {baseData.length} expedientes</div>
-          </TabsContent>
-        ))}
-
-        <TabsContent value="config" className="mt-4 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Estados</CardTitle>
-                <CardDescription className="text-xs">Estados disponibles para los expedientes.</CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-wrap gap-2">
-                {ESTADOS_PROCESO.map((e) => <EstadoProcesoBadge key={e} value={e} />)}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Gravedad</CardTitle>
-                <CardDescription className="text-xs">Niveles de gravedad para priorización.</CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-wrap gap-2">
-                {GRAVEDADES_PROCESO.map((g) => <GravedadProcesoBadge key={g} value={g} />)}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Tipos de proceso</CardTitle>
-                <CardDescription className="text-xs">Clasificación de expedientes jurídicos.</CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-wrap gap-2">
-                {TIPOS_PROCESO.map((t2) => <Badge key={t2} variant="outline">{t2}</Badge>)}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Responsables jurídicos</CardTitle>
-                <CardDescription className="text-xs">Abogados y despachos asignados.</CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-wrap gap-2">
-                {JURIDICOS.map((j) => <Badge key={j} variant="outline">{j}</Badge>)}
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-      </Tabs>
+          </>
+        )}
+      </div>
 
       <ProcesoModal open={modalOpen} onClose={() => setModalOpen(false)} onSave={handleSave} item={editItem} empresa={empresaActual.nombre} empresaId={empresaActual.id} />
       {detalleItem && (
-        <DetalleProceso open={!!detalleItem} onClose={() => setDetalleItem(null)} item={detalleItem} onAddActualizacion={addActualizacion} onAddDocumento={addDocumento} />
+        <DetalleProceso
+          open={!!detalleItem}
+          onClose={() => setDetalleItem(null)}
+          item={detalleItem}
+          onAddActualizacion={addActualizacion}
+          onAddDocumento={addDocumento}
+          onRemoveDocumento={removeDocumento}
+          onReplaceDocumentos={replaceDocumentos}
+        />
       )}
     </div>
   );

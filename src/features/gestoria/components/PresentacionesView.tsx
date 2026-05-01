@@ -368,49 +368,52 @@ export function PresentacionesView() {
   }, [empresaActual]);
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-6xl mx-auto">
-      <div className="flex items-center justify-end">
-        <Select value={anioFilter} onValueChange={setAnioFilter}>
-          <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos</SelectItem>
-            {aniosDisponibles.map((a) => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+    <div className="p-4 md:p-6 space-y-4 max-w-6xl mx-auto">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
         {[
-          { label: "Completos", count: stats.completo, icon: CheckCircle2, cls: "text-emerald-600 bg-emerald-50" },
-          { label: "Pendientes", count: stats.pendiente, icon: Clock, cls: "text-amber-600 bg-amber-50" },
-          { label: "Fuera de plazo", count: stats.fuera, icon: XCircle, cls: "text-red-600 bg-red-50" },
-          { label: "En revisión", count: stats.revision, icon: Info, cls: "text-blue-600 bg-blue-50" },
-          { label: "Incompletos", count: stats.incompleto, icon: AlertTriangle, cls: "text-orange-600 bg-orange-50" },
+          { label: "Completos", count: stats.completo, icon: CheckCircle2, iconCls: "text-emerald-600", bgCls: "bg-emerald-50", barCls: "bg-emerald-500" },
+          { label: "Pendientes", count: stats.pendiente, icon: Clock, iconCls: "text-amber-600", bgCls: "bg-amber-50", barCls: "bg-amber-500" },
+          { label: "Fuera de plazo", count: stats.fuera, icon: XCircle, iconCls: "text-red-600", bgCls: "bg-red-50", barCls: "bg-red-500" },
+          { label: "En revisión", count: stats.revision, icon: Info, iconCls: "text-blue-600", bgCls: "bg-blue-50", barCls: "bg-blue-500" },
+          { label: "Incompletos", count: stats.incompleto, icon: AlertTriangle, iconCls: "text-orange-600", bgCls: "bg-orange-50", barCls: "bg-orange-500" },
         ].map((s) => (
-          <Card key={s.label} className="p-3">
-            <div className="flex items-center gap-2">
-              <div className={`p-1.5 rounded-md ${s.cls}`}><s.icon className="h-4 w-4" /></div>
-              <div>
-                <p className="text-lg font-bold">{s.count}</p>
-                <p className="text-xs text-muted-foreground">{s.label}</p>
+          <div key={s.label} className="relative overflow-hidden rounded-lg border bg-card px-3 py-2.5 hover:shadow-sm transition-shadow">
+            <div className={`absolute left-0 top-0 bottom-0 w-1 ${s.barCls}`} />
+            <div className="flex items-center gap-2.5 pl-1">
+              <div className={`flex items-center justify-center h-7 w-7 rounded-md ${s.bgCls} shrink-0`}>
+                <s.icon className={`h-3.5 w-3.5 ${s.iconCls}`} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xl font-bold leading-none tracking-tight">{s.count}</p>
+                <p className="text-[11px] text-muted-foreground leading-tight mt-0.5 truncate">{s.label}</p>
               </div>
             </div>
-          </Card>
+          </div>
         ))}
       </div>
 
       <Tabs defaultValue="trimestrales" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="trimestrales" className="gap-1.5">
-            <CalendarDays className="h-4 w-4" /> Trimestrales
-          </TabsTrigger>
-          <TabsTrigger value="anuales" className="gap-1.5">
-            <FolderOpen className="h-4 w-4" /> Anuales
-          </TabsTrigger>
-          <TabsTrigger value="config" className="gap-1.5">
-            <Settings className="h-4 w-4" /> Configuración
-          </TabsTrigger>
-        </TabsList>
+        <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-3">
+          <TabsList>
+            <TabsTrigger value="trimestrales" className="gap-1.5">
+              <CalendarDays className="h-4 w-4" /> Trimestrales
+            </TabsTrigger>
+            <TabsTrigger value="anuales" className="gap-1.5">
+              <FolderOpen className="h-4 w-4" /> Anuales
+            </TabsTrigger>
+            <TabsTrigger value="config" aria-label="Configuración">
+              <Settings className="h-4 w-4" strokeWidth={1.75} />
+            </TabsTrigger>
+          </TabsList>
+          <div className="flex-1" />
+          <Select value={anioFilter} onValueChange={setAnioFilter}>
+            <SelectTrigger className="w-28 h-9 shrink-0"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos</SelectItem>
+              {aniosDisponibles.map((a) => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
 
         <TabsContent value="trimestrales" className="space-y-3">
           {trimestrales.length === 0 ? (

@@ -5,7 +5,7 @@ import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Settings2, BarChart3, Table2, Wallet, ArrowUpRight, ArrowDownRight, TrendingUp, Landmark } from "lucide-react";
+import { Settings, BarChart3, Table2, Wallet, ArrowUpRight, ArrowDownRight, TrendingUp, Landmark } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SAMPLE_ESCENARIO } from "@/features/contabilidad/data/contabilidad";
 import { BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, ReferenceLine, Cell } from "recharts";
@@ -54,7 +54,7 @@ export function EscenariosView() {
           <Select defaultValue="cuadre"><SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="cuadre">Cuadre Dirección</SelectItem><SelectItem value="proyeccion">Proyección base</SelectItem></SelectContent></Select>
           <span className="text-sm font-semibold">Abr 2026</span>
           <div className="ml-auto flex items-center gap-2">
-            <Button variant="outline" size="icon" className="h-8 w-8"><Settings2 className="h-4 w-4" /></Button>
+            <Button variant="outline" size="icon" className="h-8 w-8" aria-label="Configuración"><Settings className="h-4 w-4" strokeWidth={1.75} /></Button>
             <Select defaultValue="mensual"><SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="mensual">Mensual</SelectItem><SelectItem value="trimestral">Trimestral</SelectItem></SelectContent></Select>
             <Button variant="outline" size="sm" className="text-xs">📅 2026-01 — 2026-12</Button>
             <Button variant="outline" size="icon" className="h-8 w-8"><BarChart3 className="h-4 w-4" /></Button>

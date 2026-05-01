@@ -1,5 +1,3 @@
-import { CalidadDashboardView } from "@/features/calidad/components/CalidadDashboardView";
-
 export default function CalidadPage() {
-  return <CalidadDashboardView />;
+  return <div className="p-4 md:p-6" />;
 }
