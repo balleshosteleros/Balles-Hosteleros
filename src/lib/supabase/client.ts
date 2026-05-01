@@ -5,8 +5,14 @@ export function createClient() {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   if (!url || !key) {
-    throw new Error(
-      'Missing Supabase env vars. Create .env.local with NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.'
+    if (typeof window !== 'undefined') {
+      console.error(
+        'Missing Supabase env vars. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel project settings.'
+      )
+    }
+    return createBrowserClient(
+      url || 'https://placeholder.supabase.co',
+      key || 'placeholder-anon-key'
     )
   }
 
