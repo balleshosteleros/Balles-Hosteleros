@@ -21,16 +21,35 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/shared/components/ui/popover";
 import {
-  Search, ArrowUpDown, Pencil, Check, X, Sun, Settings, ChevronDown,
+  ArrowUpDown, Pencil, Check, X, Sun, Settings, ChevronDown,
 } from "lucide-react";
-import { FiltrosAvanzados, type FiltroActivo, type CampoFiltro } from "@/features/logistica/components/FiltrosAvanzados";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
+import { IOActions } from "@/shared/io";
+import { stockIO } from "@/features/logistica/io/stock.io";
 import { ImportExportButton } from "@/features/logistica/components/ImportExportButton";
-import { exportToCSV, exportToXLSX } from "@/features/logistica/lib/export-utils";
+import { exportToCSV, exportToXLSX, exportToPDF } from "@/features/logistica/lib/export-utils";
 import { toast } from "sonner";
 
-type CampoStock = "categoria" | "estadoStock" | "unidad";
-type MassAction = "pct" | "fixed" | "set" | "copy" | "copiar-temporada" | "consumption";
+type MassAction =
+  | "pct"
+  | "fixed"
+  | "set"
+  | "copy"
+  | "copiar-temporada"
+  | "consumption"
+  | "ratio"
+  | "round"
+  | "reset"
+  | "coverage";
 type MassField = "stockMaximo" | "stockSeguridad";
+type MassScope = "selected" | "filtered" | "all" | "category" | "status";
 
 function stockStatus(actual: number, seguridad: number): "critical" | "warning" | "ok" {
   if (actual < seguridad) return "critical";
@@ -125,13 +144,18 @@ export function StockView() {
   }, [temporadaSeleccionada, temporadas]);
 
   const [search, setSearch] = useState("");
-  const [filtros, setFiltros] = useState<FiltroActivo<CampoStock>[]>([]);
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<{ stockMaximo: number; stockSeguridad: number }>({ stockMaximo: 0, stockSeguridad: 0 });
 
   // Mass edit
   const [massOpen, setMassOpen] = useState(false);
+  const [massScope, setMassScope] = useState<MassScope>("selected");
+  const [massScopeCategory, setMassScopeCategory] = useState<string>("");
+  const [massScopeStatus, setMassScopeStatus] = useState<"critical" | "warning" | "ok">("critical");
   const [massAction, setMassAction] = useState<MassAction>("pct");
   const [massField, setMassField] = useState<MassField>("stockMaximo");
   const [massValue, setMassValue] = useState("");
@@ -146,33 +170,32 @@ export function StockView() {
     return { ...p, displayMaximo: s.stockMaximo, displaySeguridad: s.stockSeguridad, esTemporada: s.esTemporada };
   }), [stock, temporadaActiva]);
 
-  const camposFiltro = useMemo((): CampoFiltro<CampoStock>[] => {
-    const uniq = (arr: string[]) => [...new Set(arr.filter(Boolean))].sort();
-    return [
-      { campo: "categoria", label: "Categoría", tipo: "lista", opciones: CATEGORIAS_STOCK as string[] },
-      { campo: "estadoStock", label: "Estado stock", tipo: "lista", opciones: ["Stock bajo", "Atención", "Correcto"] },
-      { campo: "unidad", label: "Unidad", tipo: "lista", opciones: uniq(enriched.map((p) => p.unidad)) },
-    ];
-  }, [enriched]);
+  const unidadesUsadas = useMemo(
+    () => [...new Set(enriched.map((p) => p.unidad).filter(Boolean))].sort(),
+    [enriched],
+  );
+
+  type EnrichedItem = typeof enriched[number];
+  const accesoStock = (p: EnrichedItem, campo: string): unknown => {
+    if (campo === "estadoStock") {
+      const st = stockStatus(p.stockActual, p.displaySeguridad);
+      return st === "critical" ? "Stock bajo" : st === "warning" ? "Atención" : "Correcto";
+    }
+    if (campo === "stockMaximo") return p.displayMaximo;
+    if (campo === "stockSeguridad") return p.displaySeguridad;
+    return (p as unknown as Record<string, unknown>)[campo];
+  };
 
   const filtered = useMemo(() => {
-    return enriched.filter((p) => {
-      const st = stockStatus(p.stockActual, p.displaySeguridad);
-      for (const f of filtros) {
-        if (f.campo === "categoria" && f.valores?.length && !f.valores.includes(p.categoria)) return false;
-        if (f.campo === "unidad" && f.valores?.length && !f.valores.includes(p.unidad)) return false;
-        if (f.campo === "estadoStock" && f.valores?.length) {
-          const label = st === "critical" ? "Stock bajo" : st === "warning" ? "Atención" : "Correcto";
-          if (!f.valores.includes(label)) return false;
-        }
-      }
-      if (search) {
-        const s = search.toLowerCase();
-        return p.nombre.toLowerCase().includes(s) || p.categoria.toLowerCase().includes(s);
-      }
-      return true;
+    let lista = enriched.filter((p) => {
+      if (!search) return true;
+      const s = search.toLowerCase();
+      return p.nombre.toLowerCase().includes(s) || p.categoria.toLowerCase().includes(s);
     });
-  }, [enriched, search, filtros]);
+    lista = aplicarFiltrosToolbar(lista, filtros, accesoStock);
+    lista = aplicarOrdenToolbar(lista, orden, accesoStock);
+    return lista;
+  }, [enriched, search, filtros, orden]);
 
   const toggleSelect = (id: string) => setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const toggleAll = () => {
@@ -207,9 +230,26 @@ export function StockView() {
   };
   const cancelEdit = () => setEditingId(null);
 
+  // Resolve which product ids the mass edit should target based on scope
+  const massTargetIds = useMemo<Set<string>>(() => {
+    if (massScope === "selected") return new Set(selected);
+    if (massScope === "filtered") return new Set(filtered.map((p) => p.id));
+    if (massScope === "all") return new Set(stock.map((p) => p.id));
+    if (massScope === "category") {
+      if (!massScopeCategory) return new Set();
+      return new Set(stock.filter((p) => p.categoria === massScopeCategory).map((p) => p.id));
+    }
+    if (massScope === "status") {
+      return new Set(
+        enriched.filter((p) => stockStatus(p.stockActual, p.displaySeguridad) === massScopeStatus).map((p) => p.id),
+      );
+    }
+    return new Set();
+  }, [massScope, selected, filtered, stock, enriched, massScopeCategory, massScopeStatus]);
+
   // Mass edit
   const applyMassEdit = async () => {
-    if (selected.size === 0) { toast.info("Selecciona al menos un producto"); return; }
+    if (massTargetIds.size === 0) { toast.info("El ámbito seleccionado no contiene productos"); return; }
 
     // Copy between temporadas (solo local — temporadas son configuración visual)
     if (massAction === "copiar-temporada") {
@@ -219,7 +259,7 @@ export function StockView() {
       setTemporadas((prev) => prev.map((t) => {
         if (t.id !== massCopyTempTo) return t;
         const newOverrides = { ...t.overrides };
-        for (const prodId of selected) {
+        for (const prodId of massTargetIds) {
           const prod = stock.find((p) => p.id === prodId);
           if (!prod) continue;
           const srcVal = sourceTemp?.overrides[prodId] ?? { stockMaximo: prod.stockMaximo, stockSeguridad: prod.stockSeguridad };
@@ -228,35 +268,63 @@ export function StockView() {
         return { ...t, overrides: newOverrides };
       }));
       const targetName = temporadas.find((t) => t.id === massCopyTempTo)?.nombre ?? "temporada";
-      toast.success(`Stock copiado a ${targetName} para ${selected.size} producto(s)`);
+      toast.success(`Stock copiado a ${targetName} para ${massTargetIds.size} producto(s)`);
       setMassOpen(false);
       return;
     }
 
     const val = parseFloat(massValue);
+    const round2 = (n: number) => Math.round(n * 100) / 100;
     const apply = (current: number): number => {
-      if (massAction === "pct" && !isNaN(val)) return Math.max(0, Math.round(current * (1 + val / 100) * 100) / 100);
-      if (massAction === "fixed" && !isNaN(val)) return Math.max(0, Math.round((current + val) * 100) / 100);
+      if (massAction === "pct" && !isNaN(val)) return Math.max(0, round2(current * (1 + val / 100)));
+      if (massAction === "fixed" && !isNaN(val)) return Math.max(0, round2(current + val));
       if (massAction === "set" && !isNaN(val)) return Math.max(0, val);
       return current;
     };
 
+    // Validaciones específicas por acción
+    if ((massAction === "pct" || massAction === "fixed" || massAction === "set") && isNaN(val)) {
+      toast.error("Introduce un valor numérico"); return;
+    }
+    if (massAction === "ratio" && (isNaN(val) || val <= 0 || val >= 100)) {
+      toast.error("El ratio debe ser un porcentaje entre 1 y 99"); return;
+    }
+    if (massAction === "coverage" && (isNaN(val) || val <= 0)) {
+      toast.error("Indica un número de días positivo"); return;
+    }
+
     // Calcular nuevos valores primero para poder persistirlos
     const updates: { id: string; cantidad_minima: number; cantidad_maxima: number }[] = [];
     const updatedStock = stock.map((p) => {
-      if (!selected.has(p.id)) return p;
+      if (!massTargetIds.has(p.id)) return p;
       const updated = { ...p };
       if (massAction === "copy") {
         updated[massCopyTo] = updated[massCopyFrom];
       } else if (massAction === "consumption") {
         if (updated.stockActual < updated.stockSeguridad) {
-          updated.stockMaximo = Math.round(updated.stockMaximo * 1.2 * 100) / 100;
-          updated.stockSeguridad = Math.round(updated.stockSeguridad * 1.15 * 100) / 100;
+          updated.stockMaximo = round2(updated.stockMaximo * 1.2);
+          updated.stockSeguridad = round2(updated.stockSeguridad * 1.15);
         } else if (updated.stockActual > updated.stockMaximo * 0.9) {
-          updated.stockMaximo = Math.round(updated.stockMaximo * 0.9 * 100) / 100;
+          updated.stockMaximo = round2(updated.stockMaximo * 0.9);
         }
+      } else if (massAction === "ratio") {
+        // Stock mínimo = val% del Stock Máximo
+        updated.stockSeguridad = round2(updated.stockMaximo * (val / 100));
+      } else if (massAction === "round") {
+        updated.stockMaximo = Math.round(updated.stockMaximo);
+        updated.stockSeguridad = Math.round(updated.stockSeguridad);
+      } else if (massAction === "reset") {
+        updated[massField] = 0;
+      } else if (massAction === "coverage") {
+        // Cobertura: máx = consumo diario × días. Heurística: consumo diario ≈ stockSeguridad o 1
+        const consumoDiario = updated.stockSeguridad > 0 ? updated.stockSeguridad : 1;
+        updated.stockMaximo = round2(consumoDiario * val);
       } else {
         updated[massField] = apply(updated[massField]);
+      }
+      // Coherencia: mínimo nunca puede superar al máximo
+      if (updated.stockSeguridad > updated.stockMaximo) {
+        updated.stockSeguridad = updated.stockMaximo;
       }
       updates.push({ id: p.id, cantidad_minima: updated.stockSeguridad, cantidad_maxima: updated.stockMaximo });
       return updated;
@@ -268,7 +336,7 @@ export function StockView() {
 
     const res = await updateStockBatch(updates);
     if (res.ok) {
-      toast.success(`Edición masiva guardada para ${selected.size} producto(s)`);
+      toast.success(`Edición masiva guardada para ${updates.length} producto(s)`);
     } else {
       toast.error("Error al guardar en base de datos");
       loadStockData();
@@ -279,85 +347,119 @@ export function StockView() {
     <div className="p-4 md:p-6 space-y-5">
       <div className="space-y-4">
           {/* Toolbar */}
-          <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-3">
-            {/* Temporada picker */}
-            <Popover open={tempPopoverOpen} onOpenChange={setTempPopoverOpen}>
-              <PopoverTrigger asChild>
-                <Button size="sm" className="gap-1.5">
-                  <ChevronDown className="h-4 w-4" />
-                  {temporadaLabel === "Base" ? "Temporada" : temporadaLabel}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-52 p-2" align="start">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1.5">Ver temporada</p>
-                {/* Valores base siempre disponible */}
-                <button
-                  onClick={() => { setTemporadaSeleccionada("base"); setTempPopoverOpen(false); }}
-                  className={`w-full text-left text-sm px-2.5 py-1.5 rounded-md transition-colors ${
-                    temporadaSeleccionada === "base" || !temporadas.find((t) => t.id === temporadaSeleccionada)
-                      ? "bg-primary/10 text-primary font-semibold"
-                      : "hover:bg-muted"
-                  }`}
+          <SubmoduleToolbar
+            busqueda={search}
+            onBusquedaChange={setSearch}
+            placeholderBusqueda="Buscar producto…"
+            ocultarNuevo
+            campos={[
+              { campo: "categoria", label: "Categoría", tipo: "lista", opciones: CATEGORIAS_STOCK as unknown as string[] },
+              { campo: "estadoStock", label: "Estado stock", tipo: "lista", opciones: ["Stock bajo", "Atención", "Correcto"] },
+              { campo: "unidad", label: "Unidad", tipo: "lista", opciones: unidadesUsadas },
+            ]}
+            filtros={filtros}
+            onFiltrosChange={setFiltros}
+            ordenOpciones={[
+              { campo: "nombre", label: "Producto" },
+              { campo: "categoria", label: "Categoría" },
+              { campo: "stockActual", label: "Stock actual" },
+              { campo: "stockMaximo", label: "Stock Máximo" },
+              { campo: "stockSeguridad", label: "Stock Mínimo" },
+            ]}
+            orden={orden}
+            onOrdenChange={setOrden}
+            columnas={[
+              { campo: "nombre", label: "Producto" },
+              { campo: "categoria", label: "Categoría" },
+              { campo: "unidad", label: "Unidad" },
+              { campo: "stockMaximo", label: "Stock Máximo" },
+              { campo: "stockSeguridad", label: "Stock Mínimo" },
+              { campo: "stockActual", label: "Stock Actual" },
+              { campo: "stockReposicion", label: "Stock Reposición" },
+              { campo: "estado", label: "Estado" },
+              { campo: "ultimoInventario", label: "Últ. Inventario" },
+              { campo: "ultimoInventarioFecha", label: "Fecha Inv." },
+            ]}
+            columnasVisibles={columnasVisibles}
+            onColumnasVisiblesChange={setColumnasVisibles}
+            extraIzquierda={
+              <>
+                <Popover open={tempPopoverOpen} onOpenChange={setTempPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button size="sm" variant="outline" className="gap-1.5">
+                      <ChevronDown className="h-4 w-4" />
+                      {temporadaLabel === "Base" ? "Temporada" : temporadaLabel}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-52 p-2" align="start">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1.5">Ver temporada</p>
+                    <button
+                      onClick={() => { setTemporadaSeleccionada("base"); setTempPopoverOpen(false); }}
+                      className={`w-full text-left text-sm px-2.5 py-1.5 rounded-md transition-colors ${
+                        temporadaSeleccionada === "base" || !temporadas.find((t) => t.id === temporadaSeleccionada)
+                          ? "bg-primary/10 text-primary font-semibold"
+                          : "hover:bg-muted"
+                      }`}
+                    >
+                      Base
+                    </button>
+                    {temporadas.map((t) => (
+                      <button
+                        key={t.id}
+                        onClick={() => { setTemporadaSeleccionada(t.id); setTempPopoverOpen(false); }}
+                        className={`w-full text-left text-sm px-2.5 py-1.5 rounded-md transition-colors ${
+                          temporadaSeleccionada === t.id
+                            ? "bg-primary/10 text-primary font-semibold"
+                            : "hover:bg-muted"
+                        }`}
+                      >
+                        {t.nombre}
+                      </button>
+                    ))}
+                    {temporadas.length === 0 && (
+                      <p className="text-xs text-muted-foreground text-center py-2 italic">Sin temporadas — configura una con ⚙️</p>
+                    )}
+                  </PopoverContent>
+                </Popover>
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1"
+                  onClick={() => {
+                    setMassScope(selected.size > 0 ? "selected" : "filtered");
+                    setMassOpen(true);
+                  }}
                 >
-                  Base
-                </button>
-                {temporadas.map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => { setTemporadaSeleccionada(t.id); setTempPopoverOpen(false); }}
-                    className={`w-full text-left text-sm px-2.5 py-1.5 rounded-md transition-colors ${
-                      temporadaSeleccionada === t.id
-                        ? "bg-primary/10 text-primary font-semibold"
-                        : "hover:bg-muted"
-                    }`}
-                  >
-                    {t.nombre}
-                  </button>
-                ))}
-                {temporadas.length === 0 && (
-                  <p className="text-xs text-muted-foreground text-center py-2 italic">Sin temporadas — configura una con ⚙️</p>
-                )}
-              </PopoverContent>
-            </Popover>
-
-            {/* Edición masiva */}
-            <Button size="sm" variant="outline" className="gap-1" disabled={selected.size === 0} onClick={() => setMassOpen(true)}>
-              <ArrowUpDown className="h-4 w-4" />
-              Edición masiva{selected.size > 0 ? ` (${selected.size})` : ""}
-            </Button>
-
-            <div className="flex-1" />
-
-            {/* Búsqueda */}
-            <div className="relative min-w-[220px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Buscar producto…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
-            </div>
-
-            {/* Filtros */}
-            <FiltrosAvanzados campos={camposFiltro} filtros={filtros} onChange={setFiltros} />
-
-            {/* Importar / Exportar */}
-            <ImportExportButton
-              onExport={(format) => {
-                const ts = new Date().toISOString().slice(0, 10);
-                const rows = filtered.map((p) => ({
-                  Producto: p.nombre, Categoría: p.categoria, Unidad: p.unidad,
-                  "Stock Máximo": p.displayMaximo, "Stock Mínimo": p.displaySeguridad,
-                  "Stock Actual": p.stockActual, "Stock Reposición": Math.max(0, p.displayMaximo - p.stockActual),
-                }));
-                if (rows.length === 0) { toast.info("No hay datos para exportar."); return; }
-                if (format === "csv") exportToCSV(rows, `stock-${ts}.csv`);
-                else exportToXLSX(rows, `stock-${ts}.xlsx`);
-                toast.success(`${rows.length} filas exportadas en ${format.toUpperCase()}`);
-              }}
-            />
-
-            {/* Configuración temporadas */}
-            <Button size="icon" variant={showConfig ? "default" : "ghost"} className="h-8 w-8" onClick={() => setShowConfig((v) => !v)} title="Configuración" aria-label="Configuración">
-              <Settings className="h-4 w-4" strokeWidth={1.75} />
-            </Button>
-          </div>
+                  <ArrowUpDown className="h-4 w-4" />
+                  Edición masiva{selected.size > 0 ? ` (${selected.size})` : ""}
+                </Button>
+              </>
+            }
+            extraDerecha={
+              <>
+                <IOActions config={stockIO} onSuccess={() => window.location.reload()} />
+                <ImportExportButton
+                  onExport={(format) => {
+                    const ts = new Date().toISOString().slice(0, 10);
+                    const rows = filtered.map((p) => ({
+                      Producto: p.nombre, Categoría: p.categoria, Unidad: p.unidad,
+                      "Stock Máximo": p.displayMaximo, "Stock Mínimo": p.displaySeguridad,
+                      "Stock Actual": p.stockActual, "Stock Reposición": Math.max(0, p.displayMaximo - p.stockActual),
+                    }));
+                    if (rows.length === 0) { toast.info("No hay datos para exportar."); return; }
+                    if (format === "csv") exportToCSV(rows, `stock-${ts}.csv`);
+                    else if (format === "xlsx") exportToXLSX(rows, `stock-${ts}.xlsx`);
+                    else exportToPDF(rows, `stock-${ts}.pdf`, "Stock");
+                    toast.success(`${rows.length} filas exportadas en ${format.toUpperCase()}`);
+                  }}
+                />
+                <Button size="icon" variant={showConfig ? "default" : "ghost"} className="h-9 w-9" onClick={() => setShowConfig((v) => !v)} title="Configuración" aria-label="Configuración">
+                  <Settings className="h-4 w-4" strokeWidth={1.75} />
+                </Button>
+              </>
+            }
+          />
 
           {showConfig ? (
             <div className="bg-card border rounded-lg p-5">
@@ -462,14 +564,61 @@ export function StockView() {
 
       {/* Mass Edit Dialog */}
       <Dialog open={massOpen} onOpenChange={setMassOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Edición masiva — {selected.size} producto(s)</DialogTitle>
+            <DialogTitle>Edición masiva — {massTargetIds.size} producto(s)</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
-              Modifica Stock Máximo y/o Stock Mínimo de los productos seleccionados.
+            <div className="flex items-start gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+              Modifica Stock Máximo y/o Stock Mínimo de varios productos a la vez. Elige primero el ámbito y luego el tipo de acción.
             </div>
+
+            {/* Ámbito */}
+            <div>
+              <Label className="text-xs font-bold">Aplicar a</Label>
+              <Select value={massScope} onValueChange={(v) => setMassScope(v as MassScope)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="selected" disabled={selected.size === 0}>
+                    Productos seleccionados ({selected.size})
+                  </SelectItem>
+                  <SelectItem value="filtered">Productos visibles ({filtered.length})</SelectItem>
+                  <SelectItem value="all">Todos los productos ({stock.length})</SelectItem>
+                  <SelectItem value="category">Por categoría…</SelectItem>
+                  <SelectItem value="status">Por estado de stock…</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {massScope === "category" && (
+              <div>
+                <Label className="text-xs font-bold">Categoría</Label>
+                <Select value={massScopeCategory} onValueChange={setMassScopeCategory}>
+                  <SelectTrigger><SelectValue placeholder="Seleccionar categoría…" /></SelectTrigger>
+                  <SelectContent>
+                    {[...new Set(stock.map((p) => p.categoria))].sort().map((c) => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {massScope === "status" && (
+              <div>
+                <Label className="text-xs font-bold">Estado</Label>
+                <Select value={massScopeStatus} onValueChange={(v) => setMassScopeStatus(v as "critical" | "warning" | "ok")}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="critical">Stock bajo</SelectItem>
+                    <SelectItem value="warning">Atención</SelectItem>
+                    <SelectItem value="ok">Correcto</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <Separator />
 
             <div>
               <Label className="text-xs font-bold">Tipo de acción</Label>
@@ -477,16 +626,20 @@ export function StockView() {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="pct">Por porcentaje (%)</SelectItem>
-                  <SelectItem value="fixed">Por cantidad fija</SelectItem>
-                  <SelectItem value="set">Igualar valor</SelectItem>
-                  <SelectItem value="copy">Copiar campo</SelectItem>
+                  <SelectItem value="fixed">Sumar / restar cantidad</SelectItem>
+                  <SelectItem value="set">Igualar a valor fijo</SelectItem>
+                  <SelectItem value="copy">Copiar entre campos</SelectItem>
+                  <SelectItem value="ratio">Mínimo = % del Máximo</SelectItem>
+                  <SelectItem value="coverage">Máximo = días de cobertura</SelectItem>
+                  <SelectItem value="round">Redondear valores</SelectItem>
+                  <SelectItem value="reset">Reset a cero</SelectItem>
                   {temporadas.length >= 2 && <SelectItem value="copiar-temporada">Copiar entre temporadas</SelectItem>}
                   <SelectItem value="consumption">Ajustar según consumo</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {(massAction === "pct" || massAction === "fixed" || massAction === "set") && (
+            {(massAction === "pct" || massAction === "fixed" || massAction === "set" || massAction === "reset") && (
               <>
                 <div>
                   <Label className="text-xs font-bold">Campo a modificar</Label>
@@ -498,15 +651,41 @@ export function StockView() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
-                  <Label className="text-xs font-bold">
-                    {massAction === "pct" ? "Porcentaje (ej: 10 para +10%, -15 para -15%)" :
-                     massAction === "fixed" ? "Cantidad (ej: 5 para sumar, -2 para restar)" :
-                     "Valor fijo para todos"}
-                  </Label>
-                  <Input type="number" value={massValue} onChange={(e) => setMassValue(e.target.value)} placeholder={massAction === "pct" ? "10" : "5"} />
-                </div>
+                {massAction !== "reset" && (
+                  <div>
+                    <Label className="text-xs font-bold">
+                      {massAction === "pct" ? "Porcentaje (ej: 10 para +10%, -15 para -15%)" :
+                       massAction === "fixed" ? "Cantidad (ej: 5 para sumar, -2 para restar)" :
+                       "Valor fijo para todos"}
+                    </Label>
+                    <Input type="number" value={massValue} onChange={(e) => setMassValue(e.target.value)} placeholder={massAction === "pct" ? "10" : "5"} />
+                  </div>
+                )}
               </>
+            )}
+
+            {massAction === "ratio" && (
+              <div>
+                <Label className="text-xs font-bold">Stock Mínimo = X % del Stock Máximo</Label>
+                <Input type="number" value={massValue} onChange={(e) => setMassValue(e.target.value)} placeholder="30" />
+                <p className="text-xs text-muted-foreground mt-1">Ej: 30 → mínimo se ajusta al 30 % del máximo de cada producto.</p>
+              </div>
+            )}
+
+            {massAction === "coverage" && (
+              <div>
+                <Label className="text-xs font-bold">Días de cobertura</Label>
+                <Input type="number" value={massValue} onChange={(e) => setMassValue(e.target.value)} placeholder="7" />
+                <p className="text-xs text-muted-foreground mt-1">Calcula Stock Máximo = consumo diario × días. Si no hay consumo registrado se usa el Stock Mínimo como referencia.</p>
+              </div>
+            )}
+
+            {massAction === "round" && (
+              <p className="text-sm text-muted-foreground">Redondea Stock Máximo y Mínimo al entero más cercano para todos los productos del ámbito.</p>
+            )}
+
+            {massAction === "reset" && (
+              <p className="text-sm text-amber-700 dark:text-amber-400">El campo seleccionado se pondrá a 0 en todos los productos del ámbito.</p>
             )}
 
             {massAction === "copy" && (

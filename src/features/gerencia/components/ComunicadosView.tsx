@@ -4,7 +4,13 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { getComunicadosByEmpresa, type Comunicado, ESTADO_COMUNICADO_LABELS, RECURRENCIA_LABELS, type EstadoComunicado, type Recurrencia } from "@/features/rrhh/data/comunicados";
 import { getEmpleadosPorEmpresa, DEPARTAMENTOS } from "@/features/rrhh/data/rrhh";
-import { listComunicados, createComunicado } from "@/features/gerencia/actions/comunicados-actions";
+import {
+  listComunicados,
+  createComunicado,
+  updateComunicado,
+  listEmpleadosParaComunicado,
+  type EmpleadoSelector,
+} from "@/features/gerencia/actions/comunicados-actions";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,6 +31,14 @@ import {
   Trash2, FileText, Users, Building2, ArrowLeft, Save, Upload, X, AlertTriangle, ImageIcon, Bell,
   ChevronLeft, ChevronRight,
 } from "lucide-react";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
 
 function EstadoBadge({ estado }: { estado: EstadoComunicado }) {
   const colors: Record<EstadoComunicado, string> = {
@@ -77,6 +91,7 @@ interface EditorForm {
   prioridad: string;
   todaEmpresa: boolean;
   rolesDestinatarios: string[];
+  empleadosDestinatarios: string[];
   programado: boolean;
   envioFecha: string;
   envioHora: string;
@@ -90,9 +105,9 @@ interface EditorForm {
 const emptyForm: EditorForm = {
   titulo: "", asunto: "", cuerpo: "", creadorId: "", estado: "borrador",
   recurrencia: "sin_repeticion", prioridad: "normal", todaEmpresa: true,
-  rolesDestinatarios: [], programado: false, envioFecha: "", envioHora: "",
-  textoNotificacion: "", adjuntos: [], portadaColor: "hsl(var(--primary))",
-  portadaTitulo: "", observaciones: "",
+  rolesDestinatarios: [], empleadosDestinatarios: [], programado: false,
+  envioFecha: "", envioHora: "", textoNotificacion: "", adjuntos: [],
+  portadaColor: "hsl(var(--primary))", portadaTitulo: "", observaciones: "",
 };
 
 function formFromComunicado(c: Comunicado): EditorForm {
@@ -101,26 +116,48 @@ function formFromComunicado(c: Comunicado): EditorForm {
     titulo: c.titulo, asunto: c.asunto, cuerpo: c.cuerpo, creadorId: c.creadorId,
     estado: c.estado, recurrencia: c.recurrencia, prioridad: c.prioridad,
     todaEmpresa: c.todaEmpresa, rolesDestinatarios: [...c.rolesDestinatarios],
+    empleadosDestinatarios: [],
     programado: !!c.envio, envioFecha: fecha || "", envioHora: hora || "",
     textoNotificacion: `Nuevo comunicado: ${c.titulo}`, adjuntos: [],
     portadaColor: "hsl(var(--primary))", portadaTitulo: c.titulo, observaciones: c.observaciones,
   };
 }
 
-function ComunicadoEditor({ comunicado, onBack, empleados, empresaNombre }: {
+function ComunicadoEditor({ comunicado, onBack, onSave, empleados, empleadosReales, empresaNombre }: {
   comunicado: Comunicado | null;
   onBack: () => void;
+  onSave: (form: EditorForm) => void | Promise<void>;
   empleados: ReturnType<typeof getEmpleadosPorEmpresa>;
+  empleadosReales: EmpleadoSelector[];
   empresaNombre: string;
 }) {
   const isEdit = !!comunicado;
   const [form, setForm] = useState<EditorForm>(comunicado ? formFromComunicado(comunicado) : emptyForm);
   const [preview, setPreview] = useState(false);
+  const [empleadoFilter, setEmpleadoFilter] = useState("");
   const u = (patch: Partial<EditorForm>) => setForm(f => ({ ...f, ...patch }));
 
   const toggleRole = (role: string) => {
     u({ rolesDestinatarios: form.rolesDestinatarios.includes(role) ? form.rolesDestinatarios.filter(r => r !== role) : [...form.rolesDestinatarios, role] });
   };
+
+  const toggleEmpleado = (userId: string) => {
+    u({
+      empleadosDestinatarios: form.empleadosDestinatarios.includes(userId)
+        ? form.empleadosDestinatarios.filter(x => x !== userId)
+        : [...form.empleadosDestinatarios, userId],
+    });
+  };
+
+  const empleadosFiltrados = empleadosReales.filter(e => {
+    const q = empleadoFilter.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      `${e.nombre} ${e.apellidos}`.toLowerCase().includes(q) ||
+      (e.rolLabel ?? "").toLowerCase().includes(q) ||
+      (e.departamento ?? "").toLowerCase().includes(q)
+    );
+  });
 
   if (preview) {
     return (
@@ -162,7 +199,7 @@ function ComunicadoEditor({ comunicado, onBack, empleados, empresaNombre }: {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setPreview(true)}><Eye className="h-4 w-4 mr-1" />Previsualizar</Button>
-          <Button size="sm" onClick={onBack}><Save className="h-4 w-4 mr-1" />Guardar</Button>
+          <Button size="sm" onClick={() => onSave(form)}><Save className="h-4 w-4 mr-1" />Guardar</Button>
         </div>
       </div>
 
@@ -251,15 +288,63 @@ function ComunicadoEditor({ comunicado, onBack, empleados, empresaNombre }: {
                   <Label htmlFor="sw-toda" className="text-sm">Toda la empresa</Label>
                 </div>
                 {!form.todaEmpresa && (
-                  <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground">Selecciona roles:</p>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {ROLES_DISPONIBLES.map(role => (
-                        <label key={role} className="flex items-center gap-1.5 text-xs cursor-pointer">
-                          <Checkbox checked={form.rolesDestinatarios.includes(role)} onCheckedChange={() => toggleRole(role)} />
-                          {role}
-                        </label>
-                      ))}
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground">Por rol:</p>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {ROLES_DISPONIBLES.map(role => (
+                          <label key={role} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                            <Checkbox checked={form.rolesDestinatarios.includes(role)} onCheckedChange={() => toggleRole(role)} />
+                            {role}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-muted-foreground">Por empleado:</p>
+                        {form.empleadosDestinatarios.length > 0 && (
+                          <button
+                            type="button"
+                            className="text-[10px] text-muted-foreground hover:text-foreground underline"
+                            onClick={() => u({ empleadosDestinatarios: [] })}
+                          >
+                            Limpiar ({form.empleadosDestinatarios.length})
+                          </button>
+                        )}
+                      </div>
+                      <Input
+                        value={empleadoFilter}
+                        onChange={e => setEmpleadoFilter(e.target.value)}
+                        placeholder="Buscar empleado…"
+                        className="h-8 text-xs"
+                      />
+                      <div className="border rounded-md max-h-56 overflow-y-auto bg-card">
+                        {empleadosFiltrados.length === 0 ? (
+                          <p className="text-[11px] text-muted-foreground p-2 text-center">
+                            {empleadosReales.length === 0 ? "Sin empleados en BD" : "Sin resultados"}
+                          </p>
+                        ) : (
+                          empleadosFiltrados.map(emp => {
+                            const checked = form.empleadosDestinatarios.includes(emp.userId);
+                            return (
+                              <label
+                                key={emp.userId}
+                                className="flex items-center gap-2 px-2 py-1.5 text-xs cursor-pointer hover:bg-muted/40 border-b last:border-b-0"
+                              >
+                                <Checkbox checked={checked} onCheckedChange={() => toggleEmpleado(emp.userId)} />
+                                <div className="flex-1 min-w-0">
+                                  <p className="truncate font-medium">{emp.nombre} {emp.apellidos}</p>
+                                  <p className="text-[10px] text-muted-foreground truncate">
+                                    {[emp.rolLabel, emp.departamento].filter(Boolean).join(" · ") || "Sin rol"}
+                                  </p>
+                                </div>
+                              </label>
+                            );
+                          })
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -505,6 +590,7 @@ export function ComunicadosView() {
   const { empresaActual } = useEmpresa();
   const empresaId = empresaActual?.id || "habana";
   const [comunicados, setComunicados] = useState<Comunicado[]>([]);
+  const [empleadosReales, setEmpleadosReales] = useState<EmpleadoSelector[]>([]);
   const [loading, setLoading] = useState(true);
   const empleados = getEmpleadosPorEmpresa(empresaId);
 
@@ -525,44 +611,111 @@ export function ComunicadosView() {
     }
   }, [empresaId]);
 
+  const loadEmpleadosReales = useCallback(async () => {
+    const res = await listEmpleadosParaComunicado();
+    if (res.ok) setEmpleadosReales(res.data);
+  }, []);
+
   useEffect(() => {
     loadComunicados();
-  }, [loadComunicados]);
+    loadEmpleadosReales();
+  }, [loadComunicados, loadEmpleadosReales]);
 
   const [mainTab, setMainTab] = useState<"listado" | "calendario">("listado");
   const [calVista, setCalVista] = useState<"mensual" | "anual">("mensual");
   const [mesOffset, setMesOffset] = useState(0);
   const [search, setSearch] = useState("");
-  const [filtroEstado, setFiltroEstado] = useState("todos");
-  const [filtroRecurrencia, setFiltroRecurrencia] = useState("todos");
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editorMode, setEditorMode] = useState<"list" | "create" | "edit">("list");
   const [editingComunicado, setEditingComunicado] = useState<Comunicado | null>(null);
 
-  const filtered = useMemo(() => comunicados.filter(c => {
-    const ms = c.titulo.toLowerCase().includes(search.toLowerCase()) || c.asunto.toLowerCase().includes(search.toLowerCase());
-    const me = filtroEstado === "todos" || c.estado === filtroEstado;
-    const mr = filtroRecurrencia === "todos" || c.recurrencia === filtroRecurrencia;
-    return ms && me && mr;
-  }), [comunicados, search, filtroEstado, filtroRecurrencia]);
+  const accesoComunicado = (c: Comunicado, campo: string): unknown => {
+    if (campo === "estado") return c.estado;
+    if (campo === "recurrencia") return c.recurrencia;
+    if (campo === "prioridad") return c.prioridad;
+    if (campo === "titulo") return c.titulo;
+    if (campo === "creadoEl") return c.creadoEl;
+    if (campo === "envio") return c.envio ?? "";
+    if (campo === "alcancePct") return c.alcancePct;
+    return (c as unknown as Record<string, unknown>)[campo];
+  };
+
+  const filtered = useMemo(() => {
+    let lista = comunicados.filter(c => {
+      const q = search.toLowerCase();
+      return !q || c.titulo.toLowerCase().includes(q) || c.asunto.toLowerCase().includes(q);
+    });
+    const accesoGenerico = accesoComunicado as unknown as (
+      c: Record<string, unknown>,
+      campo: string,
+    ) => unknown;
+    lista = aplicarFiltrosToolbar(
+      lista as unknown as Record<string, unknown>[],
+      filtros,
+      accesoGenerico,
+    ) as unknown as Comunicado[];
+    lista = aplicarOrdenToolbar(
+      lista as unknown as Record<string, unknown>[],
+      orden,
+      accesoGenerico,
+    ) as unknown as Comunicado[];
+    return lista;
+  }, [comunicados, search, filtros, orden]);
 
   const toggleSelect = (id: string) => setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const toggleAll = () => setSelected(prev => prev.size === filtered.length ? new Set() : new Set(filtered.map(c => c.id)));
 
   const openEdit = (c: Comunicado) => { setEditingComunicado(c); setEditorMode("edit"); };
   const openCreate = () => { setEditingComunicado(null); setEditorMode("create"); };
-  const closeEditor = async () => {
-    if (editorMode === "create") {
-      const res = await createComunicado({ titulo: "Nuevo comunicado", contenido: "", tipo: "general", prioridad: "normal" });
-      if (res.ok) toast.success("Comunicado guardado");
-      else toast.error(res.error ?? "Error al guardar comunicado");
-      loadComunicados();
+  const closeEditor = () => { setEditorMode("list"); setEditingComunicado(null); };
+
+  const saveEditor = async (form: EditorForm) => {
+    if (!form.titulo.trim()) {
+      toast.error("El título es obligatorio");
+      return;
     }
-    setEditorMode("list"); setEditingComunicado(null);
+    const envio = form.programado && form.envioFecha
+      ? `${form.envioFecha}${form.envioHora ? `T${form.envioHora}:00` : "T00:00:00"}`
+      : null;
+    const payload = {
+      titulo: form.titulo,
+      asunto: form.asunto,
+      cuerpo: form.cuerpo,
+      estado: form.estado,
+      prioridad: form.prioridad,
+      recurrencia: form.recurrencia,
+      todaEmpresa: form.todaEmpresa,
+      rolesDestinatarios: form.todaEmpresa ? [] : form.rolesDestinatarios,
+      empleadosDestinatarios: form.todaEmpresa ? [] : form.empleadosDestinatarios,
+      departamentosDestinatarios: [] as string[],
+      envio,
+      observaciones: form.observaciones,
+    };
+    const res = editorMode === "create"
+      ? await createComunicado(payload)
+      : editingComunicado
+        ? await updateComunicado(editingComunicado.id, payload)
+        : { ok: false, error: "Sin contexto" };
+    if (res.ok) toast.success("Comunicado guardado");
+    else toast.error(("error" in res && res.error) || "Error al guardar comunicado");
+    await loadComunicados();
+    closeEditor();
   };
 
   if (editorMode !== "list") {
-    return <ComunicadoEditor comunicado={editingComunicado} onBack={closeEditor} empleados={empleados} empresaNombre={empresaActual?.nombre || ""} />;
+    return (
+      <ComunicadoEditor
+        comunicado={editingComunicado}
+        onBack={closeEditor}
+        onSave={saveEditor}
+        empleados={empleados}
+        empleadosReales={empleadosReales}
+        empresaNombre={empresaActual?.nombre || ""}
+      />
+    );
   }
 
   return (
@@ -575,40 +728,46 @@ export function ComunicadosView() {
       </div>
 
       <Tabs value={mainTab} onValueChange={v => setMainTab(v as "listado" | "calendario")}>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <TabsList>
-            <TabsTrigger value="listado"><FileText className="h-4 w-4 mr-1" />Comunicados</TabsTrigger>
-            <TabsTrigger value="calendario"><CalendarDays className="h-4 w-4 mr-1" />Calendario</TabsTrigger>
-          </TabsList>
-          <Button variant="primary" size="sm" onClick={openCreate}><Plus className="h-4 w-4" />Nuevo</Button>
-        </div>
+        <TabsList>
+          <TabsTrigger value="listado"><FileText className="h-4 w-4 mr-1" />Comunicados</TabsTrigger>
+          <TabsTrigger value="calendario"><CalendarDays className="h-4 w-4 mr-1" />Calendario</TabsTrigger>
+        </TabsList>
 
         <TabsContent value="listado">
-          <div className="flex flex-wrap gap-2 mb-4 items-center">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Buscar comunicado..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 w-56" />
-            </div>
-            <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-              <SelectTrigger className="w-36"><SelectValue placeholder="Estado" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                <SelectItem value="borrador">Borrador</SelectItem>
-                <SelectItem value="programado">Programado</SelectItem>
-                <SelectItem value="publicado">Publicado</SelectItem>
-                <SelectItem value="archivado">Archivado</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filtroRecurrencia} onValueChange={setFiltroRecurrencia}>
-              <SelectTrigger className="w-40"><SelectValue placeholder="Recurrencia" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todas</SelectItem>
-                <SelectItem value="sin_repeticion">Sin repetición</SelectItem>
-                <SelectItem value="semanal">Semanal</SelectItem>
-                <SelectItem value="mensual">Mensual</SelectItem>
-                <SelectItem value="personalizado">Personalizado</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="mb-4">
+            <SubmoduleToolbar
+              busqueda={search}
+              onBusquedaChange={setSearch}
+              placeholderBusqueda="Buscar comunicado..."
+              onNuevo={openCreate}
+              campos={[
+                { campo: "estado", label: "Estado", tipo: "lista", opciones: ["borrador", "programado", "publicado", "archivado"] },
+                { campo: "recurrencia", label: "Recurrencia", tipo: "lista", opciones: ["sin_repeticion", "semanal", "mensual", "personalizado"] },
+                { campo: "prioridad", label: "Prioridad", tipo: "lista", opciones: ["baja", "normal", "alta", "urgente"] },
+                { campo: "alcancePct", label: "Alcance %", tipo: "numero" },
+              ]}
+              filtros={filtros}
+              onFiltrosChange={setFiltros}
+              ordenOpciones={[
+                { campo: "titulo", label: "Título" },
+                { campo: "creadoEl", label: "Creado el" },
+                { campo: "envio", label: "Envío" },
+                { campo: "alcancePct", label: "Alcance" },
+              ]}
+              orden={orden}
+              onOrdenChange={setOrden}
+              columnas={[
+                { campo: "titulo", label: "Título" },
+                { campo: "estado", label: "Estado" },
+                { campo: "creadoEl", label: "Creado el" },
+                { campo: "envio", label: "Envío" },
+                { campo: "recurrencia", label: "Recurrencia" },
+                { campo: "alcance", label: "Alcance" },
+                { campo: "destinatarios", label: "Destinatarios" },
+              ]}
+              columnasVisibles={columnasVisibles}
+              onColumnasVisiblesChange={setColumnasVisibles}
+            />
           </div>
 
           <Card>

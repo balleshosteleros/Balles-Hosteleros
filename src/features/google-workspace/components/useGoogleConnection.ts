@@ -61,6 +61,26 @@ export function useGoogleConnection() {
     return () => window.removeEventListener("focus", onFocus);
   }, [refresh]);
 
+  // Backfill: si hay cuenta activa pero el roster está vacío (caso legacy de
+  // cuentas conectadas antes del switcher multi-cuenta), llamamos al server
+  // para que copie la cuenta activa al roster. Así el usuario no necesita
+  // volver a pasar por Google.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const correo = leerCookie("g_email");
+    if (!correo) return;
+    const roster = leerRoster();
+    if (roster.some((a) => a.email.toLowerCase() === correo.toLowerCase())) {
+      return;
+    }
+    fetch("/api/google/sync", { method: "POST" })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.synced) refresh();
+      })
+      .catch(() => {});
+  }, [refresh]);
+
   const connect = useCallback(async () => {
     const { createClient } = await import("@/lib/supabase/client");
     const supabase = createClient();

@@ -1,107 +1,127 @@
 "use client";
 
-import { ReactNode, useState, useEffect, useCallback } from "react";
+import { ReactNode, useState, useEffect, useCallback, useMemo } from "react";
 import {
-  Video, Clock, Users, RefreshCw, ExternalLink,
+  Video, Clock, Users, RefreshCw, ExternalLink, Loader2, MapPin, X,
 } from "lucide-react";
 import {
-  Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
+  Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { GoogleConnectBanner } from "./GoogleConnectBanner";
 import { GoogleAccountButton } from "./GoogleAccountButton";
 import { useGoogleConnection } from "./useGoogleConnection";
-import {
-  format, isToday, isTomorrow, parseISO, addDays,
-  startOfDay, endOfDay, startOfWeek, endOfWeek,
-} from "date-fns";
-import { es } from "date-fns/locale";
 
-interface CalEvent {
+interface EventoApi {
   id: string;
-  summary: string;
-  start: { dateTime?: string; date?: string };
-  end: { dateTime?: string; date?: string };
-  hangoutLink?: string;
-  conferenceData?: {
-    entryPoints?: Array<{ entryPointType: string; uri: string }>;
-  };
-  organizer?: { email: string; displayName?: string };
-  attendees?: Array<{ email: string; displayName?: string; responseStatus?: string }>;
+  calendarId: string;
+  titulo: string;
+  descripcion?: string;
+  hora: string;
+  duracion: string;
+  lugar?: string;
+  participantes?: string[];
+  diaIndex: number;
+  allDay: boolean;
+  inicio: string;
+  fin: string;
+  fechaDia: string;
+  meetLink: string | null;
 }
 
-function getMeetLink(event: CalEvent): string | null {
-  if (event.hangoutLink) return event.hangoutLink;
-  const entry = event.conferenceData?.entryPoints?.find(
-    (e) => e.entryPointType === "video"
-  );
-  return entry?.uri ?? null;
+interface ReunionesResponse {
+  connected: boolean;
+  needsReauth?: boolean;
+  eventos: EventoApi[];
 }
 
-function formatEventTime(event: CalEvent): string {
-  const startStr = event.start.dateTime;
-  const endStr = event.end.dateTime;
-  if (!startStr) return "Todo el día";
-  const s = format(parseISO(startStr), "HH:mm");
-  const e = endStr ? format(parseISO(endStr), "HH:mm") : "";
-  return `${s}${e ? ` – ${e}` : ""}`;
-}
-
-function getDayLabel(event: CalEvent): string {
-  const d = event.start.dateTime ?? event.start.date ?? "";
-  if (!d) return "";
-  try {
-    const date = parseISO(d);
-    if (isToday(date)) return "Hoy";
-    if (isTomorrow(date)) return "Mañana";
-    return format(date, "EEEE d MMM", { locale: es });
-  } catch {
-    return "";
-  }
-}
-
-const MOCK_MEETINGS: CalEvent[] = [
-  {
-    id: "m1",
-    summary: "Reunión semanal de equipo",
-    start: { dateTime: new Date(Date.now() + 3_600_000).toISOString() },
-    end: { dateTime: new Date(Date.now() + 5_400_000).toISOString() },
-    hangoutLink: "https://meet.google.com/demo-link",
-    organizer: { email: "direccion@balles.com", displayName: "Dirección" },
-    attendees: [{ email: "a@b.com" }, { email: "c@d.com" }, { email: "e@f.com" }],
-  },
-  {
-    id: "m2",
-    summary: "Revisión de inventario con logística",
-    start: { dateTime: new Date(Date.now() + 86_400_000 + 3_600_000).toISOString() },
-    end: { dateTime: new Date(Date.now() + 86_400_000 + 5_400_000).toISOString() },
-    hangoutLink: "https://meet.google.com/demo-link-2",
-    organizer: { email: "logistica@balles.com" },
-    attendees: [{ email: "a@b.com" }, { email: "b@c.com" }],
-  },
+const DIAS_LARGOS = [
+  "domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado",
 ];
+const MESES_CORTOS = [
+  "ene", "feb", "mar", "abr", "may", "jun",
+  "jul", "ago", "sep", "oct", "nov", "dic",
+];
+
+function ymd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+function inicioSemanaLunes(base: Date): Date {
+  const d = new Date(base);
+  d.setHours(0, 0, 0, 0);
+  const diaSemana = d.getDay() === 0 ? 6 : d.getDay() - 1;
+  d.setDate(d.getDate() - diaSemana);
+  return d;
+}
+
+function etiquetaFecha(iso: string): string {
+  const fecha = new Date(iso);
+  const hoy = new Date();
+  const hoyKey = ymd(hoy);
+  const mananaDate = new Date(hoy);
+  mananaDate.setDate(hoy.getDate() + 1);
+  const mananaKey = ymd(mananaDate);
+  const fechaKey = ymd(fecha);
+
+  if (fechaKey === hoyKey) return "Hoy";
+  if (fechaKey === mananaKey) return "Mañana";
+
+  const dia = DIAS_LARGOS[fecha.getDay()];
+  const mesCorto = MESES_CORTOS[fecha.getMonth()];
+  return `${dia} ${fecha.getDate()} ${mesCorto}`;
+}
 
 export function MeetDrawer({ children }: { children: ReactNode }) {
   const { connected } = useGoogleConnection();
-  const [events, setEvents] = useState<CalEvent[]>(MOCK_MEETINGS);
+  const [eventos, setEventos] = useState<EventoApi[]>([]);
+  const [eventosSinMeet, setEventosSinMeet] = useState(0);
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<"hoy" | "semana">("hoy");
+  const [needsReauth, setNeedsReauth] = useState(false);
 
   const load = useCallback(async () => {
     if (!connected) return;
     setLoading(true);
+    setNeedsReauth(false);
     try {
-      const now = new Date();
-      const end = addDays(now, 7);
+      const ref = ymd(new Date());
       const r = await fetch(
-        `/api/google/calendar/events?timeMin=${now.toISOString()}&timeMax=${end.toISOString()}`
+        `/api/google/calendar/events?view=week&date=${ref}`,
+        { cache: "no-store" },
       );
-      if (!r.ok) return;
-      const data = await r.json();
-      const items: CalEvent[] = (data.items ?? []).filter(
-        (e: CalEvent) => getMeetLink(e)
+      if (!r.ok) {
+        setEventos([]);
+        setEventosSinMeet(0);
+        return;
+      }
+      const data = (await r.json()) as ReunionesResponse;
+      if (data.needsReauth) {
+        setNeedsReauth(true);
+        setEventos([]);
+        setEventosSinMeet(0);
+        return;
+      }
+      if (!data.connected) {
+        setEventos([]);
+        setEventosSinMeet(0);
+        return;
+      }
+      const todos = data.eventos ?? [];
+      const conMeet = todos.filter((e) => !!e.meetLink);
+      const sinMeet = todos.length - conMeet.length;
+      conMeet.sort(
+        (a, b) => new Date(a.inicio).getTime() - new Date(b.inicio).getTime(),
       );
-      setEvents(items.length > 0 ? items : MOCK_MEETINGS);
+      setEventos(conMeet);
+      setEventosSinMeet(sinMeet);
+    } catch (err) {
+      console.error("[meet-drawer] error cargando", err);
+      setEventos([]);
+      setEventosSinMeet(0);
     } finally {
       setLoading(false);
     }
@@ -111,45 +131,53 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
     load();
   }, [load]);
 
-  const todayMeetings = events.filter((e) => {
-    const d = e.start.dateTime ?? e.start.date ?? "";
-    try {
-      return isToday(parseISO(d));
-    } catch {
-      return false;
-    }
-  });
+  const grupos = useMemo(() => {
+    const ahora = new Date();
+    const hoyKey = ymd(ahora);
+    const inicioSem = inicioSemanaLunes(ahora);
+    const finSem = new Date(inicioSem);
+    finSem.setDate(inicioSem.getDate() + 7);
 
-  const weekMeetings = events.filter((e) => {
-    const d = e.start.dateTime ?? e.start.date ?? "";
-    try {
-      return !isToday(parseISO(d));
-    } catch {
-      return false;
-    }
-  });
+    const hoy = eventos.filter((e) => ymd(new Date(e.inicio)) === hoyKey);
+    const semana = eventos.filter((e) => {
+      const t = new Date(e.inicio).getTime();
+      return (
+        t >= inicioSem.getTime() &&
+        t < finSem.getTime() &&
+        ymd(new Date(e.inicio)) !== hoyKey
+      );
+    });
+    return { hoy, semana };
+  }, [eventos]);
 
-  const displayed = tab === "hoy" ? todayMeetings : weekMeetings;
+  const lista = tab === "hoy" ? grupos.hoy : grupos.semana;
 
   return (
     <Sheet>
       <SheetTrigger asChild>{children}</SheetTrigger>
-      <SheetContent side="right" className="w-full max-w-lg flex flex-col gap-0 p-0">
-        <SheetHeader className="border-b px-5 py-3">
-          <div className="flex items-center justify-between gap-2">
-            <SheetTitle className="flex items-center gap-2 text-base">
-              <Video className="h-4 w-4 text-emerald-600" />
-              Google Meet — Reuniones
-            </SheetTitle>
-            <div className="flex items-center gap-2">
+      <SheetContent side="right" className="w-full max-w-lg flex flex-col gap-0 p-0 [&>button]:hidden">
+        <SheetTitle className="sr-only">Google Meet — Reuniones</SheetTitle>
+        <SheetHeader className="border-b px-3 py-2">
+          <div className="flex items-center gap-1">
+            <Video className="h-5 w-5 text-emerald-600" />
+            <div className="ml-auto flex items-center gap-1">
               <Button
-                variant="ghost" size="icon" className="h-7 w-7"
+                variant="ghost" size="icon" className="h-8 w-8"
                 onClick={load} disabled={loading}
                 title="Actualizar"
               >
-                <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
               </Button>
               <GoogleAccountButton />
+              <SheetClose asChild>
+                <button
+                  type="button"
+                  className="ml-1 rounded-full p-2 hover:bg-black/5 transition-colors"
+                  title="Cerrar"
+                >
+                  <X className="h-5 w-5 text-[#5f6368]" />
+                </button>
+              </SheetClose>
             </div>
           </div>
         </SheetHeader>
@@ -160,10 +188,30 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
           </div>
         )}
 
-        {/* Tabs */}
+        {connected && needsReauth && (
+          <div className="border-b bg-amber-50/60 px-5 py-3">
+            <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+              <div>
+                <p className="text-xs font-semibold text-foreground">
+                  La sesión con Google ha caducado
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Reconecta tu cuenta para volver a cargar las reuniones.
+                </p>
+              </div>
+              <a
+                href={`/api/google/connect?next=${encodeURIComponent(typeof window !== "undefined" ? window.location.pathname : "/")}`}
+                className="inline-flex h-8 shrink-0 items-center justify-center rounded-md bg-amber-600 px-4 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-amber-700"
+              >
+                Reconectar
+              </a>
+            </div>
+          </div>
+        )}
+
         <div className="flex border-b bg-muted/20 shrink-0">
           {(["hoy", "semana"] as const).map((t) => {
-            const count = t === "hoy" ? todayMeetings.length : weekMeetings.length;
+            const count = t === "hoy" ? grupos.hoy.length : grupos.semana.length;
             return (
               <button
                 key={t}
@@ -185,64 +233,71 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
           })}
         </div>
 
-        {/* Meeting list */}
         <div className="flex-1 overflow-y-auto">
-          {displayed.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-48 text-center text-muted-foreground">
+          {loading ? (
+            <div className="flex h-40 items-center justify-center text-muted-foreground">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Cargando reuniones…
+            </div>
+          ) : lista.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-48 px-6 text-center text-muted-foreground">
               <Video className="h-10 w-10 opacity-20 mb-3" />
               <p className="text-sm font-medium">
                 {tab === "hoy" ? "No hay reuniones hoy" : "No hay reuniones esta semana"}
               </p>
               <p className="text-xs mt-1 opacity-70">Los eventos con Google Meet aparecerán aquí</p>
+              {eventosSinMeet > 0 && (
+                <p className="mt-3 text-[11px] leading-relaxed text-amber-700">
+                  Tienes {eventosSinMeet}{" "}
+                  {eventosSinMeet === 1 ? "evento este mes" : "eventos este mes"}{" "}
+                  sin videollamada de Meet. Edítalos en Google Calendar y añade
+                  Meet, o créalos desde aquí marcando «Google Meet».
+                </p>
+              )}
             </div>
           ) : (
-            <div className="divide-y">
-              {displayed.map((event) => {
-                const link = getMeetLink(event);
-                const time = formatEventTime(event);
-                const dayLabel = tab === "semana" ? getDayLabel(event) : null;
-                const attendeeCount = event.attendees?.length ?? 0;
-
+            <ul className="divide-y">
+              {lista.map((ev) => {
+                const fecha = etiquetaFecha(ev.inicio);
+                const asistentes = ev.participantes?.length ?? 0;
                 return (
-                  <div
-                    key={event.id}
+                  <li
+                    key={`${ev.calendarId}-${ev.id}`}
                     className="px-5 py-4 hover:bg-muted/30 transition-colors"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
-                        {dayLabel && (
-                          <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 mb-1 block">
-                            {dayLabel}
-                          </span>
-                        )}
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 mb-1 block">
+                          {fecha}
+                        </span>
                         <p className="font-semibold text-sm leading-tight">
-                          {event.summary}
+                          {ev.titulo}
                         </p>
                         <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <Clock className="h-3 w-3" />
-                            {time}
+                            {ev.allDay ? "Todo el día" : `${ev.hora} · ${ev.duracion}`}
                           </span>
-                          {attendeeCount > 0 && (
+                          {asistentes > 0 && (
                             <span className="flex items-center gap-1">
                               <Users className="h-3 w-3" />
-                              {attendeeCount} asistentes
+                              {asistentes} {asistentes === 1 ? "asistente" : "asistentes"}
                             </span>
                           )}
-                          {event.organizer?.displayName && (
-                            <span className="truncate max-w-[120px]">
-                              {event.organizer.displayName}
+                          {ev.lugar && (
+                            <span className="flex max-w-[160px] items-center gap-1 truncate">
+                              <MapPin className="h-3 w-3 shrink-0" />
+                              <span className="truncate">{ev.lugar}</span>
                             </span>
                           )}
                         </div>
                       </div>
 
-                      {/* Botón directo de entrar */}
-                      {link && (
+                      {ev.meetLink && (
                         <Button
                           size="sm"
                           className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 shrink-0 h-9 px-4 shadow-sm shadow-emerald-600/20"
-                          onClick={() => window.open(link, "_blank")}
+                          onClick={() => window.open(ev.meetLink!, "_blank")}
                         >
                           <Video className="h-3.5 w-3.5" />
                           Entrar
@@ -250,10 +305,10 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
                         </Button>
                       )}
                     </div>
-                  </div>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
           )}
         </div>
       </SheetContent>

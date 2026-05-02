@@ -13,13 +13,19 @@ import { toast } from "sonner";
 import { EstadoProcesoBadge, GravedadProcesoBadge } from "@/features/juridico/components/BadgesProceso";
 import { DetalleProceso } from "@/features/juridico/components/DetalleProceso";
 import { ProcesoModal } from "@/features/juridico/components/ProcesoModal";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Plus, Search, Info, FileText, Settings, SlidersHorizontal, X } from "lucide-react";
+import { Info, FileText, Settings } from "lucide-react";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
 
 const ALL = "__ALL__";
 
@@ -67,13 +73,11 @@ export function ProcesosView() {
   const [data, setData] = useState<ProcesoJuridico[]>(() => getProcesosPorEmpresa(empresaActual.id));
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [filterEstado, setFilterEstado] = useState(ALL);
-  const [filterGravedad, setFilterGravedad] = useState(ALL);
-  const [filterTipo, setFilterTipo] = useState(ALL);
-  const [filterJuridico, setFilterJuridico] = useState(ALL);
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [estadoExpediente, setEstadoExpediente] = useState<"abiertos" | "cerrados" | "todos">("abiertos");
   const [showConfig, setShowConfig] = useState(false);
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editItem, setEditItem] = useState<ProcesoJuridico | null>(null);
   const [detalleItem, setDetalleItem] = useState<ProcesoJuridico | null>(null);
@@ -111,40 +115,28 @@ export function ProcesosView() {
     ? data.filter((p) => !isCerrado(p.estado))
     : data;
 
-  const properCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
-  const countIn = <T,>(arr: ProcesoJuridico[], key: (p: ProcesoJuridico) => T, value: T) =>
-    arr.filter((p) => key(p) === value).length;
-
-  const activeFilterCount =
-    (search ? 1 : 0) +
-    (filterEstado !== ALL ? 1 : 0) +
-    (filterGravedad !== ALL ? 1 : 0) +
-    (filterTipo !== ALL ? 1 : 0) +
-    (filterJuridico !== ALL ? 1 : 0) +
-    (estadoExpediente !== "abiertos" ? 1 : 0);
-
-  const resetFilters = () => {
-    setSearch("");
-    setFilterEstado(ALL);
-    setFilterGravedad(ALL);
-    setFilterTipo(ALL);
-    setFilterJuridico(ALL);
-    setEstadoExpediente("abiertos");
+  const acceso = (p: ProcesoJuridico, campo: string): unknown => {
+    if (campo === "estado") return p.estado;
+    if (campo === "gravedad") return p.gravedad;
+    if (campo === "tipo") return p.tipo;
+    if (campo === "juridico") return p.juridico;
+    if (campo === "fecha") return p.fecha;
+    if (campo === "titulo") return p.titulo;
+    return (p as unknown as Record<string, unknown>)[campo];
   };
 
   const filtered = useMemo(() => {
-    return baseData.filter((p) => {
-      if (filterEstado !== ALL && p.estado !== filterEstado) return false;
-      if (filterGravedad !== ALL && p.gravedad !== filterGravedad) return false;
-      if (filterTipo !== ALL && p.tipo !== filterTipo) return false;
-      if (filterJuridico !== ALL && p.juridico !== filterJuridico) return false;
+    let lista = baseData.filter((p) => {
       if (search) {
         const s = search.toLowerCase();
         return p.titulo.toLowerCase().includes(s) || p.descripcion.toLowerCase().includes(s) || p.juridico.toLowerCase().includes(s);
       }
       return true;
     });
-  }, [baseData, search, filterEstado, filterGravedad, filterTipo, filterJuridico]);
+    lista = aplicarFiltrosToolbar(lista, filtros, acceso);
+    lista = aplicarOrdenToolbar(lista, orden, acceso);
+    return lista;
+  }, [baseData, search, filtros, orden]);
 
   const abiertos = data.filter((p) => !isCerrado(p.estado));
   const cerrados = data.filter((p) => isCerrado(p.estado));
@@ -253,115 +245,62 @@ export function ProcesosView() {
   return (
     <div className="p-4 md:p-6 space-y-5">
       <div className="space-y-4">
-        <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-3">
-          <Button variant="primary" size="sm" onClick={openNew}><Plus className="h-4 w-4" />Nuevo</Button>
-          <div className="flex-1" />
-          <div className="relative min-w-[240px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar expedientes…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-          <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-1.5" aria-label="Filtrar">
-                <SlidersHorizontal className="h-3.5 w-3.5" />
-                Filtrar
-                {activeFilterCount > 0 && (
-                  <Badge className="ml-0.5 h-4 min-w-[16px] px-1 text-[10px] rounded-full">{activeFilterCount}</Badge>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-80 p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold">Filtros</span>
-                {activeFilterCount > 0 && (
-                  <Button variant="ghost" size="sm" onClick={resetFilters} className="h-7 px-2 text-xs gap-1">
-                    <X className="h-3 w-3" /> Limpiar
-                  </Button>
-                )}
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Expedientes</label>
-                <Select value={estadoExpediente} onValueChange={(v) => setEstadoExpediente(v as typeof estadoExpediente)}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="abiertos">Abierto ({abiertos.length})</SelectItem>
-                    <SelectItem value="cerrados">Cerrado ({cerrados.length})</SelectItem>
-                    <SelectItem value="todos">Todos ({data.length})</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Estado</label>
-                <Select value={filterEstado} onValueChange={setFilterEstado}>
-                  <SelectTrigger className="h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ALL}>Todos ({baseData.length})</SelectItem>
-                    {ESTADOS_PROCESO.map((e) => (
-                      <SelectItem key={e} value={e}>{properCase(e)} ({countIn(baseData, (p) => p.estado, e)})</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Gravedad</label>
-                <Select value={filterGravedad} onValueChange={setFilterGravedad}>
-                  <SelectTrigger className="h-9"><SelectValue placeholder="Todas" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ALL}>Todas ({baseData.length})</SelectItem>
-                    {GRAVEDADES_PROCESO.map((g) => (
-                      <SelectItem key={g} value={g}>{properCase(g)} ({countIn(baseData, (p) => p.gravedad, g)})</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Tipo</label>
-                <Select value={filterTipo} onValueChange={setFilterTipo}>
-                  <SelectTrigger className="h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ALL}>Todos ({baseData.length})</SelectItem>
-                    {TIPOS_PROCESO.map((t2) => (
-                      <SelectItem key={t2} value={t2}>{t2} ({countIn(baseData, (p) => p.tipo, t2)})</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Responsable</label>
-                <Select value={filterJuridico} onValueChange={setFilterJuridico}>
-                  <SelectTrigger className="h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ALL}>Todos ({baseData.length})</SelectItem>
-                    {JURIDICOS.map((j) => (
-                      <SelectItem key={j} value={j}>{j} ({countIn(baseData, (p) => p.juridico, j)})</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </PopoverContent>
-          </Popover>
-
-          <Button
-            size="icon"
-            variant={showConfig ? "default" : "ghost"}
-            className="h-8 w-8"
-            onClick={() => setShowConfig((v) => !v)}
-            title="Configuración"
-            aria-label="Configuración"
-          >
-            <Settings className="h-4 w-4" strokeWidth={1.75} />
-          </Button>
-        </div>
+        <SubmoduleToolbar
+          busqueda={search}
+          onBusquedaChange={setSearch}
+          placeholderBusqueda="Buscar expedientes…"
+          onNuevo={openNew}
+          textoNuevo="Nuevo"
+          campos={[
+            { campo: "estado", label: "Estado", tipo: "lista", opciones: [...ESTADOS_PROCESO] },
+            { campo: "gravedad", label: "Gravedad", tipo: "lista", opciones: [...GRAVEDADES_PROCESO] },
+            { campo: "tipo", label: "Tipo", tipo: "lista", opciones: [...TIPOS_PROCESO] },
+            { campo: "juridico", label: "Responsable", tipo: "lista", opciones: [...JURIDICOS] },
+            { campo: "fecha", label: "Fecha inicio", tipo: "fecha" },
+          ]}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenOpciones={[
+            { campo: "titulo", label: "Nombre" },
+            { campo: "fecha", label: "Fecha inicio" },
+            { campo: "estado", label: "Estado" },
+            { campo: "juridico", label: "Abogado" },
+          ]}
+          orden={orden}
+          onOrdenChange={setOrden}
+          columnas={[
+            { campo: "titulo", label: "Expediente" },
+            { campo: "tipo", label: "Tipo" },
+            { campo: "juridico", label: "Responsable" },
+            { campo: "fecha", label: "Fecha" },
+            { campo: "estado", label: "Estado" },
+            { campo: "gravedad", label: "Gravedad" },
+          ]}
+          columnasVisibles={columnasVisibles}
+          onColumnasVisiblesChange={setColumnasVisibles}
+          extraIzquierda={
+            <Select value={estadoExpediente} onValueChange={(v) => setEstadoExpediente(v as typeof estadoExpediente)}>
+              <SelectTrigger className="h-9 w-[170px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="abiertos">Abierto ({abiertos.length})</SelectItem>
+                <SelectItem value="cerrados">Cerrado ({cerrados.length})</SelectItem>
+                <SelectItem value="todos">Todos ({data.length})</SelectItem>
+              </SelectContent>
+            </Select>
+          }
+          extraDerecha={
+            <Button
+              size="icon"
+              variant={showConfig ? "default" : "ghost"}
+              className="h-9 w-9"
+              onClick={() => setShowConfig((v) => !v)}
+              title="Configuración"
+              aria-label="Configuración"
+            >
+              <Settings className="h-4 w-4" strokeWidth={1.75} />
+            </Button>
+          }
+        />
 
         {showConfig ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -1,15 +1,25 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { startOfDay, endOfDay } from "date-fns";
 import { useGoogleConnection } from "./useGoogleConnection";
 import { contarPendientesHoy } from "@/features/tareas/actions/tareas-actions";
+import { listCanales } from "@/features/comunicacion/actions/comunicacion-actions";
+import { contarLlamadasNoVistas } from "./TelefonoDrawer";
+
+function ymd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
 
 export interface DailyCounts {
-  emails: number;   // correos no leídos hoy
-  events: number;   // eventos de calendario hoy
-  meetings: number; // reuniones con Meet hoy
-  tasks: number;    // tareas pendientes hoy
+  emails: number;     // correos no leídos hoy
+  events: number;     // eventos de calendario hoy
+  meetings: number;   // reuniones con Meet hoy
+  tasks: number;      // tareas pendientes hoy
+  chatGroups: number; // canales/grupos con mensajes sin leer
+  missedCalls: number; // llamadas entrantes nuevas no vistas
 }
 
 const REFRESH_MS = 5 * 60 * 1000; // 5 minutos
@@ -21,6 +31,8 @@ export function useDailyCounts(): DailyCounts {
     events: 0,
     meetings: 0,
     tasks: 0,
+    chatGroups: 0,
+    missedCalls: 0,
   });
 
   const fetchCounts = useCallback(async () => {
@@ -33,20 +45,43 @@ export function useDailyCounts(): DailyCounts {
       /* ignore */
     }
 
+    // Chat: nº de canales con mensajes sin leer
+    let chatGroups = 0;
+    try {
+      const res = await listCanales();
+      if (res.ok) {
+        chatGroups = (res.data as Array<{ sin_leer?: number }>).filter(
+          (c) => (c.sin_leer ?? 0) > 0,
+        ).length;
+      }
+    } catch {
+      /* ignore */
+    }
+
+    // Llamadas: entrantes nuevas no vistas (mock hasta que VoIP esté integrado)
+    const missedCalls = contarLlamadasNoVistas();
+
     if (!connected) {
-      setCounts({ emails: 0, events: 0, meetings: 0, tasks });
+      setCounts({
+        emails: 0,
+        events: 0,
+        meetings: 0,
+        tasks,
+        chatGroups,
+        missedCalls,
+      });
       return;
     }
 
     try {
-      const now = new Date();
+      const ref = ymd(new Date());
       const [emailRes, calRes] = await Promise.allSettled([
         fetch("/api/google/gmail/messages?q=is:unread&maxResults=20").then((r) =>
           r.json()
         ),
-        fetch(
-          `/api/google/calendar/events?timeMin=${startOfDay(now).toISOString()}&timeMax=${endOfDay(now).toISOString()}`
-        ).then((r) => r.json()),
+        fetch(`/api/google/calendar/events?view=day&date=${ref}`).then((r) =>
+          r.json()
+        ),
       ]);
 
       let emails = 0;
@@ -57,14 +92,15 @@ export function useDailyCounts(): DailyCounts {
       let events = 0;
       let meetings = 0;
       if (calRes.status === "fulfilled") {
-        const items: Array<{ hangoutLink?: string }> = calRes.value?.items ?? [];
-        events = items.length;
-        meetings = items.filter((e) => e.hangoutLink).length;
+        const eventos: Array<{ meetLink?: string | null }> =
+          calRes.value?.eventos ?? [];
+        events = eventos.length;
+        meetings = eventos.filter((e) => !!e.meetLink).length;
       }
 
-      setCounts({ emails, events, meetings, tasks });
+      setCounts({ emails, events, meetings, tasks, chatGroups, missedCalls });
     } catch {
-      setCounts((prev) => ({ ...prev, tasks }));
+      setCounts((prev) => ({ ...prev, tasks, chatGroups, missedCalls }));
     }
   }, [connected]);
 

@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import {
   Briefcase, Calculator, FileText, Scale, User, Camera,
   Crown, UtensilsCrossed, ChefHat, CheckCircle2, Package,
-  CalendarDays, Settings, type LucideIcon,
+  Settings, type LucideIcon,
 } from "lucide-react";
 import { useAuth, type AppRole, ROLE_MODULES } from "@/features/auth/contexts/auth-context";
 
@@ -29,7 +29,6 @@ const ACCESOS: Acceso[] = [
   { modulo: "contabilidad", href: "/contabilidad", label: "Contabilidad", icon: Calculator,     color: "text-blue-600" },
   { modulo: "gestoria",     href: "/gestoria",     label: "Gestoría",     icon: FileText,       color: "text-slate-600" },
   { modulo: "juridico",     href: "/juridico",     label: "Jurídico",     icon: Scale,          color: "text-stone-600" },
-  { modulo: "*",            href: "/agenda",       label: "Agenda",       icon: CalendarDays,   color: "text-teal-600" },
   { modulo: "ajustes",      href: "/ajustes",      label: "Ajustes",      icon: Settings,       color: "text-muted-foreground" },
 ];
 

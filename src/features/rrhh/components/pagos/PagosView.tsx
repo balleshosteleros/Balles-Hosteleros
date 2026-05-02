@@ -9,22 +9,26 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Search, Edit2, Banknote, TrendingUp, TrendingDown, PiggyBank, HandCoins, Wallet } from "lucide-react";
-
-const periodos = [
-  { value: "semana", label: "Esta semana" },
-  { value: "mes", label: "Este mes" },
-  { value: "anterior", label: "Mes anterior" },
-];
+import { Edit2, Banknote, TrendingUp, TrendingDown, PiggyBank, HandCoins, Wallet } from "lucide-react";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
+import { IOActions } from "@/shared/io";
+import { pagosIO } from "@/features/rrhh/io/pagos.io";
 
 export function PagosView() {
   const { empresaActual } = useEmpresa();
   const [busqueda, setBusqueda] = useState("");
-  const [periodo, setPeriodo] = useState("mes");
-  const [filtroPagado, setFiltroPagado] = useState<string>("todos");
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [editando, setEditando] = useState<PagoEmpleado | null>(null);
   const [pagos, setPagos] = useState<PagoEmpleado[]>([]);
   const [initialized, setInitialized] = useState("");
@@ -34,13 +38,29 @@ export function PagosView() {
     setInitialized(empresaActual.id);
   }
 
+  const acceso = (p: PagoEmpleado, campo: string): unknown => {
+    if (campo === "pagado") return p.pagado;
+    if (campo === "fijo") return p.fijo;
+    if (campo === "total") return p.total;
+    if (campo === "nomina") return p.nomina;
+    if (campo === "bonus") return p.bonus;
+    if (campo === "horasExtras") return p.horasExtras;
+    if (campo === "empleado") return p.empleadoNombre;
+    return (p as unknown as Record<string, unknown>)[campo];
+  };
+
   const pagosFiltrados = useMemo(() => {
-    let resultado = pagos;
-    if (busqueda) { const q = busqueda.toLowerCase(); resultado = resultado.filter(p => p.empleadoNombre.toLowerCase().includes(q)); }
-    if (filtroPagado === "pagado") resultado = resultado.filter(p => p.pagado);
-    if (filtroPagado === "pendiente") resultado = resultado.filter(p => !p.pagado);
+    let resultado = pagos.filter((p) => {
+      if (busqueda) {
+        const q = busqueda.toLowerCase();
+        if (!p.empleadoNombre.toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
+    resultado = aplicarFiltrosToolbar(resultado, filtros, acceso);
+    resultado = aplicarOrdenToolbar(resultado, orden, acceso);
     return resultado;
-  }, [pagos, busqueda, filtroPagado]);
+  }, [pagos, busqueda, filtros, orden]);
 
   const resumen = useMemo(() => getResumenPagos(pagos), [pagos]);
 
@@ -84,24 +104,52 @@ export function PagosView() {
         ))}
       </div>
 
-      <div className="flex flex-wrap gap-3 items-center">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar empleado..." value={busqueda} onChange={e => setBusqueda(e.target.value)} className="pl-9" />
-        </div>
-        <Select value={periodo} onValueChange={setPeriodo}>
-          <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
-          <SelectContent>{periodos.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent>
-        </Select>
-        <Select value={filtroPagado} onValueChange={setFiltroPagado}>
-          <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos</SelectItem>
-            <SelectItem value="pagado">Pagados</SelectItem>
-            <SelectItem value="pendiente">Pendientes</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      <SubmoduleToolbar
+        busqueda={busqueda}
+        onBusquedaChange={setBusqueda}
+        placeholderBusqueda="Buscar empleado..."
+        ocultarNuevo
+        campos={[
+          { campo: "pagado", label: "Pagado", tipo: "booleano" },
+          { campo: "fijo", label: "Fijo", tipo: "booleano" },
+          { campo: "total", label: "Total", tipo: "numero" },
+          { campo: "bonus", label: "Bonus", tipo: "numero" },
+          { campo: "horasExtras", label: "H. Extras", tipo: "numero" },
+        ]}
+        filtros={filtros}
+        onFiltrosChange={setFiltros}
+        ordenOpciones={[
+          { campo: "empleado", label: "Empleado" },
+          { campo: "total", label: "Total" },
+          { campo: "nomina", label: "Nómina" },
+          { campo: "bonus", label: "Bonus" },
+        ]}
+        orden={orden}
+        onOrdenChange={setOrden}
+        columnas={[
+          { campo: "fijo", label: "Fijo" },
+          { campo: "pago", label: "Pago" },
+          { campo: "nomina", label: "Nómina" },
+          { campo: "horasReales", label: "H.R" },
+          { campo: "horasTrabajadas", label: "H.T" },
+          { campo: "propina", label: "Propina" },
+          { campo: "descuento", label: "Descuento" },
+          { campo: "horasExtras", label: "H.Extras" },
+          { campo: "bonus", label: "Bonus" },
+          { campo: "propinaMantenimiento", label: "Prop. Mant." },
+          { campo: "total", label: "Total" },
+          { campo: "pagado", label: "Pagado" },
+        ]}
+        columnasVisibles={columnasVisibles}
+        onColumnasVisiblesChange={setColumnasVisibles}
+        extraDerecha={
+          <IOActions
+            config={pagosIO}
+            context={{ empresaId: empresaActual.id }}
+            onSuccess={() => window.location.reload()}
+          />
+        }
+      />
 
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-base">Control de pagos en efectivo</CardTitle></CardHeader>

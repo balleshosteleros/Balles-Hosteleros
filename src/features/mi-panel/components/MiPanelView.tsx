@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { FichajeBar } from "@/features/mi-panel/components/FichajeBar";
 import { CalendarioPersonal } from "@/features/mi-panel/components/CalendarioPersonal";
@@ -48,26 +46,15 @@ export function MiPanelView() {
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-5">
       {/* Cabecera */}
-      <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">Mi panel</p>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
-            {saludoSegunHora()}{userName ? `, ${userName.split(" ")[0]}` : ""}
-          </h1>
-          <p className="text-sm text-muted-foreground capitalize">{fechaLarga}</p>
-        </div>
-        <Button
-          variant="default"
-          size="lg"
-          onClick={() => setSolicitudOpen(true)}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Solicitar
-        </Button>
+      <div>
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+          {saludoSegunHora()}{userName ? `, ${userName.split(" ")[0]}` : ""}
+        </h1>
+        <p className="text-sm text-muted-foreground capitalize">{fechaLarga}</p>
       </div>
 
       {/* Barra de fichaje */}
-      <FichajeBar onChange={handleRefresh} />
+      <FichajeBar onChange={handleRefresh} onSolicitar={() => setSolicitudOpen(true)} />
 
       {/* Tareas del cronograma del rol del usuario — pinned al top */}
       <MisTareasCronogramaWidget />

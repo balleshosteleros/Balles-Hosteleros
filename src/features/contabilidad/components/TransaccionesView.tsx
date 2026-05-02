@@ -2,19 +2,25 @@
 
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Download, Sparkles, Paperclip, MoreVertical, Settings } from "lucide-react";
+import { Paperclip, MoreVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TransaccionContable, TipoTransaccion } from "@/features/contabilidad/data/contabilidad";
 import { listTransacciones } from "@/features/contabilidad/actions/contabilidad-actions";
-import { FiltrosAvanzados, type FiltroActivo, type CampoFiltro } from "@/features/logistica/components/FiltrosAvanzados";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
+import { IOActions } from "@/shared/io";
+import { transaccionesIO } from "@/features/contabilidad/io/transacciones.io";
 import { toast } from "sonner";
 
 const TABS = [{ id: "TODAS", label: "Todas" }, { id: "COBRO", label: "Cobros" }, { id: "PAGO", label: "Pagos" }];
-
-type CampoTransaccion = "tipo" | "banco" | "conciliada" | "importe" | "fecha";
 
 function mapDbToTransaccion(row: Record<string, unknown>): TransaccionContable {
   return {
@@ -36,8 +42,9 @@ export function TransaccionesView() {
   const [busqueda, setBusqueda] = useState("");
   const [txs, setTxs] = useState<TransaccionContable[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filtros, setFiltros] = useState<FiltroActivo<CampoTransaccion>[]>([]);
-  const [showConfig, setShowConfig] = useState(false);
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
 
   const loadTransacciones = useCallback(async () => {
     setLoading(true);
@@ -59,40 +66,31 @@ export function TransaccionesView() {
     loadTransacciones();
   }, [loadTransacciones]);
 
-  const camposFiltro = useMemo((): CampoFiltro<CampoTransaccion>[] => {
-    const uniq = (arr: string[]) => [...new Set(arr.filter(Boolean))].sort();
-    return [
-      { campo: "tipo", label: "Tipo", tipo: "lista", opciones: ["COBRO", "PAGO"] },
-      { campo: "banco", label: "Banco", tipo: "lista", opciones: uniq(txs.map(t => t.banco)) },
-      { campo: "conciliada", label: "Estado", tipo: "lista", opciones: ["Conciliada", "Sin conciliar"] },
-      { campo: "importe", label: "Importe €", tipo: "numero" },
-      { campo: "fecha", label: "Fecha", tipo: "fecha" },
-    ];
-  }, [txs]);
+  const bancosUsados = useMemo(
+    () => [...new Set(txs.map(t => t.banco).filter(Boolean))].sort(),
+    [txs],
+  );
 
-  const filtradas = useMemo(() => txs.filter(t => {
-    const matchTab = tab === "TODAS" || t.tipo === tab;
-    if (!matchTab) return false;
-    for (const f of filtros) {
-      if (f.campo === "tipo" && f.valores?.length && !f.valores.includes(t.tipo)) return false;
-      if (f.campo === "banco" && f.valores?.length && !f.valores.includes(t.banco)) return false;
-      if (f.campo === "conciliada" && f.valores?.length) {
-        const lbl = t.conciliada ? "Conciliada" : "Sin conciliar";
-        if (!f.valores.includes(lbl)) return false;
-      }
-      if (f.campo === "importe" && f.numVal !== undefined) {
-        if (f.operador === "mayor" && !(t.importe > f.numVal)) return false;
-        if (f.operador === "menor" && !(t.importe < f.numVal)) return false;
-        if (f.operador === "igual" && !(t.importe === f.numVal)) return false;
-      }
-      if (f.campo === "fecha") {
-        if (f.desde && t.fecha < f.desde) return false;
-        if (f.hasta && t.fecha > f.hasta) return false;
-      }
-    }
-    const q = busqueda.toLowerCase();
-    return !q || t.concepto.toLowerCase().includes(q) || t.banco.toLowerCase().includes(q);
-  }), [txs, tab, busqueda, filtros]);
+  const acceso = (t: TransaccionContable, campo: string): unknown => {
+    if (campo === "tipo") return t.tipo;
+    if (campo === "banco") return t.banco;
+    if (campo === "conciliada") return t.conciliada ? "Conciliada" : "Sin conciliar";
+    if (campo === "importe") return t.importe;
+    if (campo === "fecha") return t.fecha;
+    if (campo === "concepto") return t.concepto;
+    return (t as unknown as Record<string, unknown>)[campo];
+  };
+
+  const filtradas = useMemo(() => {
+    let lista = txs.filter(t => {
+      if (tab !== "TODAS" && t.tipo !== tab) return false;
+      const q = busqueda.toLowerCase();
+      return !q || t.concepto.toLowerCase().includes(q) || t.banco.toLowerCase().includes(q);
+    });
+    lista = aplicarFiltrosToolbar(lista, filtros, acceso);
+    lista = aplicarOrdenToolbar(lista, orden, acceso);
+    return lista;
+  }, [txs, tab, busqueda, filtros, orden]);
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden">
@@ -109,34 +107,42 @@ export function TransaccionesView() {
 
       {/* Toolbar */}
       <div className="px-6 py-3">
-        <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-3">
-          <Button variant="primary" size="sm">
-            <Plus className="h-4 w-4" />Nuevo
-          </Button>
-          <div className="relative flex-1 min-w-[240px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar transacciones de todos tus bancos…" className="pl-9" value={busqueda} onChange={e => setBusqueda(e.target.value)} />
-          </div>
-          <FiltrosAvanzados campos={camposFiltro} filtros={filtros} onChange={setFiltros} />
-          <Button variant="outline" size="icon" className="h-8 w-8" aria-label="Descargar">
-            <Download className="h-4 w-4" />
-          </Button>
-          <Button variant="outline" size="sm" className="text-xs">Desde el inicio</Button>
-          <Button variant="secondary" size="sm" className="gap-1.5 text-xs">
-            <Sparkles className="h-3.5 w-3.5" />Etiquetar con IA
-          </Button>
-          <Button size="icon" variant={showConfig ? "default" : "ghost"} className="h-8 w-8"
-            onClick={() => setShowConfig(v => !v)} title="Configuración" aria-label="Configuración">
-            <Settings className="h-4 w-4" strokeWidth={1.75} />
-          </Button>
-        </div>
+        <SubmoduleToolbar
+          busqueda={busqueda}
+          onBusquedaChange={setBusqueda}
+          placeholderBusqueda="Buscar transacciones de todos tus bancos…"
+          onNuevo={() => { /* nuevo */ }}
+          campos={[
+            { campo: "tipo", label: "Tipo", tipo: "lista", opciones: ["COBRO", "PAGO"] },
+            { campo: "banco", label: "Banco", tipo: "lista", opciones: bancosUsados },
+            { campo: "conciliada", label: "Estado", tipo: "lista", opciones: ["Conciliada", "Sin conciliar"] },
+            { campo: "importe", label: "Importe €", tipo: "numero" },
+            { campo: "fecha", label: "Fecha", tipo: "fecha" },
+          ]}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenOpciones={[
+            { campo: "fecha", label: "Fecha" },
+            { campo: "concepto", label: "Concepto" },
+            { campo: "importe", label: "Importe" },
+            { campo: "banco", label: "Banco" },
+          ]}
+          orden={orden}
+          onOrdenChange={setOrden}
+          columnas={[
+            { campo: "concepto", label: "Concepto" },
+            { campo: "etiquetas", label: "Etiquetas" },
+            { campo: "fecha", label: "Fecha" },
+            { campo: "documentos", label: "Documentos" },
+            { campo: "importe", label: "Cantidad" },
+          ]}
+          columnasVisibles={columnasVisibles}
+          onColumnasVisiblesChange={setColumnasVisibles}
+          extraDerecha={
+            <IOActions config={transaccionesIO} onSuccess={() => window.location.reload()} />
+          }
+        />
       </div>
-
-      {showConfig && (
-        <div className="mx-6 mb-3 rounded-xl border bg-card p-5">
-          <p className="text-sm text-muted-foreground">Configuración de transacciones — próximamente.</p>
-        </div>
-      )}
 
       {/* Table */}
       <div className="flex-1 overflow-auto px-6 pb-4">

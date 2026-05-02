@@ -4,18 +4,23 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
-  Plus, Search, Sparkles, Archive, Trash2, Eye, Pencil, Palette, Filter,
+  Plus, Sparkles, Archive, Trash2, Eye, Pencil, Palette,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -45,7 +50,9 @@ export function BibliotecaView() {
   const [items, setItems] = useState<Presentacion[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [estadoFilter, setEstadoFilter] = useState<Estado | "todas">("todas");
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [nuevaOpen, setNuevaOpen] = useState(false);
   const [confirmar, setConfirmar] = useState<
     { tipo: "archivar" | "eliminar"; id: string; titulo: string } | null
@@ -64,9 +71,17 @@ export function BibliotecaView() {
     cargar();
   }, [cargar]);
 
+  const acceso = (p: Presentacion, campo: string): unknown => {
+    if (campo === "estado") return ESTADO_LABEL[p.estado];
+    if (campo === "audiencia") return p.audiencia ?? "";
+    if (campo === "slides") return p.num_slides;
+    if (campo === "fecha") return p.created_at;
+    if (campo === "titulo") return p.titulo;
+    return (p as unknown as Record<string, unknown>)[campo];
+  };
+
   const filtered = useMemo(() => {
     let r = items;
-    if (estadoFilter !== "todas") r = r.filter((p) => p.estado === estadoFilter);
     if (search) {
       const s = search.toLowerCase();
       r = r.filter(
@@ -75,8 +90,10 @@ export function BibliotecaView() {
           p.prompt_original.toLowerCase().includes(s),
       );
     }
+    r = aplicarFiltrosToolbar(r, filtros, acceso);
+    r = aplicarOrdenToolbar(r, orden, acceso);
     return r;
-  }, [items, search, estadoFilter]);
+  }, [items, search, filtros, orden]);
 
   const onConfirmar = async () => {
     if (!confirmar) return;
@@ -117,50 +134,46 @@ export function BibliotecaView() {
             Genera presentaciones con IA manteniendo tu imagen de marca.
           </p>
         </div>
-        <div className="flex gap-2">
-          <Link href="/direccion/presentaciones/branding">
-            <Button variant="outline" size="lg">
-              <Palette className="h-4 w-4 mr-2" /> Imagen de marca
-            </Button>
-          </Link>
-          <Button variant="primary" size="lg" onClick={() => setNuevaOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" /> Nueva presentación
+        <Link href="/direccion/presentaciones/branding">
+          <Button variant="outline" size="sm">
+            <Palette className="h-4 w-4 mr-2" /> Imagen de marca
           </Button>
-        </div>
+        </Link>
       </div>
 
-      {/* Filtros */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[220px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por título o prompt…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <Select
-          value={estadoFilter}
-          onValueChange={(v) => setEstadoFilter(v as Estado | "todas")}
-        >
-          <SelectTrigger className="w-[180px]">
-            <Filter className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
-            <SelectValue placeholder="Estado" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todas">Todos los estados</SelectItem>
-            <SelectItem value="listo">Listas</SelectItem>
-            <SelectItem value="borrador">Borradores</SelectItem>
-            <SelectItem value="generando">Generando</SelectItem>
-            <SelectItem value="fallida">Fallidas</SelectItem>
-            <SelectItem value="archivada">Archivadas</SelectItem>
-          </SelectContent>
-        </Select>
-        <p className="text-xs text-muted-foreground ml-auto">
-          {filtered.length} presentación{filtered.length !== 1 ? "es" : ""}
-        </p>
-      </div>
+      <SubmoduleToolbar
+        busqueda={search}
+        onBusquedaChange={setSearch}
+        placeholderBusqueda="Buscar por título o prompt…"
+        onNuevo={() => setNuevaOpen(true)}
+        textoNuevo="Nueva presentación"
+        campos={[
+          { campo: "estado", label: "Estado", tipo: "lista", opciones: Object.values(ESTADO_LABEL) },
+          { campo: "slides", label: "Slides", tipo: "numero" },
+          { campo: "fecha", label: "Fecha", tipo: "fecha" },
+        ]}
+        filtros={filtros}
+        onFiltrosChange={setFiltros}
+        ordenOpciones={[
+          { campo: "titulo", label: "Título" },
+          { campo: "fecha", label: "Fecha" },
+          { campo: "slides", label: "Slides" },
+        ]}
+        orden={orden}
+        onOrdenChange={setOrden}
+        columnas={[
+          { campo: "titulo", label: "Título" },
+          { campo: "audiencia", label: "Audiencia" },
+          { campo: "slides", label: "Slides" },
+          { campo: "estado", label: "Estado" },
+          { campo: "fecha", label: "Fecha" },
+        ]}
+        columnasVisibles={columnasVisibles}
+        onColumnasVisiblesChange={setColumnasVisibles}
+      />
+      <p className="text-xs text-muted-foreground text-right">
+        {filtered.length} presentación{filtered.length !== 1 ? "es" : ""}
+      </p>
 
       {/* Tabla */}
       <Card>

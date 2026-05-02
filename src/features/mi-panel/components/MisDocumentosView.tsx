@@ -1,26 +1,134 @@
 "use client";
 
-import { FileArchive, Inbox } from "lucide-react";
+import { useState } from "react";
+import {
+  ChevronRight,
+  FileText,
+  FileSignature,
+  Receipt,
+  Clock,
+  Folder,
+  Inbox,
+  ArrowLeft,
+  type LucideIcon,
+} from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { SubpageHeader } from "./SubpageHeader";
+
+type CarpetaId = "nominas" | "contratos" | "justificantes" | "registros-jornada";
+
+interface Carpeta {
+  id: CarpetaId;
+  nombre: string;
+  icon: LucideIcon;
+  color: string;
+  bg: string;
+}
+
+const CARPETAS: Carpeta[] = [
+  {
+    id: "nominas",
+    nombre: "Nóminas",
+    icon: FileText,
+    color: "text-blue-600",
+    bg: "bg-blue-50",
+  },
+  {
+    id: "contratos",
+    nombre: "Contratos",
+    icon: FileSignature,
+    color: "text-emerald-600",
+    bg: "bg-emerald-50",
+  },
+  {
+    id: "justificantes",
+    nombre: "Justificantes",
+    icon: Receipt,
+    color: "text-amber-600",
+    bg: "bg-amber-50",
+  },
+  {
+    id: "registros-jornada",
+    nombre: "Registros de jornada",
+    icon: Clock,
+    color: "text-violet-600",
+    bg: "bg-violet-50",
+  },
+];
 
 export function MisDocumentosView() {
-  return (
-    <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-5">
-      <SubpageHeader
-        title="Documentos"
-        subtitle="Tus contratos, nóminas y documentación laboral"
-        icon={FileArchive}
-      />
+  const [carpetaActiva, setCarpetaActiva] = useState<Carpeta | null>(null);
 
-      <Card className="p-8 flex flex-col items-center justify-center text-center text-muted-foreground">
-        <Inbox className="h-8 w-8 mb-2" />
-        <p className="text-sm font-medium">Sin documentos disponibles</p>
-        <p className="text-xs mt-1">
-          Cuando RRHH publique tu contrato, nóminas o cualquier documento personal,
-          aparecerán aquí para descarga.
+  if (carpetaActiva) {
+    const Icon = carpetaActiva.icon;
+    return (
+      <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-4">
+        <div className="flex items-center gap-2 text-sm">
+          <button
+            onClick={() => setCarpetaActiva(null)}
+            className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Mis documentos
+          </button>
+          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="font-medium">{carpetaActiva.nombre}</span>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${carpetaActiva.bg}`}>
+            <Icon className={`h-5 w-5 ${carpetaActiva.color}`} />
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold">{carpetaActiva.nombre}</h2>
+            <p className="text-xs text-muted-foreground">0 archivos</p>
+          </div>
+        </div>
+
+        <Card className="p-10 flex flex-col items-center justify-center text-center text-muted-foreground">
+          <Inbox className="h-8 w-8 mb-2" />
+          <p className="text-sm font-medium">Esta carpeta está vacía</p>
+          <p className="text-xs mt-1 max-w-sm">
+            Cuando RRHH publique documentos en {carpetaActiva.nombre.toLowerCase()},
+            aparecerán aquí para descarga.
+          </p>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-5">
+      <div>
+        <h2 className="text-xl font-semibold flex items-center gap-2">
+          <Folder className="h-5 w-5 text-primary" />
+          Mis documentos
+        </h2>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Accede a tus carpetas personales publicadas por RRHH.
         </p>
-      </Card>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+        {CARPETAS.map((c) => {
+          const Icon = c.icon;
+          return (
+            <button
+              key={c.id}
+              onClick={() => setCarpetaActiva(c)}
+              className="group relative flex flex-col items-start gap-3 p-4 rounded-xl border bg-card hover:border-primary/40 hover:shadow-sm transition-all text-left"
+            >
+              <div className={`h-11 w-11 rounded-lg flex items-center justify-center ${c.bg}`}>
+                <Icon className={`h-5 w-5 ${c.color}`} />
+              </div>
+              <div className="min-w-0 w-full">
+                <p className="text-sm font-semibold truncate">{c.nombre}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">0 archivos</p>
+              </div>
+              <ChevronRight className="absolute top-4 right-4 h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Clock, Loader2, Inbox } from "lucide-react";
+import { Loader2, Inbox } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { listarMisFichajes } from "@/features/mi-panel/actions/mi-panel-actions";
 import type { MiFichajeHoy } from "@/features/mi-panel/types";
 import { FichajeBar } from "./FichajeBar";
-import { SubpageHeader } from "./SubpageHeader";
 
 const ESTADO_COLOR: Record<string, string> = {
   trabajando: "bg-emerald-100 text-emerald-700 border-emerald-200",
@@ -56,12 +55,6 @@ export function MisFichajesView() {
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-5">
-      <SubpageHeader
-        title="Fichajes"
-        subtitle="Tu historial de fichajes y control horario"
-        icon={Clock}
-      />
-
       <FichajeBar onChange={() => setRefreshKey((k) => k + 1)} />
 
       <Card className="p-4 md:p-5">

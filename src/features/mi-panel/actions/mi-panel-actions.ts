@@ -12,15 +12,39 @@ import type {
   SolicitudSubtipoTrabajo,
 } from "@/features/mi-panel/types";
 
+function extractErrorMessage(err: unknown): string {
+  if (!err) return "Error desconocido";
+  if (err instanceof Error) return err.message;
+  if (typeof err === "object") {
+    const e = err as { message?: string; details?: string; hint?: string; code?: string };
+    const parts = [e.message, e.details, e.hint, e.code ? `[${e.code}]` : null].filter(Boolean);
+    if (parts.length) return parts.join(" — ");
+  }
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return "Error desconocido";
+  }
+}
+
 async function getContext() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { supabase, user: null, empresaId: null, nombre: null };
+  if (!user) {
+    return {
+      supabase,
+      user: null,
+      empresaId: null,
+      nombre: null,
+      departamento: null,
+      rolLabel: null,
+    };
+  }
   const { data } = await supabase
     .from("profiles")
-    .select("empresa_id, nombre, apellidos")
+    .select("empresa_id, nombre, apellidos, departamento, rol_label")
     .eq("user_id", user.id)
     .single();
   return {
@@ -28,6 +52,8 @@ async function getContext() {
     user,
     empresaId: (data?.empresa_id as string | undefined) ?? null,
     nombre: data ? `${data.nombre ?? ""} ${data.apellidos ?? ""}`.trim() : null,
+    departamento: (data?.departamento as string | undefined) ?? null,
+    rolLabel: (data?.rol_label as string | undefined) ?? null,
   };
 }
 
@@ -79,7 +105,7 @@ export async function getMiFichajeHoy(): Promise<{
       },
     };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = extractErrorMessage(err);
     console.error("[mi-panel] getMiFichajeHoy:", msg);
     return { ok: false, data: null, error: msg };
   }
@@ -105,7 +131,7 @@ export async function ficharEntradaPersonal() {
     if (error) throw error;
     return { ok: true, data };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = extractErrorMessage(err);
     console.error("[mi-panel] ficharEntradaPersonal:", msg);
     return { ok: false, error: msg };
   }
@@ -139,7 +165,7 @@ export async function ficharSalidaPersonal(fichajeId: string) {
     if (error) throw error;
     return { ok: true, data: { horas_totales: horasTotales } };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = extractErrorMessage(err);
     console.error("[mi-panel] ficharSalidaPersonal:", msg);
     return { ok: false, error: msg };
   }
@@ -156,7 +182,7 @@ export async function iniciarPausaPersonal(fichajeId: string) {
     if (error) throw error;
     return { ok: true };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = extractErrorMessage(err);
     console.error("[mi-panel] iniciarPausaPersonal:", msg);
     return { ok: false, error: msg };
   }
@@ -173,7 +199,7 @@ export async function finalizarPausaPersonal(fichajeId: string) {
     if (error) throw error;
     return { ok: true };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = extractErrorMessage(err);
     console.error("[mi-panel] finalizarPausaPersonal:", msg);
     return { ok: false, error: msg };
   }
@@ -210,7 +236,7 @@ export async function listarMisFichajes(limite = 60): Promise<{
       })),
     };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = extractErrorMessage(err);
     console.error("[mi-panel] listarMisFichajes:", msg);
     return { ok: false, data: [], error: msg };
   }
@@ -220,7 +246,6 @@ export interface ComunicadoVisible {
   id: string;
   titulo: string;
   contenido: string;
-  tipo: string;
   prioridad: string;
   createdAt: string;
 }
@@ -231,32 +256,63 @@ export async function listarComunicadosVisibles(): Promise<{
   error?: string;
 }> {
   try {
-    const { supabase, user, empresaId } = await getContext();
+    const { supabase, user, empresaId, departamento, rolLabel } =
+      await getContext();
     if (!user || !empresaId) return { ok: false, data: [], error: "No autenticado" };
+
     const { data, error } = await supabase
       .from("comunicados")
-      .select("id, titulo, contenido, tipo, prioridad, created_at, estado")
+      .select(
+        "id, titulo, cuerpo, prioridad, created_at, estado, toda_empresa, roles_destinatarios, empleados_destinatarios, departamentos_destinatarios",
+      )
       .eq("empresa_id", empresaId)
       .order("created_at", { ascending: false })
-      .limit(60);
+      .limit(200);
     if (error) throw error;
-    const rows = (data ?? []).filter((c: Record<string, unknown>) => {
+
+    const dep = (departamento ?? "").trim().toLowerCase();
+    const rol = (rolLabel ?? "").trim().toLowerCase();
+
+    const visibles = (data ?? []).filter((c: Record<string, unknown>) => {
       const estado = (c.estado as string | undefined) ?? "publicado";
-      return estado !== "borrador" && estado !== "archivado";
+      if (estado === "borrador" || estado === "archivado") return false;
+
+      // Difusión a toda la empresa: visible para todos.
+      if ((c.toda_empresa as boolean | undefined) === true) return true;
+
+      const empleados = (c.empleados_destinatarios as string[] | undefined) ?? [];
+      if (empleados.includes(user.id)) return true;
+
+      const departamentos = (
+        c.departamentos_destinatarios as string[] | undefined
+      ) ?? [];
+      if (
+        dep &&
+        departamentos.some((d) => (d ?? "").trim().toLowerCase() === dep)
+      ) {
+        return true;
+      }
+
+      const roles = (c.roles_destinatarios as string[] | undefined) ?? [];
+      const rolesLower = roles.map((r) => (r ?? "").trim().toLowerCase());
+      if (rol && rolesLower.includes(rol)) return true;
+      if (dep && rolesLower.includes(dep)) return true;
+
+      return false;
     });
+
     return {
       ok: true,
-      data: rows.map((c: Record<string, unknown>) => ({
+      data: visibles.map((c: Record<string, unknown>) => ({
         id: c.id as string,
         titulo: (c.titulo as string) ?? "",
-        contenido: (c.contenido as string) ?? "",
-        tipo: (c.tipo as string) ?? "general",
+        contenido: (c.cuerpo as string | null | undefined) ?? "",
         prioridad: (c.prioridad as string) ?? "normal",
         createdAt: c.created_at as string,
       })),
     };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = extractErrorMessage(err);
     console.error("[mi-panel] listarComunicadosVisibles:", msg);
     return { ok: false, data: [], error: msg };
   }
@@ -336,7 +392,7 @@ export async function getMiCalendarioMes(
 
     return { ok: true, data: Array.from(map.values()) };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = extractErrorMessage(err);
     console.error("[mi-panel] getMiCalendarioMes:", msg);
     return { ok: false, data: [], error: msg };
   }
@@ -379,7 +435,7 @@ export async function listarMisSolicitudes(limite = 20): Promise<{
     if (error) throw error;
     return { ok: true, data: (data ?? []).map(mapSolicitud) };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = extractErrorMessage(err);
     console.error("[mi-panel] listarMisSolicitudes:", msg);
     return { ok: false, data: [], error: msg };
   }
@@ -425,7 +481,7 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
     if (error) throw error;
     return { ok: true, data: mapSolicitud(data as Record<string, unknown>) };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = extractErrorMessage(err);
     console.error("[mi-panel] crearSolicitudPersonal:", msg);
     return { ok: false, error: msg };
   }
@@ -444,7 +500,7 @@ export async function anularMiSolicitud(id: string) {
     if (error) throw error;
     return { ok: true };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = extractErrorMessage(err);
     console.error("[mi-panel] anularMiSolicitud:", msg);
     return { ok: false, error: msg };
   }
@@ -467,7 +523,7 @@ export async function listarSolicitudesEmpresa(filtro: "pendientes" | "todas" = 
     if (error) throw error;
     return { ok: true, data: (data ?? []).map(mapSolicitud) };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = extractErrorMessage(err);
     console.error("[mi-panel] listarSolicitudesEmpresa:", msg);
     return { ok: false, data: [], error: msg };
   }
@@ -489,7 +545,7 @@ export async function aprobarSolicitud(id: string, notasRevision?: string) {
     if (error) throw error;
     return { ok: true };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = extractErrorMessage(err);
     console.error("[mi-panel] aprobarSolicitud:", msg);
     return { ok: false, error: msg };
   }
@@ -511,7 +567,7 @@ export async function rechazarSolicitud(id: string, notasRevision?: string) {
     if (error) throw error;
     return { ok: true };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = extractErrorMessage(err);
     console.error("[mi-panel] rechazarSolicitud:", msg);
     return { ok: false, error: msg };
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,9 +8,17 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { Plus, TrendingUp, TrendingDown, BarChart3, FileText, Calculator, ArrowLeft, Landmark, Target, Clock } from "lucide-react";
+import { TrendingUp, TrendingDown, BarChart3, FileText, Calculator, ArrowLeft, Landmark, Target, Clock } from "lucide-react";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line } from "recharts";
 import {
   SAMPLE_ESTUDIOS, ESCENARIOS, EstudioApertura, DatosProyecto, EstructuraCostes,
@@ -34,24 +42,83 @@ export function AperturasView() {
   const [selected, setSelected] = useState<EstudioApertura | null>(null);
   const [showNew, setShowNew] = useState(false);
 
+  const [busqueda, setBusqueda] = useState("");
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+
+  const acceso = (e: EstudioApertura, campo: string): unknown => {
+    if (campo === "nombre") return e.datos.nombre;
+    if (campo === "ciudad") return e.datos.ciudad;
+    if (campo === "zona") return e.datos.zona;
+    if (campo === "ventas") return e.datos.ventasEstimadas;
+    if (campo === "plazas") return e.datos.plazas;
+    if (campo === "creado") return e.creado;
+    return (e as unknown as Record<string, unknown>)[campo];
+  };
+
+  const ciudades = useMemo(() => [...new Set(estudios.map((e) => e.datos.ciudad).filter(Boolean))], [estudios]);
+
+  const estudiosFiltrados = useMemo(() => {
+    let lista = estudios.filter((e) => {
+      if (!busqueda) return true;
+      const txt = `${e.datos.nombre} ${e.datos.ciudad} ${e.datos.zona}`.toLowerCase();
+      return txt.includes(busqueda.toLowerCase());
+    });
+    lista = aplicarFiltrosToolbar(lista, filtros, acceso);
+    lista = aplicarOrdenToolbar(lista, orden, acceso);
+    return lista;
+  }, [estudios, busqueda, filtros, orden]);
+
   if (selected) {
     return <DetalleEstudio estudio={selected} onBack={() => setSelected(null)} onUpdate={(e) => { setEstudios(prev => prev.map(x => x.id === e.id ? e : x)); setSelected(e); }} />;
   }
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-end">
-        <Dialog open={showNew} onOpenChange={setShowNew}>
-          <DialogTrigger asChild><Button variant="primary" size="sm"><Plus className="h-4 w-4" />Nuevo</Button></DialogTrigger>
-          <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-            <DialogHeader><DialogTitle>Nuevo estudio de apertura</DialogTitle></DialogHeader>
-            <NuevoEstudioForm onSave={(e) => { setEstudios(prev => [...prev, e]); setShowNew(false); }} onClose={() => setShowNew(false)} />
-          </DialogContent>
-        </Dialog>
-      </div>
+      <SubmoduleToolbar
+        busqueda={busqueda}
+        onBusquedaChange={setBusqueda}
+        placeholderBusqueda="Buscar estudio..."
+        onNuevo={() => setShowNew(true)}
+        textoNuevo="Nuevo"
+        campos={[
+          { campo: "ciudad", label: "Ciudad", tipo: "lista", opciones: ciudades },
+          { campo: "ventas", label: "Ventas estimadas", tipo: "numero" },
+          { campo: "plazas", label: "Plazas", tipo: "numero" },
+          { campo: "creado", label: "Creado", tipo: "fecha" },
+        ]}
+        filtros={filtros}
+        onFiltrosChange={setFiltros}
+        ordenOpciones={[
+          { campo: "nombre", label: "Nombre" },
+          { campo: "ciudad", label: "Ciudad" },
+          { campo: "ventas", label: "Ventas" },
+          { campo: "creado", label: "Fecha" },
+        ]}
+        orden={orden}
+        onOrdenChange={setOrden}
+        columnas={[
+          { campo: "nombre", label: "Nombre" },
+          { campo: "ciudad", label: "Ciudad" },
+          { campo: "zona", label: "Zona" },
+          { campo: "ventas", label: "Ventas" },
+          { campo: "plazas", label: "Plazas" },
+          { campo: "creado", label: "Creado" },
+        ]}
+        columnasVisibles={columnasVisibles}
+        onColumnasVisiblesChange={setColumnasVisibles}
+      />
+
+      <Dialog open={showNew} onOpenChange={setShowNew}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Nuevo estudio de apertura</DialogTitle></DialogHeader>
+          <NuevoEstudioForm onSave={(e) => { setEstudios(prev => [...prev, e]); setShowNew(false); }} onClose={() => setShowNew(false)} />
+        </DialogContent>
+      </Dialog>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {estudios.map(e => {
+        {estudiosFiltrados.map(e => {
           const esc = calcularEscenario(e.datos.ventasEstimadas, 1, e.costes);
           const viable = esc.beneficio > 0;
           return (

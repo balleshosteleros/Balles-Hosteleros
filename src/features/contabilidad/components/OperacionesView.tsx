@@ -2,13 +2,19 @@
 
 import { useState, useMemo } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, MoreVertical, FileText, Settings } from "lucide-react";
+import { MoreVertical, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SAMPLE_OPERACIONES } from "@/features/contabilidad/data/contabilidad";
-import { FiltrosAvanzados, type FiltroActivo, type CampoFiltro } from "@/features/logistica/components/FiltrosAvanzados";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
 
 const TABS = [
   { id: "TODAS", label: "Todas" },
@@ -18,45 +24,53 @@ const TABS = [
 
 const perioLabel: Record<string, string> = { MENSUAL: "Cada mes", TRIMESTRAL: "Cada trimestre", ANUAL: "Cada año", PUNTUAL: "Puntual", SEMANAL: "Cada semana" };
 
-type CampoOperacion = "tipo" | "periodicidad" | "contacto" | "etiquetas" | "total";
-
 export function OperacionesView() {
   const { empresaActual } = useEmpresa();
   const [tab, setTab] = useState("TODAS");
   const [busqueda, setBusqueda] = useState("");
-  const [filtros, setFiltros] = useState<FiltroActivo<CampoOperacion>[]>([]);
-  const [showConfig, setShowConfig] = useState(false);
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [ops] = useState(SAMPLE_OPERACIONES);
 
-  const camposFiltro = useMemo((): CampoFiltro<CampoOperacion>[] => {
-    const uniq = (arr: string[]) => [...new Set(arr.filter(Boolean))].sort();
-    const allEtiquetas = ops.flatMap(o => o.etiquetas);
-    return [
-      { campo: "tipo", label: "Tipo", tipo: "lista", opciones: ["ENTRADA", "SALIDA"] },
-      { campo: "periodicidad", label: "Periodicidad", tipo: "lista", opciones: ["MENSUAL", "TRIMESTRAL", "ANUAL", "SEMANAL", "PUNTUAL"] },
-      { campo: "contacto", label: "Contacto", tipo: "lista", opciones: uniq(ops.map(o => o.contacto)) },
-      { campo: "etiquetas", label: "Etiquetas", tipo: "lista", opciones: uniq(allEtiquetas) },
-      { campo: "total", label: "Total", tipo: "numero" },
-    ];
-  }, [ops]);
+  const contactosUsados = useMemo(
+    () => [...new Set(ops.map(o => o.contacto).filter(Boolean))].sort(),
+    [ops],
+  );
+  const etiquetasUsadas = useMemo(
+    () => [...new Set(ops.flatMap(o => o.etiquetas))].sort(),
+    [ops],
+  );
 
-  const filtradas = useMemo(() => ops.filter(o => {
-    const matchTab = tab === "TODAS" || o.tipo === tab;
-    if (!matchTab) return false;
-    for (const f of filtros) {
-      if (f.campo === "tipo" && f.valores?.length && !f.valores.includes(o.tipo)) return false;
-      if (f.campo === "periodicidad" && f.valores?.length && !f.valores.includes(o.periodicidad)) return false;
-      if (f.campo === "contacto" && f.valores?.length && !f.valores.includes(o.contacto)) return false;
-      if (f.campo === "etiquetas" && f.valores?.length && !f.valores.some(v => o.etiquetas.includes(v))) return false;
-      if (f.campo === "total" && f.numVal !== undefined) {
-        if (f.operador === "mayor" && !(o.total > f.numVal)) return false;
-        if (f.operador === "menor" && !(o.total < f.numVal)) return false;
-        if (f.operador === "igual" && !(o.total === f.numVal)) return false;
-      }
+  const acceso = (o: typeof ops[number], campo: string): unknown => {
+    if (campo === "tipo") return o.tipo;
+    if (campo === "periodicidad") return o.periodicidad;
+    if (campo === "contacto") return o.contacto;
+    if (campo === "etiquetas") return o.etiquetas;
+    if (campo === "total") return o.total;
+    if (campo === "descripcion") return o.descripcion;
+    if (campo === "fechaFin") return o.fechaFin;
+    return (o as unknown as Record<string, unknown>)[campo];
+  };
+
+  const filtradas = useMemo(() => {
+    let lista = ops.filter(o => {
+      if (tab !== "TODAS" && o.tipo !== tab) return false;
+      const q = busqueda.toLowerCase();
+      return !q || o.descripcion.toLowerCase().includes(q) || o.contacto.toLowerCase().includes(q);
+    });
+    // Filtro especial para etiquetas (array)
+    const filtrosEtiqueta = filtros.filter(f => f.campo === "etiquetas");
+    const otrosFiltros = filtros.filter(f => f.campo !== "etiquetas");
+    lista = aplicarFiltrosToolbar(lista, otrosFiltros, acceso);
+    if (filtrosEtiqueta.length > 0) {
+      lista = lista.filter(o =>
+        filtrosEtiqueta.every(f => f.valores?.some(v => o.etiquetas.includes(v))),
+      );
     }
-    const q = busqueda.toLowerCase();
-    return !q || o.descripcion.toLowerCase().includes(q) || o.contacto.toLowerCase().includes(q);
-  }), [ops, tab, busqueda, filtros]);
+    lista = aplicarOrdenToolbar(lista, orden, acceso);
+    return lista;
+  }, [ops, tab, busqueda, filtros, orden]);
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden">
@@ -73,27 +87,39 @@ export function OperacionesView() {
 
       {/* Toolbar */}
       <div className="px-6 py-3">
-        <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-3">
-          <Button variant="primary" size="sm" onClick={() => { /* nuevo */ }}>
-            <Plus className="h-4 w-4" />Nuevo
-          </Button>
-          <div className="relative flex-1 min-w-[240px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar operaciones…" className="pl-9" value={busqueda} onChange={e => setBusqueda(e.target.value)} />
-          </div>
-          <FiltrosAvanzados campos={camposFiltro} filtros={filtros} onChange={setFiltros} />
-          <Button size="icon" variant={showConfig ? "default" : "ghost"} className="h-8 w-8"
-            onClick={() => setShowConfig(v => !v)} title="Configuración" aria-label="Configuración">
-            <Settings className="h-4 w-4" strokeWidth={1.75} />
-          </Button>
-        </div>
+        <SubmoduleToolbar
+          busqueda={busqueda}
+          onBusquedaChange={setBusqueda}
+          placeholderBusqueda="Buscar operaciones…"
+          onNuevo={() => { /* nuevo */ }}
+          campos={[
+            { campo: "tipo", label: "Tipo", tipo: "lista", opciones: ["ENTRADA", "SALIDA"] },
+            { campo: "periodicidad", label: "Periodicidad", tipo: "lista", opciones: ["MENSUAL", "TRIMESTRAL", "ANUAL", "SEMANAL", "PUNTUAL"] },
+            { campo: "contacto", label: "Contacto", tipo: "lista", opciones: contactosUsados },
+            { campo: "etiquetas", label: "Etiquetas", tipo: "lista", opciones: etiquetasUsadas },
+            { campo: "total", label: "Total €", tipo: "numero" },
+          ]}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenOpciones={[
+            { campo: "descripcion", label: "Descripción" },
+            { campo: "contacto", label: "Contacto" },
+            { campo: "total", label: "Total" },
+            { campo: "periodicidad", label: "Periodicidad" },
+          ]}
+          orden={orden}
+          onOrdenChange={setOrden}
+          columnas={[
+            { campo: "descripcion", label: "Descripción" },
+            { campo: "periodicidad", label: "Periodicidad" },
+            { campo: "fechaFin", label: "Finaliza" },
+            { campo: "etiquetas", label: "Etiquetas" },
+            { campo: "total", label: "Total" },
+          ]}
+          columnasVisibles={columnasVisibles}
+          onColumnasVisiblesChange={setColumnasVisibles}
+        />
       </div>
-
-      {showConfig && (
-        <div className="mx-6 mb-3 rounded-xl border bg-card p-5">
-          <p className="text-sm text-muted-foreground">Configuración de operaciones — próximamente.</p>
-        </div>
-      )}
 
       {/* Table */}
       <div className="flex-1 overflow-auto px-6 pb-4">

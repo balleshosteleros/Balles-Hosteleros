@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Plus, Megaphone, Pencil, Trash2, Cloud, CloudOff, Play, Pause, RefreshCw, AlertCircle, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +26,13 @@ import {
   verificarIntegracionesAction,
 } from "@/features/marketing/actions/campanas-actions";
 import { toast } from "sonner";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+} from "@/shared/components/SubmoduleToolbar";
 
 export function CampanasMetaView() {
   const { empresaActual } = useEmpresa();
@@ -34,10 +41,35 @@ export function CampanasMetaView() {
   const [edit, setEdit] = useState<CampanaMeta | null>(null);
   const [metaConfigured, setMetaConfigured] = useState<boolean | null>(null);
   const [syncing, setSyncing] = useState<string | null>(null);
+  const [busqueda, setBusqueda] = useState("");
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
 
   useEffect(() => {
     verificarIntegracionesAction().then((r) => setMetaConfigured(r.meta));
   }, []);
+
+  const acceso = (c: CampanaMeta, campo: string): unknown => {
+    if (campo === "estado") return ESTADOS_CAMPANA.find((e) => e.value === c.estado)?.label ?? c.estado;
+    if (campo === "objetivo") return OBJETIVOS_META.find((o) => o.value === c.objetivo)?.label ?? c.objetivo;
+    if (campo === "nombre") return c.nombre;
+    if (campo === "presupuestoDiario") return c.presupuestoDiario;
+    if (campo === "duracionDias") return c.duracionDias;
+    if (campo === "impresiones") return c.estadisticas.impresiones;
+    if (campo === "clicks") return c.estadisticas.clicks;
+    if (campo === "gasto") return c.estadisticas.gasto;
+    return (c as unknown as Record<string, unknown>)[campo];
+  };
+
+  const filtrados = useMemo(() => {
+    let lista = metas.filter((c) => {
+      if (!busqueda) return true;
+      return c.nombre.toLowerCase().includes(busqueda.toLowerCase());
+    });
+    lista = aplicarFiltrosToolbar(lista, filtros, acceso);
+    lista = aplicarOrdenToolbar(lista, orden, acceso);
+    return lista;
+  }, [metas, busqueda, filtros, orden]);
 
   function abrirNuevo() {
     setEdit(crearCampanaMetaVacia(empresaActual.id));
@@ -114,18 +146,48 @@ export function CampanasMetaView() {
 
   return (
     <div className="p-4 md:p-6 space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-3">
-          <Megaphone className="h-6 w-6 text-muted-foreground" />
-          <div>
-            <h1 className="text-xl font-bold tracking-tight">Campañas de Meta (Facebook + Instagram)</h1>
-            <p className="text-sm text-muted-foreground">Publicidad simplificada: nosotros traducimos tu elección a la configuración de Meta Ads</p>
-          </div>
+      <div className="flex items-center gap-3">
+        <Megaphone className="h-6 w-6 text-muted-foreground" />
+        <div>
+          <h1 className="text-xl font-bold tracking-tight">Campañas de Meta (Facebook + Instagram)</h1>
+          <p className="text-sm text-muted-foreground">Publicidad simplificada: nosotros traducimos tu elección a la configuración de Meta Ads</p>
         </div>
-        <Button onClick={abrirNuevo} className="gap-2">
-          <Plus className="h-4 w-4" /> Nueva campaña
-        </Button>
       </div>
+
+      <SubmoduleToolbar
+        busqueda={busqueda}
+        onBusquedaChange={setBusqueda}
+        placeholderBusqueda="Buscar campaña..."
+        onNuevo={abrirNuevo}
+        textoNuevo="Nueva campaña"
+        campos={[
+          {
+            campo: "estado",
+            label: "Estado",
+            tipo: "lista",
+            opciones: ESTADOS_CAMPANA.map((e) => e.label),
+          },
+          {
+            campo: "objetivo",
+            label: "Objetivo",
+            tipo: "lista",
+            opciones: OBJETIVOS_META.map((o) => o.label),
+          },
+          { campo: "presupuestoDiario", label: "Presupuesto diario", tipo: "numero" },
+          { campo: "gasto", label: "Gasto", tipo: "numero" },
+        ]}
+        filtros={filtros}
+        onFiltrosChange={setFiltros}
+        ordenOpciones={[
+          { campo: "nombre", label: "Nombre" },
+          { campo: "presupuestoDiario", label: "Presupuesto" },
+          { campo: "impresiones", label: "Impresiones" },
+          { campo: "clicks", label: "Clicks" },
+          { campo: "gasto", label: "Gasto" },
+        ]}
+        orden={orden}
+        onOrdenChange={setOrden}
+      />
 
       {(modoLocal || metaConfigured === false) && (
         <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-3 flex items-start gap-2">
@@ -157,7 +219,7 @@ export function CampanasMetaView() {
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          {metas.map((c) => (
+          {filtrados.map((c) => (
             <div key={c.id} className="rounded-xl border bg-card p-4 space-y-3">
               <div className="flex items-start justify-between gap-2">
                 <div>

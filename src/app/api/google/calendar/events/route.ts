@@ -22,13 +22,7 @@ type CalendarEvent = {
 };
 
 type UserCalendarList = {
-  items?: {
-    id: string;
-    selected?: boolean;
-    primary?: boolean;
-    backgroundColor?: string;
-    foregroundColor?: string;
-  }[];
+  items?: { id: string; selected?: boolean; primary?: boolean }[];
 };
 
 const COLORS = ["blue", "emerald", "orange", "violet", "red"] as const;
@@ -40,23 +34,29 @@ function colorFromId(colorId?: string): Color {
   return COLORS[Math.abs(idx)] || "blue";
 }
 
-// Paleta oficial de Google para eventos cuando tienen colorId (override)
+function findMeetUrlIn(text?: string | null): string | null {
+  if (!text) return null;
+  const m = text.match(/https:\/\/meet\.google\.com\/[a-z0-9-]+/i);
+  return m ? m[0] : null;
+}
+
+// Paleta oficial de Google para eventos cuando tienen colorId (override).
+// Si el evento NO tiene colorId, hereda el color del calendario al que
+// pertenece, que el frontend conoce por la lista que carga en la sidebar.
 // https://developers.google.com/calendar/api/v3/reference/colors
 const GOOGLE_EVENT_COLORS: Record<string, string> = {
-  "1": "#7986cb", // Lavender
-  "2": "#33b679", // Sage
-  "3": "#8e24aa", // Grape
-  "4": "#e67c73", // Flamingo
-  "5": "#f6bf26", // Banana
-  "6": "#f4511e", // Tangerine
-  "7": "#039be5", // Peacock
-  "8": "#616161", // Graphite
-  "9": "#3f51b5", // Blueberry
-  "10": "#0b8043", // Basil
-  "11": "#d50000", // Tomato
+  "1": "#7986cb",
+  "2": "#33b679",
+  "3": "#8e24aa",
+  "4": "#e67c73",
+  "5": "#f6bf26",
+  "6": "#f4511e",
+  "7": "#039be5",
+  "8": "#616161",
+  "9": "#3f51b5",
+  "10": "#0b8043",
+  "11": "#d50000",
 };
-
-const DEFAULT_EVENT_COLOR = "#039be5";
 
 function getInicioSemana(base?: Date): Date {
   const hoy = base ? new Date(base) : new Date();
@@ -79,34 +79,29 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
 
-  // Siempre cargamos la lista de calendarios para conocer el color real
-  // (backgroundColor) de cada uno y poder pintar los eventos como en
-  // Google Calendar.
-  const list = await googleFetchAuto<UserCalendarList>(
-    "https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader",
-  );
-  if (list.needsReauth) {
-    return NextResponse.json({
-      connected: true,
-      needsReauth: true,
-      eventos: [],
-    });
-  }
-  const calItems = list.data?.items ?? [];
-  const calColorMap = new Map<string, string>();
-  for (const c of calItems) {
-    if (c.id && c.backgroundColor) calColorMap.set(c.id, c.backgroundColor);
-  }
-
+  // Si el caller pasa calendarIds explícitos los respetamos; si no, listamos
+  // todos los calendarios del usuario (primary + secundarios + compartidos)
+  // para no perder reuniones a las que ha sido invitado fuera de "primary".
   let calendarIds = url.searchParams
     .get("calendarIds")
     ?.split(",")
     .filter(Boolean);
 
   if (!calendarIds || calendarIds.length === 0) {
+    const list = await googleFetchAuto<UserCalendarList>(
+      "https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader",
+    );
+    if (list.needsReauth) {
+      return NextResponse.json({
+        connected: true,
+        needsReauth: true,
+        eventos: [],
+      });
+    }
+    const items = list.data?.items ?? [];
     calendarIds =
-      calItems.length > 0
-        ? calItems.filter((c) => c.selected !== false).map((c) => c.id)
+      items.length > 0
+        ? items.filter((c) => c.selected !== false).map((c) => c.id)
         : ["primary"];
   }
 
@@ -200,10 +195,9 @@ export async function GET(request: Request) {
         : `${mins}m`;
 
     const calId = ev._calId ?? "primary";
-    const colorHex =
-      (ev.colorId && GOOGLE_EVENT_COLORS[ev.colorId]) ||
-      calColorMap.get(calId) ||
-      DEFAULT_EVENT_COLOR;
+    const eventColorHex = ev.colorId
+      ? GOOGLE_EVENT_COLORS[ev.colorId] ?? null
+      : null;
 
     return {
       id: ev.id,
@@ -220,7 +214,7 @@ export async function GET(request: Request) {
       lugar: ev.location,
       participantes: ev.attendees?.map((a) => a.displayName || a.email),
       color: colorFromId(ev.colorId),
-      colorHex,
+      eventColorHex,
       diaIndex,
       inicioMin,
       duracionMin,
@@ -236,6 +230,8 @@ export async function GET(request: Request) {
         ev.conferenceData?.entryPoints?.find(
           (ep) => ep.entryPointType === "video",
         )?.uri ??
+        findMeetUrlIn(ev.location) ??
+        findMeetUrlIn(ev.description) ??
         null,
     };
   });
