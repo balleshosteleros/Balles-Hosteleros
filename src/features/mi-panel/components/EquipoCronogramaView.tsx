@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Network, Lock, ChevronRight, Loader2 } from "lucide-react";
+import { Lock, ChevronRight, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -9,7 +9,6 @@ import {
   type CronogramaOperativo,
   type Frecuencia,
 } from "@/features/direccion/hooks/useCronogramasOperativos";
-import { SubpageHeader } from "./SubpageHeader";
 
 const FRECUENCIA_COLOR: Record<string, string> = {
   DIARIO: "bg-red-100 text-red-700 border-red-200",
@@ -69,12 +68,6 @@ export function EquipoCronogramaView() {
 
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-5">
-      <SubpageHeader
-        title="Equipo"
-        subtitle="Cronograma operativo de la empresa por departamento"
-        icon={Network}
-      />
-
       <Card className="p-3 md:p-4 bg-muted/40 border-dashed">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Lock className="h-3.5 w-3.5" />

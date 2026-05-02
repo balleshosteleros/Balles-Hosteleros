@@ -9,6 +9,9 @@ import { toast } from "sonner";
 import { DatosGenerales } from "@/features/ajustes/data/ajustes";
 import { Upload, Trash2, Info, ImageIcon, Loader2, ChevronDown, Check } from "lucide-react";
 import { uploadLogo, deleteLogo, saveEmpresaColor } from "@/features/empresa/actions/logo-actions";
+import { friendlyError } from "@/shared/lib/friendly-errors";
+
+const MAX_LOGO_BYTES = 5 * 1024 * 1024; // 5 MB
 import {
   getDatosFiscales,
   saveDatosFiscales,
@@ -51,8 +54,10 @@ export function DatosGeneralesTab() {
   const [uploading, setUploading] = useState(false);
   const [colorOpen, setColorOpen] = useState(false);
   const [savingColor, setSavingColor] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
-  const logoUrl = getLogoUrl(empresaActual.id);
+  const logoUrl = mounted ? getLogoUrl(empresaActual.id) : "";
   const currentColor = empresaActual.color ?? "#3B82F6";
   const [savingFiscales, setSavingFiscales] = useState(false);
 
@@ -87,16 +92,20 @@ export function DatosGeneralesTab() {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
+    if (file.size > MAX_LOGO_BYTES) {
+      toast.error("El logotipo es demasiado grande. Usa una imagen de menos de 5 MB.");
+      return;
+    }
     setUploading(true);
     try {
       const formData = new FormData();
       formData.append("file", file);
       const publicUrl = await uploadLogo(empresaActual.id, formData);
       setLogoUrl(empresaActual.id, publicUrl);
-      toast.success("Logotipo guardado en Supabase");
+      toast.success("Logotipo guardado");
     } catch (err) {
-      toast.error("Error al subir el logotipo. Inténtalo de nuevo.");
-      console.error(err);
+      console.error("[DatosGeneralesTab] uploadLogo:", err);
+      toast.error(friendlyError(err));
     } finally {
       setUploading(false);
     }
@@ -108,8 +117,9 @@ export function DatosGeneralesTab() {
       await deleteLogo(empresaActual.id);
       setLogoUrl(empresaActual.id, "");
       toast.success("Logotipo eliminado");
-    } catch {
-      toast.error("Error al eliminar el logotipo.");
+    } catch (err) {
+      console.error("[DatosGeneralesTab] deleteLogo:", err);
+      toast.error(friendlyError(err));
     } finally {
       setUploading(false);
     }
@@ -122,8 +132,9 @@ export function DatosGeneralesTab() {
     try {
       await saveEmpresaColor(empresaActual.id, hex);
       toast.success("Color guardado");
-    } catch {
-      toast.error("Error al guardar el color");
+    } catch (err) {
+      console.error("[DatosGeneralesTab] saveEmpresaColor:", err);
+      toast.error(friendlyError(err));
     } finally {
       setSavingColor(false);
     }
@@ -139,11 +150,10 @@ export function DatosGeneralesTab() {
         epigrafe_iae: d.epigrafeIae ?? "",
       });
       if (!res.ok) throw new Error(res.error ?? "Error al guardar");
-      toast.success("Datos generales guardados en Supabase");
+      toast.success("Datos generales guardados");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Error desconocido";
-      toast.error(`No se pudieron guardar los datos fiscales: ${msg}`);
       console.error("[datos-fiscales] save:", err);
+      toast.error(friendlyError(err));
     } finally {
       setSavingFiscales(false);
     }

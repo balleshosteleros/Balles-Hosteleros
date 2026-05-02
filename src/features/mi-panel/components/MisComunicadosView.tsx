@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Megaphone, Loader2, Inbox } from "lucide-react";
+import { Loader2, Inbox } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   listarComunicadosVisibles,
   type ComunicadoVisible,
 } from "@/features/mi-panel/actions/mi-panel-actions";
-import { SubpageHeader } from "./SubpageHeader";
 
 const PRIORIDAD_COLOR: Record<string, string> = {
   alta: "bg-rose-100 text-rose-700 border-rose-200",
@@ -48,12 +47,6 @@ export function MisComunicadosView() {
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-5">
-      <SubpageHeader
-        title="Comunicados"
-        subtitle="Avisos, anuncios y comunicaciones internas"
-        icon={Megaphone}
-      />
-
       {loading ? (
         <Card className="p-10 flex items-center justify-center text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin mr-2" />

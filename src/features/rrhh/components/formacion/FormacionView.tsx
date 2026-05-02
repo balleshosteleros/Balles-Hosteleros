@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, PieChart, Pie, Cell } from "recharts";
 import { ExternalLink, Users, Award, Video, TrendingUp, BookOpen, CheckCircle2, XCircle, BarChart3, Target } from "lucide-react";
+import { AdminFormacionPanel } from "@/features/formacion/components/admin/AdminFormacionPanel";
 
 const ESTADO_BADGE: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   en_curso: { label: "En curso", variant: "default" },
@@ -229,6 +230,8 @@ export function FormacionView() {
           </Table>
         </CardContent>
       </Card>
+
+      <AdminFormacionPanel />
     </div>
   );
 }

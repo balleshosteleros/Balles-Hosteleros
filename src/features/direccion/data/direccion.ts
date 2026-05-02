@@ -1,11 +1,61 @@
 export type AreaType = 'administrativa' | 'operativa' | 'externo';
 
+// ── Paletas compartidas entre el editor (Dirección) y la vista del empleado.
+// Cualquier cambio aquí se refleja en ambas vistas para mantenerlas idénticas.
+
+export type DeptPalette = { bg: string; ring: string; shadow: string };
+
+export const DEPT_COLORS: Record<string, DeptPalette> = {
+  socios:        { bg: '#f59e0b', ring: '#fbbf24', shadow: 'rgba(245,158,11,0.35)' },
+  direccion:     { bg: '#1e3a8a', ring: '#3b82f6', shadow: 'rgba(30,58,138,0.40)' },
+  juridico:      { bg: '#4f46e5', ring: '#6366f1', shadow: 'rgba(79,70,229,0.35)' },
+  gestoria:      { bg: '#0891b2', ring: '#06b6d4', shadow: 'rgba(8,145,178,0.35)' },
+  contabilidad:  { bg: '#059669', ring: '#10b981', shadow: 'rgba(5,150,105,0.35)' },
+  calidad:       { bg: '#0d9488', ring: '#14b8a6', shadow: 'rgba(13,148,136,0.35)' },
+  marketing:     { bg: '#db2777', ring: '#ec4899', shadow: 'rgba(219,39,119,0.35)' },
+  rrhh:          { bg: '#7c3aed', ring: '#8b5cf6', shadow: 'rgba(124,58,237,0.35)' },
+  logistica:     { bg: '#ea580c', ring: '#f97316', shadow: 'rgba(234,88,12,0.35)' },
+  gerencia:      { bg: '#e11d48', ring: '#f43f5e', shadow: 'rgba(225,29,72,0.35)' },
+  seguridad:     { bg: '#334155', ring: '#475569', shadow: 'rgba(51,65,85,0.40)' },
+  artistas:      { bg: '#9333ea', ring: '#a855f7', shadow: 'rgba(147,51,234,0.35)' },
+  'jefe-sala':   { bg: '#0ea5e9', ring: '#38bdf8', shadow: 'rgba(14,165,233,0.35)' },
+  '2jefe-sala':  { bg: '#38bdf8', ring: '#7dd3fc', shadow: 'rgba(56,189,248,0.35)' },
+  hostess:       { bg: '#ec4899', ring: '#f472b6', shadow: 'rgba(236,72,153,0.35)' },
+  camareros:     { bg: '#3b82f6', ring: '#60a5fa', shadow: 'rgba(59,130,246,0.35)' },
+  cachimberos:   { bg: '#c026d3', ring: '#d946ef', shadow: 'rgba(192,38,211,0.35)' },
+  'jefe-cocina': { bg: '#dc2626', ring: '#ef4444', shadow: 'rgba(220,38,38,0.35)' },
+  '2jefe-cocina':{ bg: '#ef4444', ring: '#f87171', shadow: 'rgba(239,68,68,0.35)' },
+  cocineros:     { bg: '#f97316', ring: '#fb923c', shadow: 'rgba(249,115,22,0.35)' },
+  office:        { bg: '#78716c', ring: '#a8a29e', shadow: 'rgba(120,113,108,0.35)' },
+  limpieza:      { bg: '#16a34a', ring: '#22c55e', shadow: 'rgba(22,163,74,0.35)' },
+  mantenimiento: { bg: '#ca8a04', ring: '#eab308', shadow: 'rgba(202,138,4,0.35)' },
+};
+
+export const FALLBACK_BY_AREA: Record<AreaType, DeptPalette> = {
+  administrativa: { bg: '#475569', ring: '#64748b', shadow: 'rgba(71,85,105,0.35)' },
+  operativa:      { bg: '#71717a', ring: '#a1a1aa', shadow: 'rgba(113,113,122,0.35)' },
+  externo:        { bg: '#d97706', ring: '#f59e0b', shadow: 'rgba(217,119,6,0.35)' },
+};
+
+export function getDeptPalette(id: string, area: AreaType): DeptPalette {
+  return DEPT_COLORS[id] ?? FALLBACK_BY_AREA[area];
+}
+
+export type ZonePalette = { bg: string; border: string; label: string };
+
+export const ZONE_COLORS: Record<AreaType, ZonePalette> = {
+  administrativa: { bg: '#eef2ff', border: '#c7d2fe', label: '#4338ca' },
+  operativa:      { bg: '#fff7ed', border: '#fed7aa', label: '#c2410c' },
+  externo:        { bg: '#fefce8', border: '#fde68a', label: '#a16207' },
+};
+
 export interface OrgNode {
   id: string;
   label: string;
   area: AreaType;
   x: number;
   y: number;
+  descripcion?: string;
 }
 
 export interface OrgEdge {

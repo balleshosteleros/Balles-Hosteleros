@@ -125,7 +125,7 @@ export default function FichaEmpleadoPage() {
       case "estadisticas": return <div className="p-6"><EstadisticasTab empleado={empleado!} /></div>;
       case "contratos": return <div className="p-6"><ContratosTab ficha={ficha!} /></div>;
       case "documentos": return <div className="p-6"><DocumentosTab ficha={ficha!} /></div>;
-      case "horarios": return <div className="p-6"><HorariosTab empleado={empleado!} /></div>;
+      case "horarios": return <div className="p-6"><HorariosTab empleado={empleado!} ficha={ficha!} /></div>;
       case "evaluaciones": return <div className="p-6"><EvaluacionesTab ficha={ficha!} /></div>;
     }
   }

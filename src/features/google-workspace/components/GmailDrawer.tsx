@@ -21,8 +21,6 @@ import {
   ChevronRight,
   ChevronDown,
   Menu as MenuIcon,
-  Settings,
-  HelpCircle,
   RefreshCw,
   MoreVertical,
   ChevronLeft,
@@ -604,20 +602,6 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
               </div>
             </div>
 
-            <button
-              type="button"
-              className="rounded-full p-3 hover:bg-black/5 transition-colors"
-              title="Asistencia"
-            >
-              <HelpCircle className="h-5 w-5 text-[#5f6368]" />
-            </button>
-            <button
-              type="button"
-              className="rounded-full p-3 hover:bg-black/5 transition-colors"
-              title="Ajustes"
-            >
-              <Settings className="h-5 w-5 text-[#5f6368]" />
-            </button>
             <div className="pl-1">
               <GoogleAccountButton />
             </div>

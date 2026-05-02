@@ -53,7 +53,7 @@ type Evento = {
   lugar?: string;
   participantes?: string[];
   color: "blue" | "emerald" | "orange" | "violet" | "red";
-  colorHex: string;
+  eventColorHex?: string | null;
   diaIndex: number;
   inicioMin: number;
   duracionMin: number;
@@ -378,6 +378,20 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
   const eventosTimed = eventos.filter((e) => !e.allDay);
   const eventosAllDay = eventos.filter((e) => e.allDay);
 
+  const colorPorCalendario = useMemo(() => {
+    const m = new Map<string, string>();
+    calendarios.forEach((c) => m.set(c.id, c.color));
+    return m;
+  }, [calendarios]);
+
+  function colorEvento(ev: Evento): string {
+    return (
+      ev.eventColorHex ||
+      colorPorCalendario.get(ev.calendarId) ||
+      FALLBACK_COLOR
+    );
+  }
+
   return (
     <Sheet>
       <SheetTrigger asChild>{children}</SheetTrigger>
@@ -539,8 +553,8 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                             onClick={() => setEventoSel(ev)}
                             className="block w-full truncate rounded px-1.5 py-0.5 text-left text-[10px] font-medium"
                             style={{
-                              backgroundColor: ev.colorHex,
-                              color: textOnColor(ev.colorHex),
+                              backgroundColor: colorEvento(ev),
+                              color: textOnColor(colorEvento(ev)),
                             }}
                           >
                             {ev.titulo}
@@ -585,7 +599,8 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                         const topPct = (ev.inicioMin / MINUTOS_DIA) * 100;
                         const heightPct = (ev.duracionMin / MINUTOS_DIA) * 100;
                         if (topPct < 0 || topPct >= 100) return null;
-                        const txt = textOnColor(ev.colorHex);
+                        const bg = colorEvento(ev);
+                      const txt = textOnColor(bg);
                         return (
                           <button
                             key={ev.id}
@@ -598,7 +613,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                               top: `${topPct}%`,
                               height: `calc(${heightPct}% - 2px)`,
                               minHeight: 18,
-                              backgroundColor: ev.colorHex,
+                              backgroundColor: bg,
                               color: txt,
                             }}
                           >
@@ -632,8 +647,8 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                           onClick={() => setEventoSel(ev)}
                           className="block w-full truncate rounded px-2 py-1 text-left text-xs font-medium"
                           style={{
-                            backgroundColor: ev.colorHex,
-                            color: textOnColor(ev.colorHex),
+                            backgroundColor: colorEvento(ev),
+                            color: textOnColor(colorEvento(ev)),
                           }}
                         >
                           {ev.titulo}
@@ -668,7 +683,8 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                       const topPct = (ev.inicioMin / MINUTOS_DIA) * 100;
                       const heightPct = (ev.duracionMin / MINUTOS_DIA) * 100;
                       if (topPct < 0 || topPct >= 100) return null;
-                      const txt = textOnColor(ev.colorHex);
+                      const bg = colorEvento(ev);
+                      const txt = textOnColor(bg);
                       return (
                         <button
                           key={ev.id}
@@ -681,7 +697,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                             top: `${topPct}%`,
                             height: `calc(${heightPct}% - 2px)`,
                             minHeight: 24,
-                            backgroundColor: ev.colorHex,
+                            backgroundColor: bg,
                             color: txt,
                           }}
                         >
@@ -699,7 +715,15 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
           )}
 
           {/* VISTA MONTH */}
-          {vista === "month" && <VistaMes fechaRef={fechaRef} eventos={eventos} onSelect={setEventoSel} onSlot={abrirCrear} />}
+          {vista === "month" && (
+            <VistaMes
+              fechaRef={fechaRef}
+              eventos={eventos}
+              onSelect={setEventoSel}
+              onSlot={abrirCrear}
+              colorPorCalendario={colorPorCalendario}
+            />
+          )}
         </div>
 
         {/* Detalles */}
@@ -710,7 +734,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                 <div className="flex items-center gap-2">
                   <span
                     className="h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: eventoSel.colorHex }}
+                    style={{ backgroundColor: colorEvento(eventoSel) }}
                   />
                   <h3 className="text-base font-bold text-foreground">{eventoSel.titulo}</h3>
                 </div>
@@ -917,12 +941,18 @@ function VistaMes({
   eventos,
   onSelect,
   onSlot,
+  colorPorCalendario,
 }: {
   fechaRef: Date;
   eventos: Evento[];
   onSelect: (ev: Evento) => void;
   onSlot: (fecha: Date) => void;
+  colorPorCalendario: Map<string, string>;
 }) {
+  const colorEv = (ev: Evento): string =>
+    ev.eventColorHex ||
+    colorPorCalendario.get(ev.calendarId) ||
+    FALLBACK_COLOR;
   // Calculamos las celdas: empezamos en lunes de la semana del día 1, terminamos en domingo de la semana del último día
   const año = fechaRef.getFullYear();
   const mes = fechaRef.getMonth();
@@ -986,8 +1016,8 @@ function VistaMes({
                     }}
                     className="block w-full truncate rounded px-1 py-0.5 text-left text-[10px] font-medium"
                     style={{
-                      backgroundColor: ev.colorHex,
-                      color: textOnColor(ev.colorHex),
+                      backgroundColor: colorEv(ev),
+                      color: textOnColor(colorEv(ev)),
                     }}
                   >
                     {ev.allDay ? "" : `${ev.hora} `}

@@ -22,15 +22,21 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search } from "lucide-react";
 import { toast } from "sonner";
 import {
   listIncidencias,
   createIncidencia,
 } from "@/features/logistica/actions/incidencias-actions";
-import { FiltrosAvanzados, type FiltroActivo, type CampoFiltro } from "@/features/logistica/components/FiltrosAvanzados";
-
-type CampoIncidencia = "proveedor" | "variacion" | "fecha";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
+import { IOActions } from "@/shared/io";
+import { incidenciasIO } from "@/features/logistica/io/incidencias.io";
 
 type Registro = {
   id: string;
@@ -62,7 +68,9 @@ export function IncidenciasView() {
   const [registros, setRegistros] = useState<Registro[]>([]);
   const [cargando, setCargando] = useState(true);
   const [search, setSearch] = useState("");
-  const [filtros, setFiltros] = useState<FiltroActivo<CampoIncidencia>[]>([]);
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
 
   const cargarRegistros = useCallback(async () => {
     try {
@@ -98,37 +106,26 @@ export function IncidenciasView() {
   const bajo = variacion < 0;
   const muyAlta = Math.abs(variacion) >= 10;
 
-  const camposFiltro = useMemo((): CampoFiltro<CampoIncidencia>[] => {
-    const uniq = (arr: string[]) => [...new Set(arr.filter(Boolean))].sort();
-    return [
-      { campo: "proveedor", label: "Proveedor", tipo: "lista", opciones: uniq(registros.map((r) => r.proveedor)) },
-      { campo: "variacion", label: "Variación", tipo: "numero" },
-      { campo: "fecha", label: "Fecha", tipo: "fecha" },
-    ];
-  }, [registros]);
+  const proveedoresUsados = useMemo(
+    () => [...new Set(registros.map((r) => r.proveedor).filter(Boolean))].sort(),
+    [registros],
+  );
+
+  const acceso = (r: Registro, campo: string): unknown => {
+    if (campo === "variacion") return pct(r.precioActual, r.precioNuevo);
+    return (r as unknown as Record<string, unknown>)[campo];
+  };
 
   const filteredRegistros = useMemo(() => {
-    return registros.filter((r) => {
-      for (const f of filtros) {
-        if (f.campo === "proveedor" && f.valores?.length && !f.valores.includes(r.proveedor)) return false;
-        if (f.campo === "variacion" && f.operador !== undefined && f.numVal !== undefined) {
-          const v = pct(r.precioActual, r.precioNuevo);
-          if (f.operador === "mayor" && v <= f.numVal) return false;
-          if (f.operador === "menor" && v >= f.numVal) return false;
-          if (f.operador === "igual" && Math.abs(v - f.numVal) > 0.01) return false;
-        }
-        if (f.campo === "fecha") {
-          if (f.desde && r.fecha < f.desde) return false;
-          if (f.hasta && r.fecha > f.hasta) return false;
-        }
-      }
-      if (search) {
-        const s = search.toLowerCase();
-        return r.producto.toLowerCase().includes(s) || r.proveedor.toLowerCase().includes(s);
-      }
-      return true;
+    let lista = registros.filter((r) => {
+      if (!search) return true;
+      const s = search.toLowerCase();
+      return r.producto.toLowerCase().includes(s) || r.proveedor.toLowerCase().includes(s);
     });
-  }, [registros, filtros, search]);
+    lista = aplicarFiltrosToolbar(lista, filtros, acceso);
+    lista = aplicarOrdenToolbar(lista, orden, acceso);
+    return lista;
+  }, [registros, filtros, search, orden]);
 
   async function registrar() {
     if (!producto.trim()) {
@@ -293,17 +290,44 @@ export function IncidenciasView() {
       </div>
 
       {/* Histórico */}
+      <SubmoduleToolbar
+        busqueda={search}
+        onBusquedaChange={setSearch}
+        placeholderBusqueda="Buscar producto o proveedor…"
+        ocultarNuevo
+        campos={[
+          { campo: "proveedor", label: "Proveedor", tipo: "lista", opciones: proveedoresUsados },
+          { campo: "variacion", label: "Variación", tipo: "numero" },
+          { campo: "fecha", label: "Fecha", tipo: "fecha" },
+        ]}
+        filtros={filtros}
+        onFiltrosChange={setFiltros}
+        ordenOpciones={[
+          { campo: "producto", label: "Producto" },
+          { campo: "proveedor", label: "Proveedor" },
+          { campo: "variacion", label: "Variación" },
+          { campo: "fecha", label: "Fecha" },
+        ]}
+        orden={orden}
+        onOrdenChange={setOrden}
+        columnas={[
+          { campo: "producto", label: "Producto" },
+          { campo: "proveedor", label: "Proveedor" },
+          { campo: "precioActual", label: "Actual" },
+          { campo: "precioNuevo", label: "Nuevo" },
+          { campo: "variacion", label: "Variación" },
+          { campo: "fecha", label: "Fecha" },
+        ]}
+        columnasVisibles={columnasVisibles}
+        onColumnasVisiblesChange={setColumnasVisibles}
+        extraDerecha={
+          <IOActions config={incidenciasIO} onSuccess={() => window.location.reload()} />
+        }
+      />
+
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <CardTitle className="text-base">Subidas registradas</CardTitle>
-            <div className="flex-1" />
-            <div className="relative min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Buscar producto o proveedor…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-8 text-sm" />
-            </div>
-            <FiltrosAvanzados campos={camposFiltro} filtros={filtros} onChange={setFiltros} />
-          </div>
+          <CardTitle className="text-base">Subidas registradas</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <Table>

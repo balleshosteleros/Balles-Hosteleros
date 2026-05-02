@@ -30,8 +30,10 @@ import {
   Video,
   CheckSquare2,
   Phone,
+  Notebook,
   MessageSquare,
   ClipboardList,
+  ClipboardCheck,
   Clock,
   Timer,
   UserRoundSearch,
@@ -53,6 +55,7 @@ import {
   Wallet,
   Network,
   FileArchive,
+  Files,
   TrendingUp,
   Presentation,
   Utensils,
@@ -78,6 +81,7 @@ import {
   BarChart3,
   PenLine,
   FileUp,
+  Trophy,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -102,12 +106,25 @@ import {
   GoogleHeaderPill,
   useDailyCounts,
 } from "@/features/google-workspace/components";
+import { AgendaDrawer } from "@/features/agenda/components/AgendaDrawer";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { getAccesosAppsPorEmpresa } from "@/features/rrhh/data/accesos-apps";
 import { ExternalLink } from "lucide-react";
 
 const ROUTE_TITLES: Record<string, string> = {
   "/mi-panel": "MI PANEL",
+  "/mi-panel/equipo": "EQUIPO",
+  "/mi-panel/calendario": "CALENDARIO",
+  "/mi-panel/horario": "HORARIO",
+  "/mi-panel/condiciones": "CONDICIONES",
+  "/mi-panel/cuestionarios": "CUESTIONARIOS",
+  "/mi-panel/fichajes": "FICHAJES",
+  "/mi-panel/ausencias": "SOLICITUDES",
+  "/mi-panel/comunicados": "COMUNICADOS",
+  "/mi-panel/documentos": "DOCUMENTOS",
+  "/mi-panel/formacion": "FORMACIÓN",
+  "/mi-panel/formacion/curso": "CURSO",
+  "/mi-panel/toques": "TOQUES",
   "/gerencia": "GERENCIA",
   "/direccion/estructura": "ORGANIGRAMA",
   "/direccion/cronogramas": "CRONOGRAMAS",
@@ -248,6 +265,18 @@ function getDynamicTitle(pathname: string): string {
 const ROUTE_ICONS: Record<string, LucideIcon> = {
   "/": LayoutDashboard,
   "/mi-panel": LayoutDashboard,
+  "/mi-panel/equipo": Network,
+  "/mi-panel/calendario": CalendarDays,
+  "/mi-panel/horario": Timer,
+  "/mi-panel/condiciones": ClipboardCheck,
+  "/mi-panel/cuestionarios": ClipboardList,
+  "/mi-panel/fichajes": Clock,
+  "/mi-panel/ausencias": ClipboardList,
+  "/mi-panel/comunicados": Megaphone,
+  "/mi-panel/documentos": Files,
+  "/mi-panel/formacion": GraduationCap,
+  "/mi-panel/formacion/curso": GraduationCap,
+  "/mi-panel/toques": Trophy,
 
   // DIRECCIÓN
   "/direccion": Crown,
@@ -382,11 +411,17 @@ function AccesosIcon({ className }: { className?: string }) {
 
 function NavBadge({ count, color = "blue" }: { count: number; color?: string }) {
   if (count === 0) return null;
+  const bg =
+    color === "blue"
+      ? "bg-blue-600"
+      : color === "emerald"
+        ? "bg-emerald-600"
+        : color === "red"
+          ? "bg-red-600"
+          : "bg-violet-600";
   return (
     <span
-      className={`absolute -top-0.5 -right-0.5 flex items-center justify-center h-3.5 min-w-3.5 px-0.5 rounded-full text-white text-[8px] font-bold leading-none ${
-        color === "blue" ? "bg-blue-600" : color === "emerald" ? "bg-emerald-600" : "bg-violet-600"
-      }`}
+      className={`absolute -top-0.5 -right-0.5 flex items-center justify-center h-3.5 min-w-3.5 px-0.5 rounded-full text-white text-[8px] font-bold leading-none ${bg}`}
     >
       {count > 9 ? "9+" : count}
     </span>
@@ -435,10 +470,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full">
+      <div className="h-screen flex w-full overflow-hidden">
         <AppSidebar />
-        <div className="flex-1 flex flex-col min-w-0">
-          <header className="h-14 flex items-center border-b bg-card px-4 shrink-0 gap-3">
+        <div className="flex-1 flex flex-col min-w-0 h-screen">
+          <header className="sticky top-0 z-30 h-14 flex items-center border-b bg-card px-4 shrink-0 gap-3">
             <SidebarTrigger className="md:hidden -ml-1" />
             {(headerLabel || ModuleIcon !== null) && (
               <h1 className="flex items-center gap-2 text-sm font-bold tracking-wide text-foreground">
@@ -449,11 +484,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="ml-auto flex items-center gap-3">
               {showUi && (
                 <>
-                  {/* Estado conexión Google (email + calendario reales) */}
-                  <GoogleHeaderPill />
-
-                  {/* Integraciones: email + calendario + meet + tareas */}
+                  {/* Integraciones: Google (cuenta + email + calendario + meet) | tareas + chat + llamadas | apps */}
                   <div className="flex items-center rounded-full border bg-muted/40 px-1 py-0.5 gap-0.5">
+                    {/* Cuenta Google activa (icono) */}
+                    <GoogleHeaderPill />
+
                     {/* Email */}
                     <GmailDrawer>
                       <Button
@@ -490,6 +525,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       </Button>
                     </MeetDrawer>
 
+                    {/* Separador visual */}
+                    <span className="w-px h-5 bg-border mx-0.5" />
+
                     {/* Tareas */}
                     <TareasDrawer>
                       <Button
@@ -502,9 +540,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       </Button>
                     </TareasDrawer>
 
-                    {/* Separador visual */}
-                    <span className="w-px h-5 bg-border mx-0.5" />
-
                     {/* Chat / Comunicación */}
                     <ChatDrawer>
                       <Button
@@ -513,6 +548,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         title="Comunicación interna"
                       >
                         <MessageSquare className="h-4 w-4 text-blue-500" />
+                        <NavBadge count={counts.chatGroups} color="blue" />
                       </Button>
                     </ChatDrawer>
 
@@ -524,8 +560,23 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         title="Teléfono"
                       >
                         <Phone className="h-4 w-4 text-sky-600" />
+                        <NavBadge count={counts.missedCalls} color="red" />
                       </Button>
                     </TelefonoDrawer>
+
+                    {/* Agenda de contactos */}
+                    <AgendaDrawer>
+                      <Button
+                        variant="ghost" size="icon"
+                        className="relative h-7 w-7"
+                        title="Agenda de contactos"
+                      >
+                        <Notebook className="h-4 w-4 text-yellow-500" />
+                      </Button>
+                    </AgendaDrawer>
+
+                    {/* Separador visual */}
+                    <span className="w-px h-5 bg-border mx-0.5" />
 
                     {/* Accesos a apps externas */}
                     <DropdownMenu open={appsMenuOpen} onOpenChange={setAppsMenuOpen}>
@@ -563,10 +614,24 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                                 >
                                   {app.logoUrl ? (
                                     // eslint-disable-next-line @next/next/no-img-element
-                                    <img src={app.logoUrl} alt="" className="h-4 w-4 rounded object-contain shrink-0" />
-                                  ) : (
-                                    <span className="text-sm leading-none shrink-0">{app.icono}</span>
-                                  )}
+                                    <img
+                                      src={app.logoUrl}
+                                      alt=""
+                                      className="h-4 w-4 rounded object-contain shrink-0"
+                                      onError={(e) => {
+                                        const img = e.currentTarget;
+                                        img.style.display = "none";
+                                        const fallback = img.nextElementSibling as HTMLElement | null;
+                                        if (fallback) fallback.style.display = "inline";
+                                      }}
+                                    />
+                                  ) : null}
+                                  <span
+                                    className="text-sm leading-none shrink-0"
+                                    style={{ display: app.logoUrl ? "none" : "inline" }}
+                                  >
+                                    {app.icono}
+                                  </span>
                                   <span className="flex-1 text-xs font-medium truncate">{app.nombre}</span>
                                   <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
                                 </DropdownMenuItem>
@@ -645,7 +710,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               )}
             </div>
           </header>
-          <main className="flex-1 overflow-auto">
+          <main className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
             <OnboardingGuard>{children}</OnboardingGuard>
           </main>
         </div>

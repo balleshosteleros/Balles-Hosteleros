@@ -73,6 +73,12 @@ const MOCK_RECENTS: RecentCall[] = [
   { id: "3", numero: "+34 611 222 333", tipo: "perdida", hora: "Ayer 18:45" },
 ];
 
+// Mock hasta integrar VoIP real: cuenta llamadas entrantes nuevas no vistas (perdidas).
+// Cuando exista backend (Twilio/SIP), reemplazar por consulta con flag visto=false.
+export function contarLlamadasNoVistas(): number {
+  return MOCK_RECENTS.filter((c) => c.tipo === "perdida").length;
+}
+
 const DIAL_KEYS = [
   ["1", "2", "3"],
   ["4", "5", "6"],

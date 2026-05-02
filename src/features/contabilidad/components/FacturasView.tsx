@@ -2,14 +2,22 @@
 
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, MoreVertical, Download, Settings, FileText } from "lucide-react";
+import { MoreVertical, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FacturaContable, EstadoFactura, TipoFactura } from "@/features/contabilidad/data/contabilidad";
 import { listFacturas } from "@/features/contabilidad/actions/contabilidad-actions";
-import { FiltrosAvanzados, type FiltroActivo, type CampoFiltro } from "@/features/logistica/components/FiltrosAvanzados";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
+import { IOActions } from "@/shared/io";
+import { facturasIO } from "@/features/contabilidad/io/facturas.io";
 import { toast } from "sonner";
 
 const TABS = [{ id: "TODAS", label: "Todas" }, { id: "VENTA", label: "Ventas" }, { id: "COMPRA", label: "Compras" }];
@@ -20,8 +28,6 @@ const estadoStyles: Record<string, string> = {
   COBRADO: "bg-emerald-100 text-emerald-800 border-emerald-300",
   VENCIDO: "bg-red-100 text-red-800 border-red-300",
 };
-
-type CampoFactura = "estado" | "tipo" | "cliente" | "total" | "fechaEmision";
 
 function mapDbToFactura(row: Record<string, unknown>): FacturaContable {
   return {
@@ -44,8 +50,9 @@ export function FacturasView() {
   const [busqueda, setBusqueda] = useState("");
   const [facturas, setFacturas] = useState<FacturaContable[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filtros, setFiltros] = useState<FiltroActivo<CampoFactura>[]>([]);
-  const [showConfig, setShowConfig] = useState(false);
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
 
   const loadFacturas = useCallback(async () => {
     setLoading(true);
@@ -67,37 +74,32 @@ export function FacturasView() {
     loadFacturas();
   }, [loadFacturas]);
 
-  const camposFiltro = useMemo((): CampoFiltro<CampoFactura>[] => {
-    const uniq = (arr: string[]) => [...new Set(arr.filter(Boolean))].sort();
-    return [
-      { campo: "estado", label: "Estado", tipo: "lista", opciones: ["PENDIENTE", "PAGADO", "COBRADO", "VENCIDO"] },
-      { campo: "tipo", label: "Tipo", tipo: "lista", opciones: ["VENTA", "COMPRA"] },
-      { campo: "cliente", label: "Cliente", tipo: "lista", opciones: uniq(facturas.map(f => f.cliente)) },
-      { campo: "total", label: "Total €", tipo: "numero" },
-      { campo: "fechaEmision", label: "Fecha emisión", tipo: "fecha" },
-    ];
-  }, [facturas]);
+  const clientesUsados = useMemo(
+    () => [...new Set(facturas.map(f => f.cliente).filter(Boolean))].sort(),
+    [facturas],
+  );
 
-  const filtradas = useMemo(() => facturas.filter(f => {
-    const matchTab = tab === "TODAS" || f.tipo === tab;
-    if (!matchTab) return false;
-    for (const fl of filtros) {
-      if (fl.campo === "estado" && fl.valores?.length && !fl.valores.includes(f.estado)) return false;
-      if (fl.campo === "tipo" && fl.valores?.length && !fl.valores.includes(f.tipo)) return false;
-      if (fl.campo === "cliente" && fl.valores?.length && !fl.valores.includes(f.cliente)) return false;
-      if (fl.campo === "total" && fl.numVal !== undefined) {
-        if (fl.operador === "mayor" && !(f.total > fl.numVal)) return false;
-        if (fl.operador === "menor" && !(f.total < fl.numVal)) return false;
-        if (fl.operador === "igual" && !(f.total === fl.numVal)) return false;
-      }
-      if (fl.campo === "fechaEmision") {
-        if (fl.desde && f.fechaEmision < fl.desde) return false;
-        if (fl.hasta && f.fechaEmision > fl.hasta) return false;
-      }
-    }
-    const q = busqueda.toLowerCase();
-    return !q || f.cliente.toLowerCase().includes(q) || f.numeroFactura.toLowerCase().includes(q);
-  }), [facturas, tab, busqueda, filtros]);
+  const acceso = (f: FacturaContable, campo: string): unknown => {
+    if (campo === "estado") return f.estado;
+    if (campo === "tipo") return f.tipo;
+    if (campo === "cliente") return f.cliente;
+    if (campo === "total") return f.total;
+    if (campo === "fechaEmision") return f.fechaEmision;
+    if (campo === "fechaPago") return f.fechaPago;
+    if (campo === "numeroFactura") return f.numeroFactura;
+    return (f as unknown as Record<string, unknown>)[campo];
+  };
+
+  const filtradas = useMemo(() => {
+    let lista = facturas.filter(f => {
+      if (tab !== "TODAS" && f.tipo !== tab) return false;
+      const q = busqueda.toLowerCase();
+      return !q || f.cliente.toLowerCase().includes(q) || f.numeroFactura.toLowerCase().includes(q);
+    });
+    lista = aplicarFiltrosToolbar(lista, filtros, acceso);
+    lista = aplicarOrdenToolbar(lista, orden, acceso);
+    return lista;
+  }, [facturas, tab, busqueda, filtros, orden]);
 
   const estadoLabel = (f: FacturaContable) => {
     if (f.estado === "VENCIDO" && f.diasTarde) return `⏳ ${f.diasTarde} días tarde`;
@@ -121,31 +123,43 @@ export function FacturasView() {
 
       {/* Toolbar */}
       <div className="px-6 py-3">
-        <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-3">
-          <Button variant="primary" size="sm">
-            <Plus className="h-4 w-4" />Nuevo
-          </Button>
-          <div className="relative flex-1 min-w-[240px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar por descripción, número…" className="pl-9" value={busqueda} onChange={e => setBusqueda(e.target.value)} />
-          </div>
-          <FiltrosAvanzados campos={camposFiltro} filtros={filtros} onChange={setFiltros} />
-          <Button variant="outline" size="icon" className="h-8 w-8" aria-label="Descargar">
-            <Download className="h-4 w-4" />
-          </Button>
-          <Button variant="outline" size="sm" className="text-xs">Desde el inicio</Button>
-          <Button size="icon" variant={showConfig ? "default" : "ghost"} className="h-8 w-8"
-            onClick={() => setShowConfig(v => !v)} title="Configuración" aria-label="Configuración">
-            <Settings className="h-4 w-4" strokeWidth={1.75} />
-          </Button>
-        </div>
+        <SubmoduleToolbar
+          busqueda={busqueda}
+          onBusquedaChange={setBusqueda}
+          placeholderBusqueda="Buscar por descripción, número…"
+          onNuevo={() => { /* nuevo */ }}
+          campos={[
+            { campo: "estado", label: "Estado", tipo: "lista", opciones: ["PENDIENTE", "PAGADO", "COBRADO", "VENCIDO"] },
+            { campo: "tipo", label: "Tipo", tipo: "lista", opciones: ["VENTA", "COMPRA"] },
+            { campo: "cliente", label: "Cliente", tipo: "lista", opciones: clientesUsados },
+            { campo: "total", label: "Total €", tipo: "numero" },
+            { campo: "fechaEmision", label: "Fecha emisión", tipo: "fecha" },
+          ]}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenOpciones={[
+            { campo: "fechaEmision", label: "Fecha emisión" },
+            { campo: "fechaPago", label: "Fecha pago" },
+            { campo: "cliente", label: "Cliente" },
+            { campo: "total", label: "Total" },
+            { campo: "estado", label: "Estado" },
+          ]}
+          orden={orden}
+          onOrdenChange={setOrden}
+          columnas={[
+            { campo: "cliente", label: "Cliente" },
+            { campo: "fechaEmision", label: "Fecha emisión" },
+            { campo: "fechaPago", label: "Fecha pago" },
+            { campo: "estado", label: "Estado" },
+            { campo: "total", label: "Total" },
+          ]}
+          columnasVisibles={columnasVisibles}
+          onColumnasVisiblesChange={setColumnasVisibles}
+          extraDerecha={
+            <IOActions config={facturasIO} onSuccess={() => window.location.reload()} />
+          }
+        />
       </div>
-
-      {showConfig && (
-        <div className="mx-6 mb-3 rounded-xl border bg-card p-5">
-          <p className="text-sm text-muted-foreground">Configuración de facturas — próximamente.</p>
-        </div>
-      )}
 
       {/* Table */}
       <div className="flex-1 overflow-auto px-6 pb-4">

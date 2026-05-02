@@ -23,13 +23,24 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import {
-  Search, Plus, ShoppingCart, Store, Settings2, Settings,
+  Plus, ShoppingCart, Store, Settings2, Settings,
   ArrowLeft, Pencil, Trash2, AlertTriangle, ChefHat, X, FlaskConical,
-  SlidersHorizontal, ChevronLeft,
 } from "lucide-react";
 import { toast } from "sonner";
-import { ImportExportButtons } from "@/features/logistica/components/productos/ImportExportButtons";
-import { Popover, PopoverContent, PopoverTrigger } from "@/shared/components/ui/popover";
+import { IOActions } from "@/shared/io";
+import {
+  productosCompraIO,
+  productosVentaIO,
+  productosElaboracionIO,
+} from "@/features/logistica/io/productos.io";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
 
 function EstadoBadge({ estado }: { estado: EstadoProducto }) {
   return <Badge variant="outline" className={`text-[10px] ${ESTADO_COLOR[estado]}`}>{estado}</Badge>;
@@ -312,211 +323,6 @@ function ProductoDetalle({
   );
 }
 
-/* ─── FILTROS AVANZADOS ─── */
-type CampoFiltro = "categoria" | "familia" | "estado" | "proveedor" | "unidad" | "precio" | "fecha";
-
-type FiltroActivo = {
-  id: string;
-  campo: CampoFiltro;
-  etiqueta: string;
-  valores?: string[];
-  operador?: "mayor" | "menor" | "igual";
-  precioVal?: number;
-  desde?: string;
-  hasta?: string;
-};
-
-function FiltrosAvanzados({
-  productos,
-  esCompra,
-  filtros,
-  onChange,
-}: {
-  productos: Producto[];
-  esCompra: boolean;
-  filtros: FiltroActivo[];
-  onChange: (f: FiltroActivo[]) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [paso, setPaso] = useState<"campo" | "valor">("campo");
-  const [campoActual, setCampoActual] = useState<CampoFiltro | null>(null);
-  const [tempValores, setTempValores] = useState<string[]>([]);
-  const [tempOperador, setTempOperador] = useState<"mayor" | "menor" | "igual">("mayor");
-  const [tempPrecio, setTempPrecio] = useState("");
-  const [tempDesde, setTempDesde] = useState("");
-  const [tempHasta, setTempHasta] = useState("");
-
-  const opcionesLista = useMemo(() => {
-    const uniq = (arr: (string | undefined)[]) =>
-      [...new Set(arr.filter(Boolean) as string[])].sort();
-    return {
-      categoria: uniq(productos.map((p) => p.categoria)),
-      familia: uniq(productos.map((p) => p.familia)),
-      estado: ESTADOS_PRODUCTO as string[],
-      proveedor: uniq(productos.map((p) => p.proveedor)),
-      unidad: uniq(productos.map((p) => p.unidad)),
-    };
-  }, [productos]);
-
-  const CAMPOS: { campo: CampoFiltro; label: string; tipo: "lista" | "precio" | "fecha" }[] = [
-    { campo: "categoria", label: "Categoría", tipo: "lista" },
-    { campo: "familia", label: "Familia", tipo: "lista" },
-    { campo: "estado", label: "Estado", tipo: "lista" },
-    ...(esCompra ? [{ campo: "proveedor" as CampoFiltro, label: "Proveedor", tipo: "lista" as const }] : []),
-    { campo: "unidad", label: "Unidad", tipo: "lista" },
-    { campo: "precio", label: esCompra ? "Precio compra" : "Precio de Venta", tipo: "precio" },
-    { campo: "fecha", label: "Últ. actualización", tipo: "fecha" },
-  ];
-
-  function abrirCampo(c: CampoFiltro) {
-    setCampoActual(c);
-    setTempValores([]); setTempOperador("mayor"); setTempPrecio(""); setTempDesde(""); setTempHasta("");
-    setPaso("valor");
-  }
-
-  function confirmarFiltro() {
-    if (!campoActual) return;
-    const def = CAMPOS.find((c) => c.campo === campoActual)!;
-    let nuevo: FiltroActivo | null = null;
-    if (def.tipo === "lista" && tempValores.length > 0) {
-      nuevo = { id: crypto.randomUUID(), campo: campoActual, etiqueta: def.label, valores: tempValores };
-    } else if (def.tipo === "precio" && tempPrecio) {
-      nuevo = { id: crypto.randomUUID(), campo: campoActual, etiqueta: def.label, operador: tempOperador, precioVal: parseFloat(tempPrecio) };
-    } else if (def.tipo === "fecha" && (tempDesde || tempHasta)) {
-      nuevo = { id: crypto.randomUUID(), campo: campoActual, etiqueta: def.label, desde: tempDesde || undefined, hasta: tempHasta || undefined };
-    }
-    if (nuevo) onChange([...filtros, nuevo]);
-    setOpen(false); setPaso("campo");
-  }
-
-  function labelFiltro(f: FiltroActivo) {
-    if (f.valores?.length) return `${f.etiqueta}: ${f.valores.join(", ")}`;
-    if (f.operador) {
-      const op = f.operador === "mayor" ? ">" : f.operador === "menor" ? "<" : "=";
-      return `${f.etiqueta} ${op} ${f.precioVal}`;
-    }
-    const partes: string[] = [];
-    if (f.desde) partes.push(`desde ${f.desde}`);
-    if (f.hasta) partes.push(`hasta ${f.hasta}`);
-    return `${f.etiqueta}: ${partes.join(" ")}`;
-  }
-
-  const campoDef = campoActual ? CAMPOS.find((c) => c.campo === campoActual) : null;
-
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Popover open={open} onOpenChange={(v) => { setOpen(v); if (!v) setPaso("campo"); }}>
-        <PopoverTrigger asChild>
-          <Button variant="outline" size="sm" className="gap-1.5">
-            <SlidersHorizontal className="h-3.5 w-3.5" />
-            Filtrar
-            {filtros.length > 0 && (
-              <Badge className="ml-0.5 h-4 min-w-[16px] px-1 text-[10px] rounded-full">{filtros.length}</Badge>
-            )}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-72 p-3" align="start">
-          {paso === "campo" ? (
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Filtrar por columna</p>
-              <div className="grid grid-cols-2 gap-1.5">
-                {CAMPOS.map((c) => (
-                  <button
-                    key={c.campo}
-                    onClick={() => abrirCampo(c.campo)}
-                    className="text-left text-sm px-2.5 py-1.5 rounded-md hover:bg-muted transition-colors border border-transparent hover:border-border"
-                  >
-                    {c.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex items-center gap-1.5">
-                <button onClick={() => setPaso("campo")} className="text-muted-foreground hover:text-foreground">
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                <p className="text-sm font-semibold">{campoDef?.label}</p>
-              </div>
-
-              {campoDef?.tipo === "lista" && (
-                <div className="space-y-0.5 max-h-52 overflow-y-auto pr-1">
-                  {(opcionesLista[campoActual as keyof typeof opcionesLista] ?? []).map((opt) => (
-                    <label key={opt} className="flex items-center gap-2 text-sm px-1.5 py-1 rounded hover:bg-muted cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={tempValores.includes(opt)}
-                        onChange={(e) =>
-                          setTempValores(e.target.checked ? [...tempValores, opt] : tempValores.filter((v) => v !== opt))
-                        }
-                        className="rounded accent-primary"
-                      />
-                      {opt}
-                    </label>
-                  ))}
-                  {(opcionesLista[campoActual as keyof typeof opcionesLista] ?? []).length === 0 && (
-                    <p className="text-xs text-muted-foreground text-center py-2">Sin opciones disponibles</p>
-                  )}
-                </div>
-              )}
-
-              {campoDef?.tipo === "precio" && (
-                <div className="space-y-2">
-                  <Select value={tempOperador} onValueChange={(v) => setTempOperador(v as typeof tempOperador)}>
-                    <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="mayor">Mayor que (&gt;)</SelectItem>
-                      <SelectItem value="menor">Menor que (&lt;)</SelectItem>
-                      <SelectItem value="igual">Igual a (=)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    type="number"
-                    placeholder="Introducir precio..."
-                    value={tempPrecio}
-                    onChange={(e) => setTempPrecio(e.target.value)}
-                    className="h-8"
-                  />
-                </div>
-              )}
-
-              {campoDef?.tipo === "fecha" && (
-                <div className="space-y-2">
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Desde</Label>
-                    <Input type="date" value={tempDesde} onChange={(e) => setTempDesde(e.target.value)} className="h-8 mt-0.5" />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Hasta</Label>
-                    <Input type="date" value={tempHasta} onChange={(e) => setTempHasta(e.target.value)} className="h-8 mt-0.5" />
-                  </div>
-                </div>
-              )}
-
-              <Button size="sm" className="w-full" onClick={confirmarFiltro}>Aplicar filtro</Button>
-            </div>
-          )}
-        </PopoverContent>
-      </Popover>
-
-      {filtros.map((f) => (
-        <span key={f.id} className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary border border-primary/20 rounded-full px-2.5 py-0.5">
-          {labelFiltro(f)}
-          <button onClick={() => onChange(filtros.filter((x) => x.id !== f.id))} className="hover:text-destructive ml-0.5">
-            <X className="h-3 w-3" />
-          </button>
-        </span>
-      ))}
-      {filtros.length > 1 && (
-        <button onClick={() => onChange([])} className="text-xs text-muted-foreground hover:text-foreground underline">
-          Limpiar todo
-        </button>
-      )}
-    </div>
-  );
-}
-
 /* ─── TABLA ─── */
 function TablaProductos({
   tipo, onAddClick, onRowClick, reloadKey, showConfig, onToggleConfig,
@@ -604,7 +410,16 @@ function TablaProductos({
           <Input placeholder="Buscar por nombre..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} className="pl-9" />
         </div>
         <FiltrosAvanzados productos={productos} esCompra={esCompra} filtros={filtros} onChange={setFiltros} />
-        <ImportExportButtons tipo={tipo} onImportSuccess={() => window.location.reload()} />
+        <IOActions
+          config={
+            tipo === "compra"
+              ? productosCompraIO
+              : tipo === "venta"
+              ? productosVentaIO
+              : productosElaboracionIO
+          }
+          onSuccess={() => window.location.reload()}
+        />
         <Button size="icon" variant={showConfig ? "default" : "ghost"} className="h-8 w-8" onClick={onToggleConfig} title="Configuración" aria-label="Configuración">
           <Settings className="h-4 w-4" strokeWidth={1.75} />
         </Button>

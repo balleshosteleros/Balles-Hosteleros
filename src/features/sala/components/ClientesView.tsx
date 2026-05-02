@@ -1,18 +1,24 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { Search, Plus, Star, UserCheck, UserX } from "lucide-react";
+import { Star, UserCheck, UserX } from "lucide-react";
 import { Cliente, ClasificacionCliente } from "@/features/sala/data/clientes";
-import { listClientes, createCliente, updateCliente, deleteCliente } from "@/features/sala/actions/clientes-actions";
+import { listClientes, createCliente } from "@/features/sala/actions/clientes-actions";
 import { toast } from "sonner";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
+import { IOActions } from "@/shared/io";
+import { clientesIO } from "@/features/sala/io/clientes.io";
 
 const clasificacionBadge: Record<ClasificacionCliente, string> = {
   "VIP": "bg-amber-100 text-amber-800 border-amber-300",
@@ -38,15 +44,14 @@ function mapDbToCliente(row: Record<string, unknown>): Cliente {
 }
 
 export function ClientesView() {
-  const { empresaActual } = useEmpresa();
   const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
-  const [filtro, setFiltro] = useState("TODOS");
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
 
   const loadClientes = useCallback(async () => {
-    setLoading(true);
     try {
       const res = await listClientes();
       if (res.ok) {
@@ -56,8 +61,6 @@ export function ClientesView() {
       }
     } catch {
       toast.error("Error de conexion al cargar clientes");
-    } finally {
-      setLoading(false);
     }
   }, []);
 
@@ -65,26 +68,45 @@ export function ClientesView() {
     loadClientes();
   }, [loadClientes]);
 
-  const filtrados = clientes.filter(c => {
-    const matchBusqueda = c.nombre.toLowerCase().includes(busqueda.toLowerCase()) || c.telefono.includes(busqueda) || c.email.toLowerCase().includes(busqueda.toLowerCase());
-    const matchFiltro = filtro === "TODOS" || c.clasificacion === filtro;
-    return matchBusqueda && matchFiltro;
-  });
+  const acceso = (c: Cliente, campo: string): unknown => {
+    if (campo === "clasificacion") return c.clasificacion;
+    if (campo === "visitas") return c.visitas;
+    if (campo === "ultimaVisita") return c.ultimaVisita;
+    if (campo === "nombre") return c.nombre;
+    return (c as unknown as Record<string, unknown>)[campo];
+  };
+
+  const filtrados = useMemo(() => {
+    let lista = clientes.filter((c) => {
+      if (!busqueda) return true;
+      const q = busqueda.toLowerCase();
+      return (
+        c.nombre.toLowerCase().includes(q) ||
+        c.telefono.includes(busqueda) ||
+        c.email.toLowerCase().includes(q)
+      );
+    });
+    lista = aplicarFiltrosToolbar(lista, filtros, acceso);
+    lista = aplicarOrdenToolbar(lista, orden, acceso);
+    return lista;
+  }, [clientes, busqueda, filtros, orden]);
 
   const vips = clientes.filter(c => c.clasificacion === "VIP").length;
   const frecuentes = clientes.filter(c => c.clasificacion === "FRECUENTE").length;
   const inactivos = clientes.filter(c => c.clasificacion === "INACTIVO").length;
 
+  const handleNuevo = async () => {
+    const res = await createCliente({ nombre: "Nuevo cliente" });
+    if (res.ok) {
+      toast.success("Cliente creado");
+      loadClientes();
+    } else {
+      toast.error(res.error ?? "Error al crear cliente");
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-end">
-        <Button onClick={async () => {
-          const res = await createCliente({ nombre: "Nuevo cliente" });
-          if (res.ok) { toast.success("Cliente creado"); loadClientes(); }
-          else toast.error(res.error ?? "Error al crear cliente");
-        }}><Plus className="h-4 w-4 mr-2" />Nuevo cliente</Button>
-      </div>
-
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold">{clientes.length}</p><p className="text-xs text-muted-foreground">Total clientes</p></CardContent></Card>
         <Card><CardContent className="p-4 text-center"><div className="flex items-center justify-center gap-1"><Star className="h-4 w-4 text-amber-500" /><p className="text-2xl font-bold">{vips}</p></div><p className="text-xs text-muted-foreground">VIP</p></CardContent></Card>
@@ -92,19 +114,46 @@ export function ClientesView() {
         <Card><CardContent className="p-4 text-center"><div className="flex items-center justify-center gap-1"><UserX className="h-4 w-4 text-muted-foreground" /><p className="text-2xl font-bold">{inactivos}</p></div><p className="text-xs text-muted-foreground">Inactivos</p></CardContent></Card>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar por nombre, teléfono o email..." className="pl-9" value={busqueda} onChange={e => setBusqueda(e.target.value)} />
-        </div>
-        <Select value={filtro} onValueChange={setFiltro}>
-          <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="TODOS">Todas</SelectItem>
-            {(["VIP", "FRECUENTE", "REGULAR", "NUEVO", "INACTIVO"] as ClasificacionCliente[]).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
+      <SubmoduleToolbar
+        busqueda={busqueda}
+        onBusquedaChange={setBusqueda}
+        placeholderBusqueda="Buscar por nombre, teléfono o email..."
+        onNuevo={handleNuevo}
+        textoNuevo="Nuevo cliente"
+        campos={[
+          {
+            campo: "clasificacion",
+            label: "Clasificación",
+            tipo: "lista",
+            opciones: ["VIP", "FRECUENTE", "REGULAR", "NUEVO", "INACTIVO"] as ClasificacionCliente[],
+          },
+          { campo: "visitas", label: "Visitas", tipo: "numero" },
+          { campo: "ultimaVisita", label: "Última visita", tipo: "fecha" },
+        ]}
+        filtros={filtros}
+        onFiltrosChange={setFiltros}
+        ordenOpciones={[
+          { campo: "nombre", label: "Nombre" },
+          { campo: "visitas", label: "Visitas" },
+          { campo: "ultimaVisita", label: "Última visita" },
+        ]}
+        orden={orden}
+        onOrdenChange={setOrden}
+        columnas={[
+          { campo: "nombre", label: "Nombre" },
+          { campo: "telefono", label: "Teléfono" },
+          { campo: "email", label: "Email" },
+          { campo: "clasificacion", label: "Clasificación" },
+          { campo: "visitas", label: "Visitas" },
+          { campo: "ultimaVisita", label: "Última visita" },
+          { campo: "observaciones", label: "Observaciones" },
+        ]}
+        columnasVisibles={columnasVisibles}
+        onColumnasVisiblesChange={setColumnasVisibles}
+        extraDerecha={
+          <IOActions config={clientesIO} onSuccess={() => window.location.reload()} />
+        }
+      />
 
       <Card>
         <CardContent className="p-0">

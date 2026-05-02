@@ -12,12 +12,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, PieChart, Pie, Cell, LineChart, Line, ResponsiveContainer } from "recharts";
-import { Search, Plus, Pencil, Trash2, Eye, BarChart3, Upload, FileText } from "lucide-react";
+import { Pencil, Trash2, Eye, BarChart3, Upload, FileText } from "lucide-react";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
 import { toast } from "sonner";
 
 const allResultados: Record<string, ResultadoMensual[]> = {};
@@ -49,7 +56,9 @@ export function DescuentosView() {
   const [resultados, setResultados] = useState<ResultadoMensual[]>(() => getResultados(empresaActual.id));
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
-  const [filtroActivo, setFiltroActivo] = useState<"todos" | "activo" | "inactivo">("todos");
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [modalOpen, setModalOpen] = useState(false);
   const [detalleOpen, setDetalleOpen] = useState(false);
   const [editando, setEditando] = useState<Descuento | null>(null);
@@ -84,13 +93,21 @@ export function DescuentosView() {
     setResultados(getResultados(empresaActual.id));
   }
 
+  const acceso = (d: Descuento, campo: string): unknown => {
+    if (campo === "activo") return d.activo;
+    if (campo === "codigo") return d.codigo;
+    if (campo === "ejecucion") return d.ejecucion;
+    if (campo === "ultimaActualizacion") return d.ultimaActualizacion;
+    return (d as unknown as Record<string, unknown>)[campo];
+  };
+
   const filtrados = useMemo(() => {
     let list = descuentos;
-    if (filtroActivo === "activo") list = list.filter((d) => d.activo);
-    if (filtroActivo === "inactivo") list = list.filter((d) => !d.activo);
     if (busqueda.trim()) { const q = busqueda.toLowerCase(); list = list.filter((d) => d.codigo.toLowerCase().includes(q) || d.ejecucion.toLowerCase().includes(q)); }
+    list = aplicarFiltrosToolbar(list, filtros, acceso);
+    list = aplicarOrdenToolbar(list, orden, acceso);
     return list;
-  }, [descuentos, busqueda, filtroActivo]);
+  }, [descuentos, busqueda, filtros, orden]);
 
   function openCrear() { setEditando(null); setForm({ codigo: "", ejecucion: "", tenerEnCuenta: "", activo: true, observaciones: "" }); setModalOpen(true); }
   function openEditar(d: Descuento) { setEditando(d); setForm({ ...d }); setModalOpen(true); }
@@ -145,21 +162,33 @@ export function DescuentosView() {
           </TabsList>
 
           <TabsContent value="listado" className="space-y-4">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="relative flex-1 min-w-[200px] max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Buscar descuento…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} className="pl-9" />
-              </div>
-              <Select value={filtroActivo} onValueChange={(v) => setFiltroActivo(v as "todos" | "activo" | "inactivo")}>
-                <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos</SelectItem>
-                  <SelectItem value="activo">Activos</SelectItem>
-                  <SelectItem value="inactivo">Inactivos</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button variant="primary" size="sm" onClick={openCrear}><Plus className="h-4 w-4" />Nuevo</Button>
-            </div>
+            <SubmoduleToolbar
+              busqueda={busqueda}
+              onBusquedaChange={setBusqueda}
+              placeholderBusqueda="Buscar descuento…"
+              onNuevo={openCrear}
+              campos={[
+                { campo: "activo", label: "Activo", tipo: "booleano" },
+              ]}
+              filtros={filtros}
+              onFiltrosChange={setFiltros}
+              ordenOpciones={[
+                { campo: "codigo", label: "Código" },
+                { campo: "ejecucion", label: "Ejecución" },
+                { campo: "ultimaActualizacion", label: "Actualizado" },
+              ]}
+              orden={orden}
+              onOrdenChange={setOrden}
+              columnas={[
+                { campo: "codigo", label: "Código" },
+                { campo: "ejecucion", label: "Ejecución" },
+                { campo: "tenerEnCuenta", label: "A tener en cuenta" },
+                { campo: "activo", label: "Activo" },
+                { campo: "ultimaActualizacion", label: "Actualizado" },
+              ]}
+              columnasVisibles={columnasVisibles}
+              onColumnasVisiblesChange={setColumnasVisibles}
+            />
 
             <Card>
               <CardContent className="p-0">

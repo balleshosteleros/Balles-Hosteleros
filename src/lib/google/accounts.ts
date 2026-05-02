@@ -1,5 +1,7 @@
 import { cookies } from "next/headers";
-import type { ResponseCookies } from "next/dist/compiled/@edge-runtime/cookies";
+import type { NextResponse } from "next/server";
+
+type ResponseCookies = NextResponse["cookies"];
 
 /**
  * Multi-cuenta Google estilo Gmail.

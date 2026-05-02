@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { LogIn, LogOut, Coffee, Play, Loader2, Clock } from "lucide-react";
+import { LogIn, LogOut, Coffee, Play, Loader2, Clock, Plus } from "lucide-react";
 import { toast } from "sonner";
 import {
   ficharEntradaPersonal,
@@ -38,7 +38,13 @@ function calcHorasVivas(fichaje: MiFichajeHoy | null): string {
   return `${horas}h ${String(minutos).padStart(2, "0")}m`;
 }
 
-export function FichajeBar({ onChange }: { onChange?: () => void }) {
+export function FichajeBar({
+  onChange,
+  onSolicitar,
+}: {
+  onChange?: () => void;
+  onSolicitar?: () => void;
+}) {
   const [fichaje, setFichaje] = useState<MiFichajeHoy | null>(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
@@ -152,42 +158,62 @@ export function FichajeBar({ onChange }: { onChange?: () => void }) {
         <div className="flex flex-wrap items-center gap-2">
           {sinFichar && (
             <Button
-              variant="default"
-              size="lg"
+              size="sm"
               disabled={loading || working}
               onClick={handleEntrada}
+              className="px-5 font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/25 ring-1 ring-emerald-500/40"
             >
-              {working ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogIn className="mr-2 h-4 w-4" />}
+              {working ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <LogIn className="mr-1.5 h-4 w-4" />}
               Fichar entrada
             </Button>
           )}
           {trabajando && (
             <>
-              <Button variant="outline" size="lg" disabled={working} onClick={handlePausa}>
-                <Coffee className="mr-2 h-4 w-4" />
+              <Button variant="outline" size="sm" disabled={working} onClick={handlePausa}>
+                <Coffee className="mr-1.5 h-4 w-4" />
                 Iniciar pausa
               </Button>
-              <Button variant="default" size="lg" disabled={working} onClick={handleSalida}>
-                {working ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogOut className="mr-2 h-4 w-4" />}
+              <Button
+                size="sm"
+                disabled={working}
+                onClick={handleSalida}
+                className="px-5 font-semibold bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-600/25 ring-1 ring-red-500/40"
+              >
+                {working ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <LogOut className="mr-1.5 h-4 w-4" />}
                 Fichar salida
               </Button>
             </>
           )}
           {enPausa && (
             <>
-              <Button variant="default" size="lg" disabled={working} onClick={handleReanudar}>
-                <Play className="mr-2 h-4 w-4" />
+              <Button variant="default" size="sm" disabled={working} onClick={handleReanudar}>
+                <Play className="mr-1.5 h-4 w-4" />
                 Reanudar trabajo
               </Button>
-              <Button variant="outline" size="lg" disabled={working} onClick={handleSalida}>
-                <LogOut className="mr-2 h-4 w-4" />
+              <Button
+                size="sm"
+                disabled={working}
+                onClick={handleSalida}
+                className="px-5 font-semibold bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-600/25 ring-1 ring-red-500/40"
+              >
+                <LogOut className="mr-1.5 h-4 w-4" />
                 Fichar salida
               </Button>
             </>
           )}
           {finalizado && (
-            <Button variant="outline" size="lg" disabled>
+            <Button variant="outline" size="sm" disabled>
               Jornada finalizada
+            </Button>
+          )}
+          {onSolicitar && (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={onSolicitar}
+            >
+              <Plus className="mr-1.5 h-4 w-4" />
+              Solicitar
             </Button>
           )}
         </div>

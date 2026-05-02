@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Table,
@@ -23,7 +22,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { CheckCircle2, XCircle, Loader2, Search, Inbox } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, Inbox } from "lucide-react";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+} from "@/shared/components/SubmoduleToolbar";
 import { toast } from "sonner";
 import {
   aprobarSolicitud,
@@ -68,6 +74,8 @@ export function SolicitudesView() {
   const [items, setItems] = useState<SolicitudPersonal[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
 
   const [revisando, setRevisando] = useState<SolicitudPersonal | null>(null);
   const [modo, setModo] = useState<Modo>("aprobar");
@@ -86,16 +94,31 @@ export function SolicitudesView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
+  const acceso = (s: SolicitudPersonal, campo: string): unknown => {
+    if (campo === "tipo") return s.tipo === "ausencia" ? "Ausencia" : "Trabajo";
+    if (campo === "subtipo") return SUBTIPO_LABEL[s.subtipo];
+    if (campo === "estado") return ESTADO_LABEL[s.estado];
+    if (campo === "empleado") return s.empleadoNombre;
+    if (campo === "fechaInicio") return s.fechaInicio;
+    if (campo === "createdAt") return s.createdAt;
+    return (s as unknown as Record<string, unknown>)[campo];
+  };
+
   const filtrados = useMemo(() => {
-    if (!busqueda.trim()) return items;
-    const q = busqueda.toLowerCase();
-    return items.filter(
-      (s) =>
-        s.empleadoNombre.toLowerCase().includes(q) ||
-        SUBTIPO_LABEL[s.subtipo].toLowerCase().includes(q) ||
-        s.motivo.toLowerCase().includes(q),
-    );
-  }, [items, busqueda]);
+    let lista = items;
+    if (busqueda.trim()) {
+      const q = busqueda.toLowerCase();
+      lista = lista.filter(
+        (s) =>
+          s.empleadoNombre.toLowerCase().includes(q) ||
+          SUBTIPO_LABEL[s.subtipo].toLowerCase().includes(q) ||
+          s.motivo.toLowerCase().includes(q),
+      );
+    }
+    lista = aplicarFiltrosToolbar(lista, filtros, acceso);
+    lista = aplicarOrdenToolbar(lista, orden, acceso);
+    return lista;
+  }, [items, busqueda, filtros, orden]);
 
   const stats = useMemo(() => {
     const pendientes = items.filter((s) => s.estado === "pendiente").length;
@@ -154,23 +177,44 @@ export function SolicitudesView() {
 
       {/* Tabs + buscador */}
       <Tabs value={tab} onValueChange={(v) => setTab(v as "pendientes" | "todas")}>
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <TabsList>
-            <TabsTrigger value="pendientes">Pendientes</TabsTrigger>
-            <TabsTrigger value="todas">Historial</TabsTrigger>
-          </TabsList>
-          <div className="relative w-full max-w-xs">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              placeholder="Buscar por empleado, tipo o motivo…"
-              className="pl-8"
-            />
-          </div>
-        </div>
+        <TabsList>
+          <TabsTrigger value="pendientes">Pendientes</TabsTrigger>
+          <TabsTrigger value="todas">Historial</TabsTrigger>
+        </TabsList>
 
-        <TabsContent value={tab} className="mt-4">
+        <TabsContent value={tab} className="mt-4 space-y-4">
+          <SubmoduleToolbar
+            busqueda={busqueda}
+            onBusquedaChange={setBusqueda}
+            placeholderBusqueda="Buscar por empleado, tipo o motivo..."
+            ocultarNuevo
+            campos={[
+              { campo: "tipo", label: "Tipo", tipo: "lista", opciones: ["Ausencia", "Trabajo"] },
+              {
+                campo: "subtipo",
+                label: "Subtipo",
+                tipo: "lista",
+                opciones: [...new Set(items.map((s) => SUBTIPO_LABEL[s.subtipo]))],
+              },
+              {
+                campo: "estado",
+                label: "Estado",
+                tipo: "lista",
+                opciones: [...new Set(items.map((s) => ESTADO_LABEL[s.estado]))],
+              },
+              { campo: "fechaInicio", label: "Fecha inicio", tipo: "fecha" },
+            ]}
+            filtros={filtros}
+            onFiltrosChange={setFiltros}
+            ordenOpciones={[
+              { campo: "empleado", label: "Empleado" },
+              { campo: "fechaInicio", label: "Fecha inicio" },
+              { campo: "createdAt", label: "Enviada" },
+              { campo: "estado", label: "Estado" },
+            ]}
+            orden={orden}
+            onOrdenChange={setOrden}
+          />
           <Card>
             {loading ? (
               <div className="flex items-center justify-center h-40 text-muted-foreground">

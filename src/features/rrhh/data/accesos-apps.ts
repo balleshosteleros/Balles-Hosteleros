@@ -63,9 +63,6 @@ export const DEPARTAMENTOS = [
 const logo = (domain: string) => `https://icon.horse/icon/${domain}`;
 // Simple Icons CDN: SVGs vectoriales oficiales de marcas conocidas
 const si = (slug: string, hex = "000000") => `https://cdn.simpleicons.org/${slug}/${hex}`;
-// Google Favicon 256px: fallback para marcas pequeñas sin icono en icon.horse
-const gfav = (domain: string) =>
-  `https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://${domain}&size=256`;
 const today = "2026-04-13";
 
 // ─── HABANA ──────────────────────────────────────────────────────────────────
@@ -73,7 +70,7 @@ const HABANA_APPS: AccesoApp[] = [
   // SISTEMAS DE GESTIÓN
   {
     id: "ha-sg1", nombre: "Banktrack", descripcion: "Control financiero y tesorería empresarial",
-    url: "https://app.banktrack.com", icono: "🏦", logoUrl: gfav("banktrack.com"),
+    url: "https://app.banktrack.com", icono: "🏦", logoUrl: "/icons/apps/banktrack.png",
     categoria: "Sistemas de gestión", departamentos: ["Contabilidad", "Dirección"],
     rolesAutorizados: ["Dirección", "Gerencia"], usuario: "", contrasena: "",
     estado: "Activo", responsable: "Pedro Ruiz", notas: "", tipoIntegracion: "enlace",
@@ -81,7 +78,7 @@ const HABANA_APPS: AccesoApp[] = [
   },
   {
     id: "ha-sg2", nombre: "Ágora", descripcion: "Software TPV para hostelería",
-    url: "https://www.agora-pv.com", icono: "🍽️", logoUrl: gfav("agora-pv.com"),
+    url: "https://www.agora-pv.com", icono: "🍽️", logoUrl: "/icons/apps/agora.png",
     categoria: "Sistemas de gestión", departamentos: ["Gerencia", "Dirección"],
     rolesAutorizados: ["Dirección", "Gerencia"], usuario: "", contrasena: "",
     estado: "Activo", responsable: "María García", notas: "", tipoIntegracion: "enlace",
@@ -97,7 +94,7 @@ const HABANA_APPS: AccesoApp[] = [
   },
   {
     id: "ha-sg4", nombre: "Cover Manager", descripcion: "Gestión de reservas para restaurantes",
-    url: "https://www.covermanager.com", icono: "📅", logoUrl: gfav("covermanager.com"),
+    url: "https://www.covermanager.com", icono: "📅", logoUrl: logo("covermanager.com"),
     categoria: "Sistemas de gestión", departamentos: ["Gerencia", "Dirección"],
     rolesAutorizados: ["Dirección", "Gerencia"], usuario: "", contrasena: "",
     estado: "Activo", responsable: "Carlos Martínez", notas: "", tipoIntegracion: "enlace",
@@ -105,7 +102,7 @@ const HABANA_APPS: AccesoApp[] = [
   },
   {
     id: "ha-sg5", nombre: "B2com", descripcion: "Plataforma de gestión para hostelería",
-    url: "https://www.b2com.es", icono: "🏢", logoUrl: gfav("b2com.es"), // icon.horse no tiene cobertura de este dominio
+    url: "https://www.b2com.es", icono: "🏢", logoUrl: "/icons/apps/b2com.png",
     categoria: "Sistemas de gestión", departamentos: ["Dirección"],
     rolesAutorizados: ["Dirección"], usuario: "", contrasena: "",
     estado: "Activo", responsable: "Pedro Ruiz", notas: "", tipoIntegracion: "enlace",
@@ -113,7 +110,7 @@ const HABANA_APPS: AccesoApp[] = [
   },
   {
     id: "ha-sg6", nombre: "Joombo", descripcion: "Gestión integral de restaurante",
-    url: "https://www.joombo.com", icono: "🍴", logoUrl: gfav("joombo.com"), // icon.horse no tiene cobertura de este dominio
+    url: "https://www.joombo.com", icono: "🍴", logoUrl: "/icons/apps/joombo.png",
     categoria: "Sistemas de gestión", departamentos: ["Gerencia", "Dirección"],
     rolesAutorizados: ["Dirección", "Gerencia"], usuario: "", contrasena: "",
     estado: "Activo", responsable: "Carlos Martínez", notas: "", tipoIntegracion: "enlace",
@@ -121,7 +118,7 @@ const HABANA_APPS: AccesoApp[] = [
   },
   {
     id: "ha-sg7", nombre: "High Level", descripcion: "CRM y marketing automation",
-    url: "https://app.gohighlevel.com", icono: "📊", logoUrl: logo("gohighlevel.com"),
+    url: "https://app.gohighlevel.com", icono: "📊", logoUrl: "/icons/apps/highlevel.png",
     categoria: "Sistemas de gestión", departamentos: ["Marketing", "Dirección"],
     rolesAutorizados: ["Dirección", "Marketing"], usuario: "", contrasena: "",
     estado: "Activo", responsable: "Carlos Martínez", notas: "", tipoIntegracion: "enlace",
@@ -132,7 +129,7 @@ const HABANA_APPS: AccesoApp[] = [
   {
     id: "ha-bf1", nombre: "BBVA Net Cash", descripcion: "Banca online empresarial BBVA",
     url: "https://www.bbva.es/empresas/productos/banca-electronica/net-cash.html", icono: "💳",
-    logoUrl: si("bbva", "004481"), categoria: "Banca y finanzas",
+    logoUrl: "/icons/apps/bbva.png", categoria: "Banca y finanzas",
     departamentos: ["Contabilidad", "Dirección"], rolesAutorizados: ["Dirección"],
     usuario: "", contrasena: "", estado: "Activo", responsable: "Pedro Ruiz",
     notas: "Doble factor obligatorio.", tipoIntegracion: "enlace",
@@ -295,7 +292,7 @@ const BACANAL_APPS: AccesoApp[] = [
   // SISTEMAS DE GESTIÓN
   {
     id: "ba-sg1", nombre: "Banktrack", descripcion: "Control financiero y tesorería empresarial",
-    url: "https://app.banktrack.com", icono: "🏦", logoUrl: gfav("banktrack.com"),
+    url: "https://app.banktrack.com", icono: "🏦", logoUrl: "/icons/apps/banktrack.png",
     categoria: "Sistemas de gestión", departamentos: ["Contabilidad", "Dirección"],
     rolesAutorizados: ["Dirección", "Gerencia"], usuario: "", contrasena: "",
     estado: "Activo", responsable: "Lucía Pérez", notas: "", tipoIntegracion: "enlace",
@@ -303,7 +300,7 @@ const BACANAL_APPS: AccesoApp[] = [
   },
   {
     id: "ba-sg2", nombre: "Ágora", descripcion: "Software TPV para hostelería",
-    url: "https://www.agora-pv.com", icono: "🍽️", logoUrl: gfav("agora-pv.com"),
+    url: "https://www.agora-pv.com", icono: "🍽️", logoUrl: "/icons/apps/agora.png",
     categoria: "Sistemas de gestión", departamentos: ["Gerencia", "Dirección"],
     rolesAutorizados: ["Dirección", "Gerencia"], usuario: "", contrasena: "",
     estado: "Activo", responsable: "Andrés Jiménez", notas: "", tipoIntegracion: "enlace",
@@ -319,7 +316,7 @@ const BACANAL_APPS: AccesoApp[] = [
   },
   {
     id: "ba-sg4", nombre: "Cover Manager", descripcion: "Gestión de reservas para restaurantes",
-    url: "https://www.covermanager.com", icono: "📅", logoUrl: gfav("covermanager.com"),
+    url: "https://www.covermanager.com", icono: "📅", logoUrl: logo("covermanager.com"),
     categoria: "Sistemas de gestión", departamentos: ["Gerencia", "Dirección"],
     rolesAutorizados: ["Dirección", "Gerencia"], usuario: "", contrasena: "",
     estado: "Activo", responsable: "Andrés Jiménez", notas: "", tipoIntegracion: "enlace",
@@ -327,7 +324,7 @@ const BACANAL_APPS: AccesoApp[] = [
   },
   {
     id: "ba-sg5", nombre: "High Level", descripcion: "CRM y marketing automation",
-    url: "https://app.gohighlevel.com", icono: "📊", logoUrl: logo("gohighlevel.com"),
+    url: "https://app.gohighlevel.com", icono: "📊", logoUrl: "/icons/apps/highlevel.png",
     categoria: "Sistemas de gestión", departamentos: ["Marketing", "Dirección"],
     rolesAutorizados: ["Dirección", "Marketing"], usuario: "", contrasena: "",
     estado: "Activo", responsable: "Andrés Jiménez", notas: "", tipoIntegracion: "enlace",
@@ -338,7 +335,7 @@ const BACANAL_APPS: AccesoApp[] = [
   {
     id: "ba-bf1", nombre: "BBVA Net Cash", descripcion: "Banca online empresarial BBVA",
     url: "https://www.bbva.es/empresas/productos/banca-electronica/net-cash.html", icono: "💳",
-    logoUrl: si("bbva", "004481"), categoria: "Banca y finanzas",
+    logoUrl: "/icons/apps/bbva.png", categoria: "Banca y finanzas",
     departamentos: ["Contabilidad", "Dirección"], rolesAutorizados: ["Dirección"],
     usuario: "", contrasena: "", estado: "Activo", responsable: "Andrés Jiménez",
     notas: "Doble factor obligatorio.", tipoIntegracion: "enlace",

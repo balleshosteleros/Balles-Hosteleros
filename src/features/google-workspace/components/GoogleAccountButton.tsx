@@ -14,32 +14,45 @@ import {
 import { Button } from "@/components/ui/button";
 import { useGoogleConnection, type CuentaGoogle } from "./useGoogleConnection";
 
+const GOOGLE_RING_BG =
+  "conic-gradient(from 0deg, #4285F4 0deg, #4285F4 90deg, #EA4335 90deg, #EA4335 180deg, #FBBC05 180deg, #FBBC05 270deg, #34A853 270deg, #34A853 360deg)";
+
 function Avatar({
   cuenta,
   size = "sm",
+  showRing = true,
 }: {
   cuenta: { email?: string | null; name?: string | null; picture?: string | null };
   size?: "sm" | "md" | "lg";
+  showRing?: boolean;
 }) {
   const dims =
     size === "lg" ? "h-9 w-9 text-sm" : size === "md" ? "h-8 w-8 text-xs" : "h-7 w-7 text-[11px]";
+  const ringPad = size === "lg" ? "p-[2px]" : "p-[1.5px]";
+  const innerGap = size === "lg" ? "p-[1.5px]" : "p-[1px]";
   const inicial = (cuenta.name || cuenta.email || "G").charAt(0).toUpperCase();
-  if (cuenta.picture) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={cuenta.picture}
-        alt={cuenta.name ?? cuenta.email ?? "Cuenta Google"}
-        referrerPolicy="no-referrer"
-        className={`${dims} shrink-0 rounded-full object-cover`}
-      />
-    );
-  }
-  return (
+  const inner = cuenta.picture ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={cuenta.picture}
+      alt={cuenta.name ?? cuenta.email ?? "Cuenta Google"}
+      referrerPolicy="no-referrer"
+      className={`${dims} shrink-0 rounded-full object-cover`}
+    />
+  ) : (
     <div
       className={`${dims} flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-blue-700 font-bold text-white`}
     >
       {inicial}
+    </div>
+  );
+  if (!showRing) return inner;
+  return (
+    <div
+      className={`${ringPad} shrink-0 rounded-full`}
+      style={{ background: GOOGLE_RING_BG }}
+    >
+      <div className={`${innerGap} rounded-full bg-card`}>{inner}</div>
     </div>
   );
 }
@@ -206,9 +219,10 @@ export function GoogleAccountButton() {
               pathname || "/",
             )}&switch=1`}
             className="cursor-pointer"
+            title="Solo la primera vez por cuenta. Después cambias con un click."
           >
             <Plus className="mr-2 h-4 w-4" />
-            Añadir otra cuenta
+            Añadir otra cuenta de Google
           </a>
         </DropdownMenuItem>
 

@@ -2,14 +2,22 @@
 
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, MoreVertical, Building2, User, Briefcase, Settings } from "lucide-react";
+import { MoreVertical, Building2, User, Briefcase } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ContactoContable, TipoContacto } from "@/features/contabilidad/data/contabilidad";
 import { listContactos } from "@/features/contabilidad/actions/contabilidad-actions";
-import { FiltrosAvanzados, type FiltroActivo, type CampoFiltro } from "@/features/logistica/components/FiltrosAvanzados";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
+import { IOActions } from "@/shared/io";
+import { contactosContablesIO } from "@/features/contabilidad/io/contactos.io";
 import { toast } from "sonner";
 
 const TABS: { id: string; label: string }[] = [
@@ -20,8 +28,6 @@ const TABS: { id: string; label: string }[] = [
 ];
 
 const tipoIcon: Record<TipoContacto, typeof Building2> = { EMPRESA: Building2, AUTONOMO: Briefcase, PARTICULAR: User };
-
-type CampoContacto = "tipo" | "categoria" | "etiquetas";
 
 function mapDbToContacto(row: Record<string, unknown>): ContactoContable {
   return {
@@ -42,8 +48,9 @@ export function ContactosView() {
   const [busqueda, setBusqueda] = useState("");
   const [contactos, setContactos] = useState<ContactoContable[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filtros, setFiltros] = useState<FiltroActivo<CampoContacto>[]>([]);
-  const [showConfig, setShowConfig] = useState(false);
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
 
   const loadContactos = useCallback(async () => {
     setLoading(true);
@@ -65,29 +72,41 @@ export function ContactosView() {
     loadContactos();
   }, [loadContactos]);
 
-  const camposFiltro = useMemo((): CampoFiltro<CampoContacto>[] => {
-    const uniq = (arr: string[]) => [...new Set(arr.filter(Boolean))].sort();
-    const allEtiquetas = contactos.flatMap(c => c.etiquetas);
-    return [
-      { campo: "tipo", label: "Tipo", tipo: "lista", opciones: ["EMPRESA", "AUTONOMO", "PARTICULAR"] },
-      { campo: "categoria", label: "Categoría", tipo: "lista", opciones: uniq(contactos.map(c => c.categoria)) },
-      { campo: "etiquetas", label: "Etiquetas", tipo: "lista", opciones: uniq(allEtiquetas) },
-    ];
-  }, [contactos]);
+  const categoriasUsadas = useMemo(
+    () => [...new Set(contactos.map(c => c.categoria).filter(Boolean))].sort(),
+    [contactos],
+  );
+  const etiquetasUsadas = useMemo(
+    () => [...new Set(contactos.flatMap(c => c.etiquetas))].sort(),
+    [contactos],
+  );
+
+  const acceso = (c: ContactoContable, campo: string): unknown => {
+    if (campo === "tipo") return c.tipo;
+    if (campo === "categoria") return c.categoria;
+    if (campo === "etiquetas") return c.etiquetas;
+    if (campo === "nombre") return c.nombre;
+    if (campo === "email") return c.email;
+    return (c as unknown as Record<string, unknown>)[campo];
+  };
 
   const filtrados = useMemo(() => {
-    return contactos.filter(c => {
-      const matchTab = tab === "TODOS" || c.tipo === tab;
-      if (!matchTab) return false;
-      for (const f of filtros) {
-        if (f.campo === "tipo" && f.valores?.length && !f.valores.includes(c.tipo)) return false;
-        if (f.campo === "categoria" && f.valores?.length && !f.valores.includes(c.categoria)) return false;
-        if (f.campo === "etiquetas" && f.valores?.length && !f.valores.some(v => c.etiquetas.includes(v))) return false;
-      }
+    let lista = contactos.filter(c => {
+      if (tab !== "TODOS" && c.tipo !== tab) return false;
       const q = busqueda.toLowerCase();
       return !q || c.nombre.toLowerCase().includes(q) || c.email.toLowerCase().includes(q) || c.documento.toLowerCase().includes(q);
     });
-  }, [contactos, tab, busqueda, filtros]);
+    const filtrosEtiqueta = filtros.filter(f => f.campo === "etiquetas");
+    const otrosFiltros = filtros.filter(f => f.campo !== "etiquetas");
+    lista = aplicarFiltrosToolbar(lista, otrosFiltros, acceso);
+    if (filtrosEtiqueta.length > 0) {
+      lista = lista.filter(c =>
+        filtrosEtiqueta.every(f => f.valores?.some(v => c.etiquetas.includes(v))),
+      );
+    }
+    lista = aplicarOrdenToolbar(lista, orden, acceso);
+    return lista;
+  }, [contactos, tab, busqueda, filtros, orden]);
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden">
@@ -104,27 +123,39 @@ export function ContactosView() {
 
       {/* Toolbar */}
       <div className="px-6 py-3">
-        <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-3">
-          <Button variant="primary" size="sm">
-            <Plus className="h-4 w-4" />Nuevo
-          </Button>
-          <div className="relative flex-1 min-w-[240px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar contactos…" className="pl-9" value={busqueda} onChange={e => setBusqueda(e.target.value)} />
-          </div>
-          <FiltrosAvanzados campos={camposFiltro} filtros={filtros} onChange={setFiltros} />
-          <Button size="icon" variant={showConfig ? "default" : "ghost"} className="h-8 w-8"
-            onClick={() => setShowConfig(v => !v)} title="Configuración" aria-label="Configuración">
-            <Settings className="h-4 w-4" strokeWidth={1.75} />
-          </Button>
-        </div>
+        <SubmoduleToolbar
+          busqueda={busqueda}
+          onBusquedaChange={setBusqueda}
+          placeholderBusqueda="Buscar contactos…"
+          onNuevo={() => { /* nuevo */ }}
+          campos={[
+            { campo: "tipo", label: "Tipo", tipo: "lista", opciones: ["EMPRESA", "AUTONOMO", "PARTICULAR"] },
+            { campo: "categoria", label: "Categoría", tipo: "lista", opciones: categoriasUsadas },
+            { campo: "etiquetas", label: "Etiquetas", tipo: "lista", opciones: etiquetasUsadas },
+          ]}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenOpciones={[
+            { campo: "nombre", label: "Nombre" },
+            { campo: "email", label: "Email" },
+            { campo: "categoria", label: "Categoría" },
+          ]}
+          orden={orden}
+          onOrdenChange={setOrden}
+          columnas={[
+            { campo: "nombre", label: "Nombre" },
+            { campo: "documento", label: "Nº documento" },
+            { campo: "email", label: "Email" },
+            { campo: "categoria", label: "Conceptos de etiqueta" },
+            { campo: "etiquetas", label: "Etiquetas" },
+          ]}
+          columnasVisibles={columnasVisibles}
+          onColumnasVisiblesChange={setColumnasVisibles}
+          extraDerecha={
+            <IOActions config={contactosContablesIO} onSuccess={() => window.location.reload()} />
+          }
+        />
       </div>
-
-      {showConfig && (
-        <div className="mx-6 mb-3 rounded-xl border bg-card p-5">
-          <p className="text-sm text-muted-foreground">Configuración de contactos — próximamente.</p>
-        </div>
-      )}
 
       {/* Table */}
       <div className="flex-1 overflow-auto px-6 pb-4">

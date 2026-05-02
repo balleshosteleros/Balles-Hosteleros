@@ -24,10 +24,18 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Search, Plus, MoreHorizontal, ArrowLeft, Trash2, TrendingUp, Package, ClipboardCheck,
+  Plus, MoreHorizontal, ArrowLeft, Trash2, TrendingUp, Package, ClipboardCheck,
   Heart, Coins, Gift, AlertTriangle, CreditCard, ShieldCheck, Users, Settings2, FileText,
   BarChart3, Eye, Calendar, CheckCircle2, Info,
 } from "lucide-react";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
 
 const ICON_MAP: Record<string, React.ElementType> = {
   TrendingUp, Package, ClipboardCheck, Heart, Coins, Gift, BarChart3,
@@ -42,33 +50,68 @@ function ListadoBonus({ bonus, onSelect, onCrear }: {
   onSelect: (b: Bonus, tab?: string) => void;
   onCrear: () => void;
 }) {
-  const [busq, setBusq] = useState("");
-  const [filtro, setFiltro] = useState<"todos" | EstadoBonus>("todos");
+  const [busqueda, setBusqueda] = useState("");
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+
+  const tiposUsados = useMemo(
+    () => [...new Set(bonus.map((b) => b.tipo))].sort(),
+    [bonus],
+  );
+
+  const acceso = (b: Bonus, campo: string): unknown => {
+    if (campo === "estado") return ESTADO_BONUS_LABEL[b.estado];
+    if (campo === "tipo") return b.tipo;
+    if (campo === "periodicidad") return b.periodicidad;
+    if (campo === "nombre") return b.nombre;
+    return (b as unknown as Record<string, unknown>)[campo];
+  };
 
   const filtered = useMemo(() => {
-    let list = bonus;
-    if (filtro !== "todos") list = list.filter((b) => b.estado === filtro);
-    if (busq.trim()) { const q = busq.toLowerCase(); list = list.filter((b) => b.nombre.toLowerCase().includes(q) || b.tipo.toLowerCase().includes(q)); }
+    let list = bonus.filter((b) => {
+      if (busqueda) {
+        const q = busqueda.toLowerCase();
+        if (!b.nombre.toLowerCase().includes(q) && !b.tipo.toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
+    list = aplicarFiltrosToolbar(list, filtros, acceso);
+    list = aplicarOrdenToolbar(list, orden, acceso);
     return list;
-  }, [bonus, filtro, busq]);
+  }, [bonus, busqueda, filtros, orden]);
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-end">
-        <Button variant="primary" size="sm" onClick={onCrear}><Plus className="h-4 w-4" />Nuevo</Button>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[200px] max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar bonus..." value={busq} onChange={(e) => setBusq(e.target.value)} className="pl-9" />
-        </div>
-        {(["todos", "activo", "borrador", "inactivo", "archivado"] as const).map((f) => (
-          <Button key={f} size="sm" variant={filtro === f ? "default" : "outline"} onClick={() => setFiltro(f)}>
-            {f === "todos" ? "Todos" : ESTADO_BONUS_LABEL[f as EstadoBonus]}
-          </Button>
-        ))}
-      </div>
+      <SubmoduleToolbar
+        busqueda={busqueda}
+        onBusquedaChange={setBusqueda}
+        placeholderBusqueda="Buscar bonus..."
+        onNuevo={onCrear}
+        campos={[
+          {
+            campo: "estado",
+            label: "Estado",
+            tipo: "lista",
+            opciones: (Object.keys(ESTADO_BONUS_LABEL) as EstadoBonus[]).map((k) => ESTADO_BONUS_LABEL[k]),
+          },
+          { campo: "tipo", label: "Tipo", tipo: "lista", opciones: tiposUsados },
+          {
+            campo: "periodicidad",
+            label: "Periodicidad",
+            tipo: "lista",
+            opciones: [...new Set(bonus.map((b) => b.periodicidad))],
+          },
+        ]}
+        filtros={filtros}
+        onFiltrosChange={setFiltros}
+        ordenOpciones={[
+          { campo: "nombre", label: "Nombre" },
+          { campo: "tipo", label: "Tipo" },
+          { campo: "estado", label: "Estado" },
+        ]}
+        orden={orden}
+        onOrdenChange={setOrden}
+      />
 
       <div className="grid gap-4">
         {filtered.length === 0 && (

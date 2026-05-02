@@ -1,20 +1,13 @@
 "use client";
 
-import { Timer, Construction } from "lucide-react";
+import { Construction } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { SubpageHeader } from "./SubpageHeader";
 
 const DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
 export function MiHorarioView() {
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-5">
-      <SubpageHeader
-        title="Horario"
-        subtitle="Tu horario semanal asignado"
-        icon={Timer}
-      />
-
       <Card className="p-4 md:p-5">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2">
           {DIAS.map((dia) => (

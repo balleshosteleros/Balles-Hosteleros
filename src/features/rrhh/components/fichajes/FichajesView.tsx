@@ -11,12 +11,19 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Clock, AlertTriangle, CheckCircle2, Search, Filter, Plus, Settings2, ClipboardList, History } from "lucide-react";
+import { Clock, AlertTriangle, CheckCircle2, Settings2, ClipboardList, History } from "lucide-react";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
 
 function mapDbToFichaje(row: Record<string, unknown>): Fichaje {
   return {
@@ -49,8 +56,9 @@ export function FichajesView() {
     pausasActivas: true,
   });
   const [busqueda, setBusqueda] = useState("");
-  const [filtroEstado, setFiltroEstado] = useState<string>("todos");
-  const [filtroDpto, setFiltroDpto] = useState<string>("todos");
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [fichajeModal, setFichajeModal] = useState<Fichaje | null>(null);
 
   const loadFichajes = useCallback(async () => {
@@ -86,14 +94,25 @@ export function FichajesView() {
 
   const dptos = useMemo(() => [...new Set(fichajes.map(f => f.departamento))].sort(), [fichajes]);
 
+  const acceso = (f: Fichaje, campo: string): unknown => {
+    if (campo === "estado") return ESTADO_FICHAJE_LABEL[f.estado];
+    if (campo === "departamento") return f.departamento;
+    if (campo === "centro") return f.centro;
+    if (campo === "horasTotales") return f.horasTotales;
+    if (campo === "fecha") return f.fecha;
+    if (campo === "empleado") return f.empleadoNombre;
+    return (f as unknown as Record<string, unknown>)[campo];
+  };
+
   const fichajesFiltrados = useMemo(() => {
-    return fichajes.filter(f => {
+    let lista = fichajes.filter(f => {
       if (busqueda && !f.empleadoNombre.toLowerCase().includes(busqueda.toLowerCase())) return false;
-      if (filtroEstado !== "todos" && f.estado !== filtroEstado) return false;
-      if (filtroDpto !== "todos" && f.departamento !== filtroDpto) return false;
       return true;
     });
-  }, [fichajes, busqueda, filtroEstado, filtroDpto]);
+    lista = aplicarFiltrosToolbar(lista, filtros, acceso);
+    lista = aplicarOrdenToolbar(lista, orden, acceso);
+    return lista;
+  }, [fichajes, busqueda, filtros, orden]);
 
   const kpis = useMemo(() => {
     const total = fichajes.length;
@@ -123,33 +142,50 @@ export function FichajesView() {
         </TabsList>
 
         <TabsContent value="fichajes" className="space-y-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Buscar empleado..." value={busqueda} onChange={e => setBusqueda(e.target.value)} className="pl-9" />
-            </div>
-            <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-              <SelectTrigger className="w-[160px]"><Filter className="h-4 w-4 mr-1" /><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos los estados</SelectItem>
-                {(Object.keys(ESTADO_FICHAJE_LABEL) as EstadoFichaje[]).map(e => (
-                  <SelectItem key={e} value={e}>{ESTADO_FICHAJE_LABEL[e]}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={filtroDpto} onValueChange={setFiltroDpto}>
-              <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos los departamentos</SelectItem>
-                {dptos.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Button size="sm" className="gap-1" onClick={async () => {
+          <SubmoduleToolbar
+            busqueda={busqueda}
+            onBusquedaChange={setBusqueda}
+            placeholderBusqueda="Buscar empleado..."
+            textoNuevo="Fichar entrada"
+            onNuevo={async () => {
               const res = await ficharEntrada();
               if (res.ok) { toast.success("Entrada registrada"); loadFichajes(); }
               else toast.error(res.error ?? "Error al fichar entrada");
-            }}><Plus className="h-4 w-4" />Fichar entrada</Button>
-          </div>
+            }}
+            campos={[
+              {
+                campo: "estado",
+                label: "Estado",
+                tipo: "lista",
+                opciones: (Object.keys(ESTADO_FICHAJE_LABEL) as EstadoFichaje[]).map(e => ESTADO_FICHAJE_LABEL[e]),
+              },
+              { campo: "departamento", label: "Departamento", tipo: "lista", opciones: dptos },
+              { campo: "horasTotales", label: "Horas totales", tipo: "numero" },
+              { campo: "fecha", label: "Fecha", tipo: "fecha" },
+            ]}
+            filtros={filtros}
+            onFiltrosChange={setFiltros}
+            ordenOpciones={[
+              { campo: "empleado", label: "Empleado" },
+              { campo: "fecha", label: "Fecha" },
+              { campo: "horasTotales", label: "Horas" },
+              { campo: "departamento", label: "Departamento" },
+            ]}
+            orden={orden}
+            onOrdenChange={setOrden}
+            columnas={[
+              { campo: "empleado", label: "Empleado" },
+              { campo: "fecha", label: "Fecha" },
+              { campo: "entrada", label: "Entrada" },
+              { campo: "salida", label: "Salida" },
+              { campo: "pausa", label: "Pausa" },
+              { campo: "horas", label: "Horas" },
+              { campo: "estado", label: "Estado" },
+              { campo: "validador", label: "Validado por" },
+            ]}
+            columnasVisibles={columnasVisibles}
+            onColumnasVisiblesChange={setColumnasVisibles}
+          />
           <Card>
             <Table>
               <TableHeader>
