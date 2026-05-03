@@ -158,7 +158,10 @@ create index if not exists idx_toques_ganadores_empresa
   on public.toques_ganadores(empresa_id, periodo, periodo_inicio desc);
 
 -- ─── 7. VISTA agregada de balance ────────────────────────────
-create or replace view public.toques_balance as
+-- security_invoker=true → la vista respeta RLS del consumidor (no del creador).
+drop view if exists public.toques_balance;
+create view public.toques_balance
+with (security_invoker = true) as
 select
   m.empresa_id,
   m.user_id,
@@ -178,7 +181,9 @@ create or replace function public.toques_ranking(
   empleado_nombre  text,
   total            integer,
   antiguedad       timestamptz
-) language sql stable as $$
+) language sql stable
+set search_path = public, pg_temp
+as $$
   select
     m.user_id,
     coalesce(max(p.full_name), max(p.nombre), max(m.empleado_nombre)) as empleado_nombre,
@@ -195,7 +200,9 @@ $$;
 
 -- ─── 9. TRIGGERS de updated_at ───────────────────────────────
 create or replace function public.set_toques_updated_at()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql
+set search_path = public, pg_temp
+as $$
 begin new.updated_at = now(); return new; end; $$;
 
 drop trigger if exists toques_reglas_updated on public.toques_reglas;
@@ -297,18 +304,18 @@ cross join (values
 ) as x(codigo, nombre, descripcion, toques, periodicidad, activa)
 on conflict (empresa_id, codigo) do nothing;
 
--- Niveles (7 niveles de progresión)
+-- Niveles (5 niveles de progresión, genéricos para cualquier puesto)
 insert into public.toques_niveles (empresa_id, orden, nombre, toques_min, badge_color, badge_icon)
 select e.id, x.orden, x.nombre, x.toques_min, x.badge_color, x.badge_icon
 from public.empresas e
 cross join (values
-  (1::smallint, 'Aprendiz',          0,    '#9ca3af', 'Sprout'),
-  (2::smallint, 'Camarero',          100,  '#60a5fa', 'Coffee'),
-  (3::smallint, 'Maître',            300,  '#22d3ee', 'Wine'),
-  (4::smallint, 'Chef',              700,  '#34d399', 'ChefHat'),
-  (5::smallint, 'Chef Estrella',     1500, '#fbbf24', 'Star'),
-  (6::smallint, 'Maestro Hostelero', 3000, '#f97316', 'Award'),
-  (7::smallint, 'Leyenda Balles',    6000, '#a855f7', 'Crown')
+  -- Paleta pastel: Aprendiz=verde menta, Avanzado=azul cielo,
+  -- Veterano=bronce, Mentor=plata, Leyenda=oro.
+  (1::smallint, 'Aprendiz', 0,    '#a7d8b1', 'Sprout'),
+  (2::smallint, 'Avanzado', 150,  '#a3c8e8', 'Zap'),
+  (3::smallint, 'Veterano', 500,  '#c98c5e', 'Shield'),
+  (4::smallint, 'Mentor',   1000, '#c8d0d6', 'Award'),
+  (5::smallint, 'Leyenda',  2000, '#e8c468', 'Crown')
 ) as x(orden, nombre, toques_min, badge_color, badge_icon)
 on conflict (empresa_id, orden) do nothing;
 
@@ -325,6 +332,24 @@ cross join (values
   ('Super premio anual',          'Recompensa especial reservada al Empleado del Año. Personalizable por RRHH (ej. viaje fin de semana en pareja, todo pagado).',    0,   'regalo_anual_descriptivo',  99::smallint)
 ) as x(nombre, descripcion, coste_toques, tipo, orden)
 on conflict do nothing;
+
+-- ─── 11.5 REALTIME publication ───────────────────────────────
+-- Habilita Realtime para que el cliente reciba INSERTs de movimientos.
+-- Idempotente: si la publication ya tiene la tabla, el ALTER ignora.
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'toques_movimientos'
+  ) then
+    execute 'alter publication supabase_realtime add table public.toques_movimientos';
+  end if;
+exception when others then
+  -- Si la publication no existe en este entorno, lo ignoramos.
+  raise notice 'realtime publication setup skipped: %', sqlerrm;
+end $$;
 
 -- ─── 12. COMENTARIOS ─────────────────────────────────────────
 comment on table public.toques_movimientos is

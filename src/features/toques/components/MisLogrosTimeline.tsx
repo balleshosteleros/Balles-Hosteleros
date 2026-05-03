@@ -38,7 +38,7 @@ export function MisLogrosTimeline({ items }: Props) {
       {items.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-32 text-muted-foreground text-sm">
           <Inbox className="h-6 w-6 mb-1.5" />
-          Aún no has ganado toques. Cumple tus tareas y ficha a tiempo para empezar a sumar.
+          Aún no has ganado points. Cumple tus tareas y ficha a tiempo para empezar a sumar.
         </div>
       ) : (
         <ol className="space-y-2.5 max-h-80 overflow-y-auto pr-1">

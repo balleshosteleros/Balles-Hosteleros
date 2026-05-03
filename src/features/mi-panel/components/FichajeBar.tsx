@@ -14,6 +14,7 @@ import {
   iniciarPausaPersonal,
 } from "@/features/mi-panel/actions/mi-panel-actions";
 import type { MiFichajeHoy } from "@/features/mi-panel/types";
+import { formatHorasDecimal } from "@/shared/lib/timeUtils";
 
 function formatHora(iso: string | null): string {
   if (!iso) return "—";
@@ -29,13 +30,13 @@ function formatHora(iso: string | null): string {
 }
 
 function calcHorasVivas(fichaje: MiFichajeHoy | null): string {
-  if (!fichaje?.horaEntrada) return "0h 00m";
+  if (!fichaje?.horaEntrada) return "0:00 h";
   const entrada = new Date(fichaje.horaEntrada).getTime();
   const fin = fichaje.horaSalida ? new Date(fichaje.horaSalida).getTime() : Date.now();
   const ms = Math.max(0, fin - entrada);
   const horas = Math.floor(ms / 3600000);
   const minutos = Math.floor((ms % 3600000) / 60000);
-  return `${horas}h ${String(minutos).padStart(2, "0")}m`;
+  return `${horas}:${String(minutos).padStart(2, "0")} h`;
 }
 
 export function FichajeBar({
@@ -145,7 +146,7 @@ export function FichajeBar({
             </div>
             <div className="text-xl font-semibold mt-0.5 tabular-nums">
               {finalizado
-                ? `${fichaje?.horasTotales?.toFixed(2) ?? 0} h trabajadas`
+                ? `${formatHorasDecimal(fichaje?.horasTotales)} trabajadas`
                 : calcHorasVivas(fichaje)}
             </div>
           </div>
@@ -202,8 +203,14 @@ export function FichajeBar({
             </>
           )}
           {finalizado && (
-            <Button variant="outline" size="sm" disabled>
-              Jornada finalizada
+            <Button
+              size="sm"
+              disabled={loading || working}
+              onClick={handleEntrada}
+              className="px-5 font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/25 ring-1 ring-emerald-500/40"
+            >
+              {working ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <LogIn className="mr-1.5 h-4 w-4" />}
+              Fichar nueva entrada
             </Button>
           )}
           {onSolicitar && (

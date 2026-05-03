@@ -127,7 +127,7 @@ const miPanelSubs = [
   { title: "COMUNICADOS", url: "/mi-panel/comunicados", icon: Megaphone },
   { title: "DOCUMENTOS", url: "/mi-panel/documentos", icon: Files },
   { title: "FORMACIÓN", url: "/mi-panel/formacion", icon: GraduationCap },
-  { title: "TOQUES", url: "/mi-panel/toques", icon: Trophy },
+  { title: "POINTS", url: "/mi-panel/points", icon: Trophy },
 ];
 const rrhhSubs = [
   { title: "EMPLEADOS", url: "/rrhh/empleados", icon: UsersRound },
@@ -139,6 +139,7 @@ const rrhhSubs = [
   { title: "RECLUTAMIENTO", url: "/rrhh/reclutamiento", icon: UserRoundSearch },
   { title: "BOARDING", url: "/rrhh/boarding", icon: UserCheck },
   { title: "BONUS", url: "/rrhh/bonus", icon: Gift },
+  { title: "POINTS", url: "/rrhh/points", icon: Trophy },
   { title: "PAGOS", url: "/rrhh/pagos", icon: HandCoins },
   { title: "FORMACIÓN", url: "/rrhh/formacion", icon: GraduationCap },
 ];

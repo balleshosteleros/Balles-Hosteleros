@@ -2,7 +2,14 @@ export type ToquePeriodo = "dia" | "semana" | "mes" | "trimestre" | "ano" | "his
 
 export type CanjeEstado = "pendiente" | "aprobada" | "rechazada" | "disfrutada" | "anulada";
 
-export type ReglaPeriodicidad = "diario" | "semanal" | "trimestral";
+export type ReglaPeriodicidad = "diario" | "semanal" | "mensual" | "trimestral" | "hito";
+
+export type ReglaCategoria =
+  | "dia_a_dia"
+  | "constancia"
+  | "excelencia"
+  | "antiguedad"
+  | "otros";
 
 export type MovimientoOrigen = "regla" | "bonus_periodo" | "manual" | "canje" | "ajuste";
 
@@ -22,6 +29,7 @@ export interface Regla {
   descripcion: string;
   toques: number;
   periodicidad: ReglaPeriodicidad;
+  categoria: ReglaCategoria;
   activa: boolean;
 }
 
@@ -163,6 +171,22 @@ export const PERIODO_TITULO: Record<Exclude<ToquePeriodo, "historico" | "dia" | 
   mes: "Empleado del Mes",
   trimestre: "Empleado del Trimestre",
   ano: "Empleado del Año",
+};
+
+export const CATEGORIA_LABEL: Record<ReglaCategoria, string> = {
+  dia_a_dia: "Día a día",
+  constancia: "Constancia",
+  excelencia: "Excelencia operativa",
+  antiguedad: "Antigüedad y aniversarios",
+  otros: "Otros",
+};
+
+export const CATEGORIA_DESCRIPCION: Record<ReglaCategoria, string> = {
+  dia_a_dia: "Comportamientos del día a día. Pequeños points que suman a diario.",
+  constancia: "Recompensa la consistencia: semanas y trimestres impecables.",
+  excelencia: "Cumplimiento de protocolos críticos del negocio.",
+  antiguedad: "Premios automáticos por tiempo en la empresa, calculados desde tu fecha de alta.",
+  otros: "Otras formas de ganar points.",
 };
 
 export const BONUS_PERIODO_TOQUES: Record<Exclude<ToquePeriodo, "historico">, number> = {

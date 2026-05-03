@@ -104,7 +104,7 @@ export async function canjearRecompensa(
     if (disponible < recRow.coste_toques) {
       return {
         ok: false,
-        error: `Saldo insuficiente. Tienes ${disponible} toques disponibles y necesitas ${recRow.coste_toques}.`,
+        error: `Saldo insuficiente. Tienes ${disponible} points disponibles y necesitas ${recRow.coste_toques}.`,
       };
     }
 
@@ -128,7 +128,7 @@ export async function canjearRecompensa(
       return { ok: false, error: errorMessage(errI) };
     }
 
-    revalidatePath("/mi-panel/toques");
+    revalidatePath("/mi-panel/points");
     return { ok: true, data: { canjeId: ins.id as string } };
   } catch (e) {
     console.error("[canjearRecompensa]", e);
@@ -214,8 +214,8 @@ export async function aprobarCanje(
       return { ok: false, error: errorMessage(errM) };
     }
 
-    revalidatePath("/mi-panel/toques");
-    revalidatePath("/rrhh/toques");
+    revalidatePath("/mi-panel/points");
+    revalidatePath("/rrhh/points");
     return { ok: true, data: null };
   } catch (e) {
     console.error("[aprobarCanje]", e);
@@ -265,8 +265,8 @@ export async function rechazarCanje(
       return { ok: false, error: errorMessage(errU) };
     }
 
-    revalidatePath("/mi-panel/toques");
-    revalidatePath("/rrhh/toques");
+    revalidatePath("/mi-panel/points");
+    revalidatePath("/rrhh/points");
     return { ok: true, data: null };
   } catch (e) {
     console.error("[rechazarCanje]", e);
@@ -304,8 +304,8 @@ export async function marcarCanjeDisfrutado(
       .eq("id", canje.id);
     if (errU) return { ok: false, error: errorMessage(errU) };
 
-    revalidatePath("/mi-panel/toques");
-    revalidatePath("/rrhh/toques");
+    revalidatePath("/mi-panel/points");
+    revalidatePath("/rrhh/points");
     return { ok: true, data: null };
   } catch (e) {
     return { ok: false, error: errorMessage(e) };
@@ -360,8 +360,8 @@ export async function otorgarToqueManual(
       return { ok: false, error: errorMessage(errM) };
     }
 
-    revalidatePath("/mi-panel/toques");
-    revalidatePath("/rrhh/toques");
+    revalidatePath("/mi-panel/points");
+    revalidatePath("/rrhh/points");
     return { ok: true, data: null };
   } catch (e) {
     console.error("[otorgarToqueManual]", e);

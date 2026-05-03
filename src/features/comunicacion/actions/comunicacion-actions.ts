@@ -11,20 +11,28 @@ async function getContext() {
     .select("empresa_id, nombre, apellidos")
     .eq("user_id", user.id)
     .single();
+  const partes = [data?.nombre, data?.apellidos]
+    .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+    .map((s) => s.trim());
+  const nombreCompleto = partes.length > 0
+    ? partes.join(" ")
+    : (user.email ?? "Usuario");
   return {
     supabase,
     user,
     empresaId: data?.empresa_id ?? null,
-    nombre: data ? `${data.nombre} ${data.apellidos}` : null,
+    nombre: nombreCompleto,
   };
 }
 
-export async function listCanales() {
+export async function listCanales(empresaSlug: string) {
   try {
-    const { supabase, empresaId } = await getContext();
-    const query = supabase.from("canales").select("*").order("nombre");
-    if (empresaId) query.eq("empresa_id", empresaId);
-    const { data, error } = await query;
+    const { supabase } = await getContext();
+    const { data, error } = await supabase
+      .from("canales")
+      .select("*")
+      .eq("empresa_id", empresaSlug)
+      .order("nombre");
     if (error) throw error;
     return { ok: true, data: data ?? [] };
   } catch (err) {
@@ -37,15 +45,17 @@ export async function createCanal(
   nombre: string,
   tipo: string = "grupo",
   miembrosUserIds: string[] = [],
+  empresaSlug: string = "",
 ) {
   try {
-    const { supabase, empresaId } = await getContext();
+    const { supabase } = await getContext();
+    if (!empresaSlug) return { ok: false, error: "Falta empresa" };
     const { data, error } = await supabase
       .from("canales")
       .insert({
         nombre,
         tipo,
-        empresa_id: empresaId ?? "",
+        empresa_id: empresaSlug,
         miembros_user_ids: miembrosUserIds,
       })
       .select()
@@ -160,6 +170,63 @@ export async function sendMensaje(canalId: string, texto: string) {
   }
 }
 
+/**
+ * Envía un mensaje con adjunto. El cliente sube primero el archivo al bucket
+ * 'chat-archivos' y luego invoca esta acción con la URL pública firmada y los metadatos.
+ */
+export async function sendMensajeAdjunto(input: {
+  canalId: string;
+  texto?: string | null;
+  adjuntoUrl: string;
+  adjuntoTipo: "imagen" | "audio" | "archivo";
+  adjuntoNombre: string;
+  adjuntoMime: string;
+  adjuntoTamano: number;
+}) {
+  try {
+    const { supabase, user, nombre } = await getContext();
+    const { data, error } = await supabase
+      .from("mensajes")
+      .insert({
+        canal_id: input.canalId,
+        autor_id: user?.id ?? null,
+        autor_nombre: nombre ?? "Anónimo",
+        texto: input.texto ?? null,
+        adjunto_url: input.adjuntoUrl,
+        adjunto_tipo: input.adjuntoTipo,
+        adjunto_nombre: input.adjuntoNombre,
+        adjunto_mime: input.adjuntoMime,
+        adjunto_tamano: input.adjuntoTamano,
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return { ok: true, data };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error";
+    console.error("[comunicacion] sendMensajeAdjunto:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Devuelve una URL firmada (1h) para descargar/reproducir un adjunto privado.
+ */
+export async function getAdjuntoSignedUrl(path: string) {
+  try {
+    const { supabase } = await getContext();
+    const { data, error } = await supabase.storage
+      .from("chat-archivos")
+      .createSignedUrl(path, 60 * 60);
+    if (error) throw error;
+    return { ok: true, url: data?.signedUrl ?? null };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error";
+    console.error("[comunicacion] getAdjuntoSignedUrl:", msg);
+    return { ok: false, error: msg, url: null };
+  }
+}
+
 export async function updateCanalNombre(canalId: string, nombre: string) {
   try {
     const { supabase } = await getContext();
@@ -188,15 +255,18 @@ export async function updateCanalNombre(canalId: string, nombre: string) {
  *
  * Los canales de tipo "asunto" (creados manualmente por el usuario) se preservan.
  */
-export async function purgeCanalesObsoletos(nombresPermitidos: string[]) {
+export async function purgeCanalesObsoletos(
+  nombresPermitidos: string[],
+  empresaSlug: string,
+) {
   try {
-    const { supabase, empresaId } = await getContext();
-    if (!empresaId) return { ok: false, error: "No autenticado", borrados: 0 };
+    const { supabase } = await getContext();
+    if (!empresaSlug) return { ok: false, error: "Falta empresa", borrados: 0 };
     const allowed = new Set(nombresPermitidos.map((n) => n.trim().toUpperCase()));
     const { data, error } = await supabase
       .from("canales")
       .select("id, nombre, tipo")
-      .eq("empresa_id", empresaId);
+      .eq("empresa_id", empresaSlug);
     if (error) throw error;
     const aBorrar = (data ?? [])
       .filter((c: Record<string, unknown>) => {

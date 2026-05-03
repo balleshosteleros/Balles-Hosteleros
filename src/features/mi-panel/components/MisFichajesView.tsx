@@ -7,13 +7,28 @@ import { Badge } from "@/components/ui/badge";
 import { listarMisFichajes } from "@/features/mi-panel/actions/mi-panel-actions";
 import type { MiFichajeHoy } from "@/features/mi-panel/types";
 import { FichajeBar } from "./FichajeBar";
+import { formatHorasDecimal } from "@/shared/lib/timeUtils";
 
 const ESTADO_COLOR: Record<string, string> = {
   trabajando: "bg-emerald-100 text-emerald-700 border-emerald-200",
   pausa: "bg-amber-100 text-amber-700 border-amber-200",
   completado: "bg-slate-100 text-slate-700 border-slate-200",
   pendiente: "bg-blue-100 text-blue-700 border-blue-200",
+  "sin cerrar": "bg-orange-100 text-orange-700 border-orange-200",
 };
+
+function todayISO(): string {
+  return new Date().toISOString().split("T")[0];
+}
+
+// Un fichaje sin hora_salida cuya fecha ya pasó quedó huérfano:
+// el contador real está parado, así que no tiene sentido mostrarlo "trabajando".
+function deriveEstadoMostrado(f: MiFichajeHoy, hoy: string): string {
+  if (!f.horaSalida && f.estado === "trabajando" && f.fecha !== hoy) {
+    return "sin cerrar";
+  }
+  return f.estado;
+}
 
 function formatFecha(s: string): string {
   try {
@@ -83,7 +98,9 @@ export function MisFichajesView() {
                 </tr>
               </thead>
               <tbody>
-                {items.map((f) => (
+                {items.map((f) => {
+                  const estadoVista = deriveEstadoMostrado(f, todayISO());
+                  return (
                   <tr key={f.id} className="border-b last:border-0">
                     <td className="py-2 pr-3 font-medium">{formatFecha(f.fecha)}</td>
                     <td className="py-2 px-3 text-muted-foreground">
@@ -96,18 +113,19 @@ export function MisFichajesView() {
                       {formatHora(f.horaSalida)}
                     </td>
                     <td className="py-2 px-3 text-right tabular-nums">
-                      {f.horasTotales ? f.horasTotales.toFixed(2) : "—"}
+                      {f.horaSalida ? formatHorasDecimal(f.horasTotales) : "—"}
                     </td>
                     <td className="py-2 pl-3">
                       <Badge
                         variant="outline"
-                        className={`text-[10px] ${ESTADO_COLOR[f.estado] ?? ESTADO_COLOR.pendiente}`}
+                        className={`text-[10px] ${ESTADO_COLOR[estadoVista] ?? ESTADO_COLOR.pendiente}`}
                       >
-                        {f.estado}
+                        {estadoVista}
                       </Badge>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

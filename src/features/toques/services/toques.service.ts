@@ -46,6 +46,7 @@ function mapRegla(r: Row): Regla {
     descripcion: s(r, "descripcion"),
     toques: n(r, "toques"),
     periodicidad: (s(r, "periodicidad") || "diario") as Regla["periodicidad"],
+    categoria: (s(r, "categoria") || "otros") as Regla["categoria"],
     activa: b(r, "activa"),
   };
 }

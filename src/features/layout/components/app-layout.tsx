@@ -124,7 +124,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/mi-panel/documentos": "DOCUMENTOS",
   "/mi-panel/formacion": "FORMACIÓN",
   "/mi-panel/formacion/curso": "CURSO",
-  "/mi-panel/toques": "TOQUES",
+  "/mi-panel/points": "POINTS",
   "/gerencia": "GERENCIA",
   "/direccion/estructura": "ORGANIGRAMA",
   "/direccion/cronogramas": "CRONOGRAMAS",
@@ -194,6 +194,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/gerencia/vencimientos": "REVISIONES",
   "/rrhh/boarding": "BOARDING",
   "/rrhh/bonus": "BONUS",
+  "/rrhh/points": "POINTS",
   "/rrhh/salarios": "SALARIOS",
   "/rrhh/pagos": "PAGOS",
   "/rrhh/formacion": "FORMACIÓN",
@@ -276,7 +277,7 @@ const ROUTE_ICONS: Record<string, LucideIcon> = {
   "/mi-panel/documentos": Files,
   "/mi-panel/formacion": GraduationCap,
   "/mi-panel/formacion/curso": GraduationCap,
-  "/mi-panel/toques": Trophy,
+  "/mi-panel/points": Trophy,
 
   // DIRECCIÓN
   "/direccion": Crown,
@@ -328,6 +329,7 @@ const ROUTE_ICONS: Record<string, LucideIcon> = {
   "/rrhh/reclutamiento": UserRoundSearch,
   "/rrhh/boarding": UserCheck,
   "/rrhh/bonus": Gift,
+  "/rrhh/points": Trophy,
   "/rrhh/salarios": Banknote,
   "/rrhh/pagos": HandCoins,
   "/rrhh/formacion": GraduationCap,
