@@ -34,12 +34,12 @@ function rolFromDepartamento(nombreDepto: string): string {
 }
 
 /**
- * Defensa server-side: solo usuarios con app_role 'admin' pueden mutar
- * `empresa_roles`. Cierra el agujero de "un Director con UI bloqueada
- * podría llamar al server action por POST y reescribir su propio rol".
+ * Defensa server-side: solo usuarios con app_role 'director' pueden mutar
+ * `empresa_roles`. Cierra el agujero de "un usuario con UI bloqueada podría
+ * llamar al server action por POST y reescribir su propio rol".
  * Devuelve mensaje de error si no está autorizado, null si OK.
  */
-async function requireAdminAppRole(): Promise<string | null> {
+async function requireDirectorAppRole(): Promise<string | null> {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -52,8 +52,8 @@ async function requireAdminAppRole(): Promise<string | null> {
       .eq('user_id', user.id)
 
     const roles = (rows ?? []).map((r) => r.role as string)
-    if (!roles.includes('admin')) {
-      return 'Solo un administrador puede modificar roles de empresa'
+    if (!roles.includes('director')) {
+      return 'Solo un director puede modificar roles de empresa'
     }
     return null
   } catch (e) {
@@ -136,7 +136,7 @@ export async function addRolEmpresa(
   empresaIdParam?: string,
 ): Promise<{ error?: string }> {
   try {
-    const authError = await requireAdminAppRole()
+    const authError = await requireDirectorAppRole()
     if (authError) return { error: authError }
 
     const dpto = nombreDepartamento.trim()
@@ -193,7 +193,7 @@ export async function deleteRolEmpresa(
   empresaIdParam?: string,
 ): Promise<{ error?: string }> {
   try {
-    const authError = await requireAdminAppRole()
+    const authError = await requireDirectorAppRole()
     if (authError) return { error: authError }
 
     const dpto = nombreDepartamento.trim()
@@ -218,7 +218,7 @@ export async function saveRolesToSupabase(
   empresaIdParam?: string,
 ): Promise<{ error?: string }> {
   try {
-    const authError = await requireAdminAppRole()
+    const authError = await requireDirectorAppRole()
     if (authError) return { error: authError }
 
     const supabase = await createClient()

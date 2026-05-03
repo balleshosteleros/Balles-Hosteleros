@@ -43,7 +43,7 @@ export function ConfigGeneralConfig() {
         </div>
         <CardContent className="p-5 space-y-4">
           {[
-            { label: "Administradores pueden mover candidatos entre fases", checked: true },
+            { label: "Directores pueden mover candidatos entre fases", checked: true },
             { label: "Reclutadores pueden mover candidatos entre fases", checked: true },
             { label: "RRHH puede ver y editar vacantes", checked: true },
             { label: "Otros roles pueden ver vacantes (solo lectura)", checked: false },

@@ -233,7 +233,7 @@ export function AccesosAdminTab() {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Desde aquí puedes añadir, editar y eliminar accesos. Los usuarios y contraseñas son visibles solo para administradores.
+        Desde aquí puedes añadir, editar y eliminar accesos. Los usuarios y contraseñas son visibles solo para directores.
       </p>
 
       {/* Filtros */}

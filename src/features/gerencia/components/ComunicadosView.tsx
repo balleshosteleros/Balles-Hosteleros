@@ -78,7 +78,7 @@ function PrioridadBadge({ p }: { p: string }) {
 }
 
 const ROLES_DISPONIBLES = [
-  "Administrador", "Gerencia", "Contabilidad", "Gestoría", "Jurídico",
+  "Director", "Gerencia", "Contabilidad", "Gestoría", "Jurídico",
   "Recursos Humanos", "Logística", "Marketing", "Solo lectura",
   "Cocina", "Jefe de Sala", "Camareros", "Mantenimiento", "RRPP",
 ];

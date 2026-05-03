@@ -15,10 +15,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Pencil, BookOpen, CheckCircle, Clock } from "lucide-react";
 import { toast } from "sonner";
 
-const ROLES = ["Administrador", "Gerencia", "Contabilidad", "Gestoría", "Jurídico", "Recursos Humanos", "Logística", "Marketing", "Solo lectura"];
+const ROLES = ["Director", "Gerencia", "Contabilidad", "Gestoría", "Jurídico", "Recursos Humanos", "Logística", "Marketing", "Solo lectura"];
 
 const emptyArticulo: Omit<ArticuloAyuda, "id" | "creadoEn" | "actualizadoEn"> = {
-  titulo: "", respuesta: "", modulo: "Dashboard", rolesAutorizados: ["Administrador"], etiquetas: [], validada: false,
+  titulo: "", respuesta: "", modulo: "Dashboard", rolesAutorizados: ["Director"], etiquetas: [], validada: false,
 };
 
 export function AyudaAdminTab() {
@@ -34,7 +34,7 @@ export function AyudaAdminTab() {
       setForm({ titulo: art.titulo, respuesta: art.respuesta, modulo: art.modulo, rolesAutorizados: [...art.rolesAutorizados], etiquetas: [...art.etiquetas], validada: art.validada });
     } else {
       setEditando(null);
-      setForm({ ...emptyArticulo, rolesAutorizados: ["Administrador"], etiquetas: [] });
+      setForm({ ...emptyArticulo, rolesAutorizados: ["Director"], etiquetas: [] });
     }
     setEtiquetaInput("");
     setModalOpen(true);

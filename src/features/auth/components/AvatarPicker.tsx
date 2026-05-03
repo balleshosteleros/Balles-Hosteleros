@@ -180,7 +180,7 @@ export function AvatarPicker({
               </p>
               <p className="text-xs leading-relaxed opacity-90">
                 Antes de subir tu foto necesitamos el logotipo corporativo para
-                generar tu uniforme. Pide a un administrador que lo suba en{" "}
+                generar tu uniforme. Pide a un director que lo suba en{" "}
                 <span className="font-semibold">Ajustes → Empresa → Logotipo</span>.
               </p>
             </div>

@@ -192,17 +192,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, [roles]);
 
-  // Bypass total para 'admin'. Para todo lo demás (incluido 'director'),
-  // se enforza empresa_roles.permisos como fuente de verdad. Si la lista de
-  // permisos está vacía y el usuario no es admin, no ve nada salvo dashboard.
+  // Bypass total para 'director' — el rol más alto en este SaaS.
+  // Para los demás roles se enforza empresa_roles.permisos. Si la lista de
+  // permisos está vacía y el usuario no es director, no ve nada salvo dashboard.
   const puedeVer = useCallback((modulo: string) => {
-    if (roles.includes("admin")) return true;
+    if (roles.includes("director")) return true;
     const target = normalizarModulo(modulo);
     return permisos.some((p) => p.ver && normalizarModulo(p.modulo) === target);
   }, [roles, permisos]);
 
   const puedeEditar = useCallback((modulo: string) => {
-    if (roles.includes("admin")) return true;
+    if (roles.includes("director")) return true;
     const target = normalizarModulo(modulo);
     return permisos.some((p) => p.editar && normalizarModulo(p.modulo) === target);
   }, [roles, permisos]);

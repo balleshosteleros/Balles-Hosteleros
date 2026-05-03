@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -237,141 +236,135 @@ export function AplicacionesTab() {
 
   return (
     <div className="space-y-2">
-      <Card>
-        <CardHeader className="px-4 pt-3 pb-2 flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Accesos a aplicaciones</CardTitle>
-          <Button size="sm" className="gap-1.5" onClick={openCreate}>
-            <Plus className="h-4 w-4" /> Nuevo acceso
-          </Button>
-        </CardHeader>
-        <CardContent className="px-4 pb-4 pt-0 space-y-3">
-          <p className="text-xs text-muted-foreground">
-            Gestiona los accesos y credenciales a todas las aplicaciones y herramientas externas de la empresa.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <div className="relative flex-1 min-w-[180px] max-w-xs">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                placeholder="Buscar…"
-                value={buscar}
-                onChange={(e) => setBuscar(e.target.value)}
-                className="pl-8 h-8 text-xs"
-              />
-            </div>
-            <Select value={filtroEmpresa} onValueChange={setFiltroEmpresa}>
-              <SelectTrigger className="w-[160px] h-8 text-xs">
-                <SelectValue placeholder="Empresa" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todas">Todas las empresas</SelectItem>
-                {empresasOptions.map((e) => (
-                  <SelectItem key={e.id} value={e.id}>
-                    {e.nombre}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={filtroCategoria} onValueChange={setFiltroCategoria}>
-              <SelectTrigger className="w-[200px] h-8 text-xs">
-                <SelectValue placeholder="Categoría" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todas">Todas las categorías</SelectItem>
-                {categoriasUsadas.map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {cat}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="rounded-md border overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-10"></TableHead>
-                  <TableHead>Aplicación</TableHead>
-                  <TableHead>Empresa</TableHead>
-                  <TableHead>Categoría</TableHead>
-                  <TableHead>Usuario</TableHead>
-                  <TableHead>Contraseña</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead className="text-right w-24">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading && (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground text-sm">
-                      Cargando accesos…
-                    </TableCell>
-                  </TableRow>
-                )}
-                {!loading && filteredApps.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground text-sm">
-                      No hay accesos. Crea el primero con &quot;Nuevo acceso&quot;.
-                    </TableCell>
-                  </TableRow>
-                )}
-                {filteredApps.map((app) => (
-                  <TableRow key={app.id}>
-                    <TableCell>
-                      <AppLogo nombre={app.nombre} logoUrl={app.logoUrl} />
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-medium text-sm">{app.nombre}</div>
-                      <div className="text-xs text-muted-foreground truncate max-w-[180px]">{app.descripcion}</div>
-                    </TableCell>
-                    <TableCell className="text-xs">{empresaNombre(app.empresaId)}</TableCell>
-                    <TableCell className="text-xs">{app.categoria}</TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {app.usuario || <span className="text-muted-foreground">—</span>}
-                    </TableCell>
-                    <TableCell>
-                      <PasswordAdmin value={app.contrasena} />
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        className={`text-[10px] ${
-                          app.estado === "Activo"
-                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
-                            : "bg-amber-100 text-amber-800"
-                        }`}
-                      >
-                        {app.estado}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" asChild>
-                          <a href={app.url} target="_blank" rel="noopener noreferrer">
-                            <ExternalLink className="h-3.5 w-3.5" />
-                          </a>
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(app)}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={() => handleDeleteApp(app)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {filteredApps.length} de {apps.length} accesos
-          </p>
-        </CardContent>
-      </Card>
+      <div className="flex justify-end">
+        <Button size="sm" className="gap-1.5" onClick={openCreate}>
+          <Plus className="h-4 w-4" />Nuevo
+        </Button>
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        Gestiona los accesos y credenciales a todas las aplicaciones y herramientas externas de la empresa.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <div className="relative flex-1 min-w-[180px] max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Buscar…"
+            value={buscar}
+            onChange={(e) => setBuscar(e.target.value)}
+            className="pl-8 h-8 text-xs"
+          />
+        </div>
+        <Select value={filtroEmpresa} onValueChange={setFiltroEmpresa}>
+          <SelectTrigger className="w-[160px] h-8 text-xs">
+            <SelectValue placeholder="Empresa" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todas">Todas las empresas</SelectItem>
+            {empresasOptions.map((e) => (
+              <SelectItem key={e.id} value={e.id}>
+                {e.nombre}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filtroCategoria} onValueChange={setFiltroCategoria}>
+          <SelectTrigger className="w-[200px] h-8 text-xs">
+            <SelectValue placeholder="Categoría" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todas">Todas las categorías</SelectItem>
+            {categoriasUsadas.map((cat) => (
+              <SelectItem key={cat} value={cat}>
+                {cat}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-10"></TableHead>
+            <TableHead>Aplicación</TableHead>
+            <TableHead>Empresa</TableHead>
+            <TableHead>Categoría</TableHead>
+            <TableHead>Usuario</TableHead>
+            <TableHead>Contraseña</TableHead>
+            <TableHead>Estado</TableHead>
+            <TableHead className="text-right w-24">Acciones</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {loading && (
+            <TableRow>
+              <TableCell colSpan={8} className="text-center py-8 text-muted-foreground text-sm">
+                Cargando accesos…
+              </TableCell>
+            </TableRow>
+          )}
+          {!loading && filteredApps.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={8} className="text-center py-8 text-muted-foreground text-sm">
+                No hay accesos. Crea el primero con &quot;Nuevo&quot;.
+              </TableCell>
+            </TableRow>
+          )}
+          {filteredApps.map((app) => (
+            <TableRow key={app.id}>
+              <TableCell>
+                <AppLogo nombre={app.nombre} logoUrl={app.logoUrl} />
+              </TableCell>
+              <TableCell>
+                <div className="font-medium text-sm">{app.nombre}</div>
+                <div className="text-xs text-muted-foreground truncate max-w-[180px]">{app.descripcion}</div>
+              </TableCell>
+              <TableCell className="text-xs">{empresaNombre(app.empresaId)}</TableCell>
+              <TableCell className="text-xs">{app.categoria}</TableCell>
+              <TableCell className="font-mono text-xs">
+                {app.usuario || <span className="text-muted-foreground">—</span>}
+              </TableCell>
+              <TableCell>
+                <PasswordAdmin value={app.contrasena} />
+              </TableCell>
+              <TableCell>
+                <Badge
+                  className={`text-[10px] ${
+                    app.estado === "Activo"
+                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
+                      : "bg-amber-100 text-amber-800"
+                  }`}
+                >
+                  {app.estado}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-right">
+                <div className="flex items-center justify-end gap-1">
+                  <Button variant="ghost" size="icon" className="h-7 w-7" asChild>
+                    <a href={app.url} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(app)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-destructive hover:text-destructive"
+                    onClick={() => handleDeleteApp(app)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      <p className="text-xs text-muted-foreground">
+        {filteredApps.length} de {apps.length} accesos
+      </p>
 
       {/* Modal crear / editar acceso */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
@@ -513,7 +506,7 @@ export function AplicacionesTab() {
               <Label className="text-xs font-semibold">
                 Roles autorizados{" "}
                 <span className="font-normal text-muted-foreground">
-                  (deja vacío para que solo lo vean los administradores)
+                  (deja vacío para que solo lo vean los directores)
                 </span>
               </Label>
               <Popover open={rolesPopoverOpen} onOpenChange={setRolesPopoverOpen}>
