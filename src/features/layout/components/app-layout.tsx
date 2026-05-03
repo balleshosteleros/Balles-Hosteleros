@@ -121,7 +121,7 @@ import { ExternalLink } from "lucide-react";
 import { useViewMode } from "@/features/layout/contexts/view-mode-context";
 
 const ROUTE_TITLES: Record<string, string> = {
-  "/mi-panel": "MI PANEL",
+  "/mi-panel": "MIS PANELES",
   "/mi-panel/equipo": "EQUIPO",
   "/mi-panel/calendario": "CALENDARIO",
   "/mi-panel/horario": "HORARIO",
@@ -230,7 +230,7 @@ const ROUTE_TITLES: Record<string, string> = {
 };
 
 const MODULE_LABELS: Record<string, string> = {
-  "/mi-panel": "MI PANEL",
+  "/mi-panel": "MIS PANELES",
   "/direccion": "DIRECCIÓN",
   "/sala": "SALA",
   "/cocina": "COCINA",
@@ -276,7 +276,8 @@ function getDynamicTitle(pathname: string): string {
 
 const ROUTE_ICONS: Record<string, LucideIcon> = {
   "/": LayoutDashboard,
-  "/mi-panel": LayoutDashboard,
+  "/mi-panel": UserCircle,
+  "/mis-departamentos": Building2,
   "/mi-panel/equipo": Network,
   "/mi-panel/calendario": CalendarDays,
   "/mi-panel/horario": Timer,
