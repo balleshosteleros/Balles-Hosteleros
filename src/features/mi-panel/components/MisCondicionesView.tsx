@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo } from "react";
+import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { getSalariosEmpresa, type PuestoSalarial } from "@/features/rrhh/data/salarios";
@@ -17,6 +19,7 @@ import {
   Wallet,
   Coins,
   PiggyBank,
+  UserCog,
 } from "lucide-react";
 
 const eur = (n: number) =>
@@ -99,13 +102,9 @@ function getDatosGenerales(puesto: PuestoSalarial | null): DatosGenerales {
 
 export function MisCondicionesView() {
   const { profile, user, roles } = useAuth();
-  const { empresaActual, ajustes } = useEmpresa();
-  const nombre = profile?.nombre || "—";
-  const apellidos = profile?.apellidos || "—";
+  const { empresaActual } = useEmpresa();
   const nombreCompleto = [profile?.nombre, profile?.apellidos].filter(Boolean).join(" ") || "—";
   const email = profile?.email || user?.email || "—";
-  const emailEmpresa = ajustes.contactos?.correoGeneral || "—";
-  const rolesLabel = roles.length ? roles.join(", ") : "—";
 
   const puesto = useMemo(() => {
     const data = getSalariosEmpresa(empresaActual.id);
@@ -120,32 +119,20 @@ export function MisCondicionesView() {
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-5">
-      <Card className="p-4 md:p-5">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-          Datos personales
-        </h2>
-        <dl className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3">
-          <div>
-            <dt className="text-xs text-muted-foreground">Nombre</dt>
-            <dd className="text-sm font-medium mt-0.5">{nombre}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-muted-foreground">Apellidos</dt>
-            <dd className="text-sm font-medium mt-0.5">{apellidos}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-muted-foreground">Rol</dt>
-            <dd className="text-sm font-medium mt-0.5">{rolesLabel}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-muted-foreground">Email</dt>
-            <dd className="text-sm font-medium mt-0.5 break-all">{email}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-muted-foreground">Email de empresa</dt>
-            <dd className="text-sm font-medium mt-0.5 break-all">{emailEmpresa}</dd>
-          </div>
-        </dl>
+      <Card className="p-4 md:p-5 flex items-center gap-4 border-dashed">
+        <div className="h-10 w-10 rounded-md bg-primary/10 text-primary flex items-center justify-center">
+          <UserCog className="h-5 w-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold">Tus datos personales</p>
+          <p className="text-xs text-muted-foreground">
+            DNI, IBAN, dirección, contacto de emergencia y demás se gestionan en
+            Datos personales.
+          </p>
+        </div>
+        <Button asChild size="sm" variant="outline">
+          <Link href="/mi-panel/datos-personales">Ir a Datos personales</Link>
+        </Button>
       </Card>
 
       <GeneralesCard datos={generales} />

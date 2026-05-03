@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Camera, Mail, User as UserIcon, Sparkles, Loader2, RefreshCw, AlertTriangle } from "lucide-react";
+import { Camera, Sparkles, Loader2, RefreshCw, AlertTriangle } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/contexts/auth-context";
@@ -9,15 +9,21 @@ import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { AvatarPickerDialog } from "@/features/auth/components/AvatarPickerDialog";
 import { generateAiAvatar } from "@/features/auth/actions/avatar-ai-actions";
 import { AnimatedAvatar } from "@/features/auth/components/AnimatedAvatar";
+import { DatosPersonalesForm } from "./DatosPersonalesForm";
+import type { DatosPersonalesCompletos } from "@/features/mi-panel/actions/datos-personales-actions";
 
-export function DatosPersonalesView() {
+interface Props {
+  initial: DatosPersonalesCompletos;
+}
+
+export function DatosPersonalesView({ initial }: Props) {
   const { profile, user, roles } = useAuth();
   const { empresaActual } = useEmpresa();
   const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
   const [generatingAi, setGeneratingAi] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
-  const userEmail = profile?.email ?? user?.email ?? "";
+  const userEmail = profile?.email ?? user?.email ?? initial.email ?? "";
   const userInitial = userEmail ? userEmail[0].toUpperCase() : "?";
   const nombreCompleto = profile?.nombre
     ? profile.apellidos
@@ -61,7 +67,8 @@ export function DatosPersonalesView() {
           Datos personales
         </h1>
         <p className="text-sm text-muted-foreground">
-          Gestiona tu foto de perfil e información básica.
+          Tu ficha personal completa. Estos datos los usa RRHH para contratos,
+          nóminas y emergencias.
         </p>
       </div>
 
@@ -72,7 +79,6 @@ export function DatosPersonalesView() {
         </h2>
 
         <div className="grid gap-6 md:grid-cols-2">
-          {/* Foto real */}
           <div className="flex flex-col items-center gap-3 rounded-xl border bg-muted/20 p-5">
             <Avatar className="h-32 w-32 ring-2 ring-border shadow">
               {realUrl ? (
@@ -101,7 +107,6 @@ export function DatosPersonalesView() {
             </Button>
           </div>
 
-          {/* Foto IA con uniforme */}
           <div className="flex flex-col items-center gap-3 rounded-xl border border-fuchsia-200/60 bg-gradient-to-br from-violet-50 to-fuchsia-50 p-5 dark:from-violet-950/30 dark:to-fuchsia-950/30 dark:border-fuchsia-900/40">
             <AnimatedAvatar
               avatarAiUrl={aiUrl}
@@ -165,34 +170,7 @@ export function DatosPersonalesView() {
         )}
       </section>
 
-      {/* Información básica */}
-      <section className="rounded-2xl border bg-card p-6 shadow-sm">
-        <h2 className="text-sm font-bold tracking-wide uppercase text-muted-foreground mb-4">
-          Información
-        </h2>
-
-        <dl className="grid gap-4 md:grid-cols-2">
-          <div>
-            <dt className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              <UserIcon className="h-3.5 w-3.5" />
-              Nombre
-            </dt>
-            <dd className="mt-1 text-base font-medium text-foreground">
-              {nombreCompleto}
-            </dd>
-          </div>
-
-          <div>
-            <dt className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              <Mail className="h-3.5 w-3.5" />
-              Email
-            </dt>
-            <dd className="mt-1 text-base font-medium text-foreground break-all">
-              {userEmail || "—"}
-            </dd>
-          </div>
-        </dl>
-      </section>
+      <DatosPersonalesForm initial={initial} />
 
       <AvatarPickerDialog
         open={avatarDialogOpen}
