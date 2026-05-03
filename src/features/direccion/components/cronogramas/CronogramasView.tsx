@@ -9,6 +9,7 @@ import {
 } from "../../hooks/useCronogramasOperativos";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  SelectGroup, SelectLabel, SelectSeparator,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +28,13 @@ import {
 } from "../../actions/cronograma-video-actions";
 import { CronogramasHome } from "./CronogramasHome";
 import { SelectorDiasTarea, BadgesDiasTarea } from "./SelectorDiasTarea";
+import {
+  AREA_BADGE_CLASS,
+  AREA_LABEL,
+  getAreaForRol,
+  type AreaCronograma,
+} from "../../data/cronogramaAreas";
+import { cn } from "@/lib/utils";
 
 const ORDERED_FREQUENCIES: Frecuencia[] = [
   "DIARIO", "SEMANAL", "MENSUAL", "TRIMESTRAL", "ANUAL", "POR NECESIDAD",
@@ -47,6 +55,7 @@ export function CronogramasView() {
   const [detalle, setDetalle] = useState<CronogramaOperativo | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [filtroAreaSelect, setFiltroAreaSelect] = useState<"TODAS" | AreaCronograma>("TODAS");
 
   // Fila pendiente (nueva tarea aún no guardada en DB)
   const [pendingNew, setPendingNew] = useState<{
@@ -61,7 +70,22 @@ export function CronogramasView() {
     return Array.from(new Set(data.map((d) => d.rol))).filter(Boolean).sort();
   }, [data]);
 
-  const rolActivo = selectedRol || (rolesDisponibles.length > 0 ? rolesDisponibles[0] : "");
+  const rolesPorArea = useMemo(() => {
+    const operativa: string[] = [];
+    const administrativa: string[] = [];
+    for (const r of rolesDisponibles) {
+      if (getAreaForRol(r) === "OPERATIVA") operativa.push(r);
+      else administrativa.push(r);
+    }
+    return { OPERATIVA: operativa, ADMINISTRATIVA: administrativa };
+  }, [rolesDisponibles]);
+
+  const rolesFiltrados = useMemo(() => {
+    if (filtroAreaSelect === "TODAS") return rolesDisponibles;
+    return rolesPorArea[filtroAreaSelect];
+  }, [rolesDisponibles, rolesPorArea, filtroAreaSelect]);
+
+  const rolActivo = selectedRol || (rolesFiltrados.length > 0 ? rolesFiltrados[0] : "");
   const tareasDeRol = useMemo(() => data.filter((d) => d.rol === rolActivo), [data, rolActivo]);
 
   // Construir jerarquía: main = sin parent_id, subs = con parent_id
@@ -380,9 +404,80 @@ export function CronogramasView() {
                 <SelectValue placeholder={isLoading ? "Cargando..." : "Selecciona Departamento"} />
               </SelectTrigger>
               <SelectContent>
-                {rolesDisponibles.map((r) => (
-                  <SelectItem key={r} value={r}>{r}</SelectItem>
-                ))}
+                <div className="flex items-center gap-1 px-2 py-1.5 border-b mb-1">
+                  {(["TODAS", "OPERATIVA", "ADMINISTRATIVA"] as const).map((opt) => {
+                    const active = filtroAreaSelect === opt;
+                    const label = opt === "TODAS" ? "Todas" : AREA_LABEL[opt];
+                    const n = opt === "TODAS"
+                      ? rolesDisponibles.length
+                      : rolesPorArea[opt].length;
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setFiltroAreaSelect(opt);
+                        }}
+                        className={cn(
+                          "text-[11px] font-semibold uppercase tracking-wider px-2 py-1 rounded-md flex items-center gap-1.5 transition-colors",
+                          active
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted/50 text-muted-foreground hover:bg-muted",
+                        )}
+                      >
+                        {label}
+                        <span className={cn(
+                          "text-[10px] font-mono px-1 rounded",
+                          active ? "bg-background/30" : "bg-background",
+                        )}>
+                          {n}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {rolesFiltrados.length === 0 ? (
+                  <div className="px-2 py-3 text-xs text-muted-foreground text-center">
+                    Sin cronogramas en esta área.
+                  </div>
+                ) : filtroAreaSelect === "TODAS" ? (
+                  <>
+                    {rolesPorArea.OPERATIVA.length > 0 && (
+                      <SelectGroup>
+                        <SelectLabel className={cn("text-[10px] font-semibold uppercase tracking-wider", AREA_BADGE_CLASS.OPERATIVA)}>
+                          {AREA_LABEL.OPERATIVA}
+                        </SelectLabel>
+                        {rolesPorArea.OPERATIVA.map((r) => (
+                          <SelectItem key={r} value={r}>{r}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                    )}
+                    {rolesPorArea.OPERATIVA.length > 0 && rolesPorArea.ADMINISTRATIVA.length > 0 && (
+                      <SelectSeparator />
+                    )}
+                    {rolesPorArea.ADMINISTRATIVA.length > 0 && (
+                      <SelectGroup>
+                        <SelectLabel className={cn("text-[10px] font-semibold uppercase tracking-wider", AREA_BADGE_CLASS.ADMINISTRATIVA)}>
+                          {AREA_LABEL.ADMINISTRATIVA}
+                        </SelectLabel>
+                        {rolesPorArea.ADMINISTRATIVA.map((r) => (
+                          <SelectItem key={r} value={r}>{r}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                    )}
+                  </>
+                ) : (
+                  <SelectGroup>
+                    <SelectLabel className={cn("text-[10px] font-semibold uppercase tracking-wider", AREA_BADGE_CLASS[filtroAreaSelect])}>
+                      {AREA_LABEL[filtroAreaSelect]}
+                    </SelectLabel>
+                    {rolesFiltrados.map((r) => (
+                      <SelectItem key={r} value={r}>{r}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
               </SelectContent>
             </Select>
 
@@ -403,10 +498,21 @@ export function CronogramasView() {
             )}
           </div>
 
-          <Button variant="outline" size="sm" onClick={() => setShowNewDialog(true)} className="md:ml-2">
-            <Plus className="h-4 w-4 mr-2" />
-            AÑADIR CRONOGRAMA
-          </Button>
+          {rolActivo && (() => {
+            const area = getAreaForRol(rolActivo);
+            return (
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5",
+                  AREA_BADGE_CLASS[area],
+                )}
+                title={`Área ${AREA_LABEL[area]}`}
+              >
+                Área · {AREA_LABEL[area]}
+              </Badge>
+            );
+          })()}
 
           {rolActivo && (
             <Button type="button" size="sm" onClick={handleAddMain} className="shadow-sm" disabled={isLoading}>
@@ -600,7 +706,23 @@ function DetalleTareaDialog({
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div className="rounded-lg border bg-muted/30 p-3">
               <span className="text-xs text-muted-foreground block">Departamento</span>
-              <span className="font-medium">{tarea.rol}</span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-medium">{tarea.rol}</span>
+                {(() => {
+                  const area = getAreaForRol(tarea.rol);
+                  return (
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0",
+                        AREA_BADGE_CLASS[area],
+                      )}
+                    >
+                      {AREA_LABEL[area]}
+                    </Badge>
+                  );
+                })()}
+              </div>
             </div>
             <div className="rounded-lg border bg-muted/30 p-3">
               <span className="text-xs text-muted-foreground block">Calendario actual</span>

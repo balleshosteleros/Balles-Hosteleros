@@ -22,6 +22,7 @@ import {
   sendMensaje,
   createCanal,
 } from "@/features/comunicacion/actions/comunicacion-actions";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 
 type Canal = {
   id: string;
@@ -44,12 +45,20 @@ type Mensaje = {
 };
 
 // Default canales to seed if DB is empty
+// Mantener alineado con las secciones de la sidebar (app-sidebar.tsx)
 const DEFAULT_CANALES = [
   { nombre: "General", tipo: "departamento" },
-  { nombre: "Cocina", tipo: "departamento" },
+  { nombre: "Dirección", tipo: "departamento" },
   { nombre: "Sala", tipo: "departamento" },
+  { nombre: "Cocina", tipo: "departamento" },
   { nombre: "Gerencia", tipo: "departamento" },
-  { nombre: "Logistica", tipo: "departamento" },
+  { nombre: "Calidad", tipo: "departamento" },
+  { nombre: "RRHH", tipo: "departamento" },
+  { nombre: "Marketing", tipo: "departamento" },
+  { nombre: "Logística", tipo: "departamento" },
+  { nombre: "Contabilidad", tipo: "departamento" },
+  { nombre: "Gestoría", tipo: "departamento" },
+  { nombre: "Jurídico", tipo: "departamento" },
   { nombre: "Mantenimiento", tipo: "grupo" },
   { nombre: "Eventos y reservas", tipo: "grupo" },
 ];
@@ -89,6 +98,8 @@ function mapDbMensaje(r: Record<string, unknown>): Mensaje {
 }
 
 export function ComunicacionView() {
+  const { empresaActual } = useEmpresa();
+  const empresaSlug = empresaActual.id;
   const [canales, setCanales] = useState<Canal[]>([]);
   const [canalActivo, setCanalActivo] = useState<string | null>(null);
   const [mensajes, setMensajes] = useState<Mensaje[]>([]);
@@ -118,7 +129,7 @@ export function ComunicacionView() {
   const cargarCanales = useCallback(async () => {
     try {
       setCargando(true);
-      const res = await listCanales();
+      const res = await listCanales(empresaSlug);
       if (!res.ok) return;
       let data = res.data as Record<string, unknown>[];
 
@@ -127,7 +138,7 @@ export function ComunicacionView() {
         for (const def of DEFAULT_CANALES) {
           await createCanal(def.nombre, def.tipo);
         }
-        const retry = await listCanales();
+        const retry = await listCanales(empresaSlug);
         if (retry.ok) data = retry.data as Record<string, unknown>[];
       }
 
@@ -141,7 +152,7 @@ export function ComunicacionView() {
     } finally {
       setCargando(false);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [empresaSlug]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     cargarCanales();

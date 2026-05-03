@@ -22,7 +22,7 @@ export function PublicacionesPortalesConfig() {
   const historial = [
     { fecha: "2026-04-05", vacante: "CAMARERO", portal: "InfoJobs", estado: "Publicada" },
     { fecha: "2026-04-04", vacante: "JEFE DE SALA", portal: "LinkedIn Jobs", estado: "Publicada" },
-    { fecha: "2026-04-03", vacante: "ARTISTA / DJ", portal: "InfoJobs", estado: "Error" },
+    { fecha: "2026-04-03", vacante: "ARTISTA", portal: "InfoJobs", estado: "Error" },
     { fecha: "2026-04-01", vacante: "CAMARERO", portal: "LinkedIn Jobs", estado: "Publicada" },
   ];
 

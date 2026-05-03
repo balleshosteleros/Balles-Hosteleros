@@ -68,7 +68,7 @@ export function EmpleadosView() {
     if (campo === "horasHoy") return e.horasHoy;
     if (campo === "fichajes") return e.fichajes;
     if (campo === "nombre") return `${e.nombre} ${e.apellidos}`;
-    return (e as Record<string, unknown>)[campo];
+    return (e as unknown as Record<string, unknown>)[campo];
   };
 
   const filtrados = useMemo(() => {

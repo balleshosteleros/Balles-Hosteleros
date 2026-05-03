@@ -562,7 +562,7 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
       <SheetTrigger asChild>{children}</SheetTrigger>
       <SheetContent
         side="right"
-        className="w-screen max-w-none flex flex-col gap-0 p-0 sm:max-w-none bg-[#f6f8fc] [&>button]:hidden"
+        className="flex flex-col gap-0 p-0 bg-[#f6f8fc] [&>button]:hidden"
       >
         <SheetTitle className="sr-only">Email · Google Workspace</SheetTitle>
 

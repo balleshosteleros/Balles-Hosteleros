@@ -124,11 +124,12 @@ export function MisFichajesView() {
                     <td className="py-2 pl-3">
                       <div className="flex items-center gap-1.5">
                         {esAlerta && (
-                          <AlertTriangle
-                            className="h-3.5 w-3.5 text-red-600 shrink-0"
-                            aria-label="Incidencia"
-                            title={tooltip}
-                          />
+                          <span title={tooltip} className="inline-flex">
+                            <AlertTriangle
+                              className="h-3.5 w-3.5 text-red-600 shrink-0"
+                              aria-label="Incidencia"
+                            />
+                          </span>
                         )}
                         <Badge
                           variant="outline"

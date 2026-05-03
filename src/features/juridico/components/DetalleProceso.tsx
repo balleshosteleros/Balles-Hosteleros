@@ -248,7 +248,7 @@ export function DetalleProceso({ open, onClose, item, onAddActualizacion, onAddD
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+      <SheetContent className="overflow-y-auto">
         <SheetHeader className="pb-4">
           <SheetTitle className="text-lg font-bold">DETALLE DEL EXPEDIENTE</SheetTitle>
         </SheetHeader>

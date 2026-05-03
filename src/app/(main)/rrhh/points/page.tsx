@@ -1,7 +1,7 @@
-import { CanjesAdminView } from "@/features/toques/components/admin/CanjesAdminView";
+import { PointsAdminView } from "@/features/toques/components/admin/PointsAdminView";
 
 export const dynamic = "force-dynamic";
 
-export default function RrhhToquesPage() {
-  return <CanjesAdminView />;
+export default function RrhhPointsPage() {
+  return <PointsAdminView />;
 }

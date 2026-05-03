@@ -7,8 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Building2, Plus, Trash2, Image, Info } from "lucide-react";
+import { Building2, Plus, Trash2, Image, Info, Pencil } from "lucide-react";
 import { toast } from "sonner";
+import { ConfiguracionTab } from "@/features/ajustes/components/ConfiguracionTab";
 
 interface EmpresaFormData {
   nombre: string;
@@ -23,12 +24,18 @@ const EMPTY_FORM: EmpresaFormData = {
 };
 
 export function EmpresasTab() {
-  const { empresas, empresaActual, addEmpresa, deleteEmpresa, getLogoUrl } = useEmpresa();
+  const { empresas, empresaActual, addEmpresa, deleteEmpresa, getLogoUrl, setEmpresaId } = useEmpresa();
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<EmpresaFormData>(EMPTY_FORM);
   const [deleteTarget, setDeleteTarget] = useState<Empresa | null>(null);
+  const [editTarget, setEditTarget] = useState<Empresa | null>(null);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+
+  const openEdit = (emp: Empresa) => {
+    if (emp.id !== empresaActual.id) setEmpresaId(emp.id);
+    setEditTarget(emp);
+  };
 
   const openNew = () => {
     setForm(EMPTY_FORM);
@@ -111,6 +118,14 @@ export function EmpresasTab() {
                     <Button
                       variant="outline"
                       size="sm"
+                      className="gap-1.5 text-xs"
+                      onClick={() => openEdit(emp)}
+                    >
+                      <Pencil className="h-3.5 w-3.5" /> Editar
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
                       className="gap-1.5 text-xs text-destructive hover:text-destructive"
                       onClick={() => setDeleteTarget(emp)}
                       disabled={emp.id === empresaActual.id}
@@ -185,6 +200,19 @@ export function EmpresasTab() {
             <Button variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
             <Button onClick={handleSave}>Crear empresa</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal editar empresa (toda la configuración) */}
+      <Dialog open={!!editTarget} onOpenChange={(open) => { if (!open) setEditTarget(null); }}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-primary" />
+              Editar empresa — {editTarget?.nombre}
+            </DialogTitle>
+          </DialogHeader>
+          {editTarget && <ConfiguracionTab />}
         </DialogContent>
       </Dialog>
 

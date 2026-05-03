@@ -397,7 +397,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
       <SheetTrigger asChild>{children}</SheetTrigger>
       <SheetContent
         side="right"
-        className="w-screen max-w-none flex flex-col gap-0 p-0 sm:max-w-none [&>button]:hidden"
+        className="flex flex-col gap-0 p-0 [&>button]:hidden"
       >
         <SheetTitle className="sr-only">Calendario · Google Calendar</SheetTitle>
         <SheetHeader className="border-b px-3 py-2">

@@ -231,7 +231,7 @@ const vacantesHabana: Vacante[] = [
     candidatos: generarCandidatos("v3", { nuevo: 8, papelera: 2, elegido: 1 }, "Sara Molina", poolNombres),
   },
   {
-    id: "v4", puesto: "ARTISTA / DJ", categoria: "Entretenimiento", ubicacion: "La Habana — Escenario",
+    id: "v4", puesto: "ARTISTA", categoria: "Entretenimiento", ubicacion: "La Habana — Escenario",
     tipoJornada: "parcial", estadoPublicacion: "publicada", fechaCreacion: "2026-01-20",
     cuestionario: false, reclutadores: ["Antonio Ballesteros"], favorita: true, empresaId: "habana",
     candidatos: generarCandidatos("v4", { nuevo: 15, elegido: 4, entrevista: 3, prueba: 2, no_se_presenta: 1 }, "Antonio Ballesteros", poolNombres),

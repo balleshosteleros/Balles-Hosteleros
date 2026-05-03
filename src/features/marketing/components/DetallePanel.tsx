@@ -38,7 +38,7 @@ export function DetallePanel({ item, open, onClose, onEdit, onDelete, onAddComme
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent className="w-[420px] sm:w-[480px] overflow-y-auto">
+      <SheetContent className="overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2 text-base">
             {redInfo && (

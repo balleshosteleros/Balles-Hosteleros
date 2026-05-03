@@ -2,7 +2,7 @@
 
 import { ReactNode, useCallback, useMemo, useRef, useState, useEffect } from "react";
 import {
-  MessageSquare, Send, Users, Plus, Search, Pin, Smile, MoreVertical,
+  MessageCircle, Send, Users, Plus, Search, Pin, Smile, MoreVertical,
   BellOff, Bell, Pencil, Trash2, LogOut, Lock, ChevronLeft, ChevronDown,
   ShieldCheck, Eraser, Hourglass, X, Paperclip, Mic, Building2, Briefcase, Check,
   FileText, Download, Loader2,
@@ -83,32 +83,47 @@ type Mensaje = {
 type PrefCanal = { silenciado: boolean; fijado: boolean };
 const PREF_DEFAULT: PrefCanal = { silenciado: false, fijado: false };
 
-// Departamentos garantizados (fallback si el organigrama no existe ni en BD ni local)
+// Departamentos operativos siempre presentes (no aparecen como nodos
+// administrativos en el organigrama, pero son departamentos reales del negocio).
+const DEPARTAMENTOS_OPERATIVOS_BASE = ["SALA", "COCINA"];
+
+// Nodos del organigrama que son externos al organigrama interno y no deben
+// generar grupo (p. ej. socios/inversores).
+const NODOS_EXCLUIDOS = new Set(["SOCIOS"]);
+
+// Departamentos garantizados (fallback si el organigrama no existe ni en BD ni local).
+// Debe coincidir con las secciones de la sidebar (app-sidebar.tsx).
 const DEPARTAMENTOS_FALLBACK = [
+  "DIRECCIÓN",
+  "SALA",
+  "COCINA",
   "GERENCIA",
+  "CALIDAD",
+  "RECURSOS HUMANOS",
+  "MARKETING",
+  "LOGÍSTICA",
   "CONTABILIDAD",
   "GESTORÍA",
   "JURÍDICO",
-  "RECURSOS HUMANOS",
-  "LOGÍSTICA",
-  "MARKETING",
 ];
 
-// Los grupos por defecto se derivan SOLO de los nodos administrativos del organigrama.
-// Los nodos operativos (camareros, cocineros, hostess, etc.) son puestos, no departamentos.
-// Los nodos externos (socios) tampoco cuentan.
+// Los grupos por defecto se derivan de los nodos administrativos del organigrama
+// + los departamentos operativos base (SALA, COCINA), que en el organigrama no
+// son nodos sino áreas que contienen puestos (camareros, cocineros, hostess…).
+// Los nodos externos (SOCIOS) se excluyen explícitamente.
 async function getDepartamentosDelOrganigrama(empresaId: string): Promise<string[]> {
   let chart = await getOrganigrama(empresaId);
   if (!chart || chart.nodes.length === 0) {
     chart = orgChartsPorEmpresa[empresaId] ?? orgChartsPorEmpresa.habana ?? null;
   }
-  const labels = chart
+  const adminLabels = chart
     ? chart.nodes
         .filter((n) => n.area === "administrativa")
         .map((n) => n.label.trim().toUpperCase())
-        .filter((l) => l.length > 0)
+        .filter((l) => l.length > 0 && !NODOS_EXCLUIDOS.has(l))
     : [];
-  const dedup = Array.from(new Set(labels));
+  const todos = [...DEPARTAMENTOS_OPERATIVOS_BASE, ...adminLabels];
+  const dedup = Array.from(new Set(todos));
   return dedup.length > 0 ? dedup : DEPARTAMENTOS_FALLBACK;
 }
 
@@ -685,14 +700,14 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
 
       <SheetContent
         side="right"
-        className="w-screen max-w-none flex flex-col gap-0 p-0 sm:max-w-none [&>button]:hidden"
+        className="flex flex-col gap-0 p-0 [&>button]:hidden"
       >
         <SheetTitle className="sr-only">Comunicación interna</SheetTitle>
 
         {/* Top bar global */}
         <header className="flex items-center justify-between border-b px-4 py-2 shrink-0 bg-background">
           <div className="flex items-center gap-3">
-            <MessageSquare className="h-6 w-6 text-blue-600" />
+            <MessageCircle className="h-6 w-6 text-green-500 fill-green-500/15" />
             <div>
               <h1 className="text-sm font-bold leading-tight">Comunicación</h1>
               <p className="text-[11px] text-muted-foreground leading-tight">{empresaActual.nombre} · Departamentos</p>

@@ -2,7 +2,6 @@
 
 import { useRef } from "react";
 import {
-  ArrowUpDown,
   Upload,
   Download,
   FileText,
@@ -83,7 +82,7 @@ export function IOMenuButton({
             title={label}
             aria-label={label}
           >
-            <ArrowUpDown className="h-4 w-4" />
+            <Download className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
 

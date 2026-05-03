@@ -148,7 +148,7 @@ export function TelefonoDrawer({ children }: { children: ReactNode }) {
   return (
     <Sheet>
       <SheetTrigger asChild>{children}</SheetTrigger>
-      <SheetContent side="right" className="w-full max-w-sm flex flex-col gap-0 p-0">
+      <SheetContent side="right" className="flex flex-col gap-0 p-0">
         <SheetHeader className="border-b px-5 py-3 shrink-0">
           <div className="flex items-center justify-between">
             <SheetTitle className="flex items-center gap-2 text-base">

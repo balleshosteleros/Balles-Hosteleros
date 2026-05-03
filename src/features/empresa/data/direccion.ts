@@ -1,4 +1,4 @@
-export type AreaType = 'administrativa' | 'operativa' | 'externo';
+export type AreaType = 'administrativa' | 'operativa';
 
 export interface OrgNode {
   id: string;
@@ -32,9 +32,8 @@ export interface OrgChart {
 
 const habanaChart: OrgChart = {
   nodes: [
-    // Externo (Socios)
-    { id: 'socios', label: 'SOCIOS', area: 'externo', x: 560, y: -60 },
     // Área Administrativa
+    { id: 'socios', label: 'SOCIOS', area: 'administrativa', x: 560, y: -60 },
     { id: 'direccion', label: 'DIRECCIÓN', area: 'administrativa', x: 560, y: 80 },
     { id: 'juridico', label: 'JURÍDICO', area: 'administrativa', x: 60, y: 200 },
     { id: 'gestoria', label: 'GESTORÍA', area: 'administrativa', x: 200, y: 200 },
@@ -84,14 +83,14 @@ const habanaChart: OrgChart = {
     { id: 'e22', source: '2jefe-cocina', target: 'office' },
   ],
   zones: [
-    { id: 'zone-admin', label: 'Área Administrativa', area: 'administrativa', x: -10, y: 30, width: 1250, height: 250 },
+    { id: 'zone-admin', label: 'Área Administrativa', area: 'administrativa', x: -10, y: -90, width: 1250, height: 370 },
     { id: 'zone-oper', label: 'Área Operativa', area: 'operativa', x: 30, y: 340, width: 1280, height: 370 },
   ],
 };
 
 const bacanalChart: OrgChart = {
   nodes: [
-    { id: 'socios', label: 'SOCIOS', area: 'externo', x: 460, y: -60 },
+    { id: 'socios', label: 'SOCIOS', area: 'administrativa', x: 460, y: -60 },
     { id: 'direccion', label: 'DIRECCIÓN', area: 'administrativa', x: 460, y: 80 },
     { id: 'contabilidad', label: 'CONTABILIDAD', area: 'administrativa', x: 180, y: 200 },
     { id: 'marketing', label: 'MARKETING', area: 'administrativa', x: 360, y: 200 },
@@ -116,7 +115,7 @@ const bacanalChart: OrgChart = {
     { id: 'e10', source: 'jefe-cocina', target: 'cocineros' },
   ],
   zones: [
-    { id: 'zone-admin', label: 'Área Administrativa', area: 'administrativa', x: 110, y: 30, width: 700, height: 250 },
+    { id: 'zone-admin', label: 'Área Administrativa', area: 'administrativa', x: 110, y: -90, width: 700, height: 370 },
     { id: 'zone-oper', label: 'Área Operativa', area: 'operativa', x: 250, y: 340, width: 530, height: 260 },
   ],
 };

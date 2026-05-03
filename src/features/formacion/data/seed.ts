@@ -429,7 +429,7 @@ const HABANA_DRAFTS: DraftCurso[] = [
       "linear-gradient(135deg, #312e81 0%, #6366f1 50%, #c7d2fe 100%)",
     categoria: "operativa",
     ambito: "puesto",
-    puesto: "ARTISTA / DJ",
+    puesto: "ARTISTA",
     empresaId: "habana",
     fechaPublicacion: "2026-03-25",
     autor: "Dirección",
