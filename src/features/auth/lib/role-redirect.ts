@@ -1,22 +1,21 @@
 /**
- * Mapeo rol → módulo principal donde aterriza el usuario tras login.
- * Roles válidos = los 9 alineados a departamento.
+ * Tras login, todo usuario aterriza en /mi-panel para fichar entrada.
+ * El acceso a su módulo de rol queda en los accesos rápidos del propio panel.
  */
+const LANDING = "/mi-panel";
+
 export const ROL_LANDING: Record<string, string> = {
-  "Dirección": "/direccion",
-  "Gerencia": "/gerencia",
-  "RRHH": "/rrhh",
-  "Logística": "/logistica",
-  "Cocina": "/cocina",
-  "Contabilidad": "/contabilidad",
-  "Gestoría": "/gestoria",
-  "Jurídico": "/juridico",
-  "Marketing": "/marketing",
+  "Dirección": LANDING,
+  "Gerencia": LANDING,
+  "RRHH": LANDING,
+  "Logística": LANDING,
+  "Cocina": LANDING,
+  "Contabilidad": LANDING,
+  "Gestoría": LANDING,
+  "Jurídico": LANDING,
+  "Marketing": LANDING,
 };
 
-const FALLBACK = "/rrhh";
-
-export function getRedirectByRolLabel(rolLabel: string | null | undefined): string {
-  if (!rolLabel) return FALLBACK;
-  return ROL_LANDING[rolLabel] ?? FALLBACK;
+export function getRedirectByRolLabel(_rolLabel: string | null | undefined): string {
+  return LANDING;
 }

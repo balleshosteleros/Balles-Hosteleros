@@ -9,8 +9,9 @@ import {
   GraduationCap, UtensilsCrossed, BookOpen, Contact, Thermometer, Sparkles, FileSearch,
   PenLine, CheckCircle2, BarChart3, Landmark, Tag, Zap, ContactRound,
   Heart, UserPlus, Apple, CreditCard, Presentation, QrCode, Globe,
-  Send, Wallet, LayoutDashboard, Fingerprint, Inbox, FileSignature, Trophy,
+  Send, Wallet, Fingerprint, Inbox, FileSignature, Trophy, UserCircle, LayoutDashboard,
 } from "lucide-react";
+import { useViewMode } from "@/features/layout/contexts/view-mode-context";
 
 // Icono compuesto: cuadrícula de apps + candado de seguridad
 function AccesosIcon({ className }: { className?: string }) {
@@ -117,7 +118,8 @@ const calidadSubs = [
   { title: "INSPECCIONES", url: "/calidad/inspecciones", icon: FileSearch },
 ];
 const miPanelSubs = [
-  { title: "EQUIPO", url: "/mi-panel/equipo", icon: Network },
+  { title: "DATOS PERSONALES", url: "/mi-panel/datos-personales", icon: UserCircle },
+  { title: "POINTS", url: "/mi-panel/points", icon: Trophy },
   { title: "CALENDARIO", url: "/mi-panel/calendario", icon: CalendarDays },
   { title: "HORARIO", url: "/mi-panel/horario", icon: Timer },
   { title: "FICHAJES", url: "/mi-panel/fichajes", icon: Fingerprint },
@@ -127,8 +129,9 @@ const miPanelSubs = [
   { title: "COMUNICADOS", url: "/mi-panel/comunicados", icon: Megaphone },
   { title: "DOCUMENTOS", url: "/mi-panel/documentos", icon: Files },
   { title: "FORMACIÓN", url: "/mi-panel/formacion", icon: GraduationCap },
-  { title: "POINTS", url: "/mi-panel/points", icon: Trophy },
+  { title: "EQUIPO", url: "/mi-panel/equipo", icon: Network },
 ];
+
 const rrhhSubs = [
   { title: "EMPLEADOS", url: "/rrhh/empleados", icon: UsersRound },
   { title: "FICHAJES", url: "/rrhh/fichajes", icon: Fingerprint },
@@ -232,6 +235,7 @@ export function AppSidebar() {
   const { state, toggleSidebar } = useSidebar();
   const collapsed = state === "collapsed";
   const pathname = usePathname();
+  const { mode } = useViewMode();
 
   const sections = [
     { key: "direccion", icon: Crown, label: "DIRECCIÓN", prefix: "/direccion", items: direccionSubs, linkTo: "/direccion" },
@@ -249,7 +253,6 @@ export function AppSidebar() {
 
   const activeKey = sections.find((s) => pathname.startsWith(s.prefix))?.key ?? null;
   const [openKey, setOpenKey] = useState<string | null>(activeKey);
-  const [miPanelOpen, setMiPanelOpen] = useState<boolean>(pathname.startsWith("/mi-panel"));
 
   return (
     <Sidebar collapsible="icon">
@@ -288,48 +291,81 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs tracking-widest">
-            {!collapsed && "PERSONAL"}
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <CollapsibleSection
-                icon={LayoutDashboard}
-                label="MI PANEL"
-                prefix="/mi-panel"
-                items={miPanelSubs}
-                collapsed={collapsed}
-                linkTo="/mi-panel"
-                open={miPanelOpen}
-                onOpenChange={setMiPanelOpen}
-              />
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs tracking-widest">
-            {!collapsed && "DEPARTAMENTOS"}
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {sections.map((s) => (
-                <CollapsibleSection
-                  key={s.key}
-                  icon={s.icon}
-                  label={s.label}
-                  prefix={s.prefix}
-                  items={s.items}
-                  collapsed={collapsed}
-                  linkTo={"linkTo" in s ? s.linkTo : undefined}
-                  open={openKey === s.key}
-                  onOpenChange={(isOpen) => setOpenKey(isOpen ? s.key : null)}
-                />
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {mode === "paneles" ? (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs tracking-widest">
+              {!collapsed && "MIS PANELES"}
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <NavLink
+                      href="/mi-panel"
+                      end
+                      className="hover:bg-sidebar-accent/50"
+                      activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold"
+                    >
+                      <LayoutDashboard className="mr-2 h-4 w-4 shrink-0" />
+                      {!collapsed && <span className="text-sm">DASHBOARD</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                {miPanelSubs.map((sub) => (
+                  <SidebarMenuItem key={sub.title}>
+                    <SidebarMenuButton asChild>
+                      <NavLink
+                        href={sub.url}
+                        end
+                        className="hover:bg-sidebar-accent/50"
+                        activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold"
+                      >
+                        <sub.icon className="mr-2 h-4 w-4 shrink-0" />
+                        {!collapsed && <span className="text-sm">{sub.title}</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ) : (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs tracking-widest">
+              {!collapsed && "MIS DEPARTAMENTOS"}
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <NavLink
+                      href="/mis-departamentos"
+                      end
+                      className="hover:bg-sidebar-accent/50"
+                      activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold"
+                    >
+                      <LayoutDashboard className="mr-2 h-4 w-4 shrink-0" />
+                      {!collapsed && <span className="text-sm">DASHBOARD</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                {sections.map((s) => (
+                  <CollapsibleSection
+                    key={s.key}
+                    icon={s.icon}
+                    label={s.label}
+                    prefix={s.prefix}
+                    items={s.items}
+                    collapsed={collapsed}
+                    linkTo={"linkTo" in s ? s.linkTo : undefined}
+                    open={openKey === s.key}
+                    onOpenChange={(isOpen) => setOpenKey(isOpen ? s.key : null)}
+                  />
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border/60" />

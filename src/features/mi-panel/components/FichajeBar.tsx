@@ -159,12 +159,12 @@ export function FichajeBar({
         <div className="flex flex-wrap items-center gap-2">
           {sinFichar && (
             <Button
-              size="sm"
+              size="lg"
               disabled={loading || working}
               onClick={handleEntrada}
-              className="px-5 font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/25 ring-1 ring-emerald-500/40"
+              className="h-12 px-6 text-base font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/30 ring-2 ring-emerald-500/50"
             >
-              {working ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <LogIn className="mr-1.5 h-4 w-4" />}
+              {working ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <LogIn className="mr-2 h-5 w-5" />}
               Fichar entrada
             </Button>
           )}

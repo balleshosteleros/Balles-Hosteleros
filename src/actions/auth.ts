@@ -57,7 +57,7 @@ export async function loginAsDemo(_formData: FormData) {
   }
 
   revalidatePath('/', 'layout')
-  redirect('/dashboard')
+  redirect('/mi-panel')
 }
 
 export async function signup(formData: FormData) {

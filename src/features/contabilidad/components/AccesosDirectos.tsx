@@ -1,6 +1,9 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { getAccesosAppsPorDepartamento } from "@/features/rrhh/data/accesos-apps";
-import { Badge } from "@/components/ui/badge";
+import type { AccesoApp } from "@/features/rrhh/data/accesos-apps";
+import { listAccesosApps } from "@/features/rrhh/actions/accesos-apps-actions";
 import { Button } from "@/components/ui/button";
 import { ExternalLink } from "lucide-react";
 
@@ -11,7 +14,22 @@ interface Props {
 
 export function AccesosDirectos({ departamento, max = 6 }: Props) {
   const { empresaActual } = useEmpresa();
-  const apps = getAccesosAppsPorDepartamento(empresaActual.id, departamento).slice(0, max);
+  const [apps, setApps] = useState<AccesoApp[]>([]);
+
+  useEffect(() => {
+    let alive = true;
+    listAccesosApps(empresaActual.id)
+      .then((rows) => {
+        if (!alive) return;
+        const filtered = rows.filter(
+          (a) => a.estado === "Activo" &&
+            (a.departamentos.includes(departamento) || a.departamentos.includes("Todos")),
+        );
+        setApps(filtered.slice(0, max));
+      })
+      .catch((e) => console.error("[AccesosDirectos] load:", e));
+    return () => { alive = false; };
+  }, [empresaActual.id, departamento, max]);
 
   if (apps.length === 0) return null;
 

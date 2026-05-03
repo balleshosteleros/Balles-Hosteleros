@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 function EmpresaAvatar({ empresa, logoUrl, size = "md" }: { empresa: Empresa; logoUrl?: string; size?: "sm" | "md" }) {
-  const cls = size === "sm" ? "h-5 w-5 text-[9px]" : "h-7 w-7 text-[10px]";
+  const cls = size === "sm" ? "h-5 w-5 text-[9px]" : "h-8 w-8 text-[11px]";
   if (logoUrl) {
     return (
       <img

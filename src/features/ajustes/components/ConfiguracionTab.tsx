@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,12 +14,17 @@ import { toast } from "sonner";
 import { type DatosGenerales, type ConfigOperativa } from "@/features/ajustes/data/ajustes";
 import { Upload, Trash2, Info, ImageIcon, Plus, Pencil, Eye, EyeOff, Copy, ExternalLink, Search } from "lucide-react";
 import {
-  getAllAccesosApps,
   CATEGORIAS_APP,
   type AccesoApp,
   type EstadoApp,
   type TipoIntegracion,
 } from "@/features/rrhh/data/accesos-apps";
+import {
+  listAllAccesosApps,
+  createAccesoApp,
+  updateAccesoApp,
+  deleteAccesoApp,
+} from "@/features/rrhh/actions/accesos-apps-actions";
 
 const EMPRESAS_ACC = [
   { id: "habana", nombre: "La Habana" },
@@ -95,7 +100,15 @@ export function ConfiguracionTab() {
   const handleSave = () => toast.success("Configuración guardada correctamente");
 
   // ── Estado módulo accesos a aplicaciones ──
-  const [apps, setApps] = useState<AccesoApp[]>(() => getAllAccesosApps());
+  const [apps, setApps] = useState<AccesoApp[]>([]);
+  const [savingApp, setSavingApp] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    listAllAccesosApps()
+      .then((rows) => { if (alive) setApps(rows); })
+      .catch((e) => { console.error(e); toast.error("No se pudieron cargar los accesos"); });
+    return () => { alive = false; };
+  }, []);
   const [buscar, setBuscar] = useState("");
   const [filtroEmpresa, setFiltroEmpresa] = useState("todas");
   const [filtroCategoria, setFiltroCategoria] = useState("todas");
@@ -125,26 +138,41 @@ export function ConfiguracionTab() {
       tipoIntegracion: app.tipoIntegracion, empresaId: app.empresaId });
     setDepsInput(app.departamentos.join(", ")); setRolesInput(app.rolesAutorizados.join(", ")); setModalOpen(true);
   };
-  const handleSaveApp = () => {
+  const handleSaveApp = async () => {
     if (!form.nombre.trim() || !form.url.trim()) { toast.error("Nombre y URL son obligatorios"); return; }
     const departamentos = depsInput.split(",").map((dep) => dep.trim()).filter(Boolean);
     const rolesAutorizados = rolesInput.split(",").map((r) => r.trim()).filter(Boolean);
-    const today = new Date().toISOString().slice(0, 10);
-    if (editingId) {
-      setApps((prev) => prev.map((a) => a.id === editingId
-        ? { ...a, ...form, departamentos, rolesAutorizados, logoUrl: form.logoUrl || undefined, ultimaActualizacion: today }
-        : a));
-      toast.success(`Acceso "${form.nombre}" actualizado`);
-    } else {
-      setApps((prev) => [...prev, { ...form, id: `app-${Date.now()}`, departamentos, rolesAutorizados, logoUrl: form.logoUrl || undefined, ultimaActualizacion: today }]);
-      toast.success(`Acceso "${form.nombre}" creado`);
+    setSavingApp(true);
+    try {
+      if (editingId) {
+        const updated = await updateAccesoApp(editingId, {
+          ...form, departamentos, rolesAutorizados, logoUrl: form.logoUrl || undefined,
+        });
+        setApps((prev) => prev.map((a) => (a.id === editingId ? updated : a)));
+        toast.success(`Acceso "${updated.nombre}" actualizado`);
+      } else {
+        const created = await createAccesoApp({
+          ...form, departamentos, rolesAutorizados, logoUrl: form.logoUrl || undefined,
+        });
+        setApps((prev) => [...prev, created]);
+        toast.success(`Acceso "${created.nombre}" creado`);
+      }
+      setModalOpen(false);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Error al guardar");
+    } finally {
+      setSavingApp(false);
     }
-    setModalOpen(false);
   };
-  const handleDeleteApp = (app: AccesoApp) => {
+  const handleDeleteApp = async (app: AccesoApp) => {
     if (!confirm(`¿Eliminar el acceso "${app.nombre}"?`)) return;
-    setApps((prev) => prev.filter((a) => a.id !== app.id));
-    toast.success(`Acceso "${app.nombre}" eliminado`);
+    try {
+      await deleteAccesoApp(app.id);
+      setApps((prev) => prev.filter((a) => a.id !== app.id));
+      toast.success(`Acceso "${app.nombre}" eliminado`);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Error al eliminar");
+    }
   };
   const empresaNombre = (id: string) => EMPRESAS_ACC.find((e) => e.id === id)?.nombre ?? id;
 
@@ -525,8 +553,8 @@ export function ConfiguracionTab() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSaveApp} disabled={!form.nombre.trim() || !form.url.trim()}>
-              {editingId ? "Guardar cambios" : "Crear acceso"}
+            <Button onClick={handleSaveApp} disabled={savingApp || !form.nombre.trim() || !form.url.trim()}>
+              {savingApp ? "Guardando…" : editingId ? "Guardar cambios" : "Crear acceso"}
             </Button>
           </DialogFooter>
         </DialogContent>

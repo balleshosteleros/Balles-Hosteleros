@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { getAccesosAppsPorEmpresa, CATEGORIAS_APP, DEPARTAMENTOS, type AccesoApp, type EstadoApp } from "@/features/rrhh/data/accesos-apps";
+import { CATEGORIAS_APP, DEPARTAMENTOS, type AccesoApp, type EstadoApp } from "@/features/rrhh/data/accesos-apps";
+import { listAccesosApps } from "@/features/rrhh/actions/accesos-apps-actions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -91,7 +92,18 @@ function PasswordCell({ value, canView }: { value: string; canView: boolean }) {
 
 export function AccesosView() {
   const { empresaActual } = useEmpresa();
-  const apps = getAccesosAppsPorEmpresa(empresaActual.id);
+  const [apps, setApps] = useState<AccesoApp[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    listAccesosApps(empresaActual.id)
+      .then((rows) => { if (alive) setApps(rows); })
+      .catch((e) => { console.error(e); toast.error("No se pudieron cargar los accesos"); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [empresaActual.id]);
 
   const [buscar, setBuscar] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);

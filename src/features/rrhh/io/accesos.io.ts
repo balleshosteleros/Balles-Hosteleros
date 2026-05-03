@@ -1,9 +1,7 @@
 import { z } from "zod";
 import type { ModuleIO, RowSchema } from "@/shared/io";
-import {
-  getAccesosAppsPorEmpresa,
-  type AccesoApp,
-} from "@/features/rrhh/data/accesos-apps";
+import { type AccesoApp } from "@/features/rrhh/data/accesos-apps";
+import { listAccesosApps } from "@/features/rrhh/actions/accesos-apps-actions";
 
 const ESTADOS = ["Activo", "Inactivo", "Archivado"] as const;
 const TIPOS_INTEGRACION = ["enlace", "embebido", "sso", "oauth"] as const;
@@ -56,5 +54,5 @@ export const accesosIO: ModuleIO<AccesoApp> = {
     { key: "ultimaActualizacion", label: "Actualizado", hideInImport: true },
     { key: "empresaId", label: "Empresa", hideInImport: true },
   ],
-  fetchAll: async (ctx) => getAccesosAppsPorEmpresa((ctx.empresaId as string) ?? ""),
+  fetchAll: async (ctx) => listAccesosApps((ctx.empresaId as string) ?? ""),
 };
