@@ -10,6 +10,7 @@ import {
   PenLine, CheckCircle2, BarChart3, Landmark, Tag, Zap, ContactRound,
   Heart, UserPlus, Apple, CreditCard, Presentation, QrCode, Globe,
   Send, Wallet, Fingerprint, Inbox, FileSignature, Trophy, UserCircle, LayoutDashboard,
+  FileQuestion,
 } from "lucide-react";
 import { useViewMode } from "@/features/layout/contexts/view-mode-context";
 
@@ -38,6 +39,7 @@ function AccesosIcon({ className }: { className?: string }) {
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { NavLink } from "@/features/layout/components/nav-link";
+import { useAuth } from "@/features/auth/contexts/auth-context";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarMenuSub, SidebarMenuSubItem,
@@ -123,12 +125,13 @@ const miPanelSubs = [
   { title: "CALENDARIO", url: "/mi-panel/calendario", icon: CalendarDays },
   { title: "HORARIO", url: "/mi-panel/horario", icon: Timer },
   { title: "FICHAJES", url: "/mi-panel/fichajes", icon: Fingerprint },
+  { title: "FORMACIÓN", url: "/mi-panel/formacion", icon: GraduationCap },
   { title: "CONDICIONES", url: "/mi-panel/condiciones", icon: ClipboardCheck },
-  { title: "CUESTIONARIOS", url: "/mi-panel/cuestionarios", icon: ClipboardList },
+  { title: "ENCUESTAS", url: "/mi-panel/encuestas", icon: ClipboardList },
+  { title: "CUESTIONARIOS", url: "/mi-panel/cuestionarios", icon: FileQuestion },
   { title: "SOLICITUDES", url: "/mi-panel/ausencias", icon: Inbox },
   { title: "COMUNICADOS", url: "/mi-panel/comunicados", icon: Megaphone },
   { title: "DOCUMENTOS", url: "/mi-panel/documentos", icon: Files },
-  { title: "FORMACIÓN", url: "/mi-panel/formacion", icon: GraduationCap },
   { title: "EQUIPO", url: "/mi-panel/equipo", icon: Network },
 ];
 
@@ -145,6 +148,8 @@ const rrhhSubs = [
   { title: "POINTS", url: "/rrhh/points", icon: Trophy },
   { title: "PAGOS", url: "/rrhh/pagos", icon: HandCoins },
   { title: "FORMACIÓN", url: "/rrhh/formacion", icon: GraduationCap },
+  { title: "ENCUESTAS", url: "/rrhh/encuestas", icon: ClipboardList },
+  { title: "CUESTIONARIOS", url: "/rrhh/cuestionarios", icon: FileQuestion },
 ];
 
 type SubItem = { title: string; url: string; icon: React.ElementType };
@@ -236,20 +241,27 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
   const pathname = usePathname();
   const { mode } = useViewMode();
+  const { puedeVer, permisosLoaded } = useAuth();
 
-  const sections = [
-    { key: "direccion", icon: Crown, label: "DIRECCIÓN", prefix: "/direccion", items: direccionSubs, linkTo: "/direccion" },
-    { key: "sala", icon: UtensilsCrossed, label: "SALA", prefix: "/sala", items: salaSubs, linkTo: "/sala" },
-    { key: "cocina", icon: ChefHat, label: "COCINA", prefix: "/cocina", items: cocinaSubs, linkTo: "/cocina" },
-    { key: "gerencia", icon: Briefcase, label: "GERENCIA", prefix: "/gerencia", items: gerenciaSubs, linkTo: "/gerencia" },
-    { key: "calidad", icon: CheckCircle2, label: "CALIDAD", prefix: "/calidad", items: calidadSubs, linkTo: "/calidad" },
-    { key: "rrhh", icon: User, label: "RECURSOS HUMANOS", prefix: "/rrhh", items: rrhhSubs, linkTo: "/rrhh" },
-    { key: "marketing", icon: Camera, label: "MARKETING", prefix: "/marketing", items: marketingSubs, linkTo: "/marketing" },
-    { key: "logistica", icon: Package, label: "LOGÍSTICA", prefix: "/logistica", items: logisticaSubs, linkTo: "/logistica" },
-    { key: "contabilidad", icon: Calculator, label: "CONTABILIDAD", prefix: "/contabilidad", items: contabilidadSubs, linkTo: "/contabilidad" },
-    { key: "gestoria", icon: FileText, label: "GESTORÍA", prefix: "/gestoria", items: gestoriaSubs, linkTo: "/gestoria" },
-    { key: "juridico", icon: Scale, label: "JURÍDICO", prefix: "/juridico", items: juridicoSubs, linkTo: "/juridico" },
+  const allSections = [
+    { key: "direccion", modulo: "DIRECCIÓN", icon: Crown, label: "DIRECCIÓN", prefix: "/direccion", items: direccionSubs, linkTo: "/direccion" },
+    { key: "sala", modulo: "SALA", icon: UtensilsCrossed, label: "SALA", prefix: "/sala", items: salaSubs, linkTo: "/sala" },
+    { key: "cocina", modulo: "COCINA", icon: ChefHat, label: "COCINA", prefix: "/cocina", items: cocinaSubs, linkTo: "/cocina" },
+    { key: "gerencia", modulo: "GERENCIA", icon: Briefcase, label: "GERENCIA", prefix: "/gerencia", items: gerenciaSubs, linkTo: "/gerencia" },
+    { key: "calidad", modulo: "CALIDAD", icon: CheckCircle2, label: "CALIDAD", prefix: "/calidad", items: calidadSubs, linkTo: "/calidad" },
+    { key: "rrhh", modulo: "RRHH", icon: User, label: "RECURSOS HUMANOS", prefix: "/rrhh", items: rrhhSubs, linkTo: "/rrhh" },
+    { key: "marketing", modulo: "MARKETING", icon: Camera, label: "MARKETING", prefix: "/marketing", items: marketingSubs, linkTo: "/marketing" },
+    { key: "logistica", modulo: "LOGÍSTICA", icon: Package, label: "LOGÍSTICA", prefix: "/logistica", items: logisticaSubs, linkTo: "/logistica" },
+    { key: "contabilidad", modulo: "CONTABILIDAD", icon: Calculator, label: "CONTABILIDAD", prefix: "/contabilidad", items: contabilidadSubs, linkTo: "/contabilidad" },
+    { key: "gestoria", modulo: "GESTORÍA", icon: FileText, label: "GESTORÍA", prefix: "/gestoria", items: gestoriaSubs, linkTo: "/gestoria" },
+    { key: "juridico", modulo: "JURÍDICO", icon: Scale, label: "JURÍDICO", prefix: "/juridico", items: juridicoSubs, linkTo: "/juridico" },
   ] as const;
+
+  // Mientras los permisos no han cargado, no mostramos secciones (evita parpadeo
+  // de "todo abierto" → "filtrado"). Una vez cargados, filtramos por puedeVer.
+  const sections = permisosLoaded
+    ? allSections.filter((s) => puedeVer(s.modulo))
+    : [];
 
   const activeKey = sections.find((s) => pathname.startsWith(s.prefix))?.key ?? null;
   const [openKey, setOpenKey] = useState<string | null>(activeKey);

@@ -200,7 +200,7 @@ export function SoporteDrawer({ children }: SoporteDrawerProps) {
   return (
     <Sheet onOpenChange={(open) => !open && reset()}>
       <SheetTrigger asChild>{children}</SheetTrigger>
-      <SheetContent side="right" className="w-full sm:max-w-md flex flex-col gap-0 p-0">
+      <SheetContent side="right" className="flex flex-col gap-0 p-0">
 
         {/* HEADER */}
         <SheetHeader className="border-b px-5 py-4">

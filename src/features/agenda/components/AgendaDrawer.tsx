@@ -208,7 +208,7 @@ export function AgendaDrawer({ children }: { children: ReactNode }) {
       <SheetTrigger asChild>{children}</SheetTrigger>
       <SheetContent
         side="right"
-        className="w-full sm:!max-w-[50vw] sm:!w-[50vw] sm:!min-w-[640px] flex flex-col gap-0 p-0"
+        className="flex flex-col gap-0 p-0"
       >
         <SheetHeader className="border-b py-3 pl-5 pr-14 shrink-0">
           <div className="flex items-center justify-between gap-2">

@@ -2,6 +2,8 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
 import type { User, Session, SupabaseClient } from "@supabase/supabase-js";
+import type { PermisoModulo } from "@/features/ajustes/data/ajustes";
+import { getUserPermisos } from "@/features/auth/actions/permisos-actions";
 
 export type AppRole = "admin" | "director" | "gerencia" | "responsable" | "empleado" | "solo_lectura";
 
@@ -20,10 +22,20 @@ interface AuthContextValue {
   profile: AuthProfile | null;
   roles: AppRole[];
   loading: boolean;
+  permisos: PermisoModulo[];
+  permisosLoaded: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   hasRole: (role: AppRole) => boolean;
   canAccess: (path: string) => boolean;
+  puedeVer: (modulo: string) => boolean;
+  puedeEditar: (modulo: string) => boolean;
+}
+
+// "Dirección" === "DIRECCIÓN" === " direccion " (acentos, case y espacios).
+const COMBINING_MARKS = /[̀-ͯ]/g;
+function normalizarModulo(m: string): string {
+  return m.normalize("NFD").replace(COMBINING_MARKS, "").toUpperCase().trim();
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -76,6 +88,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<AuthProfile | null>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [loading, setLoading] = useState(true);
+  const [permisos, setPermisos] = useState<PermisoModulo[]>([]);
+  const [permisosLoaded, setPermisosLoaded] = useState(false);
 
   useEffect(() => {
     const supabase = getSupabase();
@@ -105,11 +119,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               .eq("user_id", session.user.id);
 
             if (rolesData) setRoles(rolesData.map((r: { role: string }) => r.role as AppRole));
+
+            try {
+              const up = await getUserPermisos();
+              setPermisos(up.permisos);
+            } catch (e) {
+              console.error("[auth] error cargando permisos", e);
+              setPermisos([]);
+            } finally {
+              setPermisosLoaded(true);
+            }
+
             setLoading(false);
           }, 0);
         } else {
           setProfile(null);
           setRoles([]);
+          setPermisos([]);
+          setPermisosLoaded(true);
           setLoading(false);
         }
       }
@@ -165,8 +192,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, [roles]);
 
+  // Bypass total para 'admin'. Para todo lo demás (incluido 'director'),
+  // se enforza empresa_roles.permisos como fuente de verdad. Si la lista de
+  // permisos está vacía y el usuario no es admin, no ve nada salvo dashboard.
+  const puedeVer = useCallback((modulo: string) => {
+    if (roles.includes("admin")) return true;
+    const target = normalizarModulo(modulo);
+    return permisos.some((p) => p.ver && normalizarModulo(p.modulo) === target);
+  }, [roles, permisos]);
+
+  const puedeEditar = useCallback((modulo: string) => {
+    if (roles.includes("admin")) return true;
+    const target = normalizarModulo(modulo);
+    return permisos.some((p) => p.editar && normalizarModulo(p.modulo) === target);
+  }, [roles, permisos]);
+
   return (
-    <AuthContext.Provider value={{ user, session, profile, roles, loading, signIn, signOut, hasRole, canAccess }}>
+    <AuthContext.Provider value={{
+      user, session, profile, roles, loading, permisos, permisosLoaded,
+      signIn, signOut, hasRole, canAccess, puedeVer, puedeEditar,
+    }}>
       {children}
     </AuthContext.Provider>
   );

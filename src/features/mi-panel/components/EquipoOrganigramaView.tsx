@@ -5,7 +5,6 @@ import {
   ReactFlow,
   Background,
   Controls,
-  MiniMap,
   Handle,
   Position,
   type Node,
@@ -19,15 +18,15 @@ import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
   orgChartsPorEmpresa,
   getDeptPalette,
+  normalizeArea,
   ZONE_COLORS,
   type OrgNode,
-  type AreaType,
   type AreaZone,
 } from "@/features/direccion/data/direccion";
 import { getOrganigrama } from "@/features/direccion/actions/organigrama-actions";
 
 function AreaZoneNode({ data }: NodeProps) {
-  const palette = ZONE_COLORS[(data.area as AreaZone["area"]) ?? "operativa"];
+  const palette = ZONE_COLORS[normalizeArea(data.area)];
   return (
     <div
       className="w-full h-full rounded-xl"
@@ -47,8 +46,9 @@ function AreaZoneNode({ data }: NodeProps) {
 }
 
 function OrgChartNode({ id, data, selected }: NodeProps) {
-  const area = (data.area as AreaType) ?? "operativa";
-  const palette = getDeptPalette(id, area);
+  const area = normalizeArea(data.area);
+  const customColor = (data as { color?: string }).color;
+  const palette = getDeptPalette(id, area, customColor);
   const hasDescripcion = typeof data.descripcion === "string" && (data.descripcion as string).trim().length > 0;
   return (
     <div
@@ -92,7 +92,7 @@ function dataToFlow(chart: {
     id: z.id,
     type: "areaZone",
     position: { x: z.x, y: z.y },
-    data: { label: z.label, area: z.area },
+    data: { label: z.label, area: normalizeArea(z.area) },
     style: { width: z.width, height: z.height },
     draggable: false,
     selectable: false,
@@ -103,7 +103,12 @@ function dataToFlow(chart: {
     id: n.id,
     type: "orgNode",
     position: { x: n.x, y: n.y },
-    data: { label: n.label, area: n.area, descripcion: n.descripcion ?? "" },
+    data: {
+      label: n.label,
+      area: normalizeArea(n.area),
+      descripcion: n.descripcion ?? "",
+      color: n.color,
+    },
     draggable: false,
     selectable: true,
   }));
@@ -165,13 +170,6 @@ export function EquipoOrganigramaView() {
           <span className="flex items-center gap-1.5">
             <span
               className="inline-block w-3 h-3 rounded-sm"
-              style={{ background: ZONE_COLORS.externo.bg, border: `1px solid ${ZONE_COLORS.externo.border}` }}
-            />
-            Externo (Socios)
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span
-              className="inline-block w-3 h-3 rounded-sm"
               style={{ background: ZONE_COLORS.administrativa.bg, border: `1px dashed ${ZONE_COLORS.administrativa.border}` }}
             />
             Área Administrativa
@@ -206,28 +204,16 @@ export function EquipoOrganigramaView() {
             showInteractive={false}
             className="!bg-card !border-border !shadow-sm [&>button]:!bg-card [&>button]:!border-border [&>button]:!text-foreground"
           />
-          <MiniMap
-            nodeColor={(n) => {
-              if (n.type === "areaZone") return "transparent";
-              const palette = getDeptPalette(n.id, (n.data?.area as AreaType) ?? "operativa");
-              return palette.bg;
-            }}
-            maskColor="hsl(var(--muted) / 0.5)"
-            className="!bg-card !border-border"
-          />
         </ReactFlow>
 
         {selectedNode && (() => {
-          const area = (selectedNode.data.area as AreaType) ?? "operativa";
-          const palette = getDeptPalette(selectedNode.id, area);
+          const area = normalizeArea(selectedNode.data.area);
+          const customColor = (selectedNode.data as { color?: string }).color;
+          const palette = getDeptPalette(selectedNode.id, area, customColor);
           const label = (selectedNode.data.label as string) ?? "";
           const descripcion = (selectedNode.data.descripcion as string) ?? "";
           const areaLabel =
-            area === "administrativa"
-              ? "Área Administrativa"
-              : area === "operativa"
-                ? "Área Operativa"
-                : "Externo (Socios)";
+            area === "administrativa" ? "Área Administrativa" : "Área Operativa";
           return (
             <div className="absolute top-4 right-4 w-80 bg-card border rounded-lg shadow-xl z-10 max-h-[calc(100%-2rem)] overflow-y-auto">
               <div

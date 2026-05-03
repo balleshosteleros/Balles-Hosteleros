@@ -56,15 +56,6 @@ const ROLE_DEPARTAMENTOS: Record<AppRole, string[]> = {
   solo_lectura: ["gerencia"],
 };
 
-const ROLE_LABELS: Record<AppRole, string> = {
-  admin: "Administrador",
-  director: "Director",
-  gerencia: "Gerencia",
-  responsable: "Responsable",
-  empleado: "Empleado",
-  solo_lectura: "Solo lectura",
-};
-
 function dashboardSubtitlePorRol(rol: AppRole | null): string {
   if (!rol) return "Estos son tus departamentos asignados.";
   switch (rol) {
@@ -87,7 +78,6 @@ function dashboardSubtitlePorRol(rol: AppRole | null): string {
 export function MisDepartamentosView() {
   const { profile, user, roles } = useAuth();
   const rolPrincipal: AppRole | null = roles[0] ?? null;
-  const rolLabel = rolPrincipal ? ROLE_LABELS[rolPrincipal] : "—";
 
   const claves = rolPrincipal ? ROLE_DEPARTAMENTOS[rolPrincipal] : [];
   const tiles = ALL_DEPARTAMENTOS.filter((d) => claves.includes(d.key));
@@ -105,10 +95,7 @@ export function MisDepartamentosView() {
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6">
       {/* Cabecera */}
       <div>
-        <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
-          {rolLabel}
-        </p>
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight mt-1">
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
           {saludoSegunHora()}{userName ? `, ${userName.split(" ")[0]}` : ""}
         </h1>
         <p className="text-sm text-muted-foreground capitalize">{fechaLarga}</p>

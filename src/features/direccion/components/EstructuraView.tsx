@@ -5,7 +5,6 @@ import {
   ReactFlow,
   Background,
   Controls,
-  MiniMap,
   useNodesState,
   useEdgesState,
   addEdge,
@@ -24,6 +23,8 @@ import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
   orgChartsPorEmpresa,
   getDeptPalette,
+  normalizeArea,
+  DEPT_COLOR_SWATCHES,
   ZONE_COLORS,
   type OrgChart,
   type OrgNode,
@@ -58,12 +59,11 @@ import { Plus, Trash2, Save, X, Loader2, Info } from "lucide-react";
 const AREA_LABELS: Record<string, string> = {
   administrativa: "Área Administrativa",
   operativa: "Área Operativa",
-  externo: "Externo (Socios)",
 };
 
 /* ── Zone node (resizable, draggable) ── */
 function AreaZoneNode({ data, selected }: NodeProps) {
-  const palette = ZONE_COLORS[(data.area as AreaZone["area"]) ?? "operativa"];
+  const palette = ZONE_COLORS[normalizeArea(data.area)];
   return (
     <>
       <NodeResizer
@@ -93,8 +93,9 @@ function AreaZoneNode({ data, selected }: NodeProps) {
 
 /* ── Org block node (vívido, estilo botón "fichar") ── */
 function OrgChartNode({ id, data, selected }: NodeProps) {
-  const area = (data.area as AreaType) ?? "operativa";
-  const palette = getDeptPalette(id, area);
+  const area = normalizeArea(data.area);
+  const customColor = (data as { color?: string }).color;
+  const palette = getDeptPalette(id, area, customColor);
   const hasDescripcion = typeof data.descripcion === "string" && (data.descripcion as string).trim().length > 0;
   return (
     <div
@@ -139,7 +140,7 @@ function dataToFlow(chart: {
     id: z.id,
     type: "areaZone",
     position: { x: z.x, y: z.y },
-    data: { label: z.label, area: z.area, w: z.width, h: z.height },
+    data: { label: z.label, area: normalizeArea(z.area), w: z.width, h: z.height },
     style: { width: z.width, height: z.height },
     draggable: true,
     selectable: true,
@@ -150,7 +151,12 @@ function dataToFlow(chart: {
     id: n.id,
     type: "orgNode",
     position: { x: n.x, y: n.y },
-    data: { label: n.label, area: n.area, descripcion: n.descripcion ?? "" },
+    data: {
+      label: n.label,
+      area: normalizeArea(n.area),
+      descripcion: n.descripcion ?? "",
+      color: n.color,
+    },
     draggable: true,
   }));
 
@@ -177,7 +183,7 @@ function flowToData(nodes: Node[], edges: Edge[]): OrgChart {
       zones.push({
         id: n.id,
         label: (n.data.label as string) ?? "",
-        area: ((n.data.area as AreaZone["area"]) ?? "operativa"),
+        area: normalizeArea(n.data.area),
         x: n.position.x,
         y: n.position.y,
         width: typeof n.width === "number" ? n.width : (typeof styleW === "number" ? styleW : (dataW ?? 600)),
@@ -185,13 +191,15 @@ function flowToData(nodes: Node[], edges: Edge[]): OrgChart {
       });
     } else {
       const descripcion = (n.data as { descripcion?: string }).descripcion;
+      const color = (n.data as { color?: string }).color;
       orgNodes.push({
         id: n.id,
         label: (n.data.label as string) ?? "",
-        area: ((n.data.area as AreaType) ?? "operativa"),
+        area: normalizeArea(n.data.area),
         x: n.position.x,
         y: n.position.y,
         ...(descripcion && descripcion.trim().length > 0 ? { descripcion } : {}),
+        ...(color && color.trim().length > 0 ? { color } : {}),
       });
     }
   }
@@ -212,6 +220,7 @@ export function EstructuraView() {
   const [editLabel, setEditLabel] = useState("");
   const [editArea, setEditArea] = useState<AreaType>("operativa");
   const [editDescripcion, setEditDescripcion] = useState("");
+  const [editColor, setEditColor] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -282,8 +291,9 @@ export function EstructuraView() {
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     setSelectedNode(node);
     setEditLabel(node.data.label as string);
-    setEditArea((node.data.area as AreaType) || "operativa");
+    setEditArea(normalizeArea(node.data.area));
     setEditDescripcion(((node.data as { descripcion?: string }).descripcion) ?? "");
+    setEditColor(((node.data as { color?: string }).color) ?? "");
   }, []);
 
   const handleAddNode = () => {
@@ -294,7 +304,7 @@ export function EstructuraView() {
       type: "orgNode",
       position: {
         x: 400 + Math.random() * 200,
-        y: newArea === "externo" ? -60 : newArea === "administrativa" ? 150 : 500,
+        y: newArea === "administrativa" ? 150 : 500,
       },
       data: { label: newLabel.toUpperCase(), area: newArea, descripcion: "" },
       draggable: true,
@@ -334,6 +344,7 @@ export function EstructuraView() {
                   label: editLabel.toUpperCase(),
                   area: editArea,
                   descripcion: editDescripcion,
+                  color: editColor || undefined,
                 },
               }
             : n
@@ -380,13 +391,6 @@ export function EstructuraView() {
             <span className="flex items-center gap-1.5">
               <span
                 className="inline-block w-3 h-3 rounded-sm"
-                style={{ background: ZONE_COLORS.externo.bg, border: `1px dashed ${ZONE_COLORS.externo.border}` }}
-              />
-              Externo (Socios)
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span
-                className="inline-block w-3 h-3 rounded-sm"
                 style={{ background: ZONE_COLORS.administrativa.bg, border: `1px dashed ${ZONE_COLORS.administrativa.border}` }}
               />
               Área Administrativa
@@ -424,21 +428,16 @@ export function EstructuraView() {
             showInteractive={false}
             className="!bg-card !border-border !shadow-sm [&>button]:!bg-card [&>button]:!border-border [&>button]:!text-foreground"
           />
-          <MiniMap
-            nodeColor={(n) => {
-              if (n.type === "areaZone") return "transparent";
-              const area = (n.data?.area as AreaType) ?? "operativa";
-              return getDeptPalette(n.id, area).bg;
-            }}
-            maskColor="hsl(var(--muted) / 0.5)"
-            className="!bg-card !border-border"
-          />
         </ReactFlow>
 
         {/* Side panel for editing */}
         {selectedNode && (() => {
           const palette = !isZoneSelected
-            ? getDeptPalette(selectedNode.id, (selectedNode.data.area as AreaType) ?? "operativa")
+            ? getDeptPalette(
+                selectedNode.id,
+                normalizeArea(selectedNode.data.area),
+                editColor || undefined,
+              )
             : null;
           return (
             <div className="absolute top-4 right-4 w-80 bg-card border rounded-lg shadow-xl p-4 z-10 space-y-4 max-h-[calc(100%-2rem)] overflow-y-auto">
@@ -494,6 +493,54 @@ export function EstructuraView() {
                     <p className="text-[11px] text-muted-foreground">
                       Visible para todos los empleados al pulsar el bloque.
                     </p>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs">Color</Label>
+                      {editColor && (
+                        <button
+                          type="button"
+                          onClick={() => setEditColor("")}
+                          className="text-[11px] text-muted-foreground hover:text-foreground underline"
+                        >
+                          Restablecer
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-8 gap-1.5">
+                      {DEPT_COLOR_SWATCHES.map((c) => {
+                        const active = editColor.toLowerCase() === c.toLowerCase();
+                        return (
+                          <button
+                            key={c}
+                            type="button"
+                            onClick={() => setEditColor(c)}
+                            className={`h-6 w-6 rounded-md border transition-transform hover:scale-110 ${
+                              active
+                                ? "ring-2 ring-offset-1 ring-foreground"
+                                : "border-border"
+                            }`}
+                            style={{ background: c }}
+                            aria-label={`Color ${c}`}
+                          />
+                        );
+                      })}
+                    </div>
+                    <div className="flex items-center gap-2 pt-1">
+                      <input
+                        type="color"
+                        value={editColor || "#3b82f6"}
+                        onChange={(e) => setEditColor(e.target.value)}
+                        className="h-8 w-10 rounded border border-border bg-transparent cursor-pointer"
+                        aria-label="Selector de color personalizado"
+                      />
+                      <Input
+                        value={editColor}
+                        onChange={(e) => setEditColor(e.target.value)}
+                        placeholder="#3b82f6"
+                        className="h-8 text-xs font-mono"
+                      />
+                    </div>
                   </div>
                 </>
               )}

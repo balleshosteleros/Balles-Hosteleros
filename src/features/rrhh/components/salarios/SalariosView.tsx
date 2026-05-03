@@ -11,7 +11,7 @@ import { ConfigButton } from "@/shared/components/config-button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   ArrowLeft, Plus, Eye, Settings2, DollarSign, Clock, Calendar,
-  Briefcase, ChevronDown, ChevronRight, Target, AlertTriangle,
+  Briefcase, ChevronDown, ChevronRight, Target, AlertTriangle, FileText,
 } from "lucide-react";
 import {
   SubmoduleToolbar,
@@ -54,6 +54,7 @@ export function SalariosView() {
       onDetail={(id) => { setSelectedId(id); setView("detail"); }}
       onConfig={() => setView("config")}
       onNormas={() => setView("normas")}
+      empresaId={empresaActual.id}
     />
   );
 }
@@ -63,11 +64,13 @@ function ListView({
   onDetail,
   onConfig,
   onNormas,
+  empresaId,
 }: {
   puestos: PuestoSalarial[];
   onDetail: (id: string) => void;
   onConfig: () => void;
   onNormas: () => void;
+  empresaId: string;
 }) {
   const [busqueda, setBusqueda] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
@@ -190,7 +193,7 @@ function ListView({
         extraDerecha={
           <IOActions
             config={salariosIO}
-            context={{ empresaId: empresaActual.id }}
+            context={{ empresaId }}
             onSuccess={() => window.location.reload()}
           />
         }

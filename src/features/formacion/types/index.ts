@@ -8,7 +8,7 @@ export type Puesto =
   | "COCINERO"
   | "JEFE DE COCINA"
   | "CACHIMBERO"
-  | "ARTISTA / DJ"
+  | "ARTISTA"
   | "MANTENIMIENTO"
   | "GERENTE"
   | "CONTABLE";
@@ -19,7 +19,7 @@ export const PUESTOS: Puesto[] = [
   "COCINERO",
   "JEFE DE COCINA",
   "CACHIMBERO",
-  "ARTISTA / DJ",
+  "ARTISTA",
   "MANTENIMIENTO",
   "GERENTE",
   "CONTABLE",

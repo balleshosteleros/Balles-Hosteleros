@@ -46,6 +46,10 @@ import {
   AlertTriangle,
   Sparkles,
   KeyRound,
+  Eye,
+  EyeOff,
+  Copy,
+  Check,
   LayoutDashboard,
   HelpCircle,
   Fingerprint,
@@ -459,6 +463,22 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     : (userEmail.split("@")[0] || "—");
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [appsMenuOpen, setAppsMenuOpen] = useState(false);
+  const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  function copyToClipboard(value: string, fieldKey: string) {
+    if (typeof navigator === "undefined" || !navigator.clipboard) return;
+    navigator.clipboard.writeText(value).then(() => {
+      setCopiedField(fieldKey);
+      setTimeout(() => setCopiedField((k) => (k === fieldKey ? null : k)), 1200);
+    }).catch((e) => console.error("[layout] copy:", e));
+  }
+
+  function maskPassword(pwd: string): string {
+    const len = Math.min(pwd.length, 12);
+    return "•".repeat(len || 8);
+  }
+
   const { empresaActual } = useEmpresa();
   const [accesosAppsRaw, setAccesosAppsRaw] = useState<AccesoApp[]>([]);
   useEffect(() => {
@@ -602,7 +622,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent
                         align="end"
-                        className="w-72 max-h-[480px] overflow-y-auto"
+                        className="w-96 max-h-[520px] overflow-y-auto"
                         onMouseLeave={() => setAppsMenuOpen(false)}
                       >
                         <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 py-2">
@@ -616,36 +636,155 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                             </p>
                             {accesosApps
                               .filter((a) => a.categoria === cat)
-                              .map((app) => (
-                                <DropdownMenuItem
-                                  key={app.id}
-                                  className="cursor-pointer gap-2 px-3 py-1.5"
-                                  onSelect={() => window.open(app.url, "_blank", "noopener,noreferrer")}
-                                >
-                                  {app.logoUrl ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img
-                                      src={app.logoUrl}
-                                      alt=""
-                                      className="h-4 w-4 rounded object-contain shrink-0"
-                                      onError={(e) => {
-                                        const img = e.currentTarget;
-                                        img.style.display = "none";
-                                        const fallback = img.nextElementSibling as HTMLElement | null;
-                                        if (fallback) fallback.style.display = "inline";
-                                      }}
-                                    />
-                                  ) : null}
-                                  <span
-                                    className="text-sm leading-none shrink-0"
-                                    style={{ display: app.logoUrl ? "none" : "inline" }}
+                              .map((app) => {
+                                const pwdVisible = !!visiblePasswords[app.id];
+                                const tieneUsuario = !!app.usuario;
+                                const tieneContrasena = !!app.contrasena;
+                                return (
+                                  <div
+                                    key={app.id}
+                                    className="px-2 py-1.5 mx-1 rounded-md hover:bg-accent/50"
                                   >
-                                    {app.icono}
-                                  </span>
-                                  <span className="flex-1 text-xs font-medium truncate">{app.nombre}</span>
-                                  <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
-                                </DropdownMenuItem>
-                              ))}
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        window.open(app.url, "_blank", "noopener,noreferrer")
+                                      }
+                                      className="flex items-center gap-2 w-full text-left"
+                                      title={`Abrir ${app.nombre}`}
+                                    >
+                                      {app.logoUrl ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img
+                                          src={app.logoUrl}
+                                          alt=""
+                                          className="h-4 w-4 rounded object-contain shrink-0"
+                                          onError={(e) => {
+                                            const img = e.currentTarget;
+                                            img.style.display = "none";
+                                            const fallback = img.nextElementSibling as HTMLElement | null;
+                                            if (fallback) fallback.style.display = "inline";
+                                          }}
+                                        />
+                                      ) : null}
+                                      <span
+                                        className="text-sm leading-none shrink-0"
+                                        style={{ display: app.logoUrl ? "none" : "inline" }}
+                                      >
+                                        {app.icono}
+                                      </span>
+                                      <span className="flex-1 text-xs font-medium truncate">
+                                        {app.nombre}
+                                      </span>
+                                      <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
+                                    </button>
+
+                                    <div className="mt-1.5 ml-6 space-y-1">
+                                      <div className="flex items-center gap-1.5 text-[11px]">
+                                        <span className="text-muted-foreground w-16 shrink-0">
+                                          Usuario
+                                        </span>
+                                        {tieneUsuario ? (
+                                          <>
+                                            <span className="font-mono flex-1 truncate text-foreground/80 select-all">
+                                              {app.usuario}
+                                            </span>
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                copyToClipboard(app.usuario, `${app.id}:user`);
+                                              }}
+                                              className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                                              title="Copiar usuario"
+                                              aria-label="Copiar usuario"
+                                            >
+                                              {copiedField === `${app.id}:user` ? (
+                                                <Check className="h-3 w-3 text-emerald-600" />
+                                              ) : (
+                                                <Copy className="h-3 w-3" />
+                                              )}
+                                            </button>
+                                          </>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setAppsMenuOpen(false);
+                                              router.push("/accesos");
+                                            }}
+                                            className="flex-1 text-left italic text-muted-foreground/70 hover:text-primary hover:underline truncate"
+                                            title="Configurar credenciales en Accesos"
+                                          >
+                                            sin definir — añadir
+                                          </button>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-1.5 text-[11px]">
+                                        <span className="text-muted-foreground w-16 shrink-0">
+                                          Contraseña
+                                        </span>
+                                        {tieneContrasena ? (
+                                          <>
+                                            <span className="font-mono flex-1 truncate text-foreground/80 select-all">
+                                              {pwdVisible ? app.contrasena : maskPassword(app.contrasena)}
+                                            </span>
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setVisiblePasswords((prev) => ({
+                                                  ...prev,
+                                                  [app.id]: !prev[app.id],
+                                                }));
+                                              }}
+                                              className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                                              title={pwdVisible ? "Ocultar contraseña" : "Mostrar contraseña"}
+                                              aria-label={pwdVisible ? "Ocultar contraseña" : "Mostrar contraseña"}
+                                            >
+                                              {pwdVisible ? (
+                                                <EyeOff className="h-3 w-3" />
+                                              ) : (
+                                                <Eye className="h-3 w-3" />
+                                              )}
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                copyToClipboard(app.contrasena, `${app.id}:pwd`);
+                                              }}
+                                              className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                                              title="Copiar contraseña"
+                                              aria-label="Copiar contraseña"
+                                            >
+                                              {copiedField === `${app.id}:pwd` ? (
+                                                <Check className="h-3 w-3 text-emerald-600" />
+                                              ) : (
+                                                <Copy className="h-3 w-3" />
+                                              )}
+                                            </button>
+                                          </>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setAppsMenuOpen(false);
+                                              router.push("/accesos");
+                                            }}
+                                            className="flex-1 text-left italic text-muted-foreground/70 hover:text-primary hover:underline truncate"
+                                            title="Configurar credenciales en Accesos"
+                                          >
+                                            sin definir — añadir
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             <DropdownMenuSeparator />
                           </div>
                         ))}

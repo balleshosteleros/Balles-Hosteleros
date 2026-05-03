@@ -47,11 +47,13 @@ function BonusIcon({ name, className }: { name: string; className?: string }) {
   return <Icon className={className} />;
 }
 
-function ListadoBonus({ bonus, onSelect, onCrear }: {
+function ListadoBonus({ bonus, onSelect, onCrear, empresaId }: {
   bonus: Bonus[];
   onSelect: (b: Bonus, tab?: string) => void;
   onCrear: () => void;
+  empresaId: string;
 }) {
+  const eId = empresaId;
   const [busqueda, setBusqueda] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
@@ -664,7 +666,7 @@ export function BonusView() {
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto">
-      <ListadoBonus bonus={bonusList} onSelect={handleSelect} onCrear={handleCrear} />
+      <ListadoBonus bonus={bonusList} onSelect={handleSelect} onCrear={handleCrear} empresaId={eId} />
     </div>
   );
 }

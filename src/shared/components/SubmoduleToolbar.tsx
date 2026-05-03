@@ -5,7 +5,7 @@ import {
   Search,
   SlidersHorizontal,
   ArrowUpDown,
-  Settings2,
+  Columns3,
   Plus,
   ChevronLeft,
   X,
@@ -586,7 +586,7 @@ function ColumnasPopover({
           className="h-9 w-9 p-0"
           aria-label="Ajustes de columnas"
         >
-          <Settings2 className="h-4 w-4" />
+          <Columns3 className="h-4 w-4" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-56 p-2" align="end">
@@ -619,7 +619,7 @@ function ColumnasPopover({
   );
 }
 
-export function aplicarFiltrosToolbar<T extends Record<string, unknown>>(
+export function aplicarFiltrosToolbar<T>(
   items: T[],
   filtros: ToolbarFiltroActivo[],
   acceso: (item: T, campo: string) => unknown,
@@ -653,7 +653,7 @@ export function aplicarFiltrosToolbar<T extends Record<string, unknown>>(
   );
 }
 
-export function aplicarOrdenToolbar<T extends Record<string, unknown>>(
+export function aplicarOrdenToolbar<T>(
   items: T[],
   orden: ToolbarOrdenActivo | null,
   acceso: (item: T, campo: string) => unknown,

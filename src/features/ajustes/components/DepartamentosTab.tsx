@@ -1,22 +1,31 @@
-import { useState, useEffect, useCallback } from "react";
-import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { Departamento } from "@/features/ajustes/data/ajustes";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Departamento, Rol } from "@/features/ajustes/data/ajustes";
 import { getEmployees } from "@/actions/admin";
-import { addRolEmpresa, deleteRolEmpresa } from "@/features/ajustes/actions/roles-actions";
+import {
+  listDepartamentos,
+  createDepartamento,
+  updateDepartamento,
+  deleteDepartamento,
+  type DepartamentoRow,
+} from "@/features/ajustes/actions/departamentos-actions";
+import { loadRolesFromSupabase } from "@/features/ajustes/actions/roles-actions";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 
 interface UsuarioOption {
   id: string;
   nombre: string;
+  email: string;
+  rolLabel: string;
 }
 
 function getNombreFromProfile(p: Record<string, unknown>): string {
@@ -26,27 +35,80 @@ function getNombreFromProfile(p: Record<string, unknown>): string {
   return (p.email as string) ?? "—";
 }
 
+function rowToDepartamento(r: DepartamentoRow): Departamento {
+  return {
+    id: r.id,
+    nombre: r.nombre,
+    responsableId: r.responsable_id ?? "",
+    descripcion: r.descripcion,
+    estado: r.estado,
+  };
+}
+
 export function DepartamentosTab() {
-  const { ajustes, setAjustes } = useEmpresa();
+  const { empresaActual } = useEmpresa();
+  const empresaDbId = empresaActual.dbId;
+
+  // Departamentos desde Supabase (fuente de verdad).
+  const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadDepartamentos = useCallback(async () => {
+    setLoading(true);
+    const rows = await listDepartamentos(empresaDbId);
+    setDepartamentos(rows.map(rowToDepartamento));
+    setLoading(false);
+  }, [empresaDbId]);
 
   // Usuarios cargados desde Supabase (misma fuente que UsuariosTab)
   const [usuariosSupabase, setUsuariosSupabase] = useState<UsuarioOption[]>([]);
+  const [roles, setRoles] = useState<Rol[]>([]);
 
   const loadUsuarios = useCallback(async () => {
     try {
       const result = await getEmployees();
       const profiles = (result.data ?? []) as Record<string, unknown>[];
       setUsuariosSupabase(
-        profiles.map((p) => ({ id: p.id as string, nombre: getNombreFromProfile(p) }))
+        profiles.map((p) => ({
+          id: p.id as string,
+          nombre: getNombreFromProfile(p),
+          email: (p.email as string) ?? "",
+          rolLabel: (p.rol_label as string | null)?.trim() ?? "",
+        }))
       );
     } catch {
       // Sin Supabase configurado: dejar lista vacía
     }
   }, []);
 
+  const loadRoles = useCallback(async () => {
+    const rolesRemote = await loadRolesFromSupabase(empresaDbId);
+    setRoles(rolesRemote ?? []);
+  }, [empresaDbId]);
+
   useEffect(() => {
+    loadDepartamentos();
     loadUsuarios();
-  }, [loadUsuarios]);
+    loadRoles();
+  }, [loadDepartamentos, loadUsuarios, loadRoles]);
+
+  const norm = (s: string) => s.trim().toLowerCase();
+
+  // Por cada departamento, calcular usuarios con acceso (su rol tiene `ver:true` para ese módulo).
+  const usuariosPorDept = useMemo(() => {
+    const map = new Map<string, UsuarioOption[]>();
+    for (const d of departamentos) {
+      const deptKey = norm(d.nombre);
+      const rolesConAcceso = new Set(
+        roles
+          .filter((r) => r.permisos.some((p) => norm(p.modulo) === deptKey && p.ver))
+          .map((r) => norm(r.nombre))
+      );
+      const usuarios = usuariosSupabase.filter((u) => u.rolLabel && rolesConAcceso.has(norm(u.rolLabel)));
+      map.set(d.id, usuarios);
+    }
+    return map;
+  }, [departamentos, roles, usuariosSupabase]);
 
   const getNombreResponsable = (id: string) => {
     if (!id) return "—";
@@ -61,56 +123,69 @@ export function DepartamentosTab() {
   const openNew = () => { setEditDept(null); setModalOpen(true); };
   const openEdit = (d: Departamento) => { setEditDept(d); setModalOpen(true); };
 
-  const saveDept = (d: Departamento) => {
-    setAjustes((prev) => {
-      const exists = prev.departamentos.find((x) => x.id === d.id);
-      const departamentos = exists
-        ? prev.departamentos.map((x) => (x.id === d.id ? d : x))
-        : [...prev.departamentos, d];
-      return { ...prev, departamentos };
-    });
-    setModalOpen(false);
-    toast.success(editDept ? "Departamento actualizado" : "Departamento creado");
-
-    // Sincronizar con empresa_roles: cada departamento debe tener un rol homónimo.
-    if (!editDept) {
-      addRolEmpresa(d.nombre).then((res) => {
-        if (res.error) toast.error(`No se pudo crear rol: ${res.error}`);
-        else toast.success(`Rol "${d.nombre}" creado en pestaña Roles`);
+  const saveDept = async (d: Departamento) => {
+    if (editDept) {
+      const res = await updateDepartamento(d.id, {
+        nombre: d.nombre,
+        descripcion: d.descripcion,
+        responsableId: d.responsableId || null,
+        estado: d.estado,
+        empresaId: empresaDbId,
       });
+      if (res.error) {
+        toast.error(res.error);
+        return;
+      }
+      setDepartamentos((prev) => prev.map((x) => (x.id === d.id ? rowToDepartamento(res.data!) : x)));
+      setModalOpen(false);
+      toast.success("Departamento actualizado");
+    } else {
+      const res = await createDepartamento({
+        nombre: d.nombre,
+        descripcion: d.descripcion,
+        responsableId: d.responsableId || null,
+        estado: d.estado,
+        empresaId: empresaDbId,
+      });
+      if (res.error) {
+        toast.error(res.error);
+        return;
+      }
+      setDepartamentos((prev) => [...prev, rowToDepartamento(res.data!)]);
+      setModalOpen(false);
+      toast.success(`Departamento creado · rol asociado disponible en pestaña Roles`);
     }
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!deleteDept) return;
-    const nombreBorrado = deleteDept.nombre;
-    setAjustes((prev) => ({
-      ...prev,
-      departamentos: prev.departamentos.filter((d) => d.id !== deleteDept.id),
-    }));
-    toast.success("Departamento eliminado");
+    const id = deleteDept.id;
+    const nombre = deleteDept.nombre;
     setDeleteDept(null);
-    // Borrar también el rol asociado (si existe).
-    deleteRolEmpresa(nombreBorrado).then((res) => {
-      if (res.error) toast.error(`No se pudo borrar rol asociado: ${res.error}`);
-    });
+    const res = await deleteDepartamento(id, empresaDbId);
+    if (res.error) {
+      toast.error(res.error);
+      return;
+    }
+    setDepartamentos((prev) => prev.filter((d) => d.id !== id));
+    toast.success(`Departamento "${nombre}" eliminado`);
   };
 
-  const toggleEstado = (id: string) => {
-    setAjustes((prev) => ({
-      ...prev,
-      departamentos: prev.departamentos.map((d) =>
-        d.id === id
-          ? { ...d, estado: d.estado === "Activo" ? "Inactivo" : "Activo" } as Departamento
-          : d
-      ),
-    }));
+  const toggleEstado = async (d: Departamento) => {
+    const nuevo = d.estado === "Activo" ? "Inactivo" : "Activo";
+    setDepartamentos((prev) => prev.map((x) => (x.id === d.id ? { ...x, estado: nuevo } : x)));
+    const res = await updateDepartamento(d.id, { estado: nuevo, empresaId: empresaDbId });
+    if (res.error) {
+      toast.error(res.error);
+      // revertir
+      setDepartamentos((prev) => prev.map((x) => (x.id === d.id ? { ...x, estado: d.estado } : x)));
+    }
   };
 
   return (
     <div className="space-y-2">
       <div className="flex justify-end">
-        <Button variant="primary" size="sm" onClick={openNew}>
+        <Button size="sm" className="gap-1.5" onClick={openNew}>
           <Plus className="h-4 w-4" />Nuevo
         </Button>
       </div>
@@ -119,46 +194,98 @@ export function DepartamentosTab() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-muted/50">
-              {["NOMBRE", "RESPONSABLE", "ESTADO", "ACCIONES"].map((h) => (
+              {["NOMBRE", "RESPONSABLE", "ESTADO", "ACCESOS", "ACCIONES"].map((h) => (
                 <th key={h} className="text-left px-3 py-2.5 text-xs font-bold text-muted-foreground">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {ajustes.departamentos.map((d) => (
-              <tr key={d.id} className="border-b hover:bg-muted/30">
-                <td className="px-3 py-2 font-medium text-foreground">{d.nombre}</td>
-                <td className="px-3 py-2 text-muted-foreground">{getNombreResponsable(d.responsableId)}</td>
-                <td className="px-3 py-2">
-                  <Badge
-                    variant="outline"
-                    className={`text-[10px] cursor-pointer ${
-                      d.estado === "Activo"
-                        ? "bg-green-500/10 text-green-600 border-green-500/30"
-                        : "bg-red-500/10 text-red-600 border-red-500/30"
-                    }`}
-                    onClick={() => toggleEstado(d.id)}
-                  >
-                    {d.estado}
-                  </Badge>
-                </td>
-                <td className="px-3 py-2">
-                  <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(d)}>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => setDeleteDept(d)}
+            {departamentos.map((d) => {
+              const usuariosConAcceso = usuariosPorDept.get(d.id) ?? [];
+              return (
+                <tr key={d.id} className="border-b hover:bg-muted/30">
+                  <td className="px-3 py-2 font-medium text-foreground">{d.nombre}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{getNombreResponsable(d.responsableId)}</td>
+                  <td className="px-3 py-2">
+                    <Badge
+                      variant="outline"
+                      className={`text-[10px] cursor-pointer ${
+                        d.estado === "Activo"
+                          ? "bg-green-500/10 text-green-600 border-green-500/30"
+                          : "bg-red-500/10 text-red-600 border-red-500/30"
+                      }`}
+                      onClick={() => toggleEstado(d)}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                      {d.estado}
+                    </Badge>
+                  </td>
+                  <td className="px-3 py-2">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5 text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                          title={`${usuariosConAcceso.length} ${usuariosConAcceso.length === 1 ? "usuario" : "usuarios"} con acceso a este departamento`}
+                        >
+                          <Users className="h-3.5 w-3.5" />
+                          <span className="font-semibold tabular-nums">{usuariosConAcceso.length}</span>
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent align="start" className="w-64 p-0">
+                        <div className="border-b px-3 py-2">
+                          <p className="text-[10px] font-bold tracking-wider text-muted-foreground">USUARIOS CON ACCESO</p>
+                          <p className="text-sm font-semibold">{d.nombre} · {usuariosConAcceso.length}</p>
+                        </div>
+                        {usuariosConAcceso.length === 0 ? (
+                          <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+                            Ningún usuario tiene acceso a este departamento.
+                          </div>
+                        ) : (
+                          <ul className="max-h-64 overflow-y-auto py-1">
+                            {usuariosConAcceso.map((u) => (
+                              <li key={u.id} className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm hover:bg-muted/50">
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate font-medium">{u.nombre}</p>
+                                  {u.email && (
+                                    <p className="truncate text-[11px] text-muted-foreground">{u.email}</p>
+                                  )}
+                                </div>
+                                {u.rolLabel && (
+                                  <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                                    {u.rolLabel}
+                                  </span>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </PopoverContent>
+                    </Popover>
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(d)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => setDeleteDept(d)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+            {loading && (
+              <tr><td colSpan={5} className="text-center py-6 text-muted-foreground">Cargando departamentos…</td></tr>
+            )}
+            {!loading && departamentos.length === 0 && (
+              <tr><td colSpan={5} className="text-center py-6 text-muted-foreground">No hay departamentos. Crea uno con el botón Nuevo.</td></tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -252,7 +379,7 @@ function DeptModal({
             )}
           </div>
 
-          <div>
+          <div className="col-span-2">
             <Label className="text-xs font-bold">ESTADO</Label>
             <Select value={form.estado} onValueChange={(v) => set("estado", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
@@ -261,11 +388,6 @@ function DeptModal({
                 <SelectItem value="Inactivo">Inactivo</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-
-          <div className="col-span-2">
-            <Label className="text-xs font-bold">DESCRIPCIÓN</Label>
-            <Textarea value={form.descripcion} onChange={(e) => set("descripcion", e.target.value)} rows={2} />
           </div>
         </div>
 

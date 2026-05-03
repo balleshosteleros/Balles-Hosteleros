@@ -1,4 +1,10 @@
-export type AreaType = 'administrativa' | 'operativa' | 'externo';
+export type AreaType = 'administrativa' | 'operativa';
+
+// Normaliza valores antiguos (p. ej. 'externo' guardado en BD) al esquema actual
+// de solo dos áreas. Cualquier valor desconocido cae en 'administrativa'.
+export function normalizeArea(value: unknown): AreaType {
+  return value === 'operativa' ? 'operativa' : 'administrativa';
+}
 
 // ── Paletas compartidas entre el editor (Dirección) y la vista del empleado.
 // Cualquier cambio aquí se refleja en ambas vistas para mantenerlas idénticas.
@@ -34,19 +40,54 @@ export const DEPT_COLORS: Record<string, DeptPalette> = {
 export const FALLBACK_BY_AREA: Record<AreaType, DeptPalette> = {
   administrativa: { bg: '#475569', ring: '#64748b', shadow: 'rgba(71,85,105,0.35)' },
   operativa:      { bg: '#71717a', ring: '#a1a1aa', shadow: 'rgba(113,113,122,0.35)' },
-  externo:        { bg: '#d97706', ring: '#f59e0b', shadow: 'rgba(217,119,6,0.35)' },
 };
 
-export function getDeptPalette(id: string, area: AreaType): DeptPalette {
-  return DEPT_COLORS[id] ?? FALLBACK_BY_AREA[area];
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const m = /^#?([a-f\d]{6})$/i.exec(hex.trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
 }
+
+function lighten(hex: string, amount = 0.25): string {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return hex;
+  const mix = (c: number) => Math.round(c + (255 - c) * amount);
+  const toHex = (c: number) => c.toString(16).padStart(2, "0");
+  return `#${toHex(mix(rgb.r))}${toHex(mix(rgb.g))}${toHex(mix(rgb.b))}`;
+}
+
+export function paletteFromColor(bg: string): DeptPalette {
+  const rgb = hexToRgb(bg);
+  const shadow = rgb
+    ? `rgba(${rgb.r},${rgb.g},${rgb.b},0.35)`
+    : "rgba(0,0,0,0.25)";
+  return { bg, ring: lighten(bg, 0.25), shadow };
+}
+
+export function getDeptPalette(
+  id: string,
+  area: AreaType,
+  customBg?: string,
+): DeptPalette {
+  if (customBg && hexToRgb(customBg)) return paletteFromColor(customBg);
+  return DEPT_COLORS[id] ?? FALLBACK_BY_AREA[area] ?? FALLBACK_BY_AREA.administrativa;
+}
+
+// Paleta de colores preestablecidos para el selector de color.
+export const DEPT_COLOR_SWATCHES: string[] = [
+  "#1e3a8a", "#3b82f6", "#0ea5e9", "#06b6d4", "#0d9488",
+  "#059669", "#16a34a", "#65a30d", "#ca8a04", "#f59e0b",
+  "#ea580c", "#f97316", "#dc2626", "#e11d48", "#ec4899",
+  "#db2777", "#c026d3", "#9333ea", "#7c3aed", "#6366f1",
+  "#475569", "#334155", "#71717a", "#78716c", "#000000",
+];
 
 export type ZonePalette = { bg: string; border: string; label: string };
 
 export const ZONE_COLORS: Record<AreaType, ZonePalette> = {
   administrativa: { bg: '#eef2ff', border: '#c7d2fe', label: '#4338ca' },
   operativa:      { bg: '#fff7ed', border: '#fed7aa', label: '#c2410c' },
-  externo:        { bg: '#fefce8', border: '#fde68a', label: '#a16207' },
 };
 
 export interface OrgNode {
@@ -56,6 +97,7 @@ export interface OrgNode {
   x: number;
   y: number;
   descripcion?: string;
+  color?: string;
 }
 
 export interface OrgEdge {
@@ -82,9 +124,8 @@ export interface OrgChart {
 
 const habanaChart: OrgChart = {
   nodes: [
-    // Externo (Socios)
-    { id: 'socios', label: 'SOCIOS', area: 'externo', x: 560, y: -60 },
     // Área Administrativa
+    { id: 'socios', label: 'SOCIOS', area: 'administrativa', x: 560, y: -60 },
     { id: 'direccion', label: 'DIRECCIÓN', area: 'administrativa', x: 560, y: 80 },
     { id: 'juridico', label: 'JURÍDICO', area: 'administrativa', x: 60, y: 200 },
     { id: 'gestoria', label: 'GESTORÍA', area: 'administrativa', x: 200, y: 200 },
@@ -134,14 +175,14 @@ const habanaChart: OrgChart = {
     { id: 'e22', source: '2jefe-cocina', target: 'office' },
   ],
   zones: [
-    { id: 'zone-admin', label: 'Área Administrativa', area: 'administrativa', x: -10, y: 30, width: 1250, height: 250 },
+    { id: 'zone-admin', label: 'Área Administrativa', area: 'administrativa', x: -10, y: -90, width: 1250, height: 370 },
     { id: 'zone-oper', label: 'Área Operativa', area: 'operativa', x: 30, y: 340, width: 1280, height: 370 },
   ],
 };
 
 const bacanalChart: OrgChart = {
   nodes: [
-    { id: 'socios', label: 'SOCIOS', area: 'externo', x: 460, y: -60 },
+    { id: 'socios', label: 'SOCIOS', area: 'administrativa', x: 460, y: -60 },
     { id: 'direccion', label: 'DIRECCIÓN', area: 'administrativa', x: 460, y: 80 },
     { id: 'contabilidad', label: 'CONTABILIDAD', area: 'administrativa', x: 180, y: 200 },
     { id: 'marketing', label: 'MARKETING', area: 'administrativa', x: 360, y: 200 },
@@ -166,7 +207,7 @@ const bacanalChart: OrgChart = {
     { id: 'e10', source: 'jefe-cocina', target: 'cocineros' },
   ],
   zones: [
-    { id: 'zone-admin', label: 'Área Administrativa', area: 'administrativa', x: 110, y: 30, width: 700, height: 250 },
+    { id: 'zone-admin', label: 'Área Administrativa', area: 'administrativa', x: 110, y: -90, width: 700, height: 370 },
     { id: 'zone-oper', label: 'Área Operativa', area: 'operativa', x: 250, y: 340, width: 530, height: 260 },
   ],
 };

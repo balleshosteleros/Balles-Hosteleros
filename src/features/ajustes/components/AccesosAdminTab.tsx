@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import {
   CATEGORIAS_APP,
-  DEPARTAMENTOS,
   type AccesoApp,
   type EstadoApp,
   type TipoIntegracion,
@@ -14,17 +13,28 @@ import {
   updateAccesoApp,
   deleteAccesoApp,
 } from "@/features/rrhh/actions/accesos-apps-actions";
+import { getRolesEmpresaNombres } from "@/features/ajustes/actions/roles-actions";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2, Eye, EyeOff, Copy, ExternalLink, Search } from "lucide-react";
+import { Plus, Pencil, Trash2, Eye, EyeOff, Copy, ExternalLink, Search, ChevronDown, X } from "lucide-react";
 import { toast } from "sonner";
+
+const TIPO_INTEGRACION_LABELS: Record<TipoIntegracion, string> = {
+  enlace: "Abrir como página web",
+  sso: "Entrar con un solo clic",
+  oauth: "Conectar pidiendo permiso",
+  embebido: "Verlo dentro de la app",
+};
 
 const EMPRESAS = [
   { id: "habana", nombre: "La Habana" },
@@ -38,8 +48,8 @@ const emptyApp: Omit<AccesoApp, "id" | "ultimaActualizacion"> = {
   icono: "🔗",
   logoUrl: "",
   categoria: "Sistemas de gestión",
-  departamentos: ["Dirección"],
-  rolesAutorizados: ["Dirección"],
+  departamentos: [],
+  rolesAutorizados: [],
   usuario: "",
   contrasena: "",
   estado: "Activo",
@@ -90,6 +100,8 @@ function PasswordAdmin({ value }: { value: string }) {
 }
 
 export function AccesosAdminTab() {
+  const { empresaActual } = useEmpresa();
+  const empresaDbId = empresaActual.dbId;
   const [apps, setApps] = useState<AccesoApp[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -111,8 +123,14 @@ export function AccesosAdminTab() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Omit<AccesoApp, "id" | "ultimaActualizacion">>(emptyApp);
-  const [depsInput, setDepsInput] = useState("");
-  const [rolesInput, setRolesInput] = useState("");
+  const [rolesDisponibles, setRolesDisponibles] = useState<string[]>([]);
+  const [rolesPopoverOpen, setRolesPopoverOpen] = useState(false);
+
+  useEffect(() => {
+    getRolesEmpresaNombres(empresaDbId)
+      .then((nombres) => setRolesDisponibles(nombres))
+      .catch((e) => console.error("No se pudieron cargar roles:", e));
+  }, [empresaDbId]);
 
   const filtered = apps.filter((a) => {
     if (filtroEmpresa !== "todas" && a.empresaId !== filtroEmpresa) return false;
@@ -126,8 +144,6 @@ export function AccesosAdminTab() {
   const openCreate = () => {
     setEditingId(null);
     setForm(emptyApp);
-    setDepsInput("Dirección");
-    setRolesInput("Dirección");
     setModalOpen(true);
   };
 
@@ -150,9 +166,16 @@ export function AccesosAdminTab() {
       tipoIntegracion: app.tipoIntegracion,
       empresaId: app.empresaId,
     });
-    setDepsInput(app.departamentos.join(", "));
-    setRolesInput(app.rolesAutorizados.join(", "));
     setModalOpen(true);
+  };
+
+  const toggleRol = (rol: string) => {
+    setForm((p) => {
+      const set = new Set(p.rolesAutorizados);
+      if (set.has(rol)) set.delete(rol);
+      else set.add(rol);
+      return { ...p, rolesAutorizados: Array.from(set) };
+    });
   };
 
   const handleSave = async () => {
@@ -160,16 +183,12 @@ export function AccesosAdminTab() {
       toast.error("Nombre y URL son obligatorios");
       return;
     }
-    const departamentos = depsInput.split(",").map((d) => d.trim()).filter(Boolean);
-    const rolesAutorizados = rolesInput.split(",").map((r) => r.trim()).filter(Boolean);
 
     setSaving(true);
     try {
       if (editingId) {
         const updated = await updateAccesoApp(editingId, {
           ...form,
-          departamentos,
-          rolesAutorizados,
           logoUrl: form.logoUrl || undefined,
         });
         setApps((prev) => prev.map((a) => (a.id === editingId ? updated : a)));
@@ -177,8 +196,6 @@ export function AccesosAdminTab() {
       } else {
         const created = await createAccesoApp({
           ...form,
-          departamentos,
-          rolesAutorizados,
           logoUrl: form.logoUrl || undefined,
         });
         setApps((prev) => [...prev, created]);
@@ -356,14 +373,14 @@ export function AccesosAdminTab() {
               </Select>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs font-semibold">Tipo integración</Label>
+              <Label className="text-xs font-semibold">¿Cómo se abre?</Label>
               <Select value={form.tipoIntegracion} onValueChange={(v) => setForm((p) => ({ ...p, tipoIntegracion: v as TipoIntegracion }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="enlace">Enlace</SelectItem>
-                  <SelectItem value="sso">SSO</SelectItem>
-                  <SelectItem value="oauth">OAuth</SelectItem>
-                  <SelectItem value="embebido">Embebido</SelectItem>
+                  <SelectItem value="enlace">Abrir como página web</SelectItem>
+                  <SelectItem value="sso">Entrar con un solo clic</SelectItem>
+                  <SelectItem value="oauth">Conectar pidiendo permiso</SelectItem>
+                  <SelectItem value="embebido">Verlo dentro de la app</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -386,17 +403,56 @@ export function AccesosAdminTab() {
               <Label className="text-xs font-semibold">Contraseña</Label>
               <Input value={form.contrasena} onChange={(e) => setForm((p) => ({ ...p, contrasena: e.target.value }))} placeholder="Contraseña visible para admin" type="text" autoComplete="new-password" />
             </div>
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold">Departamentos <span className="font-normal text-muted-foreground">(separados por coma)</span></Label>
-              <Input value={depsInput} onChange={(e) => setDepsInput(e.target.value)} placeholder="Dirección, Marketing" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold">Roles autorizados <span className="font-normal text-muted-foreground">(separados por coma)</span></Label>
-              <Input value={rolesInput} onChange={(e) => setRolesInput(e.target.value)} placeholder="Dirección, Gerencia" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold">Responsable</Label>
-              <Input value={form.responsable} onChange={(e) => setForm((p) => ({ ...p, responsable: e.target.value }))} placeholder="Nombre del responsable" />
+            <div className="space-y-1 sm:col-span-2">
+              <Label className="text-xs font-semibold">Roles autorizados</Label>
+              <Popover open={rolesPopoverOpen} onOpenChange={setRolesPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="w-full min-h-9 flex items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-1.5 text-sm text-left hover:bg-accent/30"
+                  >
+                    <div className="flex flex-wrap gap-1 flex-1">
+                      {form.rolesAutorizados.length === 0 ? (
+                        <span className="text-muted-foreground">Selecciona roles…</span>
+                      ) : (
+                        form.rolesAutorizados.map((rol) => (
+                          <Badge key={rol} variant="secondary" className="gap-1 text-xs">
+                            {rol}
+                            <span
+                              role="button"
+                              onClick={(e) => { e.stopPropagation(); toggleRol(rol); }}
+                              className="hover:text-destructive cursor-pointer"
+                            >
+                              <X className="h-3 w-3" />
+                            </span>
+                          </Badge>
+                        ))
+                      )}
+                    </div>
+                    <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <div className="max-h-64 overflow-y-auto py-1">
+                    {rolesDisponibles.length === 0 ? (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">No hay roles definidos</div>
+                    ) : (
+                      rolesDisponibles.map((rol) => {
+                        const checked = form.rolesAutorizados.includes(rol);
+                        return (
+                          <label
+                            key={rol}
+                            className="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-accent/40"
+                          >
+                            <Checkbox checked={checked} onCheckedChange={() => toggleRol(rol)} />
+                            <span>{rol}</span>
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="space-y-1 sm:col-span-2">
               <Label className="text-xs font-semibold">Notas internas</Label>

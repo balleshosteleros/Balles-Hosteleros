@@ -5,6 +5,7 @@ export type EstadoAcceso = "Activo" | "Inactivo" | "Pendiente";
 export interface AccesoPortal {
   id: string;
   empleadoId: string;
+  userId?: string | null;       // auth.users.id — necesario para gestionar accesos a empresas
   nombreEmpleado: string;
   emailUsuario: string;
   empresa: string;
@@ -29,8 +30,22 @@ const MODULOS_PORTAL = [
   "Marketing", "Ajustes",
 ];
 
-// Mapa rol → módulo propio (solo ese módulo + Dashboard)
+// Mapa rol → módulo propio (solo ese módulo + Dashboard).
+// Roles en forma persona (GERENTE, CONTABLE, etc.) y aliases retro-compatibles.
 const ROL_MODULO: Record<string, string> = {
+  // Forma persona (canónica)
+  "DIRECTOR": "Dirección",
+  "GERENTE": "Gerencia",
+  "CONTABLE": "Contabilidad",
+  "GESTOR": "Gestoría",
+  "ABOGADO": "Jurídico",
+  "RESPONSABLE RRHH": "RRHH",
+  "JEFE DE LOGÍSTICA": "Logística",
+  "RESPONSABLE MARKETING": "Marketing",
+  "JEFE DE COCINA": "Cocina",
+  "JEFE DE SALA": "Sala",
+  "RESPONSABLE CALIDAD": "Calidad",
+  // Aliases legacy (forma departamento)
   "Dirección": "Dirección",
   "RRHH": "RRHH",
   "Logística": "Logística",
@@ -44,7 +59,7 @@ const ROL_MODULO: Record<string, string> = {
 
 export function permisosDesdeRol(rol: string): PermisoPortal[] {
   // Acceso total
-  if (rol === "Administrador" || rol === "Director") {
+  if (rol === "Administrador" || rol === "Director" || rol === "DIRECTOR") {
     return MODULOS_PORTAL.map((m) => ({ modulo: m, ver: true, editar: true }));
   }
   // Solo lectura global
@@ -55,8 +70,11 @@ export function permisosDesdeRol(rol: string): PermisoPortal[] {
   if (rol === "Empleado") {
     return MODULOS_PORTAL.map((m) => ({ modulo: m, ver: m === "RRHH" || m === "Dashboard", editar: false }));
   }
-  // Roles departamentales: solo su propio módulo + Dashboard
-  const moduloPropio = ROL_MODULO[rol];
+  // Roles departamentales: lookup tolerante a mayúsculas
+  const moduloPropio =
+    ROL_MODULO[rol] ??
+    ROL_MODULO[rol.toUpperCase()] ??
+    Object.entries(ROL_MODULO).find(([k]) => k.toUpperCase() === rol.toUpperCase())?.[1];
   if (moduloPropio) {
     return MODULOS_PORTAL.map((m) => ({
       modulo: m,

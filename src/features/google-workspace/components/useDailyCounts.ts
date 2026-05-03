@@ -5,6 +5,7 @@ import { useGoogleConnection } from "./useGoogleConnection";
 import { contarPendientesHoy } from "@/features/tareas/actions/tareas-actions";
 import { listCanales } from "@/features/comunicacion/actions/comunicacion-actions";
 import { contarLlamadasNoVistas } from "./TelefonoDrawer";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 
 function ymd(d: Date): string {
   const y = d.getFullYear();
@@ -26,6 +27,8 @@ const REFRESH_MS = 5 * 60 * 1000; // 5 minutos
 
 export function useDailyCounts(): DailyCounts {
   const { connected } = useGoogleConnection();
+  const { empresaActual } = useEmpresa();
+  const empresaSlug = empresaActual.id;
   const [counts, setCounts] = useState<DailyCounts>({
     emails: 0,
     events: 0,
@@ -48,7 +51,7 @@ export function useDailyCounts(): DailyCounts {
     // Chat: nº de canales con mensajes sin leer
     let chatGroups = 0;
     try {
-      const res = await listCanales();
+      const res = await listCanales(empresaSlug);
       if (res.ok) {
         chatGroups = (res.data as Array<{ sin_leer?: number }>).filter(
           (c) => (c.sin_leer ?? 0) > 0,
@@ -102,7 +105,7 @@ export function useDailyCounts(): DailyCounts {
     } catch {
       setCounts((prev) => ({ ...prev, tasks, chatGroups, missedCalls }));
     }
-  }, [connected]);
+  }, [connected, empresaSlug]);
 
   useEffect(() => {
     fetchCounts();

@@ -155,7 +155,7 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
   return (
     <Sheet>
       <SheetTrigger asChild>{children}</SheetTrigger>
-      <SheetContent side="right" className="w-full max-w-lg flex flex-col gap-0 p-0 [&>button]:hidden">
+      <SheetContent side="right" className="flex flex-col gap-0 p-0 [&>button]:hidden">
         <SheetTitle className="sr-only">Google Meet — Reuniones</SheetTitle>
         <SheetHeader className="border-b px-3 py-2">
           <div className="flex items-center gap-1">
