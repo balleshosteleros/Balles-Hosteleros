@@ -14,6 +14,7 @@ import {
   getMiTimeline,
   getNiveles,
   getRanking,
+  getReglas,
   getRecompensas,
   getReservadoEnCanjesPendientes,
 } from "@/features/toques/services/toques.service";
@@ -25,6 +26,7 @@ import type {
   Nivel,
   RankingRow,
   Recompensa,
+  Regla,
   ToquePeriodo,
 } from "@/features/toques/types/toques.types";
 import { PERIODO_LABEL } from "@/features/toques/types/toques.types";
@@ -35,6 +37,9 @@ import { HallOfFame } from "./HallOfFame";
 import { RecompensasGrid } from "./RecompensasGrid";
 import { MisCanjesList } from "./MisCanjesList";
 import { CanjeConfirmDialog } from "./CanjeConfirmDialog";
+import { NivelesRoadmap } from "./NivelesRoadmap";
+import { CatalogoToques } from "./CatalogoToques";
+import { useToquesRealtime } from "@/features/toques/hooks/useToquesRealtime";
 
 const PERIODOS: ToquePeriodo[] = ["dia", "semana", "mes", "trimestre", "ano", "historico"];
 
@@ -57,6 +62,8 @@ export function ToquesView() {
   const [ganadores, setGanadores] = useState<Ganador[]>([]);
   const [misCanjes, setMisCanjes] = useState<Canje[]>([]);
   const [reservadoPendiente, setReservadoPendiente] = useState(0);
+  const [reglas, setReglas] = useState<Regla[]>([]);
+  const [fechaAlta, setFechaAlta] = useState<string | null>(null);
 
   const [periodo, setPeriodo] = useState<ToquePeriodo>("mes");
   const [ranking, setRanking] = useState<RankingRow[]>([]);
@@ -80,11 +87,12 @@ export function ToquesView() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("empresa_id")
+        .select("empresa_id, fecha_alta")
         .eq("user_id", user.id)
         .maybeSingle();
       const eId = (profile?.empresa_id as string) ?? null;
       setEmpresaId(eId);
+      setFechaAlta((profile?.fecha_alta as string | null) ?? null);
 
       if (!eId) {
         setError("No estás asignado a una empresa.");
@@ -101,6 +109,7 @@ export function ToquesView() {
         misCanjesRes,
         reservadoRes,
         canjesPendRes,
+        reglasRes,
       ] = await Promise.all([
         getMiBalance(supabase, user.id),
         getNiveles(supabase, eId),
@@ -110,6 +119,7 @@ export function ToquesView() {
         getMisCanjes(supabase, user.id),
         getReservadoEnCanjesPendientes(supabase, user.id),
         getCanjesPendientes(supabase, eId).catch(() => [] as Canje[]),
+        getReglas(supabase, eId),
       ]);
       setBalance(balanceRes);
       setNiveles(nivelesRes);
@@ -118,6 +128,7 @@ export function ToquesView() {
       setGanadores(ganadoresRes);
       setMisCanjes(misCanjesRes);
       setReservadoPendiente(reservadoRes);
+      setReglas(reglasRes);
       void canjesPendRes; // disponible si en el futuro mostramos contador admin aquí
       setBootLoading(false);
     } catch (e) {
@@ -153,6 +164,10 @@ export function ToquesView() {
     void cargarRanking(empresaId, periodo, niveles);
   }, [empresaId, niveles, periodo, cargarRanking]);
 
+  useToquesRealtime(userId, () => {
+    void refrescarTodo();
+  });
+
   const nivelProgreso = useMemo(
     () => calcularNivel(balance.toquesAcumulados, niveles),
     [balance.toquesAcumulados, niveles]
@@ -163,7 +178,7 @@ export function ToquesView() {
     return (
       <div className="p-6 flex items-center justify-center text-muted-foreground">
         <Loader2 className="h-5 w-5 animate-spin mr-2" />
-        Cargando tus toques…
+        Cargando tus points…
       </div>
     );
   }
@@ -183,6 +198,10 @@ export function ToquesView() {
         nivelProgreso={nivelProgreso}
         reservadoPendiente={reservadoPendiente}
       />
+
+      <NivelesRoadmap niveles={niveles} toquesAcumulados={balance.toquesAcumulados} />
+
+      <CatalogoToques reglas={reglas} fechaAlta={fechaAlta} />
 
       <div className="grid lg:grid-cols-[1fr_360px] gap-5">
         <div className="space-y-5">

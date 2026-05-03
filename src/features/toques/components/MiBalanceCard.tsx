@@ -2,7 +2,8 @@
 
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Trophy, Coins, Sparkles } from "lucide-react";
+import { Trophy, Coins, Sparkles, Sprout, Zap, Shield, Award, Crown, Star } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type { Balance, NivelProgreso } from "@/features/toques/types/toques.types";
 
 interface Props {
@@ -11,9 +12,12 @@ interface Props {
   reservadoPendiente: number;
 }
 
+const ICONS: Record<string, LucideIcon> = { Sprout, Zap, Shield, Award, Crown, Trophy, Star };
+
 export function MiBalanceCard({ balance, nivelProgreso, reservadoPendiente }: Props) {
   const { actual, siguiente, toquesParaSiguiente, progresoPct } = nivelProgreso;
   const disponibles = Math.max(0, balance.toquesCanjeables - reservadoPendiente);
+  const NivelIcon = (actual?.badgeIcon && ICONS[actual.badgeIcon]) || Trophy;
 
   return (
     <Card className="p-5 md:p-6 bg-gradient-to-br from-amber-50 via-white to-orange-50 border-amber-200">
@@ -22,7 +26,7 @@ export function MiBalanceCard({ balance, nivelProgreso, reservadoPendiente }: Pr
           className="w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center shrink-0 shadow-inner"
           style={{ backgroundColor: actual?.badgeColor ?? "#9ca3af" }}
         >
-          <Trophy className="h-10 w-10 text-white" />
+          <NivelIcon className="h-10 w-10 text-white" />
         </div>
 
         <div className="flex-1 min-w-0">
@@ -35,7 +39,7 @@ export function MiBalanceCard({ balance, nivelProgreso, reservadoPendiente }: Pr
           </div>
           <div className="mt-3 space-y-1.5">
             <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>{balance.toquesAcumulados} toques acumulados</span>
+              <span>{balance.toquesAcumulados} points acumulados</span>
               {siguiente ? (
                 <span>
                   Faltan <strong className="text-slate-800">{toquesParaSiguiente}</strong> para{" "}
@@ -56,7 +60,7 @@ export function MiBalanceCard({ balance, nivelProgreso, reservadoPendiente }: Pr
               <div className="text-xs text-muted-foreground leading-none">Saldo</div>
               <div className="text-2xl font-bold text-amber-600 leading-tight">
                 {disponibles}
-                <span className="text-sm font-medium ml-1 text-amber-500">toques</span>
+                <span className="text-sm font-medium ml-1 text-amber-500">points</span>
               </div>
             </div>
           </div>

@@ -133,7 +133,7 @@ export function FichajesView() {
         <Card><CardContent className="pt-4 pb-4 text-center"><Clock className="mx-auto h-5 w-5 text-muted-foreground mb-1" /><p className="text-2xl font-bold">{kpis.total}</p><p className="text-xs text-muted-foreground">Fichajes registrados</p></CardContent></Card>
         <Card><CardContent className="pt-4 pb-4 text-center"><CheckCircle2 className="mx-auto h-5 w-5 text-emerald-500 mb-1" /><p className="text-2xl font-bold">{kpis.completos}</p><p className="text-xs text-muted-foreground">Completos / Validados</p></CardContent></Card>
         <Card><CardContent className="pt-4 pb-4 text-center"><AlertTriangle className="mx-auto h-5 w-5 text-destructive mb-1" /><p className="text-2xl font-bold">{kpis.conIncidencia}</p><p className="text-xs text-muted-foreground">Con incidencias</p></CardContent></Card>
-        <Card><CardContent className="pt-4 pb-4 text-center"><Clock className="mx-auto h-5 w-5 text-sky-500 mb-1" /><p className="text-2xl font-bold">{kpis.horasTotales.toFixed(1)}h</p><p className="text-xs text-muted-foreground">Horas totales</p></CardContent></Card>
+        <Card><CardContent className="pt-4 pb-4 text-center"><Clock className="mx-auto h-5 w-5 text-sky-500 mb-1" /><p className="text-2xl font-bold">{formatHorasDecimal(kpis.horasTotales)}</p><p className="text-xs text-muted-foreground">Horas totales</p></CardContent></Card>
       </div>
 
       <Tabs defaultValue="fichajes" className="space-y-4">

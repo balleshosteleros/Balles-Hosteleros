@@ -45,6 +45,13 @@ export interface Candidato {
   motivo: string;
 }
 
+interface PerfilAntiguedad {
+  userId: string;
+  empleadoNombre: string;
+  empresaId: string;
+  fechaAlta: string;
+}
+
 export interface RunnerReport {
   fecha: string;
   empresas: number;
@@ -259,6 +266,112 @@ async function fillEmpleadoNombre(
   return cands.map((c) => ({ ...c, empleadoNombre: c.empleadoNombre || map.get(c.userId) || "" }));
 }
 
+// ─── Evaluador de antigüedad ────────────────────────────────
+// Calcula meses completos desde fechaAlta hasta hasta (inclusive).
+function mesesEntre(fechaAlta: string, hasta: string): number {
+  const a = new Date(`${fechaAlta}T12:00:00Z`);
+  const h = new Date(`${hasta}T12:00:00Z`);
+  let meses = (h.getUTCFullYear() - a.getUTCFullYear()) * 12 + (h.getUTCMonth() - a.getUTCMonth());
+  if (h.getUTCDate() < a.getUTCDate()) meses -= 1;
+  return Math.max(0, meses);
+}
+
+// Devuelve la fecha del aniversario mensual número N (N=1 → primer aniversario mensual)
+function fechaAniversarioMensual(fechaAlta: string, n: number): string {
+  const a = new Date(`${fechaAlta}T12:00:00Z`);
+  const target = new Date(Date.UTC(a.getUTCFullYear(), a.getUTCMonth() + n, a.getUTCDate()));
+  return target.toISOString().slice(0, 10);
+}
+
+async function cargarPerfiles(admin: SupabaseClient, empresaId: string): Promise<PerfilAntiguedad[]> {
+  const { data, error } = await admin
+    .from("profiles")
+    .select("user_id, empresa_id, full_name, nombre, fecha_alta, created_at")
+    .eq("empresa_id", empresaId);
+  if (error) throw new Error(`profiles: ${error.message}`);
+  return ((data ?? []) as Row[])
+    .filter((r) => r.user_id)
+    .map((r) => ({
+      userId: String(r.user_id),
+      empleadoNombre: String(r.full_name ?? r.nombre ?? ""),
+      empresaId: String(r.empresa_id),
+      fechaAlta: String(r.fecha_alta ?? (r.created_at ? String(r.created_at).slice(0, 10) : "")),
+    }))
+    .filter((p) => p.fechaAlta);
+}
+
+/**
+ * Evalúa reglas de antigüedad para una empresa hasta `fecha`.
+ * Para regla mensual: genera un candidato por cada aniversario mensual cumplido (1..N meses).
+ * Para reglas hito: un candidato si la antigüedad alcanza el umbral (6m / 12m / 24m / 60m / 120m).
+ * Idempotencia: cada candidato lleva su propia fecha (la fecha del aniversario), y el insert
+ * usa el unique index uniq_toques_mov_regla_diaria(user_id, regla_id, fecha).
+ */
+async function evalAntiguedad(
+  admin: SupabaseClient,
+  empresaId: string,
+  fecha: string,
+  reglasAntiguedad: ReglaActiva[]
+): Promise<Candidato[]> {
+  if (!reglasAntiguedad.length) return [];
+  const perfiles = await cargarPerfiles(admin, empresaId);
+  if (!perfiles.length) return [];
+
+  const reglaMensual = reglasAntiguedad.find((r) => r.codigo === "aniversario_mensual");
+  const HITOS: Array<{ codigo: string; meses: number }> = [
+    { codigo: "aniversario_6_meses", meses: 6 },
+    { codigo: "aniversario_1_ano", meses: 12 },
+    { codigo: "aniversario_2_anos", meses: 24 },
+    { codigo: "aniversario_5_anos", meses: 60 },
+    { codigo: "aniversario_10_anos", meses: 120 },
+  ];
+  const reglasPorCodigo = new Map(reglasAntiguedad.map((r) => [r.codigo, r]));
+
+  const candidatos: Candidato[] = [];
+  for (const p of perfiles) {
+    const meses = mesesEntre(p.fechaAlta, fecha);
+    if (meses <= 0) continue;
+
+    // Aniversario mensual: 1..meses
+    if (reglaMensual) {
+      for (let n = 1; n <= meses; n++) {
+        const fechaAniv = fechaAniversarioMensual(p.fechaAlta, n);
+        if (fechaAniv > fecha) break;
+        candidatos.push({
+          empresaId,
+          userId: p.userId,
+          empleadoNombre: p.empleadoNombre,
+          reglaId: reglaMensual.id,
+          toques: reglaMensual.toques,
+          fecha: fechaAniv,
+          motivo: `Aniversario ${n} mes${n === 1 ? "" : "es"} en la empresa`,
+          contexto: { meses_cumplidos: n, fecha_alta: p.fechaAlta },
+        });
+      }
+    }
+
+    // Hitos
+    for (const h of HITOS) {
+      if (meses < h.meses) continue;
+      const regla = reglasPorCodigo.get(h.codigo);
+      if (!regla) continue;
+      const fechaHito = fechaAniversarioMensual(p.fechaAlta, h.meses);
+      if (fechaHito > fecha) continue;
+      candidatos.push({
+        empresaId,
+        userId: p.userId,
+        empleadoNombre: p.empleadoNombre,
+        reglaId: regla.id,
+        toques: regla.toques,
+        fecha: fechaHito,
+        motivo: regla.nombre,
+        contexto: { meses: h.meses, fecha_alta: p.fechaAlta },
+      });
+    }
+  }
+  return candidatos;
+}
+
 // ─── Runner principal ────────────────────────────────────────
 export async function ejecutarReglasDelDia(
   admin: SupabaseClient,
@@ -281,7 +394,7 @@ export async function ejecutarReglasDelDia(
   // Reglas activas (multi-empresa)
   const { data: reglasData, error: errR } = await admin
     .from("toques_reglas")
-    .select("id, empresa_id, codigo, nombre, toques, periodicidad")
+    .select("id, empresa_id, codigo, nombre, toques, periodicidad, categoria")
     .eq("activa", true);
   if (errR) {
     report.errores.push(`reglas_load: ${errR.message}`);
@@ -297,11 +410,24 @@ export async function ejecutarReglasDelDia(
   }));
   report.empresas = new Set(reglas.map((r) => r.empresaId)).size;
 
+  // Mapear cuáles son de antigüedad (codigo prefix)
+  const reglasAntiguedadPorEmpresa = new Map<string, ReglaActiva[]>();
+  const reglasNormales: ReglaActiva[] = [];
+  for (const r of reglas) {
+    if (r.codigo.startsWith("aniversario_") || r.codigo === "cumpleanos_propio" || r.codigo === "san_valentin_balles") {
+      const list = reglasAntiguedadPorEmpresa.get(r.empresaId) ?? [];
+      list.push(r);
+      reglasAntiguedadPorEmpresa.set(r.empresaId, list);
+    } else {
+      reglasNormales.push(r);
+    }
+  }
+
   const candidatos: Candidato[] = [];
 
-  for (const regla of reglas) {
-    // Filtrar por periodicidad
-    if (regla.periodicidad === "semanal" && dow !== 0) continue; // solo domingo
+  // Reglas estándar (con evaluador asociado al código)
+  for (const regla of reglasNormales) {
+    if (regla.periodicidad === "semanal" && dow !== 0) continue;
     if (regla.periodicidad === "trimestral" && !isUltTrim) continue;
 
     const evaluator = EVALUATORS[regla.codigo as ReglaCodigo];
@@ -327,6 +453,18 @@ export async function ejecutarReglasDelDia(
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       report.errores.push(`${regla.codigo}@${regla.empresaId}: ${msg}`);
+    }
+  }
+
+  // Reglas de antigüedad (procesadas en bloque por empresa)
+  for (const [empresaId, reglasAnt] of reglasAntiguedadPorEmpresa) {
+    report.reglas_evaluadas += reglasAnt.length;
+    try {
+      const cands = await evalAntiguedad(admin, empresaId, fecha, reglasAnt);
+      candidatos.push(...cands);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      report.errores.push(`antiguedad@${empresaId}: ${msg}`);
     }
   }
 

@@ -3,8 +3,9 @@
 import { ReactNode, useCallback, useMemo, useRef, useState, useEffect } from "react";
 import {
   MessageSquare, Send, Users, Plus, Search, Pin, Smile, MoreVertical,
-  BellOff, Bell, Pencil, Trash2, LogOut, Lock, ChevronLeft,
+  BellOff, Bell, Pencil, Trash2, LogOut, Lock, ChevronLeft, ChevronDown,
   ShieldCheck, Eraser, Hourglass, X, Paperclip, Mic, Building2, Briefcase, Check,
+  FileText, Download, Loader2,
 } from "lucide-react";
 import {
   Sheet, SheetContent, SheetTitle, SheetTrigger, SheetClose,
@@ -40,8 +41,11 @@ import {
   updateCanalMiembros,
   listEmpleadosEmpresa,
   purgeCanalesObsoletos,
+  sendMensajeAdjunto,
+  getAdjuntoSignedUrl,
   type EmpleadoCanal,
 } from "@/features/comunicacion/actions/comunicacion-actions";
+import { createClient as createBrowserClient } from "@/lib/supabase/client";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { getOrganigrama } from "@/features/direccion/actions/organigrama-actions";
 import { orgChartsPorEmpresa } from "@/features/direccion/data/direccion";
@@ -69,23 +73,43 @@ type Mensaje = {
   fecha: string;
   hora: string;
   fijado: boolean;
+  adjuntoPath?: string | null;
+  adjuntoTipo?: "imagen" | "audio" | "archivo" | null;
+  adjuntoNombre?: string | null;
+  adjuntoMime?: string | null;
+  adjuntoTamano?: number | null;
 };
 
 type PrefCanal = { silenciado: boolean; fijado: boolean };
 const PREF_DEFAULT: PrefCanal = { silenciado: false, fijado: false };
 
-// Los grupos por defecto se derivan del organigrama de la empresa:
-// 1 grupo por cada bloque del organigrama (excepto los nodos del área "externo", p.ej. SOCIOS).
+// Departamentos garantizados (fallback si el organigrama no existe ni en BD ni local)
+const DEPARTAMENTOS_FALLBACK = [
+  "GERENCIA",
+  "CONTABILIDAD",
+  "GESTORÍA",
+  "JURÍDICO",
+  "RECURSOS HUMANOS",
+  "LOGÍSTICA",
+  "MARKETING",
+];
+
+// Los grupos por defecto se derivan SOLO de los nodos administrativos del organigrama.
+// Los nodos operativos (camareros, cocineros, hostess, etc.) son puestos, no departamentos.
+// Los nodos externos (socios) tampoco cuentan.
 async function getDepartamentosDelOrganigrama(empresaId: string): Promise<string[]> {
   let chart = await getOrganigrama(empresaId);
   if (!chart || chart.nodes.length === 0) {
-    chart = orgChartsPorEmpresa[empresaId] ?? orgChartsPorEmpresa.habana;
+    chart = orgChartsPorEmpresa[empresaId] ?? orgChartsPorEmpresa.habana ?? null;
   }
-  const labels = chart.nodes
-    .filter((n) => n.area !== "externo")
-    .map((n) => n.label.trim().toUpperCase())
-    .filter((l) => l.length > 0);
-  return Array.from(new Set(labels));
+  const labels = chart
+    ? chart.nodes
+        .filter((n) => n.area === "administrativa")
+        .map((n) => n.label.trim().toUpperCase())
+        .filter((l) => l.length > 0)
+    : [];
+  const dedup = Array.from(new Set(labels));
+  return dedup.length > 0 ? dedup : DEPARTAMENTOS_FALLBACK;
 }
 
 function mapDbCanal(r: Record<string, unknown>): Canal {
@@ -113,12 +137,25 @@ function mapDbCanal(r: Record<string, unknown>): Canal {
   };
 }
 
+function limpiarNombre(raw: unknown): string {
+  const s = typeof raw === "string" ? raw.trim() : "";
+  if (!s || s.toLowerCase() === "null null" || s.toLowerCase() === "null") return "Sin nombre";
+  return s;
+}
+
 function mapDbMensaje(r: Record<string, unknown>): Mensaje {
   const createdAt = r.created_at ? new Date(r.created_at as string) : new Date();
   const hoy = new Date();
   const esHoy = createdAt.toDateString() === hoy.toDateString();
-  const nombre = (r.autor_nombre as string) ?? "Anon";
-  const iniciales = nombre.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
+  const nombre = limpiarNombre(r.autor_nombre);
+  const iniciales =
+    nombre
+      .split(" ")
+      .map((w) => w[0])
+      .filter(Boolean)
+      .join("")
+      .toUpperCase()
+      .slice(0, 2) || "?";
   return {
     id: r.id as string,
     canalId: (r.canal_id as string) ?? "",
@@ -128,6 +165,11 @@ function mapDbMensaje(r: Record<string, unknown>): Mensaje {
     fecha: esHoy ? "Hoy" : createdAt.toLocaleDateString("es-ES"),
     hora: createdAt.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }),
     fijado: (r.fijado as boolean) ?? false,
+    adjuntoPath: (r.adjunto_url as string) ?? null,
+    adjuntoTipo: (r.adjunto_tipo as Mensaje["adjuntoTipo"]) ?? null,
+    adjuntoNombre: (r.adjunto_nombre as string) ?? null,
+    adjuntoMime: (r.adjunto_mime as string) ?? null,
+    adjuntoTamano: (r.adjunto_tamano as number) ?? null,
   };
 }
 
@@ -200,6 +242,19 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
   const [dlgMiembros, setDlgMiembros] = useState(false);
   const [miembrosEdit, setMiembrosEdit] = useState<Set<string>>(new Set());
 
+  // Colapsables del sidebar
+  const [openDeptos, setOpenDeptos] = useState(true);
+  const [openAsuntos, setOpenAsuntos] = useState(true);
+
+  // Subida y grabación
+  const [subiendo, setSubiendo] = useState(false);
+  const [grabando, setGrabando] = useState(false);
+  const [grabadoraTiempo, setGrabadoraTiempo] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const grabadoraTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const canal = canales.find((c) => c.id === canalActivo) ?? null;
@@ -249,16 +304,21 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
   }, [msgDelCanal.length]);
 
   const cargarCanales = useCallback(async () => {
+    const empresaSlug = empresaActual.id;
     try {
       setCargando(true);
-      const departamentos = await getDepartamentosDelOrganigrama(empresaActual.id);
+      const departamentos = await getDepartamentosDelOrganigrama(empresaSlug);
+      console.log(`[chat] departamentos para ${empresaSlug}:`, departamentos);
 
-      // 1. Purgar grupos obsoletos (legacy, BACANAL prefijado, etc.) preservando 'asunto'
-      await purgeCanalesObsoletos(departamentos);
+      // 1. Purgar grupos obsoletos preservando 'asunto'
+      await purgeCanalesObsoletos(departamentos, empresaSlug);
 
       // 2. Releer y crear los que falten
-      const res = await listCanales();
-      if (!res.ok) return;
+      const res = await listCanales(empresaSlug);
+      if (!res.ok) {
+        toast.error("No se pudo leer los canales (revisa migraciones / sesión).");
+        return;
+      }
       let data = res.data as Record<string, unknown>[];
 
       const existentes = new Set(
@@ -266,14 +326,25 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
       );
       const faltantes = departamentos.filter((nombre) => !existentes.has(nombre));
       if (faltantes.length > 0) {
-        await Promise.all(faltantes.map((nombre) => createCanal(nombre, "departamento")));
-        const retry = await listCanales();
+        const resultados = await Promise.all(
+          faltantes.map((nombre) => createCanal(nombre, "departamento", [], empresaSlug)),
+        );
+        const fallos = resultados.filter((r) => !r.ok);
+        if (fallos.length > 0) {
+          console.warn("[chat] fallos al crear canales:", fallos);
+          toast.error(
+            `No se pudieron crear ${fallos.length} grupos. ${fallos[0].error ?? ""}`,
+          );
+        }
+        const retry = await listCanales(empresaSlug);
         if (retry.ok) data = retry.data as Record<string, unknown>[];
       }
 
       const mapped = data.map(mapDbCanal);
+      console.log(`[chat] canales cargados (${empresaSlug}):`, mapped.length);
       setCanales(mapped);
-    } catch {
+    } catch (err) {
+      console.error("[chat] cargarCanales error:", err);
       toast.error("Error al cargar canales");
     } finally {
       setCargando(false);
@@ -320,6 +391,15 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
     }
   }, [open, cargarCanales, cargarPrefs, cargarEmpleados]);
 
+  // Al cambiar de empresa, limpiar selección y mensajes; cargarCanales se re-ejecuta
+  // porque su useCallback depende de empresaActual.id.
+  useEffect(() => {
+    setCanalActivo(null);
+    setCanales([]);
+    setMensajes([]);
+    setBusqueda("");
+  }, [empresaActual.id]);
+
   useEffect(() => {
     if (canalActivo) cargarMensajes(canalActivo);
   }, [canalActivo, cargarMensajes]);
@@ -364,7 +444,7 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
       return;
     }
     try {
-      const res = await createCanal(limpio, "asunto", Array.from(miembrosNuevo));
+      const res = await createCanal(limpio, "asunto", Array.from(miembrosNuevo), empresaActual.id);
       if (!res.ok) {
         toast.error(res.error ?? "No se pudo crear el asunto");
         return;
@@ -498,6 +578,104 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
     }
   }
 
+  // ───────── Adjuntos: subida directa al bucket "chat-archivos" ─────────
+  async function subirYEnviarAdjunto(file: File, tipo: "imagen" | "audio" | "archivo") {
+    if (!canalActivo) return;
+    try {
+      setSubiendo(true);
+      const supabase = createBrowserClient();
+      const ext = file.name.includes(".") ? file.name.split(".").pop() : "";
+      const safeName = file.name.replace(/[^\w.\-]+/g, "_");
+      const path = `${empresaActual.id}/${canalActivo}/${Date.now()}_${safeName}${
+        ext && !safeName.endsWith(ext) ? `.${ext}` : ""
+      }`;
+      const up = await supabase.storage.from("chat-archivos").upload(path, file, {
+        upsert: false,
+        contentType: file.type || undefined,
+      });
+      if (up.error) throw up.error;
+      const res = await sendMensajeAdjunto({
+        canalId: canalActivo,
+        texto: null,
+        adjuntoUrl: up.data.path,
+        adjuntoTipo: tipo,
+        adjuntoNombre: file.name,
+        adjuntoMime: file.type || "application/octet-stream",
+        adjuntoTamano: file.size,
+      });
+      if (!res.ok) {
+        toast.error(res.error ?? "No se pudo enviar el adjunto");
+        return;
+      }
+      if (res.data) {
+        const real = mapDbMensaje(res.data as Record<string, unknown>);
+        setMensajes((prev) => [...prev, real]);
+      }
+    } catch (err) {
+      console.error("[chat] subirYEnviarAdjunto:", err);
+      toast.error("No se pudo subir el archivo");
+    } finally {
+      setSubiendo(false);
+    }
+  }
+
+  function detectarTipo(file: File): "imagen" | "audio" | "archivo" {
+    if (file.type.startsWith("image/")) return "imagen";
+    if (file.type.startsWith("audio/")) return "audio";
+    return "archivo";
+  }
+
+  function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    subirYEnviarAdjunto(f, detectarTipo(f));
+    e.target.value = "";
+  }
+
+  // ───────── Grabación de audio ─────────
+  async function iniciarGrabacion() {
+    if (!canalActivo) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      mr.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      mr.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const file = new File([blob], `audio_${Date.now()}.webm`, { type: "audio/webm" });
+        await subirYEnviarAdjunto(file, "audio");
+      };
+      mr.start();
+      mediaRecorderRef.current = mr;
+      setGrabando(true);
+      setGrabadoraTiempo(0);
+      grabadoraTimerRef.current = setInterval(() => setGrabadoraTiempo((t) => t + 1), 1000);
+    } catch (err) {
+      console.error("[chat] iniciarGrabacion:", err);
+      toast.error("Sin acceso al micrófono");
+    }
+  }
+
+  function detenerGrabacion(cancelar = false) {
+    const mr = mediaRecorderRef.current;
+    if (mr && mr.state !== "inactive") {
+      if (cancelar) {
+        mr.ondataavailable = null;
+        mr.onstop = () => mr.stream.getTracks().forEach((t) => t.stop());
+      }
+      mr.stop();
+    }
+    if (grabadoraTimerRef.current) {
+      clearInterval(grabadoraTimerRef.current);
+      grabadoraTimerRef.current = null;
+    }
+    setGrabando(false);
+    setGrabadoraTiempo(0);
+  }
+
   const iniciales = empresaActual.iniciales;
   const colorEmpresa = empresaActual.color;
 
@@ -568,47 +746,61 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
                     icon={<Building2 className="h-3.5 w-3.5" />}
                     label="Departamentos"
                     hint="De serie · no editables"
+                    count={canalesDepartamento.length}
+                    open={openDeptos}
+                    onToggle={() => setOpenDeptos((v) => !v)}
                   />
-                  {canalesDepartamento.length === 0 && (
-                    <p className="px-4 py-3 text-[11px] text-muted-foreground text-center">
-                      Aún no hay departamentos en el organigrama.
-                    </p>
+                  {openDeptos && (
+                    <>
+                      {canalesDepartamento.length === 0 && (
+                        <p className="px-4 py-3 text-[11px] text-muted-foreground text-center">
+                          Aún no hay departamentos en el organigrama.
+                        </p>
+                      )}
+                      {canalesDepartamento.map((c) => (
+                        <CanalRow
+                          key={c.id}
+                          canal={c}
+                          activo={canalActivo === c.id}
+                          pref={prefsMap[c.id] ?? PREF_DEFAULT}
+                          onClick={() => setCanalActivo(c.id)}
+                          logoUrl={logoUrl}
+                          iniciales={iniciales}
+                          colorEmpresa={colorEmpresa}
+                        />
+                      ))}
+                    </>
                   )}
-                  {canalesDepartamento.map((c) => (
-                    <CanalRow
-                      key={c.id}
-                      canal={c}
-                      activo={canalActivo === c.id}
-                      pref={prefsMap[c.id] ?? PREF_DEFAULT}
-                      onClick={() => setCanalActivo(c.id)}
-                      logoUrl={logoUrl}
-                      iniciales={iniciales}
-                      colorEmpresa={colorEmpresa}
-                    />
-                  ))}
 
                   <SidebarSeccion
                     icon={<Briefcase className="h-3.5 w-3.5" />}
                     label="Asuntos"
                     hint="Manuales · tú eliges miembros"
+                    count={canalesAsunto.length}
+                    open={openAsuntos}
+                    onToggle={() => setOpenAsuntos((v) => !v)}
                   />
-                  {canalesAsunto.length === 0 && (
-                    <p className="px-4 py-3 text-[11px] text-muted-foreground text-center">
-                      Sin asuntos. Pulsa &quot;Crear asunto&quot;.
-                    </p>
+                  {openAsuntos && (
+                    <>
+                      {canalesAsunto.length === 0 && (
+                        <p className="px-4 py-3 text-[11px] text-muted-foreground text-center">
+                          Sin asuntos. Pulsa &quot;Crear asunto&quot;.
+                        </p>
+                      )}
+                      {canalesAsunto.map((c) => (
+                        <CanalRow
+                          key={c.id}
+                          canal={c}
+                          activo={canalActivo === c.id}
+                          pref={prefsMap[c.id] ?? PREF_DEFAULT}
+                          onClick={() => setCanalActivo(c.id)}
+                          logoUrl={logoUrl}
+                          iniciales={iniciales}
+                          colorEmpresa={colorEmpresa}
+                        />
+                      ))}
+                    </>
                   )}
-                  {canalesAsunto.map((c) => (
-                    <CanalRow
-                      key={c.id}
-                      canal={c}
-                      activo={canalActivo === c.id}
-                      pref={prefsMap[c.id] ?? PREF_DEFAULT}
-                      onClick={() => setCanalActivo(c.id)}
-                      logoUrl={logoUrl}
-                      iniciales={iniciales}
-                      colorEmpresa={colorEmpresa}
-                    />
-                  ))}
                 </>
               )}
             </div>
@@ -755,7 +947,18 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
                               {m.autor}
                             </p>
                           )}
-                          <p className="text-sm whitespace-pre-wrap break-words">{m.texto}</p>
+                          {m.adjuntoPath && m.adjuntoTipo && (
+                            <Adjunto
+                              path={m.adjuntoPath}
+                              tipo={m.adjuntoTipo}
+                              nombre={m.adjuntoNombre ?? "archivo"}
+                              tamano={m.adjuntoTamano ?? 0}
+                              propio={propio}
+                            />
+                          )}
+                          {m.texto && (
+                            <p className="text-sm whitespace-pre-wrap break-words">{m.texto}</p>
+                          )}
                           <p className={cn("text-[10px] mt-1 text-right", propio ? "text-blue-100" : "text-muted-foreground")}>
                             {m.hora}
                             {m.fijado && <Pin className="inline ml-1 h-2.5 w-2.5" />}
@@ -768,31 +971,80 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
 
                 {/* Input */}
                 <div className="border-t bg-background p-3 shrink-0">
-                  <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0">
-                      <Smile className="h-5 w-5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0">
-                      <Paperclip className="h-5 w-5" />
-                    </Button>
-                    <Input
-                      value={input}
-                      onChange={(e) => setInput(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && enviar()}
-                      placeholder={canal.soloAdminsEnvian ? "Solo administradores pueden enviar" : `Mensaje a ${canal.nombre}…`}
-                      className="flex-1 h-11 rounded-full bg-muted/50 border-0 px-4"
-                      disabled={canal.soloAdminsEnvian}
-                    />
-                    {input.trim() ? (
-                      <Button onClick={enviar} size="icon" className="h-10 w-10 shrink-0 rounded-full">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    onChange={onPickFile}
+                  />
+                  {grabando ? (
+                    <div className="flex items-center gap-3 px-2 py-1.5 rounded-full bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900">
+                      <span className="relative flex h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600"></span>
+                      </span>
+                      <span className="text-sm font-medium text-red-700 dark:text-red-300 flex-1">
+                        Grabando audio… {Math.floor(grabadoraTiempo / 60)}:{(grabadoraTiempo % 60).toString().padStart(2, "0")}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 shrink-0 text-red-600 hover:text-red-700"
+                        onClick={() => detenerGrabacion(true)}
+                        title="Cancelar"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        className="h-9 w-9 shrink-0 rounded-full bg-red-600 hover:bg-red-700"
+                        onClick={() => detenerGrabacion(false)}
+                        title="Enviar audio"
+                      >
                         <Send className="h-4 w-4" />
                       </Button>
-                    ) : (
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
                       <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0">
-                        <Mic className="h-5 w-5" />
+                        <Smile className="h-5 w-5" />
                       </Button>
-                    )}
-                  </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-10 w-10 shrink-0"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={subiendo || canal.soloAdminsEnvian}
+                        title="Adjuntar archivo"
+                      >
+                        {subiendo ? <Loader2 className="h-5 w-5 animate-spin" /> : <Paperclip className="h-5 w-5" />}
+                      </Button>
+                      <Input
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && enviar()}
+                        placeholder={canal.soloAdminsEnvian ? "Solo administradores pueden enviar" : `Mensaje a ${canal.nombre}…`}
+                        className="flex-1 h-11 rounded-full bg-muted/50 border-0 px-4"
+                        disabled={canal.soloAdminsEnvian}
+                      />
+                      {input.trim() ? (
+                        <Button onClick={enviar} size="icon" className="h-10 w-10 shrink-0 rounded-full">
+                          <Send className="h-4 w-4" />
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-10 w-10 shrink-0"
+                          onClick={iniciarGrabacion}
+                          disabled={subiendo || canal.soloAdminsEnvian}
+                          title="Grabar audio"
+                        >
+                          <Mic className="h-5 w-5" />
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </>
             )}
@@ -1171,20 +1423,40 @@ function EmpleadosCheckList({
 }
 
 function SidebarSeccion({
-  icon, label, hint,
+  icon, label, hint, count, open, onToggle,
 }: {
   icon: ReactNode;
   label: string;
   hint: string;
+  count: number;
+  open: boolean;
+  onToggle: () => void;
 }) {
   return (
-    <div className="px-4 pt-4 pb-1.5 sticky top-0 bg-background/95 backdrop-blur-sm z-[1]">
-      <p className="text-[11px] font-semibold text-foreground uppercase tracking-wider flex items-center gap-1.5">
-        {icon}
-        {label}
-      </p>
-      <p className="text-[10px] text-muted-foreground/80">{hint}</p>
-    </div>
+    <button
+      type="button"
+      onClick={onToggle}
+      className="w-full text-left px-4 pt-4 pb-1.5 sticky top-0 bg-background/95 backdrop-blur-sm z-[1] hover:bg-muted/40 transition-colors"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5">
+          <ChevronDown
+            className={cn(
+              "h-3.5 w-3.5 text-muted-foreground transition-transform",
+              !open && "-rotate-90",
+            )}
+          />
+          <p className="text-[11px] font-semibold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+            {icon}
+            {label}
+          </p>
+        </div>
+        <span className="text-[10px] font-semibold text-muted-foreground bg-muted/70 rounded-full px-2 py-0.5">
+          {count}
+        </span>
+      </div>
+      <p className="text-[10px] text-muted-foreground/80 ml-5">{hint}</p>
+    </button>
   );
 }
 
@@ -1251,5 +1523,93 @@ function SettingRow({
       </div>
       <Switch checked={checked} onCheckedChange={onChange} />
     </div>
+  );
+}
+
+function formatBytes(b: number): string {
+  if (!b) return "";
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+  return `${(b / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function Adjunto({
+  path, tipo, nombre, tamano, propio,
+}: {
+  path: string;
+  tipo: "imagen" | "audio" | "archivo";
+  nombre: string;
+  tamano: number;
+  propio: boolean;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    setCargando(true);
+    getAdjuntoSignedUrl(path).then((res) => {
+      if (!mounted) return;
+      setUrl(res.url);
+      setCargando(false);
+    });
+    return () => { mounted = false; };
+  }, [path]);
+
+  if (cargando) {
+    return (
+      <div className="flex items-center gap-2 py-2 text-[11px] opacity-70">
+        <Loader2 className="h-3 w-3 animate-spin" /> Cargando…
+      </div>
+    );
+  }
+  if (!url) {
+    return <p className="text-[11px] italic opacity-70">Adjunto no disponible</p>;
+  }
+
+  if (tipo === "imagen") {
+    return (
+      <a href={url} target="_blank" rel="noreferrer" className="block mb-1">
+        <img
+          src={url}
+          alt={nombre}
+          className="max-h-72 rounded-lg object-cover"
+        />
+      </a>
+    );
+  }
+
+  if (tipo === "audio") {
+    return (
+      <audio
+        src={url}
+        controls
+        className="my-1 max-w-[260px]"
+      />
+    );
+  }
+
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      download={nombre}
+      className={cn(
+        "flex items-center gap-2 rounded-lg px-3 py-2 mb-1 transition-colors",
+        propio
+          ? "bg-blue-700/40 hover:bg-blue-700/60 text-white"
+          : "bg-muted hover:bg-muted/80 text-foreground",
+      )}
+    >
+      <FileText className="h-5 w-5 shrink-0" />
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-semibold truncate">{nombre}</p>
+        <p className={cn("text-[10px]", propio ? "text-blue-100" : "text-muted-foreground")}>
+          {formatBytes(tamano)}
+        </p>
+      </div>
+      <Download className="h-4 w-4 shrink-0 opacity-70" />
+    </a>
   );
 }

@@ -79,7 +79,7 @@ export function HallOfFame({ ganadores }: Props) {
               </div>
             </div>
             <div className="mt-2 flex items-center justify-between text-xs">
-              <span className="text-amber-700 font-bold tabular-nums">{g.totalToques} toques</span>
+              <span className="text-amber-700 font-bold tabular-nums">{g.totalToques} points</span>
               {g.bonusOtorgado > 0 && (
                 <span className="text-emerald-700 font-medium">+{g.bonusOtorgado} bonus</span>
               )}

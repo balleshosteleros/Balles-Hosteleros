@@ -3,8 +3,11 @@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Crown, Medal, Inbox, Loader2 } from "lucide-react";
+import { Crown, Medal, Inbox, Loader2, Sprout, Zap, Shield, Award, Trophy, Star } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type { RankingRow } from "@/features/toques/types/toques.types";
+
+const NIVEL_ICONS: Record<string, LucideIcon> = { Sprout, Zap, Shield, Award, Crown, Trophy, Star };
 
 interface Props {
   rows: RankingRow[];
@@ -64,7 +67,7 @@ export function RankingTable({ rows, loading, highlightUserId }: Props) {
     return (
       <Card className="p-6 flex flex-col items-center justify-center text-muted-foreground text-sm">
         <Inbox className="h-6 w-6 mb-1.5" />
-        Aún no hay toques registrados en este periodo.
+        Aún no hay points registrados en este periodo.
       </Card>
     );
   }
@@ -104,9 +107,14 @@ export function RankingTable({ rows, loading, highlightUserId }: Props) {
                   {row.nivel ? (
                     <Badge
                       variant="outline"
-                      className="text-[10px] h-4 px-1.5"
+                      className="text-[10px] h-4 px-1.5 gap-0.5"
                       style={{ borderColor: row.nivel.badgeColor, color: row.nivel.badgeColor }}
                     >
+                      {(() => {
+                        const Icon =
+                          (row.nivel.badgeIcon && NIVEL_ICONS[row.nivel.badgeIcon]) || Trophy;
+                        return <Icon className="h-2.5 w-2.5" />;
+                      })()}
                       {row.nivel.nombre}
                     </Badge>
                   ) : null}
@@ -117,7 +125,7 @@ export function RankingTable({ rows, loading, highlightUserId }: Props) {
                   {row.total}
                 </div>
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  toques
+                  points
                 </div>
               </div>
             </li>

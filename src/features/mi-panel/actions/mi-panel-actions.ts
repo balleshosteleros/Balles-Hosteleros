@@ -47,11 +47,15 @@ async function getContext() {
     .select("empresa_id, nombre, apellidos, departamento, rol_label")
     .eq("user_id", user.id)
     .single();
+  const nombreCompleto = data
+    ? `${data.nombre ?? ""} ${data.apellidos ?? ""}`.trim()
+    : "";
+  const fallbackEmail = user.email?.split("@")[0] ?? "";
   return {
     supabase,
     user,
     empresaId: (data?.empresa_id as string | undefined) ?? null,
-    nombre: data ? `${data.nombre ?? ""} ${data.apellidos ?? ""}`.trim() : null,
+    nombre: nombreCompleto || fallbackEmail || null,
     departamento: (data?.departamento as string | undefined) ?? null,
     rolLabel: (data?.rol_label as string | undefined) ?? null,
   };
@@ -152,7 +156,7 @@ export async function ficharSalidaPersonal(fichajeId: string) {
     if (fichaje?.hora_entrada) {
       const entrada = new Date(fichaje.hora_entrada as string);
       horasTotales =
-        Math.round(((ahora.getTime() - entrada.getTime()) / 3600000) * 100) / 100;
+        Math.round(((ahora.getTime() - entrada.getTime()) / 3600000) * 10000) / 10000;
     }
     const { error } = await supabase
       .from("fichajes")

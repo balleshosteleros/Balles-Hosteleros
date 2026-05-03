@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight, Download, Loader2 } from "lucide-react";
 import { getMiCalendarioMes } from "@/features/mi-panel/actions/mi-panel-actions";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import type { DiaCalendario } from "@/features/mi-panel/types";
+import { formatHorasDecimal } from "@/shared/lib/timeUtils";
 
 const DIAS_SEMANA = ["L", "M", "X", "J", "V", "S", "D"];
 const MESES = [
@@ -57,7 +58,7 @@ function getDiaInfo(fecha: string, info: DiaCalendario | undefined, todayKey: st
   if (info?.ausencia === "baja_medica") return { estado: "baja", badgeText: "BAJA", horario: "—" };
   if (info?.ausencia === "permiso") return { estado: "permiso", badgeText: "PERMISO", horario: "—" };
 
-  const horarioFichado = info?.fichado ? `${info.horasFichaje?.toFixed(1) ?? "0"}h fichadas` : prov.horario;
+  const horarioFichado = info?.fichado ? `${formatHorasDecimal(info.horasFichaje)} fichadas` : prov.horario;
 
   if (isToday) return { estado: "hoy", badgeText: "HOY", horario: horarioFichado };
   if (info?.fichado || (prov.tipo === "trabajo" && isPast)) return { estado: "trabajado", badgeText: "TRABAJADO", horario: horarioFichado };
