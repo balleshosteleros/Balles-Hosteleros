@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Inbox } from "lucide-react";
+import { Loader2, Inbox, AlertTriangle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { listarMisFichajes } from "@/features/mi-panel/actions/mi-panel-actions";
@@ -15,7 +15,10 @@ const ESTADO_COLOR: Record<string, string> = {
   completado: "bg-slate-100 text-slate-700 border-slate-200",
   pendiente: "bg-blue-100 text-blue-700 border-blue-200",
   "sin cerrar": "bg-orange-100 text-orange-700 border-orange-200",
+  incidencia: "bg-red-100 text-red-700 border-red-200",
 };
+
+const ESTADOS_ALERTA = new Set(["sin cerrar", "incidencia"]);
 
 function todayISO(): string {
   return new Date().toISOString().split("T")[0];
@@ -100,6 +103,9 @@ export function MisFichajesView() {
               <tbody>
                 {items.map((f) => {
                   const estadoVista = deriveEstadoMostrado(f, todayISO());
+                  const esAlerta = ESTADOS_ALERTA.has(estadoVista);
+                  const tooltip = f.incidencia
+                    ?? (estadoVista === "sin cerrar" ? "Fichaje sin cierre — pendiente de revisión" : undefined);
                   return (
                   <tr key={f.id} className="border-b last:border-0">
                     <td className="py-2 pr-3 font-medium">{formatFecha(f.fecha)}</td>
@@ -116,12 +122,22 @@ export function MisFichajesView() {
                       {f.horaSalida ? formatHorasDecimal(f.horasTotales) : "—"}
                     </td>
                     <td className="py-2 pl-3">
-                      <Badge
-                        variant="outline"
-                        className={`text-[10px] ${ESTADO_COLOR[estadoVista] ?? ESTADO_COLOR.pendiente}`}
-                      >
-                        {estadoVista}
-                      </Badge>
+                      <div className="flex items-center gap-1.5">
+                        {esAlerta && (
+                          <AlertTriangle
+                            className="h-3.5 w-3.5 text-red-600 shrink-0"
+                            aria-label="Incidencia"
+                            title={tooltip}
+                          />
+                        )}
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] ${ESTADO_COLOR[estadoVista] ?? ESTADO_COLOR.pendiente}`}
+                          title={tooltip}
+                        >
+                          {estadoVista}
+                        </Badge>
+                      </div>
                     </td>
                   </tr>
                   );
