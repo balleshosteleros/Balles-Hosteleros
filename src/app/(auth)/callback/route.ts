@@ -91,14 +91,21 @@ export async function GET(request: Request) {
     target = connectNext
   }
   if (!target) {
-    // Login real: usamos el user.id directamente del intercambio, no getUser
-    // (evitamos roundtrip de cookies entrantes vs. escrituras pendientes).
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('rol_label')
-      .eq('user_id', data.session.user.id)
-      .maybeSingle()
-    target = getRedirectByRolLabel(profile?.rol_label as string | null)
+    const viewModeCookie = cookieStore.get('bh_view_mode')?.value
+    if (viewModeCookie === 'departamentos') {
+      target = '/mis-departamentos'
+    } else if (viewModeCookie === 'paneles') {
+      target = '/mi-panel'
+    } else {
+      // Login real: usamos el user.id directamente del intercambio, no getUser
+      // (evitamos roundtrip de cookies entrantes vs. escrituras pendientes).
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('rol_label')
+        .eq('user_id', data.session.user.id)
+        .maybeSingle()
+      target = getRedirectByRolLabel(profile?.rol_label as string | null)
+    }
   }
 
   const response = NextResponse.redirect(`${origin}${target}`)

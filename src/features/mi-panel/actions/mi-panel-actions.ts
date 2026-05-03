@@ -11,6 +11,11 @@ import type {
   SolicitudSubtipoAusencia,
   SolicitudSubtipoTrabajo,
 } from "@/features/mi-panel/types";
+import {
+  calcularNivel,
+  getMiBalance,
+  getNiveles,
+} from "@/features/toques/services/toques.service";
 
 function extractErrorMessage(err: unknown): string {
   if (!err) return "Error desconocido";
@@ -605,5 +610,160 @@ export async function rechazarSolicitud(id: string, notasRevision?: string) {
     const msg = extractErrorMessage(err);
     console.error("[mi-panel] rechazarSolicitud:", msg);
     return { ok: false, error: msg };
+  }
+}
+
+// ─── RESUMEN MI PANEL ────────────────────────────────────────
+
+export interface MiPanelResumen {
+  points: {
+    acumulados: number;
+    canjeables: number;
+    nivelNombre: string | null;
+    nivelColor: string | null;
+    nivelIcon: string | null;
+    siguienteNombre: string | null;
+    progresoPct: number;
+    faltan: number;
+  };
+  fichajes: {
+    mesCount: number;
+    mesHoras: number;
+    incidencias: number;
+  };
+  solicitudes: {
+    pendientes: number;
+    aprobadas: number;
+    rechazadas: number;
+  };
+  comunicados: {
+    total: number;
+    ultimoTitulo: string | null;
+    ultimaFecha: string | null;
+  };
+  cuestionarios: {
+    pendientes: number;
+  };
+  formacion: {
+    cursosAsignados: number;
+    cursosCompletados: number;
+  };
+}
+
+const EMPTY_RESUMEN: MiPanelResumen = {
+  points: {
+    acumulados: 0,
+    canjeables: 0,
+    nivelNombre: null,
+    nivelColor: null,
+    nivelIcon: null,
+    siguienteNombre: null,
+    progresoPct: 0,
+    faltan: 0,
+  },
+  fichajes: { mesCount: 0, mesHoras: 0, incidencias: 0 },
+  solicitudes: { pendientes: 0, aprobadas: 0, rechazadas: 0 },
+  comunicados: { total: 0, ultimoTitulo: null, ultimaFecha: null },
+  cuestionarios: { pendientes: 0 },
+  formacion: { cursosAsignados: 0, cursosCompletados: 0 },
+};
+
+export async function getMiPanelResumen(): Promise<{
+  ok: boolean;
+  data: MiPanelResumen;
+  error?: string;
+}> {
+  try {
+    const { supabase, user, empresaId } = await getContext();
+    if (!user || !empresaId) {
+      return { ok: false, data: EMPTY_RESUMEN, error: "No autenticado" };
+    }
+
+    const now = new Date();
+    const anio = now.getFullYear();
+    const mes = now.getMonth() + 1;
+    const { desde, hasta } = monthBounds(anio, mes);
+
+    const [
+      balance,
+      niveles,
+      fichajesMes,
+      solicitudes,
+      comunicadosVisibles,
+    ] = await Promise.all([
+      getMiBalance(supabase, user.id).catch(() => ({
+        empresaId: "",
+        userId: user.id,
+        toquesAcumulados: 0,
+        toquesCanjeables: 0,
+        ultimoMovimientoAt: null,
+      })),
+      getNiveles(supabase, empresaId).catch(() => []),
+      supabase
+        .from("fichajes")
+        .select("horas_totales, estado")
+        .eq("empresa_id", empresaId)
+        .eq("empleado_id", user.id)
+        .gte("fecha", desde)
+        .lt("fecha", hasta),
+      supabase
+        .from("solicitudes_personal")
+        .select("estado")
+        .eq("empresa_id", empresaId)
+        .eq("user_id", user.id),
+      listarComunicadosVisibles(),
+    ]);
+
+    const nivelProgreso = calcularNivel(balance.toquesAcumulados, niveles);
+
+    const fRows = (fichajesMes.data ?? []) as Array<{
+      horas_totales: number | null;
+      estado: string | null;
+    }>;
+    const mesHoras = fRows.reduce((acc, r) => acc + (r.horas_totales ?? 0), 0);
+    const incidencias = fRows.filter(
+      (r) => r.estado === "incidencia" || r.estado === "sin cerrar",
+    ).length;
+
+    const sRows = (solicitudes.data ?? []) as Array<{ estado: string | null }>;
+    const pendientes = sRows.filter((s) => s.estado === "pendiente").length;
+    const aprobadas = sRows.filter((s) => s.estado === "aprobada").length;
+    const rechazadas = sRows.filter((s) => s.estado === "rechazada").length;
+
+    const comunicados = comunicadosVisibles.ok ? comunicadosVisibles.data : [];
+    const ultimo = comunicados[0] ?? null;
+
+    return {
+      ok: true,
+      data: {
+        points: {
+          acumulados: balance.toquesAcumulados,
+          canjeables: balance.toquesCanjeables,
+          nivelNombre: nivelProgreso.actual?.nombre ?? null,
+          nivelColor: nivelProgreso.actual?.badgeColor ?? null,
+          nivelIcon: nivelProgreso.actual?.badgeIcon ?? null,
+          siguienteNombre: nivelProgreso.siguiente?.nombre ?? null,
+          progresoPct: nivelProgreso.progresoPct,
+          faltan: nivelProgreso.toquesParaSiguiente,
+        },
+        fichajes: {
+          mesCount: fRows.length,
+          mesHoras: Math.round(mesHoras * 100) / 100,
+          incidencias,
+        },
+        solicitudes: { pendientes, aprobadas, rechazadas },
+        comunicados: {
+          total: comunicados.length,
+          ultimoTitulo: ultimo?.titulo ?? null,
+          ultimaFecha: ultimo?.createdAt ?? null,
+        },
+        cuestionarios: { pendientes: 0 },
+        formacion: { cursosAsignados: 0, cursosCompletados: 0 },
+      },
+    };
+  } catch (err: unknown) {
+    const msg = extractErrorMessage(err);
+    console.error("[mi-panel] getMiPanelResumen:", msg);
+    return { ok: false, data: EMPTY_RESUMEN, error: msg };
   }
 }

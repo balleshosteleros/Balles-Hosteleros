@@ -10,6 +10,8 @@ export interface AuthProfile {
   apellidos: string;
   email: string;
   empresa_id: string;
+  avatar_url?: string | null;
+  avatar_ai_url?: string | null;
 }
 
 interface AuthContextValue {
@@ -91,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setTimeout(async () => {
             const { data: profileData } = await supabase
               .from("profiles")
-              .select("nombre, apellidos, email, empresa_id")
+              .select("nombre, apellidos, email, empresa_id, avatar_url, avatar_ai_url")
               .eq("user_id", session.user.id)
               .single();
 

@@ -88,11 +88,11 @@ export function GoogleHeaderPill() {
     return (
       <a
         href={`/api/google/connect?next=${next}`}
-        className="inline-flex h-7 w-7 items-center justify-center rounded-full border bg-card shadow-sm transition-colors hover:bg-muted"
+        className="inline-flex h-8 w-8 items-center justify-center rounded-full border bg-card shadow-sm transition-colors hover:bg-muted"
         title="Conecta tu cuenta de Google para sincronizar correo, calendario y Meet"
         aria-label="Conectar mi Google"
       >
-        <GoogleLogo className="h-3.5 w-3.5 shrink-0" />
+        <GoogleLogo className="h-4 w-4 shrink-0" />
       </a>
     );
   }
@@ -141,14 +141,14 @@ export function GoogleHeaderPill() {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="inline-flex h-7 w-7 items-center justify-center rounded-full border bg-card shadow-sm transition-colors hover:bg-muted"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full border bg-card shadow-sm transition-colors hover:bg-muted"
           title={`Cuenta Google activa: ${email ?? ""}`}
           aria-label={`Cuenta Google activa: ${email ?? ""}`}
         >
           {switching ? (
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
           ) : (
-            <Avatar cuenta={cuentaActiva} size="sm" showRing={false} />
+            <Avatar cuenta={cuentaActiva} size="md" showRing={false} />
           )}
         </button>
       </DropdownMenuTrigger>

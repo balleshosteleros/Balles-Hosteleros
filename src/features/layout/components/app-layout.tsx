@@ -6,6 +6,7 @@ import { AppSidebar } from "@/features/layout/components/app-sidebar";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { AnimatedAvatar } from "@/features/auth/components/AnimatedAvatar";
 import {
   GraduationCap,
   LogOut,
@@ -32,6 +33,7 @@ import {
   Phone,
   Notebook,
   MessageSquare,
+  MessageCircle,
   ClipboardList,
   ClipboardCheck,
   Clock,
@@ -46,6 +48,8 @@ import {
   KeyRound,
   LayoutDashboard,
   HelpCircle,
+  Fingerprint,
+  Inbox,
   Carrot,
   ShoppingCart,
   Warehouse,
@@ -82,6 +86,8 @@ import {
   PenLine,
   FileUp,
   Trophy,
+  Building2,
+  Rocket,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -95,6 +101,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { FloatingSoporteButton } from "@/features/soporte/components";
 import { OnboardingGuard } from "@/features/formacion/components/OnboardingGuard";
+import { AvatarRequiredGuard } from "@/features/auth/components/AvatarRequiredGuard";
 import { EmpresaSelector } from "@/features/empresa/components/empresa-selector";
 import {
   GmailDrawer,
@@ -108,8 +115,10 @@ import {
 } from "@/features/google-workspace/components";
 import { AgendaDrawer } from "@/features/agenda/components/AgendaDrawer";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { getAccesosAppsPorEmpresa } from "@/features/rrhh/data/accesos-apps";
+import type { AccesoApp } from "@/features/rrhh/data/accesos-apps";
+import { listAccesosApps } from "@/features/rrhh/actions/accesos-apps-actions";
 import { ExternalLink } from "lucide-react";
+import { useViewMode } from "@/features/layout/contexts/view-mode-context";
 
 const ROUTE_TITLES: Record<string, string> = {
   "/mi-panel": "MI PANEL",
@@ -125,6 +134,8 @@ const ROUTE_TITLES: Record<string, string> = {
   "/mi-panel/formacion": "FORMACIÓN",
   "/mi-panel/formacion/curso": "CURSO",
   "/mi-panel/points": "POINTS",
+  "/mi-panel/datos-personales": "DATOS PERSONALES",
+  "/mis-departamentos": "MIS DEPARTAMENTOS",
   "/gerencia": "GERENCIA",
   "/direccion/estructura": "ORGANIGRAMA",
   "/direccion/cronogramas": "CRONOGRAMAS",
@@ -278,6 +289,7 @@ const ROUTE_ICONS: Record<string, LucideIcon> = {
   "/mi-panel/formacion": GraduationCap,
   "/mi-panel/formacion/curso": GraduationCap,
   "/mi-panel/points": Trophy,
+  "/mi-panel/datos-personales": UserCircle,
 
   // DIRECCIÓN
   "/direccion": Crown,
@@ -391,26 +403,6 @@ const ROUTE_ICONS: Record<string, LucideIcon> = {
   "/agenda": ContactRound,
 };
 
-function AccesosIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <rect x="3" y="3" width="7" height="7" rx="1.2" />
-      <rect x="14" y="3" width="7" height="7" rx="1.2" />
-      <rect x="3" y="14" width="7" height="7" rx="1.2" />
-      <rect x="14.5" y="17.5" width="5" height="3.5" rx="0.8" />
-      <path d="M15.5 17.5v-1.2a1.5 1.5 0 0 1 3 0v1.2" />
-    </svg>
-  );
-}
-
 function NavBadge({ count, color = "blue" }: { count: number; color?: string }) {
   if (count === 0) return null;
   const bg =
@@ -467,8 +459,23 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [appsMenuOpen, setAppsMenuOpen] = useState(false);
   const { empresaActual } = useEmpresa();
-  const accesosApps = getAccesosAppsPorEmpresa(empresaActual.id).filter((a) => a.estado === "Activo");
+  const [accesosAppsRaw, setAccesosAppsRaw] = useState<AccesoApp[]>([]);
+  useEffect(() => {
+    let alive = true;
+    listAccesosApps(empresaActual.id)
+      .then((rows) => { if (alive) setAccesosAppsRaw(rows); })
+      .catch((e) => console.error("[layout] accesos:", e));
+    return () => { alive = false; };
+  }, [empresaActual.id]);
+  const accesosApps = accesosAppsRaw.filter((a) => a.estado === "Activo");
   const appsCategories = Array.from(new Set(accesosApps.map((a) => a.categoria)));
+  const { mode: viewMode, setMode: setViewMode } = useViewMode();
+
+  function activarVista(modo: "paneles" | "departamentos") {
+    setViewMode(modo);
+    router.push(modo === "paneles" ? "/mi-panel" : "/mis-departamentos");
+    setUserMenuOpen(false);
+  }
 
   return (
     <SidebarProvider>
@@ -487,7 +494,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               {showUi && (
                 <>
                   {/* Integraciones: Google (cuenta + email + calendario + meet) | tareas + chat + llamadas | apps */}
-                  <div className="flex items-center rounded-full border bg-muted/40 px-1 py-0.5 gap-0.5">
+                  <div className="flex items-center rounded-full border bg-muted/40 py-1 px-1.5 gap-0.5">
                     {/* Cuenta Google activa (icono) */}
                     <GoogleHeaderPill />
 
@@ -495,10 +502,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     <GmailDrawer>
                       <Button
                         variant="ghost" size="icon"
-                        className="relative h-7 w-7"
+                        className="relative h-8 w-8"
                         title="Correo"
                       >
-                        <Mail className="h-4 w-4 text-red-500" />
+                        <Mail className="!h-[18px] !w-[18px] text-red-500" />
                         <NavBadge count={counts.emails} color="blue" />
                       </Button>
                     </GmailDrawer>
@@ -507,10 +514,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     <CalendarDrawer>
                       <Button
                         variant="ghost" size="icon"
-                        className="relative h-7 w-7"
+                        className="relative h-8 w-8"
                         title="Calendario"
                       >
-                        <CalendarIcon className="h-4 w-4 text-blue-600" />
+                        <CalendarIcon className="!h-[18px] !w-[18px] text-blue-600" />
                         <NavBadge count={counts.events} color="blue" />
                       </Button>
                     </CalendarDrawer>
@@ -519,10 +526,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     <MeetDrawer>
                       <Button
                         variant="ghost" size="icon"
-                        className="relative h-7 w-7"
+                        className="relative h-8 w-8"
                         title="Reuniones Meet"
                       >
-                        <Video className="h-4 w-4 text-emerald-600" />
+                        <Video className="!h-[18px] !w-[18px] text-emerald-600" />
                         <NavBadge count={counts.meetings} color="emerald" />
                       </Button>
                     </MeetDrawer>
@@ -534,10 +541,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     <TareasDrawer>
                       <Button
                         variant="ghost" size="icon"
-                        className="relative h-7 w-7"
+                        className="relative h-8 w-8"
                         title="Mis tareas"
                       >
-                        <CheckSquare2 className="h-4 w-4 text-violet-600" />
+                        <CheckSquare2 className="!h-[18px] !w-[18px] text-violet-600" />
                         <NavBadge count={counts.tasks} color="violet" />
                       </Button>
                     </TareasDrawer>
@@ -546,11 +553,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     <ChatDrawer>
                       <Button
                         variant="ghost" size="icon"
-                        className="relative h-7 w-7"
+                        className="relative h-8 w-8"
                         title="Comunicación interna"
                       >
-                        <MessageSquare className="h-4 w-4 text-blue-500" />
-                        <NavBadge count={counts.chatGroups} color="blue" />
+                        <MessageCircle className="!h-[18px] !w-[18px] text-green-500 fill-green-500/15" />
+                        <NavBadge count={counts.chatGroups} color="emerald" />
                       </Button>
                     </ChatDrawer>
 
@@ -558,10 +565,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     <TelefonoDrawer>
                       <Button
                         variant="ghost" size="icon"
-                        className="relative h-7 w-7"
+                        className="relative h-8 w-8"
                         title="Teléfono"
                       >
-                        <Phone className="h-4 w-4 text-sky-600" />
+                        <Phone className="!h-[18px] !w-[18px] text-sky-600" />
                         <NavBadge count={counts.missedCalls} color="red" />
                       </Button>
                     </TelefonoDrawer>
@@ -570,10 +577,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     <AgendaDrawer>
                       <Button
                         variant="ghost" size="icon"
-                        className="relative h-7 w-7"
+                        className="relative h-8 w-8"
                         title="Agenda de contactos"
                       >
-                        <Notebook className="h-4 w-4 text-yellow-500" />
+                        <Notebook className="!h-[18px] !w-[18px] text-yellow-500" />
                       </Button>
                     </AgendaDrawer>
 
@@ -585,11 +592,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       <DropdownMenuTrigger asChild>
                         <Button
                           variant="ghost" size="icon"
-                          className="relative h-7 w-7"
+                          className="relative h-8 w-8"
                           title="Accesos a aplicaciones"
                           onMouseEnter={() => setAppsMenuOpen(true)}
                         >
-                          <AccesosIcon className="h-4 w-4 text-amber-600" />
+                          <Rocket className="!h-[18px] !w-[18px] text-amber-600" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent
@@ -671,39 +678,75 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       </span>
                     </div>
 
-                    {/* Engranaje Ajustes */}
+                    {/* Avatar trabajador → Mi Panel */}
                     <DropdownMenu open={userMenuOpen} onOpenChange={setUserMenuOpen}>
                       <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                          title="Configuración"
-                          aria-label="Configuración"
+                        <button
+                          type="button"
+                          className="flex items-center justify-center rounded-full p-0.5 hover:bg-accent transition-colors focus:outline-none"
+                          title="Mi panel"
+                          aria-label="Mi panel"
                           onMouseEnter={() => setUserMenuOpen(true)}
                         >
-                          <Settings className="h-3.5 w-3.5" strokeWidth={1.75} />
-                        </Button>
+                          <AnimatedAvatar
+                            avatarAiUrl={profile?.avatar_ai_url}
+                            avatarUrl={profile?.avatar_url}
+                            fallback={userInitial}
+                            alt={userName}
+                            sizeClassName="h-8 w-8"
+                            fallbackBg="bg-primary"
+                          />
+                        </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent
                         align="end"
-                        className="w-52"
+                        className="w-60"
                         onMouseLeave={() => setUserMenuOpen(false)}
                       >
+                        <DropdownMenuLabel className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-3 py-1.5">
+                          Cambiar vista
+                        </DropdownMenuLabel>
                         <DropdownMenuItem
-                          onSelect={() => router.push("/ajustes")}
-                          className="cursor-pointer gap-2"
+                          className={`cursor-pointer gap-2 px-3 py-2 ${viewMode === "paneles" ? "bg-accent/60" : ""}`}
+                          onSelect={() => activarVista("paneles")}
                         >
-                          <Settings className="h-3.5 w-3.5" />
-                          Ajustes
+                          <UserCircle className={`h-4 w-4 ${viewMode === "paneles" ? "text-primary" : "text-muted-foreground"}`} />
+                          <span className={`text-xs tracking-widest uppercase ${viewMode === "paneles" ? "text-primary font-bold" : "font-semibold"}`}>
+                            MIS PANELES
+                          </span>
+                          {viewMode === "paneles" && (
+                            <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-primary" />
+                          )}
                         </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className={`cursor-pointer gap-2 px-3 py-2 ${viewMode === "departamentos" ? "bg-accent/60" : ""}`}
+                          onSelect={() => activarVista("departamentos")}
+                        >
+                          <Building2 className={`h-4 w-4 ${viewMode === "departamentos" ? "text-primary" : "text-muted-foreground"}`} />
+                          <span className={`text-xs tracking-widest uppercase ${viewMode === "departamentos" ? "text-primary font-bold" : "font-semibold"}`}>
+                            MIS DEPARTAMENTOS
+                          </span>
+                          {viewMode === "departamentos" && (
+                            <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-primary" />
+                          )}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        {roles.includes("director") && (
+                          <DropdownMenuItem
+                            onSelect={() => router.push("/ajustes")}
+                            className="cursor-pointer gap-2 px-3 py-1.5"
+                          >
+                            <Settings className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span className="text-xs font-medium">AJUSTES</span>
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           onSelect={signOut}
-                          className="text-destructive focus:text-destructive cursor-pointer gap-2"
+                          className="text-destructive focus:text-destructive cursor-pointer gap-2 px-3 py-1.5"
                         >
                           <LogOut className="h-3.5 w-3.5" />
-                          Cerrar sesión
+                          <span className="text-xs font-medium">CERRAR SESIÓN</span>
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -713,7 +756,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </header>
           <main className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
-            <OnboardingGuard>{children}</OnboardingGuard>
+            <AvatarRequiredGuard>
+              <OnboardingGuard>{children}</OnboardingGuard>
+            </AvatarRequiredGuard>
           </main>
         </div>
         {showUi && <FloatingSoporteButton />}

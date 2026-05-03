@@ -1,14 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  getAllAccesosApps,
   CATEGORIAS_APP,
   DEPARTAMENTOS,
   type AccesoApp,
   type EstadoApp,
   type TipoIntegracion,
 } from "@/features/rrhh/data/accesos-apps";
+import {
+  listAllAccesosApps,
+  createAccesoApp,
+  updateAccesoApp,
+  deleteAccesoApp,
+} from "@/features/rrhh/actions/accesos-apps-actions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -85,10 +90,22 @@ function PasswordAdmin({ value }: { value: string }) {
 }
 
 export function AccesosAdminTab() {
-  const [apps, setApps] = useState<AccesoApp[]>(() => getAllAccesosApps());
+  const [apps, setApps] = useState<AccesoApp[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [buscar, setBuscar] = useState("");
   const [filtroEmpresa, setFiltroEmpresa] = useState("todas");
   const [filtroCategoria, setFiltroCategoria] = useState("todas");
+
+  // Carga inicial desde Supabase
+  useEffect(() => {
+    let alive = true;
+    listAllAccesosApps()
+      .then((rows) => { if (alive) setApps(rows); })
+      .catch((e) => { console.error(e); toast.error("No se pudieron cargar los accesos"); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []);
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
@@ -138,43 +155,54 @@ export function AccesosAdminTab() {
     setModalOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.nombre.trim() || !form.url.trim()) {
       toast.error("Nombre y URL son obligatorios");
       return;
     }
     const departamentos = depsInput.split(",").map((d) => d.trim()).filter(Boolean);
     const rolesAutorizados = rolesInput.split(",").map((r) => r.trim()).filter(Boolean);
-    const today = new Date().toISOString().slice(0, 10);
 
-    if (editingId) {
-      setApps((prev) =>
-        prev.map((a) =>
-          a.id === editingId
-            ? { ...a, ...form, departamentos, rolesAutorizados, logoUrl: form.logoUrl || undefined, ultimaActualizacion: today }
-            : a
-        )
-      );
-      toast.success(`Acceso "${form.nombre}" actualizado`);
-    } else {
-      const newApp: AccesoApp = {
-        ...form,
-        id: `app-${Date.now()}`,
-        departamentos,
-        rolesAutorizados,
-        logoUrl: form.logoUrl || undefined,
-        ultimaActualizacion: today,
-      };
-      setApps((prev) => [...prev, newApp]);
-      toast.success(`Acceso "${form.nombre}" creado`);
+    setSaving(true);
+    try {
+      if (editingId) {
+        const updated = await updateAccesoApp(editingId, {
+          ...form,
+          departamentos,
+          rolesAutorizados,
+          logoUrl: form.logoUrl || undefined,
+        });
+        setApps((prev) => prev.map((a) => (a.id === editingId ? updated : a)));
+        toast.success(`Acceso "${updated.nombre}" actualizado`);
+      } else {
+        const created = await createAccesoApp({
+          ...form,
+          departamentos,
+          rolesAutorizados,
+          logoUrl: form.logoUrl || undefined,
+        });
+        setApps((prev) => [...prev, created]);
+        toast.success(`Acceso "${created.nombre}" creado`);
+      }
+      setModalOpen(false);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Error desconocido";
+      toast.error(msg);
+    } finally {
+      setSaving(false);
     }
-    setModalOpen(false);
   };
 
-  const handleDelete = (app: AccesoApp) => {
+  const handleDelete = async (app: AccesoApp) => {
     if (!confirm(`¿Eliminar el acceso "${app.nombre}"?`)) return;
-    setApps((prev) => prev.filter((a) => a.id !== app.id));
-    toast.success(`Acceso "${app.nombre}" eliminado`);
+    try {
+      await deleteAccesoApp(app.id);
+      setApps((prev) => prev.filter((a) => a.id !== app.id));
+      toast.success(`Acceso "${app.nombre}" eliminado`);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Error desconocido";
+      toast.error(msg);
+    }
   };
 
   const empresaNombre = (id: string) => EMPRESAS.find((e) => e.id === id)?.nombre ?? id;
@@ -229,7 +257,14 @@ export function AccesosAdminTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.length === 0 && (
+              {loading && (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground text-sm">
+                    Cargando accesos…
+                  </TableCell>
+                </TableRow>
+              )}
+              {!loading && filtered.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-8 text-muted-foreground text-sm">
                     No hay accesos. Crea el primero con "Nuevo acceso".
@@ -370,8 +405,8 @@ export function AccesosAdminTab() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={!form.nombre.trim() || !form.url.trim()}>
-              {editingId ? "Guardar cambios" : "Crear acceso"}
+            <Button onClick={handleSave} disabled={saving || !form.nombre.trim() || !form.url.trim()}>
+              {saving ? "Guardando…" : editingId ? "Guardar cambios" : "Crear acceso"}
             </Button>
           </DialogFooter>
         </DialogContent>
