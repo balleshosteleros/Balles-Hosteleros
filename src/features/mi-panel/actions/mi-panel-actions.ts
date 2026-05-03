@@ -76,6 +76,33 @@ function monthBounds(anio: number, mes: number) {
 
 // ─── FICHAJE ─────────────────────────────────────────────────
 
+// Cierra automáticamente fichajes abiertos de días pasados marcándolos como
+// incidencia. Se ejecuta solo después de las 8:00 (hora local del servidor)
+// para no interrumpir turnos de noche en curso.
+async function autoCerrarFichajesHuerfanos(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  empresaId: string,
+  empleadoId: string,
+): Promise<void> {
+  const now = new Date();
+  if (now.getHours() < 8) return;
+  try {
+    await supabase
+      .from("fichajes")
+      .update({
+        estado: "incidencia",
+        incidencia: "Fichaje sin cierre — pendiente de revisión",
+      })
+      .eq("empresa_id", empresaId)
+      .eq("empleado_id", empleadoId)
+      .lt("fecha", todayISO())
+      .is("hora_salida", null)
+      .in("estado", ["trabajando", "pausa"]);
+  } catch (err: unknown) {
+    console.error("[mi-panel] autoCerrarFichajesHuerfanos:", extractErrorMessage(err));
+  }
+}
+
 export async function getMiFichajeHoy(): Promise<{
   ok: boolean;
   data: MiFichajeHoy | null;
@@ -84,6 +111,7 @@ export async function getMiFichajeHoy(): Promise<{
   try {
     const { supabase, user, empresaId } = await getContext();
     if (!user || !empresaId) return { ok: false, data: null, error: "No autenticado" };
+    await autoCerrarFichajesHuerfanos(supabase, empresaId, user.id);
     const { data, error } = await supabase
       .from("fichajes")
       .select("*")
@@ -106,6 +134,7 @@ export async function getMiFichajeHoy(): Promise<{
         pausaFin: (data.pausa_fin as string | null) ?? null,
         horasTotales: (data.horas_totales as number | null) ?? 0,
         estado: (data.estado as string | null) ?? "pendiente",
+        incidencia: (data.incidencia as string | null) ?? null,
       },
     };
   } catch (err: unknown) {
@@ -217,6 +246,7 @@ export async function listarMisFichajes(limite = 60): Promise<{
   try {
     const { supabase, user, empresaId } = await getContext();
     if (!user || !empresaId) return { ok: false, data: [], error: "No autenticado" };
+    await autoCerrarFichajesHuerfanos(supabase, empresaId, user.id);
     const { data, error } = await supabase
       .from("fichajes")
       .select("*")
@@ -237,6 +267,7 @@ export async function listarMisFichajes(limite = 60): Promise<{
         pausaFin: (f.pausa_fin as string | null) ?? null,
         horasTotales: (f.horas_totales as number | null) ?? 0,
         estado: (f.estado as string | null) ?? "pendiente",
+        incidencia: (f.incidencia as string | null) ?? null,
       })),
     };
   } catch (err: unknown) {

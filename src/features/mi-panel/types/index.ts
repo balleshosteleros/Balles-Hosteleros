@@ -30,6 +30,7 @@ export interface MiFichajeHoy {
   pausaFin: string | null;
   horasTotales: number;
   estado: string;
+  incidencia: string | null;
 }
 
 export interface DiaCalendario {
