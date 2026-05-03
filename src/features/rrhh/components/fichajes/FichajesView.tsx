@@ -24,6 +24,9 @@ import {
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
 } from "@/shared/components/SubmoduleToolbar";
+import { IOActions } from "@/shared/io";
+import { fichajesIO } from "@/features/rrhh/io/fichajes.io";
+import { formatHorasDecimal } from "@/shared/lib/timeUtils";
 
 function mapDbToFichaje(row: Record<string, unknown>): Fichaje {
   return {
@@ -185,6 +188,9 @@ export function FichajesView() {
             ]}
             columnasVisibles={columnasVisibles}
             onColumnasVisiblesChange={setColumnasVisibles}
+            extraDerecha={
+              <IOActions config={fichajesIO} context={{ empresaId: empresaActual.id }} onSuccess={() => window.location.reload()} />
+            }
           />
           <Card>
             <Table>
@@ -203,7 +209,7 @@ export function FichajesView() {
                     <TableCell className="text-sm font-mono">{f.horaEntrada ?? "—"}</TableCell>
                     <TableCell className="text-sm font-mono">{f.horaSalida ?? "—"}</TableCell>
                     <TableCell className="text-sm font-mono">{f.pausaInicio && f.pausaFin ? `${f.pausaInicio}-${f.pausaFin}` : "—"}</TableCell>
-                    <TableCell className="text-sm text-right font-semibold">{f.horasTotales > 0 ? `${f.horasTotales.toFixed(1)}h` : "—"}</TableCell>
+                    <TableCell className="text-sm text-right font-semibold">{f.horaSalida ? formatHorasDecimal(f.horasTotales) : "—"}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className="gap-1 text-xs">
                         <span className={`h-2 w-2 rounded-full ${ESTADO_FICHAJE_COLOR[f.estado]}`} />
@@ -239,7 +245,7 @@ export function FichajesView() {
                     <TableCell className="text-sm">{f.fecha}</TableCell>
                     <TableCell className="text-sm font-mono">{f.horaEntrada ?? "—"}</TableCell>
                     <TableCell className="text-sm font-mono">{f.horaSalida ?? "—"}</TableCell>
-                    <TableCell className="text-sm text-right">{f.horasTotales > 0 ? `${f.horasTotales.toFixed(1)}h` : "—"}</TableCell>
+                    <TableCell className="text-sm text-right">{f.horaSalida ? formatHorasDecimal(f.horasTotales) : "—"}</TableCell>
                     <TableCell className="text-sm">{f.incidencia ?? <span className="text-muted-foreground">—</span>}</TableCell>
                     <TableCell className="text-sm">{f.validadoPor ?? <span className="text-muted-foreground">Pendiente</span>}</TableCell>
                   </TableRow>
@@ -323,7 +329,7 @@ export function FichajesView() {
                 <div><span className="text-muted-foreground">Entrada:</span><p className="font-mono font-medium">{fichajeModal.horaEntrada ?? "—"}</p></div>
                 <div><span className="text-muted-foreground">Salida:</span><p className="font-mono font-medium">{fichajeModal.horaSalida ?? "—"}</p></div>
                 <div><span className="text-muted-foreground">Pausa:</span><p className="font-mono font-medium">{fichajeModal.pausaInicio && fichajeModal.pausaFin ? `${fichajeModal.pausaInicio} - ${fichajeModal.pausaFin}` : "—"}</p></div>
-                <div><span className="text-muted-foreground">Horas totales:</span><p className="font-semibold">{fichajeModal.horasTotales > 0 ? `${fichajeModal.horasTotales.toFixed(2)}h` : "—"}</p></div>
+                <div><span className="text-muted-foreground">Horas totales:</span><p className="font-semibold">{fichajeModal.horaSalida ? formatHorasDecimal(fichajeModal.horasTotales) : "—"}</p></div>
               </div>
               {fichajeModal.incidencia && <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3"><p className="text-sm font-medium text-destructive">{fichajeModal.incidencia}</p></div>}
               {fichajeModal.observaciones && <div><span className="text-muted-foreground">Observaciones:</span><p>{fichajeModal.observaciones}</p></div>}

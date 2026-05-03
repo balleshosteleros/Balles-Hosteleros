@@ -36,6 +36,8 @@ import {
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
 } from "@/shared/components/SubmoduleToolbar";
+import { IOActions } from "@/shared/io";
+import { bonusIO } from "@/features/rrhh/io/bonus.io";
 
 const ICON_MAP: Record<string, React.ElementType> = {
   TrendingUp, Package, ClipboardCheck, Heart, Coins, Gift, BarChart3,
@@ -111,6 +113,9 @@ function ListadoBonus({ bonus, onSelect, onCrear }: {
         ]}
         orden={orden}
         onOrdenChange={setOrden}
+        extraDerecha={
+          <IOActions config={bonusIO} context={{ empresaId: eId }} onSuccess={() => window.location.reload()} />
+        }
       />
 
       <div className="grid gap-4">

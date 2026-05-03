@@ -20,6 +20,8 @@ import {
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
 } from "@/shared/components/SubmoduleToolbar";
+import { IOActions } from "@/shared/io";
+import { reglasIO } from "@/features/contabilidad/io/reglas.io";
 
 export function ReglasView() {
   const { empresaActual } = useEmpresa();
@@ -67,6 +69,9 @@ export function ReglasView() {
         ]}
         orden={orden}
         onOrdenChange={setOrden}
+        extraDerecha={
+          <IOActions config={reglasIO} onSuccess={() => window.location.reload()} />
+        }
       />
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

@@ -14,6 +14,8 @@ import {
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
 } from "@/shared/components/SubmoduleToolbar";
+import { IOActions } from "@/shared/io";
+import { bancosIO } from "@/features/contabilidad/io/bancos.io";
 
 export function BancosView() {
   const { empresaActual } = useEmpresa();
@@ -59,6 +61,9 @@ export function BancosView() {
         ]}
         orden={orden}
         onOrdenChange={setOrden}
+        extraDerecha={
+          <IOActions config={bancosIO} onSuccess={() => window.location.reload()} />
+        }
       />
 
       <div className="space-y-3">

@@ -37,6 +37,8 @@ import {
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
 } from "@/shared/components/SubmoduleToolbar";
+import { IOActions } from "@/shared/io";
+import { boardingIO } from "@/features/rrhh/io/boarding.io";
 
 function progreso(tareas: TareaProceso[]) {
   if (!tareas.length) return 0;
@@ -488,6 +490,9 @@ export function BoardingView() {
           <Button variant="outline" size="sm" onClick={() => setVista("plantillas")}>
             <ClipboardList className="h-4 w-4 mr-1" /> Plantillas
           </Button>
+        }
+        extraDerecha={
+          <IOActions config={boardingIO} context={{ empresaId: empresaActual.id }} onSuccess={() => window.location.reload()} />
         }
       />
 

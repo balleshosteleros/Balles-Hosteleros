@@ -39,6 +39,8 @@ import {
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
 } from "@/shared/components/SubmoduleToolbar";
+import { IOActions } from "@/shared/io";
+import { comunicadosIO } from "@/features/gerencia/io/comunicados.io";
 
 function EstadoBadge({ estado }: { estado: EstadoComunicado }) {
   const colors: Record<EstadoComunicado, string> = {
@@ -767,6 +769,9 @@ export function ComunicadosView() {
               ]}
               columnasVisibles={columnasVisibles}
               onColumnasVisiblesChange={setColumnasVisibles}
+              extraDerecha={
+                <IOActions config={comunicadosIO} onSuccess={() => window.location.reload()} />
+              }
             />
           </div>
 

@@ -26,6 +26,8 @@ import {
   type ToolbarColumnaVisible,
 } from "@/shared/components/SubmoduleToolbar";
 import { toast } from "sonner";
+import { IOActions } from "@/shared/io";
+import { descuentosIO } from "@/features/gerencia/io/descuentos.io";
 
 const allResultados: Record<string, ResultadoMensual[]> = {};
 function getResultados(id: string) { if (!allResultados[id]) allResultados[id] = buildDefaultResultados(); return allResultados[id]; }
@@ -188,6 +190,9 @@ export function DescuentosView() {
               ]}
               columnasVisibles={columnasVisibles}
               onColumnasVisiblesChange={setColumnasVisibles}
+              extraDerecha={
+                <IOActions config={descuentosIO} onSuccess={() => window.location.reload()} />
+              }
             />
 
             <Card>
