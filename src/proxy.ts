@@ -89,8 +89,8 @@ export async function proxy(request: NextRequest) {
 
   const appRoles = (rolesRows ?? []).map((r) => r.role as string)
 
-  // 'admin' tiene bypass total (acceso a todo el portal).
-  if (appRoles.includes('admin')) return sessionResponse
+  // 'director' tiene bypass total — es el rol más alto del SaaS.
+  if (appRoles.includes('director')) return sessionResponse
 
   const rolLabel = (profile?.rol_label as string | null) ?? null
   const empresaId = (profile?.empresa_id as string | null) ?? null

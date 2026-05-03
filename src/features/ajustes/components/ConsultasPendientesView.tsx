@@ -25,7 +25,7 @@ import {
   type ToolbarColumnaVisible,
 } from "@/shared/components/SubmoduleToolbar";
 
-const ROLES = ["Administrador", "Gerencia", "Contabilidad", "Gestoría", "Jurídico", "Recursos Humanos", "Logística", "Marketing", "Solo lectura"];
+const ROLES = ["Director", "Gerencia", "Contabilidad", "Gestoría", "Jurídico", "Recursos Humanos", "Logística", "Marketing", "Solo lectura"];
 
 export function ConsultasPendientesView() {
   const { consultas, resolverConsulta, articulos, setArticulos } = useAyuda();
@@ -34,7 +34,7 @@ export function ConsultasPendientesView() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
 
-  const [form, setForm] = useState({ titulo: "", respuesta: "", modulo: "Dashboard" as ModuloAyuda, rolesAutorizados: ["Administrador"] as string[], validada: true });
+  const [form, setForm] = useState({ titulo: "", respuesta: "", modulo: "Dashboard" as ModuloAyuda, rolesAutorizados: ["Director"] as string[], validada: true });
 
   const pendientes = consultas.filter((c) => c.estado === "pendiente");
   const resueltas = consultas.filter((c) => c.estado === "resuelta");
@@ -43,7 +43,7 @@ export function ConsultasPendientesView() {
     const c = consultas.find((x) => x.id === id);
     if (!c) return;
     setSelectedId(id);
-    setForm({ titulo: c.pregunta, respuesta: "", modulo: "Dashboard", rolesAutorizados: ["Administrador"], validada: true });
+    setForm({ titulo: c.pregunta, respuesta: "", modulo: "Dashboard", rolesAutorizados: ["Director"], validada: true });
     setModalOpen(true);
   };
 

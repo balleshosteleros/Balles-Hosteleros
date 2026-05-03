@@ -295,7 +295,7 @@ export function DocumentacionView() {
                           {n.value === "solo_gerencia" && "Accesible para Gerencia y Dirección"}
                           {n.value === "lectura" && "Todos los usuarios autorizados pueden leer"}
                           {n.value === "edicion" && "Permite lectura y modificación del documento"}
-                          {n.value === "privado" && "Solo el creador y administradores"}
+                          {n.value === "privado" && "Solo el creador y directores"}
                           {n.value === "compartido_interno" && "Visible para todos los empleados de la empresa"}
                         </p>
                       </div>
