@@ -19,6 +19,8 @@ import {
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
 } from "@/shared/components/SubmoduleToolbar";
+import { IOActions } from "@/shared/io";
+import { accesosIO } from "@/features/rrhh/io/accesos.io";
 
 const estadoBadge: Record<EstadoApp, string> = {
   Activo: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
@@ -161,6 +163,9 @@ export function AccesosView() {
                 onOrdenChange={setOrden}
                 columnasVisibles={columnasVisibles}
                 onColumnasVisiblesChange={setColumnasVisibles}
+                extraDerecha={
+                  <IOActions config={accesosIO} context={{ empresaId: empresaActual.id }} onSuccess={() => window.location.reload()} />
+                }
               />
             </div>
             <div className="flex border rounded-md overflow-hidden h-9">

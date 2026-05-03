@@ -15,6 +15,8 @@ import {
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
 } from "@/shared/components/SubmoduleToolbar";
+import { IOActions } from "@/shared/io";
+import { operacionesIO } from "@/features/contabilidad/io/operaciones.io";
 
 const TABS = [
   { id: "TODAS", label: "Todas" },
@@ -118,6 +120,9 @@ export function OperacionesView() {
           ]}
           columnasVisibles={columnasVisibles}
           onColumnasVisiblesChange={setColumnasVisibles}
+          extraDerecha={
+            <IOActions config={operacionesIO} onSuccess={() => window.location.reload()} />
+          }
         />
       </div>
 

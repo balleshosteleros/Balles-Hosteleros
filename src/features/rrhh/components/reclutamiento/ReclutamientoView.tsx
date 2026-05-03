@@ -44,6 +44,8 @@ import {
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
 } from "@/shared/components/SubmoduleToolbar";
+import { IOActions } from "@/shared/io";
+import { reclutamientoIO } from "@/features/rrhh/io/reclutamiento.io";
 import { ReclutamientoConfigView } from "@/features/rrhh/components/reclutamiento/config/ReclutamientoConfigView";
 import {
   DropdownMenu,
@@ -481,6 +483,9 @@ export function ReclutamientoView() {
             ]}
             orden={orden}
             onOrdenChange={setOrden}
+            extraDerecha={
+              <IOActions config={reclutamientoIO} context={{ empresaId: empresaActual.id }} onSuccess={() => window.location.reload()} />
+            }
           />
 
           <div className="space-y-4">
