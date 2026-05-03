@@ -349,81 +349,122 @@ function TablaProductos({
   }, [tipo, empresaActual.id, reloadKey]);
 
   const [busqueda, setBusqueda] = useState("");
-  const [filtros, setFiltros] = useState<FiltroActivo[]>([]);
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
 
   const esCompra = tipo === "compra";
 
+  const categoriasUsadas = useMemo(
+    () => [...new Set(productos.map((p) => p.categoria).filter(Boolean))].sort(),
+    [productos],
+  );
+  const familiasUsadas = useMemo(
+    () => [...new Set(productos.map((p) => p.familia).filter(Boolean))].sort(),
+    [productos],
+  );
+  const proveedoresUsados = useMemo(
+    () => [...new Set(productos.map((p) => p.proveedor ?? "").filter(Boolean))].sort(),
+    [productos],
+  );
+  const unidadesUsadas = useMemo(
+    () => [...new Set(productos.map((p) => p.unidad).filter(Boolean))].sort(),
+    [productos],
+  );
+
+  const acceso = (p: Producto, campo: string): unknown => {
+    if (campo === "precio") {
+      const raw = esCompra ? p.precioCompra : p.precioVenta;
+      const val = parseFloat(raw ?? "");
+      return Number.isNaN(val) ? null : val;
+    }
+    if (campo === "fecha") return p.ultimaActualizacion;
+    return (p as unknown as Record<string, unknown>)[campo];
+  };
+
   const filtrados = useMemo(() => {
-    return productos.filter((p) => {
-      if (busqueda && !p.nombre.toLowerCase().includes(busqueda.toLowerCase())) return false;
-      for (const f of filtros) {
-        if (f.campo === "categoria" && f.valores?.length && !f.valores.includes(p.categoria)) return false;
-        if (f.campo === "familia" && f.valores?.length && !f.valores.includes(p.familia)) return false;
-        if (f.campo === "estado" && f.valores?.length && !f.valores.includes(p.estado)) return false;
-        if (f.campo === "proveedor" && f.valores?.length && !f.valores.includes(p.proveedor ?? "")) return false;
-        if (f.campo === "unidad" && f.valores?.length && !f.valores.includes(p.unidad)) return false;
-        if (f.campo === "precio" && f.precioVal !== undefined) {
-          const raw = esCompra ? p.precioCompra : p.precioVenta;
-          const val = parseFloat(raw ?? "");
-          if (!isNaN(val)) {
-            if (f.operador === "mayor" && !(val > f.precioVal)) return false;
-            if (f.operador === "menor" && !(val < f.precioVal)) return false;
-            if (f.operador === "igual" && val !== f.precioVal) return false;
-          }
-        }
-        if (f.campo === "fecha") {
-          const fecha = p.ultimaActualizacion;
-          if (f.desde && fecha < f.desde) return false;
-          if (f.hasta && fecha > f.hasta) return false;
-        }
-      }
-      return true;
-    });
-  }, [productos, busqueda, filtros, esCompra]);
+    let lista = productos.filter((p) =>
+      !busqueda || p.nombre.toLowerCase().includes(busqueda.toLowerCase()),
+    );
+    lista = aplicarFiltrosToolbar(lista as unknown as Record<string, unknown>[], filtros, (item, campo) =>
+      acceso(item as unknown as Producto, campo),
+    ) as unknown as Producto[];
+    lista = aplicarOrdenToolbar(lista as unknown as Record<string, unknown>[], orden, (item, campo) =>
+      acceso(item as unknown as Producto, campo),
+    ) as unknown as Producto[];
+    return lista;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productos, busqueda, filtros, orden, esCompra]);
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-3">
-        <Button variant="primary" size="sm" onClick={onAddClick}><Plus className="h-4 w-4" />Nuevo</Button>
-        {!esCompra && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={async () => {
-              const t = toast.loading("Recalculando costes...");
-              const res = await recalculateAllCosts();
-              if (res.error) toast.error(res.error, { id: t });
-              else {
-                toast.success(`Costes actualizados (${res.updated} productos)`, { id: t });
-                window.location.reload();
+      <SubmoduleToolbar
+        busqueda={busqueda}
+        onBusquedaChange={setBusqueda}
+        placeholderBusqueda="Buscar por nombre..."
+        onNuevo={onAddClick}
+        campos={[
+          { campo: "categoria", label: "Categoría", tipo: "lista", opciones: categoriasUsadas },
+          { campo: "familia", label: "Familia", tipo: "lista", opciones: familiasUsadas },
+          { campo: "estado", label: "Estado", tipo: "lista", opciones: [...ESTADOS_PRODUCTO] },
+          { campo: "unidad", label: "Unidad", tipo: "lista", opciones: unidadesUsadas },
+          ...(esCompra
+            ? [{ campo: "proveedor", label: "Proveedor", tipo: "lista" as const, opciones: proveedoresUsados }]
+            : []),
+          { campo: "precio", label: esCompra ? "Precio compra" : "Precio venta", tipo: "numero" },
+          { campo: "fecha", label: "Actualización", tipo: "fecha" },
+        ]}
+        filtros={filtros}
+        onFiltrosChange={setFiltros}
+        ordenOpciones={[
+          { campo: "nombre", label: "Nombre" },
+          { campo: "categoria", label: "Categoría" },
+          { campo: "familia", label: "Familia" },
+          { campo: "estado", label: "Estado" },
+          { campo: "precio", label: esCompra ? "Precio compra" : "Precio venta" },
+          { campo: "fecha", label: "Actualización" },
+        ]}
+        orden={orden}
+        onOrdenChange={setOrden}
+        columnasVisibles={columnasVisibles}
+        onColumnasVisiblesChange={setColumnasVisibles}
+        extraDerecha={
+          <>
+            {!esCompra && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={async () => {
+                  const t = toast.loading("Recalculando costes...");
+                  const res = await recalculateAllCosts();
+                  if (res.error) toast.error(res.error, { id: t });
+                  else {
+                    toast.success(`Costes actualizados (${res.updated} productos)`, { id: t });
+                    window.location.reload();
+                  }
+                }}
+              >
+                <Settings2 className="h-4 w-4" />
+                Recalcular costes
+              </Button>
+            )}
+            <IOActions
+              config={
+                tipo === "compra"
+                  ? productosCompraIO
+                  : tipo === "venta"
+                  ? productosVentaIO
+                  : productosElaboracionIO
               }
-            }}
-          >
-            <Settings2 className="h-4 w-4" />
-            Recalcular costes
-          </Button>
-        )}
-        <div className="flex-1" />
-        <div className="relative min-w-[220px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar por nombre..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} className="pl-9" />
-        </div>
-        <FiltrosAvanzados productos={productos} esCompra={esCompra} filtros={filtros} onChange={setFiltros} />
-        <IOActions
-          config={
-            tipo === "compra"
-              ? productosCompraIO
-              : tipo === "venta"
-              ? productosVentaIO
-              : productosElaboracionIO
-          }
-          onSuccess={() => window.location.reload()}
-        />
-        <Button size="icon" variant={showConfig ? "default" : "ghost"} className="h-8 w-8" onClick={onToggleConfig} title="Configuración" aria-label="Configuración">
-          <Settings className="h-4 w-4" strokeWidth={1.75} />
-        </Button>
-      </div>
+              onSuccess={() => window.location.reload()}
+            />
+            <Button size="icon" variant={showConfig ? "default" : "ghost"} className="h-9 w-9" onClick={onToggleConfig} title="Configuración" aria-label="Configuración">
+              <Settings className="h-4 w-4" strokeWidth={1.75} />
+            </Button>
+          </>
+        }
+      />
 
       <div className="bg-card rounded-lg border overflow-x-auto">
         <table className="w-full text-sm">

@@ -8,6 +8,22 @@ import {
   Package, Calculator, FileText, Scale, type LucideIcon,
 } from "lucide-react";
 
+const MESES_LARGOS = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+const DIAS_LARGOS = [
+  "domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado",
+];
+
+function saludoSegunHora(): string {
+  const h = new Date().getHours();
+  if (h < 6) return "Buenas noches";
+  if (h < 13) return "Buenos días";
+  if (h < 21) return "Buenas tardes";
+  return "Buenas noches";
+}
+
 interface DepartamentoTile {
   key: string;
   label: string;
@@ -69,23 +85,33 @@ function dashboardSubtitlePorRol(rol: AppRole | null): string {
 }
 
 export function MisDepartamentosView() {
-  const { profile, roles } = useAuth();
+  const { profile, user, roles } = useAuth();
   const rolPrincipal: AppRole | null = roles[0] ?? null;
   const rolLabel = rolPrincipal ? ROLE_LABELS[rolPrincipal] : "—";
-  const nombre = profile?.nombre ?? "";
 
   const claves = rolPrincipal ? ROLE_DEPARTAMENTOS[rolPrincipal] : [];
   const tiles = ALL_DEPARTAMENTOS.filter((d) => claves.includes(d.key));
 
+  const today = new Date();
+  const fechaLarga = `${DIAS_LARGOS[today.getDay()]} ${today.getDate()} de ${MESES_LARGOS[today.getMonth()]}`;
+
+  const userName = profile?.nombre
+    ? profile.apellidos
+      ? `${profile.nombre} ${profile.apellidos}`
+      : profile.nombre
+    : (user?.email?.split("@")[0] ?? "");
+
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6">
+      {/* Cabecera */}
       <div>
         <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
           {rolLabel}
         </p>
         <h1 className="text-2xl md:text-3xl font-bold tracking-tight mt-1">
-          Mis departamentos{nombre ? `, ${nombre}` : ""}
+          {saludoSegunHora()}{userName ? `, ${userName.split(" ")[0]}` : ""}
         </h1>
+        <p className="text-sm text-muted-foreground capitalize">{fechaLarga}</p>
         <p className="text-sm text-muted-foreground mt-1">
           {dashboardSubtitlePorRol(rolPrincipal)}
         </p>

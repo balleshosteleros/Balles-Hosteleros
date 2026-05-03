@@ -179,7 +179,7 @@ export function ResumenTiles({ resumen, loading = false }: Props) {
     <div>
       <div className="mb-3 flex items-end justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Mi panel</h2>
+          <h2 className="text-lg font-semibold">Mis paneles</h2>
           <p className="text-xs text-muted-foreground">
             Resumen de toda tu actividad
           </p>
