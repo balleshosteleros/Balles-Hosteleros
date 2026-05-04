@@ -241,7 +241,7 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
   const pathname = usePathname();
   const { mode } = useViewMode();
-  const { puedeVer, permisosLoaded } = useAuth();
+  const { puedeVer, permisosLoaded, hasRole } = useAuth();
 
   const allSections = [
     { key: "direccion", modulo: "DIRECCIÓN", icon: Crown, label: "DIRECCIÓN", prefix: "/direccion", items: direccionSubs, linkTo: "/direccion" },
@@ -257,11 +257,14 @@ export function AppSidebar() {
     { key: "juridico", modulo: "JURÍDICO", icon: Scale, label: "JURÍDICO", prefix: "/juridico", items: juridicoSubs, linkTo: "/juridico" },
   ] as const;
 
-  // Mientras los permisos no han cargado, no mostramos secciones (evita parpadeo
-  // de "todo abierto" → "filtrado"). Una vez cargados, filtramos por puedeVer.
-  const sections = permisosLoaded
-    ? allSections.filter((s) => puedeVer(s.modulo))
-    : [];
+  // 'director' tiene bypass total → mostramos todos los módulos sin esperar a permisos.
+  // Para el resto, esperamos a permisosLoaded para evitar parpadeo "todo abierto" → "filtrado".
+  const isDirector = hasRole("director");
+  const sections = isDirector
+    ? allSections
+    : permisosLoaded
+      ? allSections.filter((s) => puedeVer(s.modulo))
+      : [];
 
   const activeKey = sections.find((s) => pathname.startsWith(s.prefix))?.key ?? null;
   const [openKey, setOpenKey] = useState<string | null>(activeKey);
