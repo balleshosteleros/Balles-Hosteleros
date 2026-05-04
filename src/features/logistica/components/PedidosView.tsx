@@ -15,30 +15,37 @@ import { EstadoPedidoBadge } from "@/features/logistica/components/pedidos/Badge
 import { DetallePedido } from "@/features/logistica/components/pedidos/DetallePedido";
 import { DetalleAlbaran } from "@/features/logistica/components/pedidos/DetalleAlbaran";
 import { PedidoModal } from "@/features/logistica/components/pedidos/PedidoModal";
-import { Input } from "@/components/ui/input";
+import { SugerenciasPedidoModal } from "@/features/logistica/components/pedidos/SugerenciasPedidoModal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Plus, Copy, Pencil, Trash2, Search, Printer, Download, MoreHorizontal, ClipboardList, Truck,
-  ChevronDown, FileText, Settings,
+  Copy, Pencil, Trash2, Printer, MoreHorizontal, ClipboardList, Truck,
+  ChevronDown, Settings, Package,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { FiltrosAvanzados, type FiltroActivo, type CampoFiltro } from "@/features/logistica/components/FiltrosAvanzados";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
+import { IOActions } from "@/shared/io";
+import { pedidosIO } from "@/features/logistica/io/pedidos.io";
 import { ImportExportButton } from "@/features/logistica/components/ImportExportButton";
-import { exportToCSV, exportToXLSX } from "@/features/logistica/lib/export-utils";
+import { exportToCSV, exportToXLSX, exportToPDF } from "@/features/logistica/lib/export-utils";
 import { toast } from "sonner";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-const ALL = "__ALL__";
-type CampoPedido = "estado" | "proveedor" | "almacen" | "fecha" | "fechaEntrega";
 
 function mapDbLinea(l: Record<string, unknown>, idx: number): import("@/features/logistica/data/pedidos").LineaPedido {
   return {
@@ -90,7 +97,9 @@ export function PedidosView() {
   const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState("");
-  const [filtros, setFiltros] = useState<FiltroActivo<CampoPedido>[]>([]);
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [showConfig, setShowConfig] = useState(false);
   const [tab, setTab] = useState<"pedidos" | "albaranes">("pedidos");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -99,6 +108,7 @@ export function PedidosView() {
   const [detallePedido, setDetallePedido] = useState<Pedido | null>(null);
   const [detalleAlbaran, setDetalleAlbaran] = useState<Albaran | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [sugerenciasOpen, setSugerenciasOpen] = useState(false);
 
   const loadPedidos = useCallback(async () => {
     setLoading(true);
@@ -151,42 +161,31 @@ export function PedidosView() {
     loadAlbaranes();
   }, [loadPedidos, loadAlbaranes]);
 
-  // Campos y opciones de filtro
-  const camposFiltro = useMemo((): CampoFiltro<CampoPedido>[] => {
-    const uniq = (arr: string[]) => [...new Set(arr.filter(Boolean))].sort();
-    return [
-      { campo: "estado", label: "Estado", tipo: "lista", opciones: ESTADOS_PEDIDO.filter((e) => e !== "Archivado") },
-      { campo: "proveedor", label: "Proveedor", tipo: "lista", opciones: uniq(pedidos.map((p) => p.proveedor)) },
-      { campo: "almacen", label: "Almacén", tipo: "lista", opciones: uniq(pedidos.map((p) => p.almacen).filter(Boolean)) },
-      { campo: "fecha", label: "Fecha pedido", tipo: "fecha" },
-      { campo: "fechaEntrega", label: "Fecha entrega", tipo: "fecha" },
-    ];
-  }, [pedidos]);
+  const proveedoresUsados = useMemo(
+    () => [...new Set(pedidos.map((p) => p.proveedor).filter(Boolean))].sort(),
+    [pedidos],
+  );
+  const almacenesUsados = useMemo(
+    () => [...new Set(pedidos.map((p) => p.almacen).filter(Boolean))].sort(),
+    [pedidos],
+  );
+
+  const accesoPedido = (p: Pedido, campo: string): unknown => {
+    return (p as unknown as Record<string, unknown>)[campo];
+  };
 
   // Filtered pedidos
   const filteredPedidos = useMemo(() => {
-    return pedidos.filter((p) => {
+    let lista = pedidos.filter((p) => {
       if (p.estado === "Archivado") return false;
-      for (const f of filtros) {
-        if (f.campo === "estado" && f.valores?.length && !f.valores.includes(p.estado)) return false;
-        if (f.campo === "proveedor" && f.valores?.length && !f.valores.includes(p.proveedor)) return false;
-        if (f.campo === "almacen" && f.valores?.length && !f.valores.includes(p.almacen)) return false;
-        if (f.campo === "fecha") {
-          if (f.desde && p.fecha < f.desde) return false;
-          if (f.hasta && p.fecha > f.hasta) return false;
-        }
-        if (f.campo === "fechaEntrega") {
-          if (f.desde && p.fechaEntrega < f.desde) return false;
-          if (f.hasta && p.fechaEntrega > f.hasta) return false;
-        }
-      }
-      if (search) {
-        const s = search.toLowerCase();
-        return p.numero.toLowerCase().includes(s) || p.proveedor.toLowerCase().includes(s);
-      }
-      return true;
+      if (!search) return true;
+      const s = search.toLowerCase();
+      return p.numero.toLowerCase().includes(s) || p.proveedor.toLowerCase().includes(s);
     });
-  }, [pedidos, search, filtros]);
+    lista = aplicarFiltrosToolbar(lista, filtros, accesoPedido);
+    lista = aplicarOrdenToolbar(lista, orden, accesoPedido);
+    return lista;
+  }, [pedidos, search, filtros, orden]);
 
   // Stats
   const statCounts: Record<string, number> = {};
@@ -422,68 +421,99 @@ export function PedidosView() {
         {/* PEDIDOS TAB */}
         {tab === "pedidos" && <div className="space-y-4">
           {/* Toolbar */}
-          <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-3">
-            <Button variant="primary" size="sm" onClick={() => { setEditItem(null); setModalOpen(true); }}>
-              <Plus className="h-4 w-4" />Nuevo
-            </Button>
-
-            {/* Acciones de selección — solo visible cuando hay items seleccionados */}
-            {selected.size > 0 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="sm" variant="outline" className="gap-1.5">
-                    <MoreHorizontal className="h-4 w-4" /> Acciones
-                    <ChevronDown className="h-3 w-3 opacity-60" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuLabel className="text-xs">Seleccionados ({selected.size})</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleCopy}><Copy className="h-4 w-4 mr-2" /> Copiar</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => {
-                    if (selected.size !== 1) { toast.info("Selecciona un pedido"); return; }
-                    const p = pedidos.find((x) => selected.has(x.id));
-                    if (p) { setEditItem(p); setModalOpen(true); }
-                  }}><Pencil className="h-4 w-4 mr-2" /> Editar</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => window.print()}><Printer className="h-4 w-4 mr-2" /> Imprimir</DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-destructive" onClick={() => {
-                    if (selected.size !== 1) { toast.info("Selecciona un pedido"); return; }
-                    setDeleteConfirm([...selected][0]);
-                  }}><Trash2 className="h-4 w-4 mr-2" /> Eliminar</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-
-            <div className="flex-1" />
-
-            {/* Búsqueda */}
-            <div className="relative min-w-[220px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Buscar por nombre..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
-            </div>
-
-            {/* Filtrar */}
-            <FiltrosAvanzados campos={camposFiltro} filtros={filtros} onChange={setFiltros} />
-            <ImportExportButton
-              onExport={(format) => {
-                const ts = new Date().toISOString().slice(0, 10);
-                const rows = filteredPedidos
-                  .filter((p) => selected.size === 0 || selected.has(p.id))
-                  .map((p) => {
-                    const t = calcularTotalesLineas(p.lineas);
-                    return { Número: p.numero, Proveedor: p.proveedor, Fecha: p.fecha, Entrega: p.fechaEntrega, Almacén: p.almacen, Estado: p.estado, Total: t.total.toFixed(2) };
-                  });
-                if (rows.length === 0) { toast.info("No hay datos para exportar."); return; }
-                if (format === "csv") exportToCSV(rows, `pedidos-${ts}.csv`);
-                else exportToXLSX(rows, `pedidos-${ts}.xlsx`);
-                toast.success(`${rows.length} pedidos exportados en ${format.toUpperCase()}`);
-              }}
-            />
-            <Button size="icon" variant={showConfig ? "default" : "ghost"} className="h-8 w-8" onClick={() => setShowConfig((v) => !v)} title="Configuración de pedidos">
-              <Settings className="h-4 w-4" />
-            </Button>
-          </div>
+          <SubmoduleToolbar
+            busqueda={search}
+            onBusquedaChange={setSearch}
+            placeholderBusqueda="Buscar por nombre..."
+            onNuevo={() => { setEditItem(null); setModalOpen(true); }}
+            campos={[
+              { campo: "estado", label: "Estado", tipo: "lista", opciones: ESTADOS_PEDIDO.filter((e) => e !== "Archivado") as unknown as string[] },
+              { campo: "proveedor", label: "Proveedor", tipo: "lista", opciones: proveedoresUsados },
+              { campo: "almacen", label: "Almacén", tipo: "lista", opciones: almacenesUsados },
+              { campo: "fecha", label: "Fecha pedido", tipo: "fecha" },
+              { campo: "fechaEntrega", label: "Fecha entrega", tipo: "fecha" },
+            ]}
+            filtros={filtros}
+            onFiltrosChange={setFiltros}
+            ordenOpciones={[
+              { campo: "numero", label: "Nº" },
+              { campo: "fecha", label: "Fecha" },
+              { campo: "fechaEntrega", label: "Fecha entrega" },
+              { campo: "proveedor", label: "Proveedor" },
+              { campo: "estado", label: "Estado" },
+            ]}
+            orden={orden}
+            onOrdenChange={setOrden}
+            columnas={[
+              { campo: "numero", label: "Nº" },
+              { campo: "fecha", label: "Fecha" },
+              { campo: "fechaEntrega", label: "F. Entrega" },
+              { campo: "almacen", label: "Almacén" },
+              { campo: "proveedor", label: "Proveedor" },
+              { campo: "estado", label: "Estado" },
+              { campo: "base", label: "Base (€)" },
+              { campo: "total", label: "Total (€)" },
+            ]}
+            columnasVisibles={columnasVisibles}
+            onColumnasVisiblesChange={setColumnasVisibles}
+            extraIzquierda={
+              <>
+                <Button variant="outline" size="sm" className="gap-2" onClick={() => setSugerenciasOpen(true)}>
+                  <Package className="h-4 w-4 text-primary" /> Sugerir pedido
+                </Button>
+                {selected.size > 0 && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="sm" variant="outline" className="gap-1.5">
+                        <MoreHorizontal className="h-4 w-4" /> Acciones
+                        <ChevronDown className="h-3 w-3 opacity-60" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuLabel className="text-xs">Seleccionados ({selected.size})</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={handleCopy}><Copy className="h-4 w-4 mr-2" /> Copiar</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => {
+                        if (selected.size !== 1) { toast.info("Selecciona un pedido"); return; }
+                        const p = pedidos.find((x) => selected.has(x.id));
+                        if (p) { setEditItem(p); setModalOpen(true); }
+                      }}><Pencil className="h-4 w-4 mr-2" /> Editar</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => window.print()}><Printer className="h-4 w-4 mr-2" /> Imprimir</DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem className="text-destructive" onClick={() => {
+                        if (selected.size !== 1) { toast.info("Selecciona un pedido"); return; }
+                        setDeleteConfirm([...selected][0]);
+                      }}><Trash2 className="h-4 w-4 mr-2" /> Eliminar</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </>
+            }
+            extraDerecha={
+              <>
+                <IOActions config={pedidosIO} onSuccess={() => window.location.reload()} />
+                <ImportExportButton
+                  onExport={(format) => {
+                    const ts = new Date().toISOString().slice(0, 10);
+                    const rows = filteredPedidos
+                      .filter((p) => selected.size === 0 || selected.has(p.id))
+                      .map((p) => {
+                        const t = calcularTotalesLineas(p.lineas);
+                        return { Número: p.numero, Proveedor: p.proveedor, Fecha: p.fecha, Entrega: p.fechaEntrega, Almacén: p.almacen, Estado: p.estado, Total: t.total.toFixed(2) };
+                      });
+                    if (rows.length === 0) { toast.info("No hay datos para exportar."); return; }
+                    if (format === "csv") exportToCSV(rows, `pedidos-${ts}.csv`);
+                    else if (format === "xlsx") exportToXLSX(rows, `pedidos-${ts}.xlsx`);
+                    else exportToPDF(rows, `pedidos-${ts}.pdf`, "Pedidos");
+                    toast.success(`${rows.length} pedidos exportados en ${format.toUpperCase()}`);
+                  }}
+                />
+                <Button size="icon" variant={showConfig ? "default" : "ghost"} className="h-9 w-9" onClick={() => setShowConfig((v) => !v)} title="Configuración" aria-label="Configuración">
+                  <Settings className="h-4 w-4" strokeWidth={1.75} />
+                </Button>
+              </>
+            }
+          />
 
           {showConfig && (
             <div className="rounded-xl border bg-card p-5">
@@ -574,6 +604,15 @@ export function PedidosView() {
 
       {/* Modal */}
       <PedidoModal open={modalOpen} onClose={() => setModalOpen(false)} onSave={handleSave} item={editItem} empresaId={empresaActual.id} empresaNombre={empresaActual.nombre} />
+
+      <SugerenciasPedidoModal
+        open={sugerenciasOpen}
+        onClose={() => setSugerenciasOpen(false)}
+        onOrdersCreated={() => {
+          loadPedidos();
+          setTab("pedidos");
+        }}
+      />
 
       {/* Delete confirm */}
       <AlertDialog open={!!deleteConfirm} onOpenChange={(o) => !o && setDeleteConfirm(null)}>

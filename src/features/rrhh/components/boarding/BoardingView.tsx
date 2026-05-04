@@ -18,7 +18,6 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -28,9 +27,18 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Search, Plus, MoreHorizontal, Eye, Pencil, Copy, CheckCircle2, Archive, ArrowLeft, ClipboardList, Trash2,
+  Plus, MoreHorizontal, Eye, Pencil, Copy, CheckCircle2, Archive, ArrowLeft, ClipboardList, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+} from "@/shared/components/SubmoduleToolbar";
+import { IOActions } from "@/shared/io";
+import { boardingIO } from "@/features/rrhh/io/boarding.io";
 
 function progreso(tareas: TareaProceso[]) {
   if (!tareas.length) return 0;
@@ -41,14 +49,14 @@ function tipoBadge(tipo: TipoBoarding) {
   return tipo === "onboarding" ? (
     <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-0">Onboarding</Badge>
   ) : (
-    <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-0">Offboarding</Badge>
+    <Badge className="bg-red-100 text-red-700 hover:bg-red-100 border-0">Offboarding</Badge>
   );
 }
 
 function estadoBadge(estado: EstadoProceso) {
   const map: Record<EstadoProceso, { bg: string; text: string; label: string }> = {
-    activo: { bg: "bg-blue-100", text: "text-blue-700", label: "Activo" },
-    finalizado: { bg: "bg-emerald-100", text: "text-emerald-700", label: "Finalizado" },
+    activo: { bg: "bg-emerald-100", text: "text-emerald-700", label: "Activo" },
+    finalizado: { bg: "bg-red-100", text: "text-red-700", label: "Finalizado" },
     archivado: { bg: "bg-muted", text: "text-muted-foreground", label: "Archivado" },
   };
   const s = map[estado];
@@ -99,8 +107,9 @@ export function BoardingView() {
     loadData();
   }, [loadData]);
 
-  const [tab, setTab] = useState<"todos" | "activos" | "finalizados">("todos");
   const [buscar, setBuscar] = useState("");
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
 
   const [showNew, setShowNew] = useState(false);
   const [newEmpleadoId, setNewEmpleadoId] = useState("");
@@ -114,20 +123,34 @@ export function BoardingView() {
   const [pltTipo, setPltTipo] = useState<TipoBoarding>("onboarding");
   const [pltTareas, setPltTareas] = useState<string[]>([""]);
 
+  const acceso = (p: ProcesoBoarding, campo: string): unknown => {
+    if (campo === "estado") {
+      return p.estado === "activo" ? "Activo" : p.estado === "finalizado" ? "Finalizado" : "Archivado";
+    }
+    if (campo === "tipo") return p.tipo === "onboarding" ? "Onboarding" : "Offboarding";
+    if (campo === "plantilla") return p.plantillaNombre;
+    if (campo === "fechaInicio") return p.fechaInicio;
+    if (campo === "empleado") {
+      const emp = empleados.find((e) => e.id === p.empleadoId);
+      return emp ? `${emp.nombre} ${emp.apellidos}` : "";
+    }
+    return (p as unknown as Record<string, unknown>)[campo];
+  };
+
   const filtered = useMemo(() => {
-    let list = procesos;
-    if (tab === "activos") list = list.filter((p) => p.estado === "activo");
-    if (tab === "finalizados") list = list.filter((p) => p.estado === "finalizado");
-    if (buscar.trim()) {
-      const q = buscar.toLowerCase();
-      list = list.filter((p) => {
+    let list = procesos.filter((p) => {
+      if (buscar.trim()) {
+        const q = buscar.toLowerCase();
         const emp = empleados.find((e) => e.id === p.empleadoId);
         const nombre = emp ? `${emp.nombre} ${emp.apellidos}`.toLowerCase() : "";
-        return nombre.includes(q) || p.plantillaNombre.toLowerCase().includes(q);
-      });
-    }
+        if (!nombre.includes(q) && !p.plantillaNombre.toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
+    list = aplicarFiltrosToolbar(list, filtros, acceso);
+    list = aplicarOrdenToolbar(list, orden, acceso);
     return list;
-  }, [procesos, tab, buscar, empleados]);
+  }, [procesos, buscar, filtros, orden, empleados]);
 
   async function crearProceso() {
     if (!newEmpleadoId || !newPlantillaId) { toast.error("Selecciona empleado y plantilla"); return; }
@@ -427,30 +450,51 @@ export function BoardingView() {
 
   return (
     <div className="p-4 md:p-6 space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-4">
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setVista("plantillas")}>
+      <SubmoduleToolbar
+        busqueda={buscar}
+        onBusquedaChange={setBuscar}
+        placeholderBusqueda="Buscar empleado o plantilla..."
+        onNuevo={() => setShowNew(true)}
+        campos={[
+          {
+            campo: "estado",
+            label: "Estado",
+            tipo: "lista",
+            opciones: ["Activo", "Finalizado", "Archivado"],
+          },
+          {
+            campo: "tipo",
+            label: "Tipo",
+            tipo: "lista",
+            opciones: ["Onboarding", "Offboarding"],
+          },
+          {
+            campo: "plantilla",
+            label: "Plantilla",
+            tipo: "lista",
+            opciones: [...new Set(procesos.map((p) => p.plantillaNombre))],
+          },
+          { campo: "fechaInicio", label: "Fecha inicio", tipo: "fecha" },
+        ]}
+        filtros={filtros}
+        onFiltrosChange={setFiltros}
+        ordenOpciones={[
+          { campo: "empleado", label: "Empleado" },
+          { campo: "fechaInicio", label: "Fecha inicio" },
+          { campo: "estado", label: "Estado" },
+          { campo: "plantilla", label: "Plantilla" },
+        ]}
+        orden={orden}
+        onOrdenChange={setOrden}
+        extraIzquierda={
+          <Button variant="outline" size="sm" onClick={() => setVista("plantillas")}>
             <ClipboardList className="h-4 w-4 mr-1" /> Plantillas
           </Button>
-          <Button size="sm" className="gap-1.5" onClick={() => setShowNew(true)}>
-            <Plus className="h-4 w-4" />Nuevo
-          </Button>
-        </div>
-      </div>
-
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
-          <TabsList>
-            <TabsTrigger value="todos">Todos</TabsTrigger>
-            <TabsTrigger value="activos">Activos</TabsTrigger>
-            <TabsTrigger value="finalizados">Finalizados</TabsTrigger>
-          </TabsList>
-        </Tabs>
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-9" placeholder="Buscar empleado o plantilla…" value={buscar} onChange={(e) => setBuscar(e.target.value)} />
-        </div>
-      </div>
+        }
+        extraDerecha={
+          <IOActions config={boardingIO} context={{ empresaId: empresaActual.id }} onSuccess={() => window.location.reload()} />
+        }
+      />
 
       <Card>
         <CardContent className="p-0">

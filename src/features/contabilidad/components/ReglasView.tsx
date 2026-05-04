@@ -1,24 +1,50 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, GripVertical, Pencil, Trash2, Zap } from "lucide-react";
+import { GripVertical, Pencil, Trash2, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SAMPLE_REGLAS, ReglaAutomatica } from "@/features/contabilidad/data/contabilidad";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
+import { IOActions } from "@/shared/io";
+import { reglasIO } from "@/features/contabilidad/io/reglas.io";
 
 export function ReglasView() {
   const { empresaActual } = useEmpresa();
   const [busqueda, setBusqueda] = useState("");
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [reglas, setReglas] = useState(SAMPLE_REGLAS);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
-  const filtradas = reglas.filter(r => !busqueda || r.nombre.toLowerCase().includes(busqueda.toLowerCase()));
+  const acceso = (r: ReglaAutomatica, campo: string): unknown => {
+    if (campo === "nombre") return r.nombre;
+    if (campo === "prioridad") return r.prioridad;
+    if (campo === "activa") return r.activa;
+    return (r as unknown as Record<string, unknown>)[campo];
+  };
+
+  const filtradas = useMemo(() => {
+    let lista = reglas.filter(r => !busqueda || r.nombre.toLowerCase().includes(busqueda.toLowerCase()));
+    lista = aplicarFiltrosToolbar(lista, filtros, acceso);
+    lista = aplicarOrdenToolbar(lista, orden, acceso);
+    return lista;
+  }, [reglas, busqueda, filtros, orden]);
 
   const toggleRegla = (id: string) => {
     setReglas(prev => prev.map(r => r.id === id ? { ...r, activa: !r.activa } : r));
@@ -26,72 +52,82 @@ export function ReglasView() {
 
   return (
     <div className="p-6 space-y-6 max-w-[1000px] mx-auto">
-      <div className="flex items-center justify-end">
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button variant="primary" size="sm"><Plus className="h-4 w-4" />Nuevo</Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg">
-            <DialogHeader><DialogTitle>Crear regla automática</DialogTitle></DialogHeader>
-            <div className="space-y-4 pt-2">
-              <div><Label>Nombre de la regla</Label><Input placeholder="Ej: Etiquetar pagos Amazon" /></div>
-              <div className="border rounded-lg p-4 space-y-3">
-                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Condiciones</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div><Label className="text-xs">Campo</Label>
-                    <Select><SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="concepto">Concepto contiene</SelectItem>
-                        <SelectItem value="importe_mayor">Importe mayor que</SelectItem>
-                        <SelectItem value="importe_menor">Importe menor que</SelectItem>
-                        <SelectItem value="banco">Banco es</SelectItem>
-                        <SelectItem value="tipo">Tipo es</SelectItem>
-                        <SelectItem value="contacto">Contacto es</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div><Label className="text-xs">Valor</Label><Input placeholder="Ej: AMAZON" /></div>
-                </div>
-                <Button variant="outline" size="sm" className="text-xs">+ Añadir condición</Button>
-              </div>
-              <div className="border rounded-lg p-4 space-y-3">
-                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Acciones</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div><Label className="text-xs">Acción</Label>
-                    <Select><SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="etiqueta">Asignar etiqueta</SelectItem>
-                        <SelectItem value="categoria">Asignar categoría</SelectItem>
-                        <SelectItem value="conciliar">Marcar como conciliado</SelectItem>
-                        <SelectItem value="contacto">Asociar contacto</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div><Label className="text-xs">Valor</Label><Input placeholder="Ej: Compras" /></div>
-                </div>
-                <Button variant="outline" size="sm" className="text-xs">+ Añadir acción</Button>
-              </div>
-              <div><Label className="text-xs">Prioridad</Label>
-                <Select defaultValue="MEDIA"><SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALTA">Alta</SelectItem>
-                    <SelectItem value="MEDIA">Media</SelectItem>
-                    <SelectItem value="BAJA">Baja</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button className="w-full">Crear regla</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+      <SubmoduleToolbar
+        busqueda={busqueda}
+        onBusquedaChange={setBusqueda}
+        placeholderBusqueda="Buscar reglas..."
+        onNuevo={() => setDialogOpen(true)}
+        campos={[
+          { campo: "prioridad", label: "Prioridad", tipo: "lista", opciones: ["ALTA", "MEDIA", "BAJA"] },
+          { campo: "activa", label: "Activa", tipo: "booleano" },
+        ]}
+        filtros={filtros}
+        onFiltrosChange={setFiltros}
+        ordenOpciones={[
+          { campo: "nombre", label: "Nombre" },
+          { campo: "prioridad", label: "Prioridad" },
+        ]}
+        orden={orden}
+        onOrdenChange={setOrden}
+        extraDerecha={
+          <IOActions config={reglasIO} onSuccess={() => window.location.reload()} />
+        }
+      />
 
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar reglas..." className="pl-9" value={busqueda} onChange={e => setBusqueda(e.target.value)} />
-        </div>
-      </div>
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Crear regla automática</DialogTitle></DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div><Label>Nombre de la regla</Label><Input placeholder="Ej: Etiquetar pagos Amazon" /></div>
+            <div className="border rounded-lg p-4 space-y-3">
+              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Condiciones</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label className="text-xs">Campo</Label>
+                  <Select><SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="concepto">Concepto contiene</SelectItem>
+                      <SelectItem value="importe_mayor">Importe mayor que</SelectItem>
+                      <SelectItem value="importe_menor">Importe menor que</SelectItem>
+                      <SelectItem value="banco">Banco es</SelectItem>
+                      <SelectItem value="tipo">Tipo es</SelectItem>
+                      <SelectItem value="contacto">Contacto es</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div><Label className="text-xs">Valor</Label><Input placeholder="Ej: AMAZON" /></div>
+              </div>
+              <Button variant="outline" size="sm" className="text-xs">+ Añadir condición</Button>
+            </div>
+            <div className="border rounded-lg p-4 space-y-3">
+              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Acciones</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label className="text-xs">Acción</Label>
+                  <Select><SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="etiqueta">Asignar etiqueta</SelectItem>
+                      <SelectItem value="categoria">Asignar categoría</SelectItem>
+                      <SelectItem value="conciliar">Marcar como conciliado</SelectItem>
+                      <SelectItem value="contacto">Asociar contacto</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div><Label className="text-xs">Valor</Label><Input placeholder="Ej: Compras" /></div>
+              </div>
+              <Button variant="outline" size="sm" className="text-xs">+ Añadir acción</Button>
+            </div>
+            <div><Label className="text-xs">Prioridad</Label>
+              <Select defaultValue="MEDIA"><SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALTA">Alta</SelectItem>
+                  <SelectItem value="MEDIA">Media</SelectItem>
+                  <SelectItem value="BAJA">Baja</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button className="w-full">Crear regla</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div className="border rounded-lg divide-y">
         {filtradas.map((r, idx) => (

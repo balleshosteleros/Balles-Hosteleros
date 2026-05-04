@@ -5,15 +5,24 @@ import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { getSalariosEmpresa, type PuestoSalarial, type NormaSalarial, DEPARTAMENTOS_DISPONIBLES } from "@/features/rrhh/data/salarios";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { ConfigButton } from "@/shared/components/config-button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  ArrowLeft, Search, Plus, Eye, Settings2, DollarSign, Clock, Calendar,
+  ArrowLeft, Plus, Eye, Settings2, DollarSign, Clock, Calendar,
   Briefcase, ChevronDown, ChevronRight, Target, AlertTriangle, FileText,
 } from "lucide-react";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
+import { IOActions } from "@/shared/io";
+import { salariosIO } from "@/features/rrhh/io/salarios.io";
 
 const estadoBadge = (e: string) => {
   switch (e) {
@@ -45,6 +54,7 @@ export function SalariosView() {
       onDetail={(id) => { setSelectedId(id); setView("detail"); }}
       onConfig={() => setView("config")}
       onNormas={() => setView("normas")}
+      empresaId={empresaActual.id}
     />
   );
 }
@@ -54,27 +64,48 @@ function ListView({
   onDetail,
   onConfig,
   onNormas,
+  empresaId,
 }: {
   puestos: PuestoSalarial[];
   onDetail: (id: string) => void;
   onConfig: () => void;
   onNormas: () => void;
+  empresaId: string;
 }) {
-  const [search, setSearch] = useState("");
-  const [filtroDepto, setFiltroDepto] = useState("todos");
-  const [filtroJornada, setFiltroJornada] = useState("todos");
-  const [filtroEstado, setFiltroEstado] = useState("todos");
+  const [busqueda, setBusqueda] = useState("");
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
+  const deptos = useMemo(
+    () => [...new Set(puestos.map((p) => p.departamento))].sort(),
+    [puestos],
+  );
+  const jornadas = useMemo(
+    () => [...new Set(puestos.map((p) => p.jornadaContrato))].sort(),
+    [puestos],
+  );
+
+  const acceso = (p: PuestoSalarial, campo: string): unknown => {
+    if (campo === "departamento") return p.departamento;
+    if (campo === "jornada") return p.jornadaContrato;
+    if (campo === "estado") return p.estado === "activo" ? "Activo" : p.estado === "borrador" ? "Borrador" : "Inactivo";
+    if (campo === "salarioNeto") return p.salarioNeto;
+    if (campo === "horasSemanales") return p.horasSemanales;
+    if (campo === "puesto") return p.puesto;
+    return (p as unknown as Record<string, unknown>)[campo];
+  };
+
   const filtered = useMemo(() => {
-    return puestos.filter((p) => {
-      if (search && !`${p.puesto} ${p.departamento}`.toLowerCase().includes(search.toLowerCase())) return false;
-      if (filtroDepto !== "todos" && p.departamento !== filtroDepto) return false;
-      if (filtroJornada !== "todos" && p.jornadaContrato !== filtroJornada) return false;
-      if (filtroEstado !== "todos" && p.estado !== filtroEstado) return false;
+    let lista = puestos.filter((p) => {
+      if (busqueda && !`${p.puesto} ${p.departamento}`.toLowerCase().includes(busqueda.toLowerCase())) return false;
       return true;
     });
-  }, [puestos, search, filtroDepto, filtroJornada, filtroEstado]);
+    lista = aplicarFiltrosToolbar(lista, filtros, acceso);
+    lista = aplicarOrdenToolbar(lista, orden, acceso);
+    return lista;
+  }, [puestos, busqueda, filtros, orden]);
 
   const grouped = useMemo(() => {
     const map: Record<string, PuestoSalarial[]> = {};
@@ -83,9 +114,6 @@ function ListView({
     });
     return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
   }, [filtered]);
-
-  const deptos = [...new Set(puestos.map((p) => p.departamento))].sort();
-  const jornadas = [...new Set(puestos.map((p) => p.jornadaContrato))].sort();
 
   const toggle = (d: string) => setExpanded((prev) => ({ ...prev, [d]: !prev[d] }));
 
@@ -96,12 +124,7 @@ function ListView({
           <Button variant="outline" size="sm" onClick={onNormas}>
             <AlertTriangle className="h-4 w-4 mr-1" /> Normas y cláusulas
           </Button>
-          <Button variant="outline" size="sm" onClick={onConfig}>
-            <Settings2 className="h-4 w-4 mr-1" /> Configuración
-          </Button>
-          <Button size="sm">
-            <Plus className="h-4 w-4 mr-1" /> Crear puesto
-          </Button>
+          <ConfigButton onClick={onConfig} />
         </div>
       </div>
 
@@ -132,35 +155,49 @@ function ListView({
         </Card>
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar puesto o departamento…" className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
-        </div>
-        <Select value={filtroDepto} onValueChange={setFiltroDepto}>
-          <SelectTrigger className="w-[180px]"><SelectValue placeholder="Departamento" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos los departamentos</SelectItem>
-            {deptos.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filtroJornada} onValueChange={setFiltroJornada}>
-          <SelectTrigger className="w-[160px]"><SelectValue placeholder="Jornada" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todas las jornadas</SelectItem>
-            {jornadas.map((j) => <SelectItem key={j} value={j}>{j}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-          <SelectTrigger className="w-[140px]"><SelectValue placeholder="Estado" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos</SelectItem>
-            <SelectItem value="activo">Activo</SelectItem>
-            <SelectItem value="borrador">Borrador</SelectItem>
-            <SelectItem value="inactivo">Inactivo</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      <SubmoduleToolbar
+        busqueda={busqueda}
+        onBusquedaChange={setBusqueda}
+        placeholderBusqueda="Buscar puesto o departamento..."
+        textoNuevo="Crear puesto"
+        onNuevo={() => { /* TODO: abrir crear puesto */ }}
+        campos={[
+          { campo: "departamento", label: "Departamento", tipo: "lista", opciones: deptos },
+          { campo: "jornada", label: "Jornada", tipo: "lista", opciones: jornadas },
+          { campo: "estado", label: "Estado", tipo: "lista", opciones: ["Activo", "Borrador", "Inactivo"] },
+          { campo: "salarioNeto", label: "Salario neto", tipo: "numero" },
+          { campo: "horasSemanales", label: "Horas / semana", tipo: "numero" },
+        ]}
+        filtros={filtros}
+        onFiltrosChange={setFiltros}
+        ordenOpciones={[
+          { campo: "puesto", label: "Puesto" },
+          { campo: "departamento", label: "Departamento" },
+          { campo: "salarioNeto", label: "Salario neto" },
+          { campo: "horasSemanales", label: "Horas / semana" },
+        ]}
+        orden={orden}
+        onOrdenChange={setOrden}
+        columnas={[
+          { campo: "puesto", label: "Puesto" },
+          { campo: "nominaNeta", label: "Nómina neta" },
+          { campo: "efectivoExtra", label: "Efectivo extra" },
+          { campo: "salarioNeto", label: "Salario neto" },
+          { campo: "jornada", label: "Jornada" },
+          { campo: "horasSemanales", label: "Horas/sem" },
+          { campo: "diasLibres", label: "Días libres" },
+          { campo: "estado", label: "Estado" },
+        ]}
+        columnasVisibles={columnasVisibles}
+        onColumnasVisiblesChange={setColumnasVisibles}
+        extraDerecha={
+          <IOActions
+            config={salariosIO}
+            context={{ empresaId }}
+            onSuccess={() => window.location.reload()}
+          />
+        }
+      />
 
       {grouped.length === 0 && (
         <Card><CardContent className="p-8 text-center text-muted-foreground">No se encontraron puestos con los filtros aplicados.</CardContent></Card>

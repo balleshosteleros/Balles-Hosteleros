@@ -2,7 +2,6 @@
 
 /**
  * Guard server-side para el acceso al panel de Comandas (KDS).
- * Soporta DEV_BYPASS_AUTH (ver `src/lib/supabase/get-context.ts`).
  */
 
 import { getAppContext } from "@/lib/supabase/get-context";
@@ -23,10 +22,6 @@ export async function useComandasPermisos(): Promise<{
   roles: string[];
   reason?: string;
 }> {
-  if (process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true") {
-    return { allowed: true, userId: "dev-bypass", roles: ["admin"] };
-  }
-
   const { supabase, userId } = await getAppContext();
   if (!userId) return { allowed: false, userId: null, roles: [], reason: "No autenticado" };
 

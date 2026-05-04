@@ -30,6 +30,10 @@ export async function POST(request: Request) {
   response.cookies.delete("g_access_token");
   response.cookies.delete("g_refresh_token");
   response.cookies.delete("g_email");
+  response.cookies.delete("g_picture");
+  response.cookies.delete("g_name");
+  response.cookies.delete("g_accounts");
+  response.cookies.delete("g_accounts_meta");
 
   return response;
 }

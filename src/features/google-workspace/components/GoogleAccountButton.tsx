@@ -1,7 +1,8 @@
 "use client";
 
-import { LogOut, RefreshCw, UserCircle2 } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { Check, Loader2, LogOut, Plus, UserCircle2, X } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,17 +12,71 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { useGoogleConnection } from "./useGoogleConnection";
+import { useGoogleConnection, type CuentaGoogle } from "./useGoogleConnection";
+
+const GOOGLE_RING_BG =
+  "conic-gradient(from 0deg, #4285F4 0deg, #4285F4 90deg, #EA4335 90deg, #EA4335 180deg, #FBBC05 180deg, #FBBC05 270deg, #34A853 270deg, #34A853 360deg)";
+
+function Avatar({
+  cuenta,
+  size = "sm",
+  showRing = true,
+}: {
+  cuenta: { email?: string | null; name?: string | null; picture?: string | null };
+  size?: "sm" | "md" | "lg";
+  showRing?: boolean;
+}) {
+  const dims =
+    size === "lg" ? "h-9 w-9 text-sm" : size === "md" ? "h-8 w-8 text-xs" : "h-7 w-7 text-[11px]";
+  const ringPad = size === "lg" ? "p-[2px]" : "p-[1.5px]";
+  const innerGap = size === "lg" ? "p-[1.5px]" : "p-[1px]";
+  const inicial = (cuenta.name || cuenta.email || "G").charAt(0).toUpperCase();
+  const inner = cuenta.picture ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={cuenta.picture}
+      alt={cuenta.name ?? cuenta.email ?? "Cuenta Google"}
+      referrerPolicy="no-referrer"
+      className={`${dims} shrink-0 rounded-full object-cover`}
+    />
+  ) : (
+    <div
+      className={`${dims} flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-blue-700 font-bold text-white`}
+    >
+      {inicial}
+    </div>
+  );
+  if (!showRing) return inner;
+  return (
+    <div
+      className={`${ringPad} shrink-0 rounded-full`}
+      style={{ background: GOOGLE_RING_BG }}
+    >
+      <div className={`${innerGap} rounded-full bg-card`}>{inner}</div>
+    </div>
+  );
+}
 
 export function GoogleAccountButton() {
-  const { connected, email, disconnect } = useGoogleConnection();
+  const {
+    connected,
+    email,
+    picture,
+    name,
+    accounts,
+    switching,
+    disconnect,
+    switchTo,
+  } = useGoogleConnection();
   const pathname = usePathname();
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [busyEmail, setBusyEmail] = useState<string | null>(null);
 
   if (!connected) {
-    // Si no está conectado, mostramos un botón directo de "Conectar Google"
     return (
       <a
-        href={`/api/google/connect?next=${encodeURIComponent(pathname || "/dashboard")}`}
+        href={`/api/google/connect?next=${encodeURIComponent(pathname || "/")}`}
         className="inline-flex h-8 items-center gap-1.5 rounded-md border bg-card px-3 text-xs font-semibold text-foreground shadow-sm transition-colors hover:bg-muted"
       >
         <svg className="h-3.5 w-3.5" viewBox="0 0 24 24">
@@ -35,10 +90,51 @@ export function GoogleAccountButton() {
     );
   }
 
-  const inicial = email?.charAt(0).toUpperCase() ?? "G";
+  const cuentaActiva: CuentaGoogle = {
+    email: email ?? "",
+    name: name ?? "",
+    picture: picture ?? "",
+  };
+
+  // Otras cuentas del roster (todas menos la activa).
+  const otras = accounts.filter(
+    (a) => a.email.toLowerCase() !== (email ?? "").toLowerCase(),
+  );
+
+  const onSwitch = async (correo: string) => {
+    setBusyEmail(correo);
+    const ok = await switchTo(correo);
+    setBusyEmail(null);
+    if (ok) {
+      setOpen(false);
+      router.refresh();
+    } else {
+      // Si el refresh falló, abrimos OAuth de esa cuenta para reconectar.
+      window.location.href = `/api/google/connect?next=${encodeURIComponent(
+        pathname || "/",
+      )}&switch=1`;
+    }
+  };
+
+  const onRemove = async (correo: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setBusyEmail(correo);
+    await disconnect(correo);
+    setBusyEmail(null);
+    router.refresh();
+  };
+
+  const onSignOutActive = async () => {
+    setBusyEmail(email ?? "");
+    await disconnect(email ?? undefined);
+    setBusyEmail(null);
+    setOpen(false);
+    router.refresh();
+  };
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
@@ -46,44 +142,100 @@ export function GoogleAccountButton() {
           className="h-8 w-8"
           title={`Cuenta Google: ${email ?? ""}`}
         >
-          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-blue-700 text-[11px] font-bold text-white">
-            {inicial}
-          </div>
+          {switching ? (
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          ) : (
+            <Avatar cuenta={cuentaActiva} size="sm" />
+          )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
-        <DropdownMenuLabel className="flex items-center gap-2 py-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-blue-700 text-sm font-bold text-white">
-            {inicial}
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs font-semibold text-foreground">
-              Conectado a Google
+      <DropdownMenuContent align="end" className="w-72 p-0">
+        <DropdownMenuLabel className="flex items-center gap-2 border-b bg-muted/40 px-3 py-3">
+          <Avatar cuenta={cuentaActiva} size="lg" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-semibold text-foreground">
+              {name || "Conectado a Google"}
             </p>
             <p className="truncate text-[11px] text-muted-foreground">
               {email}
             </p>
           </div>
+          <Check className="h-4 w-4 shrink-0 text-emerald-500" />
         </DropdownMenuLabel>
+
+        {otras.length > 0 && (
+          <>
+            <div className="px-2 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Otras cuentas
+            </div>
+            {otras.map((cuenta) => {
+              const ocupada = busyEmail === cuenta.email;
+              return (
+                <div
+                  key={cuenta.email}
+                  className="group flex items-center gap-2 rounded-sm px-2 py-1.5 hover:bg-muted"
+                >
+                  <button
+                    type="button"
+                    onClick={() => onSwitch(cuenta.email)}
+                    disabled={ocupada}
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:opacity-60"
+                  >
+                    {ocupada ? (
+                      <Loader2 className="h-7 w-7 shrink-0 animate-spin p-1.5 text-muted-foreground" />
+                    ) : (
+                      <Avatar cuenta={cuenta} size="sm" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-medium text-foreground">
+                        {cuenta.name || cuenta.email}
+                      </p>
+                      <p className="truncate text-[10px] text-muted-foreground">
+                        {cuenta.email}
+                      </p>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => onRemove(cuenta.email, e)}
+                    disabled={ocupada}
+                    aria-label={`Quitar ${cuenta.email}`}
+                    title="Quitar cuenta"
+                    className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 disabled:opacity-30"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              );
+            })}
+          </>
+        )}
+
         <DropdownMenuSeparator />
+
         <DropdownMenuItem asChild>
           <a
-            href={`/api/google/connect?next=${encodeURIComponent(pathname || "/dashboard")}&switch=1`}
+            href={`/api/google/connect?next=${encodeURIComponent(
+              pathname || "/",
+            )}&switch=1`}
             className="cursor-pointer"
+            title="Solo la primera vez por cuenta. Después cambias con un click."
           >
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Cambiar de cuenta Google
+            <Plus className="mr-2 h-4 w-4" />
+            Añadir otra cuenta de Google
           </a>
         </DropdownMenuItem>
+
         <DropdownMenuItem
-          onClick={() => disconnect()}
+          onClick={onSignOutActive}
           className="cursor-pointer text-destructive focus:text-destructive"
         >
           <LogOut className="mr-2 h-4 w-4" />
-          Desconectar Google
+          Desconectar esta cuenta
         </DropdownMenuItem>
+
         <DropdownMenuSeparator />
-        <div className="px-2 py-1.5 text-[10px] text-muted-foreground">
+        <div className="px-3 py-1.5 text-[10px] text-muted-foreground">
           <UserCircle2 className="mr-1 inline h-3 w-3" />
           Tus emails y eventos solo los ves tú
         </div>

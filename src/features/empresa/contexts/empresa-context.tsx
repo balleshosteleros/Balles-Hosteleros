@@ -2,11 +2,13 @@
 
 import { createContext, useContext, useState, ReactNode, useCallback, useEffect } from "react";
 import { Incidencia, SAMPLE_DATA } from "@/features/empresa/data/mantenimiento";
-import { AjustesEmpresa, buildDefaultAjustes } from "@/features/ajustes/data/ajustes";
+import { AjustesEmpresa, buildDefaultAjustes, DatosGenerales, ConfigOperativa } from "@/features/ajustes/data/ajustes";
 import { getLogoUrls } from "@/features/empresa/actions/logo-actions";
+import { listEmpresasCompletas } from "@/features/empresa/actions/empresas-actions";
 
 export interface Empresa {
-  id: string;
+  id: string;       // slug — identificador lógico estable para FK en accesos_apps, etc.
+  dbId?: string;    // UUID real en Supabase (cuando la empresa se hidrata desde BD)
   nombre: string;
   iniciales: string;
   color: string;
@@ -31,7 +33,13 @@ function buildInitialData(): Record<string, Incidencia[]> {
 
 const AJUSTES_STORAGE_KEY = "balles_ajustes_v1";
 
-const ROLES_OBSOLETOS = ["Administrador", "Solo lectura", "Dirección"];
+// Roles legados (forma departamento o genéricos). Si los detectamos en
+// localStorage descartamos el snapshot y volvemos a sembrar con la forma persona.
+const ROLES_OBSOLETOS = [
+  "Administrador", "Solo lectura", "Dirección",
+  "RRHH", "Logística", "Cocina", "Gerencia",
+  "Contabilidad", "Gestoría", "Jurídico", "Marketing",
+];
 
 function migrateRoles(storedRoles: AjustesEmpresa["roles"], defaultRoles: AjustesEmpresa["roles"]): AjustesEmpresa["roles"] {
   const tieneRolesObsoletos = storedRoles.some((r) => ROLES_OBSOLETOS.includes(r.nombre));
@@ -101,6 +109,53 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
   // Cargar logos desde Supabase al montar
   useEffect(() => {
     getLogoUrls().then(setLogoUrls).catch(() => {});
+  }, []);
+
+  // Hidratar empresas + ajustes desde Supabase (fuente de verdad)
+  useEffect(() => {
+    let alive = true;
+    listEmpresasCompletas()
+      .then((rows) => {
+        if (!alive || rows.length === 0) return;
+
+        const list: Empresa[] = rows.map((r) => ({
+          id: r.slug,
+          dbId: r.id,
+          nombre: r.nombre,
+          iniciales: r.iniciales ?? r.nombre.slice(0, 2).toUpperCase(),
+          color: r.color ?? "hsl(210 70% 50%)",
+        }));
+
+        setEmpresasList(list);
+        setEmpresaId((prev) => list.some((e) => e.id === prev) ? prev : list[0].id);
+
+        // Hidratar ajustes con lo que haya en Supabase, mergeado contra los defaults.
+        setAllAjustes((prev) => {
+          const next: Record<string, AjustesEmpresa> = { ...prev };
+          for (const r of rows) {
+            const defaults = buildDefaultAjustes(r.nombre);
+            const stored = prev[r.slug];
+            const baseAjustes = stored ? mergeWithDefaults(stored, r.nombre) : defaults;
+            next[r.slug] = {
+              ...baseAjustes,
+              datosGenerales: {
+                ...baseAjustes.datosGenerales,
+                ...(r.datosGenerales as Partial<DatosGenerales>),
+                logoUrl: r.logoUrl ?? baseAjustes.datosGenerales.logoUrl,
+              },
+              configOperativa: {
+                ...baseAjustes.configOperativa,
+                ...(r.configOperativa as Partial<ConfigOperativa>),
+              },
+            };
+          }
+          return next;
+        });
+      })
+      .catch((err) => {
+        console.error("[empresa-context] hidratación falló:", err);
+      });
+    return () => { alive = false; };
   }, []);
 
   useEffect(() => {

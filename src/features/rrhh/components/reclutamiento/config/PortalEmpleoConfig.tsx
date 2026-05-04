@@ -235,7 +235,7 @@ export function PortalEmpleoConfig() {
               </div>
               {/* Mini preview body */}
               <div className="p-4 space-y-2" style={{ backgroundColor: colorSecundario + "40" }}>
-                {["CAMARERO", "JEFE DE SALA", "ARTISTA / DJ"].map((nombre) => (
+                {["CAMARERO", "JEFE DE SALA", "ARTISTA"].map((nombre) => (
                   <div key={nombre} className="bg-white rounded-lg px-4 py-3 flex items-center justify-between border border-gray-100">
                     <div>
                       <p className="text-xs font-bold" style={{ color: colorTexto }}>{nombre}</p>

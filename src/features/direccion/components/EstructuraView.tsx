@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
   ReactFlow,
   Background,
   Controls,
-  MiniMap,
   useNodesState,
   useEdgesState,
   addEdge,
@@ -19,11 +18,28 @@ import {
   NodeResizer,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { toast } from "sonner";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { orgChartsPorEmpresa, type OrgNode, type AreaType, type AreaZone } from "@/features/direccion/data/direccion";
+import {
+  orgChartsPorEmpresa,
+  getDeptPalette,
+  normalizeArea,
+  DEPT_COLOR_SWATCHES,
+  ZONE_COLORS,
+  type OrgChart,
+  type OrgNode,
+  type OrgEdge,
+  type AreaType,
+  type AreaZone,
+} from "@/features/direccion/data/direccion";
+import {
+  getOrganigrama,
+  saveOrganigrama,
+} from "@/features/direccion/actions/organigrama-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -38,17 +54,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Trash2, Save, X } from "lucide-react";
+import { Plus, Trash2, Save, X, Loader2, Info } from "lucide-react";
 
 const AREA_LABELS: Record<string, string> = {
   administrativa: "Área Administrativa",
   operativa: "Área Operativa",
-  externo: "Externo (Socios)",
 };
 
 /* ── Zone node (resizable, draggable) ── */
 function AreaZoneNode({ data, selected }: NodeProps) {
-  const isAdmin = data.area === "administrativa";
+  const palette = ZONE_COLORS[normalizeArea(data.area)];
   return (
     <>
       <NodeResizer
@@ -61,19 +76,13 @@ function AreaZoneNode({ data, selected }: NodeProps) {
       <div
         className="w-full h-full rounded-xl"
         style={{
-          background: isAdmin
-            ? "hsla(var(--primary) / 0.03)"
-            : "hsla(var(--muted) / 0.4)",
-          border: `1.5px dashed ${isAdmin ? "hsla(var(--primary) / 0.2)" : "hsl(var(--border))"}`,
+          background: palette.bg,
+          border: `1.5px dashed ${palette.border}`,
         }}
       >
         <span
           className="absolute top-3 left-4 text-[11px] font-semibold uppercase tracking-widest select-none"
-          style={{
-            color: isAdmin
-              ? "hsl(var(--primary))"
-              : "hsl(var(--muted-foreground))",
-          }}
+          style={{ color: palette.label }}
         >
           {data.label as string}
         </span>
@@ -82,36 +91,39 @@ function AreaZoneNode({ data, selected }: NodeProps) {
   );
 }
 
-/* ── Org block node ── */
-function OrgChartNode({ data, selected }: NodeProps) {
-  const area = data.area as AreaType;
-  const isExterno = area === "externo";
-  const isAdmin = area === "administrativa";
+/* ── Org block node (vívido, estilo botón "fichar") ── */
+function OrgChartNode({ id, data, selected }: NodeProps) {
+  const area = normalizeArea(data.area);
+  const customColor = (data as { color?: string }).color;
+  const palette = getDeptPalette(id, area, customColor);
+  const hasDescripcion = typeof data.descripcion === "string" && (data.descripcion as string).trim().length > 0;
   return (
     <div
-      className="rounded-lg px-5 py-3 text-center shadow-sm transition-shadow"
+      className="relative rounded-xl px-5 py-3 text-center transition-all"
       style={{
-        background: isExterno
-          ? "hsl(var(--accent))"
-          : isAdmin
-            ? "hsl(var(--card))"
-            : "hsl(var(--muted))",
-        border: `2px solid ${selected ? "hsl(var(--primary))" : "hsl(var(--border))"}`,
-        color: isExterno
-          ? "hsl(var(--accent-foreground))"
-          : isAdmin
-            ? "hsl(var(--card-foreground))"
-            : "hsl(var(--muted-foreground))",
-        minWidth: 120,
+        background: palette.bg,
+        color: "#ffffff",
+        minWidth: 130,
         fontSize: 13,
-        fontWeight: 600,
-        letterSpacing: "0.03em",
-        boxShadow: selected ? "0 0 0 2px hsla(var(--primary) / 0.25)" : undefined,
+        fontWeight: 700,
+        letterSpacing: "0.04em",
+        boxShadow: selected
+          ? `0 0 0 3px ${palette.ring}, 0 10px 20px ${palette.shadow}`
+          : `0 6px 14px ${palette.shadow}, inset 0 1px 0 rgba(255,255,255,0.18)`,
+        border: `1px solid ${palette.ring}`,
+        textShadow: "0 1px 1px rgba(0,0,0,0.18)",
       }}
     >
-      <Handle type="target" position={Position.Top} className="!bg-border !w-2 !h-2" />
+      <Handle type="target" position={Position.Top} className="!bg-white/60 !w-2 !h-2 !border-white" />
       {data.label as string}
-      <Handle type="source" position={Position.Bottom} className="!bg-border !w-2 !h-2" />
+      {hasDescripcion && (
+        <Info
+          className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-white p-0.5 shadow"
+          style={{ color: palette.bg }}
+          aria-label="Tiene descripción"
+        />
+      )}
+      <Handle type="source" position={Position.Bottom} className="!bg-white/60 !w-2 !h-2 !border-white" />
     </div>
   );
 }
@@ -128,7 +140,7 @@ function dataToFlow(chart: {
     id: z.id,
     type: "areaZone",
     position: { x: z.x, y: z.y },
-    data: { label: z.label, area: z.area },
+    data: { label: z.label, area: normalizeArea(z.area), w: z.width, h: z.height },
     style: { width: z.width, height: z.height },
     draggable: true,
     selectable: true,
@@ -139,7 +151,12 @@ function dataToFlow(chart: {
     id: n.id,
     type: "orgNode",
     position: { x: n.x, y: n.y },
-    data: { label: n.label, area: n.area },
+    data: {
+      label: n.label,
+      area: normalizeArea(n.area),
+      descripcion: n.descripcion ?? "",
+      color: n.color,
+    },
     draggable: true,
   }));
 
@@ -154,31 +171,97 @@ function dataToFlow(chart: {
   return { nodes: [...zoneNodes, ...orgNodes], edges };
 }
 
+function flowToData(nodes: Node[], edges: Edge[]): OrgChart {
+  const orgNodes: OrgNode[] = [];
+  const zones: AreaZone[] = [];
+  for (const n of nodes) {
+    if (n.type === "areaZone") {
+      const styleW = (n.style as { width?: number } | undefined)?.width;
+      const styleH = (n.style as { height?: number } | undefined)?.height;
+      const dataW = (n.data as { w?: number }).w;
+      const dataH = (n.data as { h?: number }).h;
+      zones.push({
+        id: n.id,
+        label: (n.data.label as string) ?? "",
+        area: normalizeArea(n.data.area),
+        x: n.position.x,
+        y: n.position.y,
+        width: typeof n.width === "number" ? n.width : (typeof styleW === "number" ? styleW : (dataW ?? 600)),
+        height: typeof n.height === "number" ? n.height : (typeof styleH === "number" ? styleH : (dataH ?? 250)),
+      });
+    } else {
+      const descripcion = (n.data as { descripcion?: string }).descripcion;
+      const color = (n.data as { color?: string }).color;
+      orgNodes.push({
+        id: n.id,
+        label: (n.data.label as string) ?? "",
+        area: normalizeArea(n.data.area),
+        x: n.position.x,
+        y: n.position.y,
+        ...(descripcion && descripcion.trim().length > 0 ? { descripcion } : {}),
+        ...(color && color.trim().length > 0 ? { color } : {}),
+      });
+    }
+  }
+  const orgEdges: OrgEdge[] = edges.map((e) => ({ id: e.id, source: e.source, target: e.target }));
+  return { nodes: orgNodes, edges: orgEdges, zones };
+}
+
 export function EstructuraView() {
   const { empresaActual } = useEmpresa();
   const key = empresaActual?.id || "habana";
-  const chartData = orgChartsPorEmpresa[key] || orgChartsPorEmpresa.habana;
-  const initial = dataToFlow(chartData);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [newArea, setNewArea] = useState<AreaType>("operativa");
   const [editLabel, setEditLabel] = useState("");
   const [editArea, setEditArea] = useState<AreaType>("operativa");
+  const [editDescripcion, setEditDescripcion] = useState("");
+  const [editColor, setEditColor] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const idCounter = useRef(100);
+  const skipDirtyRef = useRef(true);
 
-  // Reset when empresa changes
-  const lastKey = useRef(key);
-  if (key !== lastKey.current) {
-    lastKey.current = key;
-    const fresh = dataToFlow(orgChartsPorEmpresa[key] || orgChartsPorEmpresa.habana);
-    setNodes(fresh.nodes);
-    setEdges(fresh.edges);
+  // Cargar organigrama desde Supabase (con seed estático como fallback)
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    skipDirtyRef.current = true;
     setSelectedNode(null);
-  }
+    getOrganigrama(key)
+      .then((remote) => {
+        if (cancelled) return;
+        const seed = orgChartsPorEmpresa[key] || orgChartsPorEmpresa.habana;
+        const chart = remote && remote.nodes.length > 0 ? remote : seed;
+        const flow = dataToFlow(chart);
+        setNodes(flow.nodes);
+        setEdges(flow.edges);
+        setDirty(false);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+          // Permitir que los próximos cambios marquen dirty (tras el primer render)
+          setTimeout(() => {
+            skipDirtyRef.current = false;
+          }, 0);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [key, setNodes, setEdges]);
+
+  // Marcar dirty ante cualquier cambio del usuario (drag, edit, add, delete, connect…)
+  useEffect(() => {
+    if (skipDirtyRef.current) return;
+    setDirty(true);
+  }, [nodes, edges]);
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -192,10 +275,25 @@ export function EstructuraView() {
     [setEdges]
   );
 
+  const handleSave = useCallback(async () => {
+    setSaving(true);
+    const chart = flowToData(nodes, edges);
+    const res = await saveOrganigrama(key, chart);
+    setSaving(false);
+    if (res.ok) {
+      setDirty(false);
+      toast.success("Organigrama guardado");
+    } else {
+      toast.error(`No se pudo guardar: ${res.error ?? "error desconocido"}`);
+    }
+  }, [nodes, edges, key]);
+
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     setSelectedNode(node);
     setEditLabel(node.data.label as string);
-    setEditArea((node.data.area as AreaType) || "operativa");
+    setEditArea(normalizeArea(node.data.area));
+    setEditDescripcion(((node.data as { descripcion?: string }).descripcion) ?? "");
+    setEditColor(((node.data as { color?: string }).color) ?? "");
   }, []);
 
   const handleAddNode = () => {
@@ -206,9 +304,9 @@ export function EstructuraView() {
       type: "orgNode",
       position: {
         x: 400 + Math.random() * 200,
-        y: newArea === "externo" ? -60 : newArea === "administrativa" ? 150 : 500,
+        y: newArea === "administrativa" ? 150 : 500,
       },
-      data: { label: newLabel.toUpperCase(), area: newArea },
+      data: { label: newLabel.toUpperCase(), area: newArea, descripcion: "" },
       draggable: true,
     };
     setNodes((nds) => [...nds, newNode]);
@@ -239,7 +337,16 @@ export function EstructuraView() {
       setNodes((nds) =>
         nds.map((n) =>
           n.id === selectedNode.id
-            ? { ...n, data: { ...n.data, label: editLabel.toUpperCase(), area: editArea } }
+            ? {
+                ...n,
+                data: {
+                  ...n.data,
+                  label: editLabel.toUpperCase(),
+                  area: editArea,
+                  descripcion: editDescripcion,
+                  color: editColor || undefined,
+                },
+              }
             : n
         )
       );
@@ -253,7 +360,7 @@ export function EstructuraView() {
     <div className="flex flex-col h-[calc(100vh-3.5rem)]">
       {/* Toolbar */}
       <div className="flex items-center gap-3 px-4 py-3 border-b bg-card shrink-0">
-        <Button size="sm" variant="outline" onClick={() => setShowAdd(true)}>
+        <Button size="sm" variant="outline" onClick={() => setShowAdd(true)} disabled={loading}>
           <Plus className="h-4 w-4 mr-1" /> Añadir bloque
         </Button>
         {selectedNode && (
@@ -266,18 +373,33 @@ export function EstructuraView() {
             </Button>
           </>
         )}
+        <Button
+          size="sm"
+          onClick={handleSave}
+          disabled={!dirty || saving || loading}
+          className="ml-2"
+        >
+          {saving ? (
+            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+          ) : (
+            <Save className="h-4 w-4 mr-1" />
+          )}
+          {dirty ? "Guardar cambios" : "Guardado"}
+        </Button>
         <div className="ml-auto flex items-center gap-4">
           <div className="hidden md:flex items-center gap-4 text-xs text-muted-foreground">
             <span className="flex items-center gap-1.5">
-              <span className="inline-block w-3 h-3 rounded-sm" style={{ background: "hsl(var(--accent))", border: "1px solid hsl(var(--border))" }} />
-              Externo (Socios)
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block w-3 h-3 rounded-sm" style={{ background: "hsla(var(--primary) / 0.12)", border: "1px dashed hsla(var(--primary) / 0.4)" }} />
+              <span
+                className="inline-block w-3 h-3 rounded-sm"
+                style={{ background: ZONE_COLORS.administrativa.bg, border: `1px dashed ${ZONE_COLORS.administrativa.border}` }}
+              />
               Área Administrativa
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="inline-block w-3 h-3 rounded-sm" style={{ background: "hsl(var(--muted))", border: "1px dashed hsl(var(--border))" }} />
+              <span
+                className="inline-block w-3 h-3 rounded-sm"
+                style={{ background: ZONE_COLORS.operativa.bg, border: `1px dashed ${ZONE_COLORS.operativa.border}` }}
+              />
               Área Operativa
             </span>
           </div>
@@ -306,65 +428,141 @@ export function EstructuraView() {
             showInteractive={false}
             className="!bg-card !border-border !shadow-sm [&>button]:!bg-card [&>button]:!border-border [&>button]:!text-foreground"
           />
-          <MiniMap
-            nodeColor={(n) => {
-              if (n.type === "areaZone") return "transparent";
-              if (n.data?.area === "externo") return "hsl(var(--accent))";
-              return n.data?.area === "administrativa"
-                ? "hsl(var(--primary) / 0.2)"
-                : "hsl(var(--muted))";
-            }}
-            maskColor="hsl(var(--muted) / 0.5)"
-            className="!bg-card !border-border"
-          />
         </ReactFlow>
 
         {/* Side panel for editing */}
-        {selectedNode && (
-          <div className="absolute top-4 right-4 w-72 bg-card border rounded-lg shadow-lg p-4 z-10 space-y-4">
-            <h3 className="text-sm font-semibold text-foreground">
-              {isZoneSelected ? "Editar zona de área" : "Editar bloque"}
-            </h3>
-            <div className="space-y-2">
-              <Label className="text-xs">Nombre</Label>
-              <Input
-                value={editLabel}
-                onChange={(e) => setEditLabel(e.target.value)}
-                className="h-9 text-sm"
-              />
-            </div>
-            {!isZoneSelected && (
+        {selectedNode && (() => {
+          const palette = !isZoneSelected
+            ? getDeptPalette(
+                selectedNode.id,
+                normalizeArea(selectedNode.data.area),
+                editColor || undefined,
+              )
+            : null;
+          return (
+            <div className="absolute top-4 right-4 w-80 bg-card border rounded-lg shadow-xl p-4 z-10 space-y-4 max-h-[calc(100%-2rem)] overflow-y-auto">
+              {palette && (
+                <div
+                  className="rounded-lg px-3 py-2 text-white text-xs font-bold uppercase tracking-widest text-center"
+                  style={{
+                    background: palette.bg,
+                    boxShadow: `0 4px 10px ${palette.shadow}`,
+                  }}
+                >
+                  {editLabel || (selectedNode.data.label as string)}
+                </div>
+              )}
+              <h3 className="text-sm font-semibold text-foreground">
+                {isZoneSelected ? "Editar zona de área" : "Editar departamento"}
+              </h3>
               <div className="space-y-2">
-                <Label className="text-xs">Área</Label>
-                <Select value={editArea} onValueChange={(v) => setEditArea(v as AreaType)}>
-                  <SelectTrigger className="h-9 text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(AREA_LABELS).map(([val, label]) => (
-                      <SelectItem key={val} value={val}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label className="text-xs">Nombre</Label>
+                <Input
+                  value={editLabel}
+                  onChange={(e) => setEditLabel(e.target.value)}
+                  className="h-9 text-sm"
+                />
               </div>
-            )}
-            {isZoneSelected && (
-              <p className="text-xs text-muted-foreground">
-                Arrastra los bordes para redimensionar la zona.
+              {!isZoneSelected && (
+                <>
+                  <div className="space-y-2">
+                    <Label className="text-xs">Área</Label>
+                    <Select value={editArea} onValueChange={(v) => setEditArea(v as AreaType)}>
+                      <SelectTrigger className="h-9 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(AREA_LABELS).map(([val, label]) => (
+                          <SelectItem key={val} value={val}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs">
+                      Descripción / Responsabilidades
+                    </Label>
+                    <Textarea
+                      value={editDescripcion}
+                      onChange={(e) => setEditDescripcion(e.target.value)}
+                      placeholder="Qué hace este departamento, de qué se ocupa, a quién reporta… para que cualquier empleado lo entienda."
+                      className="text-sm min-h-[140px] resize-none"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Visible para todos los empleados al pulsar el bloque.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs">Color</Label>
+                      {editColor && (
+                        <button
+                          type="button"
+                          onClick={() => setEditColor("")}
+                          className="text-[11px] text-muted-foreground hover:text-foreground underline"
+                        >
+                          Restablecer
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-8 gap-1.5">
+                      {DEPT_COLOR_SWATCHES.map((c) => {
+                        const active = editColor.toLowerCase() === c.toLowerCase();
+                        return (
+                          <button
+                            key={c}
+                            type="button"
+                            onClick={() => setEditColor(c)}
+                            className={`h-6 w-6 rounded-md border transition-transform hover:scale-110 ${
+                              active
+                                ? "ring-2 ring-offset-1 ring-foreground"
+                                : "border-border"
+                            }`}
+                            style={{ background: c }}
+                            aria-label={`Color ${c}`}
+                          />
+                        );
+                      })}
+                    </div>
+                    <div className="flex items-center gap-2 pt-1">
+                      <input
+                        type="color"
+                        value={editColor || "#3b82f6"}
+                        onChange={(e) => setEditColor(e.target.value)}
+                        className="h-8 w-10 rounded border border-border bg-transparent cursor-pointer"
+                        aria-label="Selector de color personalizado"
+                      />
+                      <Input
+                        value={editColor}
+                        onChange={(e) => setEditColor(e.target.value)}
+                        placeholder="#3b82f6"
+                        className="h-8 text-xs font-mono"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+              {isZoneSelected && (
+                <p className="text-xs text-muted-foreground">
+                  Arrastra los bordes para redimensionar la zona.
+                </p>
+              )}
+              <div className="flex gap-2">
+                <Button size="sm" onClick={handleUpdateNode} className="flex-1">
+                  <Save className="h-3 w-3 mr-1" /> Aplicar
+                </Button>
+                <Button size="sm" variant="destructive" onClick={handleDeleteNode}>
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground text-center pt-1 border-t">
+                Pulsa <span className="font-semibold">Guardar cambios</span> arriba para persistir.
               </p>
-            )}
-            <div className="flex gap-2">
-              <Button size="sm" onClick={handleUpdateNode} className="flex-1">
-                <Save className="h-3 w-3 mr-1" /> Guardar
-              </Button>
-              <Button size="sm" variant="destructive" onClick={handleDeleteNode}>
-                <Trash2 className="h-3 w-3" />
-              </Button>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
       {/* Add dialog */}

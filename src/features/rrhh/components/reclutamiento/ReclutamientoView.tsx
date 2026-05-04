@@ -35,8 +35,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import {
   Search, Star, MoreHorizontal, MapPin, Clock, CalendarDays,
   FileText, Users, Send, ArrowLeft, User, Phone, Mail, Tag, Kanban, List,
-  Briefcase, Settings, Info,
+  Briefcase,
 } from "lucide-react";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+} from "@/shared/components/SubmoduleToolbar";
+import { IOActions } from "@/shared/io";
+import { reclutamientoIO } from "@/features/rrhh/io/reclutamiento.io";
 import { ReclutamientoConfigView } from "@/features/rrhh/components/reclutamiento/config/ReclutamientoConfigView";
 import {
   DropdownMenu,
@@ -352,9 +361,8 @@ export function ReclutamientoView() {
   }, [empresaActual.id]);
 
   const [search, setSearch] = useState("");
-  const [filtroEstado, setFiltroEstado] = useState("todos");
-  const [filtroCategoria, setFiltroCategoria] = useState("todas");
-  const [soloFavoritas, setSoloFavoritas] = useState(false);
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
 
   const [selectedVacante, setSelectedVacante] = useState<Vacante | null>(null);
   const [selectedFase, setSelectedFase] = useState<FaseReclutamiento | null>(null);
@@ -362,17 +370,26 @@ export function ReclutamientoView() {
 
   const categorias = useMemo(() => [...new Set(vacantes.map((v) => v.categoria))], [vacantes]);
 
+  const acceso = (v: Vacante, campo: string): unknown => {
+    if (campo === "estadoPublicacion") return ESTADO_PUBLICACION_LABELS[v.estadoPublicacion];
+    if (campo === "categoria") return v.categoria;
+    if (campo === "tipoJornada") return TIPO_JORNADA_LABELS[v.tipoJornada];
+    if (campo === "favorita") return v.favorita;
+    if (campo === "puesto") return v.puesto;
+    if (campo === "ubicacion") return v.ubicacion;
+    return (v as unknown as Record<string, unknown>)[campo];
+  };
+
   const filtered = useMemo(() => {
     let list = vacantes;
     if (search) {
       const s = search.toLowerCase();
       list = list.filter((v) => v.puesto.toLowerCase().includes(s) || v.ubicacion.toLowerCase().includes(s));
     }
-    if (filtroEstado !== "todos") list = list.filter((v) => v.estadoPublicacion === filtroEstado);
-    if (filtroCategoria !== "todas") list = list.filter((v) => v.categoria === filtroCategoria);
-    if (soloFavoritas) list = list.filter((v) => v.favorita);
+    list = aplicarFiltrosToolbar(list, filtros, acceso);
+    list = aplicarOrdenToolbar(list, orden, acceso);
     return list;
-  }, [vacantes, search, filtroEstado, filtroCategoria, soloFavoritas]);
+  }, [vacantes, search, filtros, orden]);
 
   const handleSelectFase = (v: Vacante, f: FaseReclutamiento | null) => {
     setSelectedVacante(v);
@@ -434,33 +451,42 @@ export function ReclutamientoView() {
 
 
         <TabsContent value="vacantes" className="space-y-4 mt-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative flex-1 min-w-[200px] max-w-xs">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Buscar vacante..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
-            </div>
-            <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-              <SelectTrigger className="w-40 h-9"><SelectValue placeholder="Estado" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos los estados</SelectItem>
-                <SelectItem value="publicada">Publicada</SelectItem>
-                <SelectItem value="borrador">Borrador</SelectItem>
-                <SelectItem value="cerrada">Cerrada</SelectItem>
-                <SelectItem value="archivada">Archivada</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filtroCategoria} onValueChange={setFiltroCategoria}>
-              <SelectTrigger className="w-40 h-9"><SelectValue placeholder="Categoría" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todas">Todas las categorías</SelectItem>
-                {categorias.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Button variant={soloFavoritas ? "default" : "outline"} size="sm" className="h-9 gap-1.5" onClick={() => setSoloFavoritas(!soloFavoritas)}>
-              <Star className={`h-3.5 w-3.5 ${soloFavoritas ? "fill-current" : ""}`} />
-              Favoritas
-            </Button>
-          </div>
+          <SubmoduleToolbar
+            busqueda={search}
+            onBusquedaChange={setSearch}
+            placeholderBusqueda="Buscar vacante..."
+            textoNuevo="Nueva vacante"
+            onNuevo={() => { /* TODO: crear vacante */ }}
+            campos={[
+              {
+                campo: "estadoPublicacion",
+                label: "Estado",
+                tipo: "lista",
+                opciones: Object.values(ESTADO_PUBLICACION_LABELS),
+              },
+              { campo: "categoria", label: "Categoría", tipo: "lista", opciones: categorias },
+              {
+                campo: "tipoJornada",
+                label: "Jornada",
+                tipo: "lista",
+                opciones: [...new Set(vacantes.map((v) => TIPO_JORNADA_LABELS[v.tipoJornada]))],
+              },
+              { campo: "favorita", label: "Favorita", tipo: "booleano" },
+            ]}
+            filtros={filtros}
+            onFiltrosChange={setFiltros}
+            ordenOpciones={[
+              { campo: "puesto", label: "Puesto" },
+              { campo: "ubicacion", label: "Ubicación" },
+              { campo: "estadoPublicacion", label: "Estado" },
+              { campo: "categoria", label: "Categoría" },
+            ]}
+            orden={orden}
+            onOrdenChange={setOrden}
+            extraDerecha={
+              <IOActions config={reclutamientoIO} context={{ empresaId: empresaActual.id }} onSuccess={() => window.location.reload()} />
+            }
+          />
 
           <div className="space-y-4">
             {filtered.length === 0 && (

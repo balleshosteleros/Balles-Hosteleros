@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useEmpresa, type Empresa } from "@/features/empresa/contexts/empresa-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,8 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Building2, Plus, Trash2, Image, Info } from "lucide-react";
+import { Building2, Plus, Trash2, Image, Info, Pencil } from "lucide-react";
 import { toast } from "sonner";
+import { ConfiguracionTab } from "@/features/ajustes/components/ConfiguracionTab";
 
 interface EmpresaFormData {
   nombre: string;
@@ -23,10 +24,18 @@ const EMPTY_FORM: EmpresaFormData = {
 };
 
 export function EmpresasTab() {
-  const { empresas, empresaActual, addEmpresa, deleteEmpresa } = useEmpresa();
+  const { empresas, empresaActual, addEmpresa, deleteEmpresa, getLogoUrl, setEmpresaId } = useEmpresa();
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<EmpresaFormData>(EMPTY_FORM);
   const [deleteTarget, setDeleteTarget] = useState<Empresa | null>(null);
+  const [editTarget, setEditTarget] = useState<Empresa | null>(null);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const openEdit = (emp: Empresa) => {
+    if (emp.id !== empresaActual.id) setEmpresaId(emp.id);
+    setEditTarget(emp);
+  };
 
   const openNew = () => {
     setForm(EMPTY_FORM);
@@ -75,40 +84,60 @@ export function EmpresasTab() {
       </div>
 
       <div className="grid gap-3">
-        {empresas.map((emp) => (
-          <Card key={emp.id} className={emp.id === empresaActual.id ? "border-primary/40 shadow-sm" : ""}>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="h-10 w-10 rounded-lg flex items-center justify-center font-bold text-white text-sm shrink-0"
-                    style={{ backgroundColor: emp.color }}
-                  >
-                    {emp.iniciales}
+        {empresas.map((emp) => {
+          const logoUrl = mounted ? getLogoUrl(emp.id) : "";
+          return (
+            <Card key={emp.id} className={emp.id === empresaActual.id ? "border-primary/40 shadow-sm" : ""}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {logoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={logoUrl}
+                        alt={emp.nombre}
+                        className="h-10 w-10 rounded-lg object-contain bg-muted/40 border shrink-0"
+                      />
+                    ) : (
+                      <div
+                        className="h-10 w-10 rounded-lg flex items-center justify-center font-bold text-white text-sm shrink-0"
+                        style={{ backgroundColor: emp.color }}
+                      >
+                        {emp.iniciales}
+                      </div>
+                    )}
+                    <div>
+                      <h4 className="font-semibold text-foreground">{emp.nombre}</h4>
+                      <p className="text-xs text-muted-foreground">ID: {emp.id}</p>
+                    </div>
+                    {emp.id === empresaActual.id && (
+                      <Badge variant="default" className="text-[10px]">Activa</Badge>
+                    )}
                   </div>
-                  <div>
-                    <h4 className="font-semibold text-foreground">{emp.nombre}</h4>
-                    <p className="text-xs text-muted-foreground">ID: {emp.id}</p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 text-xs"
+                      onClick={() => openEdit(emp)}
+                    >
+                      <Pencil className="h-3.5 w-3.5" /> Editar
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 text-xs text-destructive hover:text-destructive"
+                      onClick={() => setDeleteTarget(emp)}
+                      disabled={emp.id === empresaActual.id}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> Borrar
+                    </Button>
                   </div>
-                  {emp.id === empresaActual.id && (
-                    <Badge variant="default" className="text-[10px]">Activa</Badge>
-                  )}
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5 text-xs text-destructive hover:text-destructive"
-                    onClick={() => setDeleteTarget(emp)}
-                    disabled={emp.id === empresaActual.id}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" /> Borrar
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       {/* Modal nueva empresa */}
@@ -171,6 +200,19 @@ export function EmpresasTab() {
             <Button variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
             <Button onClick={handleSave}>Crear empresa</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal editar empresa (toda la configuración) */}
+      <Dialog open={!!editTarget} onOpenChange={(open) => { if (!open) setEditTarget(null); }}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-primary" />
+              Editar empresa — {editTarget?.nombre}
+            </DialogTitle>
+          </DialogHeader>
+          {editTarget && <ConfiguracionTab />}
         </DialogContent>
       </Dialog>
 

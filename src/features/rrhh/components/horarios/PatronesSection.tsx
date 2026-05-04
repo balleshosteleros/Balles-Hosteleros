@@ -1,20 +1,30 @@
 import { useState } from "react";
-import { getPatronesPorEmpresa, type Patron } from "@/features/rrhh/data/horarios";
+import { getPatronesPorEmpresa, getTurnosConfigPorEmpresa, type Patron } from "@/features/rrhh/data/horarios";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Plus, Pencil, Copy, Trash2, Search, Layers } from "lucide-react";
+import { Plus, Pencil, Copy, Trash2, Search, Layers, Clock } from "lucide-react";
 
 const DIAS_LABEL: Record<string, string> = { L: "Lun", M: "Mar", X: "Mié", J: "Jue", V: "Vie", S: "Sáb", D: "Dom" };
 
 export function PatronesSection({ empresaId }: { empresaId: string }) {
   const patrones = getPatronesPorEmpresa(empresaId);
+  const turnos = getTurnosConfigPorEmpresa(empresaId);
+  const turnosById = new Map(turnos.map(t => [t.id, t]));
   const [busqueda, setBusqueda] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editando, setEditando] = useState<Patron | null>(null);
+
+  const calcularHorasSemana = (p: Patron): number => {
+    if (p.turnos.length === 0 || p.dias.length === 0) return 0;
+    return p.dias.reduce((total, _, i) => {
+      const turnoId = p.turnos[i] ?? p.turnos[i % p.turnos.length];
+      return total + (turnosById.get(turnoId)?.duracion ?? 0);
+    }, 0);
+  };
 
   const filtrados = patrones.filter(p =>
     !busqueda || p.nombre.toLowerCase().includes(busqueda.toLowerCase())
@@ -46,10 +56,14 @@ export function PatronesSection({ empresaId }: { empresaId: string }) {
                 </div>
                 <Badge variant={p.activo ? "default" : "secondary"} className="text-xs shrink-0">{p.activo ? "Activo" : "Inactivo"}</Badge>
               </div>
-              <div className="flex flex-wrap gap-1">
+              <div className="flex flex-wrap items-center gap-1">
                 {p.dias.map(d => (
                   <Badge key={d} variant="outline" className="text-[10px] px-1.5">{DIAS_LABEL[d] || d}</Badge>
                 ))}
+                <Badge variant="secondary" className="text-[10px] px-1.5 ml-auto gap-1">
+                  <Clock className="h-3 w-3" />
+                  {calcularHorasSemana(p)}h / sem
+                </Badge>
               </div>
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span>{p.duracionDias} días · {p.repetible ? "Repetible" : "No repetible"}</span>

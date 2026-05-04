@@ -1,0 +1,104 @@
+[
+  {
+    "method": "GET",
+    "status": 200,
+    "url": "http://localhost:3000/cocina/fichas-tecnicas",
+    "body": "<!DOCTYPE html><html lang=\"es\"><head><meta charSet=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/><link rel=\"stylesheet\" href=\"/_next/static/chunks/src_app_globals_0p2ml0n.css\" data-precedence=\"next_static/chunks/src_app_globals_0p2ml0n.css\"/><link rel=\"preload\" as=\"script\" fetchPriority=\"low\" href=\"/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_10z625~._.js\"/><script src=\"/_next/static/chunks/node_modules_next_dist_compiled_next-devtools"
+  },
+  {
+    "method": "POST",
+    "status": 200,
+    "url": "http://localhost:3000/cocina/fichas-tecnicas",
+    "body": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":true,\"b\":\"development\"}\n1:D\"$2\"\n1:{\"ok\":true,\"data\":[{\"id\":\"722f724f-2064-42ba-9bf6-c6283c07ed91\",\"empresa_id\":\"00000000-0000-0000-0000-000000000001\",\"nombre\":\"prueba\",\"categoria\":null,\"estado\":\"Activa\",\"partida\":null,\"porciones\":1,\"tiempo_preparacion\":null,\"elaboracion\":null,\"descripcion\":null,\"coste_total\":0,\"pvp\":0,\"margen_pct\":0,\"alergenos\":[],\"etiquetas\":[],\"foto_url\":null,\"notas\":null,\"origen_receta_id\":\"46898389-d8d5-41b0-89c4-34a4cf2a5a88\",\"created_at\":\"202"
+  },
+  {
+    "method": "POST",
+    "status": 200,
+    "url": "http://localhost:3000/cocina/fichas-tecnicas",
+    "body": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":true,\"b\":\"development\"}\n1:D\"$2\"\n1:{\"ok\":true,\"data\":[{\"id\":\"097ca373-74d7-40b0-b5de-64c90f94a1c8\",\"empresa_id\":\"00000000-0000-0000-0000-000000000001\",\"grupo_codigo\":\"categorias\",\"nombre\":\"PARA EMPEZAR\",\"descripcion\":null,\"orden\":1,\"activa\":true,\"created_at\":\"2026-04-24T04:57:13.7174+00:00\",\"updated_at\":\"2026-04-24T04:57:13.7174+00:00\",\"created_by\":null},{\"id\":\"e2b2bb9f-3068-43eb-821c-3b8b98a9889d\",\"empresa_id\":\"00000000-0000-0000-0000-000000000001\",\"grupo_codigo\":\""
+  },
+  {
+    "method": "POST",
+    "status": 200,
+    "url": "http://localhost:3000/cocina/fichas-tecnicas",
+    "body": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":true,\"b\":\"development\"}\n1:D\"$2\"\n1:{\"ok\":true,\"data\":[{\"id\":\"1432440a-112b-427f-8573-9275c9de321c\",\"empresa_id\":\"00000000-0000-0000-0000-000000000001\",\"grupo_codigo\":\"alergenos\",\"nombre\":\"Ninguno\",\"descripcion\":null,\"orden\":1,\"activa\":true,\"created_at\":\"2026-04-24T04:57:13.7174+00:00\",\"updated_at\":\"2026-04-24T04:57:13.7174+00:00\",\"created_by\":null},{\"id\":\"4224638e-af94-45c2-9798-3cf7890926da\",\"empresa_id\":\"00000000-0000-0000-0000-000000000001\",\"grupo_codigo\":\"alerge"
+  },
+  {
+    "method": "POST",
+    "status": 200,
+    "url": "http://localhost:3000/cocina/fichas-tecnicas",
+    "body": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":true,\"b\":\"development\"}\n1:D\"$2\"\n1:{\"ok\":true,\"data\":[{\"id\":\"4733bde2-7ad9-42ea-bea0-7c1ed830f168\",\"empresa_id\":\"00000000-0000-0000-0000-000000000001\",\"grupo_codigo\":\"partidas\",\"nombre\":\"Entrantes frÃ­os/calientes\",\"descripcion\":null,\"orden\":1,\"activa\":true,\"created_at\":\"2026-04-24T04:57:13.7174+00:00\",\"updated_at\":\"2026-04-24T04:57:13.7174+00:00\",\"created_by\":null},{\"id\":\"f608b9bb-15cd-4208-99f3-eae0cba4b40b\",\"empresa_id\":\"00000000-0000-0000-0000-000000000001\",\"gru"
+  },
+  {
+    "method": "POST",
+    "status": 200,
+    "url": "http://localhost:3000/cocina/fichas-tecnicas",
+    "body": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":true,\"b\":\"development\"}\n1:D\"$2\"\n1:{\"ok\":true,\"data\":[{\"id\":\"bfac40e0-6e8c-4c1f-b0b8-aabd23f47c83\",\"empresa_id\":\"00000000-0000-0000-0000-000000000001\",\"grupo_codigo\":\"menaje\",\"nombre\":\"Plato rectangular de pizarra\",\"descripcion\":null,\"orden\":1,\"activa\":true,\"created_at\":\"2026-04-24T04:57:13.7174+00:00\",\"updated_at\":\"2026-04-24T04:57:13.7174+00:00\",\"created_by\":null},{\"id\":\"49255fd6-ae35-4c07-8a7e-06e8ce60b4e4\",\"empresa_id\":\"00000000-0000-0000-0000-000000000001\",\"gru"
+  },
+  {
+    "method": "POST",
+    "status": 200,
+    "url": "http://localhost:3000/cocina/fichas-tecnicas",
+    "body": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":true,\"b\":\"development\"}\n1:D\"$2\"\n1:{\"ok\":true,\"data\":[{\"id\":\"2bf54e08-8ba4-485f-ba12-a07223810078\",\"empresa_id\":\"00000000-0000-0000-0000-000000000001\",\"grupo_codigo\":\"recomendaciones\",\"nombre\":\"Ninguno\",\"descripcion\":null,\"orden\":1,\"activa\":true,\"created_at\":\"2026-04-24T04:57:13.7174+00:00\",\"updated_at\":\"2026-04-24T04:57:13.7174+00:00\",\"created_by\":null},{\"id\":\"e8399c25-8532-4f02-a256-9d715dbc22d3\",\"empresa_id\":\"00000000-0000-0000-0000-000000000001\",\"grupo_codigo\":\""
+  },
+  {
+    "method": "POST",
+    "status": 200,
+    "url": "http://localhost:3000/cocina/fichas-tecnicas",
+    "body": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":true,\"b\":\"development\"}\n1:D\"$2\"\n1:{\"ok\":true,\"data\":0}\n"
+  },
+  {
+    "method": "POST",
+    "status": 200,
+    "url": "http://localhost:3000/cocina/fichas-tecnicas",
+    "body": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":true,\"b\":\"development\"}\n1:D\"$2\"\n1:{}\n"
+  },
+  {
+    "method": "POST",
+    "status": 200,
+    "url": "http://localhost:3000/cocina/fichas-tecnicas",
+    "body": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":true,\"b\":\"development\"}\n1:D\"$2\"\n1:{\"ok\":true,\"data\":[{\"id\":\"097ca373-74d7-40b0-b5de-64c90f94a1c8\",\"empresa_id\":\"00000000-0000-0000-0000-000000000001\",\"grupo_codigo\":\"categorias\",\"nombre\":\"PARA EMPEZAR\",\"descripcion\":null,\"orden\":1,\"activa\":true,\"created_at\":\"2026-04-24T04:57:13.7174+00:00\",\"updated_at\":\"2026-04-24T04:57:13.7174+00:00\",\"created_by\":null},{\"id\":\"e2b2bb9f-3068-43eb-821c-3b8b98a9889d\",\"empresa_id\":\"00000000-0000-0000-0000-000000000001\",\"grupo_codigo\":\""
+  },
+  {
+    "method": "POST",
+    "status": 200,
+    "url": "http://localhost:3000/cocina/fichas-tecnicas",
+    "body": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":true,\"b\":\"development\"}\n1:D\"$2\"\n1:{\"ok\":true,\"data\":[{\"id\":\"097ca373-74d7-40b0-b5de-64c90f94a1c8\",\"empresa_id\":\"00000000-0000-0000-0000-000000000001\",\"grupo_codigo\":\"categorias\",\"nombre\":\"PARA EMPEZAR\",\"descripcion\":null,\"orden\":1,\"activa\":true,\"created_at\":\"2026-04-24T04:57:13.7174+00:00\",\"updated_at\":\"2026-04-24T04:57:13.7174+00:00\",\"created_by\":null},{\"id\":\"e2b2bb9f-3068-43eb-821c-3b8b98a9889d\",\"empresa_id\":\"00000000-0000-0000-0000-000000000001\",\"grupo_codigo\":\""
+  },
+  {
+    "method": "POST",
+    "status": 200,
+    "url": "http://localhost:3000/cocina/fichas-tecnicas",
+    "body": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":true,\"b\":\"development\"}\n1:D\"$2\"\n1:{\"ok\":true,\"data\":{\"id\":\"cdf6d14c-aafa-4346-8e74-b6ab1b63b523\",\"empresa_id\":\"00000000-0000-0000-0000-000000000001\",\"grupo_codigo\":\"categorias\",\"nombre\":\"TEST_PLAYWRIGHT\",\"descripcion\":null,\"orden\":8,\"activa\":true,\"created_at\":\"2026-04-24T05:19:23.428701+00:00\",\"updated_at\":\"2026-04-24T05:19:23.428701+00:00\",\"created_by\":null}}\n"
+  },
+  {
+    "method": "POST",
+    "status": 200,
+    "url": "http://localhost:3000/cocina/fichas-tecnicas",
+    "body": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":true,\"b\":\"development\"}\n1:D\"$2\"\n1:{\"ok\":true,\"data\":[{\"id\":\"097ca373-74d7-40b0-b5de-64c90f94a1c8\",\"empresa_id\":\"00000000-0000-0000-0000-000000000001\",\"grupo_codigo\":\"categorias\",\"nombre\":\"PARA EMPEZAR\",\"descripcion\":null,\"orden\":1,\"activa\":true,\"created_at\":\"2026-04-24T04:57:13.7174+00:00\",\"updated_at\":\"2026-04-24T04:57:13.7174+00:00\",\"created_by\":null},{\"id\":\"e2b2bb9f-3068-43eb-821c-3b8b98a9889d\",\"empresa_id\":\"00000000-0000-0000-0000-000000000001\",\"grupo_codigo\":\""
+  },
+  {
+    "method": "POST",
+    "status": 200,
+    "url": "http://localhost:3000/cocina/fichas-tecnicas",
+    "body": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":true,\"b\":\"development\"}\n1:D\"$2\"\n1:{\"ok\":true,\"data\":[{\"id\":\"1432440a-112b-427f-8573-9275c9de321c\",\"empresa_id\":\"00000000-0000-0000-0000-000000000001\",\"grupo_codigo\":\"alergenos\",\"nombre\":\"Ninguno\",\"descripcion\":null,\"orden\":1,\"activa\":true,\"created_at\":\"2026-04-24T04:57:13.7174+00:00\",\"updated_at\":\"2026-04-24T04:57:13.7174+00:00\",\"created_by\":null},{\"id\":\"4224638e-af94-45c2-9798-3cf7890926da\",\"empresa_id\":\"00000000-0000-0000-0000-000000000001\",\"grupo_codigo\":\"alerge"
+  },
+  {
+    "method": "POST",
+    "status": 200,
+    "url": "http://localhost:3000/cocina/fichas-tecnicas",
+    "body": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":true,\"b\":\"development\"}\n1:D\"$2\"\n1:{\"ok\":true,\"data\":[{\"id\":\"4733bde2-7ad9-42ea-bea0-7c1ed830f168\",\"empresa_id\":\"00000000-0000-0000-0000-000000000001\",\"grupo_codigo\":\"partidas\",\"nombre\":\"Entrantes frÃ­os/calientes\",\"descripcion\":null,\"orden\":1,\"activa\":true,\"created_at\":\"2026-04-24T04:57:13.7174+00:00\",\"updated_at\":\"2026-04-24T04:57:13.7174+00:00\",\"created_by\":null},{\"id\":\"f608b9bb-15cd-4208-99f3-eae0cba4b40b\",\"empresa_id\":\"00000000-0000-0000-0000-000000000001\",\"gru"
+  },
+  {
+    "method": "POST",
+    "status": 200,
+    "url": "http://localhost:3000/cocina/fichas-tecnicas",
+    "body": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":true,\"b\":\"development\"}\n1:D\"$2\"\n1:{\"ok\":true,\"data\":[{\"id\":\"bfac40e0-6e8c-4c1f-b0b8-aabd23f47c83\",\"empresa_id\":\"00000000-0000-0000-0000-000000000001\",\"grupo_codigo\":\"menaje\",\"nombre\":\"Plato rectangular de pizarra\",\"descripcion\":null,\"orden\":1,\"activa\":true,\"created_at\":\"2026-04-24T04:57:13.7174+00:00\",\"updated_at\":\"2026-04-24T04:57:13.7174+00:00\",\"created_by\":null},{\"id\":\"49255fd6-ae35-4c07-8a7e-06e8ce60b4e4\",\"empresa_id\":\"00000000-0000-0000-0000-000000000001\",\"gru"
+  },
+  {
+    "method": "POST",
+    "status": 200,
+    "url": "http://localhost:3000/cocina/fichas-tecnicas",
+    "body": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":true,\"b\":\"development\"}\n1:D\"$2\"\n1:{\"ok\":true,\"data\":[{\"id\":\"2bf54e08-8ba4-485f-ba12-a07223810078\",\"empresa_id\":\"00000000-0000-0000-0000-000000000001\",\"grupo_codigo\":\"recomendaciones\",\"nombre\":\"Ninguno\",\"descripcion\":null,\"orden\":1,\"activa\":true,\"created_at\":\"2026-04-24T04:57:13.7174+00:00\",\"updated_at\":\"2026-04-24T04:57:13.7174+00:00\",\"created_by\":null},{\"id\":\"e8399c25-8532-4f02-a256-9d715dbc22d3\",\"empresa_id\":\"00000000-0000-0000-0000-000000000001\",\"grupo_codigo\":\""
+  }
+]

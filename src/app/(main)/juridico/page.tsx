@@ -1,5 +1,3 @@
-import { redirect } from "next/navigation";
-
 export default function JuridicoPage() {
-  redirect("/juridico/procesos");
+  return <div className="p-4 md:p-6" />;
 }

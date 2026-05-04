@@ -2,11 +2,11 @@
 
 import { useState, useMemo } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Filter, ArrowLeftRight } from "lucide-react";
+import { Search, ArrowLeftRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SAMPLE_CONCILIACION } from "@/features/contabilidad/data/contabilidad";
+import { SubmoduleToolbar } from "@/shared/components/SubmoduleToolbar";
 
 const TABS = [{ id: "PENDIENTE", label: "Para conciliar" }, { id: "CONCILIADA", label: "Conciliadas" }];
 
@@ -27,10 +27,13 @@ export function ConciliacionView() {
       <div className="border-b px-6 pt-4 flex items-center gap-6">
         {TABS.map(t => <button key={t.id} onClick={() => setTab(t.id)} className={cn("pb-3 text-sm font-medium border-b-2 transition-colors", tab === t.id ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground")}>{t.label}</button>)}
       </div>
-      <div className="px-6 py-3 flex items-center gap-3">
-        <div className="relative flex-1 max-w-md"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Buscar transacciones..." className="pl-9" value={busqueda} onChange={e => setBusqueda(e.target.value)} /></div>
-        <Button variant="outline" size="sm" className="text-xs">📅 Este año</Button>
-        <Button variant="outline" size="icon" className="h-8 w-8"><Filter className="h-4 w-4" /></Button>
+      <div className="px-6 py-3">
+        <SubmoduleToolbar
+          busqueda={busqueda}
+          onBusquedaChange={setBusqueda}
+          placeholderBusqueda="Buscar transacciones..."
+          ocultarNuevo
+        />
       </div>
       <div className="flex-1 overflow-auto px-6">
         <table className="w-full text-sm">

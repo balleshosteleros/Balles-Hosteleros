@@ -332,7 +332,7 @@ export function PartidasView() {
           <TabsList>
             <TabsTrigger value="lista"><List className="h-4 w-4 mr-1" />Lista</TabsTrigger>
             <TabsTrigger value="pipeline"><LayoutGrid className="h-4 w-4 mr-1" />Pipeline</TabsTrigger>
-            <TabsTrigger value="config"><Settings2 className="h-4 w-4 mr-1" />Configuración</TabsTrigger>
+            <TabsTrigger value="config" aria-label="Configuración" className="ml-auto"><Settings2 className="h-4 w-4" strokeWidth={1.75} /></TabsTrigger>
           </TabsList>
           {mainTab !== "config" && (
             <div className="flex gap-2 items-center">

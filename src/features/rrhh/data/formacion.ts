@@ -110,7 +110,7 @@ const rutasHabana: RutaFormativa[] = [
     ],
   },
   {
-    id: "ruta-h-dj", puestoId: "rh4", puestoNombre: "ARTISTA / DJ", empresaId: "habana",
+    id: "ruta-h-dj", puestoId: "rh4", puestoNombre: "ARTISTA", empresaId: "habana",
     modulos: [
       crearModulo("m-hdj1", "Bienvenida y cultura de empresa", 1, 4, 70),
       crearModulo("m-hdj2", "Equipos de sonido e iluminación", 2, 4, 70),
@@ -162,7 +162,7 @@ const progresoHabana: ProgresoEmpleado[] = [
   { id: "pf-h2", empleadoId: "h1", empleadoNombre: "Carlos Martínez López", puestoNombre: "CAMARERO", empresaId: "habana", rutaId: "ruta-h-camarero", modulosCompletados: 5, totalModulos: 5, videosVistos: 19, totalVideos: 19, evaluacionesAprobadas: 5, evaluacionesSuspendidas: 1, notaMedia: 88, porcentajeAvance: 100, estado: "completado", ultimoAcceso: "2026-03-28 14:30", fechaInicio: "2026-02-01" },
   { id: "pf-h3", empleadoId: "h2", empleadoNombre: "María García Fernández", puestoNombre: "JEFE DE SALA", empresaId: "habana", rutaId: "ruta-h-jefesala", modulosCompletados: 4, totalModulos: 4, videosVistos: 17, totalVideos: 17, evaluacionesAprobadas: 4, evaluacionesSuspendidas: 0, notaMedia: 91, porcentajeAvance: 100, estado: "completado", ultimoAcceso: "2026-03-20 11:00", fechaInicio: "2026-01-10" },
   { id: "pf-h4", empleadoId: "h3", empleadoNombre: "Alejandro Ruiz Torres", puestoNombre: "CACHIMBERO", empresaId: "habana", rutaId: "ruta-h-cachimbero", modulosCompletados: 1, totalModulos: 3, videosVistos: 4, totalVideos: 12, evaluacionesAprobadas: 1, evaluacionesSuspendidas: 2, notaMedia: 58, porcentajeAvance: 33, estado: "bloqueado", ultimoAcceso: "2026-04-05 20:00", fechaInicio: "2026-03-20" },
-  { id: "pf-h5", empleadoId: "h7", empleadoNombre: "Pablo Herrera Vega", puestoNombre: "ARTISTA / DJ", empresaId: "habana", rutaId: "ruta-h-dj", modulosCompletados: 2, totalModulos: 3, videosVistos: 8, totalVideos: 11, evaluacionesAprobadas: 2, evaluacionesSuspendidas: 0, notaMedia: 76, porcentajeAvance: 67, estado: "en_curso", ultimoAcceso: "2026-04-06 22:00", fechaInicio: "2026-03-01" },
+  { id: "pf-h5", empleadoId: "h7", empleadoNombre: "Pablo Herrera Vega", puestoNombre: "ARTISTA", empresaId: "habana", rutaId: "ruta-h-dj", modulosCompletados: 2, totalModulos: 3, videosVistos: 8, totalVideos: 11, evaluacionesAprobadas: 2, evaluacionesSuspendidas: 0, notaMedia: 76, porcentajeAvance: 67, estado: "en_curso", ultimoAcceso: "2026-04-06 22:00", fechaInicio: "2026-03-01" },
   { id: "pf-h6", empleadoId: "h8", empleadoNombre: "Sofía Romero Castillo", puestoNombre: "CAMARERO", empresaId: "habana", rutaId: "ruta-h-camarero", modulosCompletados: 1, totalModulos: 5, videosVistos: 4, totalVideos: 19, evaluacionesAprobadas: 1, evaluacionesSuspendidas: 0, notaMedia: 74, porcentajeAvance: 20, estado: "en_curso", ultimoAcceso: "2026-04-07 08:00", fechaInicio: "2026-04-01" },
 ];
 

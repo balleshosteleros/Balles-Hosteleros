@@ -4,7 +4,7 @@ import { getAppContext } from "@/lib/supabase/get-context";
 import { getMiInformacionLaboral } from "@/features/rrhh/actions/empleados-actions";
 
 export type TareaPrioridad = "alta" | "media" | "baja";
-export type TareaTipo = "manual" | "nueva_receta_fase" | "sistema";
+export type TareaTipo = "manual" | "nueva_receta_fase" | "sistema" | "cronograma";
 
 export interface TareaRow {
   id: string;
@@ -26,8 +26,28 @@ export interface TareaRow {
 
 type Result<T = void> = { ok: true; data: T } | { ok: false; error: string };
 
+const TIPO_ORDER: Record<TareaTipo, number> = {
+  cronograma: 0,
+  nueva_receta_fase: 1,
+  manual: 2,
+  sistema: 3,
+};
+
+function sortTareas(rows: TareaRow[]): TareaRow[] {
+  return rows.slice().sort((a, b) => {
+    const fa = a.fecha;
+    const fb = b.fecha;
+    if (fa !== fb) return fa < fb ? -1 : 1;
+    const ta = TIPO_ORDER[a.tipo] ?? 99;
+    const tb = TIPO_ORDER[b.tipo] ?? 99;
+    if (ta !== tb) return ta - tb;
+    return (a.created_at ?? "").localeCompare(b.created_at ?? "");
+  });
+}
+
 /**
- * Lista tareas del usuario actual.
+ * Lista tareas del usuario actual. Las tareas tipo "cronograma" salen primero
+ * dentro de cada día.
  */
 export async function listTareasMias(): Promise<Result<TareaRow[]>> {
   try {
@@ -39,7 +59,7 @@ export async function listTareasMias(): Promise<Result<TareaRow[]>> {
       .eq("user_id", userId)
       .order("fecha", { ascending: true });
     if (error) throw error;
-    return { ok: true, data: (data as TareaRow[]) ?? [] };
+    return { ok: true, data: sortTareas((data as TareaRow[]) ?? []) };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Error" };
   }
@@ -237,5 +257,171 @@ export async function completarTareaSugerida(cronogramaId: string, titulo: strin
   } catch (err) {
     console.error("[tareas] completarTareaSugerida:", err);
     return { ok: false, error: "Error al marcar tarea" };
+  }
+}
+
+/* ───────────── Cronogramas → Mis Tareas (auto-seed) ───────────── */
+
+interface CronogramaTareaRow {
+  id: string;
+  rol: string;
+  tarea: string;
+  resumen: string | null;
+  frecuencia: string | null;
+  tiempo_requerido: string | null;
+  dia_semana: number[] | null;
+  dia_mes: number | null;
+  fecha_anual: string | null;
+  meses_trimestrales: number[] | null;
+  empleados_asignados: string[] | null;
+  parent_id: string | null;
+  empresa_id: string | null;
+}
+
+function ymd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function isoWeekday(d: Date): number {
+  // ISO: 1=lunes ... 7=domingo
+  const js = d.getDay(); // 0=domingo
+  return js === 0 ? 7 : js;
+}
+
+function tocaHoy(t: CronogramaTareaRow, hoy: Date): boolean {
+  const f = (t.frecuencia ?? "").toUpperCase();
+  if (!f) return false;
+  if (f === "DIARIO") return true;
+  if (f === "SEMANAL") {
+    const arr = t.dia_semana ?? [];
+    return arr.includes(isoWeekday(hoy));
+  }
+  if (f === "MENSUAL") {
+    return t.dia_mes === hoy.getDate();
+  }
+  if (f === "TRIMESTRAL") {
+    const meses = t.meses_trimestrales ?? [];
+    return meses.includes(hoy.getMonth() + 1) && t.dia_mes === hoy.getDate();
+  }
+  if (f === "ANUAL") {
+    const mm = String(hoy.getMonth() + 1).padStart(2, "0");
+    const dd = String(hoy.getDate()).padStart(2, "0");
+    return t.fecha_anual === `${mm}-${dd}`;
+  }
+  // POR NECESIDAD / OTRO → no se materializa
+  return false;
+}
+
+interface SeedSummary {
+  rol: string | null;
+  insertadas: number;
+  yaExistian: number;
+}
+
+/**
+ * Materializa en `tareas` las tareas del cronograma del rol del usuario que
+ * tocan hoy. Idempotente: chequea existentes antes de insertar.
+ *
+ * Empareja `cronogramas_operativos.rol` con `profiles.rol_label`
+ * (case-insensitive, trim).
+ */
+export async function seedTareasCronogramaHoy(): Promise<Result<SeedSummary>> {
+  try {
+    const { supabase, userId, empresaId } = await getAppContext();
+    if (!userId) return { ok: true, data: { rol: null, insertadas: 0, yaExistian: 0 } };
+
+    // 1) Rol del usuario
+    const { data: profile, error: pErr } = await supabase
+      .from("profiles")
+      .select("rol_label")
+      .eq("user_id", userId)
+      .single();
+    if (pErr) {
+      console.warn("[seedTareasCronogramaHoy] sin profile:", pErr.message);
+      return { ok: true, data: { rol: null, insertadas: 0, yaExistian: 0 } };
+    }
+    const rolRaw = (profile?.rol_label as string | null) ?? null;
+    const rol = rolRaw ? rolRaw.trim() : null;
+    if (!rol) {
+      return { ok: true, data: { rol: null, insertadas: 0, yaExistian: 0 } };
+    }
+
+    // 2) Cronogramas del rol (ilike sin wildcards = igualdad case-insensitive)
+    const { data: cronos, error: cErr } = await supabase
+      .from("cronogramas_operativos")
+      .select(
+        "id, rol, tarea, resumen, frecuencia, tiempo_requerido, dia_semana, dia_mes, fecha_anual, meses_trimestrales, empleados_asignados, parent_id, empresa_id"
+      )
+      .ilike("rol", rol);
+    if (cErr) throw cErr;
+
+    const candidatos = (cronos as CronogramaTareaRow[] | null) ?? [];
+    const hoy = new Date();
+    const hoyIso = ymd(hoy);
+
+    // Filtrar: que toquen hoy y que el usuario esté asignado (o asignación abierta)
+    const aSembrar = candidatos.filter((t) => {
+      if (!tocaHoy(t, hoy)) return false;
+      const asig = t.empleados_asignados;
+      if (!asig || asig.length === 0) return true; // abierto a todo el rol
+      return asig.includes(userId);
+    });
+
+    if (aSembrar.length === 0) {
+      return { ok: true, data: { rol, insertadas: 0, yaExistian: 0 } };
+    }
+
+    // 3) ¿Cuáles ya existen hoy?
+    const { data: existentes, error: eErr } = await supabase
+      .from("tareas")
+      .select("ref_id")
+      .eq("user_id", userId)
+      .eq("fecha", hoyIso)
+      .eq("ref_tabla", "cronogramas_operativos")
+      .in(
+        "ref_id",
+        aSembrar.map((t) => t.id)
+      );
+    if (eErr) throw eErr;
+    const existSet = new Set(
+      ((existentes as { ref_id: string }[] | null) ?? []).map((r) => r.ref_id)
+    );
+
+    const nuevas = aSembrar.filter((t) => !existSet.has(t.id));
+
+    if (nuevas.length === 0) {
+      return { ok: true, data: { rol, insertadas: 0, yaExistian: existSet.size } };
+    }
+
+    // 4) Insertar
+    const rows = nuevas.map((t) => ({
+      empresa_id: empresaId ?? t.empresa_id ?? null,
+      user_id: userId,
+      titulo: t.tarea,
+      descripcion: t.resumen ?? null,
+      fecha: hoyIso,
+      hecha: false,
+      prioridad: "alta" as TareaPrioridad,
+      tipo: "cronograma" as TareaTipo,
+      link_url: null,
+      ref_tabla: "cronogramas_operativos",
+      ref_id: t.id,
+      created_by: userId,
+    }));
+
+    const { error: iErr } = await supabase.from("tareas").insert(rows);
+    if (iErr) throw iErr;
+
+    return {
+      ok: true,
+      data: { rol, insertadas: rows.length, yaExistian: existSet.size },
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error";
+    console.error("[seedTareasCronogramaHoy]", msg);
+    return { ok: false, error: msg };
   }
 }

@@ -165,7 +165,7 @@ export function AyudaChat() {
                       <p className="text-xs text-muted-foreground px-1">
                         {msg.feedbackPositivo
                           ? "✓ Gracias por tu feedback."
-                          : "Tu duda ha sido registrada. Un administrador la revisará."}
+                          : "Tu duda ha sido registrada. Un director la revisará."}
                       </p>
                     )}
                   </>

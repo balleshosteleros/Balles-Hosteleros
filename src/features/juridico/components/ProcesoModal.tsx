@@ -24,14 +24,24 @@ export function ProcesoModal({ open, onClose, onSave, item, empresa, empresaId }
     tipo: item?.tipo ?? TIPOS_PROCESO[0],
     juridico: item?.juridico ?? JURIDICOS[0],
     fecha: item?.fecha ?? new Date().toISOString().slice(0, 10),
-    estado: item?.estado ?? ("PENDIENTE" as EstadoProceso),
+    estado: item?.estado ?? ("ABIERTO" as EstadoProceso),
     gravedad: item?.gravedad ?? ("LEVE" as GravedadProceso),
     descripcion: item?.descripcion ?? "",
   });
 
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
+  const isValid =
+    form.titulo.trim() !== "" &&
+    form.tipo.trim() !== "" &&
+    form.juridico.trim() !== "" &&
+    form.fecha.trim() !== "" &&
+    form.estado.trim() !== "" &&
+    form.gravedad.trim() !== "" &&
+    form.descripcion.trim() !== "";
+
   const handleSave = () => {
+    if (!isValid) return;
     onSave({
       id: item?.id ?? crypto.randomUUID(),
       ...form,
@@ -62,7 +72,7 @@ export function ProcesoModal({ open, onClose, onSave, item, empresa, empresaId }
             </Select>
           </div>
           <div>
-            <Label>JURÍDICO RESPONSABLE</Label>
+            <Label>RESPONSABLE</Label>
             <Select value={form.juridico} onValueChange={(v) => set("juridico", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>{JURIDICOS.map((j) => <SelectItem key={j} value={j}>{j}</SelectItem>)}</SelectContent>
@@ -91,9 +101,12 @@ export function ProcesoModal({ open, onClose, onSave, item, empresa, empresaId }
             <Textarea value={form.descripcion} onChange={(e) => set("descripcion", e.target.value)} rows={3} placeholder="Descripción detallada…" />
           </div>
         </div>
+        {!isValid && (
+          <p className="text-xs text-red-600 mt-3">Completa todos los campos para {isEdit ? "guardar los cambios" : "crear el expediente"}.</p>
+        )}
         <div className="flex justify-end gap-2 mt-4">
           <Button variant="outline" onClick={onClose}>CANCELAR</Button>
-          <Button onClick={handleSave}>{isEdit ? "GUARDAR CAMBIOS" : "CREAR EXPEDIENTE"}</Button>
+          <Button onClick={handleSave} disabled={!isValid}>{isEdit ? "GUARDAR CAMBIOS" : "CREAR EXPEDIENTE"}</Button>
         </div>
       </DialogContent>
     </Dialog>

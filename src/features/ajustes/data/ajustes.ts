@@ -111,44 +111,39 @@ export interface AjustesEmpresa {
 }
 
 const MODULOS = [
-  "Dashboard", "Dirección", "RRHH", "Logística", "Cocina",
+  "Dirección", "RRHH", "Logística", "Cocina",
   "Gerencia", "Contabilidad", "Gestoría", "Jurídico",
   "Marketing", "Ajustes",
 ];
 
-// Mapa rol → módulo propio
+// Mapa rol persona → módulo propio
 const ROLE_MODULE_MAP: Record<string, string> = {
-  "Dirección": "Dirección",
-  "RRHH": "RRHH",
-  "Logística": "Logística",
-  "Cocina": "Cocina",
-  "Gerencia": "Gerencia",
-  "Contabilidad": "Contabilidad",
-  "Gestoría": "Gestoría",
-  "Jurídico": "Jurídico",
-  "Marketing": "Marketing",
+  "DIRECTOR": "Dirección",
+  "RESPONSABLE RRHH": "RRHH",
+  "JEFE DE LOGÍSTICA": "Logística",
+  "JEFE DE COCINA": "Cocina",
+  "JEFE DE SALA": "Sala",
+  "GERENTE": "Gerencia",
+  "CONTABLE": "Contabilidad",
+  "GESTOR": "Gestoría",
+  "ABOGADO": "Jurídico",
+  "RESPONSABLE MARKETING": "Marketing",
+  "RESPONSABLE CALIDAD": "Calidad",
 };
 
 function buildRoles(): Rol[] {
   const roleNames = [
-    { nombre: "Administrador", desc: "Acceso total a todos los módulos" },
-    { nombre: "Director", desc: "Acceso total a todos los módulos" },
-    { nombre: "Dirección", desc: "Gestión de aperturas y cronogramas" },
-    { nombre: "RRHH", desc: "Gestión de personal y nóminas" },
-    { nombre: "Logística", desc: "Proveedores, productos e inventario" },
-    { nombre: "Cocina", desc: "Fichas técnicas y producción" },
-    { nombre: "Gerencia", desc: "Supervisión general y cuadros de mando" },
-    { nombre: "Contabilidad", desc: "Facturas, operaciones y tesorería" },
-    { nombre: "Gestoría", desc: "Gestión documental y fiscal" },
-    { nombre: "Jurídico", desc: "Procesos legales y normativa" },
-    { nombre: "Marketing", desc: "Comunicación, campañas y reservas" },
-    { nombre: "Empleado", desc: "Acceso básico a ficha personal" },
-    { nombre: "Solo lectura", desc: "Visualización sin edición" },
+    { nombre: "DIRECTOR", desc: "Dirección general — gestión de aperturas y cronogramas" },
+    { nombre: "RESPONSABLE RRHH", desc: "Gestión de personal y nóminas" },
+    { nombre: "JEFE DE LOGÍSTICA", desc: "Proveedores, productos e inventario" },
+    { nombre: "JEFE DE COCINA", desc: "Fichas técnicas y producción" },
+    { nombre: "GERENTE", desc: "Supervisión general y cuadros de mando" },
+    { nombre: "CONTABLE", desc: "Facturas, operaciones y tesorería" },
+    { nombre: "GESTOR", desc: "Gestión documental y fiscal" },
+    { nombre: "ABOGADO", desc: "Procesos legales y normativa" },
+    { nombre: "RESPONSABLE MARKETING", desc: "Comunicación, campañas y reservas" },
   ];
   return roleNames.map((r, i) => {
-    const isTotal = r.nombre === "Administrador" || r.nombre === "Director";
-    const isSoloLectura = r.nombre === "Solo lectura";
-    const isEmpleado = r.nombre === "Empleado";
     const moduloPropio = ROLE_MODULE_MAP[r.nombre];
     return {
       id: `rol-${i}`,
@@ -156,15 +151,15 @@ function buildRoles(): Rol[] {
       descripcion: r.desc,
       permisos: MODULOS.map((m) => ({
         modulo: m,
-        ver: isTotal || isSoloLectura || (isEmpleado ? m === "RRHH" || m === "Dashboard" : m === "Dashboard" || m === moduloPropio),
-        editar: isTotal || (!isSoloLectura && !isEmpleado && m === moduloPropio),
+        ver: m === moduloPropio,
+        editar: m === moduloPropio,
       })),
     };
   });
 }
 
 function buildDepts(): Departamento[] {
-  const names = ["GERENCIA", "CONTABILIDAD", "GESTORÍA", "JURÍDICO", "RECURSOS HUMANOS", "LOGÍSTICA", "MARKETING"];
+  const names = ["DIRECCIÓN", "GERENCIA", "CONTABILIDAD", "GESTORÍA", "JURÍDICO", "RECURSOS HUMANOS", "LOGÍSTICA", "MARKETING", "COCINA", "SALA", "CALIDAD"];
   return names.map((n, i) => ({
     id: `dept-${i}`,
     nombre: n,

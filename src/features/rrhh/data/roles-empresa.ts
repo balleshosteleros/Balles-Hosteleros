@@ -227,7 +227,7 @@ const rolesHabana: RolEmpresa[] = [
     vacanteId: "v3", favorita: false,
   },
   {
-    id: "rh4", nombre: "ARTISTA / DJ", departamento: "Entretenimiento", descripcionPuesto: "Actuaciones en directo y sesiones DJ en escenario principal.",
+    id: "rh4", nombre: "ARTISTA", departamento: "Entretenimiento", descripcionPuesto: "Actuaciones en directo y sesiones DJ en escenario principal.",
     responsable: "Antonio Ballesteros", empresaId: "habana", estado: "activo", activo: true,
     ubicacion: "La Habana — Escenario", jornada: "parcial", salario: "1.000€ – 2.000€",
     tipoContrato: "temporal", observaciones: "",

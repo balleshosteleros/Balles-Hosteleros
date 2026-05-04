@@ -6,6 +6,7 @@ export { ChatDrawer } from "./ChatDrawer";
 export { TelefonoDrawer } from "./TelefonoDrawer";
 export { GoogleConnectBanner } from "./GoogleConnectBanner";
 export { GoogleAccountButton } from "./GoogleAccountButton";
+export { GoogleHeaderPill } from "./GoogleHeaderPill";
 export { useGoogleConnection } from "./useGoogleConnection";
 export { useDailyCounts } from "./useDailyCounts";
 export type { DailyCounts } from "./useDailyCounts";

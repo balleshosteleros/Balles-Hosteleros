@@ -4,13 +4,19 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { getEmpleadosPorEmpresa, ESTADOS_LABEL, ESTADOS_COLOR, type EstadoEmpleado } from "@/features/rrhh/data/rrhh";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, UserPlus, Plus } from "lucide-react";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
+import { IOActions } from "@/shared/io";
+import { empleadosIO } from "@/features/rrhh/io/empleados.io";
 
 const AVATAR_COLORS = [
   "hsl(var(--primary))", "hsl(25 80% 55%)", "hsl(280 60% 55%)", "hsl(160 55% 42%)",
@@ -45,19 +51,36 @@ export function EmpleadosView() {
   const empleados = useMemo(() => getEmpleadosPorEmpresa(empresaActual.id), [empresaActual.id]);
 
   const [busqueda, setBusqueda] = useState("");
-  const [filtroEstado, setFiltroEstado] = useState("todos");
-  const [filtroDepartamento, setFiltroDepartamento] = useState("todos");
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
 
+  const departamentosUsados = useMemo(
+    () => [...new Set(empleados.map((e) => e.departamento))].sort(),
+    [empleados],
+  );
+
+  const acceso = (e: typeof empleados[number], campo: string): unknown => {
+    if (campo === "estado") return ESTADOS_LABEL[e.estado];
+    if (campo === "departamento") return e.departamento;
+    if (campo === "horarioTipo") return e.horarioTipo;
+    if (campo === "horasHoy") return e.horasHoy;
+    if (campo === "fichajes") return e.fichajes;
+    if (campo === "nombre") return `${e.nombre} ${e.apellidos}`;
+    return (e as unknown as Record<string, unknown>)[campo];
+  };
+
   const filtrados = useMemo(() => {
-    return empleados.filter((e) => {
+    let lista = empleados.filter((e) => {
       const texto = `${e.nombre} ${e.apellidos} ${e.departamento} ${e.emailEmpresa}`.toLowerCase();
       if (busqueda && !texto.includes(busqueda.toLowerCase())) return false;
-      if (filtroEstado !== "todos" && e.estado !== filtroEstado) return false;
-      if (filtroDepartamento !== "todos" && e.departamento !== filtroDepartamento) return false;
       return true;
     });
-  }, [empleados, busqueda, filtroEstado, filtroDepartamento]);
+    lista = aplicarFiltrosToolbar(lista, filtros, acceso);
+    lista = aplicarOrdenToolbar(lista, orden, acceso);
+    return lista;
+  }, [empleados, busqueda, filtros, orden]);
 
   const todosSeleccionados = filtrados.length > 0 && filtrados.every((e) => seleccionados.has(e.id));
 
@@ -74,36 +97,63 @@ export function EmpleadosView() {
     });
   }
 
-  const departamentosUsados = [...new Set(empleados.map((e) => e.departamento))].sort();
-
   return (
     <div className="space-y-4 p-4 md:p-6">
-      <div className="flex items-center justify-end">
-        <Button variant="primary" size="sm"><Plus className="h-4 w-4" />Nuevo</Button>
-      </div>
+      <SubmoduleToolbar
+        busqueda={busqueda}
+        onBusquedaChange={setBusqueda}
+        placeholderBusqueda="Buscar empleado..."
+        onNuevo={() => router.push("/rrhh/empleados/nuevo")}
+        campos={[
+          {
+            campo: "estado",
+            label: "Estado",
+            tipo: "lista",
+            opciones: (Object.keys(ESTADOS_LABEL) as EstadoEmpleado[]).map((k) => ESTADOS_LABEL[k]),
+          },
+          {
+            campo: "departamento",
+            label: "Departamento",
+            tipo: "lista",
+            opciones: departamentosUsados,
+          },
+          { campo: "horarioTipo", label: "Tipo horario", tipo: "lista", opciones: [...new Set(empleados.map(e => e.horarioTipo))] },
+          { campo: "horasHoy", label: "Horas hoy", tipo: "numero" },
+          { campo: "fichajes", label: "Fichajes", tipo: "numero" },
+        ]}
+        filtros={filtros}
+        onFiltrosChange={setFiltros}
+        ordenOpciones={[
+          { campo: "nombre", label: "Nombre" },
+          { campo: "departamento", label: "Departamento" },
+          { campo: "horasHoy", label: "Horas hoy" },
+          { campo: "fichajes", label: "Fichajes" },
+        ]}
+        orden={orden}
+        onOrdenChange={setOrden}
+        columnas={[
+          { campo: "empleado", label: "Empleado" },
+          { campo: "estado", label: "Estado" },
+          { campo: "horario", label: "Horario" },
+          { campo: "horasHoy", label: "Horas hoy" },
+          { campo: "departamento", label: "Departamento" },
+          { campo: "telefono", label: "Teléfono" },
+          { campo: "fichajes", label: "Fichajes" },
+          { campo: "emailEmpresa", label: "Email empresa" },
+          { campo: "emailPersonal", label: "Email personal" },
+          { campo: "validador", label: "Validador fichajes" },
+        ]}
+        columnasVisibles={columnasVisibles}
+        onColumnasVisiblesChange={setColumnasVisibles}
+        extraDerecha={
+          <IOActions
+            config={empleadosIO}
+            context={{ empresaId: empresaActual.id }}
+            onSuccess={() => window.location.reload()}
+          />
+        }
+      />
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[220px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar empleado..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} className="pl-9" />
-        </div>
-        <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-          <SelectTrigger className="w-[160px]"><SelectValue placeholder="Estado" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos los estados</SelectItem>
-            {(Object.keys(ESTADOS_LABEL) as EstadoEmpleado[]).map((k) => (
-              <SelectItem key={k} value={k}>{ESTADOS_LABEL[k]}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={filtroDepartamento} onValueChange={setFiltroDepartamento}>
-          <SelectTrigger className="w-[180px]"><SelectValue placeholder="Departamento" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos</SelectItem>
-            {departamentosUsados.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
 
       <div className="rounded-lg border bg-card overflow-x-auto">
         <Table>

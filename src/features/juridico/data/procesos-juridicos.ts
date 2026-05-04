@@ -1,5 +1,5 @@
-export type EstadoProceso = "EN PROCESO" | "PENDIENTE" | "REVISIÓN" | "ESCALADO" | "CERRADO" | "ARCHIVADO";
-export type GravedadProceso = "LEVE" | "MEDIA" | "GRAVE" | "MUY GRAVE";
+export type EstadoProceso = "ABIERTO" | "CERRADO";
+export type GravedadProceso = "LEVE" | "GRAVE" | "MUY GRAVE";
 export type TipoProceso = "Reclamación judicial" | "Sanción administrativa" | "Procedimiento interno" | "Reclamación contra empresa" | "Expediente laboral" | "Otro";
 export type CategoriaDocumento = "Demanda" | "Requerimiento" | "Escrito" | "Resolución" | "Notificación" | "Contrato" | "Comunicación" | "Informe" | "Anexo" | "Otro";
 
@@ -12,6 +12,7 @@ export interface DocumentoProceso {
   tipo: string; // mime hint: pdf, docx, img…
   subidoPor: string;
   fechaSubida: string;
+  actualizacionId?: string;
 }
 
 export interface ActualizacionProceso {
@@ -37,8 +38,8 @@ export interface ProcesoJuridico {
   actualizaciones: ActualizacionProceso[];
 }
 
-export const ESTADOS_PROCESO: EstadoProceso[] = ["EN PROCESO", "PENDIENTE", "REVISIÓN", "ESCALADO", "CERRADO", "ARCHIVADO"];
-export const GRAVEDADES_PROCESO: GravedadProceso[] = ["LEVE", "MEDIA", "GRAVE", "MUY GRAVE"];
+export const ESTADOS_PROCESO: EstadoProceso[] = ["ABIERTO", "CERRADO"];
+export const GRAVEDADES_PROCESO: GravedadProceso[] = ["LEVE", "GRAVE", "MUY GRAVE"];
 export const TIPOS_PROCESO: TipoProceso[] = ["Reclamación judicial", "Sanción administrativa", "Procedimiento interno", "Reclamación contra empresa", "Expediente laboral", "Otro"];
 export const CATEGORIAS_DOCUMENTO: CategoriaDocumento[] = ["Demanda", "Requerimiento", "Escrito", "Resolución", "Notificación", "Contrato", "Comunicación", "Informe", "Anexo", "Otro"];
 export const JURIDICOS = ["Ana Beltrán (interna)", "Bufete García & Asociados", "Carlos Mendoza (interno)", "Despacho Ruiz Legal", "Marta Domínguez (interna)"];
@@ -49,7 +50,7 @@ function doc(id: string, nombre: string, categoria: CategoriaDocumento, descripc
 
 const HABANA_PROCESOS: ProcesoJuridico[] = [
   {
-    id: "pj-h1", titulo: "Reclamación por despido improcedente – Ex empleado J.L.", empresa: "HABANA", empresaId: "habana", tipo: "Reclamación judicial", juridico: "Bufete García & Asociados", fecha: "2026-01-15", estado: "EN PROCESO", gravedad: "GRAVE",
+    id: "pj-h1", titulo: "Reclamación por despido improcedente – Ex empleado J.L.", empresa: "HABANA", empresaId: "habana", tipo: "Reclamación judicial", juridico: "Bufete García & Asociados", fecha: "2026-01-15", estado: "ABIERTO", gravedad: "GRAVE",
     descripcion: "Ex empleado reclama despido improcedente. Demanda presentada en Juzgado Social nº3. Indemnización solicitada: 18.500 €.",
     documentos: [
       doc("d1", "Demanda_JL_2026.pdf", "Demanda", "Demanda presentada por el ex empleado", "Bufete García", "2026-01-16"),
@@ -63,7 +64,7 @@ const HABANA_PROCESOS: ProcesoJuridico[] = [
     ],
   },
   {
-    id: "pj-h2", titulo: "Sanción municipal por ruido – Terraza nocturna", empresa: "HABANA", empresaId: "habana", tipo: "Sanción administrativa", juridico: "Ana Beltrán (interna)", fecha: "2026-02-20", estado: "REVISIÓN", gravedad: "MEDIA",
+    id: "pj-h2", titulo: "Sanción municipal por ruido – Terraza nocturna", empresa: "HABANA", empresaId: "habana", tipo: "Sanción administrativa", juridico: "Ana Beltrán (interna)", fecha: "2026-02-20", estado: "ABIERTO", gravedad: "LEVE",
     descripcion: "Expediente sancionador por exceso de decibelios en horario nocturno. Multa propuesta: 3.000 €. Plazo de alegaciones abierto.",
     documentos: [doc("d4", "Expediente_ruido_2026.pdf", "Requerimiento", "Expediente sancionador del Ayuntamiento", "Ana Beltrán", "2026-02-21")],
     actualizaciones: [
@@ -72,7 +73,7 @@ const HABANA_PROCESOS: ProcesoJuridico[] = [
     ],
   },
   {
-    id: "pj-h3", titulo: "Reclamación de proveedor – Factura impagada", empresa: "HABANA", empresaId: "habana", tipo: "Reclamación contra empresa", juridico: "Carlos Mendoza (interno)", fecha: "2026-03-01", estado: "PENDIENTE", gravedad: "LEVE",
+    id: "pj-h3", titulo: "Reclamación de proveedor – Factura impagada", empresa: "HABANA", empresaId: "habana", tipo: "Reclamación contra empresa", juridico: "Carlos Mendoza (interno)", fecha: "2026-03-01", estado: "ABIERTO", gravedad: "LEVE",
     descripcion: "Proveedor de bebidas reclama factura de 2.400 € supuestamente impagada. Se está verificando con contabilidad.",
     documentos: [doc("d5", "Factura_proveedor.pdf", "Otro", "Factura reclamada por el proveedor", "Carlos Mendoza", "2026-03-02")],
     actualizaciones: [
@@ -80,7 +81,7 @@ const HABANA_PROCESOS: ProcesoJuridico[] = [
     ],
   },
   {
-    id: "pj-h4", titulo: "Inspección de trabajo – Control de horarios", empresa: "HABANA", empresaId: "habana", tipo: "Procedimiento interno", juridico: "Ana Beltrán (interna)", fecha: "2025-11-10", estado: "CERRADO", gravedad: "MEDIA",
+    id: "pj-h4", titulo: "Inspección de trabajo – Control de horarios", empresa: "HABANA", empresaId: "habana", tipo: "Procedimiento interno", juridico: "Ana Beltrán (interna)", fecha: "2025-11-10", estado: "CERRADO", gravedad: "LEVE",
     descripcion: "Inspección de trabajo sobre registro horario. Se solicitó documentación de fichajes de los últimos 6 meses.",
     documentos: [doc("d6", "Acta_inspeccion.pdf", "Informe", "Acta de inspección de trabajo", "Ana Beltrán", "2025-11-12"), doc("d7", "Registros_horarios.pdf", "Anexo", "Registros de fichaje aportados", "Ana Beltrán", "2025-11-14")],
     actualizaciones: [
@@ -89,7 +90,7 @@ const HABANA_PROCESOS: ProcesoJuridico[] = [
     ],
   },
   {
-    id: "pj-h5", titulo: "Expediente disciplinario – Empleado M.R.", empresa: "HABANA", empresaId: "habana", tipo: "Expediente laboral", juridico: "Carlos Mendoza (interno)", fecha: "2026-03-20", estado: "ESCALADO", gravedad: "MUY GRAVE",
+    id: "pj-h5", titulo: "Expediente disciplinario – Empleado M.R.", empresa: "HABANA", empresaId: "habana", tipo: "Expediente laboral", juridico: "Carlos Mendoza (interno)", fecha: "2026-03-20", estado: "ABIERTO", gravedad: "MUY GRAVE",
     descripcion: "Expediente por falta muy grave: abandono de puesto reiterado sin justificación. Posible despido disciplinario.",
     documentos: [doc("d8", "Expediente_MR.pdf", "Informe", "Expediente disciplinario completo", "Carlos Mendoza", "2026-03-20")],
     actualizaciones: [
@@ -99,7 +100,7 @@ const HABANA_PROCESOS: ProcesoJuridico[] = [
     ],
   },
   {
-    id: "pj-h6", titulo: "Licencia de actividad – Renovación 2026", empresa: "HABANA", empresaId: "habana", tipo: "Sanción administrativa", juridico: "Despacho Ruiz Legal", fecha: "2025-09-01", estado: "ARCHIVADO", gravedad: "LEVE",
+    id: "pj-h6", titulo: "Licencia de actividad – Renovación 2026", empresa: "HABANA", empresaId: "habana", tipo: "Sanción administrativa", juridico: "Despacho Ruiz Legal", fecha: "2025-09-01", estado: "CERRADO", gravedad: "LEVE",
     descripcion: "Renovación de licencia de actividad. Tramitado y concedido sin incidencias.",
     documentos: [doc("d9", "Licencia_2026.pdf", "Resolución", "Licencia de actividad renovada", "Despacho Ruiz Legal", "2025-10-15")],
     actualizaciones: [],
@@ -108,7 +109,7 @@ const HABANA_PROCESOS: ProcesoJuridico[] = [
 
 const BACANAL_PROCESOS: ProcesoJuridico[] = [
   {
-    id: "pj-b1", titulo: "Reclamación de cliente por intoxicación alimentaria", empresa: "BACANAL", empresaId: "bacanal", tipo: "Reclamación judicial", juridico: "Bufete García & Asociados", fecha: "2026-02-10", estado: "EN PROCESO", gravedad: "MUY GRAVE",
+    id: "pj-b1", titulo: "Reclamación de cliente por intoxicación alimentaria", empresa: "BACANAL", empresaId: "bacanal", tipo: "Reclamación judicial", juridico: "Bufete García & Asociados", fecha: "2026-02-10", estado: "ABIERTO", gravedad: "MUY GRAVE",
     descripcion: "Cliente presenta denuncia por supuesta intoxicación. Se ha solicitado informe al laboratorio de sanidad.",
     documentos: [doc("db1", "Denuncia_cliente.pdf", "Demanda", "Denuncia del cliente", "Bufete García", "2026-02-11"), doc("db2", "Informe_sanidad.pdf", "Informe", "Informe del laboratorio de sanidad", "Bufete García", "2026-03-06")],
     actualizaciones: [
@@ -118,7 +119,7 @@ const BACANAL_PROCESOS: ProcesoJuridico[] = [
     ],
   },
   {
-    id: "pj-b2", titulo: "Sanción por terraza – Ocupación de vía pública", empresa: "BACANAL", empresaId: "bacanal", tipo: "Sanción administrativa", juridico: "Marta Domínguez (interna)", fecha: "2026-03-15", estado: "PENDIENTE", gravedad: "MEDIA",
+    id: "pj-b2", titulo: "Sanción por terraza – Ocupación de vía pública", empresa: "BACANAL", empresaId: "bacanal", tipo: "Sanción administrativa", juridico: "Marta Domínguez (interna)", fecha: "2026-03-15", estado: "ABIERTO", gravedad: "LEVE",
     descripcion: "Expediente del Ayuntamiento por exceso de mobiliario en terraza. Multa propuesta: 1.500 €.",
     documentos: [doc("db3", "Sancion_terraza.pdf", "Requerimiento", "Expediente sancionador municipal", "Marta Domínguez", "2026-03-16")],
     actualizaciones: [
@@ -135,7 +136,7 @@ const BACANAL_PROCESOS: ProcesoJuridico[] = [
     ],
   },
   {
-    id: "pj-b4", titulo: "Reclamación laboral – Horas extra no pagadas", empresa: "BACANAL", empresaId: "bacanal", tipo: "Expediente laboral", juridico: "Marta Domínguez (interna)", fecha: "2026-04-01", estado: "REVISIÓN", gravedad: "GRAVE",
+    id: "pj-b4", titulo: "Reclamación laboral – Horas extra no pagadas", empresa: "BACANAL", empresaId: "bacanal", tipo: "Expediente laboral", juridico: "Marta Domínguez (interna)", fecha: "2026-04-01", estado: "ABIERTO", gravedad: "GRAVE",
     descripcion: "Ex empleada reclama 45 horas extra no abonadas. Pendiente de cruzar con registros de fichaje.",
     documentos: [doc("db5", "Reclamacion_horas.pdf", "Demanda", "Reclamación formal de la ex empleada", "Marta Domínguez", "2026-04-02")],
     actualizaciones: [

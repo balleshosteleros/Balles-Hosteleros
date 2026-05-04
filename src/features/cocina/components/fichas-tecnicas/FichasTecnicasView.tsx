@@ -12,6 +12,8 @@ import { getEmpleadosPorEmpresa } from "@/features/rrhh/data/rrhh";
 import {
   listFichas, createFicha, updateFicha, deleteFicha,
 } from "@/features/cocina/actions/fichas-tecnicas-actions";
+import { useFichasConfig, type FichaConfigItem, type GrupoCodigo } from "@/features/cocina/hooks/useFichasConfig";
+import { listConfigItems } from "@/features/cocina/actions/fichas-config-actions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,91 +41,140 @@ const ESTADO_COLORS: Record<EstadoFicha, string> = {
   archivada: "bg-muted text-muted-foreground border-border",
 };
 
-// ─── Generic Config List Editor ────────────────────────────────
-function ConfigListEditor({ title, items, onChange }: { title: string; items: string[]; onChange: (items: string[]) => void }) {
+// ─── Editor de items de configuración (Supabase) ───────────────
+function ConfigItemsEditor({
+  grupo,
+  title,
+  uppercase = false,
+  showActiva = false,
+  onChanged,
+}: {
+  grupo: GrupoCodigo;
+  title: string;
+  uppercase?: boolean;
+  showActiva?: boolean;
+  onChanged?: () => void;
+}) {
+  const { items, loading, create, update, remove } = useFichasConfig(grupo);
   const [nuevo, setNuevo] = useState("");
-  const [editIdx, setEditIdx] = useState<number | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
   const [editVal, setEditVal] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  const add = () => {
-    if (!nuevo.trim() || items.includes(nuevo.trim())) return;
-    onChange([...items, nuevo.trim()]);
-    setNuevo("");
-    toast.success(`${title}: valor añadido`);
+  const fire = () => onChanged?.();
+
+  const add = async () => {
+    const val = nuevo.trim();
+    if (!val) {
+      toast.error("Escribe un nombre antes de añadir");
+      return;
+    }
+    setSaving(true);
+    try {
+      const ok = await create({ nombre: uppercase ? val.toUpperCase() : val });
+      if (ok) {
+        setNuevo("");
+        fire();
+      }
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const remove = (idx: number) => {
-    onChange(items.filter((_, i) => i !== idx));
-    toast.success(`${title}: valor eliminado`);
+  const startEdit = (it: FichaConfigItem) => {
+    setEditId(it.id);
+    setEditVal(it.nombre);
   };
 
-  const startEdit = (idx: number) => { setEditIdx(idx); setEditVal(items[idx]); };
+  const saveEdit = async () => {
+    if (!editId) return;
+    const val = editVal.trim();
+    if (!val) return;
+    const ok = await update(editId, { nombre: uppercase ? val.toUpperCase() : val });
+    if (ok) {
+      setEditId(null);
+      setEditVal("");
+      fire();
+    }
+  };
 
-  const saveEdit = () => {
-    if (editIdx === null || !editVal.trim()) return;
-    onChange(items.map((v, i) => i === editIdx ? editVal.trim() : v));
-    setEditIdx(null);
-    setEditVal("");
+  const handleRemove = async (id: string) => {
+    const ok = await remove(id);
+    if (ok) fire();
+  };
+
+  const toggleActiva = async (it: FichaConfigItem) => {
+    const ok = await update(it.id, { activa: !it.activa });
+    if (ok) fire();
   };
 
   return (
     <div className="space-y-3">
       <h3 className="font-bold text-foreground text-sm uppercase tracking-wide">{title}</h3>
       <div className="flex gap-2">
-        <Input value={nuevo} onChange={(e) => setNuevo(e.target.value)} placeholder={`Nuevo valor...`} className="max-w-xs h-8 text-sm"
-          onKeyDown={(e) => e.key === "Enter" && add()} />
-        <Button size="sm" onClick={add} className="gap-1 h-8 text-xs"><Plus className="h-3.5 w-3.5" /> Añadir</Button>
+        <Input
+          value={nuevo}
+          onChange={(e) => setNuevo(e.target.value)}
+          placeholder={`Escribe un nuevo ${title.toLowerCase().replace(/s$/, "")} y pulsa Añadir`}
+          className="max-w-md h-9 text-sm"
+          onKeyDown={(e) => e.key === "Enter" && add()}
+          disabled={saving}
+          autoFocus
+        />
+        <Button size="sm" onClick={add} className="gap-1 h-9 text-xs" disabled={saving}>
+          <Plus className="h-4 w-4" /> {saving ? "Añadiendo…" : "Añadir"}
+        </Button>
       </div>
-      <div className="space-y-1 max-h-[200px] overflow-y-auto">
-        {items.map((item, idx) => (
-          <div key={idx} className="flex items-center justify-between px-3 py-1.5 rounded-lg border bg-card text-sm">
-            {editIdx === idx ? (
-              <div className="flex items-center gap-2 flex-1">
-                <Input value={editVal} onChange={(e) => setEditVal(e.target.value)} className="h-7 text-sm flex-1"
-                  onKeyDown={(e) => e.key === "Enter" && saveEdit()} autoFocus />
-                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={saveEdit}>OK</Button>
-                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditIdx(null)}>✕</Button>
-              </div>
-            ) : (
-              <>
-                <span className="text-foreground">{item}</span>
-                <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => startEdit(idx)}>
-                    <span className="text-xs">✎</span>
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => remove(idx)}>
-                    <Trash2 className="h-3 w-3 text-destructive" />
-                  </Button>
+      <div className="space-y-1 max-h-[320px] overflow-y-auto">
+        {loading && items.length === 0 ? (
+          <div className="text-xs text-muted-foreground py-2">Cargando…</div>
+        ) : items.length === 0 ? (
+          <div className="text-xs text-muted-foreground py-2">Sin valores. Añade el primero.</div>
+        ) : (
+          items.map((it) => (
+            <div key={it.id} className="flex items-center justify-between px-3 py-1.5 rounded-lg border bg-card text-sm">
+              {editId === it.id ? (
+                <div className="flex items-center gap-2 flex-1">
+                  <Input
+                    value={editVal}
+                    onChange={(e) => setEditVal(e.target.value)}
+                    className="h-7 text-sm flex-1"
+                    onKeyDown={(e) => e.key === "Enter" && saveEdit()}
+                    autoFocus
+                  />
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={saveEdit}>OK</Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditId(null)}>✕</Button>
                 </div>
-              </>
-            )}
-          </div>
-        ))}
+              ) : (
+                <>
+                  <span className="text-foreground">{it.nombre}</span>
+                  <div className="flex items-center gap-2">
+                    {showActiva && (
+                      <>
+                        <Label className="text-xs text-muted-foreground">Activa</Label>
+                        <Switch checked={it.activa} onCheckedChange={() => toggleActiva(it)} />
+                      </>
+                    )}
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => startEdit(it)}>
+                      <span className="text-xs">✎</span>
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleRemove(it.id)}>
+                      <Trash2 className="h-3 w-3 text-destructive" />
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
 }
 
 // ─── Config Panel ──────────────────────────────────────────────
-function ConfigPanel({
-  categorias, onCatChange, config, onConfigChange,
-}: {
-  categorias: CategoriaFicha[]; onCatChange: (cats: CategoriaFicha[]) => void;
-  config: ConfigFichas; onConfigChange: (cfg: ConfigFichas) => void;
-}) {
-  const [nombre, setNombre] = useState("");
+function ConfigPanel({ onChanged }: { onChanged?: () => void }) {
   const [configTab, setConfigTab] = useState("categorias");
-
-  const addCat = () => {
-    if (!nombre.trim()) return;
-    const nueva: CategoriaFicha = {
-      id: `cat-${Date.now()}`, nombre: nombre.toUpperCase().trim(),
-      orden: categorias.length + 1, activa: true,
-    };
-    onCatChange([...categorias, nueva]);
-    setNombre("");
-    toast.success("Categoría creada");
-  };
 
   return (
     <div className="space-y-4">
@@ -136,40 +187,20 @@ function ConfigPanel({
           <TabsTrigger value="recomendaciones" className="text-xs">Recomendaciones</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="categorias" className="mt-4 space-y-4">
-          <h3 className="font-bold text-foreground text-sm uppercase tracking-wide">Categorías</h3>
-          <div className="flex gap-2">
-            <Input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nueva categoría..." className="max-w-xs h-8 text-sm"
-              onKeyDown={(e) => e.key === "Enter" && addCat()} />
-            <Button size="sm" onClick={addCat} className="gap-1 h-8 text-xs"><Plus className="h-3.5 w-3.5" /> Añadir</Button>
-          </div>
-          <div className="space-y-1">
-            {categorias.sort((a, b) => a.orden - b.orden).map((cat) => (
-              <div key={cat.id} className="flex items-center justify-between px-3 py-2 rounded-lg border bg-card">
-                <div className="flex items-center gap-3">
-                  <GripVertical className="h-4 w-4 text-muted-foreground/40" />
-                  <span className="text-sm font-medium text-foreground">{cat.nombre}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Label className="text-xs text-muted-foreground">Activa</Label>
-                  <Switch checked={cat.activa} onCheckedChange={(v) => onCatChange(categorias.map((c) => c.id === cat.id ? { ...c, activa: v } : c))} />
-                </div>
-              </div>
-            ))}
-          </div>
+        <TabsContent value="categorias" className="mt-4">
+          <ConfigItemsEditor grupo="categorias" title="Categorías" uppercase showActiva onChanged={onChanged} />
         </TabsContent>
-
         <TabsContent value="alergenos" className="mt-4">
-          <ConfigListEditor title="Alérgenos" items={config.alergenos} onChange={(v) => onConfigChange({ ...config, alergenos: v })} />
+          <ConfigItemsEditor grupo="alergenos" title="Alérgenos" onChanged={onChanged} />
         </TabsContent>
         <TabsContent value="partidas" className="mt-4">
-          <ConfigListEditor title="Partidas" items={config.partidas} onChange={(v) => onConfigChange({ ...config, partidas: v })} />
+          <ConfigItemsEditor grupo="partidas" title="Partidas" onChanged={onChanged} />
         </TabsContent>
         <TabsContent value="menaje" className="mt-4">
-          <ConfigListEditor title="Menaje" items={config.menaje} onChange={(v) => onConfigChange({ ...config, menaje: v })} />
+          <ConfigItemsEditor grupo="menaje" title="Menaje" onChanged={onChanged} />
         </TabsContent>
         <TabsContent value="recomendaciones" className="mt-4">
-          <ConfigListEditor title="Recomendaciones" items={config.recomendaciones} onChange={(v) => onConfigChange({ ...config, recomendaciones: v })} />
+          <ConfigItemsEditor grupo="recomendaciones" title="Recomendaciones" onChanged={onChanged} />
         </TabsContent>
       </Tabs>
     </div>
@@ -622,9 +653,42 @@ export function FichasTecnicasView() {
     }
   }, [empresaActual.id, mapDbToFicha]);
 
+  // --- Load config (categorias + alergenos/partidas/menaje/recomendaciones) ---
+  const loadConfig = useCallback(async () => {
+    try {
+      const [cats, alg, par, men, rec] = await Promise.all([
+        listConfigItems("categorias"),
+        listConfigItems("alergenos"),
+        listConfigItems("partidas"),
+        listConfigItems("menaje"),
+        listConfigItems("recomendaciones"),
+      ]);
+
+      const mappedCats: CategoriaFicha[] = (cats.data ?? []).map((it) => ({
+        id: it.id,
+        nombre: it.nombre,
+        orden: it.orden,
+        activa: it.activa,
+      }));
+      setCategorias((prev) => ({ ...prev, [empresaActual.id]: mappedCats }));
+
+      const cfg: ConfigFichas = {
+        alergenos: (alg.data ?? []).filter((i) => i.activa).map((i) => i.nombre),
+        partidas: (par.data ?? []).filter((i) => i.activa).map((i) => i.nombre),
+        menaje: (men.data ?? []).filter((i) => i.activa).map((i) => i.nombre),
+        recomendaciones: (rec.data ?? []).filter((i) => i.activa).map((i) => i.nombre),
+      };
+      setConfigs((prev) => ({ ...prev, [empresaActual.id]: cfg }));
+    } catch (err) {
+      console.error("[fichas-tecnicas] loadConfig:", err);
+      toast.error("Error al cargar la configuración");
+    }
+  }, [empresaActual.id]);
+
   useEffect(() => {
     loadFichas();
-  }, [loadFichas]);
+    loadConfig();
+  }, [loadFichas, loadConfig]);
 
   const empresaFichas = fichas[empresaActual.id] ?? [];
   const empresaCats = categorias[empresaActual.id] ?? [];
@@ -718,14 +782,6 @@ export function FichasTecnicasView() {
       const res = await updateFicha(id, { nombre: undefined });
       if (!res.ok) loadFichas();
     } catch { loadFichas(); }
-  };
-
-  const handleCatChange = (cats: CategoriaFicha[]) => {
-    setCategorias((prev) => ({ ...prev, [empresaActual.id]: cats }));
-  };
-
-  const handleConfigChange = (cfg: ConfigFichas) => {
-    setConfigs((prev) => ({ ...prev, [empresaActual.id]: cfg }));
   };
 
   const toggleSelect = (id: string) => {
@@ -824,7 +880,7 @@ export function FichasTecnicasView() {
         <div className="flex items-center justify-between">
           <TabsList className="h-9">
             <TabsTrigger value="fichas" className="text-xs gap-1"><ChefHat className="h-3.5 w-3.5" /> Fichas</TabsTrigger>
-            <TabsTrigger value="config" className="text-xs gap-1"><Settings className="h-3.5 w-3.5" /> Configuración</TabsTrigger>
+            <TabsTrigger value="config" aria-label="Configuración" className="ml-auto"><Settings className="h-3.5 w-3.5" strokeWidth={1.75} /></TabsTrigger>
           </TabsList>
           {tab === "fichas" && (
             <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
@@ -996,7 +1052,7 @@ export function FichasTecnicasView() {
         </TabsContent>
 
         <TabsContent value="config" className="mt-4">
-          <ConfigPanel categorias={empresaCats} onCatChange={handleCatChange} config={empresaConfig} onConfigChange={handleConfigChange} />
+          <ConfigPanel onChanged={loadConfig} />
         </TabsContent>
       </Tabs>
 

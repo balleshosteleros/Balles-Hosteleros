@@ -1,14 +1,8 @@
 "use server";
 
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 
 const BUCKET = "cronogramas-videos";
-
-function pickClient() {
-  if (process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true") return createAdminClient();
-  return null;
-}
 
 export async function uploadCronogramaVideo(
   cronogramaId: string,
@@ -17,7 +11,7 @@ export async function uploadCronogramaVideo(
   mime: string
 ): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
   try {
-    const supabase = pickClient() ?? (await createServerClient());
+    const supabase = await createServerClient();
     const safeName = fileName.replace(/[^\w.-]+/g, "_");
     const path = `${cronogramaId}/${Date.now()}_${safeName}`;
     const buffer = Buffer.from(fileBase64, "base64");
@@ -44,7 +38,7 @@ export async function uploadCronogramaVideo(
 
 export async function deleteCronogramaVideo(cronogramaId: string, url: string) {
   try {
-    const supabase = pickClient() ?? (await createServerClient());
+    const supabase = await createServerClient();
     const idx = url.indexOf(`/${BUCKET}/`);
     if (idx >= 0) {
       const objectPath = url.slice(idx + BUCKET.length + 2);
@@ -59,7 +53,7 @@ export async function deleteCronogramaVideo(cronogramaId: string, url: string) {
 
 export async function updateCronogramaResumen(id: string, resumen: string) {
   try {
-    const supabase = pickClient() ?? (await createServerClient());
+    const supabase = await createServerClient();
     const { error } = await supabase
       .from("cronogramas_operativos")
       .update({ resumen })

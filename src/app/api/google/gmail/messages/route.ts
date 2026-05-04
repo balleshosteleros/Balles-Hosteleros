@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { getGoogleTokens, googleFetch } from "@/lib/google/api";
 
-type GmailListResponse = {
-  messages?: { id: string; threadId: string }[];
+type GmailThreadListResponse = {
+  threads?: { id: string; historyId: string }[];
 };
 
 type GmailMessage = {
@@ -14,6 +14,11 @@ type GmailMessage = {
   payload?: {
     headers: { name: string; value: string }[];
   };
+};
+
+type GmailThreadResponse = {
+  id: string;
+  messages?: GmailMessage[];
 };
 
 function header(msg: GmailMessage, name: string): string {
@@ -28,6 +33,10 @@ function parseFrom(value: string): { name: string; email: string } {
   const m = value.match(/^(.*?)\s*<(.+)>$/);
   if (m) return { name: m[1].replace(/"/g, "").trim(), email: m[2] };
   return { name: value, email: value };
+}
+
+function quitarPrefijoRe(asunto: string): string {
+  return asunto.replace(/^\s*(re|fwd|rv|ref)\s*:\s*/i, "").trim();
 }
 
 function fechaCorta(internalDate: string): string {
@@ -60,47 +69,76 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const carpeta = url.searchParams.get("carpeta") ?? "inbox";
+  // Si se pasa labelId explícito (etiqueta del usuario), tiene prioridad
+  const labelIdParam = url.searchParams.get("labelId");
   const labelMap: Record<string, string> = {
     inbox: "INBOX",
     enviados: "SENT",
     borradores: "DRAFT",
     papelera: "TRASH",
   };
-  const label = labelMap[carpeta] ?? "INBOX";
+  const label = labelIdParam ?? labelMap[carpeta] ?? "INBOX";
 
-  // 1) Listado de IDs
-  const list = await googleFetch<GmailListResponse>(
-    `https://gmail.googleapis.com/gmail/v1/users/me/messages?labelIds=${label}&maxResults=20`,
+  // 1) Listado de hilos (conversaciones), igual que Gmail web
+  const list = await googleFetch<GmailThreadListResponse>(
+    `https://gmail.googleapis.com/gmail/v1/users/me/threads?labelIds=${encodeURIComponent(label)}&maxResults=30`,
     accessToken,
   );
-  if (!list || !list.messages) {
+  if (!list || !list.threads) {
     return NextResponse.json({ connected: true, mensajes: [] });
   }
 
-  // 2) Detalles en paralelo (metadata + snippet)
+  // 2) Detalles de cada hilo en paralelo (todos sus mensajes en metadata)
   const detalles = await Promise.all(
-    list.messages.slice(0, 20).map((m) =>
-      googleFetch<GmailMessage>(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
+    list.threads.slice(0, 30).map((t) =>
+      googleFetch<GmailThreadResponse>(
+        `https://gmail.googleapis.com/gmail/v1/users/me/threads/${t.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
         accessToken,
       ),
     ),
   );
 
   const mensajes = detalles
-    .filter((m): m is GmailMessage => m !== null)
-    .map((m) => {
-      const from = parseFrom(header(m, "From"));
+    .filter(
+      (t): t is GmailThreadResponse =>
+        t !== null && Array.isArray(t.messages) && t.messages.length > 0,
+    )
+    .map((t) => {
+      const msgs = t.messages!;
+      const ultimoMsg = msgs[msgs.length - 1];
+      const primerMsg = msgs[0];
+      const fromUltimo = parseFrom(header(ultimoMsg, "From"));
+
+      // Estado agregado del hilo (Gmail considera el hilo no leído si CUALQUIER
+      // mensaje lo está; idem con la estrella). También unimos todas las labels
+      // para que las etiquetas del usuario se vean.
+      const todosLabels = new Set<string>();
+      let algunoNoLeido = false;
+      let algunoEstrella = false;
+      for (const m of msgs) {
+        m.labelIds?.forEach((l) => todosLabels.add(l));
+        if (m.labelIds?.includes("UNREAD")) algunoNoLeido = true;
+        if (m.labelIds?.includes("STARRED")) algunoEstrella = true;
+      }
+
+      const asuntoBase =
+        header(primerMsg, "Subject") || header(ultimoMsg, "Subject") || "";
+      // Gmail muestra el asunto del primer mensaje sin "Re:"
+      const asunto = quitarPrefijoRe(asuntoBase) || "(sin asunto)";
+
       return {
-        id: m.id,
-        remitente: from.name,
-        email: from.email,
-        asunto: header(m, "Subject") || "(sin asunto)",
-        preview: m.snippet,
-        fecha: fechaCorta(m.internalDate),
-        leido: !m.labelIds?.includes("UNREAD"),
-        estrella: m.labelIds?.includes("STARRED") ?? false,
+        id: ultimoMsg.id,
+        threadId: t.id,
+        remitente: fromUltimo.name,
+        email: fromUltimo.email,
+        asunto,
+        preview: ultimoMsg.snippet,
+        fecha: fechaCorta(ultimoMsg.internalDate),
+        leido: !algunoNoLeido,
+        estrella: algunoEstrella,
         carpeta,
+        labelIds: Array.from(todosLabels),
+        mensajesCount: msgs.length,
       };
     });
 

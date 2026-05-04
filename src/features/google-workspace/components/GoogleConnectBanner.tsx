@@ -9,7 +9,7 @@ interface Props {
 
 export function GoogleConnectBanner({ servicio }: Props) {
   const pathname = usePathname();
-  const href = `/api/google/connect?next=${encodeURIComponent(pathname || "/dashboard")}`;
+  const href = `/api/google/connect?next=${encodeURIComponent(pathname || "/")}`;
 
   return (
     <div className="flex flex-col items-start justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50/60 p-3 sm:flex-row sm:items-center dark:border-blue-900/50 dark:bg-blue-950/30">
