@@ -1,4 +1,4 @@
-﻿"use server";
+"use server";
 
 import { getAppContext } from "@/lib/supabase/get-context";
 import { revalidatePath } from "next/cache";
@@ -138,5 +138,27 @@ export async function listPuestos() {
     return { ok: true, data: result.length > 0 ? result : FALLBACK_PUESTOS };
   } catch {
     return { ok: true, data: FALLBACK_PUESTOS };
+  }
+}
+export async function getMiInformacionLaboral() {
+  try {
+    const { supabase, userId } = await getAppContext();
+    if (!userId) return { ok: false, error: "No autenticado" };
+
+    const { data, error } = await supabase
+      .from("empleados")
+      .select(`
+        *,
+        departamentos(nombre),
+        puestos_trabajo(nombre)
+      `)
+      .eq("profile_id", userId)
+      .maybeSingle();
+
+    if (error) throw error;
+    return { ok: true, data };
+  } catch (err) {
+    console.error("[rrhh] getMiInformacionLaboral:", err);
+    return { ok: false, error: "Error al obtener info laboral" };
   }
 }

@@ -1,6 +1,7 @@
 "use server";
 
 import { getAppContext } from "@/lib/supabase/get-context";
+import { getMiInformacionLaboral } from "@/features/rrhh/actions/empleados-actions";
 
 export type TareaPrioridad = "alta" | "media" | "baja";
 export type TareaTipo = "manual" | "nueva_receta_fase" | "sistema";
@@ -115,34 +116,49 @@ export async function crearTareaAsignada(input: {
   }
 }
 
-export async function toggleTareaHecha(id: string): Promise<Result> {
+export async function marcarTarea(id: string, hecha: boolean): Promise<Result> {
   try {
     const { supabase } = await getAppContext();
-    const { data: cur } = await supabase
-      .from("tareas")
-      .select("hecha")
-      .eq("id", id)
-      .single();
     const { error } = await supabase
       .from("tareas")
-      .update({ hecha: !cur?.hecha })
+      .update({ hecha, updated_at: new Date().toISOString() })
       .eq("id", id);
     if (error) throw error;
-    return { ok: true, data: undefined };
+    return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Error" };
+    return { ok: false, error: "No se pudo actualizar la tarea" };
   }
 }
 
-/**
- * Cuenta las tareas pendientes del usuario actual para hoy.
- * Usada por useDailyCounts en el header.
- */
-export async function contarPendientesHoy(): Promise<Result<number>> {
+/** Alias para compatibilidad — toglea el campo hecha de la tarea */
+export async function toggleTareaHecha(id: string): Promise<Result> {
+  const { supabase } = await getAppContext();
+  const { data: current } = await supabase
+    .from("tareas")
+    .select("hecha")
+    .eq("id", id)
+    .single();
+  return marcarTarea(id, !current?.hecha);
+}
+
+/** Elimina una tarea */
+export async function deleteTarea(id: string): Promise<Result> {
+  try {
+    const { supabase } = await getAppContext();
+    const { error } = await supabase.from("tareas").delete().eq("id", id);
+    if (error) throw error;
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Error al eliminar" };
+  }
+}
+
+/** Cuenta tareas pendientes de hoy para el badge del header */
+export async function contarPendientesHoy(): Promise<{ ok: boolean; data: number }> {
   try {
     const { supabase, userId } = await getAppContext();
     if (!userId) return { ok: true, data: 0 };
-    const hoy = new Date().toISOString().slice(0, 10);
+    const hoy = new Date().toISOString().split("T")[0];
     const { count, error } = await supabase
       .from("tareas")
       .select("*", { count: "exact", head: true })
@@ -151,18 +167,75 @@ export async function contarPendientesHoy(): Promise<Result<number>> {
       .eq("hecha", false);
     if (error) throw error;
     return { ok: true, data: count ?? 0 };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Error" };
+  } catch {
+    return { ok: true, data: 0 };
   }
 }
 
-export async function deleteTarea(id: string): Promise<Result> {
+export async function listTareasSugeridas() {
   try {
-    const { supabase } = await getAppContext();
-    const { error } = await supabase.from("tareas").delete().eq("id", id);
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false, data: [] };
+
+    const infoLaboral = await getMiInformacionLaboral();
+    if (!infoLaboral.ok || !infoLaboral.data) {
+      return { ok: true, data: [] };
+    }
+
+    const info = infoLaboral.data as any;
+    const rolesToMatch = [];
+    if (info.departamentos?.nombre) rolesToMatch.push(info.departamentos.nombre.toUpperCase());
+    if (info.puestos_trabajo?.nombre) rolesToMatch.push(info.puestos_trabajo.nombre.toUpperCase());
+
+    if (rolesToMatch.length === 0) return { ok: true, data: [] };
+
+    const { data, error } = await supabase
+      .from("cronogramas_operativos")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .in("rol", rolesToMatch);
+
     if (error) throw error;
-    return { ok: true, data: undefined };
+    return { ok: true, data: data ?? [] };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Error" };
+    console.error("[tareas] listTareasSugeridas:", err);
+    return { ok: false, data: [] };
+  }
+}
+
+export async function completarTareaSugerida(cronogramaId: string, titulo: string) {
+  try {
+    const { supabase, userId, empresaId } = await getAppContext();
+    if (!userId || !empresaId) return { ok: false, error: "No autenticado" };
+
+    const hoy = new Date().toISOString().split("T")[0];
+    const { data: existente } = await supabase
+      .from("tareas")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("ref_tabla", "cronogramas_operativos")
+      .eq("ref_id", cronogramaId)
+      .eq("fecha", hoy)
+      .maybeSingle();
+
+    if (existente) return { ok: true };
+
+    const { error } = await supabase.from("tareas").insert({
+      empresa_id: empresaId,
+      user_id: userId,
+      titulo: titulo,
+      fecha: hoy,
+      hecha: true,
+      prioridad: "media",
+      tipo: "sistema",
+      ref_tabla: "cronogramas_operativos",
+      ref_id: cronogramaId
+    });
+
+    if (error) throw error;
+    return { ok: true };
+  } catch (err) {
+    console.error("[tareas] completarTareaSugerida:", err);
+    return { ok: false, error: "Error al marcar tarea" };
   }
 }
