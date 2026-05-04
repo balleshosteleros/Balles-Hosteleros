@@ -17,21 +17,24 @@ import { getStockPorEmpresa, type ProductoStock } from "@/features/logistica/dat
 import { listInventarios as listInventariosAction, createInventario as createInventarioAction, updateInventarioEstado as updateInventarioEstadoAction } from "@/features/logistica/actions/inventarios-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Plus, Search, Eye, Settings,
-} from "lucide-react";
+import { Eye, Settings } from "lucide-react";
 import { ImportExportButton } from "@/features/logistica/components/ImportExportButton";
-import { exportToCSV, exportToXLSX } from "@/features/logistica/lib/export-utils";
-import { FiltrosAvanzados, type FiltroActivo, type CampoFiltro } from "@/features/logistica/components/FiltrosAvanzados";
+import { exportToCSV, exportToXLSX, exportToPDF } from "@/features/logistica/lib/export-utils";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
+import { IOActions } from "@/shared/io";
+import { inventariosIO } from "@/features/logistica/io/inventarios.io";
 import { toast } from "sonner";
 import InventarioModal from "@/features/logistica/components/inventarios/InventarioModal";
 import DetalleInventario from "@/features/logistica/components/inventarios/DetalleInventario";
 import InventarioConfigView from "@/features/logistica/components/inventarios/InventarioConfigView";
-
-const ALL = "__ALL__";
-type CampoInventario = "estado" | "almacen" | "motivo" | "fecha";
 
 export function InventariosView() {
   const pathname = usePathname();
@@ -85,40 +88,37 @@ export function InventariosView() {
   }, [loadInventarios]);
 
   const [search, setSearch] = useState("");
-  const [filtros, setFiltros] = useState<FiltroActivo<CampoInventario>[]>([]);
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [createOpen, setCreateOpen] = useState(false);
   const [detalleId, setDetalleId] = useState<string | null>(null);
   const [showConfig, setShowConfig] = useState(false);
 
-  const camposFiltro = useMemo((): CampoFiltro<CampoInventario>[] => {
-    const uniq = (arr: string[]) => [...new Set(arr.filter(Boolean))].sort();
-    return [
-      { campo: "estado", label: "Estado", tipo: "lista", opciones: ["Borrador", "Confirmado"] },
-      { campo: "almacen", label: "Almacén", tipo: "lista", opciones: uniq(inventarios.map((i) => i.almacen)) },
-      { campo: "motivo", label: "Motivo", tipo: "lista", opciones: uniq(inventarios.map((i) => i.motivo)) },
-      { campo: "fecha", label: "Fecha", tipo: "fecha" },
-    ];
-  }, [inventarios]);
+  const almacenesUsados = useMemo(
+    () => [...new Set(inventarios.map((i) => i.almacen).filter(Boolean))].sort(),
+    [inventarios],
+  );
+  const motivosUsados = useMemo(
+    () => [...new Set(inventarios.map((i) => i.motivo).filter(Boolean))].sort(),
+    [inventarios],
+  );
+
+  const acceso = (i: Inventario, campo: string): unknown => {
+    return (i as unknown as Record<string, unknown>)[campo];
+  };
 
   const filtered = useMemo(() => {
-    return inventarios.filter((inv) => {
-      for (const f of filtros) {
-        if (f.campo === "estado" && f.valores?.length && !f.valores.includes(inv.estado)) return false;
-        if (f.campo === "almacen" && f.valores?.length && !f.valores.includes(inv.almacen)) return false;
-        if (f.campo === "motivo" && f.valores?.length && !f.valores.includes(inv.motivo)) return false;
-        if (f.campo === "fecha") {
-          if (f.desde && inv.fecha < f.desde) return false;
-          if (f.hasta && inv.fecha > f.hasta) return false;
-        }
-      }
-      if (search) {
-        const s = search.toLowerCase();
-        return inv.almacen.toLowerCase().includes(s) || inv.motivo.toLowerCase().includes(s) || inv.usuario.toLowerCase().includes(s);
-      }
-      return true;
+    let lista = inventarios.filter((inv) => {
+      if (!search) return true;
+      const s = search.toLowerCase();
+      return inv.almacen.toLowerCase().includes(s) || inv.motivo.toLowerCase().includes(s) || inv.usuario.toLowerCase().includes(s);
     });
-  }, [inventarios, search, filtros]);
+    lista = aplicarFiltrosToolbar(lista, filtros, acceso);
+    lista = aplicarOrdenToolbar(lista, orden, acceso);
+    return lista;
+  }, [inventarios, search, filtros, orden]);
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -271,38 +271,60 @@ export function InventariosView() {
   return (
     <div className="p-4 md:p-6 space-y-5">
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-3">
-        <Button
-          size="sm"
-          variant="primary"
-          className="gap-1"
-          onClick={() => setCreateOpen(true)}
-        >
-          <Plus className="h-4 w-4" /> Nuevo
-        </Button>
-        <div className="flex-1" />
-        <div className="relative min-w-[220px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
-        </div>
-        <FiltrosAvanzados campos={camposFiltro} filtros={filtros} onChange={setFiltros} />
-        <ImportExportButton
-          onExport={(format) => {
-            const ts = new Date().toISOString().slice(0, 10);
-            const rows = filtered.map((i) => ({
-              Fecha: i.fecha, Almacén: i.almacen, Motivo: i.motivo,
-              Estado: i.estado, Usuario: i.usuario, Conteos: i.conteos.length,
-            }));
-            if (rows.length === 0) { toast.info("No hay datos para exportar."); return; }
-            if (format === "csv") exportToCSV(rows, `inventarios-${ts}.csv`);
-            else exportToXLSX(rows, `inventarios-${ts}.xlsx`);
-            toast.success(`${rows.length} inventarios exportados en ${format.toUpperCase()}`);
-          }}
-        />
-        <Button size="icon" variant={showConfig ? "default" : "ghost"} className="h-8 w-8" onClick={() => setShowConfig((v) => !v)} title="Configuración de inventarios">
-          <Settings className="h-4 w-4" />
-        </Button>
-      </div>
+      <SubmoduleToolbar
+        busqueda={search}
+        onBusquedaChange={setSearch}
+        placeholderBusqueda="Buscar…"
+        onNuevo={() => setCreateOpen(true)}
+        campos={[
+          { campo: "estado", label: "Estado", tipo: "lista", opciones: ["Borrador", "Confirmado"] },
+          { campo: "almacen", label: "Almacén", tipo: "lista", opciones: almacenesUsados },
+          { campo: "motivo", label: "Motivo", tipo: "lista", opciones: motivosUsados },
+          { campo: "fecha", label: "Fecha", tipo: "fecha" },
+        ]}
+        filtros={filtros}
+        onFiltrosChange={setFiltros}
+        ordenOpciones={[
+          { campo: "fecha", label: "Fecha" },
+          { campo: "almacen", label: "Almacén" },
+          { campo: "motivo", label: "Motivo" },
+          { campo: "estado", label: "Estado" },
+        ]}
+        orden={orden}
+        onOrdenChange={setOrden}
+        columnas={[
+          { campo: "fecha", label: "Fecha" },
+          { campo: "almacen", label: "Almacén" },
+          { campo: "motivo", label: "Motivo" },
+          { campo: "estado", label: "Estado" },
+          { campo: "usuario", label: "Usuario" },
+          { campo: "conteos", label: "Conteos" },
+        ]}
+        columnasVisibles={columnasVisibles}
+        onColumnasVisiblesChange={setColumnasVisibles}
+        extraDerecha={
+          <>
+            <IOActions config={inventariosIO} onSuccess={() => window.location.reload()} />
+            <ImportExportButton
+              onExport={(format) => {
+                const ts = new Date().toISOString().slice(0, 10);
+                const rows = filtered.map((i) => ({
+                  Fecha: i.fecha, Almacén: i.almacen, Motivo: i.motivo,
+                  Estado: i.estado, Usuario: i.usuario, Conteos: i.conteos.length,
+                }));
+                if (rows.length === 0) { toast.info("No hay datos para exportar."); return; }
+                if (format === "csv") exportToCSV(rows, `inventarios-${ts}.csv`);
+                else if (format === "xlsx") exportToXLSX(rows, `inventarios-${ts}.xlsx`);
+                else exportToPDF(rows, `inventarios-${ts}.pdf`, "Inventarios");
+                toast.success(`${rows.length} inventarios exportados en ${format.toUpperCase()}`);
+              }}
+            />
+            <Button size="icon" variant={showConfig ? "default" : "ghost"} className="h-9 w-9" onClick={() => setShowConfig((v) => !v)} title="Configuración" aria-label="Configuración">
+              <Settings className="h-4 w-4" strokeWidth={1.75} />
+            </Button>
+          </>
+        }
+      />
 
       {/* Table */}
       <div className="bg-card rounded-lg border overflow-x-auto">

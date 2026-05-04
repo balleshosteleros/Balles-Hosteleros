@@ -13,13 +13,19 @@ import { toast } from "sonner";
 import { EstadoProcesoBadge, GravedadProcesoBadge } from "@/features/juridico/components/BadgesProceso";
 import { DetalleProceso } from "@/features/juridico/components/DetalleProceso";
 import { ProcesoModal } from "@/features/juridico/components/ProcesoModal";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Plus, Search, Info, FileText, Settings2 } from "lucide-react";
+import { Info, FileText, Settings } from "lucide-react";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
 
 const ALL = "__ALL__";
 
@@ -34,8 +40,8 @@ function mapDbToProceso(row: Record<string, unknown>, empresa: string, empresaId
     tipo: ((row.tipo as string) ?? "Otro") as TipoProceso,
     juridico: (row.abogado as string) ?? "",
     fecha: (row.fecha_inicio as string) ?? (row.created_at as string) ?? "",
-    estado: ((row.estado as string)?.toUpperCase() ?? "PENDIENTE") as EstadoProceso,
-    gravedad: ((row.gravedad as string)?.toUpperCase() ?? "MEDIA") as GravedadProceso,
+    estado: ((row.estado as string)?.toUpperCase() ?? "ABIERTO") as EstadoProceso,
+    gravedad: ((row.gravedad as string)?.toUpperCase() ?? "LEVE") as GravedadProceso,
     descripcion: (row.descripcion as string) ?? "",
     documentos: docsDb.map((d) => ({
       id: d.id as string,
@@ -67,11 +73,11 @@ export function ProcesosView() {
   const [data, setData] = useState<ProcesoJuridico[]>(() => getProcesosPorEmpresa(empresaActual.id));
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [filterEstado, setFilterEstado] = useState(ALL);
-  const [filterGravedad, setFilterGravedad] = useState(ALL);
-  const [filterTipo, setFilterTipo] = useState(ALL);
-  const [filterJuridico, setFilterJuridico] = useState(ALL);
-  const [tab, setTab] = useState<"abiertos" | "cerrados" | "config">("abiertos");
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [estadoExpediente, setEstadoExpediente] = useState<"abiertos" | "cerrados" | "todos">("abiertos");
+  const [showConfig, setShowConfig] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editItem, setEditItem] = useState<ProcesoJuridico | null>(null);
   const [detalleItem, setDetalleItem] = useState<ProcesoJuridico | null>(null);
@@ -101,31 +107,39 @@ export function ProcesosView() {
     loadProcesos();
   }, [loadProcesos]);
 
-  const isCerrado = (e: EstadoProceso) => e === "CERRADO" || e === "ARCHIVADO";
+  const isCerrado = (e: EstadoProceso) => e === "CERRADO";
 
-  const baseData = tab === "cerrados" ? data.filter((p) => isCerrado(p.estado)) : tab === "abiertos" ? data.filter((p) => !isCerrado(p.estado)) : data;
+  const baseData = estadoExpediente === "cerrados"
+    ? data.filter((p) => isCerrado(p.estado))
+    : estadoExpediente === "abiertos"
+    ? data.filter((p) => !isCerrado(p.estado))
+    : data;
+
+  const acceso = (p: ProcesoJuridico, campo: string): unknown => {
+    if (campo === "estado") return p.estado;
+    if (campo === "gravedad") return p.gravedad;
+    if (campo === "tipo") return p.tipo;
+    if (campo === "juridico") return p.juridico;
+    if (campo === "fecha") return p.fecha;
+    if (campo === "titulo") return p.titulo;
+    return (p as unknown as Record<string, unknown>)[campo];
+  };
 
   const filtered = useMemo(() => {
-    return baseData.filter((p) => {
-      if (filterEstado !== ALL && p.estado !== filterEstado) return false;
-      if (filterGravedad !== ALL && p.gravedad !== filterGravedad) return false;
-      if (filterTipo !== ALL && p.tipo !== filterTipo) return false;
-      if (filterJuridico !== ALL && p.juridico !== filterJuridico) return false;
+    let lista = baseData.filter((p) => {
       if (search) {
         const s = search.toLowerCase();
         return p.titulo.toLowerCase().includes(s) || p.descripcion.toLowerCase().includes(s) || p.juridico.toLowerCase().includes(s);
       }
       return true;
     });
-  }, [baseData, search, filterEstado, filterGravedad, filterTipo, filterJuridico]);
+    lista = aplicarFiltrosToolbar(lista, filtros, acceso);
+    lista = aplicarOrdenToolbar(lista, orden, acceso);
+    return lista;
+  }, [baseData, search, filtros, orden]);
 
   const abiertos = data.filter((p) => !isCerrado(p.estado));
   const cerrados = data.filter((p) => isCerrado(p.estado));
-
-  const counts: Record<string, number> = {};
-  ESTADOS_PROCESO.forEach((e) => { counts[e] = data.filter((p) => p.estado === e).length; });
-  const gravityCounts: Record<string, number> = {};
-  GRAVEDADES_PROCESO.forEach((g) => { gravityCounts[g] = data.filter((p) => p.gravedad === g).length; });
 
   const handleSave = async (item: ProcesoJuridico) => {
     const exists = data.find((p) => p.id === item.id);
@@ -207,95 +221,133 @@ export function ProcesosView() {
     }));
   };
 
+  const removeDocumento = (procesoId: string, docId: string) => {
+    setData((prev) => prev.map((p) => {
+      if (p.id !== procesoId) return p;
+      const updated = { ...p, documentos: p.documentos.filter((d) => d.id !== docId) };
+      setDetalleItem(updated);
+      return updated;
+    }));
+  };
+
+  const replaceDocumentos = (procesoId: string, docs: DocumentoProceso[]) => {
+    setData((prev) => prev.map((p) => {
+      if (p.id !== procesoId) return p;
+      const updated = { ...p, documentos: docs };
+      setDetalleItem(updated);
+      return updated;
+    }));
+  };
+
   const openEdit = (item: ProcesoJuridico) => { setEditItem(item); setModalOpen(true); };
   const openNew = () => { setEditItem(null); setModalOpen(true); };
 
-  const estadoCards: { key: EstadoProceso; color: string }[] = [
-    { key: "PENDIENTE", color: "border-status-pending bg-status-pending/10 text-status-pending" },
-    { key: "EN PROCESO", color: "border-status-progress bg-status-progress/10 text-status-progress" },
-    { key: "REVISIÓN", color: "border-blue-400 bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300" },
-    { key: "ESCALADO", color: "border-status-escalated bg-status-escalated/10 text-status-escalated" },
-    { key: "CERRADO", color: "border-status-done bg-status-done/10 text-status-done" },
-    { key: "ARCHIVADO", color: "border-border bg-muted text-muted-foreground" },
-  ];
-
   return (
     <div className="p-4 md:p-6 space-y-5">
-      <div className="flex items-center justify-end">
-        <Button variant="primary" size="sm" onClick={openNew}><Plus className="h-4 w-4" />Nuevo</Button>
-      </div>
+      <div className="space-y-4">
+        <SubmoduleToolbar
+          busqueda={search}
+          onBusquedaChange={setSearch}
+          placeholderBusqueda="Buscar expedientes…"
+          onNuevo={openNew}
+          textoNuevo="Nuevo"
+          campos={[
+            { campo: "estado", label: "Estado", tipo: "lista", opciones: [...ESTADOS_PROCESO] },
+            { campo: "gravedad", label: "Gravedad", tipo: "lista", opciones: [...GRAVEDADES_PROCESO] },
+            { campo: "tipo", label: "Tipo", tipo: "lista", opciones: [...TIPOS_PROCESO] },
+            { campo: "juridico", label: "Responsable", tipo: "lista", opciones: [...JURIDICOS] },
+            { campo: "fecha", label: "Fecha inicio", tipo: "fecha" },
+          ]}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenOpciones={[
+            { campo: "titulo", label: "Nombre" },
+            { campo: "fecha", label: "Fecha inicio" },
+            { campo: "estado", label: "Estado" },
+            { campo: "juridico", label: "Abogado" },
+          ]}
+          orden={orden}
+          onOrdenChange={setOrden}
+          columnas={[
+            { campo: "titulo", label: "Expediente" },
+            { campo: "tipo", label: "Tipo" },
+            { campo: "juridico", label: "Responsable" },
+            { campo: "fecha", label: "Fecha" },
+            { campo: "estado", label: "Estado" },
+            { campo: "gravedad", label: "Gravedad" },
+          ]}
+          columnasVisibles={columnasVisibles}
+          onColumnasVisiblesChange={setColumnasVisibles}
+          extraIzquierda={
+            <Select value={estadoExpediente} onValueChange={(v) => setEstadoExpediente(v as typeof estadoExpediente)}>
+              <SelectTrigger className="h-9 w-[170px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="abiertos">Abierto ({abiertos.length})</SelectItem>
+                <SelectItem value="cerrados">Cerrado ({cerrados.length})</SelectItem>
+                <SelectItem value="todos">Todos ({data.length})</SelectItem>
+              </SelectContent>
+            </Select>
+          }
+          extraDerecha={
+            <Button
+              size="icon"
+              variant={showConfig ? "default" : "ghost"}
+              className="h-9 w-9"
+              onClick={() => setShowConfig((v) => !v)}
+              title="Configuración"
+              aria-label="Configuración"
+            >
+              <Settings className="h-4 w-4" strokeWidth={1.75} />
+            </Button>
+          }
+        />
 
-      <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
-        {estadoCards.map((s) => (
-          <div key={s.key} className={`rounded-lg border-2 p-3 text-center ${s.color}`}>
-            <div className="text-2xl font-black">{counts[s.key]}</div>
-            <div className="text-[10px] font-bold mt-0.5">{s.key}</div>
+        {showConfig ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Estados</CardTitle>
+                <CardDescription className="text-xs">Estados disponibles para los expedientes.</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-2">
+                {ESTADOS_PROCESO.map((e) => <EstadoProcesoBadge key={e} value={e} />)}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Gravedad</CardTitle>
+                <CardDescription className="text-xs">Niveles de gravedad para priorización.</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-2">
+                {GRAVEDADES_PROCESO.map((g) => <GravedadProcesoBadge key={g} value={g} />)}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Tipos de proceso</CardTitle>
+                <CardDescription className="text-xs">Clasificación de expedientes jurídicos.</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-2">
+                {TIPOS_PROCESO.map((t2) => <Badge key={t2} variant="outline">{t2}</Badge>)}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Responsables jurídicos</CardTitle>
+                <CardDescription className="text-xs">Abogados y despachos asignados.</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-2">
+                {JURIDICOS.map((j) => <Badge key={j} variant="outline">{j}</Badge>)}
+              </CardContent>
+            </Card>
           </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {GRAVEDADES_PROCESO.map((g) => (
-          <div key={g} className="rounded-lg border bg-card p-3 text-center">
-            <GravedadProcesoBadge value={g} />
-            <div className="text-xl font-bold mt-1 text-foreground">{gravityCounts[g]}</div>
-          </div>
-        ))}
-      </div>
-
-      <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
-        <TabsList>
-          <TabsTrigger value="abiertos" className="gap-1.5">
-            Abiertos <Badge variant="secondary" className="ml-1 text-[10px] px-1.5">{abiertos.length}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="cerrados" className="gap-1.5">
-            Cerrados <Badge variant="secondary" className="ml-1 text-[10px] px-1.5">{cerrados.length}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="config" className="gap-1.5"><Settings2 className="h-4 w-4" /> Configuración</TabsTrigger>
-        </TabsList>
-
-        {(["abiertos", "cerrados"] as const).map((t) => (
-          <TabsContent key={t} value={t} className="space-y-4 mt-4">
-            <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-3">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Buscar expedientes…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
-              </div>
-              <Select value={filterEstado} onValueChange={setFilterEstado}>
-                <SelectTrigger className="w-[150px]"><SelectValue placeholder="Estado" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Todos</SelectItem>
-                  {ESTADOS_PROCESO.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={filterGravedad} onValueChange={setFilterGravedad}>
-                <SelectTrigger className="w-[140px]"><SelectValue placeholder="Gravedad" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Todas</SelectItem>
-                  {GRAVEDADES_PROCESO.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={filterTipo} onValueChange={setFilterTipo}>
-                <SelectTrigger className="w-[200px]"><SelectValue placeholder="Tipo" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Todos</SelectItem>
-                  {TIPOS_PROCESO.map((t2) => <SelectItem key={t2} value={t2}>{t2}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={filterJuridico} onValueChange={setFilterJuridico}>
-                <SelectTrigger className="w-[210px]"><SelectValue placeholder="Jurídico" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Todos</SelectItem>
-                  {JURIDICOS.map((j) => <SelectItem key={j} value={j}>{j}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-
+        ) : (
+          <>
             <div className="bg-card rounded-lg border overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted/50">
-                    {["EXPEDIENTE", "TIPO", "JURÍDICO", "FECHA", "ESTADO", "GRAVEDAD", "PDF", ""].map((h) => (
+                    {["EXPEDIENTE", "TIPO", "RESPONSABLE", "FECHA", "ESTADO", "GRAVEDAD", "PDF", ""].map((h) => (
                       <th key={h || "actions"} className="text-left px-3 py-3 text-xs font-bold text-muted-foreground tracking-wide whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -347,54 +399,21 @@ export function ProcesosView() {
               </table>
             </div>
             <div className="text-xs text-muted-foreground text-right">{filtered.length} de {baseData.length} expedientes</div>
-          </TabsContent>
-        ))}
-
-        <TabsContent value="config" className="mt-4 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Estados</CardTitle>
-                <CardDescription className="text-xs">Estados disponibles para los expedientes.</CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-wrap gap-2">
-                {ESTADOS_PROCESO.map((e) => <EstadoProcesoBadge key={e} value={e} />)}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Gravedad</CardTitle>
-                <CardDescription className="text-xs">Niveles de gravedad para priorización.</CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-wrap gap-2">
-                {GRAVEDADES_PROCESO.map((g) => <GravedadProcesoBadge key={g} value={g} />)}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Tipos de proceso</CardTitle>
-                <CardDescription className="text-xs">Clasificación de expedientes jurídicos.</CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-wrap gap-2">
-                {TIPOS_PROCESO.map((t2) => <Badge key={t2} variant="outline">{t2}</Badge>)}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Responsables jurídicos</CardTitle>
-                <CardDescription className="text-xs">Abogados y despachos asignados.</CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-wrap gap-2">
-                {JURIDICOS.map((j) => <Badge key={j} variant="outline">{j}</Badge>)}
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-      </Tabs>
+          </>
+        )}
+      </div>
 
       <ProcesoModal open={modalOpen} onClose={() => setModalOpen(false)} onSave={handleSave} item={editItem} empresa={empresaActual.nombre} empresaId={empresaActual.id} />
       {detalleItem && (
-        <DetalleProceso open={!!detalleItem} onClose={() => setDetalleItem(null)} item={detalleItem} onAddActualizacion={addActualizacion} onAddDocumento={addDocumento} />
+        <DetalleProceso
+          open={!!detalleItem}
+          onClose={() => setDetalleItem(null)}
+          item={detalleItem}
+          onAddActualizacion={addActualizacion}
+          onAddDocumento={addDocumento}
+          onRemoveDocumento={removeDocumento}
+          onReplaceDocumentos={replaceDocumentos}
+        />
       )}
     </div>
   );

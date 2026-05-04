@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useAyuda } from "@/features/ajustes/contexts/ayuda-context";
 import { ArticuloAyuda, MODULOS_AYUDA, ModuloAyuda } from "@/features/ajustes/data/ayuda";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,8 +16,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { BookPlus, Eye, CheckCircle2, Clock } from "lucide-react";
 import { toast } from "sonner";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
 
-const ROLES = ["Administrador", "Gerencia", "Contabilidad", "Gestoría", "Jurídico", "Recursos Humanos", "Logística", "Marketing", "Solo lectura"];
+const ROLES = ["Director", "Gerencia", "Contabilidad", "Gestoría", "Jurídico", "Recursos Humanos", "Logística", "Marketing", "Solo lectura"];
 
 export function ConsultasPendientesView() {
   const { consultas, resolverConsulta, articulos, setArticulos } = useAyuda();
@@ -26,7 +34,7 @@ export function ConsultasPendientesView() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
 
-  const [form, setForm] = useState({ titulo: "", respuesta: "", modulo: "Dashboard" as ModuloAyuda, rolesAutorizados: ["Administrador"] as string[], validada: true });
+  const [form, setForm] = useState({ titulo: "", respuesta: "", modulo: "Dashboard" as ModuloAyuda, rolesAutorizados: ["Director"] as string[], validada: true });
 
   const pendientes = consultas.filter((c) => c.estado === "pendiente");
   const resueltas = consultas.filter((c) => c.estado === "resuelta");
@@ -35,7 +43,7 @@ export function ConsultasPendientesView() {
     const c = consultas.find((x) => x.id === id);
     if (!c) return;
     setSelectedId(id);
-    setForm({ titulo: c.pregunta, respuesta: "", modulo: "Dashboard", rolesAutorizados: ["Administrador"], validada: true });
+    setForm({ titulo: c.pregunta, respuesta: "", modulo: "Dashboard", rolesAutorizados: ["Director"], validada: true });
     setModalOpen(true);
   };
 

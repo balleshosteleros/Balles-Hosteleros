@@ -96,7 +96,7 @@ export async function resolverHostname(rawHost: string): Promise<HostnameMatch |
 export function hostnamesPrincipales(): string[] {
   const env = process.env.APP_PRIMARY_HOSTS ?? "";
   const vercel = process.env.VERCEL_URL ? `${process.env.VERCEL_URL}` : "";
-  return [...env.split(","), vercel, "localhost"]
+  return [...env.split(","), vercel, "balleshosteleros.com", "localhost"]
     .map((h) => normalizarHost(h))
     .filter(Boolean);
 }

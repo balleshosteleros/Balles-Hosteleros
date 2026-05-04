@@ -3,6 +3,18 @@
     {
       "path": "/api/cron/agora-sync",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/cerrar-fichajes-huerfanos",
+      "schedule": "10 8 * * *"
+    },
+    {
+      "path": "/api/points/cron/devengo-diario",
+      "schedule": "55 23 * * *"
+    },
+    {
+      "path": "/api/points/cron/snapshot-periodos",
+      "schedule": "5 0 * * *"
     }
   ]
 }

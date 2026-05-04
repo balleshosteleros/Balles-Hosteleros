@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { listPublicaciones, createPublicacion } from "@/features/marketing/actions/publicaciones-actions";
 import { toast } from "sonner";
@@ -13,7 +13,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Film, Camera, FileText, ImageIcon, Clock, Plus, Search, ExternalLink, Trash2, Edit, Video, BookOpen } from "lucide-react";
+import { Film, Camera, Clock, ExternalLink, Trash2, Edit, Video, BookOpen, ImageIcon } from "lucide-react";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+} from "@/shared/components/SubmoduleToolbar";
 
 type TipoContenido = "guion" | "grabacion" | "reel" | "post" | "historia";
 type EstadoContenido = "borrador" | "en_produccion" | "listo" | "publicado" | "archivado";
@@ -131,7 +138,8 @@ export function ContenidoView() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<TipoContenido>("guion");
   const [search, setSearch] = useState("");
-  const [filtroEstado, setFiltroEstado] = useState<string>("todos");
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editItem, setEditItem] = useState<ContenidoItem | null>(null);
 
@@ -155,12 +163,29 @@ export function ContenidoView() {
     loadContenido();
   }, [loadContenido]);
 
-  const filtered = items.filter((i) => {
-    if (i.tipo !== tab) return false;
-    if (filtroEstado !== "todos" && i.estado !== filtroEstado) return false;
-    if (search && !i.titulo.toLowerCase().includes(search.toLowerCase()) && !i.descripcion.toLowerCase().includes(search.toLowerCase())) return false;
-    return true;
-  });
+  const acceso = (i: ContenidoItem, campo: string): unknown => {
+    if (campo === "estado") return ESTADOS.find((e) => e.value === i.estado)?.label ?? i.estado;
+    if (campo === "responsable") return i.responsable;
+    if (campo === "fecha") return i.fecha;
+    if (campo === "titulo") return i.titulo;
+    return (i as unknown as Record<string, unknown>)[campo];
+  };
+
+  const filtered = useMemo(() => {
+    let lista = items.filter((i) => {
+      if (i.tipo !== tab) return false;
+      if (search) {
+        const q = search.toLowerCase();
+        if (!i.titulo.toLowerCase().includes(q) && !i.descripcion.toLowerCase().includes(q)) {
+          return false;
+        }
+      }
+      return true;
+    });
+    lista = aplicarFiltrosToolbar(lista, filtros, acceso);
+    lista = aplicarOrdenToolbar(lista, orden, acceso);
+    return lista;
+  }, [items, tab, search, filtros, orden]);
 
   const counts = SECCIONES.map((s) => ({ ...s, count: items.filter((i) => i.tipo === s.value).length }));
 
@@ -203,27 +228,44 @@ export function ContenidoView() {
       </div>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as TipoContenido)}>
-        <div className="flex flex-col md:flex-row md:items-center gap-3 mb-4">
+        <div className="mb-4">
           <TabsList>
             {SECCIONES.map((s) => <TabsTrigger key={s.value} value={s.value} className="text-xs">{s.label}</TabsTrigger>)}
           </TabsList>
-          <div className="flex items-center gap-2 ml-auto">
-            <div className="relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input className="pl-8 h-8 w-48" placeholder="Buscar..." value={search} onChange={(e) => setSearch(e.target.value)} />
-            </div>
-            <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-              <SelectTrigger className="h-8 w-36"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                {ESTADOS.map((e) => <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Button size="sm" onClick={() => { setEditItem(null); setModalOpen(true); }}>
-              <Plus className="h-4 w-4 mr-1" /> Nuevo
-            </Button>
-          </div>
         </div>
+
+        <SubmoduleToolbar
+          busqueda={search}
+          onBusquedaChange={setSearch}
+          placeholderBusqueda="Buscar por título o descripción..."
+          onNuevo={() => { setEditItem(null); setModalOpen(true); }}
+          textoNuevo="Nuevo"
+          campos={[
+            {
+              campo: "estado",
+              label: "Estado",
+              tipo: "lista",
+              opciones: ESTADOS.map((e) => e.label),
+            },
+            {
+              campo: "responsable",
+              label: "Responsable",
+              tipo: "lista",
+              opciones: [...new Set(items.map((i) => i.responsable).filter(Boolean))].sort(),
+            },
+            { campo: "fecha", label: "Fecha", tipo: "fecha" },
+          ]}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenOpciones={[
+            { campo: "titulo", label: "Título" },
+            { campo: "fecha", label: "Fecha" },
+            { campo: "responsable", label: "Responsable" },
+          ]}
+          orden={orden}
+          onOrdenChange={setOrden}
+          className="mb-4"
+        />
 
         {SECCIONES.map((s) => (
           <TabsContent key={s.value} value={s.value}>

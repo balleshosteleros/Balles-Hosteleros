@@ -9,7 +9,7 @@ interface GoogleSignInButtonProps {
 }
 
 export function GoogleSignInButton({
-  redirectTo = '/dashboard',
+  redirectTo,
   label = 'Continuar con Google',
 }: GoogleSignInButtonProps) {
   const [loading, setLoading] = useState(false)
@@ -21,11 +21,13 @@ export function GoogleSignInButton({
     // OJO: solo scopes básicos. Los de Gmail/Calendar se piden por separado
     // desde el botón "Conectar Google" del drawer, porque son scopes sensibles
     // y disparan el bloqueo de verificación de Google si los pedimos en el login.
+    // Si no se pasa redirectTo, /callback decide en función del rol_label del usuario.
+    const callbackUrl = redirectTo
+      ? `${window.location.origin}/callback?next=${redirectTo}`
+      : `${window.location.origin}/callback`
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/callback?next=${redirectTo}`,
-      },
+      options: { redirectTo: callbackUrl },
     })
 
     if (error) {

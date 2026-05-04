@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Search, Settings, LayoutGrid, List } from "lucide-react";
+import { Plus, Search, Settings, LayoutGrid, List, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -20,10 +20,11 @@ import { NuevaRecetaDialog } from "./NuevaRecetaDialog";
 import { RecetaDetailDialog } from "./RecetaDetailDialog";
 import { FaseConfigDialog } from "./config/FaseConfigDialog";
 import { GestionarFasesDialog } from "./config/GestionarFasesDialog";
+import { CambiosCartaCalendario } from "./CambiosCartaCalendario";
 import type { EstadoGeneral } from "../types";
 import { ESTADO_GENERAL_LABELS } from "../types";
 
-type Vista = "kanban" | "tabla";
+type Vista = "kanban" | "tabla" | "calendario";
 
 export function NuevasRecetasView() {
   const [fases, setFases] = useState<FaseConPolicies[]>([]);
@@ -116,6 +117,14 @@ export function NuevasRecetasView() {
             >
               <List className="h-3.5 w-3.5" /> Tabla
             </Button>
+            <Button
+              variant={vista === "calendario" ? "default" : "ghost"}
+              size="sm"
+              className="h-7 text-xs gap-1"
+              onClick={() => setVista("calendario")}
+            >
+              <CalendarDays className="h-3.5 w-3.5" /> Calendario
+            </Button>
           </div>
 
           <Button
@@ -148,6 +157,12 @@ export function NuevasRecetasView() {
           onConfigFase={openConfigFase}
           onRefresh={cargar}
         />
+      )}
+
+      {!cargando && vista === "calendario" && (
+        <div className="flex-1 overflow-y-auto">
+          <CambiosCartaCalendario />
+        </div>
       )}
 
       {!cargando && vista === "tabla" && (

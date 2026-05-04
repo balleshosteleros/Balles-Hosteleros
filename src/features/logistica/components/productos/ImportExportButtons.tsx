@@ -18,6 +18,7 @@ import {
   parseFileToProductos,
   exportProductosToCSV,
   exportProductosToExcel,
+  exportProductosToPDF,
   downloadTemplateCSV,
 } from "@/features/logistica/lib/productos-io";
 import type { TipoProducto } from "@/features/logistica/data/productos";
@@ -65,7 +66,7 @@ export function ImportExportButtons({ tipo, onImportSuccess }: ImportExportButto
     });
   }
 
-  async function handleExport(format: "csv" | "xlsx") {
+  async function handleExport(format: "csv" | "xlsx" | "pdf") {
     setIsExporting(true);
     try {
       const productos = await listProductos(tipo);
@@ -73,8 +74,10 @@ export function ImportExportButtons({ tipo, onImportSuccess }: ImportExportButto
       const ts = new Date().toISOString().slice(0, 10);
       if (format === "csv") {
         exportProductosToCSV(productos, `productos-${tipo}-${ts}.csv`);
-      } else {
+      } else if (format === "xlsx") {
         exportProductosToExcel(productos, `productos-${tipo}-${ts}.xlsx`);
+      } else {
+        exportProductosToPDF(productos, `productos-${tipo}-${ts}.pdf`, `Productos ${tipo}`);
       }
       toast.success(`${productos.length} productos exportados en ${format.toUpperCase()}`);
     } catch (err) {

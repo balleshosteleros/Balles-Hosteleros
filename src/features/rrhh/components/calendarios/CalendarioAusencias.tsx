@@ -4,7 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Plus, CalendarDays, List, ChevronLeft, ChevronRight, Settings2 } from "lucide-react";
+import { Search, Plus, CalendarDays, List, ChevronLeft, ChevronRight } from "lucide-react";
+import { ConfigButton } from "@/shared/components/config-button";
 import { CalendarioConfig } from "./CalendarioConfig";
 
 interface AusenciaItem {
@@ -120,7 +121,7 @@ export function CalendarioAusencias({ modalidad, titulo, items, botonNuevo, colu
           </Button>
         </div>
         <Button size="sm" className="gap-1"><Plus className="h-4 w-4" />{botonNuevo}</Button>
-        <Button size="sm" variant="outline" className="gap-1" onClick={() => setShowConfig(true)}><Settings2 className="h-4 w-4" />Configuración</Button>
+        <ConfigButton onClick={() => setShowConfig(true)} className="ml-auto" />
       </div>
 
       {vista === "calendario" ? (

@@ -5,26 +5,17 @@ import Link from "next/link";
 import { toast } from "sonner";
 import {
   Plus,
-  Search,
   Globe,
   LayoutTemplate,
   Pencil,
   Trash2,
   Eye,
-  Filter,
   Archive,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -33,6 +24,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -67,7 +66,9 @@ export function PaginasListView() {
   const [items, setItems] = useState<PaginaWeb[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [estadoFilter, setEstadoFilter] = useState<PaginaWebEstado | "todas">("todas");
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [nuevaOpen, setNuevaOpen] = useState(false);
   const [confirmar, setConfirmar] = useState<
     | { tipo: "archivar" | "eliminar"; id: string; nombre: string }
@@ -87,15 +88,24 @@ export function PaginasListView() {
     cargar();
   }, [cargar]);
 
+  const acceso = (p: PaginaWeb, campo: string): unknown => {
+    if (campo === "estado") return ESTADO_LABEL[p.estado];
+    if (campo === "tipo") return p.tipo === "WEB_PRINCIPAL" ? "Web principal" : "One-page";
+    if (campo === "nombre") return p.nombre;
+    if (campo === "updated_at") return p.updated_at;
+    return (p as unknown as Record<string, unknown>)[campo];
+  };
+
   const filtered = useMemo(() => {
-    let r = items;
-    if (estadoFilter !== "todas") r = r.filter((p) => p.estado === estadoFilter);
-    if (search) {
+    let r = items.filter((p) => {
+      if (!search) return true;
       const s = search.toLowerCase();
-      r = r.filter((p) => p.nombre.toLowerCase().includes(s) || p.slug_interno.includes(s));
-    }
+      return p.nombre.toLowerCase().includes(s) || p.slug_interno.includes(s);
+    });
+    r = aplicarFiltrosToolbar(r, filtros, acceso);
+    r = aplicarOrdenToolbar(r, orden, acceso);
     return r;
-  }, [items, search, estadoFilter]);
+  }, [items, search, filtros, orden]);
 
   const onConfirmar = async () => {
     if (!confirmar) return;
@@ -127,50 +137,58 @@ export function PaginasListView() {
   return (
     <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Globe className="h-6 w-6" /> Página web
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Web corporativa + one-pages de campaña. Dominios custom con SSL automático.
-          </p>
-        </div>
-        <Button variant="primary" size="lg" onClick={() => setNuevaOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" /> Nueva página
-        </Button>
-      </div>
-
-      {/* Filtros */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[220px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por nombre o slug…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <Select
-          value={estadoFilter}
-          onValueChange={(v) => setEstadoFilter(v as PaginaWebEstado | "todas")}
-        >
-          <SelectTrigger className="w-[180px]">
-            <Filter className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
-            <SelectValue placeholder="Estado" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todas">Todos los estados</SelectItem>
-            <SelectItem value="BORRADOR">Borradores</SelectItem>
-            <SelectItem value="PUBLICADA">Publicadas</SelectItem>
-            <SelectItem value="ARCHIVADA">Archivadas</SelectItem>
-          </SelectContent>
-        </Select>
-        <p className="text-xs text-muted-foreground ml-auto">
-          {filtered.length} página{filtered.length !== 1 ? "s" : ""}
+      <div>
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <Globe className="h-6 w-6" /> Página web
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Web corporativa + one-pages de campaña. Dominios custom con SSL automático.
         </p>
       </div>
+
+      <SubmoduleToolbar
+        busqueda={search}
+        onBusquedaChange={setSearch}
+        placeholderBusqueda="Buscar por nombre o slug..."
+        onNuevo={() => setNuevaOpen(true)}
+        textoNuevo="Nueva página"
+        campos={[
+          {
+            campo: "estado",
+            label: "Estado",
+            tipo: "lista",
+            opciones: Object.values(ESTADO_LABEL),
+          },
+          {
+            campo: "tipo",
+            label: "Tipo",
+            tipo: "lista",
+            opciones: ["Web principal", "One-page"],
+          },
+        ]}
+        filtros={filtros}
+        onFiltrosChange={setFiltros}
+        ordenOpciones={[
+          { campo: "nombre", label: "Nombre" },
+          { campo: "updated_at", label: "Actualizada" },
+        ]}
+        orden={orden}
+        onOrdenChange={setOrden}
+        columnas={[
+          { campo: "nombre", label: "Nombre" },
+          { campo: "tipo", label: "Tipo" },
+          { campo: "slug", label: "Slug" },
+          { campo: "estado", label: "Estado" },
+          { campo: "actualizada", label: "Actualizada" },
+        ]}
+        columnasVisibles={columnasVisibles}
+        onColumnasVisiblesChange={setColumnasVisibles}
+        extraDerecha={
+          <span className="text-xs text-muted-foreground">
+            {filtered.length} página{filtered.length !== 1 ? "s" : ""}
+          </span>
+        }
+      />
 
       {/* Tabla */}
       <Card>

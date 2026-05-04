@@ -3,6 +3,19 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { getRedirectByRolLabel } from '@/features/auth/lib/role-redirect'
+
+async function getRolLandingForCurrentUser(): Promise<string> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return '/'
+  const { data } = await supabase
+    .from('profiles')
+    .select('rol_label')
+    .eq('user_id', user.id)
+    .maybeSingle()
+  return getRedirectByRolLabel(data?.rol_label as string | null)
+}
 
 export async function login(formData: FormData) {
   const supabase = await createClient()
@@ -17,7 +30,8 @@ export async function login(formData: FormData) {
   }
 
   revalidatePath('/', 'layout')
-  redirect('/dashboard')
+  const target = await getRolLandingForCurrentUser()
+  redirect(target)
 }
 
 export async function loginAsDemo(_formData: FormData) {
@@ -43,7 +57,7 @@ export async function loginAsDemo(_formData: FormData) {
   }
 
   revalidatePath('/', 'layout')
-  redirect('/dashboard')
+  redirect('/mi-panel')
 }
 
 export async function signup(formData: FormData) {
@@ -100,7 +114,8 @@ export async function updatePassword(formData: FormData) {
   }
 
   revalidatePath('/', 'layout')
-  redirect('/dashboard')
+  const target = await getRolLandingForCurrentUser()
+  redirect(target)
 }
 
 export async function updateProfile(formData: FormData) {

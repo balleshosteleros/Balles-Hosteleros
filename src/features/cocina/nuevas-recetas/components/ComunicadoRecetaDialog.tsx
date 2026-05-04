@@ -73,10 +73,10 @@ export function ComunicadoRecetaDialog({ open, onOpenChange, receta }: Props) {
     try {
       const res = await createComunicado({
         titulo: titulo.trim(),
-        contenido: contenido.trim(),
-        tipo: "nueva_receta",
+        cuerpo: contenido.trim(),
         prioridad,
-        destinatarios: destino === "empresa" ? ["toda-empresa"] : [],
+        todaEmpresa: destino === "empresa",
+        rolesDestinatarios: destino === "empresa" ? [] : ["Cocina"],
       });
       if (!res.ok) {
         toast.error((res as { error?: string }).error ?? "Error al enviar");

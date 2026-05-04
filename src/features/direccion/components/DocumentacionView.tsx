@@ -6,23 +6,30 @@ import {
   Documento, CATEGORIAS_DOCUMENTALES, NIVELES_ACCESO,
   ESTADOS_DOCUMENTO, CARPETAS, NivelAcceso, EstadoDocumento, TipoArchivo,
 } from "@/features/direccion/data/documentacion";
-import { listDocumentos, createDocumento, deleteDocumento } from "@/features/direccion/actions/documentacion-actions";
+import { listDocumentos } from "@/features/direccion/actions/documentacion-actions";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  Search, Upload, FolderPlus, List, LayoutGrid, FileText, FileSpreadsheet,
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
+import {
+  Upload, List, LayoutGrid, FileText, FileSpreadsheet,
   FileImage, File, Download, Eye, Pencil, Archive, FolderOpen, Shield,
-  Clock, User, Tag, HardDrive, Settings, Link2, X, ChevronRight,
-  Lock, Users, Building2, Filter,
+  Tag, HardDrive, Settings, Link2,
+  Lock, Users, Building2,
 } from "lucide-react";
 
 /* ── helpers ── */
@@ -106,12 +113,22 @@ export function DocumentacionView() {
   }, [loadDocumentos]);
 
   const [search, setSearch] = useState("");
-  const [catFilter, setCatFilter] = useState("todas");
-  const [estadoFilter, setEstadoFilter] = useState("todos");
-  const [carpetaFilter, setCarpetaFilter] = useState("todas");
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [vista, setVista] = useState<"lista" | "tarjetas">("lista");
   const [selected, setSelected] = useState<Documento | null>(null);
   const [mainTab, setMainTab] = useState("biblioteca");
+
+  const acceso = (d: Documento, campo: string): unknown => {
+    if (campo === "estado") return ESTADOS_DOCUMENTO.find((x) => x.value === d.estado)?.label ?? d.estado;
+    if (campo === "categoria") return d.categoria;
+    if (campo === "carpeta") return d.carpeta;
+    if (campo === "fecha") return d.ultimaActualizacion;
+    if (campo === "version") return d.tamano;
+    if (campo === "nombre") return d.nombre;
+    return (d as unknown as Record<string, unknown>)[campo];
+  };
 
   const filtered = useMemo(() => {
     let r = docs;
@@ -119,62 +136,64 @@ export function DocumentacionView() {
       const s = search.toLowerCase();
       r = r.filter((d) => d.nombre.toLowerCase().includes(s) || d.descripcion.toLowerCase().includes(s) || d.etiquetas.some((t) => t.toLowerCase().includes(s)));
     }
-    if (catFilter !== "todas") r = r.filter((d) => d.categoria === catFilter);
-    if (estadoFilter !== "todos") r = r.filter((d) => d.estado === estadoFilter);
-    if (carpetaFilter !== "todas") r = r.filter((d) => d.carpeta === carpetaFilter);
+    r = aplicarFiltrosToolbar(r, filtros, acceso);
+    r = aplicarOrdenToolbar(r, orden, acceso);
     return r;
-  }, [docs, search, catFilter, estadoFilter, carpetaFilter]);
+  }, [docs, search, filtros, orden]);
 
   return (
     <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
-      <div className="flex items-center justify-end gap-2">
-        <Button variant="outline" size="sm"><FolderPlus className="h-4 w-4 mr-1.5" />Nueva carpeta</Button>
-        <Button size="sm"><Upload className="h-4 w-4 mr-1.5" />Subir documento</Button>
-      </div>
-
       {/* Main Tabs */}
       <Tabs value={mainTab} onValueChange={setMainTab}>
         <TabsList>
           <TabsTrigger value="biblioteca"><FolderOpen className="h-4 w-4 mr-1.5" />Biblioteca</TabsTrigger>
           <TabsTrigger value="permisos"><Shield className="h-4 w-4 mr-1.5" />Permisos</TabsTrigger>
           <TabsTrigger value="drive"><HardDrive className="h-4 w-4 mr-1.5" />Conexión Drive</TabsTrigger>
-          <TabsTrigger value="config"><Settings className="h-4 w-4 mr-1.5" />Configuración</TabsTrigger>
+          <TabsTrigger value="config" aria-label="Configuración" className="ml-auto"><Settings className="h-4 w-4" strokeWidth={1.75} /></TabsTrigger>
         </TabsList>
 
         {/* ─── BIBLIOTECA ─── */}
         <TabsContent value="biblioteca" className="space-y-4 mt-4">
-          {/* Filters */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative flex-1 min-w-[220px] max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Buscar documentos..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
-            </div>
-            <Select value={catFilter} onValueChange={setCatFilter}>
-              <SelectTrigger className="w-[180px]"><Filter className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" /><SelectValue placeholder="Categoría" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todas">Todas las categorías</SelectItem>
-                {CATEGORIAS_DOCUMENTALES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={estadoFilter} onValueChange={setEstadoFilter}>
-              <SelectTrigger className="w-[160px]"><SelectValue placeholder="Estado" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos los estados</SelectItem>
-                {ESTADOS_DOCUMENTO.map((e) => <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={carpetaFilter} onValueChange={setCarpetaFilter}>
-              <SelectTrigger className="w-[160px]"><FolderOpen className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" /><SelectValue placeholder="Carpeta" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todas">Todas las carpetas</SelectItem>
-                {CARPETAS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <div className="ml-auto flex gap-1">
-              <Button variant={vista === "lista" ? "secondary" : "ghost"} size="icon" onClick={() => setVista("lista")}><List className="h-4 w-4" /></Button>
-              <Button variant={vista === "tarjetas" ? "secondary" : "ghost"} size="icon" onClick={() => setVista("tarjetas")}><LayoutGrid className="h-4 w-4" /></Button>
-            </div>
-          </div>
+          <SubmoduleToolbar
+            busqueda={search}
+            onBusquedaChange={setSearch}
+            placeholderBusqueda="Buscar documentos..."
+            textoNuevo="Subir documento"
+            onNuevo={() => { /* abrir uploader */ }}
+            campos={[
+              { campo: "categoria", label: "Categoría", tipo: "lista", opciones: [...CATEGORIAS_DOCUMENTALES] },
+              { campo: "estado", label: "Estado", tipo: "lista", opciones: ESTADOS_DOCUMENTO.map((e) => e.label) },
+              { campo: "carpeta", label: "Carpeta", tipo: "lista", opciones: [...CARPETAS] },
+              { campo: "fecha", label: "Fecha", tipo: "fecha" },
+            ]}
+            filtros={filtros}
+            onFiltrosChange={setFiltros}
+            ordenOpciones={[
+              { campo: "nombre", label: "Nombre" },
+              { campo: "categoria", label: "Categoría" },
+              { campo: "fecha", label: "Fecha" },
+              { campo: "version", label: "Versión" },
+            ]}
+            orden={orden}
+            onOrdenChange={setOrden}
+            columnas={[
+              { campo: "nombre", label: "Nombre" },
+              { campo: "categoria", label: "Categoría" },
+              { campo: "carpeta", label: "Carpeta" },
+              { campo: "estado", label: "Estado" },
+              { campo: "acceso", label: "Acceso" },
+              { campo: "fecha", label: "Fecha" },
+              { campo: "tamano", label: "Tamaño" },
+            ]}
+            columnasVisibles={columnasVisibles}
+            onColumnasVisiblesChange={setColumnasVisibles}
+            extraDerecha={
+              <div className="flex gap-1">
+                <Button variant={vista === "lista" ? "secondary" : "ghost"} size="icon" onClick={() => setVista("lista")}><List className="h-4 w-4" /></Button>
+                <Button variant={vista === "tarjetas" ? "secondary" : "ghost"} size="icon" onClick={() => setVista("tarjetas")}><LayoutGrid className="h-4 w-4" /></Button>
+              </div>
+            }
+          />
 
           {/* Counter */}
           <p className="text-xs text-muted-foreground">{filtered.length} documento{filtered.length !== 1 ? "s" : ""}</p>
@@ -276,7 +295,7 @@ export function DocumentacionView() {
                           {n.value === "solo_gerencia" && "Accesible para Gerencia y Dirección"}
                           {n.value === "lectura" && "Todos los usuarios autorizados pueden leer"}
                           {n.value === "edicion" && "Permite lectura y modificación del documento"}
-                          {n.value === "privado" && "Solo el creador y administradores"}
+                          {n.value === "privado" && "Solo el creador y directores"}
                           {n.value === "compartido_interno" && "Visible para todos los empleados de la empresa"}
                         </p>
                       </div>

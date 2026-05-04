@@ -3,6 +3,7 @@
 import * as XLSX from "xlsx";
 import type { Producto, TipoProducto } from "@/features/logistica/data/productos";
 import type { ProductoInput } from "@/features/logistica/actions/producto-actions";
+import { exportToPDF } from "@/features/logistica/lib/export-utils";
 
 // Columnas estándar para CSV/Excel (claves internas → etiquetas visibles)
 const FIELD_LABELS: Record<string, string> = {
@@ -185,6 +186,27 @@ export function exportProductosToExcel(
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Productos");
   XLSX.writeFile(wb, filename);
+}
+
+/**
+ * Genera un PDF (vía diálogo de impresión del navegador) con los productos.
+ */
+export function exportProductosToPDF(
+  productos: Producto[],
+  filename: string,
+  title = "Productos",
+): void {
+  const fieldKeys = Object.keys(FIELD_LABELS) as Array<keyof typeof FIELD_LABELS>;
+  const data = productos.map((p) => {
+    const row: Record<string, string> = {};
+    for (const k of fieldKeys) {
+      row[FIELD_LABELS[k]] = String(
+        (p as unknown as Record<string, unknown>)[k] ?? ""
+      );
+    }
+    return row;
+  });
+  exportToPDF(data, filename, title);
 }
 
 function downloadBlob(blob: Blob, filename: string): void {

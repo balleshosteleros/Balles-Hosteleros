@@ -1,22 +1,24 @@
 "use client";
 
-import { Users, Shield, Layers, Settings, Store } from "lucide-react";
+import { Users, Shield, Layers, Store, AppWindow } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ConfiguracionTab } from "@/features/ajustes/components/ConfiguracionTab";
 import { UsuariosTab } from "@/features/ajustes/components/UsuariosTab";
 import { RolesTab } from "@/features/ajustes/components/RolesTab";
 import { DepartamentosTab } from "@/features/ajustes/components/DepartamentosTab";
 import { EmpresasTab } from "@/features/ajustes/components/EmpresasTab";
+import { AplicacionesTab } from "@/features/ajustes/components/AplicacionesTab";
+import { useHydrateUsuarios } from "@/features/ajustes/hooks/use-hydrate-usuarios";
 
 const tabs = [
-  { id: "empresas",       label: "Empresas",        icon: Store },
-  { id: "usuarios",       label: "Usuarios",        icon: Users },
-  { id: "roles",          label: "Roles",           icon: Shield },
-  { id: "departamentos",  label: "Departamentos",   icon: Layers },
-  { id: "configuracion",  label: "Configuración",   icon: Settings },
+  { id: "empresas",       label: "Empresas",        icon: Store     },
+  { id: "usuarios",       label: "Usuarios",        icon: Users     },
+  { id: "roles",          label: "Roles",           icon: Shield    },
+  { id: "departamentos",  label: "Departamentos",   icon: Layers    },
+  { id: "aplicaciones",   label: "Aplicaciones",    icon: AppWindow },
 ];
 
 export default function AjustesPage() {
+  useHydrateUsuarios();
   return (
     <div className="p-3 md:p-4 space-y-2">
       <Tabs defaultValue="empresas" className="space-y-2">
@@ -25,6 +27,7 @@ export default function AjustesPage() {
             <TabsTrigger
               key={t.id}
               value={t.id}
+              aria-label={t.label}
               className="gap-1.5 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
             >
               <t.icon className="h-3.5 w-3.5" />
@@ -37,7 +40,7 @@ export default function AjustesPage() {
         <TabsContent value="usuarios"><UsuariosTab /></TabsContent>
         <TabsContent value="roles"><RolesTab /></TabsContent>
         <TabsContent value="departamentos"><DepartamentosTab /></TabsContent>
-        <TabsContent value="configuracion"><ConfiguracionTab /></TabsContent>
+        <TabsContent value="aplicaciones"><AplicacionesTab /></TabsContent>
       </Tabs>
     </div>
   );

@@ -44,7 +44,7 @@ export function DetalleIncidencia({ open, onClose, item, onAddActualizacion }: P
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+      <SheetContent className="overflow-y-auto">
         <SheetHeader className="pb-4">
           <SheetTitle className="text-lg font-bold">MÁS INFORMACIÓN</SheetTitle>
         </SheetHeader>

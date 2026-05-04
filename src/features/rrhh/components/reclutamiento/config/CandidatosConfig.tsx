@@ -112,7 +112,7 @@ export function CandidatosConfig() {
         <CardContent className="p-5 space-y-4">
           {[
             { label: "Reclutadores pueden ver todos los candidatos", checked: true },
-            { label: "Administradores ven datos sensibles (email, teléfono)", checked: true },
+            { label: "Directores ven datos sensibles (email, teléfono)", checked: true },
             { label: "Otros departamentos pueden consultar candidatos", checked: false },
           ].map((perm) => (
             <div key={perm.label} className="flex items-center justify-between">

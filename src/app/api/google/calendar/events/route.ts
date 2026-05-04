@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getGoogleTokens, googleFetch } from "@/lib/google/api";
+import { getGoogleTokens, googleFetchAuto } from "@/lib/google/api";
 
 type CalendarListResponse = {
   items?: CalendarEvent[];
@@ -21,6 +21,10 @@ type CalendarEvent = {
   };
 };
 
+type UserCalendarList = {
+  items?: { id: string; selected?: boolean; primary?: boolean }[];
+};
+
 const COLORS = ["blue", "emerald", "orange", "violet", "red"] as const;
 type Color = (typeof COLORS)[number];
 
@@ -29,6 +33,30 @@ function colorFromId(colorId?: string): Color {
   const idx = parseInt(colorId, 10) % COLORS.length;
   return COLORS[Math.abs(idx)] || "blue";
 }
+
+function findMeetUrlIn(text?: string | null): string | null {
+  if (!text) return null;
+  const m = text.match(/https:\/\/meet\.google\.com\/[a-z0-9-]+/i);
+  return m ? m[0] : null;
+}
+
+// Paleta oficial de Google para eventos cuando tienen colorId (override).
+// Si el evento NO tiene colorId, hereda el color del calendario al que
+// pertenece, que el frontend conoce por la lista que carga en la sidebar.
+// https://developers.google.com/calendar/api/v3/reference/colors
+const GOOGLE_EVENT_COLORS: Record<string, string> = {
+  "1": "#7986cb",
+  "2": "#33b679",
+  "3": "#8e24aa",
+  "4": "#e67c73",
+  "5": "#f6bf26",
+  "6": "#f4511e",
+  "7": "#039be5",
+  "8": "#616161",
+  "9": "#3f51b5",
+  "10": "#0b8043",
+  "11": "#d50000",
+};
 
 function getInicioSemana(base?: Date): Date {
   const hoy = base ? new Date(base) : new Date();
@@ -42,15 +70,40 @@ function getInicioSemana(base?: Date): Date {
 export async function GET(request: Request) {
   const { accessToken } = await getGoogleTokens();
   if (!accessToken) {
-    return NextResponse.json({ connected: false, eventos: [] });
+    return NextResponse.json({
+      connected: false,
+      needsReauth: false,
+      eventos: [],
+    });
   }
 
   const url = new URL(request.url);
-  // Permite pedir varios calendarios separados por coma
-  const calendarIds =
-    url.searchParams.get("calendarIds")?.split(",").filter(Boolean) ?? [
-      "primary",
-    ];
+
+  // Si el caller pasa calendarIds explícitos los respetamos; si no, listamos
+  // todos los calendarios del usuario (primary + secundarios + compartidos)
+  // para no perder reuniones a las que ha sido invitado fuera de "primary".
+  let calendarIds = url.searchParams
+    .get("calendarIds")
+    ?.split(",")
+    .filter(Boolean);
+
+  if (!calendarIds || calendarIds.length === 0) {
+    const list = await googleFetchAuto<UserCalendarList>(
+      "https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader",
+    );
+    if (list.needsReauth) {
+      return NextResponse.json({
+        connected: true,
+        needsReauth: true,
+        eventos: [],
+      });
+    }
+    const items = list.data?.items ?? [];
+    calendarIds =
+      items.length > 0
+        ? items.filter((c) => c.selected !== false).map((c) => c.id)
+        : ["primary"];
+  }
 
   // Vista (day | week | month) y fecha de referencia (yyyy-mm-dd)
   const vista = url.searchParams.get("view") ?? "week";
@@ -85,13 +138,20 @@ export async function GET(request: Request) {
   // Pedimos los eventos de TODOS los calendarios seleccionados en paralelo
   const responses = await Promise.all(
     calendarIds.map(async (calId) => {
-      const data = await googleFetch<CalendarListResponse>(
+      const r = await googleFetchAuto<CalendarListResponse>(
         `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?${params}`,
-        accessToken,
       );
-      return { calId, items: data?.items ?? [] };
+      return { calId, items: r.data?.items ?? [], needsReauth: r.needsReauth };
     }),
   );
+
+  if (responses.some((r) => r.needsReauth)) {
+    return NextResponse.json({
+      connected: true,
+      needsReauth: true,
+      eventos: [],
+    });
+  }
 
   // Aplanamos manteniendo el calendarId de origen
   const data: CalendarListResponse = {
@@ -101,7 +161,11 @@ export async function GET(request: Request) {
   };
 
   if (!data || !data.items) {
-    return NextResponse.json({ connected: true, eventos: [] });
+    return NextResponse.json({
+      connected: true,
+      needsReauth: false,
+      eventos: [],
+    });
   }
 
   const eventos = data.items.map((ev) => {
@@ -130,9 +194,14 @@ export async function GET(request: Request) {
         ? `${horas}h${mins ? ` ${mins}m` : ""}`
         : `${mins}m`;
 
+    const calId = ev._calId ?? "primary";
+    const eventColorHex = ev.colorId
+      ? GOOGLE_EVENT_COLORS[ev.colorId] ?? null
+      : null;
+
     return {
       id: ev.id,
-      calendarId: ev._calId ?? "primary",
+      calendarId: calId,
       titulo: ev.summary || "(Sin título)",
       descripcion: ev.description ?? "",
       hora: allDay
@@ -145,6 +214,7 @@ export async function GET(request: Request) {
       lugar: ev.location,
       participantes: ev.attendees?.map((a) => a.displayName || a.email),
       color: colorFromId(ev.colorId),
+      eventColorHex,
       diaIndex,
       inicioMin,
       duracionMin,
@@ -160,9 +230,15 @@ export async function GET(request: Request) {
         ev.conferenceData?.entryPoints?.find(
           (ep) => ep.entryPointType === "video",
         )?.uri ??
+        findMeetUrlIn(ev.location) ??
+        findMeetUrlIn(ev.description) ??
         null,
     };
   });
 
-  return NextResponse.json({ connected: true, eventos });
+  return NextResponse.json({
+    connected: true,
+    needsReauth: false,
+    eventos,
+  });
 }

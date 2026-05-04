@@ -1,49 +1,163 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { cookies } from 'next/headers'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { getRedirectByRolLabel } from '@/features/auth/lib/role-redirect'
+import {
+  readAccounts,
+  upsertAccount,
+  writeAccountsTo,
+} from '@/lib/google/accounts'
+
+const TEMP_CLEAR = { path: '/', maxAge: 0 }
+
+function clearPending(response: NextResponse) {
+  response.cookies.set('sb_pending_access', '', TEMP_CLEAR)
+  response.cookies.set('sb_pending_refresh', '', TEMP_CLEAR)
+  response.cookies.set('g_connect_next', '', TEMP_CLEAR)
+}
+
+type DeferredWrite = { name: string; value: string; options: CookieOptions }
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
-  const next = searchParams.get('next') ?? '/dashboard'
+  const explicitNext = searchParams.get('next')
 
-  if (code) {
-    const supabase = await createClient()
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
-    if (!error && data.session) {
-      const response = NextResponse.redirect(`${origin}${next}`)
-
-      // Si la sesión viene con tokens de Google (provider_token), los
-      // guardamos en cookies httpOnly para que las rutas /api/google/*
-      // puedan llamar a Gmail y Calendar en nombre del usuario.
-      const providerToken = data.session.provider_token
-      const providerRefreshToken = data.session.provider_refresh_token
-      const email = data.session.user?.email
-
-      const cookieOpts = {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax' as const,
-        path: '/',
-        // 60 días — refresh token vive bastante
-        maxAge: 60 * 60 * 24 * 60,
-      }
-
-      if (providerToken) {
-        response.cookies.set('g_access_token', providerToken, cookieOpts)
-      }
-      if (providerRefreshToken) {
-        response.cookies.set('g_refresh_token', providerRefreshToken, cookieOpts)
-      }
-      if (email) {
-        response.cookies.set('g_email', email, {
-          ...cookieOpts,
-          httpOnly: false, // este sí lo lee el cliente para mostrar
-        })
-      }
-
-      return response
-    }
+  if (!code) {
+    const fail = NextResponse.redirect(`${origin}/?error=auth_callback_failed`)
+    clearPending(fail)
+    return fail
   }
 
-  return NextResponse.redirect(`${origin}/?error=auth_callback_failed`)
+  const cookieStore = await cookies()
+  const pendingAccess = cookieStore.get('sb_pending_access')?.value
+  const pendingRefresh = cookieStore.get('sb_pending_refresh')?.value
+  const connectNext = cookieStore.get('g_connect_next')?.value
+  const isConnectFlow = !!(pendingAccess && pendingRefresh)
+
+  // Buffer de escrituras del cliente Supabase. Lo aplicamos nosotros a la
+  // respuesta al final → control total del estado final de cookies sb-*.
+  // Clave: si es connect flow, setSession sobreescribe en este Map las
+  // cookies que escribió exchangeCodeForSession, por nombre.
+  const sbWrites = new Map<string, DeferredWrite>()
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll()
+        },
+        setAll(
+          cookiesToSet: { name: string; value: string; options?: CookieOptions }[],
+        ) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            sbWrites.set(name, { name, value, options: options ?? {} })
+          })
+        },
+      },
+    },
+  )
+
+  const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+  if (error || !data.session) {
+    const fail = NextResponse.redirect(`${origin}/?error=auth_callback_failed`)
+    clearPending(fail)
+    return fail
+  }
+
+  const providerToken = data.session.provider_token
+  const providerRefreshToken = data.session.provider_refresh_token
+  const googleEmail = data.session.user?.email
+  const meta = data.session.user?.user_metadata as
+    | { avatar_url?: string; picture?: string; full_name?: string; name?: string }
+    | undefined
+  const picture = meta?.avatar_url || meta?.picture || ''
+  const fullName = meta?.full_name || meta?.name || ''
+
+  // Si veníamos de "Conectar / Añadir otra cuenta de Google", restauramos la
+  // sesión del software original. setSession sobreescribe en sbWrites las
+  // cookies sb-* del Google recién intercambiado.
+  if (isConnectFlow) {
+    await supabase.auth.setSession({
+      access_token: pendingAccess,
+      refresh_token: pendingRefresh,
+    })
+  }
+
+  let target: string | null = explicitNext
+  if (!target && isConnectFlow && connectNext) {
+    target = connectNext
+  }
+  if (!target) {
+    // Login real: todos los usuarios aterrizan en /mi-panel, ignorando
+    // bh_view_mode (cookie de preferencia de navegación interna).
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('rol_label')
+      .eq('user_id', data.session.user.id)
+      .maybeSingle()
+    target = getRedirectByRolLabel(profile?.rol_label as string | null)
+  }
+
+  const response = NextResponse.redirect(`${origin}${target}`)
+
+  // Volcar las escrituras de Supabase a la respuesta. En connect flow son las
+  // del usuario original; en login normal son las del nuevo usuario.
+  for (const { name, value, options } of sbWrites.values()) {
+    response.cookies.set(
+      name,
+      value,
+      options as Parameters<typeof response.cookies.set>[2],
+    )
+  }
+
+  const cookieOpts = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax' as const,
+    path: '/',
+    maxAge: 60 * 60 * 24 * 60,
+  }
+
+  if (providerToken) {
+    response.cookies.set('g_access_token', providerToken, cookieOpts)
+  }
+  if (providerRefreshToken) {
+    response.cookies.set('g_refresh_token', providerRefreshToken, cookieOpts)
+  }
+  if (googleEmail) {
+    response.cookies.set('g_email', googleEmail, {
+      ...cookieOpts,
+      httpOnly: false,
+    })
+  }
+  if (picture) {
+    response.cookies.set('g_picture', picture, {
+      ...cookieOpts,
+      httpOnly: false,
+    })
+  }
+  if (fullName) {
+    response.cookies.set('g_name', fullName, {
+      ...cookieOpts,
+      httpOnly: false,
+    })
+  }
+
+  if (googleEmail && providerRefreshToken) {
+    const previas = await readAccounts()
+    const actualizadas = upsertAccount(previas, {
+      email: googleEmail,
+      name: fullName,
+      picture,
+      refreshToken: providerRefreshToken,
+    })
+    writeAccountsTo(response.cookies, actualizadas)
+  }
+
+  if (isConnectFlow) clearPending(response)
+
+  return response
 }

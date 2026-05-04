@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Plus, MessageCircle, Pencil, Trash2, Send, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +19,14 @@ import {
 } from "@/features/marketing/data/campanas";
 import { enviarWhatsAppAction, verificarIntegracionesAction } from "@/features/marketing/actions/campanas-actions";
 import { toast } from "sonner";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
 
 const IDIOMAS = [
   { value: "es", label: "Español" },
@@ -33,10 +41,38 @@ export function CampanasWhatsAppView() {
   const [edit, setEdit] = useState<CampanaWhatsApp | null>(null);
   const [enviando, setEnviando] = useState<string | null>(null);
   const [waOk, setWaOk] = useState<boolean | null>(null);
+  const [busqueda, setBusqueda] = useState("");
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
 
   useEffect(() => {
     verificarIntegracionesAction().then((r) => setWaOk(r.whatsapp));
   }, []);
+
+  const acceso = (c: CampanaWhatsApp, campo: string): unknown => {
+    if (campo === "estado") return ESTADOS_CAMPANA.find((e) => e.value === c.estado)?.label ?? c.estado;
+    if (campo === "segmento") return SEGMENTOS_CLIENTE.find((s) => s.value === c.segmento)?.label ?? c.segmento;
+    if (campo === "nombre") return c.nombre;
+    if (campo === "enviados") return c.estadisticas.enviados;
+    if (campo === "leidos") return c.estadisticas.leidos;
+    return (c as unknown as Record<string, unknown>)[campo];
+  };
+
+  const filtrados = useMemo(() => {
+    let lista = whatsapps.filter((c) => {
+      if (!busqueda) return true;
+      const q = busqueda.toLowerCase();
+      return (
+        c.nombre.toLowerCase().includes(q) ||
+        c.cuerpo.toLowerCase().includes(q) ||
+        (c.plantilla ?? "").toLowerCase().includes(q)
+      );
+    });
+    lista = aplicarFiltrosToolbar(lista, filtros, acceso);
+    lista = aplicarOrdenToolbar(lista, orden, acceso);
+    return lista;
+  }, [whatsapps, busqueda, filtros, orden]);
 
   function abrirNuevo() {
     setEdit(crearCampanaWhatsAppVacia(empresaActual.id));
@@ -87,18 +123,55 @@ export function CampanasWhatsAppView() {
 
   return (
     <div className="p-4 md:p-6 space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-3">
-          <MessageCircle className="h-6 w-6 text-muted-foreground" />
-          <div>
-            <h1 className="text-xl font-bold tracking-tight">Campañas de WhatsApp</h1>
-            <p className="text-sm text-muted-foreground">Envía mensajes masivos usando plantillas aprobadas por WhatsApp Business</p>
-          </div>
+      <div className="flex items-center gap-3">
+        <MessageCircle className="h-6 w-6 text-muted-foreground" />
+        <div>
+          <h1 className="text-xl font-bold tracking-tight">Campañas de WhatsApp</h1>
+          <p className="text-sm text-muted-foreground">Envía mensajes masivos usando plantillas aprobadas por WhatsApp Business</p>
         </div>
-        <Button onClick={abrirNuevo} className="gap-2">
-          <Plus className="h-4 w-4" /> Nueva campaña
-        </Button>
       </div>
+
+      <SubmoduleToolbar
+        busqueda={busqueda}
+        onBusquedaChange={setBusqueda}
+        placeholderBusqueda="Buscar campaña..."
+        onNuevo={abrirNuevo}
+        textoNuevo="Nueva campaña"
+        campos={[
+          {
+            campo: "estado",
+            label: "Estado",
+            tipo: "lista",
+            opciones: ESTADOS_CAMPANA.map((e) => e.label),
+          },
+          {
+            campo: "segmento",
+            label: "Segmento",
+            tipo: "lista",
+            opciones: SEGMENTOS_CLIENTE.map((s) => s.label),
+          },
+          { campo: "enviados", label: "Enviados", tipo: "numero" },
+        ]}
+        filtros={filtros}
+        onFiltrosChange={setFiltros}
+        ordenOpciones={[
+          { campo: "nombre", label: "Nombre" },
+          { campo: "enviados", label: "Enviados" },
+          { campo: "leidos", label: "Leídos" },
+        ]}
+        orden={orden}
+        onOrdenChange={setOrden}
+        columnas={[
+          { campo: "campana", label: "Campaña" },
+          { campo: "plantilla", label: "Plantilla" },
+          { campo: "segmento", label: "Segmento" },
+          { campo: "estado", label: "Estado" },
+          { campo: "enviados", label: "Enviados" },
+          { campo: "leidos", label: "Leídos" },
+        ]}
+        columnasVisibles={columnasVisibles}
+        onColumnasVisiblesChange={setColumnasVisibles}
+      />
 
       {(modoLocal || waOk === false) && (
         <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-3 flex items-start gap-2">
@@ -142,7 +215,7 @@ export function CampanasWhatsAppView() {
               </tr>
             </thead>
             <tbody>
-              {whatsapps.map((c) => (
+              {filtrados.map((c) => (
                 <tr key={c.id} className="border-t hover:bg-muted/30">
                   <td className="px-4 py-2 font-medium">{c.nombre}</td>
                   <td className="px-4 py-2 text-muted-foreground font-mono text-xs">{c.plantilla || "—"}</td>

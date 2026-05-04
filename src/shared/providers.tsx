@@ -9,6 +9,7 @@ import { AuthProvider } from "@/features/auth/contexts/auth-context";
 import { EmpresaProvider } from "@/features/empresa/contexts/empresa-context";
 import { AyudaProvider } from "@/features/ajustes/contexts/ayuda-context";
 import { MarketingProvider } from "@/features/marketing/contexts/marketing-context";
+import { ViewModeProvider } from "@/features/layout/contexts/view-mode-context";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
@@ -20,9 +21,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <EmpresaProvider>
             <AyudaProvider>
               <MarketingProvider>
-                {children}
-                <Toaster />
-                <Sonner />
+                <ViewModeProvider>
+                  {children}
+                  <Toaster />
+                  <Sonner />
+                </ViewModeProvider>
               </MarketingProvider>
             </AyudaProvider>
           </EmpresaProvider>

@@ -18,6 +18,13 @@ export interface CronogramaOperativo {
   id_visible?: string | null;
   parent_id?: string | null;
   orden?: number;
+  empresa_id?: string | null;
+  // Calendario (PRP-032)
+  dia_semana?: number[] | null;          // ISO 1=lun..7=dom (SEMANAL)
+  dia_mes?: number | null;                // 1-31 (MENSUAL / TRIMESTRAL)
+  fecha_anual?: string | null;            // 'MM-DD' (ANUAL)
+  meses_trimestrales?: number[] | null;   // default [1,4,7,10]
+  empleados_asignados?: string[] | null;  // null = todos los del rol
 }
 
 import { fallbackCronogramas } from "../data/cronogramasMockData";

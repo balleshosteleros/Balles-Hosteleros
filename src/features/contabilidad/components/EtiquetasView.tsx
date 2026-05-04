@@ -4,11 +4,12 @@ import { useState, useMemo } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Search, GripVertical, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SubmoduleToolbar } from "@/shared/components/SubmoduleToolbar";
 
 interface Etiqueta {
   id: string;
@@ -62,6 +63,7 @@ export function EtiquetasView() {
   const [busqueda, setBusqueda] = useState("");
   const [tabActiva, setTabActiva] = useState("Categorías");
   const [categorias] = useState(SAMPLE_CATEGORIAS);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const filtradas = useMemo(() => {
     if (!busqueda) return categorias;
@@ -88,36 +90,34 @@ export function EtiquetasView() {
       </div>
 
       <div className="flex-1 overflow-auto p-6 max-w-[1100px] mx-auto w-full">
-        {/* Search + Create */}
-        <div className="flex items-center gap-3 mb-6">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Filtrar por nombre de la etiqueta..." className="pl-9" value={busqueda} onChange={e => setBusqueda(e.target.value)} />
-          </div>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="primary" size="sm"><Plus className="h-4 w-4" />Nuevo</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>Crear etiqueta</DialogTitle></DialogHeader>
-              <div className="space-y-4 pt-2">
-                <div><Label>Nombre</Label><Input placeholder="Nombre de la etiqueta" /></div>
-                <div><Label>Categoría</Label>
-                  <Select><SelectTrigger><SelectValue placeholder="Seleccionar categoría" /></SelectTrigger>
-                    <SelectContent>{categorias.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <Button className="w-full">Crear etiqueta</Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+        <div className="mb-6">
+          <SubmoduleToolbar
+            busqueda={busqueda}
+            onBusquedaChange={setBusqueda}
+            placeholderBusqueda="Filtrar por nombre de la etiqueta..."
+            onNuevo={() => setDialogOpen(true)}
+          />
         </div>
+
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Crear etiqueta</DialogTitle></DialogHeader>
+            <div className="space-y-4 pt-2">
+              <div><Label>Nombre</Label><Input placeholder="Nombre de la etiqueta" /></div>
+              <div><Label>Categoría</Label>
+                <Select><SelectTrigger><SelectValue placeholder="Seleccionar categoría" /></SelectTrigger>
+                  <SelectContent>{categorias.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <Button className="w-full">Crear etiqueta</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Categories + Tags */}
         <div className="space-y-2">
           {filtradas.map(cat => (
             <div key={cat.id}>
-              {/* Category header */}
               <div className="flex items-center gap-3 px-4 py-4 bg-muted/30 rounded-xl border hover:bg-muted/40 transition-colors">
                 <GripVertical className="h-4 w-4 text-muted-foreground/40 shrink-0" />
                 <span className="text-2xl shrink-0">{cat.emoji}</span>
@@ -128,7 +128,6 @@ export function EtiquetasView() {
                 <Button variant="ghost" size="icon" className="h-8 w-8"><Trash2 className="h-4 w-4" /></Button>
               </div>
 
-              {/* Sub-tags */}
               {cat.etiquetas.map(et => (
                 <div key={et.id} className="flex items-center gap-3 px-4 py-3 ml-4 border-b last:border-b-0 hover:bg-muted/20 transition-colors">
                   <GripVertical className="h-4 w-4 text-muted-foreground/30 shrink-0" />

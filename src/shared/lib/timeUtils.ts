@@ -23,3 +23,18 @@ export function tiempoTranscurrido(desde: string, hasta: string): string {
 
   return parts.join(" y ") || "Hoy";
 }
+
+/**
+ * Convierte horas decimales (p.ej. 0.27) al formato `H:MM h` (p.ej. `0:16 h`).
+ * Si las horas son menores a un minuto pero mayores que 0, devuelve `<1 min`
+ * para indicar que sí hubo fichaje aunque la duración fue inferior al minuto.
+ */
+export function formatHorasDecimal(horas: number | null | undefined): string {
+  const total = Math.max(0, horas ?? 0);
+  if (total > 0 && total < 1 / 60) return "<1 min";
+  const h = Math.floor(total);
+  const m = Math.round((total - h) * 60);
+  const hFinal = m === 60 ? h + 1 : h;
+  const mFinal = m === 60 ? 0 : m;
+  return `${hFinal}:${String(mFinal).padStart(2, "0")} h`;
+}

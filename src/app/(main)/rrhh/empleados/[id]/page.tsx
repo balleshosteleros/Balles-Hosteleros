@@ -94,21 +94,26 @@ export default function FichaEmpleadoPage() {
         return (
           <div className="flex flex-1 min-h-0">
             <nav className="w-56 shrink-0 border-r bg-muted/30 py-4 space-y-0.5">
-              {PERFIL_SECTIONS.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => setActivePerfilSection(s.id)}
-                  className={cn(
-                    "flex items-center gap-2.5 w-full px-4 py-2 text-sm transition-colors text-left",
-                    activePerfilSection === s.id
-                      ? "bg-primary/10 text-primary font-medium border-r-2 border-primary"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                  )}
-                >
-                  <s.icon className="h-4 w-4 shrink-0" />
-                  {s.label}
-                </button>
-              ))}
+              {PERFIL_SECTIONS.map((s) => {
+                const isConfig = s.id === "configuracion";
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => setActivePerfilSection(s.id)}
+                    aria-label={s.label}
+                    className={cn(
+                      "flex items-center gap-2.5 w-full px-4 py-2 text-sm transition-colors text-left",
+                      isConfig && "justify-end",
+                      activePerfilSection === s.id
+                        ? "bg-primary/10 text-primary font-medium border-r-2 border-primary"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    )}
+                  >
+                    <s.icon className="h-4 w-4 shrink-0" strokeWidth={isConfig ? 1.75 : undefined} />
+                    {!isConfig && s.label}
+                  </button>
+                );
+              })}
             </nav>
             <div className="flex-1 p-6 overflow-auto">
               {renderPerfilContent()}
@@ -120,7 +125,7 @@ export default function FichaEmpleadoPage() {
       case "estadisticas": return <div className="p-6"><EstadisticasTab empleado={empleado!} /></div>;
       case "contratos": return <div className="p-6"><ContratosTab ficha={ficha!} /></div>;
       case "documentos": return <div className="p-6"><DocumentosTab ficha={ficha!} /></div>;
-      case "horarios": return <div className="p-6"><HorariosTab empleado={empleado!} /></div>;
+      case "horarios": return <div className="p-6"><HorariosTab empleado={empleado!} ficha={ficha!} /></div>;
       case "evaluaciones": return <div className="p-6"><EvaluacionesTab ficha={ficha!} /></div>;
     }
   }

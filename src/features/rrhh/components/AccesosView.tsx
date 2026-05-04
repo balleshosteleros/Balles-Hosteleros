@@ -1,18 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { getAccesosAppsPorEmpresa, CATEGORIAS_APP, DEPARTAMENTOS, type AccesoApp, type EstadoApp } from "@/features/rrhh/data/accesos-apps";
+import { CATEGORIAS_APP, DEPARTAMENTOS, type AccesoApp, type EstadoApp } from "@/features/rrhh/data/accesos-apps";
+import { listAccesosApps } from "@/features/rrhh/actions/accesos-apps-actions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, ExternalLink, Eye, EyeOff, Copy, Settings2, LayoutGrid, List, Globe, KeyRound } from "lucide-react";
+import { ExternalLink, Eye, EyeOff, Copy, Settings2, LayoutGrid, List, Globe, KeyRound } from "lucide-react";
 import { toast } from "sonner";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
+import { IOActions } from "@/shared/io";
+import { accesosIO } from "@/features/rrhh/io/accesos.io";
 
 const estadoBadge: Record<EstadoApp, string> = {
   Activo: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
@@ -83,67 +92,97 @@ function PasswordCell({ value, canView }: { value: string; canView: boolean }) {
 
 export function AccesosView() {
   const { empresaActual } = useEmpresa();
-  const apps = getAccesosAppsPorEmpresa(empresaActual.id);
+  const [apps, setApps] = useState<AccesoApp[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    listAccesosApps(empresaActual.id)
+      .then((rows) => { if (alive) setApps(rows); })
+      .catch((e) => { console.error(e); toast.error("No se pudieron cargar los accesos"); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [empresaActual.id]);
 
   const [buscar, setBuscar] = useState("");
-  const [filtroCategoria, setFiltroCategoria] = useState("todas");
-  const [filtroDep, setFiltroDep] = useState("todos");
-  const [filtroEstado, setFiltroEstado] = useState("todos");
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [vista, setVista] = useState<"tabla" | "tarjetas">("tarjetas");
   const [detalle, setDetalle] = useState<AccesoApp | null>(null);
   const [tab, setTab] = useState("apps");
 
+  const categoriasUsadas = [...new Set(apps.map((a) => a.categoria))];
+  const depsUsados = [...new Set(apps.flatMap((a) => a.departamentos))];
+
+  const acceso = (a: AccesoApp, campo: string): unknown => {
+    if (campo === "categoria") return a.categoria;
+    if (campo === "estado") return a.estado;
+    if (campo === "tipoIntegracion") return a.tipoIntegracion.toUpperCase();
+    if (campo === "nombre") return a.nombre;
+    if (campo === "departamentos") return a.departamentos.join(", ");
+    return (a as unknown as Record<string, unknown>)[campo];
+  };
+
   const filtered = apps.filter((a) => {
     if (buscar && !a.nombre.toLowerCase().includes(buscar.toLowerCase()) && !a.descripcion.toLowerCase().includes(buscar.toLowerCase())) return false;
-    if (filtroCategoria !== "todas" && a.categoria !== filtroCategoria) return false;
-    if (filtroDep !== "todos" && !a.departamentos.includes(filtroDep) && !a.departamentos.includes("Todos")) return false;
-    if (filtroEstado !== "todos" && a.estado !== filtroEstado) return false;
     return true;
   });
 
-  const categoriasUsadas = [...new Set(apps.map((a) => a.categoria))];
-  const depsUsados = [...new Set(apps.flatMap((a) => a.departamentos))];
+  // Filtro especial para departamentos (multi-valor en lista)
+  const filteredAdvanced = (() => {
+    let lista = aplicarFiltrosToolbar(filtered, filtros.filter(f => f.campo !== "departamento"), acceso);
+    const filtroDep = filtros.find((f) => f.campo === "departamento");
+    if (filtroDep?.valores?.length) {
+      lista = lista.filter((a) =>
+        filtroDep.valores!.some((d) => a.departamentos.includes(d) || a.departamentos.includes("Todos")),
+      );
+    }
+    lista = aplicarOrdenToolbar(lista, orden, acceso);
+    return lista;
+  })();
 
   return (
     <div className="p-4 md:p-6 space-y-6 w-full">
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="apps" className="gap-1.5"><Globe className="h-4 w-4" /> Aplicaciones</TabsTrigger>
-<TabsTrigger value="config" className="gap-1.5"><Settings2 className="h-4 w-4" /> Configuración</TabsTrigger>
+<TabsTrigger value="config" aria-label="Configuración" className="ml-auto"><Settings2 className="h-4 w-4" strokeWidth={1.75} /></TabsTrigger>
         </TabsList>
 
         <TabsContent value="apps" className="space-y-4 mt-4">
-          <div className="flex flex-wrap gap-3 items-end">
-            <div className="relative flex-1 min-w-[200px] max-w-xs">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Buscar app…" value={buscar} onChange={(e) => setBuscar(e.target.value)} className="pl-9" />
+          <div className="flex items-end gap-3">
+            <div className="flex-1">
+              <SubmoduleToolbar
+                busqueda={buscar}
+                onBusquedaChange={setBuscar}
+                placeholderBusqueda="Buscar app…"
+                campos={[
+                  { campo: "categoria", label: "Categoría", tipo: "lista", opciones: categoriasUsadas },
+                  { campo: "departamento", label: "Departamento", tipo: "lista", opciones: depsUsados.filter((d) => d !== "Todos") },
+                  { campo: "estado", label: "Estado", tipo: "lista", opciones: ["Activo", "Inactivo", "Archivado"] },
+                  { campo: "tipoIntegracion", label: "Tipo", tipo: "lista", opciones: ["ENLACE", "SSO", "OAUTH", "EMBEBIDO"] },
+                ]}
+                filtros={filtros}
+                onFiltrosChange={setFiltros}
+                ordenOpciones={[
+                  { campo: "nombre", label: "Nombre" },
+                  { campo: "categoria", label: "Categoría" },
+                  { campo: "estado", label: "Estado" },
+                ]}
+                orden={orden}
+                onOrdenChange={setOrden}
+                columnasVisibles={columnasVisibles}
+                onColumnasVisiblesChange={setColumnasVisibles}
+                extraDerecha={
+                  <IOActions config={accesosIO} context={{ empresaId: empresaActual.id }} onSuccess={() => window.location.reload()} />
+                }
+              />
             </div>
-            <Select value={filtroCategoria} onValueChange={setFiltroCategoria}>
-              <SelectTrigger className="w-[200px]"><SelectValue placeholder="Categoría" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todas">Todas las categorías</SelectItem>
-                {categoriasUsadas.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={filtroDep} onValueChange={setFiltroDep}>
-              <SelectTrigger className="w-[180px]"><SelectValue placeholder="Departamento" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos los dept.</SelectItem>
-                {depsUsados.filter((d) => d !== "Todos").map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-              <SelectTrigger className="w-[140px]"><SelectValue placeholder="Estado" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                <SelectItem value="Activo">Activo</SelectItem>
-                <SelectItem value="Inactivo">Inactivo</SelectItem>
-                <SelectItem value="Archivado">Archivado</SelectItem>
-              </SelectContent>
-            </Select>
-            <div className="flex border rounded-md overflow-hidden">
-              <button onClick={() => setVista("tabla")} className={`p-2 ${vista === "tabla" ? "bg-accent" : "hover:bg-accent/50"}`}><List className="h-4 w-4" /></button>
-              <button onClick={() => setVista("tarjetas")} className={`p-2 ${vista === "tarjetas" ? "bg-accent" : "hover:bg-accent/50"}`}><LayoutGrid className="h-4 w-4" /></button>
+            <div className="flex border rounded-md overflow-hidden h-9">
+              <button onClick={() => setVista("tabla")} className={`px-2 ${vista === "tabla" ? "bg-accent" : "hover:bg-accent/50"}`} aria-label="Vista tabla"><List className="h-4 w-4" /></button>
+              <button onClick={() => setVista("tarjetas")} className={`px-2 ${vista === "tarjetas" ? "bg-accent" : "hover:bg-accent/50"}`} aria-label="Vista tarjetas"><LayoutGrid className="h-4 w-4" /></button>
             </div>
           </div>
 
@@ -165,10 +204,10 @@ export function AccesosView() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filtered.length === 0 && (
+                    {filteredAdvanced.length === 0 && (
                       <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">No se encontraron aplicaciones</TableCell></TableRow>
                     )}
-                    {filtered.map((app) => (
+                    {filteredAdvanced.map((app) => (
                       <TableRow key={app.id} className="cursor-pointer" onClick={() => setDetalle(app)}>
                         <TableCell>
                           <AppLogo nombre={app.nombre} logoUrl={app.logoUrl} icono={app.icono} size="sm" />
@@ -199,7 +238,7 @@ export function AccesosView() {
             </Card>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-              {filtered.map((app) => (
+              {filteredAdvanced.map((app) => (
                 <Card
                   key={app.id}
                   className="hover:shadow-md transition-all cursor-pointer hover:border-primary/30 group"
@@ -230,7 +269,7 @@ export function AccesosView() {
               ))}
             </div>
           )}
-          <div className="text-xs text-muted-foreground">{filtered.length} de {apps.length} aplicaciones</div>
+          <div className="text-xs text-muted-foreground">{filteredAdvanced.length} de {apps.length} aplicaciones</div>
         </TabsContent>
 
 

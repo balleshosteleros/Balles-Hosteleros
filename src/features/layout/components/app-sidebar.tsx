@@ -3,14 +3,16 @@
 import {
   Briefcase, Calculator, FileText, Scale, User, UsersRound, Truck, Camera,
   Wrench, ChevronDown, Settings, CalendarDays, Utensils,
-  ChefHat, UserCheck, ClipboardList, Gift, Banknote, Crown, Network, PercentDiamond,
+  ChefHat, UserCheck, ClipboardList, ClipboardCheck, Gift, Crown, Network, PercentDiamond,
   TrendingUp, FolderOpen, Clock, Calendar, Timer, UserRoundSearch, HandCoins, Megaphone,
-  Package, FileArchive, KeyRound, Gavel, FileUp, ShoppingCart, Warehouse, FlaskConical,
+  Package, FileArchive, Files, KeyRound, Gavel, FileUp, ShoppingCart, Warehouse, FlaskConical,
   GraduationCap, UtensilsCrossed, BookOpen, Contact, Thermometer, Sparkles, FileSearch,
   PenLine, CheckCircle2, BarChart3, Landmark, Tag, Zap, ContactRound,
   Heart, UserPlus, Apple, CreditCard, Presentation, QrCode, Globe,
-  Send,
+  Send, Wallet, Fingerprint, Inbox, FileSignature, Trophy, UserCircle, LayoutDashboard,
+  FileQuestion,
 } from "lucide-react";
+import { useViewMode } from "@/features/layout/contexts/view-mode-context";
 
 // Icono compuesto: cuadrícula de apps + candado de seguridad
 function AccesosIcon({ className }: { className?: string }) {
@@ -37,6 +39,7 @@ function AccesosIcon({ className }: { className?: string }) {
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { NavLink } from "@/features/layout/components/nav-link";
+import { useAuth } from "@/features/auth/contexts/auth-context";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarMenuSub, SidebarMenuSubItem,
@@ -104,6 +107,7 @@ const direccionSubs = [
 const gerenciaSubs = [
   { title: "MANTENIMIENTO", url: "/gerencia/mantenimiento", icon: Wrench },
   { title: "REVISIONES", url: "/gerencia/vencimientos", icon: CalendarDays },
+  { title: "CIERRES", url: "/gerencia/cierres", icon: Wallet },
   { title: "DESCUENTOS", url: "/gerencia/descuentos", icon: PercentDiamond },
   { title: "RATIOS", url: "/gerencia/ratios", icon: TrendingUp },
   { title: "COMUNICADOS", url: "/gerencia/comunicados", icon: Megaphone },
@@ -115,17 +119,37 @@ const calidadSubs = [
   { title: "CLIENTES", url: "/calidad/clientes", icon: ContactRound },
   { title: "INSPECCIONES", url: "/calidad/inspecciones", icon: FileSearch },
 ];
+const miPanelSubs = [
+  { title: "DATOS PERSONALES", url: "/mi-panel/datos-personales", icon: UserCircle },
+  { title: "POINTS", url: "/mi-panel/points", icon: Trophy },
+  { title: "CALENDARIO", url: "/mi-panel/calendario", icon: CalendarDays },
+  { title: "HORARIO", url: "/mi-panel/horario", icon: Timer },
+  { title: "FICHAJES", url: "/mi-panel/fichajes", icon: Fingerprint },
+  { title: "FORMACIÓN", url: "/mi-panel/formacion", icon: GraduationCap },
+  { title: "CONDICIONES", url: "/mi-panel/condiciones", icon: ClipboardCheck },
+  { title: "ENCUESTAS", url: "/mi-panel/encuestas", icon: ClipboardList },
+  { title: "CUESTIONARIOS", url: "/mi-panel/cuestionarios", icon: FileQuestion },
+  { title: "SOLICITUDES", url: "/mi-panel/ausencias", icon: Inbox },
+  { title: "COMUNICADOS", url: "/mi-panel/comunicados", icon: Megaphone },
+  { title: "DOCUMENTOS", url: "/mi-panel/documentos", icon: Files },
+  { title: "EQUIPO", url: "/mi-panel/equipo", icon: Network },
+];
+
 const rrhhSubs = [
   { title: "EMPLEADOS", url: "/rrhh/empleados", icon: UsersRound },
-  { title: "FICHAJES", url: "/rrhh/fichajes", icon: Clock },
+  { title: "FICHAJES", url: "/rrhh/fichajes", icon: Fingerprint },
+  { title: "SOLICITUDES", url: "/rrhh/solicitudes", icon: Inbox },
+  { title: "FIRMAS", url: "/rrhh/firmas", icon: FileSignature },
   { title: "CALENDARIOS", url: "/rrhh/calendarios", icon: Calendar },
   { title: "HORARIOS", url: "/rrhh/horarios", icon: Timer },
   { title: "RECLUTAMIENTO", url: "/rrhh/reclutamiento", icon: UserRoundSearch },
   { title: "BOARDING", url: "/rrhh/boarding", icon: UserCheck },
   { title: "BONUS", url: "/rrhh/bonus", icon: Gift },
-  { title: "SALARIOS", url: "/rrhh/salarios", icon: Banknote },
+  { title: "POINTS", url: "/rrhh/points", icon: Trophy },
   { title: "PAGOS", url: "/rrhh/pagos", icon: HandCoins },
   { title: "FORMACIÓN", url: "/rrhh/formacion", icon: GraduationCap },
+  { title: "ENCUESTAS", url: "/rrhh/encuestas", icon: ClipboardList },
+  { title: "CUESTIONARIOS", url: "/rrhh/cuestionarios", icon: FileQuestion },
 ];
 
 type SubItem = { title: string; url: string; icon: React.ElementType };
@@ -216,20 +240,31 @@ export function AppSidebar() {
   const { state, toggleSidebar } = useSidebar();
   const collapsed = state === "collapsed";
   const pathname = usePathname();
+  const { mode } = useViewMode();
+  const { puedeVer, permisosLoaded, hasRole } = useAuth();
 
-  const sections = [
-    { key: "direccion", icon: Crown, label: "DIRECCIÓN", prefix: "/direccion", items: direccionSubs },
-    { key: "sala", icon: UtensilsCrossed, label: "SALA", prefix: "/sala", items: salaSubs },
-    { key: "cocina", icon: ChefHat, label: "COCINA", prefix: "/cocina", items: cocinaSubs },
-    { key: "gerencia", icon: Briefcase, label: "GERENCIA", prefix: "/gerencia", items: gerenciaSubs },
-    { key: "calidad", icon: CheckCircle2, label: "CALIDAD", prefix: "/calidad", items: calidadSubs, linkTo: "/calidad" },
-    { key: "rrhh", icon: User, label: "RECURSOS HUMANOS", prefix: "/rrhh", items: rrhhSubs, linkTo: "/rrhh" },
-    { key: "marketing", icon: Camera, label: "MARKETING", prefix: "/marketing", items: marketingSubs, linkTo: "/marketing" },
-    { key: "logistica", icon: Package, label: "LOGÍSTICA", prefix: "/logistica", items: logisticaSubs, linkTo: "/logistica" },
-    { key: "contabilidad", icon: Calculator, label: "CONTABILIDAD", prefix: "/contabilidad", items: contabilidadSubs },
-    { key: "gestoria", icon: FileText, label: "GESTORÍA", prefix: "/gestoria", items: gestoriaSubs, linkTo: "/gestoria" },
-    { key: "juridico", icon: Scale, label: "JURÍDICO", prefix: "/juridico", items: juridicoSubs, linkTo: "/juridico" },
+  const allSections = [
+    { key: "direccion", modulo: "DIRECCIÓN", icon: Crown, label: "DIRECCIÓN", prefix: "/direccion", items: direccionSubs, linkTo: "/direccion" },
+    { key: "sala", modulo: "SALA", icon: UtensilsCrossed, label: "SALA", prefix: "/sala", items: salaSubs, linkTo: "/sala" },
+    { key: "cocina", modulo: "COCINA", icon: ChefHat, label: "COCINA", prefix: "/cocina", items: cocinaSubs, linkTo: "/cocina" },
+    { key: "gerencia", modulo: "GERENCIA", icon: Briefcase, label: "GERENCIA", prefix: "/gerencia", items: gerenciaSubs, linkTo: "/gerencia" },
+    { key: "calidad", modulo: "CALIDAD", icon: CheckCircle2, label: "CALIDAD", prefix: "/calidad", items: calidadSubs, linkTo: "/calidad" },
+    { key: "rrhh", modulo: "RRHH", icon: User, label: "RECURSOS HUMANOS", prefix: "/rrhh", items: rrhhSubs, linkTo: "/rrhh" },
+    { key: "marketing", modulo: "MARKETING", icon: Camera, label: "MARKETING", prefix: "/marketing", items: marketingSubs, linkTo: "/marketing" },
+    { key: "logistica", modulo: "LOGÍSTICA", icon: Package, label: "LOGÍSTICA", prefix: "/logistica", items: logisticaSubs, linkTo: "/logistica" },
+    { key: "contabilidad", modulo: "CONTABILIDAD", icon: Calculator, label: "CONTABILIDAD", prefix: "/contabilidad", items: contabilidadSubs, linkTo: "/contabilidad" },
+    { key: "gestoria", modulo: "GESTORÍA", icon: FileText, label: "GESTORÍA", prefix: "/gestoria", items: gestoriaSubs, linkTo: "/gestoria" },
+    { key: "juridico", modulo: "JURÍDICO", icon: Scale, label: "JURÍDICO", prefix: "/juridico", items: juridicoSubs, linkTo: "/juridico" },
   ] as const;
+
+  // 'director' tiene bypass total → mostramos todos los módulos sin esperar a permisos.
+  // Para el resto, esperamos a permisosLoaded para evitar parpadeo "todo abierto" → "filtrado".
+  const isDirector = hasRole("director");
+  const sections = isDirector
+    ? allSections
+    : permisosLoaded
+      ? allSections.filter((s) => puedeVer(s.modulo))
+      : [];
 
   const activeKey = sections.find((s) => pathname.startsWith(s.prefix))?.key ?? null;
   const [openKey, setOpenKey] = useState<string | null>(activeKey);
@@ -259,9 +294,9 @@ export function AppSidebar() {
               <PanelLeft className="h-4 w-4 text-sidebar-foreground/60" />
             </button>
             <img
-              src="/isotipo-balles.png"
-              alt="Balles"
-              className="h-20 w-20 rounded-xl transition-all duration-200"
+              src="/logo-balles.png"
+              alt="Balles Hosteleros"
+              className="w-36 transition-all duration-200"
             />
             <span className="text-[10px] font-light uppercase tracking-[0.28em] text-sidebar-foreground/60">
               Software de Gestión
@@ -271,28 +306,81 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs tracking-widest">
-            {!collapsed && "DEPARTAMENTOS"}
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {sections.map((s) => (
-                <CollapsibleSection
-                  key={s.key}
-                  icon={s.icon}
-                  label={s.label}
-                  prefix={s.prefix}
-                  items={s.items}
-                  collapsed={collapsed}
-                  linkTo={"linkTo" in s ? s.linkTo : undefined}
-                  open={openKey === s.key}
-                  onOpenChange={(isOpen) => setOpenKey(isOpen ? s.key : null)}
-                />
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {mode === "paneles" ? (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs tracking-widest">
+              {!collapsed && "MIS PANELES"}
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <NavLink
+                      href="/mi-panel"
+                      end
+                      className="hover:bg-sidebar-accent/50"
+                      activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold"
+                    >
+                      <LayoutDashboard className="mr-2 h-4 w-4 shrink-0" />
+                      {!collapsed && <span className="text-sm">DASHBOARD</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                {miPanelSubs.map((sub) => (
+                  <SidebarMenuItem key={sub.title}>
+                    <SidebarMenuButton asChild>
+                      <NavLink
+                        href={sub.url}
+                        end
+                        className="hover:bg-sidebar-accent/50"
+                        activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold"
+                      >
+                        <sub.icon className="mr-2 h-4 w-4 shrink-0" />
+                        {!collapsed && <span className="text-sm">{sub.title}</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ) : (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs tracking-widest">
+              {!collapsed && "MIS DEPARTAMENTOS"}
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <NavLink
+                      href="/mis-departamentos"
+                      end
+                      className="hover:bg-sidebar-accent/50"
+                      activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold"
+                    >
+                      <LayoutDashboard className="mr-2 h-4 w-4 shrink-0" />
+                      {!collapsed && <span className="text-sm">DASHBOARD</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                {sections.map((s) => (
+                  <CollapsibleSection
+                    key={s.key}
+                    icon={s.icon}
+                    label={s.label}
+                    prefix={s.prefix}
+                    items={s.items}
+                    collapsed={collapsed}
+                    linkTo={"linkTo" in s ? s.linkTo : undefined}
+                    open={openKey === s.key}
+                    onOpenChange={(isOpen) => setOpenKey(isOpen ? s.key : null)}
+                  />
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border/60" />

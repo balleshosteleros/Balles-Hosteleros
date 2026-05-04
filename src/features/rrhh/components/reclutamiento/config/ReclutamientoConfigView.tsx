@@ -22,10 +22,10 @@ type ConfigSection =
   | "plantillas"
   | "gestion_datos";
 
-const SECTIONS: { id: ConfigSection; label: string; icon: React.ReactNode }[] = [
+const SECTIONS: { id: ConfigSection; label: string; icon: React.ReactNode; isConfig?: boolean }[] = [
   { id: "ofertas", label: "Ofertas de trabajo", icon: <Briefcase className="h-4 w-4" /> },
   { id: "candidatos", label: "Candidatos", icon: <Users className="h-4 w-4" /> },
-  { id: "configuracion", label: "Configuración", icon: <Settings className="h-4 w-4" /> },
+  { id: "configuracion", label: "Configuración", icon: <Settings className="h-4 w-4" strokeWidth={1.75} />, isConfig: true },
   { id: "portal", label: "Portal de empleo", icon: <Globe className="h-4 w-4" /> },
   { id: "publicaciones", label: "Publicaciones en portales", icon: <Share2 className="h-4 w-4" /> },
   { id: "datos_empresa", label: "Datos de tu empresa", icon: <Building2 className="h-4 w-4" /> },
@@ -55,15 +55,17 @@ export function ReclutamientoConfigView() {
           <button
             key={s.id}
             onClick={() => setActive(s.id)}
+            aria-label={s.label}
             className={cn(
               "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left",
+              s.isConfig && "justify-end",
               active === s.id
                 ? "bg-primary/10 text-primary"
                 : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
             )}
           >
             {s.icon}
-            {s.label}
+            {!s.isConfig && s.label}
           </button>
         ))}
       </nav>

@@ -11,12 +11,22 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Clock, AlertTriangle, CheckCircle2, Search, Filter, Plus, Settings2, ClipboardList, History } from "lucide-react";
+import { Clock, AlertTriangle, CheckCircle2, Settings2, ClipboardList, History } from "lucide-react";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
+import { IOActions } from "@/shared/io";
+import { fichajesIO } from "@/features/rrhh/io/fichajes.io";
+import { formatHorasDecimal } from "@/shared/lib/timeUtils";
 
 function mapDbToFichaje(row: Record<string, unknown>): Fichaje {
   return {
@@ -49,8 +59,9 @@ export function FichajesView() {
     pausasActivas: true,
   });
   const [busqueda, setBusqueda] = useState("");
-  const [filtroEstado, setFiltroEstado] = useState<string>("todos");
-  const [filtroDpto, setFiltroDpto] = useState<string>("todos");
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [fichajeModal, setFichajeModal] = useState<Fichaje | null>(null);
 
   const loadFichajes = useCallback(async () => {
@@ -86,14 +97,25 @@ export function FichajesView() {
 
   const dptos = useMemo(() => [...new Set(fichajes.map(f => f.departamento))].sort(), [fichajes]);
 
+  const acceso = (f: Fichaje, campo: string): unknown => {
+    if (campo === "estado") return ESTADO_FICHAJE_LABEL[f.estado];
+    if (campo === "departamento") return f.departamento;
+    if (campo === "centro") return f.centro;
+    if (campo === "horasTotales") return f.horasTotales;
+    if (campo === "fecha") return f.fecha;
+    if (campo === "empleado") return f.empleadoNombre;
+    return (f as unknown as Record<string, unknown>)[campo];
+  };
+
   const fichajesFiltrados = useMemo(() => {
-    return fichajes.filter(f => {
+    let lista = fichajes.filter(f => {
       if (busqueda && !f.empleadoNombre.toLowerCase().includes(busqueda.toLowerCase())) return false;
-      if (filtroEstado !== "todos" && f.estado !== filtroEstado) return false;
-      if (filtroDpto !== "todos" && f.departamento !== filtroDpto) return false;
       return true;
     });
-  }, [fichajes, busqueda, filtroEstado, filtroDpto]);
+    lista = aplicarFiltrosToolbar(lista, filtros, acceso);
+    lista = aplicarOrdenToolbar(lista, orden, acceso);
+    return lista;
+  }, [fichajes, busqueda, filtros, orden]);
 
   const kpis = useMemo(() => {
     const total = fichajes.length;
@@ -111,7 +133,7 @@ export function FichajesView() {
         <Card><CardContent className="pt-4 pb-4 text-center"><Clock className="mx-auto h-5 w-5 text-muted-foreground mb-1" /><p className="text-2xl font-bold">{kpis.total}</p><p className="text-xs text-muted-foreground">Fichajes registrados</p></CardContent></Card>
         <Card><CardContent className="pt-4 pb-4 text-center"><CheckCircle2 className="mx-auto h-5 w-5 text-emerald-500 mb-1" /><p className="text-2xl font-bold">{kpis.completos}</p><p className="text-xs text-muted-foreground">Completos / Validados</p></CardContent></Card>
         <Card><CardContent className="pt-4 pb-4 text-center"><AlertTriangle className="mx-auto h-5 w-5 text-destructive mb-1" /><p className="text-2xl font-bold">{kpis.conIncidencia}</p><p className="text-xs text-muted-foreground">Con incidencias</p></CardContent></Card>
-        <Card><CardContent className="pt-4 pb-4 text-center"><Clock className="mx-auto h-5 w-5 text-sky-500 mb-1" /><p className="text-2xl font-bold">{kpis.horasTotales.toFixed(1)}h</p><p className="text-xs text-muted-foreground">Horas totales</p></CardContent></Card>
+        <Card><CardContent className="pt-4 pb-4 text-center"><Clock className="mx-auto h-5 w-5 text-sky-500 mb-1" /><p className="text-2xl font-bold">{formatHorasDecimal(kpis.horasTotales)}</p><p className="text-xs text-muted-foreground">Horas totales</p></CardContent></Card>
       </div>
 
       <Tabs defaultValue="fichajes" className="space-y-4">
@@ -119,37 +141,57 @@ export function FichajesView() {
           <TabsTrigger value="fichajes" className="gap-1"><ClipboardList className="h-4 w-4" />Fichajes</TabsTrigger>
           <TabsTrigger value="historial" className="gap-1"><History className="h-4 w-4" />Historial</TabsTrigger>
           <TabsTrigger value="incidencias" className="gap-1"><AlertTriangle className="h-4 w-4" />Incidencias</TabsTrigger>
-          <TabsTrigger value="config" className="gap-1"><Settings2 className="h-4 w-4" />Configuración</TabsTrigger>
+          <TabsTrigger value="config" aria-label="Configuración" className="ml-auto"><Settings2 className="h-4 w-4" strokeWidth={1.75} /></TabsTrigger>
         </TabsList>
 
         <TabsContent value="fichajes" className="space-y-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Buscar empleado..." value={busqueda} onChange={e => setBusqueda(e.target.value)} className="pl-9" />
-            </div>
-            <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-              <SelectTrigger className="w-[160px]"><Filter className="h-4 w-4 mr-1" /><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos los estados</SelectItem>
-                {(Object.keys(ESTADO_FICHAJE_LABEL) as EstadoFichaje[]).map(e => (
-                  <SelectItem key={e} value={e}>{ESTADO_FICHAJE_LABEL[e]}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={filtroDpto} onValueChange={setFiltroDpto}>
-              <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos los departamentos</SelectItem>
-                {dptos.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Button size="sm" className="gap-1" onClick={async () => {
+          <SubmoduleToolbar
+            busqueda={busqueda}
+            onBusquedaChange={setBusqueda}
+            placeholderBusqueda="Buscar empleado..."
+            textoNuevo="Fichar entrada"
+            onNuevo={async () => {
               const res = await ficharEntrada();
               if (res.ok) { toast.success("Entrada registrada"); loadFichajes(); }
               else toast.error(res.error ?? "Error al fichar entrada");
-            }}><Plus className="h-4 w-4" />Fichar entrada</Button>
-          </div>
+            }}
+            campos={[
+              {
+                campo: "estado",
+                label: "Estado",
+                tipo: "lista",
+                opciones: (Object.keys(ESTADO_FICHAJE_LABEL) as EstadoFichaje[]).map(e => ESTADO_FICHAJE_LABEL[e]),
+              },
+              { campo: "departamento", label: "Departamento", tipo: "lista", opciones: dptos },
+              { campo: "horasTotales", label: "Horas totales", tipo: "numero" },
+              { campo: "fecha", label: "Fecha", tipo: "fecha" },
+            ]}
+            filtros={filtros}
+            onFiltrosChange={setFiltros}
+            ordenOpciones={[
+              { campo: "empleado", label: "Empleado" },
+              { campo: "fecha", label: "Fecha" },
+              { campo: "horasTotales", label: "Horas" },
+              { campo: "departamento", label: "Departamento" },
+            ]}
+            orden={orden}
+            onOrdenChange={setOrden}
+            columnas={[
+              { campo: "empleado", label: "Empleado" },
+              { campo: "fecha", label: "Fecha" },
+              { campo: "entrada", label: "Entrada" },
+              { campo: "salida", label: "Salida" },
+              { campo: "pausa", label: "Pausa" },
+              { campo: "horas", label: "Horas" },
+              { campo: "estado", label: "Estado" },
+              { campo: "validador", label: "Validado por" },
+            ]}
+            columnasVisibles={columnasVisibles}
+            onColumnasVisiblesChange={setColumnasVisibles}
+            extraDerecha={
+              <IOActions config={fichajesIO} context={{ empresaId: empresaActual.id }} onSuccess={() => window.location.reload()} />
+            }
+          />
           <Card>
             <Table>
               <TableHeader>
@@ -167,7 +209,7 @@ export function FichajesView() {
                     <TableCell className="text-sm font-mono">{f.horaEntrada ?? "—"}</TableCell>
                     <TableCell className="text-sm font-mono">{f.horaSalida ?? "—"}</TableCell>
                     <TableCell className="text-sm font-mono">{f.pausaInicio && f.pausaFin ? `${f.pausaInicio}-${f.pausaFin}` : "—"}</TableCell>
-                    <TableCell className="text-sm text-right font-semibold">{f.horasTotales > 0 ? `${f.horasTotales.toFixed(1)}h` : "—"}</TableCell>
+                    <TableCell className="text-sm text-right font-semibold">{f.horaSalida ? formatHorasDecimal(f.horasTotales) : "—"}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className="gap-1 text-xs">
                         <span className={`h-2 w-2 rounded-full ${ESTADO_FICHAJE_COLOR[f.estado]}`} />
@@ -203,7 +245,7 @@ export function FichajesView() {
                     <TableCell className="text-sm">{f.fecha}</TableCell>
                     <TableCell className="text-sm font-mono">{f.horaEntrada ?? "—"}</TableCell>
                     <TableCell className="text-sm font-mono">{f.horaSalida ?? "—"}</TableCell>
-                    <TableCell className="text-sm text-right">{f.horasTotales > 0 ? `${f.horasTotales.toFixed(1)}h` : "—"}</TableCell>
+                    <TableCell className="text-sm text-right">{f.horaSalida ? formatHorasDecimal(f.horasTotales) : "—"}</TableCell>
                     <TableCell className="text-sm">{f.incidencia ?? <span className="text-muted-foreground">—</span>}</TableCell>
                     <TableCell className="text-sm">{f.validadoPor ?? <span className="text-muted-foreground">Pendiente</span>}</TableCell>
                   </TableRow>
@@ -287,7 +329,7 @@ export function FichajesView() {
                 <div><span className="text-muted-foreground">Entrada:</span><p className="font-mono font-medium">{fichajeModal.horaEntrada ?? "—"}</p></div>
                 <div><span className="text-muted-foreground">Salida:</span><p className="font-mono font-medium">{fichajeModal.horaSalida ?? "—"}</p></div>
                 <div><span className="text-muted-foreground">Pausa:</span><p className="font-mono font-medium">{fichajeModal.pausaInicio && fichajeModal.pausaFin ? `${fichajeModal.pausaInicio} - ${fichajeModal.pausaFin}` : "—"}</p></div>
-                <div><span className="text-muted-foreground">Horas totales:</span><p className="font-semibold">{fichajeModal.horasTotales > 0 ? `${fichajeModal.horasTotales.toFixed(2)}h` : "—"}</p></div>
+                <div><span className="text-muted-foreground">Horas totales:</span><p className="font-semibold">{fichajeModal.horaSalida ? formatHorasDecimal(fichajeModal.horasTotales) : "—"}</p></div>
               </div>
               {fichajeModal.incidencia && <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3"><p className="text-sm font-medium text-destructive">{fichajeModal.incidencia}</p></div>}
               {fichajeModal.observaciones && <div><span className="text-muted-foreground">Observaciones:</span><p>{fichajeModal.observaciones}</p></div>}

@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetHeader,
   SheetTitle,
@@ -52,6 +53,7 @@ type Evento = {
   lugar?: string;
   participantes?: string[];
   color: "blue" | "emerald" | "orange" | "violet" | "red";
+  eventColorHex?: string | null;
   diaIndex: number;
   inicioMin: number;
   duracionMin: number;
@@ -62,32 +64,29 @@ type Evento = {
   meetLink?: string | null;
 };
 
+const FALLBACK_COLOR = "#039be5";
+
+function textOnColor(hex: string): string {
+  const c = (hex || FALLBACK_COLOR).replace("#", "");
+  if (c.length !== 6) return "#ffffff";
+  const r = parseInt(c.slice(0, 2), 16);
+  const g = parseInt(c.slice(2, 4), 16);
+  const b = parseInt(c.slice(4, 6), 16);
+  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+  return yiq >= 175 ? "#1a1a1a" : "#ffffff";
+}
+
 type Vista = "day" | "week" | "month";
 
-const HORA_INICIO = 7;
-const HORA_FIN = 22;
+const HORA_INICIO = 0;
+const HORA_FIN = 23;
 const HORAS = Array.from(
   { length: HORA_FIN - HORA_INICIO + 1 },
   (_, i) => i + HORA_INICIO,
 );
+const MINUTOS_DIA = 24 * 60;
 const DIAS_LARGO = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 const DIAS_CORTO = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
-
-const COLOR_MAP: Record<Evento["color"], string> = {
-  blue: "bg-blue-500/90 border-blue-700 text-white",
-  emerald: "bg-emerald-500/90 border-emerald-700 text-white",
-  orange: "bg-orange-500/90 border-orange-700 text-white",
-  violet: "bg-violet-500/90 border-violet-700 text-white",
-  red: "bg-red-500/90 border-red-700 text-white",
-};
-
-const COLOR_DOT: Record<Evento["color"], string> = {
-  blue: "bg-blue-500",
-  emerald: "bg-emerald-500",
-  orange: "bg-orange-500",
-  violet: "bg-violet-500",
-  red: "bg-red-500",
-};
 
 const MOCK_EVENTOS: Evento[] = [];
 
@@ -161,8 +160,6 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
   const [eventoSel, setEventoSel] = useState<Evento | null>(null);
   const [form, setForm] = useState<Form | null>(null);
   const [guardando, setGuardando] = useState(false);
-
-  const PIXELS_POR_HORA = 56;
 
   // 1) Lista de calendarios al conectar
   useEffect(() => {
@@ -381,21 +378,44 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
   const eventosTimed = eventos.filter((e) => !e.allDay);
   const eventosAllDay = eventos.filter((e) => e.allDay);
 
+  const colorPorCalendario = useMemo(() => {
+    const m = new Map<string, string>();
+    calendarios.forEach((c) => m.set(c.id, c.color));
+    return m;
+  }, [calendarios]);
+
+  function colorEvento(ev: Evento): string {
+    return (
+      ev.eventColorHex ||
+      colorPorCalendario.get(ev.calendarId) ||
+      FALLBACK_COLOR
+    );
+  }
+
   return (
     <Sheet>
       <SheetTrigger asChild>{children}</SheetTrigger>
       <SheetContent
         side="right"
-        className="w-full max-w-6xl flex flex-col gap-0 p-0 sm:max-w-6xl"
+        className="flex flex-col gap-0 p-0 [&>button]:hidden"
       >
-        <SheetHeader className="border-b px-5 py-3">
-          <div className="flex items-center justify-between gap-2">
-            <SheetTitle className="flex items-center gap-2 text-base">
-              <CalendarIcon className="h-5 w-5 text-blue-600" />
-              Calendario · Google Calendar
-              {cargando && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
-            </SheetTitle>
-            <GoogleAccountButton />
+        <SheetTitle className="sr-only">Calendario · Google Calendar</SheetTitle>
+        <SheetHeader className="border-b px-3 py-2">
+          <div className="flex items-center gap-2">
+            <CalendarIcon className="h-6 w-6 text-blue-600" />
+            {cargando && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+            <div className="ml-auto flex items-center gap-1">
+              <GoogleAccountButton />
+              <SheetClose asChild>
+                <button
+                  type="button"
+                  className="ml-1 rounded-full p-2 hover:bg-black/5 transition-colors"
+                  title="Cerrar"
+                >
+                  <X className="h-5 w-5 text-[#5f6368]" />
+                </button>
+              </SheetClose>
+            </div>
           </div>
         </SheetHeader>
 
@@ -486,189 +506,101 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
 
           {/* VISTA WEEK */}
           {vista === "week" && (
-            <div className="flex-1 overflow-auto">
-              <div className="min-w-[700px]">
-                {/* Cabecera de días */}
-                <div className="sticky top-0 z-20 flex border-b bg-card">
-                  <div className="w-[60px] shrink-0 border-r" />
-                  {semanaActual.map((d, i) => {
-                    const esHoy = d.toDateString() === new Date().toDateString();
-                    return (
-                      <div
-                        key={i}
+            <div className="flex flex-1 min-h-0 flex-col">
+              {/* Cabecera de días */}
+              <div className="flex shrink-0 border-b bg-card">
+                <div className="w-[60px] shrink-0 border-r" />
+                {semanaActual.map((d, i) => {
+                  const esHoy = d.toDateString() === new Date().toDateString();
+                  return (
+                    <div
+                      key={i}
+                      className={cn(
+                        "flex-1 border-r px-2 py-2 text-center",
+                        esHoy && "bg-blue-50 dark:bg-blue-950/30",
+                      )}
+                    >
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                        {DIAS_CORTO[i]}
+                      </p>
+                      <p
                         className={cn(
-                          "flex-1 border-r px-2 py-2 text-center",
-                          esHoy && "bg-blue-50 dark:bg-blue-950/30",
+                          "text-base font-bold",
+                          esHoy ? "text-blue-600" : "text-foreground",
                         )}
                       >
-                        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                          {DIAS_CORTO[i]}
-                        </p>
-                        <p
-                          className={cn(
-                            "text-base font-bold",
-                            esHoy ? "text-blue-600" : "text-foreground",
-                          )}
-                        >
-                          {d.getDate()}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Fila de all-day events */}
-                {eventosAllDay.length > 0 && (
-                  <div className="flex border-b bg-muted/10">
-                    <div className="w-[60px] shrink-0 border-r px-2 py-1 text-right text-[9px] uppercase text-muted-foreground">
-                      Todo el día
+                        {d.getDate()}
+                      </p>
                     </div>
-                    {semanaActual.map((d, i) => {
-                      const dayIso = isoDate(d);
-                      const evs = eventosAllDay.filter((e) => e.fechaDia === dayIso);
-                      return (
-                        <div key={i} className="flex-1 min-h-[28px] border-r p-1 space-y-0.5">
-                          {evs.map((ev) => (
-                            <button
-                              key={ev.id}
-                              onClick={() => setEventoSel(ev)}
-                              className={cn(
-                                "block w-full truncate rounded px-1.5 py-0.5 text-left text-[10px] font-medium",
-                                COLOR_MAP[ev.color],
-                              )}
-                            >
-                              {ev.titulo}
-                            </button>
-                          ))}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* Grid horario */}
-                <div className="flex">
-                  <div className="w-[60px] shrink-0 border-r">
-                    {HORAS.map((h) => (
-                      <div
-                        key={h}
-                        className="border-b px-2 text-right text-[10px] text-muted-foreground"
-                        style={{ height: PIXELS_POR_HORA }}
-                      >
-                        {h.toString().padStart(2, "0")}:00
-                      </div>
-                    ))}
-                  </div>
-
-                  {semanaActual.map((d, diaIdx) => {
-                    const dayIso = isoDate(d);
-                    const evsDelDia = eventosTimed.filter((e) => e.fechaDia === dayIso);
-                    return (
-                      <div
-                        key={diaIdx}
-                        className="relative flex-1 border-r"
-                        style={{ height: HORAS.length * PIXELS_POR_HORA }}
-                      >
-                        {HORAS.map((h) => (
-                          <div
-                            key={h}
-                            onClick={() => abrirCrear(d, h)}
-                            className="cursor-pointer border-b transition-colors hover:bg-blue-50/40 dark:hover:bg-blue-950/20"
-                            style={{ height: PIXELS_POR_HORA }}
-                          />
-                        ))}
-
-                        {evsDelDia.map((ev) => {
-                          const top =
-                            ((ev.inicioMin - HORA_INICIO * 60) / 60) * PIXELS_POR_HORA;
-                          const height = (ev.duracionMin / 60) * PIXELS_POR_HORA - 2;
-                          if (top < 0 || top >= HORAS.length * PIXELS_POR_HORA) return null;
-                          return (
-                            <button
-                              key={ev.id}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEventoSel(ev);
-                              }}
-                              className={cn(
-                                "absolute left-1 right-1 z-10 overflow-hidden rounded-md border-l-4 px-2 py-1 text-left text-[11px] shadow-sm hover:shadow-md hover:z-20 transition-shadow",
-                                COLOR_MAP[ev.color],
-                              )}
-                              style={{ top, height: Math.max(height, 22) }}
-                            >
-                              <p className="truncate font-bold leading-tight">{ev.titulo}</p>
-                              <p className="truncate text-[10px] opacity-90">{ev.hora}</p>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
-                </div>
+                  );
+                })}
               </div>
-            </div>
-          )}
 
-          {/* VISTA DAY */}
-          {vista === "day" && (
-            <div className="flex-1 overflow-auto">
-              <div className="min-w-[400px]">
-                {/* All-day del día */}
-                {eventosAllDay.filter((e) => e.fechaDia === isoDate(fechaRef)).length > 0 && (
-                  <div className="border-b bg-muted/20 px-4 py-2">
-                    <p className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-                      Todo el día
-                    </p>
-                    <div className="space-y-1">
-                      {eventosAllDay
-                        .filter((e) => e.fechaDia === isoDate(fechaRef))
-                        .map((ev) => (
+              {/* Fila de all-day events */}
+              {eventosAllDay.length > 0 && (
+                <div className="flex shrink-0 border-b bg-muted/10">
+                  <div className="w-[60px] shrink-0 border-r px-2 py-1 text-right text-[9px] uppercase text-muted-foreground">
+                    Todo el día
+                  </div>
+                  {semanaActual.map((d, i) => {
+                    const dayIso = isoDate(d);
+                    const evs = eventosAllDay.filter((e) => e.fechaDia === dayIso);
+                    return (
+                      <div key={i} className="flex-1 min-h-[28px] border-r p-1 space-y-0.5">
+                        {evs.map((ev) => (
                           <button
                             key={ev.id}
                             onClick={() => setEventoSel(ev)}
-                            className={cn(
-                              "block w-full truncate rounded px-2 py-1 text-left text-xs font-medium",
-                              COLOR_MAP[ev.color],
-                            )}
+                            className="block w-full truncate rounded px-1.5 py-0.5 text-left text-[10px] font-medium"
+                            style={{
+                              backgroundColor: colorEvento(ev),
+                              color: textOnColor(colorEvento(ev)),
+                            }}
                           >
                             {ev.titulo}
                           </button>
                         ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex">
-                  <div className="w-[60px] shrink-0 border-r">
-                    {HORAS.map((h) => (
-                      <div
-                        key={h}
-                        className="border-b px-2 text-right text-[10px] text-muted-foreground"
-                        style={{ height: PIXELS_POR_HORA }}
-                      >
-                        {h.toString().padStart(2, "0")}:00
                       </div>
-                    ))}
-                  </div>
-                  <div
-                    className="relative flex-1 border-r"
-                    style={{ height: HORAS.length * PIXELS_POR_HORA }}
-                  >
-                    {HORAS.map((h) => (
-                      <div
-                        key={h}
-                        onClick={() => abrirCrear(fechaRef, h)}
-                        className="cursor-pointer border-b transition-colors hover:bg-blue-50/40 dark:hover:bg-blue-950/20"
-                        style={{ height: PIXELS_POR_HORA }}
-                      />
-                    ))}
-                    {eventosTimed
-                      .filter((e) => e.fechaDia === isoDate(fechaRef))
-                      .map((ev) => {
-                        const top =
-                          ((ev.inicioMin - HORA_INICIO * 60) / 60) * PIXELS_POR_HORA;
-                        const height = (ev.duracionMin / 60) * PIXELS_POR_HORA - 2;
-                        if (top < 0 || top >= HORAS.length * PIXELS_POR_HORA) return null;
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Grid horario — 24 h repartidas por flex */}
+              <div className="flex flex-1 min-h-0">
+                <div className="flex w-[60px] shrink-0 flex-col border-r">
+                  {HORAS.map((h) => (
+                    <div
+                      key={h}
+                      className="flex flex-1 items-start justify-end border-b px-2 pt-0.5 text-[10px] text-muted-foreground"
+                    >
+                      {h.toString().padStart(2, "0")}:00
+                    </div>
+                  ))}
+                </div>
+
+                {semanaActual.map((d, diaIdx) => {
+                  const dayIso = isoDate(d);
+                  const evsDelDia = eventosTimed.filter((e) => e.fechaDia === dayIso);
+                  return (
+                    <div
+                      key={diaIdx}
+                      className="relative flex flex-1 flex-col border-r"
+                    >
+                      {HORAS.map((h) => (
+                        <div
+                          key={h}
+                          onClick={() => abrirCrear(d, h)}
+                          className="flex-1 cursor-pointer border-b transition-colors hover:bg-blue-50/40 dark:hover:bg-blue-950/20"
+                        />
+                      ))}
+
+                      {evsDelDia.map((ev) => {
+                        const topPct = (ev.inicioMin / MINUTOS_DIA) * 100;
+                        const heightPct = (ev.duracionMin / MINUTOS_DIA) * 100;
+                        if (topPct < 0 || topPct >= 100) return null;
+                        const bg = colorEvento(ev);
+                      const txt = textOnColor(bg);
                         return (
                           <button
                             key={ev.id}
@@ -676,28 +608,122 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                               e.stopPropagation();
                               setEventoSel(ev);
                             }}
-                            className={cn(
-                              "absolute left-2 right-2 z-10 overflow-hidden rounded-md border-l-4 px-3 py-1.5 text-left text-xs shadow-sm hover:shadow-md transition-shadow",
-                              COLOR_MAP[ev.color],
-                            )}
-                            style={{ top, height: Math.max(height, 28) }}
+                            className="absolute left-0.5 right-0.5 z-10 overflow-hidden rounded-[4px] px-1.5 py-0.5 text-left text-[11px] leading-tight transition-shadow hover:z-20 hover:shadow-md"
+                            style={{
+                              top: `${topPct}%`,
+                              height: `calc(${heightPct}% - 2px)`,
+                              minHeight: 18,
+                              backgroundColor: bg,
+                              color: txt,
+                            }}
                           >
-                            <p className="truncate font-bold">{ev.titulo}</p>
-                            <p className="truncate text-[10px] opacity-90">
-                              {ev.hora} · {ev.duracion}
-                            </p>
-                            {ev.lugar && <p className="truncate text-[10px] opacity-90">📍 {ev.lugar}</p>}
+                            <p className="truncate font-semibold">{ev.titulo}</p>
+                            <p className="truncate text-[10px] opacity-90">{ev.hora}</p>
                           </button>
                         );
                       })}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* VISTA DAY */}
+          {vista === "day" && (
+            <div className="flex flex-1 min-h-0 flex-col">
+              {/* All-day del día */}
+              {eventosAllDay.filter((e) => e.fechaDia === isoDate(fechaRef)).length > 0 && (
+                <div className="shrink-0 border-b bg-muted/20 px-4 py-2">
+                  <p className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Todo el día
+                  </p>
+                  <div className="space-y-1">
+                    {eventosAllDay
+                      .filter((e) => e.fechaDia === isoDate(fechaRef))
+                      .map((ev) => (
+                        <button
+                          key={ev.id}
+                          onClick={() => setEventoSel(ev)}
+                          className="block w-full truncate rounded px-2 py-1 text-left text-xs font-medium"
+                          style={{
+                            backgroundColor: colorEvento(ev),
+                            color: textOnColor(colorEvento(ev)),
+                          }}
+                        >
+                          {ev.titulo}
+                        </button>
+                      ))}
                   </div>
+                </div>
+              )}
+
+              <div className="flex flex-1 min-h-0">
+                <div className="flex w-[60px] shrink-0 flex-col border-r">
+                  {HORAS.map((h) => (
+                    <div
+                      key={h}
+                      className="flex flex-1 items-start justify-end border-b px-2 pt-0.5 text-[10px] text-muted-foreground"
+                    >
+                      {h.toString().padStart(2, "0")}:00
+                    </div>
+                  ))}
+                </div>
+                <div className="relative flex flex-1 flex-col border-r">
+                  {HORAS.map((h) => (
+                    <div
+                      key={h}
+                      onClick={() => abrirCrear(fechaRef, h)}
+                      className="flex-1 cursor-pointer border-b transition-colors hover:bg-blue-50/40 dark:hover:bg-blue-950/20"
+                    />
+                  ))}
+                  {eventosTimed
+                    .filter((e) => e.fechaDia === isoDate(fechaRef))
+                    .map((ev) => {
+                      const topPct = (ev.inicioMin / MINUTOS_DIA) * 100;
+                      const heightPct = (ev.duracionMin / MINUTOS_DIA) * 100;
+                      if (topPct < 0 || topPct >= 100) return null;
+                      const bg = colorEvento(ev);
+                      const txt = textOnColor(bg);
+                      return (
+                        <button
+                          key={ev.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEventoSel(ev);
+                          }}
+                          className="absolute left-1 right-1 z-10 overflow-hidden rounded-[4px] px-2 py-1 text-left text-xs leading-tight transition-shadow hover:shadow-md"
+                          style={{
+                            top: `${topPct}%`,
+                            height: `calc(${heightPct}% - 2px)`,
+                            minHeight: 24,
+                            backgroundColor: bg,
+                            color: txt,
+                          }}
+                        >
+                          <p className="truncate font-semibold">{ev.titulo}</p>
+                          <p className="truncate text-[10px] opacity-90">
+                            {ev.hora} · {ev.duracion}
+                          </p>
+                          {ev.lugar && <p className="truncate text-[10px] opacity-90">📍 {ev.lugar}</p>}
+                        </button>
+                      );
+                    })}
                 </div>
               </div>
             </div>
           )}
 
           {/* VISTA MONTH */}
-          {vista === "month" && <VistaMes fechaRef={fechaRef} eventos={eventos} onSelect={setEventoSel} onSlot={abrirCrear} />}
+          {vista === "month" && (
+            <VistaMes
+              fechaRef={fechaRef}
+              eventos={eventos}
+              onSelect={setEventoSel}
+              onSlot={abrirCrear}
+              colorPorCalendario={colorPorCalendario}
+            />
+          )}
         </div>
 
         {/* Detalles */}
@@ -706,7 +732,10 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <span className={cn("h-2.5 w-2.5 rounded-full", COLOR_DOT[eventoSel.color])} />
+                  <span
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ backgroundColor: colorEvento(eventoSel) }}
+                  />
                   <h3 className="text-base font-bold text-foreground">{eventoSel.titulo}</h3>
                 </div>
                 <div className="mt-2 space-y-1 text-xs text-muted-foreground">
@@ -912,12 +941,18 @@ function VistaMes({
   eventos,
   onSelect,
   onSlot,
+  colorPorCalendario,
 }: {
   fechaRef: Date;
   eventos: Evento[];
   onSelect: (ev: Evento) => void;
   onSlot: (fecha: Date) => void;
+  colorPorCalendario: Map<string, string>;
 }) {
+  const colorEv = (ev: Evento): string =>
+    ev.eventColorHex ||
+    colorPorCalendario.get(ev.calendarId) ||
+    FALLBACK_COLOR;
   // Calculamos las celdas: empezamos en lunes de la semana del día 1, terminamos en domingo de la semana del último día
   const año = fechaRef.getFullYear();
   const mes = fechaRef.getMonth();
@@ -979,10 +1014,11 @@ function VistaMes({
                       e.stopPropagation();
                       onSelect(ev);
                     }}
-                    className={cn(
-                      "block w-full truncate rounded px-1 py-0.5 text-left text-[10px] font-medium",
-                      COLOR_MAP[ev.color],
-                    )}
+                    className="block w-full truncate rounded px-1 py-0.5 text-left text-[10px] font-medium"
+                    style={{
+                      backgroundColor: colorEv(ev),
+                      color: textOnColor(colorEv(ev)),
+                    }}
                   >
                     {ev.allDay ? "" : `${ev.hora} `}
                     {ev.titulo}

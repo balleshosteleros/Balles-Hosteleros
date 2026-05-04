@@ -4,10 +4,84 @@ import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
 import type { ProveedorImport } from "@/features/logistica/types/import";
 import type { ProveedorRow } from "@/features/logistica/types/db";
 import { capitalizeText } from "@/shared/lib/utils";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 async function getContext() {
   const { supabase, userId, empresaId } = await getLogisticaContext();
   return { supabase, user: userId ? { id: userId } : null, empresaId };
+}
+
+/**
+ * Mantiene un contacto de la agenda (categoría "proveedores") sincronizado con
+ * el proveedor de logística: nombre comercial → empresa_contacto, persona de
+ * contacto → nombre, teléfono y email principales. Best-effort: si falla solo
+ * se loggea, no rompe la operación principal.
+ */
+async function upsertContactoAgendaFromProveedor(opts: {
+  supabase: SupabaseClient;
+  empresaId: string;
+  userId: string;
+  oldNombreComercial?: string | null;
+  nombreComercial: string;
+  personaContacto: string | null;
+  telefonoPrincipal: string | null;
+  emailPrincipal: string | null;
+}) {
+  try {
+    const empresaContacto = opts.nombreComercial.trim();
+    const nombre = (opts.personaContacto?.trim() || empresaContacto);
+    const lookupNombre = (opts.oldNombreComercial?.trim() || empresaContacto);
+
+    const { data: existing } = await opts.supabase
+      .from("contactos_agenda")
+      .select("id")
+      .eq("empresa_id", opts.empresaId)
+      .eq("categoria", "proveedores")
+      .eq("empresa_contacto", lookupNombre)
+      .maybeSingle();
+
+    if (existing?.id) {
+      await opts.supabase
+        .from("contactos_agenda")
+        .update({
+          nombre,
+          empresa_contacto: empresaContacto,
+          telefono: opts.telefonoPrincipal,
+          email: opts.emailPrincipal,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existing.id);
+    } else {
+      await opts.supabase.from("contactos_agenda").insert({
+        empresa_id: opts.empresaId,
+        nombre,
+        empresa_contacto: empresaContacto,
+        categoria: "proveedores",
+        telefono: opts.telefonoPrincipal,
+        email: opts.emailPrincipal,
+        created_by: opts.userId,
+      });
+    }
+  } catch (err) {
+    console.error("[proveedores] upsertContactoAgendaFromProveedor:", err);
+  }
+}
+
+async function deleteContactoAgendaFromProveedor(opts: {
+  supabase: SupabaseClient;
+  empresaId: string;
+  nombreComercial: string;
+}) {
+  try {
+    await opts.supabase
+      .from("contactos_agenda")
+      .delete()
+      .eq("empresa_id", opts.empresaId)
+      .eq("categoria", "proveedores")
+      .eq("empresa_contacto", opts.nombreComercial);
+  } catch (err) {
+    console.error("[proveedores] deleteContactoAgendaFromProveedor:", err);
+  }
 }
 
 export async function listProveedores() {
@@ -39,17 +113,22 @@ export async function createProveedor(input: ProveedorImport) {
       return { ok: false as const, error: "La categoría es obligatoria" };
     }
 
+    const nombreComercial = capitalizeText(input.nombreComercial.trim());
+    const personaContacto = input.personaContacto ? capitalizeText(input.personaContacto) : null;
+    const telefonoPrincipal = input.telefonoPrincipal ?? null;
+    const emailPrincipal = input.emailPrincipal ?? null;
+
     const { error } = await supabase.from("proveedores").insert({
       empresa_id: empresaId,
-      nombre_comercial: capitalizeText(input.nombreComercial.trim()),
+      nombre_comercial: nombreComercial,
       razon_social: input.razonSocial ? capitalizeText(input.razonSocial) : null,
       cif_nif: input.cifNif ?? null,
       categoria: capitalizeText(input.categoria.trim()),
       estado: input.estado ?? "Activo",
-      persona_contacto: input.personaContacto ? capitalizeText(input.personaContacto) : null,
-      telefono_principal: input.telefonoPrincipal ?? null,
+      persona_contacto: personaContacto,
+      telefono_principal: telefonoPrincipal,
       telefono_secundario: input.telefonoSecundario ?? null,
-      email_principal: input.emailPrincipal ?? null,
+      email_principal: emailPrincipal,
       email_pedidos: input.emailPedidos ?? null,
       email_incidencias: input.emailIncidencias ?? null,
       web: input.web ?? null,
@@ -67,6 +146,17 @@ export async function createProveedor(input: ProveedorImport) {
     });
 
     if (error) throw error;
+
+    await upsertContactoAgendaFromProveedor({
+      supabase,
+      empresaId,
+      userId: user.id,
+      nombreComercial,
+      personaContacto,
+      telefonoPrincipal,
+      emailPrincipal,
+    });
+
     return { ok: true as const };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
@@ -77,7 +167,14 @@ export async function createProveedor(input: ProveedorImport) {
 
 export async function updateProveedor(id: string, input: Partial<ProveedorImport>) {
   try {
-    const { supabase } = await getContext();
+    const { supabase, user } = await getContext();
+
+    const { data: before } = await supabase
+      .from("proveedores")
+      .select("nombre_comercial, persona_contacto, telefono_principal, email_principal, empresa_id")
+      .eq("id", id)
+      .maybeSingle();
+
     const updates: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     };
@@ -107,6 +204,33 @@ export async function updateProveedor(id: string, input: Partial<ProveedorImport
 
     const { error } = await supabase.from("proveedores").update(updates).eq("id", id);
     if (error) throw error;
+
+    if (before?.empresa_id && user) {
+      const finalNombreComercial = input.nombreComercial !== undefined && input.nombreComercial
+        ? capitalizeText(input.nombreComercial)
+        : (before.nombre_comercial as string);
+      const finalPersonaContacto = input.personaContacto !== undefined
+        ? (input.personaContacto ? capitalizeText(input.personaContacto) : null)
+        : ((before.persona_contacto as string | null) ?? null);
+      const finalTelefono = input.telefonoPrincipal !== undefined
+        ? (input.telefonoPrincipal ?? null)
+        : ((before.telefono_principal as string | null) ?? null);
+      const finalEmail = input.emailPrincipal !== undefined
+        ? (input.emailPrincipal ?? null)
+        : ((before.email_principal as string | null) ?? null);
+
+      await upsertContactoAgendaFromProveedor({
+        supabase,
+        empresaId: before.empresa_id as string,
+        userId: user.id,
+        oldNombreComercial: before.nombre_comercial as string,
+        nombreComercial: finalNombreComercial,
+        personaContacto: finalPersonaContacto,
+        telefonoPrincipal: finalTelefono,
+        emailPrincipal: finalEmail,
+      });
+    }
+
     return { ok: true as const };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
@@ -118,8 +242,24 @@ export async function updateProveedor(id: string, input: Partial<ProveedorImport
 export async function deleteProveedor(id: string) {
   try {
     const { supabase } = await getContext();
+
+    const { data: before } = await supabase
+      .from("proveedores")
+      .select("nombre_comercial, empresa_id")
+      .eq("id", id)
+      .maybeSingle();
+
     const { error } = await supabase.from("proveedores").delete().eq("id", id);
     if (error) throw error;
+
+    if (before?.empresa_id && before.nombre_comercial) {
+      await deleteContactoAgendaFromProveedor({
+        supabase,
+        empresaId: before.empresa_id as string,
+        nombreComercial: before.nombre_comercial as string,
+      });
+    }
+
     return { ok: true as const };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
@@ -178,6 +318,18 @@ export async function bulkImportProveedores(proveedores: ProveedorImport[]) {
 
     const { error } = await supabase.from("proveedores").insert(rows);
     if (error) throw error;
+
+    for (const r of rows) {
+      await upsertContactoAgendaFromProveedor({
+        supabase,
+        empresaId,
+        userId: user.id,
+        nombreComercial: r.nombre_comercial,
+        personaContacto: r.persona_contacto,
+        telefonoPrincipal: r.telefono_principal,
+        emailPrincipal: r.email_principal,
+      });
+    }
 
     return { ok: true as const, imported: rows.length, skipped: proveedores.length - rows.length };
   } catch (err) {
