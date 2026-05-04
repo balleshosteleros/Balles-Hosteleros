@@ -82,6 +82,36 @@ function getSupabase(): SupabaseClient | null {
   return supabaseInstance;
 }
 
+// Caché stale-while-revalidate de profile/roles/permisos por usuario.
+// Permite que el sidebar y los gates de UI se muestren al instante en cargas
+// posteriores, mientras refrescamos en segundo plano contra Supabase.
+interface AuthCache {
+  profile: AuthProfile | null;
+  roles: AppRole[];
+  permisos: PermisoModulo[];
+}
+function authCacheKey(userId: string) {
+  return `bh_auth_cache_${userId}`;
+}
+function readAuthCache(userId: string): AuthCache | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(authCacheKey(userId));
+    if (!raw) return null;
+    return JSON.parse(raw) as AuthCache;
+  } catch {
+    return null;
+  }
+}
+function writeAuthCache(userId: string, value: AuthCache) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(authCacheKey(userId), JSON.stringify(value));
+  } catch {
+    // quota / private mode → ignoramos
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -104,33 +134,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(session?.user ?? null);
 
         if (session?.user) {
-          setTimeout(async () => {
-            const { data: profileData } = await supabase
-              .from("profiles")
-              .select("nombre, apellidos, email, empresa_id, avatar_url, avatar_ai_url")
-              .eq("user_id", session.user.id)
-              .single();
+          const userId = session.user.id;
 
-            if (profileData) setProfile(profileData as AuthProfile);
-
-            const { data: rolesData } = await supabase
-              .from("user_roles")
-              .select("role")
-              .eq("user_id", session.user.id);
-
-            if (rolesData) setRoles(rolesData.map((r: { role: string }) => r.role as AppRole));
-
-            try {
-              const up = await getUserPermisos();
-              setPermisos(up.permisos);
-            } catch (e) {
-              console.error("[auth] error cargando permisos", e);
-              setPermisos([]);
-            } finally {
-              setPermisosLoaded(true);
-            }
-
+          // 1) Hidratación instantánea desde localStorage si hay caché del usuario.
+          //    Así el sidebar y los gates pueden filtrar al primer render — sin
+          //    esperar a Supabase. Si no hay caché, seguimos en estado vacío hasta
+          //    el primer fetch.
+          const cached = readAuthCache(userId);
+          if (cached) {
+            if (cached.profile) setProfile(cached.profile);
+            setRoles(cached.roles);
+            setPermisos(cached.permisos);
+            setPermisosLoaded(true);
             setLoading(false);
+          }
+
+          // 2) Refresco en paralelo (stale-while-revalidate). Profile y permisos
+          //    en una sola tanda — getUserPermisos ya devuelve appRoles, así que
+          //    no necesitamos una query extra a user_roles.
+          setTimeout(async () => {
+            const [profileRes, permisosRes] = await Promise.all([
+              supabase
+                .from("profiles")
+                .select("nombre, apellidos, email, empresa_id, avatar_url, avatar_ai_url")
+                .eq("user_id", userId)
+                .single(),
+              getUserPermisos().catch((e) => {
+                console.error("[auth] error cargando permisos", e);
+                return null;
+              }),
+            ]);
+
+            const nextProfile = (profileRes.data as AuthProfile | null) ?? null;
+            const nextRoles = (permisosRes?.appRoles ?? []) as AppRole[];
+            const nextPermisos = permisosRes?.permisos ?? [];
+
+            if (nextProfile) setProfile(nextProfile);
+            setRoles(nextRoles);
+            setPermisos(nextPermisos);
+            setPermisosLoaded(true);
+            setLoading(false);
+
+            writeAuthCache(userId, {
+              profile: nextProfile,
+              roles: nextRoles,
+              permisos: nextPermisos,
+            });
           }, 0);
         } else {
           setProfile(null);
@@ -159,6 +208,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     const supabase = getSupabase();
 
+    // Limpia el caché de permisos del usuario actual (privacidad si otro
+    // usuario inicia sesión en el mismo navegador después).
+    if (user?.id && typeof window !== "undefined") {
+      try {
+        window.localStorage.removeItem(authCacheKey(user.id));
+      } catch {
+        // ignore
+      }
+    }
+
     try {
       if (supabase) {
         await supabase.auth.signOut();
@@ -179,7 +238,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     window.location.href = "/";
-  }, []);
+  }, [user?.id]);
 
   const hasRole = useCallback((role: AppRole) => roles.includes(role), [roles]);
 
