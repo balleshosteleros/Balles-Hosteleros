@@ -19,6 +19,7 @@ import type {
 } from "../types";
 import { ColumnaEstado } from "./ColumnaEstado";
 import { FiltrosBar } from "./FiltrosBar";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 // ─── Tabla de siguiente/anterior estado ───────────────────────
 const SIGUIENTE: Record<ColumnaKDS, LineaEstadoCocina | null> = {
@@ -156,11 +157,7 @@ function ComandasBoardInner() {
   );
 
   if (loading) {
-    return (
-      <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center">
-        <p className="text-muted-foreground">Cargando comandas...</p>
-      </div>
-    );
+    return <LoadingSpinner className="h-[calc(100vh-3.5rem)]" size="lg" />;
   }
 
   if (error) {

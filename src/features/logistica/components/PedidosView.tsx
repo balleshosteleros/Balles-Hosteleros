@@ -22,7 +22,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Copy, Pencil, Trash2, Printer, MoreHorizontal, ClipboardList, Truck,
-  ChevronDown, Settings, Package,
+  ChevronDown, Package,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
@@ -38,8 +38,6 @@ import {
 } from "@/shared/components/SubmoduleToolbar";
 import { IOActions } from "@/shared/io";
 import { pedidosIO } from "@/features/logistica/io/pedidos.io";
-import { ImportExportButton } from "@/features/logistica/components/ImportExportButton";
-import { exportToCSV, exportToXLSX, exportToPDF } from "@/features/logistica/lib/export-utils";
 import { toast } from "sonner";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -100,7 +98,6 @@ export function PedidosView() {
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
-  const [showConfig, setShowConfig] = useState(false);
   const [tab, setTab] = useState<"pedidos" | "albaranes">("pedidos");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [modalOpen, setModalOpen] = useState(false);
@@ -490,36 +487,9 @@ export function PedidosView() {
               </>
             }
             extraDerecha={
-              <>
-                <IOActions config={pedidosIO} onSuccess={() => window.location.reload()} />
-                <ImportExportButton
-                  onExport={(format) => {
-                    const ts = new Date().toISOString().slice(0, 10);
-                    const rows = filteredPedidos
-                      .filter((p) => selected.size === 0 || selected.has(p.id))
-                      .map((p) => {
-                        const t = calcularTotalesLineas(p.lineas);
-                        return { Número: p.numero, Proveedor: p.proveedor, Fecha: p.fecha, Entrega: p.fechaEntrega, Almacén: p.almacen, Estado: p.estado, Total: t.total.toFixed(2) };
-                      });
-                    if (rows.length === 0) { toast.info("No hay datos para exportar."); return; }
-                    if (format === "csv") exportToCSV(rows, `pedidos-${ts}.csv`);
-                    else if (format === "xlsx") exportToXLSX(rows, `pedidos-${ts}.xlsx`);
-                    else exportToPDF(rows, `pedidos-${ts}.pdf`, "Pedidos");
-                    toast.success(`${rows.length} pedidos exportados en ${format.toUpperCase()}`);
-                  }}
-                />
-                <Button size="icon" variant={showConfig ? "default" : "ghost"} className="h-9 w-9" onClick={() => setShowConfig((v) => !v)} title="Configuración" aria-label="Configuración">
-                  <Settings className="h-4 w-4" strokeWidth={1.75} />
-                </Button>
-              </>
+              <IOActions config={pedidosIO} onSuccess={() => window.location.reload()} />
             }
           />
-
-          {showConfig && (
-            <div className="rounded-xl border bg-card p-5">
-              <p className="text-sm text-muted-foreground">Configuración de pedidos — próximamente.</p>
-            </div>
-          )}
 
           {/* Table */}
           <div className="bg-card rounded-lg border overflow-x-auto">

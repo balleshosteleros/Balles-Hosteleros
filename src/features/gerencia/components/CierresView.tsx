@@ -33,6 +33,7 @@ import {
   listCierres, createCierre, deleteCierre, getCierresConfig, updateCierresConfig,
   type CierreRow, type CierresConfig, type CierreModo,
 } from "@/features/gerencia/actions/cierres-actions";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 const DIAS_SEMANA = [
   { value: 0, label: "Lunes" },
@@ -373,9 +374,13 @@ export function CierresView() {
               <CardContent className="p-4 space-y-3">
                 <h3 className="font-semibold">Últimos cierres</h3>
                 {ultimosCierres.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-6 text-center">
-                    {loading ? "Cargando..." : "Aún no hay cierres registrados."}
-                  </p>
+                  loading ? (
+                    <LoadingSpinner className="py-6" />
+                  ) : (
+                    <p className="text-sm text-muted-foreground py-6 text-center">
+                      Aún no hay cierres registrados.
+                    </p>
+                  )
                 ) : (
                   <div className="space-y-2">
                     {ultimosCierres.map((c) => (
@@ -428,7 +433,7 @@ export function CierresView() {
                 {cierres.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
-                      {loading ? "Cargando..." : "No hay cierres registrados aún"}
+                      {loading ? <LoadingSpinner /> : "No hay cierres registrados aún"}
                     </TableCell>
                   </TableRow>
                 )}

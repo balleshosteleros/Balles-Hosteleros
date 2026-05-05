@@ -73,9 +73,8 @@ export function MisTareasCronogramaWidget() {
   if (isLoading) {
     return (
       <Card className="p-4 bg-card">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex items-center justify-center text-muted-foreground">
           <RefreshCw className="h-4 w-4 animate-spin" />
-          Cargando tareas del cronograma…
         </div>
       </Card>
     );

@@ -49,6 +49,7 @@ import { createClient as createBrowserClient } from "@/lib/supabase/client";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { getOrganigrama } from "@/features/direccion/actions/organigrama-actions";
 import { orgChartsPorEmpresa } from "@/features/direccion/data/direccion";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 type Canal = {
   id: string;
@@ -751,9 +752,7 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
 
             {/* Lista de canales separada en dos secciones */}
             <div className="flex-1 overflow-y-auto">
-              {cargando && (
-                <p className="px-4 py-6 text-xs text-muted-foreground text-center">Cargando…</p>
-              )}
+              {cargando && <LoadingSpinner size="sm" className="px-4 py-6" />}
 
               {!cargando && (
                 <>
@@ -929,9 +928,7 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
 
                 {/* Mensajes */}
                 <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-5 space-y-3">
-                  {cargandoMsgs && (
-                    <div className="py-12 text-center text-sm text-muted-foreground">Cargando mensajes…</div>
-                  )}
+                  {cargandoMsgs && <LoadingSpinner className="py-12" />}
                   {!cargandoMsgs && msgDelCanal.length === 0 && (
                     <div className="flex flex-col items-center gap-2 py-16 text-center">
                       <GrupoAvatar logoUrl={logoUrl} iniciales={iniciales} color={colorEmpresa} size="lg" />
@@ -1573,8 +1570,8 @@ function Adjunto({
 
   if (cargando) {
     return (
-      <div className="flex items-center gap-2 py-2 text-[11px] opacity-70">
-        <Loader2 className="h-3 w-3 animate-spin" /> Cargando…
+      <div className="flex items-center justify-center py-2 opacity-70">
+        <Loader2 className="h-3 w-3 animate-spin" />
       </div>
     );
   }

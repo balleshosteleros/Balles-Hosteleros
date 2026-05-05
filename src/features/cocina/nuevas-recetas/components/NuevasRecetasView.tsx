@@ -23,6 +23,7 @@ import { GestionarFasesDialog } from "./config/GestionarFasesDialog";
 import { CambiosCartaCalendario } from "./CambiosCartaCalendario";
 import type { EstadoGeneral } from "../types";
 import { ESTADO_GENERAL_LABELS } from "../types";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 type Vista = "kanban" | "tabla" | "calendario";
 
@@ -143,11 +144,7 @@ export function NuevasRecetasView() {
       </div>
 
       {/* Body */}
-      {cargando && (
-        <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-          Cargando pipeline...
-        </div>
-      )}
+      {cargando && <LoadingSpinner className="flex-1" />}
 
       {!cargando && vista === "kanban" && (
         <RecetaKanban

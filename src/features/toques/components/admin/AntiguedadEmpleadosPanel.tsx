@@ -129,8 +129,7 @@ export function AntiguedadEmpleadosPanel() {
   if (loading) {
     return (
       <Card className="p-6 flex items-center justify-center text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin mr-2" />
-        Cargando empleados…
+        <Loader2 className="h-5 w-5 animate-spin" />
       </Card>
     );
   }

@@ -14,6 +14,7 @@ import type { Cata, ValoracionCata } from "../types";
 import { VALORACION_LABELS } from "../types";
 import { QrFotoDialog } from "./QrFotoDialog";
 import { subirFotoCataDirecto } from "../actions/qr-foto-actions";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 interface Props {
   recetaId: string;
@@ -122,7 +123,7 @@ export function CataTab({ recetaId, numero, escandallo, onChanged }: Props) {
   const catasAnteriores = catas.filter((c) => c.numero < numero);
 
   if (loading) {
-    return <p className="text-sm text-muted-foreground p-4">Cargando cata...</p>;
+    return <LoadingSpinner className="p-4" />;
   }
 
   return (

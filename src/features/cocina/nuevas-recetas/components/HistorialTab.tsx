@@ -5,6 +5,7 @@ import { Clock, User, MessageSquare, Send } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { listHistorial } from "../actions/recetas-actions";
 import type { HistorialEntry } from "../types";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 interface Props {
   recetaId: string;
@@ -22,7 +23,7 @@ export function HistorialTab({ recetaId }: Props) {
     })();
   }, [recetaId]);
 
-  if (loading) return <p className="text-sm text-muted-foreground p-4">Cargando historial...</p>;
+  if (loading) return <LoadingSpinner className="p-4" />;
 
   if (entries.length === 0) {
     return (

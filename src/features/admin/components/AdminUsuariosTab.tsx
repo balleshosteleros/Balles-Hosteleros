@@ -11,6 +11,7 @@ import { Plus, Trash2, UserPlus } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { createEmployee, getEmployees, deleteEmployee } from '@/actions/admin'
 import type { Profile } from '@/types/database'
+import { LoadingSpinner } from '@/shared/components/LoadingSpinner'
 
 const ROLES = ['empleado', 'cocinero', 'camarero', 'gerente', 'admin']
 
@@ -83,7 +84,7 @@ export function AdminUsuariosTab() {
       <Card>
         <CardContent className="p-0">
           {loading ? (
-            <div className="p-8 text-center text-muted-foreground">Cargando usuarios...</div>
+            <LoadingSpinner className="p-8" />
           ) : employees.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">No hay usuarios registrados</div>
           ) : (

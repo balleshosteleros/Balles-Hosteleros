@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { ArrowUpDown, Upload, Download, FileText, FileSpreadsheet, FileDown, FileType2 } from "lucide-react";
+import { FileUp, Upload, Download, FileText, FileSpreadsheet, FileDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -19,7 +19,7 @@ interface ImportExportButtonProps {
   /** Llamado con el File elegido. Si no se pasa, Importar no aparece. */
   onImport?: (file: File) => void;
   /** Llamado con el formato de exportación elegido. */
-  onExport: (format: "csv" | "xlsx" | "pdf") => void;
+  onExport: (format: "csv" | "xlsx") => void;
   /** Si se pasa, aparece "Descargar plantilla" dentro de Importar. */
   onDownloadTemplate?: () => void;
   disabled?: boolean;
@@ -51,13 +51,14 @@ export function ImportExportButton({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
-            size="icon"
-            variant="ghost"
-            className="h-8 w-8"
+            size="sm"
+            variant="outline"
+            className="h-9 w-9 p-0"
             disabled={disabled}
             title="Importar / Exportar"
+            aria-label="Importar / Exportar"
           >
-            <ArrowUpDown className="h-4 w-4" />
+            <FileUp className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
 
@@ -124,13 +125,6 @@ export function ImportExportButton({
               >
                 <FileSpreadsheet className="h-3.5 w-3.5" />
                 Excel (.xlsx)
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="gap-2 text-xs cursor-pointer"
-                onClick={() => onExport("pdf")}
-              >
-                <FileType2 className="h-3.5 w-3.5" />
-                PDF (.pdf)
               </DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>

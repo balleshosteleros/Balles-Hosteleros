@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getGoogleTokens, googleFetch } from "@/lib/google/api";
+import { getGoogleTokens, googleFetchAuto } from "@/lib/google/api";
 
 type PeopleSearchResponse = {
   results?: {
@@ -21,13 +21,12 @@ function fotoNoDefault(
 async function buscarEnEndpoint(
   endpoint: "people:searchContacts" | "otherContacts:search",
   query: string,
-  accessToken: string,
 ): Promise<{ email: string; photo: string }[]> {
   const url = new URL(`https://people.googleapis.com/v1/${endpoint}`);
   url.searchParams.set("query", query);
   url.searchParams.set("readMask", "emailAddresses,photos");
   url.searchParams.set("pageSize", "10");
-  const data = await googleFetch<PeopleSearchResponse>(url.toString(), accessToken);
+  const { data } = await googleFetchAuto<PeopleSearchResponse>(url.toString());
   if (!data?.results) return [];
   const out: { email: string; photo: string }[] = [];
   for (const r of data.results) {
@@ -71,11 +70,7 @@ export async function POST(request: Request) {
     lote.map(async (email) => {
       // 1) Contactos guardados
       try {
-        const matches = await buscarEnEndpoint(
-          "people:searchContacts",
-          email,
-          accessToken,
-        );
+        const matches = await buscarEnEndpoint("people:searchContacts", email);
         const m = matches.find((x) => x.email === email);
         if (m) {
           resultado[email] = m.photo;
@@ -87,11 +82,7 @@ export async function POST(request: Request) {
       // 2) "Otros contactos" (gente con la que has cruzado correos pero no
       //    está en tu agenda). Suele cubrir clientes/proveedores.
       try {
-        const matches = await buscarEnEndpoint(
-          "otherContacts:search",
-          email,
-          accessToken,
-        );
+        const matches = await buscarEnEndpoint("otherContacts:search", email);
         const m = matches.find((x) => x.email === email);
         if (m) resultado[email] = m.photo;
       } catch {

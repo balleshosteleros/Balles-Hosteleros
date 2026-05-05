@@ -60,7 +60,7 @@ export function EditorShell({ paginaId }: Props) {
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center p-10 text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin mr-2" /> Cargando editor…
+        <Loader2 className="h-5 w-5 animate-spin" />
       </div>
     );
   }

@@ -20,6 +20,7 @@ import {
   type CategoriaPickable,
 } from "../../../../services/carta-items-fetch";
 import type { Bloque, MenuDatos } from "../../../../types";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 export function MenuForm({ bloque }: { bloque: Extract<Bloque, { tipo: "menu" }> }) {
   const actualizar = useEditorStore((s) => s.actualizarBloque);
@@ -72,9 +73,7 @@ export function MenuForm({ bloque }: { bloque: Extract<Bloque, { tipo: "menu" }>
 
       {datos.fuente === "carta_items" && (
         <Section title="Categorías a mostrar">
-          {loadingCats && (
-            <p className="text-xs text-muted-foreground">Cargando categorías…</p>
-          )}
+          {loadingCats && <LoadingSpinner size="sm" className="py-2" />}
           {!loadingCats && categorias.length === 0 && (
             <p className="text-xs text-muted-foreground">
               No hay categorías en tu carta digital todavía.

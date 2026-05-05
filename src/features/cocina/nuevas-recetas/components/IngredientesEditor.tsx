@@ -13,6 +13,7 @@ import { Plus, Trash2, Sparkles, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { listProductosCompra, type ProductoCompraSimple } from "../actions/compra-actions";
 import type { PrioridadIngrediente } from "../types";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 export interface IngredienteLinea {
   tempId: string;
@@ -110,9 +111,7 @@ export function IngredientesEditor({ value, onChange }: Props) {
         </div>
       </div>
 
-      {loading && (
-        <p className="text-xs text-muted-foreground italic">Cargando productos...</p>
-      )}
+      {loading && <LoadingSpinner size="sm" className="py-2" />}
 
       {!loading && value.length === 0 && (
         <p className="text-xs text-muted-foreground italic">

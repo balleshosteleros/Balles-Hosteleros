@@ -463,9 +463,15 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
               Mis calendarios
             </p>
             {calendarios.length === 0 && (
-              <p className="px-2 text-[11px] italic text-muted-foreground">
-                {connected ? "Cargando…" : "Conecta Google para ver tus calendarios"}
-              </p>
+              connected ? (
+                <div className="flex items-center justify-center px-2 py-2">
+                  <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <p className="px-2 text-[11px] italic text-muted-foreground">
+                  Conecta Google para ver tus calendarios
+                </p>
+              )
             )}
             <ul className="space-y-0.5">
               {calendarios.map((cal) => {

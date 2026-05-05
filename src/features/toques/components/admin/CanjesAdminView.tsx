@@ -239,8 +239,7 @@ export function CanjesAdminView() {
           <TabsContent key={key} value={key} className="mt-4">
             {loading ? (
               <Card className="p-6 flex items-center justify-center text-muted-foreground">
-                <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                Cargando…
+                <Loader2 className="h-5 w-5 animate-spin" />
               </Card>
             ) : grupos[key].length === 0 ? (
               <Card className="p-6 flex flex-col items-center text-muted-foreground text-sm">

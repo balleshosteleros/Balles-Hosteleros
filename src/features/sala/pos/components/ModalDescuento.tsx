@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { listDescuentos } from "@/features/gerencia/actions/descuentos-actions";
 import { usePOSTicket } from "../hooks/usePOSTicket";
 import type { DescuentoCabecera } from "../services/calculo-ticket";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 interface DescuentoRow {
   id: string;
@@ -89,7 +90,7 @@ export function ModalDescuento({ open, onOpenChange }: Props) {
         )}
 
         {loading ? (
-          <div className="p-8 text-center text-sm text-muted-foreground">Cargando…</div>
+          <LoadingSpinner className="p-8" />
         ) : descuentos.length === 0 ? (
           <div className="p-8 text-center text-sm text-muted-foreground">
             No hay descuentos activos. Créalos en Gerencia → Descuentos.

@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { Search, Plus, List, LayoutGrid, ArrowLeft, Pencil, Trash2, ChefHat, Settings2 } from "lucide-react";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 // ─── Config list editor (reused pattern) ────────────────────────
 function ConfigListEditor({ title, items, onAdd, onRemove }: { title: string; items: string[]; onAdd: (v: string) => void; onRemove: (i: number) => void }) {
@@ -302,14 +303,7 @@ export function PartidasView() {
   });
 
   if (loading) {
-    return (
-      <div className="p-6 flex items-center justify-center min-h-[300px]">
-        <div className="text-center space-y-2">
-          <div className="h-8 w-8 mx-auto animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="text-sm text-muted-foreground">Cargando partidas...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner className="p-6 min-h-[300px]" size="lg" />;
   }
 
   if (selectedPartida) {

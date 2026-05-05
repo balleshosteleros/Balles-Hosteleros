@@ -18,6 +18,7 @@ import {
   type AreaCronograma,
 } from "../../data/cronogramaAreas";
 import { cn } from "@/lib/utils";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 interface Props {
   data: CronogramaOperativo[];
@@ -210,7 +211,7 @@ export function CronogramasHome({ data, onSelect, onCrearCronograma, onIrProduct
       {/* Grid de cards */}
       <div className="flex-1 overflow-auto p-6">
         {isLoading ? (
-          <div className="text-center text-muted-foreground py-20">Cargando cronogramas…</div>
+          <LoadingSpinner className="py-20" />
         ) : gruposFiltrados.length === 0 ? (
           <div className="text-center text-muted-foreground py-20">
             <p className="mb-3">

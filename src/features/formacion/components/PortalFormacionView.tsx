@@ -34,6 +34,7 @@ import { usePuestoActual } from "../hooks/use-puesto";
 import { PUESTOS, type Puesto } from "../types";
 import { NovedadesPanel } from "./NovedadesPanel";
 import { CursoCard } from "./CursoCard";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 const TRES_MESES_MS = 1000 * 60 * 60 * 24 * 90;
 
@@ -82,11 +83,7 @@ export function PortalFormacionView() {
   );
 
   if (!ready) {
-    return (
-      <div className="p-4 md:p-6">
-        <p className="text-sm text-muted-foreground">Cargando portal…</p>
-      </div>
-    );
+    return <LoadingSpinner className="p-4 md:p-6" />;
   }
 
   return (

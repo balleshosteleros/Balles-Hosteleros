@@ -16,6 +16,7 @@ import {
   listProveedoresEmpresa, listProductosCompra,
 } from "../actions/compra-actions";
 import type { Compra } from "../types";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 interface Props {
   recetaId: string;
@@ -136,7 +137,7 @@ export function CompraTab({ recetaId }: Props) {
     return c.producto_nombre_propuesto ?? "—";
   }
 
-  if (loading) return <p className="text-sm text-muted-foreground p-4">Cargando compras...</p>;
+  if (loading) return <LoadingSpinner className="p-4" />;
 
   return (
     <div className="space-y-3">

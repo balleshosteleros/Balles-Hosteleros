@@ -31,7 +31,10 @@ export function IOActions<T>({
 
   const supportsImport = !!config.upsert;
   const importFormats = config.supportedImportFormats ?? ["xlsx", "csv"];
-  const exportFormats = config.supportedExportFormats ?? ["xlsx", "csv", "json"];
+  const baseExportFormats = config.supportedExportFormats ?? ["xlsx"];
+  const exportFormats = baseExportFormats.includes("pdf")
+    ? baseExportFormats
+    : [...baseExportFormats, "pdf" as const];
 
   async function handleImport(file: File) {
     setFileName(file.name);

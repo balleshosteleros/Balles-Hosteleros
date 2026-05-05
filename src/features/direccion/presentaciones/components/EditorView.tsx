@@ -23,6 +23,7 @@ import type {
   PresentacionConSlides, Slide, Branding, Layout,
 } from "../types/presentaciones";
 import { LAYOUTS } from "../data/layouts";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 interface Props {
   presentacionId: string;
@@ -154,7 +155,7 @@ export function EditorView({ presentacionId }: Props) {
   };
 
   if (loading) {
-    return <div className="p-8 text-center text-muted-foreground">Cargando…</div>;
+    return <LoadingSpinner className="p-8" />;
   }
   if (!data) {
     return (

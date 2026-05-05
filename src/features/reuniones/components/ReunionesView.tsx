@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import {
   listReuniones,
   createReunion,
@@ -205,8 +206,8 @@ export function ReunionesView() {
       <div className="space-y-3">
         {cargando && (
           <Card>
-            <CardContent className="py-12 text-center text-sm text-muted-foreground">
-              Cargando reuniones...
+            <CardContent>
+              <LoadingSpinner className="py-12" />
             </CardContent>
           </Card>
         )}

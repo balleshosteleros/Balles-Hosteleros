@@ -50,6 +50,7 @@ import {
 } from "../../actions/paginas-actions";
 import { NuevaPaginaModal } from "./NuevaPaginaModal";
 import type { PaginaWeb, PaginaWebEstado } from "../../types";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 const ESTADO_LABEL: Record<PaginaWebEstado, string> = {
   BORRADOR: "Borrador",
@@ -206,8 +207,8 @@ export function PaginasListView() {
           <TableBody>
             {loading && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
-                  Cargando…
+                <TableCell colSpan={6} className="text-center py-12">
+                  <LoadingSpinner />
                 </TableCell>
               </TableRow>
             )}

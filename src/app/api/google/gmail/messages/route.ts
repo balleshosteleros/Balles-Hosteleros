@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getGoogleTokens, googleFetch } from "@/lib/google/api";
+import { googleFetchAuto } from "@/lib/google/api";
 
 type GmailThreadListResponse = {
   threads?: { id: string; historyId: string }[];
@@ -62,11 +62,6 @@ function fechaCorta(internalDate: string): string {
 }
 
 export async function GET(request: Request) {
-  const { accessToken } = await getGoogleTokens();
-  if (!accessToken) {
-    return NextResponse.json({ connected: false, mensajes: [] });
-  }
-
   const url = new URL(request.url);
   const carpeta = url.searchParams.get("carpeta") ?? "inbox";
   // Si se pasa labelId explícito (etiqueta del usuario), tiene prioridad
@@ -80,10 +75,13 @@ export async function GET(request: Request) {
   const label = labelIdParam ?? labelMap[carpeta] ?? "INBOX";
 
   // 1) Listado de hilos (conversaciones), igual que Gmail web
-  const list = await googleFetch<GmailThreadListResponse>(
+  const listRes = await googleFetchAuto<GmailThreadListResponse>(
     `https://gmail.googleapis.com/gmail/v1/users/me/threads?labelIds=${encodeURIComponent(label)}&maxResults=30`,
-    accessToken,
   );
+  if (listRes.needsReauth) {
+    return NextResponse.json({ connected: false, mensajes: [] });
+  }
+  const list = listRes.data;
   if (!list || !list.threads) {
     return NextResponse.json({ connected: true, mensajes: [] });
   }
@@ -91,10 +89,9 @@ export async function GET(request: Request) {
   // 2) Detalles de cada hilo en paralelo (todos sus mensajes en metadata)
   const detalles = await Promise.all(
     list.threads.slice(0, 30).map((t) =>
-      googleFetch<GmailThreadResponse>(
+      googleFetchAuto<GmailThreadResponse>(
         `https://gmail.googleapis.com/gmail/v1/users/me/threads/${t.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
-        accessToken,
-      ),
+      ).then((r) => r.data),
     ),
   );
 

@@ -236,8 +236,7 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <div className="flex h-40 items-center justify-center text-muted-foreground">
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Cargando reuniones…
+              <Loader2 className="h-4 w-4 animate-spin" />
             </div>
           ) : lista.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-48 px-6 text-center text-muted-foreground">

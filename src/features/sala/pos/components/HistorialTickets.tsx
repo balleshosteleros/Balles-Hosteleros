@@ -9,6 +9,7 @@ import { listTicketsHoy, getTicket, anularTicket } from "../actions/tickets-acti
 import { formatEur, calcularTotales } from "../services/calculo-ticket";
 import { htmlTicketVenta, imprimirHTML } from "../services/impresion";
 import type { Ticket } from "../types";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 interface Props {
   open: boolean;
@@ -108,7 +109,7 @@ export function HistorialTickets({ open, onOpenChange }: Props) {
 
         <div className="max-h-[60vh] overflow-y-auto rounded-md border">
           {loading ? (
-            <div className="p-8 text-center text-sm text-muted-foreground">Cargando…</div>
+            <LoadingSpinner className="p-8" />
           ) : filtrados.length === 0 ? (
             <div className="p-8 text-center text-sm text-muted-foreground">Sin tickets.</div>
           ) : (

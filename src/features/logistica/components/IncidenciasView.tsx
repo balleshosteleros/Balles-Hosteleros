@@ -37,6 +37,7 @@ import {
 } from "@/shared/components/SubmoduleToolbar";
 import { IOActions } from "@/shared/io";
 import { incidenciasIO } from "@/features/logistica/io/incidencias.io";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 type Registro = {
   id: string;
@@ -344,11 +345,8 @@ export function IncidenciasView() {
             <TableBody>
               {cargando && (
                 <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className="py-10 text-center text-sm text-muted-foreground"
-                  >
-                    Cargando incidencias...
+                  <TableCell colSpan={6} className="py-10 text-center">
+                    <LoadingSpinner />
                   </TableCell>
                 </TableRow>
               )}

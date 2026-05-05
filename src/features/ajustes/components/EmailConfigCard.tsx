@@ -23,6 +23,7 @@ import {
   testEmpresaEmailConfig,
   type EmpresaEmailConfigInput,
 } from "@/features/ajustes/actions/email-config-actions";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 type Preset = {
   id: string;
@@ -403,7 +404,7 @@ export function EmailConfigCard() {
           </div>
         )}
         {loading && (
-          <p className="text-xs text-muted-foreground">Cargando configuración…</p>
+          <LoadingSpinner size="sm" className="py-2" />
         )}
       </CardContent>
     </Card>

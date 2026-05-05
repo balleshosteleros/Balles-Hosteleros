@@ -20,8 +20,9 @@ export interface DatosPersonalesInput {
   estado_civil?: string | null;
   numero_ss?: string | null;
   telefono?: string | null;
-  telefono_secundario?: string | null;
+  telefono_empresa?: string | null;
   email_personal?: string | null;
+  email_empresa?: string | null;
   direccion?: string | null;
   codigo_postal?: string | null;
   ciudad?: string | null;
@@ -123,8 +124,9 @@ export async function guardarDatosPersonales(
       estado_civil: trim(input.estado_civil),
       numero_ss: trim(input.numero_ss),
       telefono: trim(input.telefono),
-      telefono_secundario: trim(input.telefono_secundario),
+      telefono_empresa: trim(input.telefono_empresa),
       email_personal: trim(input.email_personal),
+      email_empresa: trim(input.email_empresa),
       direccion: trim(input.direccion),
       codigo_postal: trim(input.codigo_postal),
       ciudad: trim(input.ciudad),
@@ -177,8 +179,9 @@ export interface DatosPersonalesCompletos {
   estado_civil: string | null;
   numero_ss: string | null;
   telefono: string | null;
-  telefono_secundario: string | null;
+  telefono_empresa: string | null;
   email_personal: string | null;
+  email_empresa: string | null;
   direccion: string | null;
   codigo_postal: string | null;
   ciudad: string | null;
@@ -209,7 +212,7 @@ export async function cargarDatosPersonales(): Promise<DatosPersonalesCompletos 
     const { data, error } = await supabase
       .from("profiles")
       .select(
-        "nombre, apellidos, email, tipo_documento, dni_nie, fecha_nacimiento, nacionalidad, genero, estado_civil, numero_ss, telefono, telefono_secundario, email_personal, direccion, codigo_postal, ciudad, provincia, pais, iban, banco_codigo, banco_nombre, titular_cuenta, iban_verificado, emergencia_nombre, emergencia_relacion, emergencia_telefono, permiso_trabajo, permiso_caducidad, carnet_manipulador, talla_uniforme, alergias",
+        "nombre, apellidos, email, tipo_documento, dni_nie, fecha_nacimiento, nacionalidad, genero, estado_civil, numero_ss, telefono, telefono_empresa, email_personal, email_empresa, direccion, codigo_postal, ciudad, provincia, pais, iban, banco_codigo, banco_nombre, titular_cuenta, iban_verificado, emergencia_nombre, emergencia_relacion, emergencia_telefono, permiso_trabajo, permiso_caducidad, carnet_manipulador, talla_uniforme, alergias",
       )
       .eq("user_id", user.id)
       .single();

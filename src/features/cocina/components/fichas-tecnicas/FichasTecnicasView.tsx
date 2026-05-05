@@ -33,6 +33,7 @@ import {
   Share2, Link2, LinkIcon, ImageIcon, Upload, X, FileDown, Check,
 } from "lucide-react";
 import { toast } from "sonner";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 // ─── Estado colors ─────────────────────────────────────────────
 const ESTADO_COLORS: Record<EstadoFicha, string> = {
@@ -127,7 +128,7 @@ function ConfigItemsEditor({
       </div>
       <div className="space-y-1 max-h-[320px] overflow-y-auto">
         {loading && items.length === 0 ? (
-          <div className="text-xs text-muted-foreground py-2">Cargando…</div>
+          <LoadingSpinner size="sm" className="py-2" />
         ) : items.length === 0 ? (
           <div className="text-xs text-muted-foreground py-2">Sin valores. Añade el primero.</div>
         ) : (
@@ -837,14 +838,7 @@ export function FichasTecnicasView() {
   const margenMedio = empresaFichas.length > 0 ? Math.round(empresaFichas.reduce((s, f) => s + calcularMargen(f.pvp, f.costeTotal), 0) / empresaFichas.length) : 0;
 
   if (loading) {
-    return (
-      <div className="p-4 md:p-6 flex items-center justify-center min-h-[300px]">
-        <div className="text-center space-y-2">
-          <div className="h-8 w-8 mx-auto animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="text-sm text-muted-foreground">Cargando fichas técnicas...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner className="p-4 md:p-6 min-h-[300px]" size="lg" />;
   }
 
   return (

@@ -1081,9 +1081,8 @@ function ListaMensajes({
       {/* Lista compacta */}
       <ul className="flex-1 overflow-y-auto">
         {cargando && mensajes.length === 0 ? (
-          <li className="p-12 text-center text-sm text-[#5f6368]">
-            <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
-            Cargando mensajes…
+          <li className="p-12 text-center">
+            <Loader2 className="mx-auto h-5 w-5 animate-spin text-[#5f6368]" />
           </li>
         ) : mensajes.length === 0 ? (
           <li className="p-12 text-center text-sm text-[#5f6368]">
@@ -1608,9 +1607,7 @@ function BloqueMensajeUnico({
           {mensaje.cuerpo}
         </div>
       ) : (
-        <span className="text-sm text-[#5f6368] italic">
-          Cargando contenido…
-        </span>
+        <Loader2 className="h-4 w-4 animate-spin text-[#5f6368]" />
       )}
     </>
   );

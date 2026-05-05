@@ -20,6 +20,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Badge } from "@/components/ui/badge";
 import { Plus, Pencil, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 interface UsuarioOption {
   id: string;
@@ -281,7 +282,7 @@ export function DepartamentosTab() {
               );
             })}
             {loading && (
-              <tr><td colSpan={5} className="text-center py-6 text-muted-foreground">Cargando departamentos…</td></tr>
+              <tr><td colSpan={5} className="text-center py-6"><LoadingSpinner /></td></tr>
             )}
             {!loading && departamentos.length === 0 && (
               <tr><td colSpan={5} className="text-center py-6 text-muted-foreground">No hay departamentos. Crea uno con el botón Nuevo.</td></tr>

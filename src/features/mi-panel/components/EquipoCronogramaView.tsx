@@ -77,8 +77,7 @@ export function EquipoCronogramaView() {
 
       {isLoading ? (
         <div className="flex items-center justify-center h-40 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin mr-2" />
-          Cargando cronograma…
+          <Loader2 className="h-5 w-5 animate-spin" />
         </div>
       ) : selectedRol ? (
         <div className="space-y-4">

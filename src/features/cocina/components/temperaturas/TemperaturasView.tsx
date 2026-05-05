@@ -19,6 +19,7 @@ import {
   listEquipos, createEquipo as serverCreateEquipo, registrarTemperatura, listRegistros,
 } from "@/features/cocina/actions/temperaturas-actions";
 import { toast } from "sonner";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 const TIPOS: TipoEquipo[] = ["NEVERA", "CONGELADOR", "CÁMARA", "BOTELLERO", "OTRO"];
 
@@ -163,14 +164,7 @@ export default function TemperaturasView({ area, equiposIniciales, registrosInic
   };
 
   if (loading) {
-    return (
-      <div className="p-6 flex items-center justify-center min-h-[300px]">
-        <div className="text-center space-y-2">
-          <div className="h-8 w-8 mx-auto animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="text-sm text-muted-foreground">Cargando datos de temperatura...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner className="p-6 min-h-[300px]" size="lg" />;
   }
 
   return (

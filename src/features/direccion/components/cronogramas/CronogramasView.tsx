@@ -401,7 +401,7 @@ export function CronogramasView() {
               disabled={isLoading || rolesDisponibles.length === 0}
             >
               <SelectTrigger className="w-[280px] bg-background">
-                <SelectValue placeholder={isLoading ? "Cargando..." : "Selecciona Departamento"} />
+                <SelectValue placeholder={isLoading ? "…" : "Selecciona Departamento"} />
               </SelectTrigger>
               <SelectContent>
                 <div className="flex items-center gap-1 px-2 py-1.5 border-b mb-1">

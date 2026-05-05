@@ -188,9 +188,8 @@ export function AgoraSyncStatus() {
 
         <CardContent className="pt-0">
           {loadingLog ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Cargando estado…
+            <div className="flex items-center justify-center text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
             </div>
           ) : lastLog ? (
             <div className="space-y-2 text-sm">

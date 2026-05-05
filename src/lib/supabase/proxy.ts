@@ -19,6 +19,13 @@ function isPublicPath(pathname: string) {
 }
 
 export async function updateSession(request: NextRequest) {
+  // Alias /login → / (la pantalla de login vive en la raíz)
+  if (request.nextUrl.pathname === '/login') {
+    const target = request.nextUrl.clone()
+    target.pathname = '/'
+    return NextResponse.redirect(target)
+  }
+
   // ── Hostname rewrite: dominios custom de páginas web ────────────────
   const rawHost =
     request.headers.get('x-forwarded-host') ?? request.headers.get('host') ?? ''
