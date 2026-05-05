@@ -503,19 +503,19 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="h-screen flex w-full overflow-hidden">
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0 h-screen">
-          <header className="sticky top-0 z-30 h-14 flex items-center border-b bg-card px-4 shrink-0 gap-3">
-            <SidebarTrigger className="md:hidden -ml-1" />
+          <header className="sticky top-0 z-30 h-14 flex items-center border-b bg-card px-3 md:px-4 shrink-0 gap-2 md:gap-3">
+            <SidebarTrigger className="md:hidden -ml-1 shrink-0" />
             {(headerLabel || ModuleIcon !== null) && (
-              <h1 className="flex items-center gap-2 text-sm font-bold tracking-wide text-foreground">
+              <h1 className="flex items-center gap-2 text-sm font-bold tracking-wide text-foreground min-w-0 flex-1 md:flex-none">
                 {ModuleIcon !== null && <ModuleIcon className="h-4 w-4 shrink-0" />}
                 <span className="truncate">{headerLabel}</span>
               </h1>
             )}
-            <div className="ml-auto flex items-center gap-3">
+            <div className="ml-auto flex items-center gap-2 md:gap-3 shrink-0">
               {showUi && (
                 <>
                   {/* Integraciones: Google (cuenta + email + calendario + meet) | tareas + chat + llamadas | apps */}
-                  <div className="flex items-center rounded-full border bg-muted/40 py-1 px-1.5 gap-0.5">
+                  <div className="hidden md:flex items-center rounded-full border bg-muted/40 py-1 px-1.5 gap-0.5">
                     {/* Cuenta Google activa (icono) */}
                     <GoogleHeaderPill />
 
@@ -803,7 +803,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     {/* Logo empresa */}
                     <EmpresaSelector />
 
-                    <div className="h-5 w-px bg-border mx-1" />
+                    <div className="hidden md:block h-5 w-px bg-border mx-1" />
 
                     {/* Nombre + Rol del empleado */}
                     <div className="hidden md:flex flex-col justify-center px-1 max-w-[140px]">
