@@ -1,12 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Camera, Upload, Check, RefreshCw, Loader2, Sparkles, Building2 } from "lucide-react";
+import { Camera, Upload, Check, RefreshCw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { uploadAvatar } from "@/features/auth/actions/avatar-actions";
-import { generateAiAvatar } from "@/features/auth/actions/avatar-ai-actions";
-import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 
 type Mode = "menu" | "camera" | "preview";
 
@@ -25,15 +23,11 @@ export function AvatarPicker({
   variant = "overlay",
 }: AvatarPickerProps) {
   const { user } = useAuth();
-  const { empresaActual, getLogoUrl } = useEmpresa();
-  const empresaLogoUrl = getLogoUrl(empresaActual.id);
-  const tieneLogoEmpresa = !!empresaLogoUrl;
   const [mode, setMode] = useState<Mode>("menu");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [generatingAi, setGeneratingAi] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -141,53 +135,17 @@ export function AvatarPicker({
       fd.append("file", file);
       const url = await uploadAvatar(user.id, fd);
 
-      setSubmitting(false);
-      setGeneratingAi(true);
-      const aiResult = await generateAiAvatar(user.id, empresaActual?.id ?? null);
-      if (!aiResult.ok) {
-        console.warn("[AvatarPicker] generación IA falló, conservando foto real:", aiResult.error);
-      }
-      setGeneratingAi(false);
-
       if (onUploaded) {
-        onUploaded(aiResult.avatarAiUrl ?? url);
+        onUploaded(url);
       } else {
         window.location.reload();
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Error al subir la foto.";
       setError(msg);
+    } finally {
       setSubmitting(false);
-      setGeneratingAi(false);
     }
-  }
-
-  if (!tieneLogoEmpresa) {
-    return (
-      <div className="w-full">
-        <div
-          className={
-            isOverlay
-              ? "rounded-lg border border-amber-500/40 bg-amber-950/30 p-4 text-amber-100"
-              : "rounded-lg border border-amber-500/50 bg-amber-50 p-4 text-amber-900"
-          }
-        >
-          <div className="flex items-start gap-3">
-            <Building2 className="mt-0.5 h-5 w-5 shrink-0" />
-            <div className="space-y-1.5">
-              <p className="text-sm font-semibold">
-                Falta el logotipo de {empresaActual.nombre}
-              </p>
-              <p className="text-xs leading-relaxed opacity-90">
-                Antes de subir tu foto necesitamos el logotipo corporativo para
-                generar tu uniforme. Pide a un director que lo suba en{" "}
-                <span className="font-semibold">Ajustes → Empresa → Logotipo</span>.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
   }
 
   return (
@@ -296,18 +254,13 @@ export function AvatarPicker({
             <Button
               size="lg"
               onClick={confirmUpload}
-              disabled={submitting || generatingAi}
+              disabled={submitting}
               className="gap-2 bg-emerald-600 text-white hover:bg-emerald-700"
             >
               {submitting ? (
                 <>
                   <Loader2 className="h-5 w-5 animate-spin" />
                   Guardando…
-                </>
-              ) : generatingAi ? (
-                <>
-                  <Sparkles className="h-5 w-5 animate-pulse" />
-                  Generando uniforme con IA…
                 </>
               ) : (
                 <>
@@ -316,11 +269,6 @@ export function AvatarPicker({
                 </>
               )}
             </Button>
-            {generatingAi && (
-              <p className={`text-center text-xs ${helpColor}`}>
-                Recreando tu foto con el uniforme corporativo (5–15 s)…
-              </p>
-            )}
             <Button
               variant="ghost"
               onClick={() => {
@@ -329,7 +277,7 @@ export function AvatarPicker({
                 setPreviewBlob(null);
                 setMode("menu");
               }}
-              disabled={submitting || generatingAi}
+              disabled={submitting}
               className={isOverlay ? "gap-2 text-blue-200 hover:bg-white/10" : "gap-2"}
             >
               <RefreshCw className="h-4 w-4" />
