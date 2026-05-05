@@ -13,6 +13,8 @@ export function LoginForm() {
   const [error, setError] = useState<string | null>(
     oauthError === 'auth_callback_failed'
       ? 'Error al iniciar sesión con Google. Inténtalo de nuevo.'
+      : oauthError === 'cuenta_inactiva'
+      ? 'Tu cuenta está inactiva. Contacta con el administrador del sistema.'
       : null
   )
   const [loading, setLoading] = useState(false)

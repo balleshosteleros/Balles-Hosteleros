@@ -18,6 +18,19 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async headers() {
+    return [
+      {
+        // Portal público de empleo (PRP-034) — embebible vía iframe.
+        // frame-ancestors abierto para que cada empresa pueda incrustar la URL en su web.
+        source: '/empleo/:path*',
+        headers: [
+          { key: 'X-Frame-Options', value: 'ALLOWALL' },
+          { key: 'Content-Security-Policy', value: "frame-ancestors *" },
+        ],
+      },
+    ]
+  },
 }
 
 export default nextConfig

@@ -63,6 +63,7 @@ export function CalendariosRRHHView() {
 
         <TabsContent value="vacaciones">
           <CalendarioAusencias
+            empresaId={empresaActual.id}
             modalidad="vacaciones"
             titulo="Vacaciones"
             items={vacaciones}
@@ -73,15 +74,17 @@ export function CalendariosRRHHView() {
 
         <TabsContent value="festivos">
           <CalendarioAusencias
+            empresaId={empresaActual.id}
             modalidad="festivos"
             titulo="Festivos"
             items={festivos}
-            botonNuevo="Añadir festivo"
+            botonNuevo="Registrar festivo"
           />
         </TabsContent>
 
         <TabsContent value="bajas">
           <CalendarioAusencias
+            empresaId={empresaActual.id}
             modalidad="bajas"
             titulo="Bajas médicas"
             items={bajas}
@@ -92,10 +95,11 @@ export function CalendariosRRHHView() {
 
         <TabsContent value="justificadas">
           <CalendarioAusencias
+            empresaId={empresaActual.id}
             modalidad="justificadas"
             titulo="Justificadas"
             items={justificadas}
-            botonNuevo="Registrar ausencia"
+            botonNuevo="Registrar justificada"
             columnaExtra={{ header: "Tipo", render: item => <span>{item.tipo || "—"}</span> }}
           />
         </TabsContent>

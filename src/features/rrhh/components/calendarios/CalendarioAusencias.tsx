@@ -4,9 +4,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Plus, CalendarDays, List, ChevronLeft, ChevronRight } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Search, Plus, CalendarDays, List, ChevronLeft, ChevronRight, AlertCircle, Info } from "lucide-react";
 import { ConfigButton } from "@/shared/components/config-button";
 import { CalendarioConfig } from "./CalendarioConfig";
+import { getFestivoEnFecha } from "@/features/rrhh/data/calendarios";
 
 interface AusenciaItem {
   id: string;
@@ -25,7 +27,8 @@ const ESTADO_COLORES: Record<string, string> = {
   rechazada: "bg-destructive/10 text-destructive border-destructive/20",
   activa: "bg-sky-500/10 text-sky-700 border-sky-500/20",
   finalizada: "bg-muted text-muted-foreground border-border",
-  general: "bg-amber-500/10 text-amber-700 border-amber-500/20",
+  nacional: "bg-rose-500/10 text-rose-700 border-rose-500/20",
+  autonomico: "bg-amber-500/10 text-amber-700 border-amber-500/20",
   local: "bg-violet-500/10 text-violet-700 border-violet-500/20",
 };
 
@@ -35,8 +38,15 @@ const DOT_COLORES: Record<string, string> = {
   rechazada: "bg-destructive",
   activa: "bg-sky-500",
   finalizada: "bg-muted-foreground",
-  general: "bg-amber-500",
+  nacional: "bg-rose-500",
+  autonomico: "bg-amber-500",
   local: "bg-violet-500",
+};
+
+const TIPO_FESTIVO_LABEL: Record<string, string> = {
+  nacional: "Nacional",
+  autonomico: "Autonómico",
+  local: "Local",
 };
 
 interface Props {
@@ -45,6 +55,11 @@ interface Props {
   items: AusenciaItem[];
   botonNuevo: string;
   columnaExtra?: { header: string; render: (item: AusenciaItem) => React.ReactNode };
+  empresaId?: string;
+}
+
+function toISO(year: number, month: number, day: number): string {
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 function getDaysInMonth(year: number, month: number) {
@@ -55,7 +70,7 @@ function getFirstDayOfMonth(year: number, month: number) {
   return new Date(year, month, 1).getDay();
 }
 
-export function CalendarioAusencias({ modalidad, titulo, items, botonNuevo, columnaExtra }: Props) {
+export function CalendarioAusencias({ modalidad, titulo, items, botonNuevo, columnaExtra, empresaId }: Props) {
   const [busqueda, setBusqueda] = useState("");
   const [vista, setVista] = useState<"calendario" | "lista">("calendario");
   const [showConfig, setShowConfig] = useState(false);
@@ -143,9 +158,54 @@ export function CalendarioAusencias({ modalidad, titulo, items, botonNuevo, colu
                 const day = i + 1;
                 const eventos = diasConEvento.get(day) || [];
                 const isToday = mesActual.year === 2026 && mesActual.month === 3 && day === 6;
+                const fechaISO = toISO(mesActual.year, mesActual.month, day);
+                const festivoInfo = empresaId ? getFestivoEnFecha(empresaId, fechaISO) : null;
                 return (
-                  <div key={day} className={`bg-card min-h-[80px] p-1.5 ${isToday ? "ring-2 ring-primary ring-inset" : ""}`}>
+                  <div key={day} className={`relative bg-card min-h-[80px] p-1.5 ${isToday ? "ring-2 ring-primary ring-inset" : ""} ${festivoInfo?.tipo === "festivo" ? "bg-rose-50/40" : festivoInfo?.tipo === "vispera" ? "bg-sky-50/30" : ""}`}>
                     <span className={`text-[11px] font-medium ${isToday ? "text-primary font-bold" : "text-foreground"}`}>{day}</span>
+                    {festivoInfo && (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button
+                            type="button"
+                            className={`absolute top-1 right-1 h-4 w-4 rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform ${
+                              festivoInfo.tipo === "festivo"
+                                ? "bg-rose-500 text-white"
+                                : "bg-sky-500 text-white"
+                            }`}
+                            aria-label={festivoInfo.tipo === "festivo" ? "Festivo" : "Víspera de festivo"}
+                          >
+                            {festivoInfo.tipo === "festivo"
+                              ? <AlertCircle className="h-3 w-3" />
+                              : <Info className="h-3 w-3" />}
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent side="top" className="w-64 p-3 text-xs">
+                          <div className="flex items-center gap-2 font-semibold">
+                            {festivoInfo.tipo === "festivo"
+                              ? <><AlertCircle className="h-3.5 w-3.5 text-rose-500" /> Festivo</>
+                              : <><Info className="h-3.5 w-3.5 text-sky-500" /> Víspera de festivo</>}
+                          </div>
+                          <div className="mt-2 space-y-1">
+                            <div className="text-foreground font-medium">{festivoInfo.festivo.nombre}</div>
+                            <div className="text-muted-foreground">{festivoInfo.festivo.fecha}</div>
+                            <div className="flex items-center gap-1.5 pt-1">
+                              <Badge variant="outline" className={`text-[10px] ${ESTADO_COLORES[festivoInfo.festivo.tipo] ?? ""}`}>
+                                {TIPO_FESTIVO_LABEL[festivoInfo.festivo.tipo] ?? festivoInfo.festivo.tipo}
+                              </Badge>
+                              {festivoInfo.festivo.region && (
+                                <Badge variant="outline" className="text-[10px]">{festivoInfo.festivo.region}</Badge>
+                              )}
+                            </div>
+                            <p className="pt-1 text-muted-foreground italic">
+                              {festivoInfo.tipo === "festivo"
+                                ? "Día no laborable. Revisa cuadrante y nóminas."
+                                : "Día anterior a festivo. Posible recargo o cierre anticipado."}
+                            </p>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    )}
                     <div className="mt-1 space-y-0.5">
                       {eventos.slice(0, 2).map((ev, idx) => (
                         <div key={idx} className={`flex items-center gap-1 rounded px-1 py-0.5 ${ESTADO_COLORES[ev.estado] || "bg-muted"}`}>

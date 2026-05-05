@@ -1,11 +1,12 @@
 import { useState, useMemo } from "react";
-import { getTurnosPorEmpresa } from "@/features/rrhh/data/calendarios";
+import { getTurnosPorEmpresa, getFestivoEnFecha } from "@/features/rrhh/data/calendarios";
 import { getEmpleadosPorEmpresa } from "@/features/rrhh/data/rrhh";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronLeft, ChevronRight, Plus, Users, Clock, Search } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ChevronLeft, ChevronRight, Plus, Users, Clock, Search, AlertCircle, Info } from "lucide-react";
 import { ConfigButton } from "@/shared/components/config-button";
 import { CalendarioConfig } from "./CalendarioConfig";
 
@@ -48,6 +49,7 @@ export function CalendarioLaboral({ empresaId }: { empresaId: string }) {
   const diasSemana = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
   const fechaObj = new Date(fecha + "T12:00:00");
   const diaSemana = diasSemana[fechaObj.getDay()];
+  const festivoInfo = getFestivoEnFecha(empresaId, fecha);
 
   if (showConfig) return <CalendarioConfig modalidad="laboral" onBack={() => setShowConfig(false)} />;
 
@@ -56,7 +58,40 @@ export function CalendarioLaboral({ empresaId }: { empresaId: string }) {
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2 bg-muted rounded-lg p-1">
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => cambiarFecha(-1)}><ChevronLeft className="h-4 w-4" /></Button>
-          <span className="text-sm font-semibold px-2 min-w-[140px] text-center">{diaSemana}, {fecha}</span>
+          <span className="text-sm font-semibold px-2 min-w-[140px] text-center flex items-center justify-center gap-1.5">
+            {diaSemana}, {fecha}
+            {festivoInfo && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className={`h-5 w-5 rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform ${
+                      festivoInfo.tipo === "festivo" ? "bg-rose-500 text-white" : "bg-sky-500 text-white"
+                    }`}
+                    aria-label={festivoInfo.tipo === "festivo" ? "Festivo" : "Víspera de festivo"}
+                  >
+                    {festivoInfo.tipo === "festivo"
+                      ? <AlertCircle className="h-3 w-3" />
+                      : <Info className="h-3 w-3" />}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent side="bottom" className="w-64 p-3 text-xs">
+                  <div className="flex items-center gap-2 font-semibold">
+                    {festivoInfo.tipo === "festivo"
+                      ? <><AlertCircle className="h-3.5 w-3.5 text-rose-500" /> Festivo</>
+                      : <><Info className="h-3.5 w-3.5 text-sky-500" /> Víspera de festivo</>}
+                  </div>
+                  <div className="mt-2 space-y-1">
+                    <div className="font-medium">{festivoInfo.festivo.nombre}</div>
+                    <div className="text-muted-foreground">{festivoInfo.festivo.fecha}</div>
+                    {festivoInfo.festivo.region && (
+                      <div className="text-[10px] text-muted-foreground">{festivoInfo.festivo.region}</div>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
+          </span>
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => cambiarFecha(1)}><ChevronRight className="h-4 w-4" /></Button>
         </div>
         <div className="relative flex-1 min-w-[180px]">
@@ -78,7 +113,7 @@ export function CalendarioLaboral({ empresaId }: { empresaId: string }) {
             <SelectItem value="sin_horario">Sin horario</SelectItem>
           </SelectContent>
         </Select>
-        <Button size="sm" className="gap-1"><Plus className="h-4 w-4" />Asignar turno</Button>
+        <Button size="sm" className="gap-1"><Plus className="h-4 w-4" />Registrar turno</Button>
         <ConfigButton onClick={() => setShowConfig(true)} className="ml-auto" />
       </div>
 

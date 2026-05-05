@@ -41,6 +41,7 @@ import {
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
 } from "@/shared/components/SubmoduleToolbar";
+import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 function EstadoBadge({ estado }: { estado: EstadoProducto }) {
@@ -404,29 +405,8 @@ function TablaProductos({
         onBusquedaChange={setBusqueda}
         placeholderBusqueda="Buscar por nombre..."
         onNuevo={onAddClick}
-        campos={[
-          { campo: "categoria", label: "Categoría", tipo: "lista", opciones: categoriasUsadas },
-          { campo: "familia", label: "Familia", tipo: "lista", opciones: familiasUsadas },
-          { campo: "estado", label: "Estado", tipo: "lista", opciones: [...ESTADOS_PRODUCTO] },
-          { campo: "unidad", label: "Unidad", tipo: "lista", opciones: unidadesUsadas },
-          ...(esCompra
-            ? [{ campo: "proveedor", label: "Proveedor", tipo: "lista" as const, opciones: proveedoresUsados }]
-            : []),
-          { campo: "precio", label: esCompra ? "Precio compra" : "Precio venta", tipo: "numero" },
-          { campo: "fecha", label: "Actualización", tipo: "fecha" },
-        ]}
         filtros={filtros}
         onFiltrosChange={setFiltros}
-        ordenOpciones={[
-          { campo: "nombre", label: "Nombre" },
-          { campo: "categoria", label: "Categoría" },
-          { campo: "familia", label: "Familia" },
-          { campo: "estado", label: "Estado" },
-          { campo: "precio", label: esCompra ? "Precio compra" : "Precio venta" },
-          { campo: "fecha", label: "Actualización" },
-        ]}
-        orden={orden}
-        onOrdenChange={setOrden}
         columnasVisibles={columnasVisibles}
         onColumnasVisiblesChange={setColumnasVisibles}
         extraDerecha={
@@ -471,13 +451,104 @@ function TablaProductos({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-muted/50">
-              {[
-                "NOMBRE", "CATEGORÍA", "FAMILIA", "ESTADO",
-                ...(esCompra ? ["PROVEEDOR", "PRECIO COMPRA"] : ["PRECIO DE VENTA", "COSTE"]),
-                "IVA", "UNIDAD", "ACTUALIZACIÓN",
-              ].map((h) => (
-                <th key={h} className="text-left px-3 py-1.5 text-xs font-bold text-muted-foreground whitespace-nowrap">{h}</th>
-              ))}
+              <TableColumnHeader
+                label="NOMBRE"
+                campo="nombre"
+                ordenable
+                orden={orden}
+                onOrdenChange={setOrden}
+              />
+              <TableColumnHeader
+                label="CATEGORÍA"
+                campo="categoria"
+                filtroTipo="lista"
+                opciones={categoriasUsadas}
+                filtros={filtros}
+                onFiltrosChange={setFiltros}
+                ordenable
+                orden={orden}
+                onOrdenChange={setOrden}
+              />
+              <TableColumnHeader
+                label="FAMILIA"
+                campo="familia"
+                filtroTipo="lista"
+                opciones={familiasUsadas}
+                filtros={filtros}
+                onFiltrosChange={setFiltros}
+                ordenable
+                orden={orden}
+                onOrdenChange={setOrden}
+              />
+              <TableColumnHeader
+                label="ESTADO"
+                campo="estado"
+                filtroTipo="lista"
+                opciones={[...ESTADOS_PRODUCTO]}
+                filtros={filtros}
+                onFiltrosChange={setFiltros}
+                ordenable
+                orden={orden}
+                onOrdenChange={setOrden}
+              />
+              {esCompra ? (
+                <>
+                  <TableColumnHeader
+                    label="PROVEEDOR"
+                    campo="proveedor"
+                    filtroTipo="lista"
+                    opciones={proveedoresUsados}
+                    filtros={filtros}
+                    onFiltrosChange={setFiltros}
+                    ordenable
+                    orden={orden}
+                    onOrdenChange={setOrden}
+                  />
+                  <TableColumnHeader
+                    label="PRECIO COMPRA"
+                    campo="precio"
+                    filtroTipo="numero"
+                    filtros={filtros}
+                    onFiltrosChange={setFiltros}
+                    ordenable
+                    orden={orden}
+                    onOrdenChange={setOrden}
+                  />
+                </>
+              ) : (
+                <>
+                  <TableColumnHeader
+                    label="PRECIO DE VENTA"
+                    campo="precio"
+                    filtroTipo="numero"
+                    filtros={filtros}
+                    onFiltrosChange={setFiltros}
+                    ordenable
+                    orden={orden}
+                    onOrdenChange={setOrden}
+                  />
+                  <TableColumnHeader label="COSTE" />
+                </>
+              )}
+              <TableColumnHeader label="IVA" />
+              <TableColumnHeader
+                label="UNIDAD"
+                campo="unidad"
+                filtroTipo="lista"
+                opciones={unidadesUsadas}
+                filtros={filtros}
+                onFiltrosChange={setFiltros}
+              />
+              <TableColumnHeader
+                label="ACTUALIZACIÓN"
+                campo="fecha"
+                filtroTipo="fecha"
+                filtros={filtros}
+                onFiltrosChange={setFiltros}
+                ordenable
+                orden={orden}
+                onOrdenChange={setOrden}
+              />
             </tr>
           </thead>
           <tbody>

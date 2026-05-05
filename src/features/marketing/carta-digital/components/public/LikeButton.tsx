@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Heart } from "lucide-react";
 import { toggleLike } from "../../actions/like-actions";
 
 export function LikeButton({
@@ -31,7 +32,6 @@ export function LikeButton({
     startTransition(async () => {
       const res = await toggleLike(itemId, deviceId);
       if (!res.ok) {
-        // Revert
         setOptimistic({ liked: !willLike, count: optimistic.count });
         onToggleLocal(itemId, !willLike);
         setError(res.error);
@@ -43,22 +43,30 @@ export function LikeButton({
   };
 
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div className="flex flex-col items-end gap-1">
       <button
         type="button"
         onClick={handleClick}
         disabled={!deviceId || pending}
         aria-label={optimistic.liked ? "Quitar me gusta" : "Me gusta"}
-        className={`flex items-center gap-2 rounded-full px-5 py-3 text-base font-semibold shadow-sm transition active:scale-95 disabled:opacity-60 ${
-          optimistic.liked
-            ? "bg-rose-500 text-white"
-            : "bg-white text-stone-900 ring-1 ring-stone-200"
-        }`}
+        className="group inline-flex items-center gap-1.5 rounded-full border px-3 py-2 transition active:scale-90 disabled:opacity-60"
+        style={{
+          borderColor: optimistic.liked ? "var(--carta-primario)" : "var(--carta-borde)",
+          color: optimistic.liked ? "var(--carta-primario)" : "var(--carta-texto-tenue)",
+          backgroundColor: optimistic.liked
+            ? "color-mix(in srgb, var(--carta-primario) 8%, transparent)"
+            : "transparent",
+        }}
       >
-        <span className="text-2xl leading-none">{optimistic.liked ? "❤️" : "🤍"}</span>
-        <span>{optimistic.count}</span>
+        <Heart
+          className={`h-5 w-5 transition ${optimistic.liked ? "fill-current" : ""}`}
+          strokeWidth={1.5}
+        />
+        {optimistic.count > 0 ? (
+          <span className="text-[12px] font-medium tabular-nums">{optimistic.count}</span>
+        ) : null}
       </button>
-      {error ? <span className="text-xs text-red-600">{error}</span> : null}
+      {error ? <span className="text-[10px] text-red-500">{error}</span> : null}
     </div>
   );
 }

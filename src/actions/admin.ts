@@ -120,13 +120,15 @@ export async function createEmployee(formData: FormData) {
 
   if (error) return { error: error.message }
 
-  // Completar nombre + (departamento opcional) + rol_label en el profile
+  // Completar nombre + (departamento opcional) + rol_label en el profile.
+  // avatar_obligatorio=true solo para empleados → fuerza la foto en primer login.
   const profilePatch: Record<string, string | boolean | null> = {
     full_name: fullName,
     nombre,
     apellidos,
     rol_label: rolLabel,
     es_empleado: esEmpleado,
+    avatar_obligatorio: esEmpleado,
   }
   if (departamento) profilePatch.departamento = departamento
 
@@ -181,27 +183,16 @@ export async function getEmployees() {
     }
   })
 
-  // last_sign_in_at vive en auth.users (no en profiles). Lo traemos vía admin
-  // API y lo unimos por user_id (o id como fallback). Si la lista crece >1000,
-  // habría que paginar; por ahora cabe en una sola página.
-  const lastSignInByUser = new Map<string, string | null>()
-  try {
-    const { data: usersPage } = await admin.auth.admin.listUsers({ perPage: 1000 })
-    ;(usersPage?.users ?? []).forEach((u) => {
-      lastSignInByUser.set(u.id, u.last_sign_in_at ?? null)
-    })
-  } catch {
-    // Si falla, dejamos el mapa vacío y la UI mostrará "—"
-  }
-
-  const data = (profiles ?? []).map((p: { id: string; user_id?: string | null; rol_label?: string | null }) => {
+  const data = (profiles ?? []).map((p: { id: string; user_id?: string | null; rol_label?: string | null; ultima_actividad?: string | null }) => {
     const authId = p.user_id ?? p.id
     return {
       ...p,
       role: rolesByUser.get(authId) ?? 'empleado',
       // rol_label = nombre custom del rol (preferente para mostrar en UI)
       rol_label: p.rol_label ?? null,
-      last_sign_in_at: lastSignInByUser.get(authId) ?? null,
+      // ultima_actividad la escribe el proxy en cada navegación autenticada;
+      // refleja la última vez que el usuario entró a la app (no el login).
+      ultima_actividad: p.ultima_actividad ?? null,
     }
   })
 
