@@ -11,6 +11,7 @@ import {
 } from "../actions/modelos-actions";
 import { ModeloCard } from "./ModeloCard";
 import type { ModeloAeat, ModeloTipo } from "../types/modelos";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 type GrupoTipo = "TRIMESTRALES" | "ANUALES";
 
@@ -132,7 +133,7 @@ export function ModelosView() {
       ) : null}
 
       {loading ? (
-        <div className="text-center py-12 text-muted-foreground">Cargando modelos...</div>
+        <LoadingSpinner className="py-12" />
       ) : modelos.length === 0 ? null : (
         <>
           <section className="space-y-3">

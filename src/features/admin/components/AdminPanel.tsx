@@ -5,6 +5,7 @@ import { getEmployees } from '@/actions/admin'
 import { CreateEmployeeForm } from './CreateEmployeeForm'
 import { EmployeeList } from './EmployeeList'
 import type { Profile } from '@/types/database'
+import { LoadingSpinner } from '@/shared/components/LoadingSpinner'
 
 export function AdminPanel() {
   const [employees, setEmployees] = useState<Profile[]>([])
@@ -28,7 +29,7 @@ export function AdminPanel() {
       <div>
         <h2 className="mb-4 text-lg font-semibold">Empleados</h2>
         {loading ? (
-          <p className="text-gray-500">Cargando...</p>
+          <LoadingSpinner />
         ) : (
           <EmployeeList employees={employees} />
         )}

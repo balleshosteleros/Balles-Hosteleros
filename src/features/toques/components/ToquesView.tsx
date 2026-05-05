@@ -177,8 +177,7 @@ export function ToquesView() {
   if (bootLoading) {
     return (
       <div className="p-6 flex items-center justify-center text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin mr-2" />
-        Cargando tus points…
+        <Loader2 className="h-5 w-5 animate-spin" />
       </div>
     );
   }

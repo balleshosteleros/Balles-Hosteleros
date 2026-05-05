@@ -23,6 +23,7 @@ import {
   COLOR_PALETTE,
   type CambioCartaConSemanas, type CambioCartaSemana, type FaseColor,
 } from "../types";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -188,9 +189,7 @@ export function CambiosCartaCalendario() {
 
       {/* Grid 12 meses */}
       {cargando ? (
-        <div className="text-center py-12 text-sm text-muted-foreground">
-          Cargando calendario...
-        </div>
+        <LoadingSpinner className="py-12" />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {MESES.map((nombre, mesIdx) => (

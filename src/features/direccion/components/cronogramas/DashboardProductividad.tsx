@@ -22,6 +22,7 @@ import {
   type ProductividadFila,
 } from "../../actions/cronograma-ejecuciones-actions";
 import { cn } from "@/lib/utils";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 type RangoPreset = "7d" | "30d" | "90d" | "mes" | "custom";
 
@@ -297,7 +298,7 @@ export function DashboardProductividad() {
             <Card className="p-4">
               <h3 className="font-bold text-sm mb-3 tracking-tight">Cumplimiento por departamento</h3>
               {isLoading ? (
-                <div className="h-72 flex items-center justify-center text-sm text-muted-foreground">Cargando…</div>
+                <LoadingSpinner className="h-72" />
               ) : porDepto.length === 0 ? (
                 <div className="h-72 flex items-center justify-center text-sm text-muted-foreground">
                   Sin datos en el rango seleccionado.
@@ -322,7 +323,7 @@ export function DashboardProductividad() {
             <Card className="p-4">
               <h3 className="font-bold text-sm mb-3 tracking-tight">Evolución diaria del % cumplimiento</h3>
               {isLoading ? (
-                <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">Cargando…</div>
+                <LoadingSpinner className="h-64" />
               ) : porDia.length === 0 ? (
                 <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">
                   Sin datos.

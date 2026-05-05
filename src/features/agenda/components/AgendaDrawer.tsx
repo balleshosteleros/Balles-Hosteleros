@@ -44,6 +44,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import {
   CONTACTO_CATEGORIAS,
   CATEGORIA_LABELS,
@@ -268,11 +269,7 @@ export function AgendaDrawer({ children }: { children: ReactNode }) {
 
         {/* Lista */}
         <div className="flex-1 overflow-y-auto">
-          {cargando && (
-            <div className="py-16 text-center text-sm text-muted-foreground">
-              Cargando contactos…
-            </div>
-          )}
+          {cargando && <LoadingSpinner className="py-16" />}
           {!cargando && filtrados.length === 0 && (
             <div className="py-16 px-6 text-center text-sm text-muted-foreground">
               {contactos.length === 0

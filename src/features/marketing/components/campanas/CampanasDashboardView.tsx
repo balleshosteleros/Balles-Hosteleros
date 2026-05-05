@@ -5,6 +5,7 @@ import { Mail, MessageCircle, Megaphone, Send, BarChart3, Target } from "lucide-
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useCampanas } from "@/features/marketing/hooks/useCampanas";
 import type { EstadoCampana } from "@/features/marketing/data/campanas";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 function StatCard({
   value,
@@ -195,9 +196,7 @@ export function CampanasDashboardView() {
         ))}
       </div>
 
-      {!loaded && (
-        <p className="text-xs text-muted-foreground text-center">Cargando campañas…</p>
-      )}
+      {!loaded && <LoadingSpinner size="sm" />}
     </div>
   );
 }

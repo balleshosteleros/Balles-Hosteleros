@@ -28,6 +28,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Plus, Pencil, Trash2, Eye, EyeOff, Copy, ExternalLink, Search, ChevronDown, X } from "lucide-react";
 import { toast } from "sonner";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 const TIPO_INTEGRACION_LABELS: Record<TipoIntegracion, string> = {
   enlace: "Abrir como página web",
@@ -276,8 +277,8 @@ export function AccesosAdminTab() {
             <TableBody>
               {loading && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground text-sm">
-                    Cargando accesos…
+                  <TableCell colSpan={8} className="text-center py-8">
+                    <LoadingSpinner />
                   </TableCell>
                 </TableRow>
               )}

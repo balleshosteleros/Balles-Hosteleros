@@ -4,7 +4,7 @@ import { useState, useMemo, type ReactNode } from "react";
 import {
   Search,
   SlidersHorizontal,
-  ArrowUpDown,
+  ArrowDownWideNarrow,
   Columns3,
   Plus,
   ChevronLeft,
@@ -492,10 +492,11 @@ function OrdenPopover({
         <Button
           variant="outline"
           size="sm"
-          className={cn("h-9 gap-1.5", valor && "border-primary text-primary")}
+          className={cn("h-9 w-9 p-0", valor && "border-primary text-primary")}
           aria-label="Ordenar"
+          title="Ordenar"
         >
-          <ArrowUpDown className="h-4 w-4" />
+          <ArrowDownWideNarrow className="h-4 w-4" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-56 p-2" align="end">

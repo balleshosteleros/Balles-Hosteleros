@@ -38,6 +38,7 @@ import {
   deleteAccesoApp,
 } from "@/features/rrhh/actions/accesos-apps-actions";
 import { getRolesEmpresaNombres } from "@/features/ajustes/actions/roles-actions";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 const emptyApp: Omit<AccesoApp, "id" | "ultimaActualizacion"> = {
   nombre: "",
@@ -298,8 +299,8 @@ export function AplicacionesTab() {
         <TableBody>
           {loading && (
             <TableRow>
-              <TableCell colSpan={8} className="text-center py-8 text-muted-foreground text-sm">
-                Cargando accesos…
+              <TableCell colSpan={8} className="text-center py-8">
+                <LoadingSpinner />
               </TableCell>
             </TableRow>
           )}

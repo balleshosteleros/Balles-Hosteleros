@@ -1,236 +1,402 @@
 "use client";
 
+// Dashboard admin del Portal de Formación (RRHH).
+// Lee del MISMO store que el portal del empleado (useFormacionStore), por lo
+// que cualquier cambio aquí (publicar curso, añadir lección, novedad) se ve
+// al instante en /mi-panel/formacion.
+//
+// KPIs y tablas derivadas SIEMPRE de datos reales:
+//   - Cursos / secciones / lecciones / novedades del store.
+//   - Empleados de la empresa desde rrhh/data/rrhh.ts.
+// No se inventan notas, evaluaciones ni progreso por empleado: el modelo del
+// store sólo registra "lección completada por usuario logueado". Cuando exista
+// una tabla `formacion_progreso` por empleado en Supabase, esta vista cruzará
+// los datos reales.
+
 import { useMemo } from "react";
+import {
+  BookOpen,
+  GraduationCap,
+  Layers,
+  ListChecks,
+  Timer,
+  UserSquare2,
+  Users,
+} from "lucide-react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { getResumenFormacion, getProgresoPorEmpresa, getEstadisticasMensuales, PORTAL_FORMATIVO_URL } from "@/features/rrhh/data/formacion";
+import {
+  useFormacionStore,
+  leccionesOrdenadas,
+} from "@/features/formacion/store/use-formacion-store";
+import { PUESTOS, type Puesto } from "@/features/formacion/types";
+import { getEmpleadosPorEmpresa } from "@/features/rrhh/data/rrhh";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, PieChart, Pie, Cell } from "recharts";
-import { ExternalLink, Users, Award, Video, TrendingUp, BookOpen, CheckCircle2, XCircle, BarChart3, Target } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { AdminFormacionPanel } from "@/features/formacion/components/admin/AdminFormacionPanel";
 
-const ESTADO_BADGE: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-  en_curso: { label: "En curso", variant: "default" },
-  completado: { label: "Completado", variant: "secondary" },
-  bloqueado: { label: "Bloqueado", variant: "destructive" },
+// Mapa de departamento de RRHH a "puesto" del modelo de formación.
+// Los departamentos sin equivalente (DIRECCIÓN, RRPP) sólo verán cursos generales.
+const DEPARTAMENTO_A_PUESTO: Record<string, Puesto> = {
+  CAMAREROS: "CAMARERO",
+  "JEFE DE SALA": "JEFE DE SALA",
+  COCINA: "COCINERO",
+  CACHIMBEROS: "CACHIMBERO",
+  ARTISTAS: "ARTISTA",
+  MANTENIMIENTO: "MANTENIMIENTO",
+  GERENTE: "GERENTE",
+  ADMINISTRATIVO: "CONTABLE",
 };
 
-const PIE_COLORS = ["hsl(var(--primary))", "hsl(var(--destructive))", "hsl(var(--muted-foreground))"];
+function formatFecha(iso: string): string {
+  return new Date(iso).toLocaleDateString("es-ES", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
 
 export function FormacionView() {
   const { empresaActual } = useEmpresa();
-  const resumen = useMemo(() => getResumenFormacion(empresaActual.id), [empresaActual.id]);
-  const progresos = useMemo(() => getProgresoPorEmpresa(empresaActual.id), [empresaActual.id]);
-  const stats = useMemo(() => getEstadisticasMensuales(empresaActual.id), [empresaActual.id]);
+  const cursos = useFormacionStore((s) => s.cursos);
+  const secciones = useFormacionStore((s) => s.secciones);
+  const lecciones = useFormacionStore((s) => s.lecciones);
+  const novedades = useFormacionStore((s) => s.novedades);
 
-  const pieData = [
-    { name: "Aprobadas", value: resumen.aprobadas },
-    { name: "Suspendidas", value: resumen.suspendidas },
-  ];
+  const empleados = useMemo(
+    () => getEmpleadosPorEmpresa(empresaActual.id),
+    [empresaActual.id],
+  );
 
-  const chartConfig = {
-    empleadosFormados: { label: "Empleados formados", color: "hsl(var(--primary))" },
-    notaMedia: { label: "Nota media", color: "hsl(var(--chart-2))" },
-  };
+  const cursosEmpresa = useMemo(
+    () => cursos.filter((c) => c.empresaId === empresaActual.id),
+    [cursos, empresaActual.id],
+  );
 
-  const puestoChartConfig = {
-    enFormacion: { label: "En formación", color: "hsl(var(--primary))" },
-    completados: { label: "Completados", color: "hsl(var(--chart-2))" },
-    bloqueados: { label: "Bloqueados", color: "hsl(var(--destructive))" },
-  };
+  const novedadesEmpresa = useMemo(
+    () => novedades.filter((n) => n.empresaId === empresaActual.id),
+    [novedades, empresaActual.id],
+  );
+
+  // ─── KPIs globales ──────────────────────────────────────────
+  const stats = useMemo(() => {
+    const cursoIds = new Set(cursosEmpresa.map((c) => c.id));
+    const leccionesEmpresa = lecciones.filter((l) => cursoIds.has(l.cursoId));
+    const totalMinutos = leccionesEmpresa.reduce(
+      (acc, l) => acc + l.duracionMin,
+      0,
+    );
+    return {
+      totalCursos: cursosEmpresa.length,
+      publicados: cursosEmpresa.filter((c) => c.publicado).length,
+      borradores: cursosEmpresa.filter((c) => !c.publicado).length,
+      generales: cursosEmpresa.filter((c) => c.ambito === "general").length,
+      porPuesto: cursosEmpresa.filter((c) => c.ambito === "puesto").length,
+      totalLecciones: leccionesEmpresa.length,
+      totalMinutos,
+      novedadesActivas: novedadesEmpresa.length,
+    };
+  }, [cursosEmpresa, lecciones, novedadesEmpresa]);
+
+  // ─── Por puesto ─────────────────────────────────────────────
+  const filasPuesto = useMemo(() => {
+    return PUESTOS.map((puesto) => {
+      const cursosGenerales = cursosEmpresa.filter(
+        (c) => c.ambito === "general",
+      );
+      const cursosEspecificos = cursosEmpresa.filter(
+        (c) => c.ambito === "puesto" && c.puesto === puesto,
+      );
+      const cursosDisponibles = [...cursosGenerales, ...cursosEspecificos];
+      const totalLecciones = cursosDisponibles.reduce(
+        (acc, c) =>
+          acc + leccionesOrdenadas(secciones, lecciones, c.id).length,
+        0,
+      );
+      const empleadosPuesto = empleados.filter(
+        (e) => DEPARTAMENTO_A_PUESTO[e.departamento] === puesto,
+      ).length;
+
+      return {
+        puesto,
+        empleados: empleadosPuesto,
+        cursosTotales: cursosDisponibles.length,
+        cursosPublicados: cursosDisponibles.filter((c) => c.publicado).length,
+        cursosEspecificos: cursosEspecificos.length,
+        totalLecciones,
+      };
+    }).filter((f) => f.empleados > 0 || f.cursosEspecificos > 0);
+  }, [cursosEmpresa, secciones, lecciones, empleados]);
+
+  // ─── Catálogo de cursos ─────────────────────────────────────
+  const catalogo = useMemo(() => {
+    return [...cursosEmpresa]
+      .map((c) => {
+        const ords = leccionesOrdenadas(secciones, lecciones, c.id);
+        const minutos = ords.reduce((acc, l) => acc + l.duracionMin, 0);
+        return {
+          curso: c,
+          lecciones: ords.length,
+          minutos,
+        };
+      })
+      .sort((a, b) => {
+        if (a.curso.ambito !== b.curso.ambito)
+          return a.curso.ambito === "general" ? -1 : 1;
+        return a.curso.orden - b.curso.orden;
+      });
+  }, [cursosEmpresa, secciones, lecciones]);
+
+  // ─── Empleados sin puesto reconocido ────────────────────────
+  const empleadosSinPuesto = empleados.filter(
+    (e) => !DEPARTAMENTO_A_PUESTO[e.departamento],
+  ).length;
 
   return (
     <div className="p-4 md:p-6 space-y-4">
-      <div className="flex items-center justify-end">
-        <Button onClick={() => window.open(`${PORTAL_FORMATIVO_URL}/${empresaActual.id}`, "_blank")} className="gap-2">
-          <ExternalLink className="h-4 w-4" />Acceder al portal formativo
-        </Button>
-      </div>
-
+      {/* Banner: explica la conexión admin ↔ portal */}
       <Card className="border-primary/20 bg-primary/5">
-        <CardContent className="py-3 px-4 flex items-center gap-3">
-          <BookOpen className="h-5 w-5 text-primary shrink-0" />
-          <p className="text-sm text-foreground">El portal formativo es un <strong>software independiente</strong> conectado al SaaS principal. Los empleados acceden con las mismas credenciales.</p>
+        <CardContent className="flex items-center gap-3 px-4 py-3">
+          <BookOpen className="h-5 w-5 shrink-0 text-primary" />
+          <p className="text-sm text-foreground">
+            Lo que creas o publiques aquí aparece <strong>al instante</strong>{" "}
+            en <code>Mi Panel → Formación</code> de los empleados. Esta pantalla
+            es el panel de administración; el portal es el reflejo.
+          </p>
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
         {[
-          { label: "Personas en formación", value: resumen.enCurso, icon: Users, sub: "activas ahora" },
-          { label: "Formación completada", value: resumen.completados, icon: CheckCircle2, sub: "finalizaron" },
-          { label: "Bloqueados", value: resumen.bloqueados, icon: XCircle, sub: "no alcanzan nota" },
-          { label: "Nota media", value: `${resumen.notaMedia}%`, icon: Award, sub: "de evaluaciones" },
-          { label: "Tasa de aprobado", value: `${resumen.tasaAprobado}%`, icon: Target, sub: `${resumen.aprobadas}/${resumen.totalEvaluaciones}` },
-          { label: "Vídeos subidos", value: resumen.totalVideos, icon: Video, sub: `${resumen.videosGenericos} gen. / ${resumen.videosEspecificos} esp.` },
+          {
+            label: "Cursos publicados",
+            value: stats.publicados,
+            icon: GraduationCap,
+            sub: `${stats.borradores} en borrador`,
+          },
+          {
+            label: "Cursos generales",
+            value: stats.generales,
+            icon: Layers,
+            sub: "para todo el equipo",
+          },
+          {
+            label: "Cursos por puesto",
+            value: stats.porPuesto,
+            icon: UserSquare2,
+            sub: "específicos",
+          },
+          {
+            label: "Total lecciones",
+            value: stats.totalLecciones,
+            icon: ListChecks,
+            sub: "vídeos del catálogo",
+          },
+          {
+            label: "Duración total",
+            value: `${Math.round(stats.totalMinutos / 60)}h`,
+            icon: Timer,
+            sub: `${stats.totalMinutos} min`,
+          },
+          {
+            label: "Empleados",
+            value: empleados.length,
+            icon: Users,
+            sub: `${empleadosSinPuesto} sin puesto formativo`,
+          },
         ].map((kpi) => (
           <Card key={kpi.label} className="border bg-card">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-xs font-medium text-muted-foreground">{kpi.label}</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-xs font-medium text-muted-foreground">
+                {kpi.label}
+              </CardTitle>
               <kpi.icon className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-foreground">{kpi.value}</div>
-              <p className="text-xs text-muted-foreground mt-0.5">{kpi.sub}</p>
+              <div className="text-2xl font-bold text-foreground">
+                {kpi.value}
+              </div>
+              <p className="mt-0.5 text-xs text-muted-foreground">{kpi.sub}</p>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="border bg-card">
-          <CardHeader><CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2"><TrendingUp className="h-4 w-4" />Avance medio global</CardTitle></CardHeader>
-          <CardContent className="space-y-2">
-            <div className="text-3xl font-bold text-foreground">{resumen.avanceMedio}%</div>
-            <Progress value={resumen.avanceMedio} className="h-3" />
-            <p className="text-xs text-muted-foreground">{resumen.totalPuestos} puestos con ruta formativa</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border bg-card">
-          <CardHeader><CardTitle className="text-sm font-medium text-muted-foreground">Aprobados vs Suspendidos</CardTitle></CardHeader>
-          <CardContent className="flex items-center justify-center">
-            <ChartContainer config={{}} className="h-[180px] w-[180px]">
-              <PieChart>
-                <Pie data={pieData} cx="50%" cy="50%" innerRadius={45} outerRadius={70} dataKey="value" paddingAngle={4}>
-                  {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i]} />)}
-                </Pie>
-                <ChartTooltip content={<ChartTooltipContent />} />
-              </PieChart>
-            </ChartContainer>
-            <div className="ml-4 space-y-2 text-sm">
-              <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-primary" /><span>Aprobadas: {resumen.aprobadas}</span></div>
-              <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-destructive" /><span>Suspendidas: {resumen.suspendidas}</span></div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border bg-card">
-          <CardHeader><CardTitle className="text-sm font-medium text-muted-foreground">Desglose de vídeos</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <div className="flex justify-between text-sm mb-1"><span className="text-muted-foreground">Genéricos</span><span className="font-semibold">{resumen.videosGenericos}</span></div>
-              <Progress value={(resumen.videosGenericos / Math.max(resumen.totalVideos, 1)) * 100} className="h-2" />
-            </div>
-            <div>
-              <div className="flex justify-between text-sm mb-1"><span className="text-muted-foreground">Específicos</span><span className="font-semibold">{resumen.videosEspecificos}</span></div>
-              <Progress value={(resumen.videosEspecificos / Math.max(resumen.totalVideos, 1)) * 100} className="h-2" />
-            </div>
-            <p className="text-xs text-muted-foreground">Total: {resumen.totalVideos} vídeos</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card className="border bg-card">
-          <CardHeader><CardTitle className="text-sm font-medium text-muted-foreground">Evolución mensual</CardTitle></CardHeader>
-          <CardContent>
-            <ChartContainer config={chartConfig} className="h-[250px] w-full">
-              <LineChart data={stats}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Line type="monotone" dataKey="empleadosFormados" stroke="var(--color-empleadosFormados)" strokeWidth={2} dot={{ r: 4 }} />
-              </LineChart>
-            </ChartContainer>
-          </CardContent>
-        </Card>
-
-        <Card className="border bg-card">
-          <CardHeader><CardTitle className="text-sm font-medium text-muted-foreground">Estado por puesto</CardTitle></CardHeader>
-          <CardContent>
-            <ChartContainer config={puestoChartConfig} className="h-[250px] w-full">
-              <BarChart data={resumen.porPuesto}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="puesto" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Bar dataKey="enFormacion" fill="var(--color-enFormacion)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="completados" fill="var(--color-completados)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="bloqueados" fill="var(--color-bloqueados)" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ChartContainer>
-          </CardContent>
-        </Card>
-      </div>
-
+      {/* Reparto publicado / borrador */}
       <Card className="border bg-card">
-        <CardHeader><CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2"><BarChart3 className="h-4 w-4" />Métricas por puesto</CardTitle></CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Puesto</TableHead><TableHead className="text-center">En formación</TableHead>
-                <TableHead className="text-center">Completados</TableHead><TableHead className="text-center">Bloqueados</TableHead>
-                <TableHead className="text-center">Nota media</TableHead><TableHead className="text-center">Avance</TableHead>
-                <TableHead className="text-center">% Finalización</TableHead><TableHead className="text-center">Vídeos</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {resumen.porPuesto.map((p) => (
-                <TableRow key={p.puesto}>
-                  <TableCell className="font-medium">{p.puesto}</TableCell>
-                  <TableCell className="text-center">{p.enFormacion}</TableCell>
-                  <TableCell className="text-center">{p.completados}</TableCell>
-                  <TableCell className="text-center">{p.bloqueados}</TableCell>
-                  <TableCell className="text-center">{p.notaMedia}%</TableCell>
-                  <TableCell className="text-center">
-                    <div className="flex items-center gap-2 justify-center">
-                      <Progress value={p.avanceMedio} className="h-2 w-16" />
-                      <span className="text-xs">{p.avanceMedio}%</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center">{p.finalizacion}%</TableCell>
-                  <TableCell className="text-center">{p.videosPuesto}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+        <CardHeader>
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            Estado del catálogo
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div>
+            <div className="mb-1 flex justify-between text-xs">
+              <span className="text-muted-foreground">Publicados</span>
+              <span className="font-semibold">
+                {stats.publicados}/{stats.totalCursos}
+              </span>
+            </div>
+            <Progress
+              value={
+                stats.totalCursos > 0
+                  ? (stats.publicados / stats.totalCursos) * 100
+                  : 0
+              }
+              className="h-2"
+            />
+          </div>
+          <div>
+            <div className="mb-1 flex justify-between text-xs">
+              <span className="text-muted-foreground">Borradores</span>
+              <span className="font-semibold">{stats.borradores}</span>
+            </div>
+            <Progress
+              value={
+                stats.totalCursos > 0
+                  ? (stats.borradores / stats.totalCursos) * 100
+                  : 0
+              }
+              className="h-2"
+            />
+          </div>
         </CardContent>
       </Card>
 
+      {/* Cobertura por puesto */}
       <Card className="border bg-card">
-        <CardHeader><CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2"><Users className="h-4 w-4" />Seguimiento individual</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            <UserSquare2 className="h-4 w-4" />
+            Cobertura por puesto
+          </CardTitle>
+        </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Empleado</TableHead><TableHead>Puesto</TableHead><TableHead className="text-center">Módulos</TableHead>
-                <TableHead className="text-center">Vídeos</TableHead><TableHead className="text-center">Nota</TableHead>
-                <TableHead className="text-center">Avance</TableHead><TableHead className="text-center">Estado</TableHead>
-                <TableHead>Último acceso</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {progresos.map((p) => {
-                const b = ESTADO_BADGE[p.estado];
-                return (
-                  <TableRow key={p.id}>
-                    <TableCell className="font-medium">{p.empleadoNombre}</TableCell>
-                    <TableCell className="text-muted-foreground">{p.puestoNombre}</TableCell>
-                    <TableCell className="text-center">{p.modulosCompletados}/{p.totalModulos}</TableCell>
-                    <TableCell className="text-center">{p.videosVistos}/{p.totalVideos}</TableCell>
-                    <TableCell className="text-center font-semibold">{p.notaMedia}%</TableCell>
+          {filasPuesto.length === 0 ? (
+            <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+              Aún no hay cursos por puesto ni empleados asignados a puestos
+              formativos.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Puesto</TableHead>
+                  <TableHead className="text-center">Empleados</TableHead>
+                  <TableHead className="text-center">Cursos disponibles</TableHead>
+                  <TableHead className="text-center">Específicos</TableHead>
+                  <TableHead className="text-center">Lecciones</TableHead>
+                  <TableHead className="text-center">Publicados</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filasPuesto.map((f) => (
+                  <TableRow key={f.puesto}>
+                    <TableCell className="font-medium">{f.puesto}</TableCell>
+                    <TableCell className="text-center">{f.empleados}</TableCell>
                     <TableCell className="text-center">
-                      <div className="flex items-center gap-2 justify-center">
-                        <Progress value={p.porcentajeAvance} className="h-2 w-16" />
-                        <span className="text-xs">{p.porcentajeAvance}%</span>
+                      {f.cursosTotales}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {f.cursosEspecificos}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {f.totalLecciones}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant="outline" className="text-[11px]">
+                        {f.cursosPublicados}/{f.cursosTotales}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Catálogo de cursos */}
+      <Card className="border bg-card">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            <BookOpen className="h-4 w-4" />
+            Catálogo actual ({catalogo.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {catalogo.length === 0 ? (
+            <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+              Aún no hay cursos. Crea el primero desde el panel de gestión más
+              abajo.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Curso</TableHead>
+                  <TableHead>Ámbito</TableHead>
+                  <TableHead className="text-center">Lecciones</TableHead>
+                  <TableHead className="text-center">Duración</TableHead>
+                  <TableHead className="text-center">Estado</TableHead>
+                  <TableHead>Publicado</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {catalogo.map(({ curso, lecciones: nLecc, minutos }) => (
+                  <TableRow key={curso.id}>
+                    <TableCell>
+                      <div className="font-medium">{curso.titulo}</div>
+                      <div className="line-clamp-1 text-xs text-muted-foreground">
+                        {curso.descripcion}
                       </div>
                     </TableCell>
-                    <TableCell className="text-center">{b && <Badge variant={b.variant}>{b.label}</Badge>}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{p.ultimoAcceso}</TableCell>
+                    <TableCell>
+                      {curso.ambito === "general" ? (
+                        <Badge variant="outline">General</Badge>
+                      ) : (
+                        <Badge variant="secondary">{curso.puesto}</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center">{nLecc}</TableCell>
+                    <TableCell className="text-center">
+                      {minutos > 0 ? `${minutos} min` : "—"}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {curso.publicado ? (
+                        <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+                          Publicado
+                        </Badge>
+                      ) : (
+                        <Badge
+                          variant="outline"
+                          className="text-muted-foreground"
+                        >
+                          Borrador
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {formatFecha(curso.fechaPublicacion)}
+                    </TableCell>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
+      {/* Panel de gestión real (cursos + novedades) */}
       <AdminFormacionPanel />
     </div>
   );

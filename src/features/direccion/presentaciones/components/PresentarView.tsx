@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { getPresentacion } from "../actions/presentaciones-actions";
 import { SlideRenderer } from "./SlideRenderer";
 import type { PresentacionConSlides, Branding } from "../types/presentaciones";
+import { Loader2 } from "lucide-react";
 
 interface Props {
   presentacionId: string;
@@ -55,7 +56,7 @@ export function PresentarView({ presentacionId }: Props) {
   if (!data) {
     return (
       <div className="fixed inset-0 bg-black flex items-center justify-center text-white">
-        Cargando…
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
   }

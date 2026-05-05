@@ -44,6 +44,7 @@ import {
   type ContactoInput,
 } from "@/features/agenda/types";
 import { toast } from "sonner";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import {
   listContactos,
   createContacto,
@@ -220,8 +221,8 @@ export function AgendaView() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {cargando && (
           <Card className="md:col-span-2 xl:col-span-3">
-            <CardContent className="py-16 text-center text-sm text-muted-foreground">
-              Cargando contactos...
+            <CardContent>
+              <LoadingSpinner className="py-16" />
             </CardContent>
           </Card>
         )}

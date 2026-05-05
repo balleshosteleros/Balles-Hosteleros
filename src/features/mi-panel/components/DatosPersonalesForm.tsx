@@ -45,9 +45,9 @@ import {
   BANCOS_ESPANA,
   buscarBancoPorCodigo,
   buscarBancoPorIban,
+  urlLogoBanco,
 } from "@/features/mi-panel/data/bancos-espana";
 import {
-  compararTitular,
   detectarTipoDocumento,
   formatearIban,
   validarDocumento,
@@ -70,8 +70,9 @@ type FormState = {
   estado_civil: string;
   numero_ss: string;
   telefono: string;
-  telefono_secundario: string;
+  telefono_empresa: string;
   email_personal: string;
+  email_empresa: string;
   direccion: string;
   codigo_postal: string;
   ciudad: string;
@@ -103,8 +104,9 @@ function fromInitial(d: DatosPersonalesCompletos): FormState {
     estado_civil: d.estado_civil ?? "",
     numero_ss: d.numero_ss ?? "",
     telefono: d.telefono ?? "",
-    telefono_secundario: d.telefono_secundario ?? "",
+    telefono_empresa: d.telefono_empresa ?? "",
     email_personal: d.email_personal ?? "",
+    email_empresa: d.email_empresa ?? "",
     direccion: d.direccion ?? "",
     codigo_postal: d.codigo_postal ?? "",
     ciudad: d.ciudad ?? "",
@@ -132,6 +134,11 @@ export function DatosPersonalesForm({ initial }: Props) {
 
   const ibanCheck = useMemo(() => {
     if (!form.iban) return null;
+    const limpio = form.iban.replace(/\s+/g, "").toUpperCase();
+    // Mientras el usuario escribe un prefijo ES válido, no mostramos error.
+    // El aviso de "debe empezar por ES" solo aparece cuando arranca con otras letras.
+    if (limpio === "" || limpio === "E") return null;
+    if (limpio.startsWith("ES") && limpio.length < 24) return null;
     return validarIban(form.iban);
   }, [form.iban]);
 
@@ -160,13 +167,13 @@ export function DatosPersonalesForm({ initial }: Props) {
     }
   }, [form.iban, form.banco_codigo, ibanCheck?.valido]);
 
-  // Coincidencia titular ↔ nombre+apellidos
-  const coincidenciaTitular = useMemo(() => {
-    if (!form.titular_cuenta) return null;
+  // El titular de la cuenta es SIEMPRE nombre + apellidos. Nunca una persona distinta.
+  useEffect(() => {
     const nombreCompleto = `${form.nombre} ${form.apellidos}`.trim();
-    if (!nombreCompleto) return null;
-    return compararTitular(form.titular_cuenta, nombreCompleto);
-  }, [form.titular_cuenta, form.nombre, form.apellidos]);
+    if (form.titular_cuenta !== nombreCompleto) {
+      setForm((f) => ({ ...f, titular_cuenta: nombreCompleto }));
+    }
+  }, [form.nombre, form.apellidos, form.titular_cuenta]);
 
   function update<K extends keyof FormState>(k: K, v: FormState[K]) {
     setForm((f) => ({ ...f, [k]: v }));
@@ -184,9 +191,12 @@ export function DatosPersonalesForm({ initial }: Props) {
       toast.error(docCheck.mensaje ?? "Documento inválido");
       return;
     }
-    if (form.iban && ibanCheck && !ibanCheck.valido) {
-      toast.error(ibanCheck.mensaje ?? "IBAN inválido");
-      return;
+    if (form.iban) {
+      const fullCheck = validarIban(form.iban);
+      if (!fullCheck.valido) {
+        toast.error(fullCheck.mensaje ?? "IBAN inválido");
+        return;
+      }
     }
 
     setSaving(true);
@@ -325,7 +335,7 @@ export function DatosPersonalesForm({ initial }: Props) {
 
       <Section title="Contacto" icon={<Phone className="h-4 w-4" />}>
         <Grid>
-          <Field label="Teléfono">
+          <Field label="Teléfono personal">
             <Input
               type="tel"
               value={form.telefono}
@@ -333,11 +343,12 @@ export function DatosPersonalesForm({ initial }: Props) {
               placeholder="+34 600 000 000"
             />
           </Field>
-          <Field label="Teléfono secundario">
+          <Field label="Teléfono de empresa">
             <Input
               type="tel"
-              value={form.telefono_secundario}
-              onChange={(e) => update("telefono_secundario", e.target.value)}
+              value={form.telefono_empresa}
+              onChange={(e) => update("telefono_empresa", e.target.value)}
+              placeholder="+34 900 000 000"
             />
           </Field>
           <Field label="Email personal">
@@ -345,6 +356,15 @@ export function DatosPersonalesForm({ initial }: Props) {
               type="email"
               value={form.email_personal}
               onChange={(e) => update("email_personal", e.target.value)}
+              placeholder="tu@correo.com"
+            />
+          </Field>
+          <Field label="Email de empresa">
+            <Input
+              type="email"
+              value={form.email_empresa}
+              onChange={(e) => update("email_empresa", e.target.value)}
+              placeholder="nombre@empresa.com"
             />
           </Field>
         </Grid>
@@ -420,11 +440,16 @@ export function DatosPersonalesForm({ initial }: Props) {
                   className="w-full justify-between font-normal"
                 >
                   {bancoSeleccionado ? (
-                    <span className="truncate">
-                      <span className="font-mono text-xs text-muted-foreground mr-2">
-                        {bancoSeleccionado.codigo}
-                      </span>
-                      {bancoSeleccionado.nombre}
+                    <span className="flex items-center gap-2 truncate">
+                      {urlLogoBanco(bancoSeleccionado) && (
+                        <img
+                          src={urlLogoBanco(bancoSeleccionado) ?? ""}
+                          alt=""
+                          className="h-5 w-5 shrink-0 rounded-sm object-contain"
+                          loading="lazy"
+                        />
+                      )}
+                      <span className="truncate">{bancoSeleccionado.nombre}</span>
                     </span>
                   ) : (
                     <span className="text-muted-foreground">
@@ -448,27 +473,37 @@ export function DatosPersonalesForm({ initial }: Props) {
                   <CommandEmpty>Sin coincidencias</CommandEmpty>
                   <CommandList className="max-h-72">
                     <CommandGroup>
-                      {BANCOS_ESPANA.map((b) => (
-                        <CommandItem
-                          key={b.codigo}
-                          value={`${b.codigo} ${b.nombre} ${(b.alias ?? []).join(" ")}`}
-                          onSelect={() => {
-                            update("banco_codigo", b.codigo);
-                            update("banco_nombre", b.nombre);
-                            setBancoOpen(false);
-                          }}
-                        >
-                          <Check
-                            className={`mr-2 h-4 w-4 ${
-                              form.banco_codigo === b.codigo ? "opacity-100" : "opacity-0"
-                            }`}
-                          />
-                          <span className="font-mono text-xs text-muted-foreground mr-2">
-                            {b.codigo}
-                          </span>
-                          <span className="truncate">{b.nombre}</span>
-                        </CommandItem>
-                      ))}
+                      {BANCOS_ESPANA.map((b) => {
+                        const logo = urlLogoBanco(b);
+                        return (
+                          <CommandItem
+                            key={b.codigo}
+                            value={`${b.nombre} ${(b.alias ?? []).join(" ")}`}
+                            onSelect={() => {
+                              update("banco_codigo", b.codigo);
+                              update("banco_nombre", b.nombre);
+                              setBancoOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={`mr-2 h-4 w-4 ${
+                                form.banco_codigo === b.codigo ? "opacity-100" : "opacity-0"
+                              }`}
+                            />
+                            {logo ? (
+                              <img
+                                src={logo}
+                                alt=""
+                                className="mr-2 h-5 w-5 shrink-0 rounded-sm object-contain"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <span className="mr-2 h-5 w-5 shrink-0 rounded-sm bg-muted" />
+                            )}
+                            <span className="truncate">{b.nombre}</span>
+                          </CommandItem>
+                        );
+                      })}
                     </CommandGroup>
                   </CommandList>
                 </Command>
@@ -479,13 +514,16 @@ export function DatosPersonalesForm({ initial }: Props) {
           <Field
             label="Titular de la cuenta"
             wide
-            hint={titularHint(coincidenciaTitular)}
-            hintTone={titularTone(coincidenciaTitular)}
+            hint="Siempre coincide con tu nombre y apellidos. Si necesitas cambiarlo, edita los datos personales arriba."
+            hintTone="muted"
           >
             <Input
               value={form.titular_cuenta}
-              onChange={(e) => update("titular_cuenta", e.target.value)}
-              placeholder="Tal y como aparece en el banco"
+              readOnly
+              disabled
+              tabIndex={-1}
+              aria-readonly
+              className="bg-muted/50 cursor-not-allowed"
             />
           </Field>
 
@@ -579,11 +617,11 @@ export function DatosPersonalesForm({ initial }: Props) {
         </Grid>
       </Section>
 
-      <div className="sticky bottom-4 flex justify-end">
+      <div className="flex justify-end">
         <Button
           type="submit"
           size="lg"
-          className="gap-2 shadow-lg"
+          className="gap-2"
           disabled={saving}
         >
           {saving ? (
@@ -601,20 +639,6 @@ export function DatosPersonalesForm({ initial }: Props) {
       </div>
     </form>
   );
-}
-
-function titularHint(score: number | null): string | undefined {
-  if (score == null) return undefined;
-  if (score >= 0.85) return "Coincide con tu nombre completo";
-  if (score >= 0.5) return "Coincidencia parcial — revisa que sea correcto";
-  return "El titular no coincide con tu nombre — la nómina podría rechazarse";
-}
-
-function titularTone(score: number | null): "ok" | "error" | "warn" | "muted" {
-  if (score == null) return "muted";
-  if (score >= 0.85) return "ok";
-  if (score >= 0.5) return "warn";
-  return "error";
 }
 
 function Section({

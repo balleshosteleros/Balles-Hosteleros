@@ -105,6 +105,10 @@ export async function createEmployee(formData: FormData) {
   const rolLabel = rolLabelInput
   // El departamento ya no se asigna a nivel de usuario: se hereda del rol.
   const departamento = ((formData.get('departamento') as string) ?? '').trim().toUpperCase() || null
+  // Flag de empleado: true por defecto. La UI envía "1" o "0".
+  // Si no llega el campo (compatibilidad con clientes viejos), se asume empleado.
+  const esEmpleadoRaw = formData.get('es_empleado')
+  const esEmpleado = esEmpleadoRaw == null ? true : String(esEmpleadoRaw) !== '0'
 
   // Crear usuario en auth (el trigger handle_new_user crea el profile automáticamente)
   const { data, error } = await admin.auth.admin.createUser({
@@ -117,11 +121,12 @@ export async function createEmployee(formData: FormData) {
   if (error) return { error: error.message }
 
   // Completar nombre + (departamento opcional) + rol_label en el profile
-  const profilePatch: Record<string, string | null> = {
+  const profilePatch: Record<string, string | boolean | null> = {
     full_name: fullName,
     nombre,
     apellidos,
     rol_label: rolLabel,
+    es_empleado: esEmpleado,
   }
   if (departamento) profilePatch.departamento = departamento
 
@@ -176,12 +181,29 @@ export async function getEmployees() {
     }
   })
 
-  const data = (profiles ?? []).map((p: { id: string; user_id?: string | null; rol_label?: string | null }) => ({
-    ...p,
-    role: rolesByUser.get(p.user_id ?? p.id) ?? 'empleado',
-    // rol_label = nombre custom del rol (preferente para mostrar en UI)
-    rol_label: p.rol_label ?? null,
-  }))
+  // last_sign_in_at vive en auth.users (no en profiles). Lo traemos vía admin
+  // API y lo unimos por user_id (o id como fallback). Si la lista crece >1000,
+  // habría que paginar; por ahora cabe en una sola página.
+  const lastSignInByUser = new Map<string, string | null>()
+  try {
+    const { data: usersPage } = await admin.auth.admin.listUsers({ perPage: 1000 })
+    ;(usersPage?.users ?? []).forEach((u) => {
+      lastSignInByUser.set(u.id, u.last_sign_in_at ?? null)
+    })
+  } catch {
+    // Si falla, dejamos el mapa vacío y la UI mostrará "—"
+  }
+
+  const data = (profiles ?? []).map((p: { id: string; user_id?: string | null; rol_label?: string | null }) => {
+    const authId = p.user_id ?? p.id
+    return {
+      ...p,
+      role: rolesByUser.get(authId) ?? 'empleado',
+      // rol_label = nombre custom del rol (preferente para mostrar en UI)
+      rol_label: p.rol_label ?? null,
+      last_sign_in_at: lastSignInByUser.get(authId) ?? null,
+    }
+  })
 
   return { data }
 }
@@ -342,7 +364,13 @@ export async function getEmpleadosSinAcceso() {
 
 export async function updateEmployeeProfile(
   profileId: string,
-  patch: { departamento?: string; role?: string; nombre?: string; apellidos?: string }
+  patch: {
+    departamento?: string;
+    role?: string;
+    nombre?: string;
+    apellidos?: string;
+    esEmpleado?: boolean;
+  }
 ) {
   await requireAdmin()
 
@@ -353,7 +381,7 @@ export async function updateEmployeeProfile(
     return { error: 'Supabase admin no configurado. Configura SUPABASE_SERVICE_ROLE_KEY.' }
   }
 
-  const profileUpdate: Record<string, string | null> = {}
+  const profileUpdate: Record<string, string | boolean | null> = {}
   if (patch.departamento !== undefined) {
     const dep = patch.departamento.trim().toUpperCase()
     if (!dep) return { error: 'El departamento no puede estar vacío.' }
@@ -361,6 +389,7 @@ export async function updateEmployeeProfile(
   }
   if (patch.nombre !== undefined) profileUpdate.nombre = capitalizeText(patch.nombre)
   if (patch.apellidos !== undefined) profileUpdate.apellidos = capitalizeText(patch.apellidos)
+  if (patch.esEmpleado !== undefined) profileUpdate.es_empleado = patch.esEmpleado
 
   // El rol que llega es el NOMBRE custom (de empresa_roles). Lo guardamos en rol_label
   // y derivamos el app_role para user_roles. Validamos contra empresa_roles para

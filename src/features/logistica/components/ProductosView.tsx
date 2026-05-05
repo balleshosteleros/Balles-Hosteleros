@@ -41,6 +41,7 @@ import {
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
 } from "@/shared/components/SubmoduleToolbar";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 function EstadoBadge({ estado }: { estado: EstadoProducto }) {
   return <Badge variant="outline" className={`text-[10px] ${ESTADO_COLOR[estado]}`}>{estado}</Badge>;
@@ -132,7 +133,7 @@ function Composicion({ productoVentaId, precioVenta }: { productoVentaId: string
       </CardHeader>
       <CardContent>
         {loading ? (
-          <p className="text-sm text-muted-foreground text-center py-6">Cargando…</p>
+          <LoadingSpinner className="py-6" />
         ) : lineas.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-6">
             Este plato no tiene composición. Añade ingredientes para definir el escandallo.
@@ -459,7 +460,7 @@ function TablaProductos({
               }
               onSuccess={() => window.location.reload()}
             />
-            <Button size="icon" variant={showConfig ? "default" : "ghost"} className="h-9 w-9" onClick={onToggleConfig} title="Configuración" aria-label="Configuración">
+            <Button size="icon" variant={showConfig ? "default" : "outline"} className="h-9 w-9" onClick={onToggleConfig} title="Configuración" aria-label="Configuración">
               <Settings className="h-4 w-4" strokeWidth={1.75} />
             </Button>
           </>
@@ -505,7 +506,7 @@ function TablaProductos({
               </tr>
             ))}
             {loading && productos.length === 0 && (
-              <tr><td colSpan={8} className="text-center py-10 text-muted-foreground">Cargando productos...</td></tr>
+              <tr><td colSpan={8} className="text-center py-10"><LoadingSpinner /></td></tr>
             )}
             {!loading && productos.length === 0 && (
               <tr><td colSpan={8} className="text-center py-10 text-muted-foreground">No hay productos todavía.</td></tr>

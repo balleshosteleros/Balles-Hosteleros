@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Bloque } from "../../types";
 import type { PaginaContexto } from "./PaginaPublicaShell";
+import { Loader2 } from "lucide-react";
 
 export function BloquePublico({
   bloque,
@@ -215,7 +216,9 @@ function MenuPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "menu" }> }) 
     <section className="py-12 px-4 max-w-4xl mx-auto" id="menu">
       <h2 className="text-3xl font-bold text-center mb-8">Carta</h2>
       {cargando ? (
-        <p className="text-center text-sm text-muted-foreground">Cargando carta…</p>
+        <div className="flex items-center justify-center py-6">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
       ) : catsFiltradas.length === 0 ? (
         <p className="text-center text-sm text-muted-foreground">
           Publica tu carta digital para que aparezca aquí.

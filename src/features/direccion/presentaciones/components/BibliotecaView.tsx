@@ -30,6 +30,7 @@ import {
 } from "../actions/presentaciones-actions";
 import { NuevaPresentacionModal } from "./NuevaPresentacionModal";
 import type { Presentacion, Estado } from "../types/presentaciones";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 const ESTADO_LABEL: Record<Estado, string> = {
   borrador: "Borrador",
@@ -191,8 +192,8 @@ export function BibliotecaView() {
           <TableBody>
             {loading && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
-                  Cargando…
+                <TableCell colSpan={6} className="text-center py-12">
+                  <LoadingSpinner />
                 </TableCell>
               </TableRow>
             )}

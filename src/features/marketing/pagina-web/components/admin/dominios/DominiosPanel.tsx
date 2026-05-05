@@ -32,6 +32,7 @@ import {
 import { AnadirDominioDialog } from "./AnadirDominioDialog";
 import { EstadoDominio } from "./EstadoDominio";
 import type { PaginaWebDominio } from "../../../types";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 interface Props {
   paginaId: string;
@@ -131,8 +132,8 @@ export function DominiosPanel({ paginaId, nombrePagina }: Props) {
           <TableBody>
             {loading && (
               <TableRow>
-                <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">
-                  Cargando…
+                <TableCell colSpan={4} className="text-center py-12">
+                  <LoadingSpinner />
                 </TableCell>
               </TableRow>
             )}

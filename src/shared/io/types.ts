@@ -73,6 +73,6 @@ export interface ModuleIO<T> {
   fetchAll: (ctx: IOContext) => Promise<T[]>;
   upsert?: (rows: T[], ctx: IOContext, mode: ImportMode) => Promise<ImportResult>;
   dictionary?: Record<string, readonly (string | number)[]>;
-  supportedExportFormats?: ("xlsx" | "csv" | "json")[];
+  supportedExportFormats?: ("xlsx" | "csv" | "json" | "pdf")[];
   supportedImportFormats?: ("xlsx" | "csv" | "json")[];
 }

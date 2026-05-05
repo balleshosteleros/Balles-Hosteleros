@@ -218,8 +218,7 @@ export function SolicitudesView() {
           <Card>
             {loading ? (
               <div className="flex items-center justify-center h-40 text-muted-foreground">
-                <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                Cargando solicitudes…
+                <Loader2 className="h-5 w-5 animate-spin" />
               </div>
             ) : filtrados.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-40 text-muted-foreground text-sm">

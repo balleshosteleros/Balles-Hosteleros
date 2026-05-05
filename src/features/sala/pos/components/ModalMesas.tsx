@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { listMesasPOS, type MesaPOS } from "../actions/mesas-pos-actions";
 import { formatEur } from "../services/calculo-ticket";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 interface Props {
   open: boolean;
@@ -80,7 +81,7 @@ export function ModalMesas({ open, onOpenChange, onSelect, titulo = "Seleccionar
 
         {/* Grid mesas */}
         {loading ? (
-          <div className="p-8 text-center text-sm text-muted-foreground">Cargando…</div>
+          <LoadingSpinner className="p-8" />
         ) : filtradas.length === 0 ? (
           <div className="p-8 text-center text-sm text-muted-foreground">
             No hay mesas disponibles{filtroEstado ? ` (filtro: ${filtroEstado})` : ""}.

@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Badge } from "@/components/ui/badge";
 import {
   Search, KeyRound, Pencil, UserCog,
-  Power, PowerOff, UserPlus, Plus, UserCheck, Trash2, Mail,
+  Power, PowerOff, UserPlus, Plus, UserCheck, Trash2, Mail, ListFilter,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -28,6 +28,7 @@ import {
   setEmpresasDeUsuario,
 } from "@/features/empresa/actions/user-empresas-actions";
 import { Checkbox } from "@/components/ui/checkbox";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 const ESTADO_STYLES: Record<EstadoAcceso, string> = {
   Activo: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
@@ -64,7 +65,25 @@ type SupabaseProfile = {
   estado_acceso?: string;
   created_at: string;
   updated_at: string;
+  last_sign_in_at?: string | null;
 };
+
+// Formatea un timestamp ISO (auth.users.last_sign_in_at) a un string corto en
+// horario local: "5 may 13:14" para hoy/reciente, "5 may 2026" para fechas más antiguas.
+function formatUltimaConexion(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  const ahora = new Date();
+  const mismoAnio = d.getFullYear() === ahora.getFullYear();
+  const fecha = d.toLocaleDateString("es-ES", {
+    day: "numeric",
+    month: "short",
+    ...(mismoAnio ? {} : { year: "numeric" }),
+  });
+  const hora = d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+  return `${fecha} · ${hora}`;
+}
 
 function profileToAcceso(p: SupabaseProfile, empresa: { id: string; nombre: string }): AccesoPortal {
   // El rol UI viene SIEMPRE del nombre custom guardado en empresa_roles (rol_label).
@@ -81,13 +100,15 @@ function profileToAcceso(p: SupabaseProfile, empresa: { id: string; nombre: stri
     empleadoId: p.id,
     userId: p.user_id,
     nombreEmpleado: fullName,
+    nombre: p.nombre ?? "",
+    apellidos: p.apellidos ?? "",
     emailUsuario: p.email,
     empresa: empresa.nombre,
     empresaId: empresa.id,
     rol: rolUI,
     departamento: p.departamento ?? "",
     estadoAcceso,
-    ultimaConexion: "—",
+    ultimaConexion: formatUltimaConexion(p.last_sign_in_at),
     fechaCreacion: p.created_at?.slice(0, 10) ?? "",
     permisos: permisosDesdeRol(rolUI),
   };
@@ -101,10 +122,13 @@ export function UsuariosTab() {
   const [rolesData, setRolesData] = useState<Rol[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
-  const [filtroEstado, setFiltroEstado] = useState("todos");
+  const [filtroEstados, setFiltroEstados] = useState<Set<string>>(new Set());
+  const [filtroRoles, setFiltroRoles] = useState<Set<string>>(new Set());
+  const [filtroDepartamentos, setFiltroDepartamentos] = useState<Set<string>>(new Set());
   const [editModal, setEditModal] = useState<AccesoPortal | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createPrefill, setCreatePrefill] = useState<{ nombre: string; apellidos: string; email: string } | null>(null);
+  const [createEsEmpleado, setCreateEsEmpleado] = useState(true);
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [resetModal, setResetModal] = useState<{ id: string; nombre: string } | null>(null);
@@ -166,27 +190,42 @@ export function UsuariosTab() {
     return map;
   }, [rolesData]);
 
-  // Mapa rol → permisos reales guardados en empresa_roles. Es la fuente de
-  // verdad para la celda PERMISOS de la tabla; no usar `permisosDesdeRol`
-  // (helper hardcodeado por nombre que ignora la config real).
-  const permisosPorRol = useMemo(() => {
-    const map = new Map<string, { ver: number; editar: number }>();
+  // Mapa rol → nº de módulos con acceso. La pestaña Roles tiene UN único toggle
+  // por módulo ("ACCESO"), así que aquí contamos módulos con `ver = true`.
+  // El total fijo es 12 (11 departamentos del sidebar + AJUSTES), igual que en
+  // RolesTab.tsx para que ambas pestañas muestren la misma cifra.
+  const TOTAL_MODULOS_ACCESO = 12;
+  const accesosPorRol = useMemo(() => {
+    const map = new Map<string, number>();
     for (const r of rolesData) {
-      const ver = r.permisos.filter((p) => p.ver).length;
-      const editar = r.permisos.filter((p) => p.editar).length;
-      map.set(r.nombre.trim().toLowerCase(), { ver, editar });
+      const accesos = r.permisos.filter((p) => p.ver).length;
+      map.set(r.nombre.trim().toLowerCase(), accesos);
     }
     return map;
   }, [rolesData]);
+
+  // Opciones únicas de departamentos derivadas de la config de roles.
+  const departamentosOpciones = useMemo(() => {
+    const set = new Set<string>();
+    for (const deps of departamentosPorRol.values()) {
+      for (const d of deps) set.add(d);
+    }
+    return Array.from(set).sort();
+  }, [departamentosPorRol]);
 
   const filtrados = useMemo(() => {
     return accesos.filter((a) => {
       const texto = `${a.nombreEmpleado} ${a.emailUsuario} ${a.rol} ${a.departamento}`.toLowerCase();
       if (busqueda && !texto.includes(busqueda.toLowerCase())) return false;
-      if (filtroEstado !== "todos" && a.estadoAcceso !== filtroEstado) return false;
+      if (filtroEstados.size > 0 && !filtroEstados.has(a.estadoAcceso)) return false;
+      if (filtroRoles.size > 0 && !filtroRoles.has(a.rol)) return false;
+      if (filtroDepartamentos.size > 0) {
+        const deps = departamentosPorRol.get(a.rol.trim().toLowerCase()) ?? [];
+        if (!deps.some((d) => filtroDepartamentos.has(d))) return false;
+      }
       return true;
     });
-  }, [accesos, busqueda, filtroEstado]);
+  }, [accesos, busqueda, filtroEstados, filtroRoles, filtroDepartamentos, departamentosPorRol]);
 
   const activar = async (acc: AccesoPortal) => {
     setAccesos((prev) => prev.map((a) => a.id === acc.id ? { ...a, estadoAcceso: "Activo" as EstadoAcceso } : a));
@@ -255,15 +294,24 @@ export function UsuariosTab() {
 
   const guardarEdicion = async (updated: AccesoPortal) => {
     // Enviamos el nombre custom del rol; el server action lo guarda en rol_label
-    // y deriva el app_role para user_roles.
+    // y deriva el app_role para user_roles. Nombre/apellidos también se persisten
+    // si se editaron en el modal.
     const res = await updateEmployeeProfile(updated.empleadoId, {
       role: updated.rol,
+      nombre: updated.nombre ?? "",
+      apellidos: updated.apellidos ?? "",
     });
     if (res.error) {
       toast.error(res.error);
       return;
     }
-    setAccesos((prev) => prev.map((a) => a.id === updated.id ? updated : a));
+    const nombreEmpleado = [updated.nombre, updated.apellidos]
+      .filter(Boolean)
+      .join(" ")
+      .trim() || updated.nombreEmpleado;
+    setAccesos((prev) =>
+      prev.map((a) => (a.id === updated.id ? { ...updated, nombreEmpleado } : a)),
+    );
     setEditModal(null);
     toast.success("Usuario actualizado");
   };
@@ -271,6 +319,7 @@ export function UsuariosTab() {
   const handleCreateUser = async (formData: FormData) => {
     setCreateLoading(true);
     setCreateError(null);
+    formData.set("es_empleado", createEsEmpleado ? "1" : "0");
     const result = await createEmployee(formData);
     if (result?.error) {
       setCreateError(result.error);
@@ -279,6 +328,7 @@ export function UsuariosTab() {
       toast.success("Usuario creado correctamente en Supabase");
       setShowCreateModal(false);
       setCreatePrefill(null);
+      setCreateEsEmpleado(true);
       setCreateLoading(false);
       await loadAccesos();
     }
@@ -308,14 +358,6 @@ export function UsuariosTab() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Buscar por nombre, email o rol..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} className="pl-9" />
         </div>
-        <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-          <SelectTrigger className="w-[160px]"><SelectValue placeholder="Estado" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos los estados</SelectItem>
-            <SelectItem value="Activo">Activo</SelectItem>
-            <SelectItem value="Inactivo">Inactivo</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
 
       {/* Users table — todos los usuarios de Supabase en una única tabla */}
@@ -323,16 +365,54 @@ export function UsuariosTab() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-muted/50">
-              {["EMPLEADO", "USUARIO", "DEPARTAMENTO", "ROL", "ESTADO", "ÚLTIMA CONEXIÓN", "PERMISOS", "ACCIONES"].map((h) => (
-                <th key={h} className="text-left px-3 py-2.5 text-xs font-bold text-muted-foreground whitespace-nowrap">{h}</th>
+              {([
+                { label: "USUARIO" },
+                { label: "DEPARTAMENTO", filter: "departamento" as const },
+                { label: "ROL", filter: "rol" as const },
+                { label: "ESTADO", filter: "estado" as const },
+                { label: "ÚLTIMA CONEXIÓN" },
+                { label: "PERMISOS" },
+                { label: "ACCIONES" },
+              ]).map((col) => (
+                <th key={col.label} className="text-left px-3 py-2.5 text-xs font-bold text-muted-foreground whitespace-nowrap">
+                  <div className="inline-flex items-center gap-1.5">
+                    <span>{col.label}</span>
+                    {col.filter === "departamento" && (
+                      <ColumnFilter
+                        label="Departamentos"
+                        options={departamentosOpciones}
+                        selected={filtroDepartamentos}
+                        onChange={setFiltroDepartamentos}
+                      />
+                    )}
+                    {col.filter === "rol" && (
+                      <ColumnFilter
+                        label="Roles"
+                        options={rolesEmpresa}
+                        selected={filtroRoles}
+                        onChange={setFiltroRoles}
+                      />
+                    )}
+                    {col.filter === "estado" && (
+                      <ColumnFilter
+                        label="Estados"
+                        options={["Activo", "Inactivo", "Pendiente"]}
+                        selected={filtroEstados}
+                        onChange={setFiltroEstados}
+                      />
+                    )}
+                  </div>
+                </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {filtrados.map((acc) => (
               <tr key={acc.id} className="border-b hover:bg-muted/30">
-                <td className="px-3 py-2.5 font-medium text-foreground whitespace-nowrap">{acc.nombreEmpleado}</td>
-                <td className="px-3 py-2.5 text-muted-foreground">{acc.emailUsuario}</td>
+                <td className="px-3 py-2.5 whitespace-nowrap">
+                  <div className="font-medium text-foreground">{acc.nombreEmpleado}</div>
+                  <div className="text-[11px] text-muted-foreground">{acc.emailUsuario}</div>
+                </td>
                 <td className="px-3 py-2.5">
                   <DepartamentosCell
                     departamentos={departamentosPorRol.get(acc.rol.trim().toLowerCase()) ?? []}
@@ -348,10 +428,10 @@ export function UsuariosTab() {
                 <td className="px-3 py-2.5">
                   {(() => {
                     const k = acc.rol.trim().toLowerCase();
-                    const p = permisosPorRol.get(k) ?? { ver: 0, editar: 0 };
+                    const accesos = accesosPorRol.get(k) ?? 0;
                     return (
-                      <span className="text-[10px] text-muted-foreground">
-                        {p.ver} ver · {p.editar} editar
+                      <span className="text-[10px] text-muted-foreground tabular-nums">
+                        {accesos} / {TOTAL_MODULOS_ACCESO} con acceso
                       </span>
                     );
                   })()}
@@ -388,10 +468,10 @@ export function UsuariosTab() {
               </tr>
             ))}
             {loading && (
-              <tr><td colSpan={8} className="text-center py-8 text-muted-foreground">Cargando usuarios desde Supabase…</td></tr>
+              <tr><td colSpan={7} className="text-center py-8"><LoadingSpinner /></td></tr>
             )}
             {!loading && filtrados.length === 0 && (
-              <tr><td colSpan={8} className="text-center py-8 text-muted-foreground">No se encontraron usuarios.</td></tr>
+              <tr><td colSpan={7} className="text-center py-8 text-muted-foreground">No se encontraron usuarios.</td></tr>
             )}
           </tbody>
         </table>
@@ -544,7 +624,16 @@ export function UsuariosTab() {
       </Dialog>
 
       {/* Create user modal (Supabase) */}
-      <Dialog open={showCreateModal} onOpenChange={(o) => { setShowCreateModal(o); if (!o) setCreatePrefill(null); }}>
+      <Dialog
+        open={showCreateModal}
+        onOpenChange={(o) => {
+          setShowCreateModal(o);
+          if (!o) {
+            setCreatePrefill(null);
+            setCreateEsEmpleado(true);
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -585,9 +674,35 @@ export function UsuariosTab() {
                 El rol determina los departamentos accesibles y los permisos. Configúralo en la pestaña Roles.
               </p>
             </div>
+            <div className="rounded-md border bg-muted/30 px-2.5 py-2 mt-1">
+              <label className="flex items-start gap-2 cursor-pointer">
+                <Checkbox
+                  checked={!createEsEmpleado}
+                  onCheckedChange={(v) => setCreateEsEmpleado(!v)}
+                  className="mt-0.5"
+                />
+                <span className="flex-1">
+                  <span className="text-xs font-bold block">No es empleado</span>
+                  <span className="text-[10px] text-muted-foreground">
+                    Marca esta opción si el usuario es externo (asesor, inversor, gestor, etc.)
+                    y no forma parte de la plantilla.
+                  </span>
+                </span>
+              </label>
+            </div>
             {createError && <p className="text-sm text-red-600">{createError}</p>}
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => { setShowCreateModal(false); setCreatePrefill(null); }}>Cancelar</Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowCreateModal(false);
+                  setCreatePrefill(null);
+                  setCreateEsEmpleado(true);
+                }}
+              >
+                Cancelar
+              </Button>
               <Button type="submit" disabled={createLoading}>
                 {createLoading ? "Creando..." : "Crear usuario"}
               </Button>
@@ -657,14 +772,39 @@ function EditarUsuarioModal({
     onSave(form);
   };
 
+  const tituloUsuario = [form.nombre, form.apellidos].filter(Boolean).join(" ").trim()
+    || acceso.nombreEmpleado;
+
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle>EDITAR USUARIO — {acceso.nombreEmpleado}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>EDITAR USUARIO — {tituloUsuario}</DialogTitle></DialogHeader>
         <div className="grid grid-cols-2 gap-3 mt-2">
+          <div>
+            <Label className="text-xs font-bold">NOMBRE</Label>
+            <Input
+              value={form.nombre ?? ""}
+              onChange={(e) => setForm((p) => ({ ...p, nombre: e.target.value }))}
+            />
+          </div>
+          <div>
+            <Label className="text-xs font-bold">APELLIDOS</Label>
+            <Input
+              value={form.apellidos ?? ""}
+              onChange={(e) => setForm((p) => ({ ...p, apellidos: e.target.value }))}
+            />
+          </div>
           <div className="col-span-2">
-            <Label className="text-xs font-bold">EMAIL / USUARIO</Label>
-            <Input value={form.emailUsuario} onChange={(e) => setForm((p) => ({ ...p, emailUsuario: e.target.value }))} />
+            <Label className="text-xs font-bold">EMAIL</Label>
+            <Input
+              type="email"
+              value={form.emailUsuario}
+              readOnly
+              className="bg-muted/40 cursor-not-allowed"
+            />
+            <p className="text-[10px] text-muted-foreground mt-1">
+              El email es el identificador de inicio de sesión y no se modifica desde aquí.
+            </p>
           </div>
           <div>
             <Label className="text-xs font-bold">ROL</Label>
@@ -698,7 +838,7 @@ function EditarUsuarioModal({
                 Este usuario no está vinculado a una cuenta de Supabase, no se pueden asignar accesos.
               </p>
             ) : empresasLoading ? (
-              <p className="text-[11px] text-muted-foreground mt-1">Cargando accesos…</p>
+              <LoadingSpinner size="sm" className="py-2 mt-1" />
             ) : empresasDisponibles.length === 0 ? (
               <p className="text-[11px] text-muted-foreground mt-1">
                 No hay empresas en la base de datos.
@@ -732,6 +872,77 @@ function EditarUsuarioModal({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/* ─── COLUMN FILTER ─── */
+// Icono de filtro reutilizable para cabeceras de tabla. Abre un Popover con
+// checkboxes multi-selección. El icono se resalta cuando hay filtro activo.
+function ColumnFilter({
+  label,
+  options,
+  selected,
+  onChange,
+}: {
+  label: string;
+  options: string[];
+  selected: Set<string>;
+  onChange: (next: Set<string>) => void;
+}) {
+  const active = selected.size > 0;
+  const toggle = (value: string) => {
+    const next = new Set(selected);
+    if (next.has(value)) next.delete(value);
+    else next.add(value);
+    onChange(next);
+  };
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={`inline-flex h-5 w-5 items-center justify-center rounded transition ${
+            active
+              ? "bg-primary/10 text-primary"
+              : "text-muted-foreground/60 hover:bg-muted hover:text-foreground"
+          }`}
+          title={`Filtrar ${label.toLowerCase()}`}
+        >
+          <ListFilter className="h-3 w-3" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-56 p-0">
+        <div className="flex items-center justify-between border-b px-3 py-2">
+          <p className="text-[10px] font-bold tracking-wider text-muted-foreground">{label}</p>
+          {active && (
+            <button
+              type="button"
+              onClick={() => onChange(new Set())}
+              className="text-[10px] font-semibold text-primary hover:underline"
+            >
+              Limpiar
+            </button>
+          )}
+        </div>
+        <ul className="max-h-64 overflow-y-auto py-1">
+          {options.length === 0 ? (
+            <li className="px-3 py-2 text-xs text-muted-foreground">Sin opciones</li>
+          ) : (
+            options.map((opt) => (
+              <li key={opt}>
+                <label className="flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-muted/50">
+                  <Checkbox
+                    checked={selected.has(opt)}
+                    onCheckedChange={() => toggle(opt)}
+                  />
+                  <span className="text-sm">{opt}</span>
+                </label>
+              </li>
+            ))
+          )}
+        </ul>
+      </PopoverContent>
+    </Popover>
   );
 }
 

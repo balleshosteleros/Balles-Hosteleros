@@ -895,7 +895,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               )}
             </div>
           </header>
-          <main className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
+          <main className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 overscroll-contain">
             <AvatarRequiredGuard>
               <OnboardingGuard>{children}</OnboardingGuard>
             </AvatarRequiredGuard>

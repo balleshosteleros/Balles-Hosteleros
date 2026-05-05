@@ -8,6 +8,7 @@ import {
   FileSpreadsheet,
   FileCode,
   FileDown,
+  FileType2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,7 +23,7 @@ import {
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 
-export type IOFormat = "csv" | "xlsx" | "json";
+export type IOFormat = "csv" | "xlsx" | "json" | "pdf";
 
 interface IOMenuButtonProps {
   onImport?: (file: File) => void;
@@ -38,6 +39,7 @@ const FORMAT_META: Record<IOFormat, { label: string; icon: typeof FileText }> = 
   csv: { label: "CSV (.csv)", icon: FileText },
   xlsx: { label: "Excel (.xlsx)", icon: FileSpreadsheet },
   json: { label: "JSON (.json)", icon: FileCode },
+  pdf: { label: "PDF (.pdf)", icon: FileType2 },
 };
 
 export function IOMenuButton({
@@ -45,9 +47,9 @@ export function IOMenuButton({
   onExport,
   onDownloadTemplate,
   importFormats = ["xlsx", "csv"],
-  exportFormats = ["xlsx", "csv"],
+  exportFormats = ["xlsx", "pdf"],
   disabled,
-  label = "Importar / Exportar",
+  label = "Descargar",
 }: IOMenuButtonProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const acceptAttr = importFormats
@@ -75,9 +77,9 @@ export function IOMenuButton({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
-            size="icon"
-            variant="ghost"
-            className="h-8 w-8"
+            size="sm"
+            variant="outline"
+            className="h-9 w-9 p-0"
             disabled={disabled}
             title={label}
             aria-label={label}

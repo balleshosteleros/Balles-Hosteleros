@@ -13,6 +13,7 @@ import {
   type EjecucionConTarea,
 } from "../../hooks/useCronogramaEjecuciones";
 import { toast } from "sonner";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 function formatFechaLarga(d: Date) {
   return d.toLocaleDateString("es-ES", {
@@ -88,7 +89,7 @@ export function TareasHoyWidget() {
 
           <div className="divide-y">
             {isLoading ? (
-              <div className="p-6 text-sm text-muted-foreground text-center">Cargando…</div>
+              <LoadingSpinner className="p-6" />
             ) : hoy.length === 0 ? (
               <div className="p-6 text-sm text-muted-foreground text-center">
                 No tienes tareas asignadas para hoy. ¡Buen día! 💪

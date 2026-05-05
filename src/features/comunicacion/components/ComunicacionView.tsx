@@ -23,6 +23,7 @@ import {
   createCanal,
 } from "@/features/comunicacion/actions/comunicacion-actions";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 type Canal = {
   id: string;
@@ -250,11 +251,7 @@ export function ComunicacionView() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
-          {cargando && (
-            <p className="px-3 py-4 text-xs text-muted-foreground text-center">
-              Cargando canales...
-            </p>
-          )}
+          {cargando && <LoadingSpinner size="sm" className="px-3 py-4" />}
           {["departamento", "grupo"].map((tipo) => {
             const lista = canalesFiltrados.filter((c) => c.tipo === tipo);
             if (!lista.length) return null;
@@ -311,11 +308,7 @@ export function ComunicacionView() {
 
         {/* Mensajes */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 space-y-4">
-          {cargandoMsgs && (
-            <div className="py-12 text-center text-sm text-muted-foreground">
-              Cargando mensajes...
-            </div>
-          )}
+          {cargandoMsgs && <LoadingSpinner className="py-12" />}
           {!cargandoMsgs && msgDelCanal.length === 0 && (
             <div className="py-12 text-center text-sm text-muted-foreground">
               No hay mensajes en este canal.

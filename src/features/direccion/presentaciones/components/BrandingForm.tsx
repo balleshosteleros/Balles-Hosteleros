@@ -17,6 +17,7 @@ import {
 } from "../actions/branding-actions";
 import type { Branding } from "../types/presentaciones";
 import { TIPOGRAFIAS } from "../data/layouts";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 const DEFAULT: Branding = {
   empresa_id: "",
@@ -76,7 +77,7 @@ export function BrandingForm() {
   };
 
   if (loading) {
-    return <div className="p-8 text-center text-muted-foreground">Cargando marca…</div>;
+    return <LoadingSpinner className="p-8" />;
   }
 
   return (

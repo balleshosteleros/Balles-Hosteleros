@@ -319,8 +319,8 @@ export function DetalleProceso({ open, onClose, item, onAddActualizacion, onAddD
             )}
 
             {loadingDocs && (
-              <p className="text-xs text-muted-foreground text-center py-2 flex items-center justify-center gap-1">
-                <Loader2 className="h-3 w-3 animate-spin" /> Cargando documentos…
+              <p className="text-xs text-muted-foreground text-center py-2 flex items-center justify-center">
+                <Loader2 className="h-4 w-4 animate-spin" />
               </p>
             )}
 

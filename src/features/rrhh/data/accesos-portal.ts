@@ -7,6 +7,8 @@ export interface AccesoPortal {
   empleadoId: string;
   userId?: string | null;       // auth.users.id — necesario para gestionar accesos a empresas
   nombreEmpleado: string;
+  nombre?: string;
+  apellidos?: string;
   emailUsuario: string;
   empresa: string;
   empresaId: string;

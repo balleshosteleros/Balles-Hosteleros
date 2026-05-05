@@ -33,8 +33,6 @@ import {
 } from "@/shared/components/SubmoduleToolbar";
 import { IOActions } from "@/shared/io";
 import { stockIO } from "@/features/logistica/io/stock.io";
-import { ImportExportButton } from "@/features/logistica/components/ImportExportButton";
-import { exportToCSV, exportToXLSX, exportToPDF } from "@/features/logistica/lib/export-utils";
 import { toast } from "sonner";
 
 type MassAction =
@@ -439,22 +437,7 @@ export function StockView() {
             extraDerecha={
               <>
                 <IOActions config={stockIO} onSuccess={() => window.location.reload()} />
-                <ImportExportButton
-                  onExport={(format) => {
-                    const ts = new Date().toISOString().slice(0, 10);
-                    const rows = filtered.map((p) => ({
-                      Producto: p.nombre, Categoría: p.categoria, Unidad: p.unidad,
-                      "Stock Máximo": p.displayMaximo, "Stock Mínimo": p.displaySeguridad,
-                      "Stock Actual": p.stockActual, "Stock Reposición": Math.max(0, p.displayMaximo - p.stockActual),
-                    }));
-                    if (rows.length === 0) { toast.info("No hay datos para exportar."); return; }
-                    if (format === "csv") exportToCSV(rows, `stock-${ts}.csv`);
-                    else if (format === "xlsx") exportToXLSX(rows, `stock-${ts}.xlsx`);
-                    else exportToPDF(rows, `stock-${ts}.pdf`, "Stock");
-                    toast.success(`${rows.length} filas exportadas en ${format.toUpperCase()}`);
-                  }}
-                />
-                <Button size="icon" variant={showConfig ? "default" : "ghost"} className="h-9 w-9" onClick={() => setShowConfig((v) => !v)} title="Configuración" aria-label="Configuración">
+                <Button size="icon" variant={showConfig ? "default" : "outline"} className="h-9 w-9" onClick={() => setShowConfig((v) => !v)} title="Configuración" aria-label="Configuración">
                   <Settings className="h-4 w-4" strokeWidth={1.75} />
                 </Button>
               </>

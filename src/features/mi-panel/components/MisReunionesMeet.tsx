@@ -256,8 +256,7 @@ export function MisReunionesMeet() {
 
           {loading ? (
             <div className="flex h-40 items-center justify-center text-muted-foreground">
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Cargando reuniones…
+              <Loader2 className="h-4 w-4 animate-spin" />
             </div>
           ) : error ? (
             <div className="flex flex-col items-center justify-center px-5 py-10 text-center">

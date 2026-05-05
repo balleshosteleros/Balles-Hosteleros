@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getGoogleTokens, googleFetch } from "@/lib/google/api";
+import { googleFetchAuto } from "@/lib/google/api";
 
 type GmailFullMessage = {
   id: string;
@@ -104,25 +104,19 @@ function decodificarMensaje(msg: GmailFullMessage) {
 }
 
 export async function GET(request: Request) {
-  const { accessToken } = await getGoogleTokens();
-  if (!accessToken) {
-    return NextResponse.json({
-      connected: false,
-      cuerpo: "",
-      cuerpoHtml: "",
-      mensajes: [],
-    });
-  }
   const url = new URL(request.url);
   const id = url.searchParams.get("id");
   const threadId = url.searchParams.get("threadId");
 
   // Hilo completo: devolver todos los mensajes (como Gmail)
   if (threadId) {
-    const thread = await googleFetch<GmailFullThread>(
+    const r = await googleFetchAuto<GmailFullThread>(
       `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?format=full`,
-      accessToken,
     );
+    if (r.needsReauth) {
+      return NextResponse.json({ connected: false, mensajes: [] });
+    }
+    const thread = r.data;
     if (!thread || !thread.messages) {
       return NextResponse.json({ connected: true, mensajes: [] });
     }
@@ -134,10 +128,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "missing id or threadId" }, { status: 400 });
   }
 
-  const msg = await googleFetch<GmailFullMessage>(
+  const r = await googleFetchAuto<GmailFullMessage>(
     `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=full`,
-    accessToken,
   );
+  if (r.needsReauth) {
+    return NextResponse.json({ connected: false, cuerpo: "", cuerpoHtml: "" });
+  }
+  const msg = r.data;
   if (!msg) {
     return NextResponse.json({ connected: true, cuerpo: "", cuerpoHtml: "" });
   }

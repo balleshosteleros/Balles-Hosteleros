@@ -49,8 +49,7 @@ export function MisComunicadosView() {
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-5">
       {loading ? (
         <Card className="p-10 flex items-center justify-center text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin mr-2" />
-          Cargando comunicados…
+          <Loader2 className="h-5 w-5 animate-spin" />
         </Card>
       ) : items.length === 0 ? (
         <Card className="p-10 flex flex-col items-center justify-center text-center text-muted-foreground">

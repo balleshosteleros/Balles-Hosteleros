@@ -14,6 +14,7 @@ import { listFases, reordenarFases, type FaseConPolicies } from "../../actions/f
 import { listUsuariosEmpresa } from "../../actions/usuarios-empresa-actions";
 import { COLOR_PALETTE, type FaseColor } from "../../types";
 import { FaseConfigDialog } from "./FaseConfigDialog";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 interface Props {
   open: boolean;
@@ -84,7 +85,7 @@ export function GestionarFasesDialog({ open, onOpenChange, onChanged }: Props) {
             </p>
           </DialogHeader>
 
-          {loading && <p className="text-sm text-muted-foreground py-6 text-center">Cargando...</p>}
+          {loading && <LoadingSpinner className="py-6" />}
 
           {!loading && (
             <div className="space-y-2">
