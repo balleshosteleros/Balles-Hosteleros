@@ -6,7 +6,7 @@ import { AppSidebar } from "@/features/layout/components/app-sidebar";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { AnimatedAvatar } from "@/features/auth/components/AnimatedAvatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   GraduationCap,
   LogOut,
@@ -828,14 +828,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                           aria-label="Mi panel"
                           onMouseEnter={() => setUserMenuOpen(true)}
                         >
-                          <AnimatedAvatar
-                            avatarAiUrl={profile?.avatar_ai_url}
-                            avatarUrl={profile?.avatar_url}
-                            fallback={userInitial}
-                            alt={userName}
-                            sizeClassName="h-8 w-8"
-                            fallbackBg="bg-primary"
-                          />
+                          <Avatar className="h-8 w-8 ring-1 ring-border">
+                            {profile?.avatar_url ? (
+                              <AvatarImage src={profile.avatar_url} alt={userName} />
+                            ) : null}
+                            <AvatarFallback className="bg-primary text-primary-foreground text-xs font-bold">
+                              {userInitial}
+                            </AvatarFallback>
+                          </Avatar>
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent
