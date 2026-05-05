@@ -9,6 +9,7 @@ export interface AccesoPortal {
   nombreEmpleado: string;
   nombre?: string;
   apellidos?: string;
+  esEmpleado?: boolean;
   emailUsuario: string;
   empresa: string;
   empresaId: string;

@@ -27,9 +27,19 @@ export interface Festivo {
   id: string;
   fecha: string;
   nombre: string;
-  tipo: "general" | "local";
+  tipo: "nacional" | "autonomico" | "local";
   centro: string;
+  region?: string;
 }
+
+export const REGIONES_ESPANA = [
+  "Andalucía", "Aragón", "Asturias", "Baleares", "Canarias", "Cantabria",
+  "Castilla-La Mancha", "Castilla y León", "Cataluña", "Comunidad Valenciana",
+  "Extremadura", "Galicia", "La Rioja", "Madrid", "Murcia", "Navarra",
+  "País Vasco", "Ceuta", "Melilla",
+] as const;
+
+export type RegionEspana = (typeof REGIONES_ESPANA)[number];
 
 export interface BajaMedica {
   id: string;
@@ -107,23 +117,53 @@ const BACANAL_VACACIONES: Vacacion[] = [
 ];
 
 const HABANA_FESTIVOS: Festivo[] = [
-  { id: "feh1", fecha: "2026-01-01", nombre: "Año Nuevo", tipo: "general", centro: "Habana" },
-  { id: "feh2", fecha: "2026-01-06", nombre: "Reyes Magos", tipo: "general", centro: "Habana" },
-  { id: "feh3", fecha: "2026-05-01", nombre: "Día del Trabajador", tipo: "general", centro: "Habana" },
-  { id: "feh4", fecha: "2026-05-15", nombre: "San Isidro", tipo: "local", centro: "Habana" },
-  { id: "feh5", fecha: "2026-08-15", nombre: "Asunción de la Virgen", tipo: "general", centro: "Habana" },
-  { id: "feh6", fecha: "2026-10-12", nombre: "Fiesta Nacional", tipo: "general", centro: "Habana" },
-  { id: "feh7", fecha: "2026-12-25", nombre: "Navidad", tipo: "general", centro: "Habana" },
+  { id: "feh1", fecha: "2026-01-01", nombre: "Año Nuevo", tipo: "nacional", centro: "Habana", region: "Madrid" },
+  { id: "feh2", fecha: "2026-01-06", nombre: "Reyes Magos", tipo: "nacional", centro: "Habana", region: "Madrid" },
+  { id: "feh3", fecha: "2026-04-03", nombre: "Viernes Santo", tipo: "nacional", centro: "Habana", region: "Madrid" },
+  { id: "feh4", fecha: "2026-05-01", nombre: "Día del Trabajador", tipo: "nacional", centro: "Habana", region: "Madrid" },
+  { id: "feh5", fecha: "2026-05-02", nombre: "Día de la Comunidad de Madrid", tipo: "autonomico", centro: "Habana", region: "Madrid" },
+  { id: "feh6", fecha: "2026-05-15", nombre: "San Isidro", tipo: "local", centro: "Habana", region: "Madrid" },
+  { id: "feh7", fecha: "2026-08-15", nombre: "Asunción de la Virgen", tipo: "nacional", centro: "Habana", region: "Madrid" },
+  { id: "feh8", fecha: "2026-10-12", nombre: "Fiesta Nacional de España", tipo: "nacional", centro: "Habana", region: "Madrid" },
+  { id: "feh9", fecha: "2026-11-09", nombre: "Virgen de la Almudena", tipo: "local", centro: "Habana", region: "Madrid" },
+  { id: "feh10", fecha: "2026-12-06", nombre: "Día de la Constitución", tipo: "nacional", centro: "Habana", region: "Madrid" },
+  { id: "feh11", fecha: "2026-12-08", nombre: "Inmaculada Concepción", tipo: "nacional", centro: "Habana", region: "Madrid" },
+  { id: "feh12", fecha: "2026-12-25", nombre: "Navidad", tipo: "nacional", centro: "Habana", region: "Madrid" },
 ];
 
 const BACANAL_FESTIVOS: Festivo[] = [
-  { id: "feb1", fecha: "2026-01-01", nombre: "Año Nuevo", tipo: "general", centro: "Bacanal" },
-  { id: "feb2", fecha: "2026-01-06", nombre: "Reyes Magos", tipo: "general", centro: "Bacanal" },
-  { id: "feb3", fecha: "2026-03-19", nombre: "Fallas", tipo: "local", centro: "Bacanal" },
-  { id: "feb4", fecha: "2026-05-01", nombre: "Día del Trabajador", tipo: "general", centro: "Bacanal" },
-  { id: "feb5", fecha: "2026-08-15", nombre: "Asunción de la Virgen", tipo: "general", centro: "Bacanal" },
-  { id: "feb6", fecha: "2026-12-25", nombre: "Navidad", tipo: "general", centro: "Bacanal" },
+  { id: "feb1", fecha: "2026-01-01", nombre: "Año Nuevo", tipo: "nacional", centro: "Bacanal", region: "Comunidad Valenciana" },
+  { id: "feb2", fecha: "2026-01-06", nombre: "Reyes Magos", tipo: "nacional", centro: "Bacanal", region: "Comunidad Valenciana" },
+  { id: "feb3", fecha: "2026-03-19", nombre: "San José (Fallas)", tipo: "autonomico", centro: "Bacanal", region: "Comunidad Valenciana" },
+  { id: "feb4", fecha: "2026-04-03", nombre: "Viernes Santo", tipo: "nacional", centro: "Bacanal", region: "Comunidad Valenciana" },
+  { id: "feb5", fecha: "2026-04-06", nombre: "Lunes de Pascua", tipo: "autonomico", centro: "Bacanal", region: "Comunidad Valenciana" },
+  { id: "feb6", fecha: "2026-05-01", nombre: "Día del Trabajador", tipo: "nacional", centro: "Bacanal", region: "Comunidad Valenciana" },
+  { id: "feb7", fecha: "2026-08-15", nombre: "Asunción de la Virgen", tipo: "nacional", centro: "Bacanal", region: "Comunidad Valenciana" },
+  { id: "feb8", fecha: "2026-10-09", nombre: "Día de la Comunidad Valenciana", tipo: "autonomico", centro: "Bacanal", region: "Comunidad Valenciana" },
+  { id: "feb9", fecha: "2026-10-12", nombre: "Fiesta Nacional de España", tipo: "nacional", centro: "Bacanal", region: "Comunidad Valenciana" },
+  { id: "feb10", fecha: "2026-12-06", nombre: "Día de la Constitución", tipo: "nacional", centro: "Bacanal", region: "Comunidad Valenciana" },
+  { id: "feb11", fecha: "2026-12-08", nombre: "Inmaculada Concepción", tipo: "nacional", centro: "Bacanal", region: "Comunidad Valenciana" },
+  { id: "feb12", fecha: "2026-12-25", nombre: "Navidad", tipo: "nacional", centro: "Bacanal", region: "Comunidad Valenciana" },
 ];
+
+export interface FestivoEnFecha {
+  tipo: "festivo" | "vispera";
+  festivo: Festivo;
+}
+
+export function getFestivoEnFecha(empresaId: string, fechaISO: string): FestivoEnFecha | null {
+  const festivos = getFestivosPorEmpresa(empresaId);
+  const directo = festivos.find(f => f.fecha === fechaISO);
+  if (directo) return { tipo: "festivo", festivo: directo };
+
+  const d = new Date(fechaISO + "T12:00:00");
+  d.setDate(d.getDate() + 1);
+  const siguiente = d.toISOString().split("T")[0];
+  const proximoFestivo = festivos.find(f => f.fecha === siguiente);
+  if (proximoFestivo) return { tipo: "vispera", festivo: proximoFestivo };
+
+  return null;
+}
 
 const HABANA_BAJAS: BajaMedica[] = [
   { id: "bh1", empleadoId: "h1", empleadoNombre: "Carlos Martínez López", departamento: "CACHIMBEROS", fechaInicio: "2026-03-20", fechaFin: "2026-04-10", estado: "activa", motivo: "Lesión espalda" },

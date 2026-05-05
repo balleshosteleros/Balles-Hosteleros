@@ -47,6 +47,8 @@ import {
 import { IOActions } from "@/shared/io";
 import { reclutamientoIO } from "@/features/rrhh/io/reclutamiento.io";
 import { ReclutamientoConfigView } from "@/features/rrhh/components/reclutamiento/config/ReclutamientoConfigView";
+import { OfertasPublicasTab } from "@/features/rrhh/components/reclutamiento/OfertasPublicasTab";
+import { CandidatosRealesTab } from "@/features/rrhh/components/reclutamiento/CandidatosRealesTab";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -444,6 +446,8 @@ export function ReclutamientoView() {
             <TabsList className="h-9">
               <TabsTrigger value="vacantes" className="text-xs">Vacantes</TabsTrigger>
               <TabsTrigger value="candidatos" className="text-xs">Candidatos</TabsTrigger>
+              <TabsTrigger value="ofertas-publicas" className="text-xs">Ofertas públicas</TabsTrigger>
+              <TabsTrigger value="pipeline-real" className="text-xs">Pipeline real</TabsTrigger>
               <TabsTrigger value="config" className="text-xs">Configuración</TabsTrigger>
             </TabsList>
           </div>
@@ -500,6 +504,14 @@ export function ReclutamientoView() {
 
         <TabsContent value="candidatos" className="mt-4">
           <AllCandidatosView vacantes={vacantes} />
+        </TabsContent>
+
+        <TabsContent value="ofertas-publicas" className="mt-4">
+          <OfertasPublicasTab empresaSlug={empresaActual.id} />
+        </TabsContent>
+
+        <TabsContent value="pipeline-real" className="mt-4">
+          <CandidatosRealesTab />
         </TabsContent>
 
         <TabsContent value="config" className="mt-4">

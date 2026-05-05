@@ -21,7 +21,7 @@ export async function listCandidatos() {
     const { supabase, empresaId } = await getContext();
     const query = supabase
       .from("candidatos")
-      .select("*")
+      .select("*, vacantes(id,titulo,puesto_id,departamento_id)")
       .order("created_at", { ascending: false });
     if (empresaId) query.eq("empresa_id", empresaId);
     const { data, error } = await query;
@@ -35,14 +35,18 @@ export async function listCandidatos() {
 
 export async function createCandidato(input: {
   nombre: string;
-  puesto: string;
-  email?: string;
+  apellidos?: string;
+  email: string;
   telefono?: string;
+  dni_nie?: string;
+  vacante_id?: string;
   cv_url?: string;
+  carta_presentacion?: string;
+  origen?: "web" | "formulario" | "redes_sociales" | "recomendacion" | "base_datos" | "portal_empleo" | "otros";
   notas?: string;
 }) {
   try {
-    const { supabase, user, empresaId } = await getContext();
+    const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
 
     const { data, error } = await supabase
@@ -50,13 +54,17 @@ export async function createCandidato(input: {
       .insert({
         empresa_id: empresaId,
         nombre: input.nombre,
-        puesto: input.puesto,
-        email: input.email ?? null,
+        apellidos: input.apellidos ?? null,
+        email: input.email,
         telefono: input.telefono ?? null,
+        dni_nie: input.dni_nie ?? null,
+        vacante_id: input.vacante_id ?? null,
         cv_url: input.cv_url ?? null,
+        carta_presentacion: input.carta_presentacion ?? null,
+        origen: input.origen ?? "formulario",
         notas: input.notas ?? null,
+        fase: "nuevo",
         estado: "nuevo",
-        created_by: user?.id ?? null,
       })
       .select()
       .single();
@@ -73,12 +81,16 @@ export async function updateCandidato(
   id: string,
   input: {
     nombre?: string;
-    puesto?: string;
+    apellidos?: string;
     email?: string;
     telefono?: string;
+    dni_nie?: string;
+    vacante_id?: string;
     cv_url?: string;
     notas?: string;
+    fase?: string;
     estado?: string;
+    puntuacion?: number;
   }
 ) {
   try {

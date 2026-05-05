@@ -49,14 +49,29 @@ export type CartaItemLike = {
   created_at: string;
 };
 
+export type EstiloCards = "plana" | "sombra" | "borde";
+export type ModoCarta = "claro" | "oscuro" | "auto";
+
 export type CartaEmpresaPublica = {
   id: string;
+  slug?: string;
   nombre: string;
   carta_slug: string;
   carta_publicada: boolean;
   carta_horarios: CartaHorarios | null;
   carta_descripcion: string | null;
   logo_url?: string | null;
+  logo_alt_url?: string | null;
+  color_primario?: string | null;
+  color_secundario?: string | null;
+  color_texto?: string | null;
+  carta_color_fondo?: string | null;
+  carta_color_acento?: string | null;
+  carta_fuente_titulos?: string | null;
+  carta_fuente_cuerpo?: string | null;
+  carta_hero_url?: string | null;
+  carta_estilo_cards?: EstiloCards | null;
+  carta_modo?: ModoCarta | null;
 };
 
 export type CartaHorarios = {

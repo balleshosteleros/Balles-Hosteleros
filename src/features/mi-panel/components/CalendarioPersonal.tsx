@@ -3,11 +3,21 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Download, Loader2 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Badge } from "@/components/ui/badge";
+import { ChevronLeft, ChevronRight, Download, Loader2, AlertCircle, Info } from "lucide-react";
 import { getMiCalendarioMes } from "@/features/mi-panel/actions/mi-panel-actions";
 import { useAuth } from "@/features/auth/contexts/auth-context";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { getFestivoEnFecha } from "@/features/rrhh/data/calendarios";
 import type { DiaCalendario } from "@/features/mi-panel/types";
 import { formatHorasDecimal } from "@/shared/lib/timeUtils";
+
+const TIPO_FESTIVO_LABEL: Record<string, string> = {
+  nacional: "Nacional",
+  autonomico: "Autonómico",
+  local: "Local",
+};
 
 const DIAS_SEMANA = ["L", "M", "X", "J", "V", "S", "D"];
 const MESES = [
@@ -92,6 +102,7 @@ interface CalendarioPersonalProps {
 
 export function CalendarioPersonal({ refreshKey = 0 }: CalendarioPersonalProps) {
   const { profile } = useAuth();
+  const { empresaActual } = useEmpresa();
   const today = new Date();
   const [anio, setAnio] = useState(today.getFullYear());
   const [mes, setMes] = useState(today.getMonth() + 1);
@@ -285,6 +296,7 @@ export function CalendarioPersonal({ refreshKey = 0 }: CalendarioPersonalProps) 
             const isToday = c.fecha === todayKey;
             const di = getDiaInfo(c.fecha, info, todayKey);
             const cls = TW_CLASSES[di.estado];
+            const festivoInfo = empresaActual?.id ? getFestivoEnFecha(empresaActual.id, c.fecha) : null;
 
             return (
               <div
@@ -299,6 +311,45 @@ export function CalendarioPersonal({ refreshKey = 0 }: CalendarioPersonalProps) 
                 >
                   {c.dia}
                 </span>
+                {festivoInfo && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={(e) => e.stopPropagation()}
+                        className={`absolute top-1 left-1 h-4 w-4 rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform z-10 ${
+                          festivoInfo.tipo === "festivo"
+                            ? "bg-rose-500 text-white"
+                            : "bg-sky-500 text-white"
+                        }`}
+                        aria-label={festivoInfo.tipo === "festivo" ? "Festivo" : "Víspera de festivo"}
+                      >
+                        {festivoInfo.tipo === "festivo"
+                          ? <AlertCircle className="h-3 w-3" />
+                          : <Info className="h-3 w-3" />}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent side="top" className="w-60 p-3 text-xs">
+                      <div className="flex items-center gap-2 font-semibold">
+                        {festivoInfo.tipo === "festivo"
+                          ? <><AlertCircle className="h-3.5 w-3.5 text-rose-500" /> Festivo</>
+                          : <><Info className="h-3.5 w-3.5 text-sky-500" /> Víspera de festivo</>}
+                      </div>
+                      <div className="mt-2 space-y-1">
+                        <div className="font-medium">{festivoInfo.festivo.nombre}</div>
+                        <div className="text-muted-foreground">{festivoInfo.festivo.fecha}</div>
+                        <div className="flex items-center gap-1.5 pt-1 flex-wrap">
+                          <Badge variant="outline" className="text-[10px]">
+                            {TIPO_FESTIVO_LABEL[festivoInfo.festivo.tipo] ?? festivoInfo.festivo.tipo}
+                          </Badge>
+                          {festivoInfo.festivo.region && (
+                            <Badge variant="outline" className="text-[10px]">{festivoInfo.festivo.region}</Badge>
+                          )}
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
                 <span
                   className={`text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded ${cls.badge}`}
                 >
@@ -340,6 +391,12 @@ export function CalendarioPersonal({ refreshKey = 0 }: CalendarioPersonalProps) 
         </span>
         <span className="flex items-center gap-1">
           <span className="h-2.5 w-2.5 rounded-sm bg-violet-500" /> Permiso
+        </span>
+        <span className="flex items-center gap-1">
+          <AlertCircle className="h-3 w-3 text-rose-500" /> Festivo
+        </span>
+        <span className="flex items-center gap-1">
+          <Info className="h-3 w-3 text-sky-500" /> Víspera
         </span>
         <span className="ml-auto italic">Horario provisional (mock)</span>
       </div>

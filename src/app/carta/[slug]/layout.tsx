@@ -1,10 +1,28 @@
 /**
  * Layout público de la Carta Digital (PRP-028).
  * NO incluye AppLayout, sidebar ni auth — vista limpia para clientes anónimos.
- * Tema claro fijo para legibilidad en cualquier dispositivo.
+ * El tema visual (colores, fuentes) lo aplica CartaPublicaShell vía CSS custom
+ * properties cargadas desde BD por empresa.
  */
 import type { Metadata } from "next";
+import { Cormorant_Garamond, Inter } from "next/font/google";
 import "@/app/globals.css";
+
+// Pre-cargamos los defaults razonables del sistema. Si la empresa configura
+// otras fuentes vía Google Fonts, CartaPublicaShell las inyecta en runtime.
+const serifDefault = Cormorant_Garamond({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-carta-serif-default",
+  display: "swap",
+});
+
+const sansDefault = Inter({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600"],
+  variable: "--font-carta-sans-default",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Carta Digital",
@@ -14,7 +32,7 @@ export const metadata: Metadata = {
 
 export default function CartaPublicLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-stone-50 text-stone-900 antialiased">
+    <div className={`${serifDefault.variable} ${sansDefault.variable} min-h-screen antialiased`}>
       {children}
     </div>
   );

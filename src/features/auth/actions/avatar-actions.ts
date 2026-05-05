@@ -27,7 +27,11 @@ export async function uploadAvatar(userId: string, formData: FormData): Promise<
 
   const { error: dbError } = await supabase
     .from("profiles")
-    .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
+    .update({
+      avatar_url: publicUrl,
+      avatar_obligatorio: false,
+      updated_at: new Date().toISOString(),
+    })
     .eq("user_id", userId);
   if (dbError) throw new Error(`Error al guardar URL: ${dbError.message}`);
 

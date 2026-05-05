@@ -4,7 +4,7 @@ import { esHostPrincipal } from '@/features/marketing/pagina-web/services/hostna
 import { getRedirectByRolLabel } from '@/features/auth/lib/role-redirect'
 
 const AUTH_PATHS = ['/', '/signup', '/callback', '/forgot-password', '/update-password', '/check-email']
-const PUBLIC_PREFIXES = ['/carta', '/__site', '/api/google/connect']
+const PUBLIC_PREFIXES = ['/carta', '/__site', '/api/google/connect', '/empleo', '/api/empleo']
 
 function isAuthPath(pathname: string) {
   if (pathname === '/') return true

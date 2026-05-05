@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Search, KeyRound, Pencil, UserCog,
   Power, PowerOff, UserPlus, Plus, UserCheck, Trash2, Mail, ListFilter,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -60,16 +61,20 @@ type SupabaseProfile = {
   avatar_url: string | null;
   empresa_id: string | null;
   departamento: string | null;
+  es_empleado?: boolean | null;
   role?: string;
   rol_label?: string | null;
   estado_acceso?: string;
   created_at: string;
   updated_at: string;
-  last_sign_in_at?: string | null;
+  ultima_actividad?: string | null;
 };
 
-// Formatea un timestamp ISO (auth.users.last_sign_in_at) a un string corto en
+// Formatea un timestamp ISO (profiles.ultima_actividad) a un string corto en
 // horario local: "5 may 13:14" para hoy/reciente, "5 may 2026" para fechas más antiguas.
+// El proxy actualiza ultima_actividad cada vez que el usuario navega por una
+// ruta protegida (auto-throttled a 30s en BD), así que refleja la última vez
+// que estuvo "vivo" en la app — no el último login fresco con credenciales.
 function formatUltimaConexion(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -102,13 +107,14 @@ function profileToAcceso(p: SupabaseProfile, empresa: { id: string; nombre: stri
     nombreEmpleado: fullName,
     nombre: p.nombre ?? "",
     apellidos: p.apellidos ?? "",
+    esEmpleado: p.es_empleado ?? true,
     emailUsuario: p.email,
     empresa: empresa.nombre,
     empresaId: empresa.id,
     rol: rolUI,
     departamento: p.departamento ?? "",
     estadoAcceso,
-    ultimaConexion: formatUltimaConexion(p.last_sign_in_at),
+    ultimaConexion: formatUltimaConexion(p.ultima_actividad),
     fechaCreacion: p.created_at?.slice(0, 10) ?? "",
     permisos: permisosDesdeRol(rolUI),
   };
@@ -300,6 +306,7 @@ export function UsuariosTab() {
       role: updated.rol,
       nombre: updated.nombre ?? "",
       apellidos: updated.apellidos ?? "",
+      esEmpleado: updated.esEmpleado ?? true,
     });
     if (res.error) {
       toast.error(res.error);
@@ -410,7 +417,18 @@ export function UsuariosTab() {
             {filtrados.map((acc) => (
               <tr key={acc.id} className="border-b hover:bg-muted/30">
                 <td className="px-3 py-2.5 whitespace-nowrap">
-                  <div className="font-medium text-foreground">{acc.nombreEmpleado}</div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium text-foreground">{acc.nombreEmpleado}</span>
+                    {acc.esEmpleado === false && (
+                      <span
+                        className="inline-flex items-center"
+                        title="Usuario externo (no empleado)"
+                        aria-label="Usuario externo"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5 text-violet-600 shrink-0" />
+                      </span>
+                    )}
+                  </div>
                   <div className="text-[11px] text-muted-foreground">{acc.emailUsuario}</div>
                 </td>
                 <td className="px-3 py-2.5">
@@ -830,6 +848,24 @@ function EditarUsuarioModal({
                 <SelectItem value="Inactivo">Inactivo</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div className="col-span-2 rounded-md border bg-muted/30 px-2.5 py-2">
+            <label className="flex items-start gap-2 cursor-pointer">
+              <Checkbox
+                checked={form.esEmpleado === false}
+                onCheckedChange={(v) =>
+                  setForm((p) => ({ ...p, esEmpleado: v ? false : true }))
+                }
+                className="mt-0.5"
+              />
+              <span className="flex-1">
+                <span className="text-xs font-bold block">No es empleado</span>
+                <span className="text-[10px] text-muted-foreground">
+                  Marca esta opción si es un usuario externo (asesor, inversor, gestor, etc.)
+                  y no forma parte de la plantilla.
+                </span>
+              </span>
+            </label>
           </div>
           <div className="col-span-2">
             <Label className="text-xs font-bold">EMPRESAS A LAS QUE TIENE ACCESO</Label>

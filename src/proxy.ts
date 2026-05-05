@@ -75,17 +75,39 @@ export async function proxy(request: NextRequest) {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 
+  // Marca actividad real del usuario en la app. Auto-throttled a 30s vía WHERE
+  // para que múltiples pestañas/recargas no inflen la BD: si la última marca
+  // es reciente, el UPDATE no toca filas y vuelve casi gratis.
+  const cutoff = new Date(Date.now() - 30_000).toISOString()
+  const ahora = new Date().toISOString()
+
   const [{ data: profile }, { data: rolesRows }] = await Promise.all([
     admin
       .from('profiles')
-      .select('rol_label, empresa_id')
+      .select('rol_label, empresa_id, estado_acceso')
       .eq('user_id', user.id)
       .maybeSingle(),
     admin
       .from('user_roles')
       .select('role')
       .eq('user_id', user.id),
+    admin
+      .from('profiles')
+      .update({ ultima_actividad: ahora })
+      .eq('user_id', user.id)
+      .or(`ultima_actividad.is.null,ultima_actividad.lt.${cutoff}`),
   ])
+
+  // Cuenta deshabilitada (p.ej. el empleado fue dado de baja en RRHH y el
+  // trigger sync_profile_estado_from_empleado puso estado_acceso=Inactivo).
+  // Cerramos sesión y mandamos al login con un flag para que la UI lo explique.
+  const estadoAcceso = (profile?.estado_acceso as string | null) ?? null
+  if (estadoAcceso === 'Inactivo') {
+    await supabase.auth.signOut()
+    const url = new URL('/', request.url)
+    url.searchParams.set('error', 'cuenta_inactiva')
+    return NextResponse.redirect(url)
+  }
 
   const appRoles = (rolesRows ?? []).map((r) => r.role as string)
 

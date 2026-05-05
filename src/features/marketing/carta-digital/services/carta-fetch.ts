@@ -9,6 +9,8 @@ import type {
   CartaCategoria,
   CartaItem,
   CartaEmpresaPublica,
+  EstiloCards,
+  ModoCarta,
   Alergeno,
 } from "../types";
 
@@ -34,6 +36,18 @@ interface EmpresaRow {
   carta_publicada: boolean;
   carta_horarios: unknown;
   carta_descripcion: string | null;
+  logo_url: string | null;
+  logo_alt_url: string | null;
+  color: string | null;
+  color_secundario: string | null;
+  color_texto: string | null;
+  carta_color_fondo: string | null;
+  carta_color_acento: string | null;
+  carta_fuente_titulos: string | null;
+  carta_fuente_cuerpo: string | null;
+  carta_hero_url: string | null;
+  carta_estilo_cards: string | null;
+  carta_modo: string | null;
 }
 
 interface CategoriaRow {
@@ -111,7 +125,9 @@ export async function fetchCartaPorSlug(slug: string): Promise<CartaPublica | nu
 
     const { data: empresa, error: empresaErr } = await supabase
       .from("empresas")
-      .select("id, nombre, carta_slug, carta_publicada, carta_horarios, carta_descripcion")
+      .select(
+        "id, nombre, carta_slug, carta_publicada, carta_horarios, carta_descripcion, logo_url, logo_alt_url, color, color_secundario, color_texto, carta_color_fondo, carta_color_acento, carta_fuente_titulos, carta_fuente_cuerpo, carta_hero_url, carta_estilo_cards, carta_modo",
+      )
       .eq("carta_slug", slug)
       .eq("carta_publicada", true)
       .maybeSingle<EmpresaRow>();
@@ -129,6 +145,18 @@ export async function fetchCartaPorSlug(slug: string): Promise<CartaPublica | nu
       carta_publicada: empresa.carta_publicada,
       carta_horarios: (empresa.carta_horarios as CartaPublica["empresa"]["carta_horarios"]) ?? null,
       carta_descripcion: empresa.carta_descripcion,
+      logo_url: empresa.logo_url,
+      logo_alt_url: empresa.logo_alt_url,
+      color_primario: empresa.color,
+      color_secundario: empresa.color_secundario,
+      color_texto: empresa.color_texto,
+      carta_color_fondo: empresa.carta_color_fondo,
+      carta_color_acento: empresa.carta_color_acento,
+      carta_fuente_titulos: empresa.carta_fuente_titulos,
+      carta_fuente_cuerpo: empresa.carta_fuente_cuerpo,
+      carta_hero_url: empresa.carta_hero_url,
+      carta_estilo_cards: (empresa.carta_estilo_cards as EstiloCards | null) ?? null,
+      carta_modo: (empresa.carta_modo as ModoCarta | null) ?? null,
     };
 
     const [categoriasRes, itemsRes] = await Promise.all([

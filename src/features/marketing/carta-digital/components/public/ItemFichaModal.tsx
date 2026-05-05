@@ -2,25 +2,10 @@
 
 import Image from "next/image";
 import { useEffect } from "react";
+import { X, Star, Utensils } from "lucide-react";
 import type { CartaItem } from "../../types";
 import { LikeButton } from "./LikeButton";
-
-const ALERGENO_LABEL: Record<string, string> = {
-  gluten: "Gluten",
-  crustaceos: "Crustáceos",
-  huevos: "Huevos",
-  pescado: "Pescado",
-  cacahuetes: "Cacahuetes",
-  soja: "Soja",
-  lacteos: "Lácteos",
-  frutos_cascara: "Frutos cáscara",
-  apio: "Apio",
-  mostaza: "Mostaza",
-  sesamo: "Sésamo",
-  sulfitos: "Sulfitos",
-  altramuces: "Altramuces",
-  moluscos: "Moluscos",
-};
+import { AlergenoIcon, alergenoLabel } from "./FiltroAlergenos";
 
 export function ItemFichaModal({
   item,
@@ -54,25 +39,34 @@ export function ItemFichaModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-6"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-md sm:items-center sm:p-6"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
     >
       <div
-        className="relative max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-3xl bg-white shadow-xl sm:rounded-3xl"
+        className="relative max-h-[94vh] w-full max-w-md animate-[fichaIn_.32s_cubic-bezier(.2,.9,.3,1.1)] overflow-y-auto rounded-t-[28px] shadow-2xl sm:max-w-lg sm:rounded-[28px]"
         onClick={(e) => e.stopPropagation()}
+        style={{ backgroundColor: "var(--carta-superficie)", color: "var(--carta-texto)" }}
       >
         <button
           type="button"
           onClick={onClose}
           aria-label="Cerrar"
-          className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-xl shadow ring-1 ring-stone-200"
+          className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full shadow-sm backdrop-blur transition active:scale-90"
+          style={{
+            backgroundColor: "color-mix(in srgb, var(--carta-superficie) 80%, transparent)",
+            color: "var(--carta-texto)",
+          }}
         >
-          ×
+          <X className="h-4 w-4" strokeWidth={1.75} />
         </button>
 
-        <div className="relative aspect-square w-full overflow-hidden bg-stone-100 sm:aspect-[4/3]">
+        {/* Hero foto */}
+        <div
+          className="relative aspect-[4/3] w-full overflow-hidden"
+          style={{ backgroundColor: "var(--carta-superficie-enfasis)" }}
+        >
           {item.foto_url ? (
             <Image
               src={item.foto_url}
@@ -83,18 +77,45 @@ export function ItemFichaModal({
               priority
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-6xl text-stone-300">
-              🍽️
+            <div
+              className="flex h-full w-full items-center justify-center"
+              style={{
+                background:
+                  "linear-gradient(135deg, color-mix(in srgb, var(--carta-acento) 30%, var(--carta-superficie-enfasis)) 0%, var(--carta-superficie-enfasis) 100%)",
+              }}
+            >
+              <Utensils className="h-16 w-16 opacity-30" strokeWidth={1} style={{ color: "var(--carta-primario)" }} />
             </div>
           )}
+
+          {item.destacado ? (
+            <span
+              className="absolute left-4 top-4 inline-flex items-center gap-1 rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] backdrop-blur"
+              style={{
+                backgroundColor: "color-mix(in srgb, var(--carta-acento) 90%, transparent)",
+                color: "var(--carta-sobre-marca)",
+              }}
+            >
+              <Star className="h-2.5 w-2.5 fill-current" strokeWidth={1.5} />
+              Destacado
+            </span>
+          ) : null}
         </div>
 
-        <div className="flex flex-col gap-4 p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-2xl font-bold leading-tight">{item.nombre}</h2>
-              <p className="mt-1 text-2xl font-bold text-stone-900">
-                {item.precio.toFixed(2)} €
+        <div className="flex flex-col gap-5 px-6 pb-8 pt-6 sm:px-7">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <h2
+                className="text-3xl font-light leading-tight tracking-tight sm:text-4xl"
+                style={{ fontFamily: "var(--carta-fuente-titulos)", color: "var(--carta-texto)" }}
+              >
+                {item.nombre}
+              </h2>
+              <p
+                className="mt-2 text-xl font-bold tabular-nums sm:text-2xl"
+                style={{ color: "var(--carta-primario)", fontFamily: "var(--carta-fuente-titulos)" }}
+              >
+                {item.precio.toFixed(2).replace(".", ",")}€
               </p>
             </div>
             <LikeButton
@@ -107,21 +128,32 @@ export function ItemFichaModal({
           </div>
 
           {item.descripcion ? (
-            <p className="text-base leading-relaxed text-stone-700">{item.descripcion}</p>
+            <p className="text-[15px] font-light leading-relaxed" style={{ color: "var(--carta-texto-suave)" }}>
+              {item.descripcion}
+            </p>
           ) : null}
 
           {item.alergenos.length > 0 ? (
-            <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-500">
-                Alérgenos
+            <div className="border-t pt-5" style={{ borderColor: "var(--carta-borde)" }}>
+              <p
+                className="mb-3 text-[10px] font-semibold uppercase tracking-[0.3em]"
+                style={{ color: "var(--carta-texto-tenue)" }}
+              >
+                Contiene alérgenos
               </p>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 {item.alergenos.map((a) => (
                   <span
                     key={a}
-                    className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-900"
+                    className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[12px] font-medium"
+                    style={{
+                      borderColor: "var(--carta-borde)",
+                      color: "var(--carta-texto-suave)",
+                      backgroundColor: "color-mix(in srgb, var(--carta-superficie-enfasis) 60%, transparent)",
+                    }}
                   >
-                    {ALERGENO_LABEL[a] ?? a}
+                    <AlergenoIcon alergeno={a} className="h-3 w-3" />
+                    {alergenoLabel(a)}
                   </span>
                 ))}
               </div>
@@ -129,6 +161,19 @@ export function ItemFichaModal({
           ) : null}
         </div>
       </div>
+
+      <style jsx>{`
+        @keyframes fichaIn {
+          0% {
+            transform: translateY(40px) scale(0.97);
+            opacity: 0;
+          }
+          100% {
+            transform: translateY(0) scale(1);
+            opacity: 1;
+          }
+        }
+      `}</style>
     </div>
   );
 }

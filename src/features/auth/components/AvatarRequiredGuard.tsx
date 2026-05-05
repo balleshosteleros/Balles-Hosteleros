@@ -12,12 +12,13 @@ export function AvatarRequiredGuard({ children }: { children: React.ReactNode })
   useEffect(() => setMounted(true), []);
 
   const tieneFoto = !!profile?.avatar_url;
+  const obligatorio = profile?.avatar_obligatorio === true;
   const exento =
     loading ||
     !user ||
     roles.some((r) => ["admin", "director", "gerencia"].includes(r));
 
-  if (!mounted || tieneFoto || exento) {
+  if (!mounted || tieneFoto || !obligatorio || exento) {
     return <>{children}</>;
   }
 
