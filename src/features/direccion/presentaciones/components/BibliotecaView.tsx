@@ -28,7 +28,7 @@ import {
 import {
   listPresentaciones, archivarPresentacion, eliminarPresentacion, renombrarPresentacion,
 } from "../actions/presentaciones-actions";
-import { NuevaPresentacionModal } from "./NuevaPresentacionModal";
+import { GeneradorInteligenteModal } from "./GeneradorInteligenteModal";
 import type { Presentacion, Estado } from "../types/presentaciones";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
@@ -292,7 +292,7 @@ export function BibliotecaView() {
       </Card>
 
       {/* Modal crear */}
-      <NuevaPresentacionModal open={nuevaOpen} onOpenChange={setNuevaOpen} />
+      <GeneradorInteligenteModal open={nuevaOpen} onOpenChange={setNuevaOpen} onSuccess={cargar} />
 
       {/* Confirmación archivar/eliminar */}
       <AlertDialog open={!!confirmar} onOpenChange={(o) => !o && setConfirmar(null)}>

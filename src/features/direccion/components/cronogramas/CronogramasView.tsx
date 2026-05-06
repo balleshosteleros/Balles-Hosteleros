@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Plus, Trash2, CalendarDays, Edit2, ChevronDown, ChevronRight, Video, Upload, X, ArrowLeft,
+  Plus, Trash2, CalendarDays, Edit2, ChevronDown, ChevronRight, Video, Upload, X, ArrowLeft, CheckSquare2,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -515,10 +515,12 @@ export function CronogramasView() {
           })()}
 
           {rolActivo && (
-            <Button type="button" size="sm" onClick={handleAddMain} className="shadow-sm" disabled={isLoading}>
-              <Plus className="h-4 w-4 mr-1.5" />
-              Añadir Tarea
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button type="button" size="sm" onClick={handleAddMain} className="shadow-sm" disabled={isLoading}>
+                <Plus className="h-4 w-4 mr-1.5" />
+                Añadir Tarea
+              </Button>
+            </div>
           )}
         </div>
       </div>

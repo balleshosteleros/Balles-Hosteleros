@@ -8,6 +8,7 @@ import {
   Briefcase, Utensils, ClipboardCheck, Users, Megaphone, Truck,
   Calculator, FileText, Scale, Shield, ChevronRight, Plus, Video, BarChart3,
   Wine, Sparkles, ChefHat, Music, ShieldCheck, UtensilsCrossed,
+  CheckSquare2,
 } from "lucide-react";
 import type { CronogramaOperativo } from "../../hooks/useCronogramasOperativos";
 import {
@@ -249,7 +250,21 @@ export function CronogramasHome({ data, onSelect, onCrearCronograma, onIrProduct
                     <div className={cn("p-2.5 rounded-lg bg-background/70", color)}>
                       <Icon className="h-6 w-6" />
                     </div>
-                    <ChevronRight className="h-5 w-5 text-muted-foreground/50 group-hover:text-foreground transition-colors" />
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-violet-600 hover:bg-violet-50"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.dispatchEvent(new CustomEvent("open-tasks-drawer", { detail: { rol } }));
+                        }}
+                        title="Ver en Mis Tareas"
+                      >
+                        <CheckSquare2 className="h-5 w-5" />
+                      </Button>
+                      <ChevronRight className="h-5 w-5 text-muted-foreground/50 group-hover:text-foreground transition-colors" />
+                    </div>
                   </div>
 
                   <Badge
