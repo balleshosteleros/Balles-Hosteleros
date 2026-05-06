@@ -30,7 +30,12 @@ export interface CronogramaOperativo {
 import { fallbackCronogramas } from "../data/cronogramasMockData";
 
 export function useCronogramasOperativos() {
-  const [data, setData] = useState<CronogramaOperativo[]>(fallbackCronogramas);
+  const [data, setData] = useState<CronogramaOperativo[]>(() => 
+    fallbackCronogramas.map((it, idx) => ({
+      ...it,
+      id: it.id ? `${it.id}-${it.rol}-${idx}` : `mock-${idx}`
+    }))
+  );
   const [isLoading, setIsLoading] = useState(false);
   const supabase = createClient();
 
@@ -47,7 +52,12 @@ export function useCronogramasOperativos() {
       setData(result as CronogramaOperativo[]);
     } else {
       // Fallback a los datos mockeados si la DB está vacía o falla
-      setData(fallbackCronogramas);
+      // Aseguramos que los IDs sean únicos (el mock tiene IDs duplicados entre roles)
+      const sanitized = fallbackCronogramas.map((it, idx) => ({
+        ...it,
+        id: it.id ? `${it.id}-${it.rol}-${idx}` : `mock-${idx}`
+      }));
+      setData(sanitized);
     }
     setIsLoading(false);
   };
