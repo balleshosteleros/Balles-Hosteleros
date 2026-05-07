@@ -11,8 +11,8 @@ let _client: SupabaseClient | null = null
 export function createClient() {
   if (typeof window !== 'undefined' && _client) return _client
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
 
   if (!url || !key) {
     if (typeof window !== 'undefined') {

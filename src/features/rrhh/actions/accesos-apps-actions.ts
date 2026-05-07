@@ -77,7 +77,8 @@ export async function listAccesosApps(empresaSlug: string): Promise<AccesoApp[]>
     .order("nombre", { ascending: true });
   if (error) {
     console.error("[accesos-apps] listAccesosApps:", error);
-    throw new Error(`Error al cargar accesos: ${error.message}`);
+    // En local/offline, devolvemos un array vacío en vez de romper la app
+    return [];
   }
   return (data ?? []).map((r) => rowToApp(r as Row));
 }
@@ -93,7 +94,7 @@ export async function listAllAccesosApps(): Promise<AccesoApp[]> {
     .order("nombre", { ascending: true });
   if (error) {
     console.error("[accesos-apps] listAllAccesosApps:", error);
-    throw new Error(`Error al cargar accesos: ${error.message}`);
+    return [];
   }
   return (data ?? []).map((r) => rowToApp(r as Row));
 }
