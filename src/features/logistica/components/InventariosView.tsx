@@ -23,10 +23,14 @@ import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
   aplicarOrdenToolbar,
+  coincideBusquedaUniversal,
+  colVisible,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
 } from "@/shared/components/SubmoduleToolbar";
+import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
+import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 import { IOActions } from "@/shared/io";
 import { inventariosIO } from "@/features/logistica/io/inventarios.io";
 import { toast } from "sonner";
@@ -108,11 +112,7 @@ export function InventariosView() {
   };
 
   const filtered = useMemo(() => {
-    let lista = inventarios.filter((inv) => {
-      if (!search) return true;
-      const s = search.toLowerCase();
-      return inv.almacen.toLowerCase().includes(s) || inv.motivo.toLowerCase().includes(s) || inv.usuario.toLowerCase().includes(s);
-    });
+    let lista = inventarios.filter((inv) => coincideBusquedaUniversal(inv, search));
     lista = aplicarFiltrosToolbar(lista, filtros, acceso);
     lista = aplicarOrdenToolbar(lista, orden, acceso);
     return lista;
@@ -272,26 +272,12 @@ export function InventariosView() {
       <SubmoduleToolbar
         busqueda={search}
         onBusquedaChange={setSearch}
-        placeholderBusqueda="Buscar…"
+        placeholderBusqueda="Buscar"
         onNuevo={() => setCreateOpen(true)}
-        campos={[
-          { campo: "estado", label: "Estado", tipo: "lista", opciones: ["Borrador", "Confirmado"] },
-          { campo: "almacen", label: "Almacén", tipo: "lista", opciones: almacenesUsados },
-          { campo: "motivo", label: "Motivo", tipo: "lista", opciones: motivosUsados },
-          { campo: "fecha", label: "Fecha", tipo: "fecha" },
-        ]}
         filtros={filtros}
         onFiltrosChange={setFiltros}
-        ordenOpciones={[
-          { campo: "fecha", label: "Fecha" },
-          { campo: "almacen", label: "Almacén" },
-          { campo: "motivo", label: "Motivo" },
-          { campo: "estado", label: "Estado" },
-        ]}
-        orden={orden}
-        onOrdenChange={setOrden}
         columnas={[
-          { campo: "fecha", label: "Fecha" },
+          { campo: "fecha", label: "Fecha", bloqueada: true },
           { campo: "almacen", label: "Almacén" },
           { campo: "motivo", label: "Motivo" },
           { campo: "estado", label: "Estado" },
@@ -311,6 +297,7 @@ export function InventariosView() {
       />
 
       {/* Table */}
+      <ResizableColumnsProvider storageKey="logistica-inventarios">
       <div className="bg-card rounded-lg border overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -318,9 +305,58 @@ export function InventariosView() {
               <th className="px-3 py-3 w-10">
                 <Checkbox checked={selected.size === filtered.length && filtered.length > 0} onCheckedChange={toggleAll} />
               </th>
-              {["Fecha", "Almacén", "Motivo", "Estado", "Usuario", "Conteos", ""].map((h) => (
-                <th key={h} className="px-3 py-3 text-left text-xs font-bold text-muted-foreground whitespace-nowrap">{h}</th>
-              ))}
+              <TableColumnHeader
+                label="Fecha"
+                campo="fecha"
+                filtroTipo="fecha"
+                filtros={filtros}
+                onFiltrosChange={setFiltros}
+                ordenable
+                orden={orden}
+                onOrdenChange={setOrden}
+              />
+              {colVisible(columnasVisibles, "almacen") && (
+                <TableColumnHeader
+                  label="Almacén"
+                  campo="almacen"
+                  filtroTipo="lista"
+                  opciones={almacenesUsados}
+                  filtros={filtros}
+                  onFiltrosChange={setFiltros}
+                  ordenable
+                  orden={orden}
+                  onOrdenChange={setOrden}
+                />
+              )}
+              {colVisible(columnasVisibles, "motivo") && (
+                <TableColumnHeader
+                  label="Motivo"
+                  campo="motivo"
+                  filtroTipo="lista"
+                  opciones={motivosUsados}
+                  filtros={filtros}
+                  onFiltrosChange={setFiltros}
+                  ordenable
+                  orden={orden}
+                  onOrdenChange={setOrden}
+                />
+              )}
+              {colVisible(columnasVisibles, "estado") && (
+                <TableColumnHeader
+                  label="Estado"
+                  campo="estado"
+                  filtroTipo="lista"
+                  opciones={["Borrador", "Confirmado"]}
+                  filtros={filtros}
+                  onFiltrosChange={setFiltros}
+                  ordenable
+                  orden={orden}
+                  onOrdenChange={setOrden}
+                />
+              )}
+              {colVisible(columnasVisibles, "usuario") && <TableColumnHeader label="Usuario" />}
+              {colVisible(columnasVisibles, "conteos") && <TableColumnHeader label="Conteos" />}
+              <TableColumnHeader label="" />
             </tr>
           </thead>
           <tbody>
@@ -330,20 +366,30 @@ export function InventariosView() {
                   <Checkbox checked={selected.has(inv.id)} onCheckedChange={() => toggleSelect(inv.id)} />
                 </td>
                 <td className="px-3 py-2.5 font-semibold text-foreground whitespace-nowrap">{inv.fecha}</td>
-                <td className="px-3 py-2.5 text-xs">{inv.almacen}</td>
-                <td className="px-3 py-2.5 text-xs">
-                  {inv.motivo}
-                  {inv.plantillaId && <Badge variant="secondary" className="ml-1.5 text-[9px]">Plantilla</Badge>}
-                </td>
-                <td className="px-3 py-2.5">
-                  <Badge variant="outline" className={inv.estado === "Confirmado"
-                    ? "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-300 text-[11px] font-bold"
-                    : "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 text-[11px] font-bold"}>
-                    {inv.estado}
-                  </Badge>
-                </td>
-                <td className="px-3 py-2.5 text-xs text-muted-foreground">{inv.usuario}</td>
-                <td className="px-3 py-2.5 text-xs font-medium">{inv.conteos.length}</td>
+                {colVisible(columnasVisibles, "almacen") && (
+                  <td className="px-3 py-2.5 text-xs">{inv.almacen}</td>
+                )}
+                {colVisible(columnasVisibles, "motivo") && (
+                  <td className="px-3 py-2.5 text-xs">
+                    {inv.motivo}
+                    {inv.plantillaId && <Badge variant="secondary" className="ml-1.5 text-[9px]">Plantilla</Badge>}
+                  </td>
+                )}
+                {colVisible(columnasVisibles, "estado") && (
+                  <td className="px-3 py-2.5">
+                    <Badge variant="outline" className={inv.estado === "Confirmado"
+                      ? "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-300 text-[11px] font-bold"
+                      : "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 text-[11px] font-bold"}>
+                      {inv.estado}
+                    </Badge>
+                  </td>
+                )}
+                {colVisible(columnasVisibles, "usuario") && (
+                  <td className="px-3 py-2.5 text-xs text-muted-foreground">{inv.usuario}</td>
+                )}
+                {colVisible(columnasVisibles, "conteos") && (
+                  <td className="px-3 py-2.5 text-xs font-medium">{inv.conteos.length}</td>
+                )}
                 <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                   <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setDetalleId(inv.id)} title="Ver detalle">
                     <Eye className="h-3.5 w-3.5" />
@@ -352,11 +398,12 @@ export function InventariosView() {
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={8} className="text-center py-12 text-muted-foreground">No se encontraron inventarios.</td></tr>
+              <tr><td colSpan={20} className="text-center py-12 text-muted-foreground">No se encontraron inventarios.</td></tr>
             )}
           </tbody>
         </table>
       </div>
+      </ResizableColumnsProvider>
       <div className="text-xs text-muted-foreground text-right">{filtered.length} de {inventarios.length} inventarios</div>
 
       {/* Create Modal */}

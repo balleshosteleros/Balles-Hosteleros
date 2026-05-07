@@ -92,6 +92,7 @@ import {
   Trophy,
   Building2,
   Rocket,
+  LayoutGrid,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -138,7 +139,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/mi-panel/formacion": "FORMACIÓN",
   "/mi-panel/formacion/curso": "CURSO",
   "/mi-panel/points": "POINTS",
-  "/mi-panel/datos-personales": "DATOS PERSONALES",
+  "/mi-panel/datos-personales": "PERFIL",
   "/mis-departamentos": "MIS DEPARTAMENTOS",
   "/gerencia": "GERENCIA",
   "/direccion/estructura": "ORGANIGRAMA",
@@ -173,7 +174,6 @@ const ROUTE_TITLES: Record<string, string> = {
   "/marketing/campanas/email": "CAMPAÑAS — EMAIL",
   "/marketing/campanas/meta": "CAMPAÑAS — META",
   "/marketing/campanas/whatsapp": "CAMPAÑAS — WHATSAPP",
-  "/logistica/incidencias": "INCIDENCIAS",
   "/ajustes": "AJUSTES",
   "/ayuda": "AYUDA",
   "/accesos": "ACCESOS",
@@ -316,7 +316,7 @@ const ROUTE_ICONS: Record<string, LucideIcon> = {
   "/cocina/nuevas-recetas": Sparkles,
   "/cocina/fichas-tecnicas": Utensils,
   "/cocina/elaboraciones": FlaskConical,
-  "/cocina/partidas": ChefHat,
+  "/cocina/partidas": LayoutGrid,
   "/cocina/temperaturas": Thermometer,
 
   // GERENCIA
@@ -372,7 +372,6 @@ const ROUTE_ICONS: Record<string, LucideIcon> = {
   "/logistica/pedidos": ShoppingCart,
   "/logistica/stock": Warehouse,
   "/logistica/inventarios": ClipboardList,
-  "/logistica/incidencias": AlertTriangle,
 
   // CONTABILIDAD
   "/contabilidad": Calculator,

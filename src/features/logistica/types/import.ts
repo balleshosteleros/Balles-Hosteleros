@@ -16,9 +16,11 @@ export interface ProveedorImport {
   personaContacto?: string | null;
   telefonoPrincipal?: string | null;
   telefonoSecundario?: string | null;
+  telefonoComercial?: string | null;
   emailPrincipal?: string | null;
+  emailComercial?: string | null;
   emailPedidos?: string | null;
-  emailIncidencias?: string | null;
+  emailContabilidad?: string | null;
   web?: string | null;
   direccion?: string | null;
   ciudad?: string | null;
@@ -26,9 +28,18 @@ export interface ProveedorImport {
   pais?: string | null;
   codigoPostal?: string | null;
   diasReparto?: string[];
+  horarioReparto?: Record<string, string> | null;
+  diasRepartoNegociados?: string[];
+  horarioRepartoNegociado?: Record<string, string> | null;
+  diaRepartoNegociado?: string | null;
+  viaPago?: string | null;
+  viaPagoNegociada?: string | null;
+  plazoPago?: string | null;
+  plazoPagoNegociado?: string | null;
   condicionesPago?: string | null;
   plazoEntrega?: string | null;
   observaciones?: string | null;
+  observacionesLogisticas?: string | null;
   comentariosInternos?: string | null;
 }
 

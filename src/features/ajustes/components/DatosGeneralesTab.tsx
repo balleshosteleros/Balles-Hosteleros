@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { DatosGenerales } from "@/features/ajustes/data/ajustes";
 import { Upload, Trash2, Info, ImageIcon, Loader2, ChevronDown, Check } from "lucide-react";
 import { uploadLogo, deleteLogo, saveEmpresaColor } from "@/features/empresa/actions/logo-actions";
+import { saveEmpresaAjustes } from "@/features/empresa/actions/empresas-actions";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 
 const MAX_LOGO_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -143,13 +144,28 @@ export function DatosGeneralesTab() {
   const save = async () => {
     setSavingFiscales(true);
     try {
-      const res = await saveDatosFiscales({
-        razon_social: d.razonSocial,
-        nif: d.cif,
-        direccion: d.direccionFiscal,
-        epigrafe_iae: d.epigrafeIae ?? "",
-      });
-      if (!res.ok) throw new Error(res.error ?? "Error al guardar");
+      const nombreComercial = d.nombreComercial?.trim();
+      if (!nombreComercial) {
+        toast.error("El nombre comercial no puede estar vacío");
+        return;
+      }
+      const [fiscalRes, ajustesRes] = await Promise.all([
+        saveDatosFiscales({
+          razon_social: d.razonSocial,
+          nif: d.cif,
+          direccion: d.direccionFiscal,
+          epigrafe_iae: d.epigrafeIae ?? "",
+        }),
+        empresaActual.dbId
+          ? saveEmpresaAjustes({ id: empresaActual.dbId, datosGenerales: d })
+          : Promise.resolve({ ok: true as const }),
+      ]);
+      if (!fiscalRes.ok) throw new Error(fiscalRes.error ?? "Error al guardar datos fiscales");
+      if (!ajustesRes.ok) throw new Error(ajustesRes.error ?? "Error al guardar empresa");
+      // Refrescar el contexto local para que sidebar/Empresas reflejen el nombre nuevo.
+      if (nombreComercial !== empresaActual.nombre) {
+        updateEmpresa(empresaActual.id, { nombre: nombreComercial });
+      }
       toast.success("Datos generales guardados");
     } catch (err) {
       console.error("[datos-fiscales] save:", err);

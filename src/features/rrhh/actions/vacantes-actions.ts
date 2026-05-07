@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 
 async function getContext() {
   const supabase = await createClient();
@@ -9,12 +10,8 @@ async function getContext() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { supabase, user: null, empresaId: null as string | null };
-  const { data } = await supabase
-    .from("profiles")
-    .select("empresa_id")
-    .eq("user_id", user.id)
-    .single();
-  return { supabase, user, empresaId: (data?.empresa_id ?? null) as string | null };
+  const empresaId = await getEmpresaActivaForUser(supabase, user.id);
+  return { supabase, user, empresaId };
 }
 
 export interface VacanteInput {
@@ -135,16 +132,22 @@ export async function updateVacante(id: string, input: Partial<VacanteInput>) {
 
 export async function deleteVacante(id: string) {
   try {
-    const { supabase, empresaId } = await getContext();
-    if (!empresaId) return { ok: false, error: "No autenticado" };
+    const { supabase, user } = await getContext();
+    if (!user) return { ok: false, error: "No autenticado" };
 
-    const { error } = await supabase
+    // El id es PK única; RLS se encarga de la autorización. No filtramos por
+    // empresa_id porque el contexto seleccionado en cliente puede no coincidir
+    // con el `profiles.empresa_id` por defecto.
+    const { data, error } = await supabase
       .from("vacantes")
       .delete()
       .eq("id", id)
-      .eq("empresa_id", empresaId);
+      .select("id");
 
     if (error) throw error;
+    if (!data || data.length === 0) {
+      return { ok: false, error: "No se encontró la vacante o sin permisos" };
+    }
     revalidatePath("/rrhh/reclutamiento");
     return { ok: true };
   } catch (err: unknown) {

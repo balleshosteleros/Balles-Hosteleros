@@ -17,6 +17,9 @@ import {
   Siren,
   Tag,
   X,
+  Users,
+  Check,
+  MoreVertical,
 } from "lucide-react";
 import {
   Sheet,
@@ -43,20 +46,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { toast } from "sonner";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import {
   CONTACTO_CATEGORIAS,
   CATEGORIA_LABELS,
+  ETIQUETA_COLORES,
   type Contacto,
   type ContactoCategoria,
   type ContactoInput,
+  type Etiqueta,
+  type EtiquetaColor,
 } from "@/features/agenda/types";
 import {
   listContactos,
   createContacto,
   updateContacto,
   deleteContacto,
+  listEtiquetas,
+  createEtiqueta,
+  updateEtiqueta,
+  deleteEtiqueta,
 } from "@/features/agenda/actions/contactos-actions";
 
 const CATEGORIA_ICON: Record<ContactoCategoria, React.ElementType> = {
@@ -64,6 +79,7 @@ const CATEGORIA_ICON: Record<ContactoCategoria, React.ElementType> = {
   proveedores: Truck,
   servicios: Sparkles,
   emergencias: Siren,
+  empleados: Users,
   otros: Tag,
 };
 
@@ -72,6 +88,7 @@ const CATEGORIA_TINT: Record<ContactoCategoria, string> = {
   proveedores: "text-blue-600 bg-blue-50",
   servicios: "text-violet-600 bg-violet-50",
   emergencias: "text-red-600 bg-red-50",
+  empleados: "text-emerald-600 bg-emerald-50",
   otros: "text-gray-600 bg-gray-50",
 };
 
@@ -80,13 +97,26 @@ const CATEGORIA_BORDER: Record<ContactoCategoria, string> = {
   proveedores: "bg-blue-100 text-blue-700 border-blue-200",
   servicios: "bg-violet-100 text-violet-700 border-violet-200",
   emergencias: "bg-red-100 text-red-700 border-red-200",
+  empleados: "bg-emerald-100 text-emerald-700 border-emerald-200",
   otros: "bg-gray-100 text-gray-700 border-gray-200",
+};
+
+const COLOR_CHIP: Record<EtiquetaColor, { dot: string; chip: string; chipActivo: string }> = {
+  slate: { dot: "bg-slate-400", chip: "border-slate-200 text-slate-700 bg-slate-50", chipActivo: "border-slate-500 bg-slate-100 text-slate-800" },
+  amber: { dot: "bg-amber-400", chip: "border-amber-200 text-amber-700 bg-amber-50", chipActivo: "border-amber-500 bg-amber-100 text-amber-800" },
+  blue: { dot: "bg-blue-400", chip: "border-blue-200 text-blue-700 bg-blue-50", chipActivo: "border-blue-500 bg-blue-100 text-blue-800" },
+  violet: { dot: "bg-violet-400", chip: "border-violet-200 text-violet-700 bg-violet-50", chipActivo: "border-violet-500 bg-violet-100 text-violet-800" },
+  red: { dot: "bg-red-400", chip: "border-red-200 text-red-700 bg-red-50", chipActivo: "border-red-500 bg-red-100 text-red-800" },
+  emerald: { dot: "bg-emerald-400", chip: "border-emerald-200 text-emerald-700 bg-emerald-50", chipActivo: "border-emerald-500 bg-emerald-100 text-emerald-800" },
+  pink: { dot: "bg-pink-400", chip: "border-pink-200 text-pink-700 bg-pink-50", chipActivo: "border-pink-500 bg-pink-100 text-pink-800" },
+  orange: { dot: "bg-orange-400", chip: "border-orange-200 text-orange-700 bg-orange-50", chipActivo: "border-orange-500 bg-orange-100 text-orange-800" },
 };
 
 const EMPTY_FORM: ContactoInput = {
   nombre: "",
   empresa_contacto: "",
   categoria: "proveedores",
+  etiqueta_id: null,
   telefono: "",
   email: "",
   whatsapp: "",
@@ -97,19 +127,28 @@ const EMPTY_FORM: ContactoInput = {
 export function AgendaDrawer({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [contactos, setContactos] = useState<Contacto[]>([]);
+  const [etiquetas, setEtiquetas] = useState<Etiqueta[]>([]);
   const [cargando, setCargando] = useState(false);
   const [busqueda, setBusqueda] = useState("");
   const [grupo, setGrupo] = useState<ContactoCategoria | "todos">("todos");
+  const [etiquetaFiltro, setEtiquetaFiltro] = useState<string | null>(null);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<ContactoInput>(EMPTY_FORM);
 
+  // Etiqueta dialog (crear / editar)
+  const [etDialogOpen, setEtDialogOpen] = useState(false);
+  const [etEditId, setEtEditId] = useState<string | null>(null);
+  const [etNombre, setEtNombre] = useState("");
+  const [etColor, setEtColor] = useState<EtiquetaColor>("slate");
+
   const cargar = useCallback(async () => {
     try {
       setCargando(true);
-      const data = await listContactos();
-      setContactos(data);
+      const [c, e] = await Promise.all([listContactos(), listEtiquetas()]);
+      setContactos(c);
+      setEtiquetas(e);
     } catch {
       toast.error("Error al cargar contactos");
     } finally {
@@ -121,21 +160,41 @@ export function AgendaDrawer({ children }: { children: ReactNode }) {
     if (open) cargar();
   }, [open, cargar]);
 
+  // Reset filtro de etiqueta al cambiar de categoría
+  useEffect(() => {
+    setEtiquetaFiltro(null);
+  }, [grupo]);
+
   const conteos = useMemo(() => {
     const c: Record<ContactoCategoria, number> = {
       mantenimiento: 0,
       proveedores: 0,
       servicios: 0,
       emergencias: 0,
+      empleados: 0,
       otros: 0,
     };
     contactos.forEach((x) => (c[x.categoria] += 1));
     return c;
   }, [contactos]);
 
+  const etiquetasGrupo = useMemo(() => {
+    if (grupo === "todos") return [];
+    return etiquetas.filter((e) => e.categoria === grupo);
+  }, [etiquetas, grupo]);
+
+  const conteoEtiquetas = useMemo(() => {
+    const map = new Map<string, number>();
+    contactos.forEach((c) => {
+      if (c.etiqueta_id) map.set(c.etiqueta_id, (map.get(c.etiqueta_id) ?? 0) + 1);
+    });
+    return map;
+  }, [contactos]);
+
   const filtrados = useMemo(() => {
     let lista = contactos;
     if (grupo !== "todos") lista = lista.filter((c) => c.categoria === grupo);
+    if (etiquetaFiltro) lista = lista.filter((c) => c.etiqueta_id === etiquetaFiltro);
     if (busqueda.trim()) {
       const q = busqueda.toLowerCase();
       lista = lista.filter(
@@ -146,11 +205,21 @@ export function AgendaDrawer({ children }: { children: ReactNode }) {
       );
     }
     return lista;
-  }, [contactos, grupo, busqueda]);
+  }, [contactos, grupo, etiquetaFiltro, busqueda]);
+
+  const etiquetaById = useMemo(() => {
+    const map = new Map<string, Etiqueta>();
+    etiquetas.forEach((e) => map.set(e.id, e));
+    return map;
+  }, [etiquetas]);
 
   function abrirNuevo() {
     setEditId(null);
-    setForm({ ...EMPTY_FORM, categoria: grupo === "todos" ? "proveedores" : grupo });
+    setForm({
+      ...EMPTY_FORM,
+      categoria: grupo === "todos" ? "proveedores" : grupo,
+      etiqueta_id: etiquetaFiltro,
+    });
     setDialogOpen(true);
   }
 
@@ -160,6 +229,7 @@ export function AgendaDrawer({ children }: { children: ReactNode }) {
       nombre: c.nombre,
       empresa_contacto: c.empresa_contacto,
       categoria: c.categoria,
+      etiqueta_id: c.etiqueta_id,
       telefono: c.telefono,
       email: c.email,
       whatsapp: c.whatsapp,
@@ -199,6 +269,54 @@ export function AgendaDrawer({ children }: { children: ReactNode }) {
       toast.success("Contacto eliminado");
     } catch {
       toast.error("Error al eliminar contacto");
+    }
+  }
+
+  // ───────── Etiquetas ─────────
+  function abrirNuevaEtiqueta() {
+    setEtEditId(null);
+    setEtNombre("");
+    setEtColor("slate");
+    setEtDialogOpen(true);
+  }
+
+  function abrirEditarEtiqueta(e: Etiqueta) {
+    setEtEditId(e.id);
+    setEtNombre(e.nombre);
+    setEtColor(e.color);
+    setEtDialogOpen(true);
+  }
+
+  async function guardarEtiqueta() {
+    if (grupo === "todos") return;
+    const nombre = etNombre.trim();
+    if (!nombre) {
+      toast.error("El nombre es obligatorio");
+      return;
+    }
+    try {
+      const payload = { nombre, color: etColor, categoria: grupo };
+      const res = etEditId
+        ? await updateEtiqueta(etEditId, payload)
+        : await createEtiqueta(payload);
+      if (!res.ok) { toast.error(res.error ?? "Error al guardar etiqueta"); return; }
+      toast.success(etEditId ? "Etiqueta actualizada" : "Etiqueta creada");
+      setEtDialogOpen(false);
+      await cargar();
+    } catch {
+      toast.error("Error al guardar etiqueta");
+    }
+  }
+
+  async function eliminarEtiqueta(id: string) {
+    try {
+      const res = await deleteEtiqueta(id);
+      if (!res.ok) { toast.error(res.error ?? "Error al eliminar etiqueta"); return; }
+      if (etiquetaFiltro === id) setEtiquetaFiltro(null);
+      toast.success("Etiqueta eliminada");
+      await cargar();
+    } catch {
+      toast.error("Error al eliminar etiqueta");
     }
   }
 
@@ -267,6 +385,77 @@ export function AgendaDrawer({ children }: { children: ReactNode }) {
           })}
         </div>
 
+        {/* Etiquetas de la categoría seleccionada */}
+        {grupo !== "todos" && (
+          <div className="flex flex-wrap items-center gap-1.5 px-4 py-2 border-b shrink-0">
+            <button
+              onClick={() => setEtiquetaFiltro(null)}
+              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                etiquetaFiltro === null
+                  ? "border-teal-600 bg-teal-50 text-teal-700"
+                  : "border-border text-muted-foreground hover:border-teal-300"
+              }`}
+            >
+              Todas
+              <span className="tabular-nums text-[10px]">{conteos[grupo]}</span>
+            </button>
+            {etiquetasGrupo.map((e) => {
+              const activo = etiquetaFiltro === e.id;
+              const colors = COLOR_CHIP[e.color] ?? COLOR_CHIP.slate;
+              const total = conteoEtiquetas.get(e.id) ?? 0;
+              return (
+                <div key={e.id} className="inline-flex items-center">
+                  <button
+                    onClick={() => setEtiquetaFiltro(activo ? null : e.id)}
+                    className={`inline-flex items-center gap-1 rounded-l-full border border-r-0 px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                      activo ? colors.chipActivo : colors.chip
+                    }`}
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full ${colors.dot}`} />
+                    {e.nombre}
+                    <span className="tabular-nums opacity-70">{total}</span>
+                  </button>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        className={`inline-flex items-center rounded-r-full border px-1 py-0.5 transition-colors ${
+                          activo ? colors.chipActivo : colors.chip
+                        }`}
+                        title="Opciones"
+                      >
+                        <MoreVertical className="h-3 w-3" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" className="w-36 p-1">
+                      <button
+                        onClick={() => abrirEditarEtiqueta(e)}
+                        className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
+                      >
+                        <Pencil className="h-3 w-3" />
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => eliminarEtiqueta(e.id)}
+                        className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-destructive hover:bg-destructive/10"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        Eliminar
+                      </button>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              );
+            })}
+            <button
+              onClick={abrirNuevaEtiqueta}
+              className="inline-flex items-center gap-1 rounded-full border border-dashed border-muted-foreground/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground hover:border-teal-500 hover:text-teal-700"
+            >
+              <Plus className="h-3 w-3" />
+              Etiqueta
+            </button>
+          </div>
+        )}
+
         {/* Lista */}
         <div className="flex-1 overflow-y-auto">
           {cargando && <LoadingSpinner className="py-16" />}
@@ -280,6 +469,8 @@ export function AgendaDrawer({ children }: { children: ReactNode }) {
           <ul className="grid grid-cols-1 lg:grid-cols-2 gap-px bg-border/50">
             {filtrados.map((c) => {
               const Icon = CATEGORIA_ICON[c.categoria];
+              const et = c.etiqueta_id ? etiquetaById.get(c.etiqueta_id) : null;
+              const etColors = et ? COLOR_CHIP[et.color] ?? COLOR_CHIP.slate : null;
               return (
                 <li
                   key={c.id}
@@ -301,12 +492,23 @@ export function AgendaDrawer({ children }: { children: ReactNode }) {
                             </p>
                           )}
                         </div>
-                        <Badge
-                          variant="outline"
-                          className={`shrink-0 text-[10px] ${CATEGORIA_BORDER[c.categoria]}`}
-                        >
-                          {CATEGORIA_LABELS[c.categoria]}
-                        </Badge>
+                        <div className="flex shrink-0 flex-wrap items-center gap-1">
+                          {et && etColors && (
+                            <Badge
+                              variant="outline"
+                              className={`text-[10px] ${etColors.chip}`}
+                            >
+                              <span className={`mr-1 h-1.5 w-1.5 rounded-full ${etColors.dot}`} />
+                              {et.nombre}
+                            </Badge>
+                          )}
+                          <Badge
+                            variant="outline"
+                            className={`text-[10px] ${CATEGORIA_BORDER[c.categoria]}`}
+                          >
+                            {CATEGORIA_LABELS[c.categoria]}
+                          </Badge>
+                        </div>
                       </div>
 
                       <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs">
@@ -382,7 +584,7 @@ export function AgendaDrawer({ children }: { children: ReactNode }) {
         </div>
       </SheetContent>
 
-      {/* Dialog crear / editar */}
+      {/* Dialog crear / editar contacto */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
@@ -411,25 +613,56 @@ export function AgendaDrawer({ children }: { children: ReactNode }) {
                 />
               </div>
             </div>
-            <div>
-              <Label>Categoría</Label>
-              <Select
-                value={form.categoria}
-                onValueChange={(v) =>
-                  setForm({ ...form, categoria: v as ContactoCategoria })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CONTACTO_CATEGORIAS.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {CATEGORIA_LABELS[cat]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label>Categoría</Label>
+                <Select
+                  value={form.categoria}
+                  onValueChange={(v) =>
+                    setForm({ ...form, categoria: v as ContactoCategoria, etiqueta_id: null })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CONTACTO_CATEGORIAS.map((cat) => (
+                      <SelectItem key={cat} value={cat}>
+                        {CATEGORIA_LABELS[cat]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Etiqueta</Label>
+                <Select
+                  value={form.etiqueta_id ?? "__none__"}
+                  onValueChange={(v) =>
+                    setForm({ ...form, etiqueta_id: v === "__none__" ? null : v })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sin etiqueta" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Sin etiqueta</SelectItem>
+                    {etiquetas
+                      .filter((e) => e.categoria === form.categoria)
+                      .map((e) => {
+                        const colors = COLOR_CHIP[e.color] ?? COLOR_CHIP.slate;
+                        return (
+                          <SelectItem key={e.id} value={e.id}>
+                            <span className="inline-flex items-center gap-2">
+                              <span className={`h-1.5 w-1.5 rounded-full ${colors.dot}`} />
+                              {e.nombre}
+                            </span>
+                          </SelectItem>
+                        );
+                      })}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
@@ -482,6 +715,64 @@ export function AgendaDrawer({ children }: { children: ReactNode }) {
               Cancelar
             </Button>
             <Button className="bg-teal-600 hover:bg-teal-700" onClick={guardar}>
+              Guardar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog crear / editar etiqueta */}
+      <Dialog open={etDialogOpen} onOpenChange={setEtDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {etEditId ? "Editar etiqueta" : "Nueva etiqueta"}
+              {grupo !== "todos" && (
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  · {CATEGORIA_LABELS[grupo]}
+                </span>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Nombre</Label>
+              <Input
+                autoFocus
+                value={etNombre}
+                onChange={(e) => setEtNombre(e.target.value)}
+                placeholder="Ej: Fontanería, Comercial, Limpieza…"
+                onKeyDown={(e) => { if (e.key === "Enter") guardarEtiqueta(); }}
+              />
+            </div>
+            <div>
+              <Label>Color</Label>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {ETIQUETA_COLORES.map((c) => {
+                  const colors = COLOR_CHIP[c];
+                  const sel = etColor === c;
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setEtColor(c)}
+                      className={`relative h-7 w-7 rounded-full border-2 transition-transform ${
+                        sel ? "border-foreground scale-110" : "border-transparent hover:scale-105"
+                      } ${colors.dot}`}
+                      title={c}
+                    >
+                      {sel && <Check className="absolute inset-0 m-auto h-3.5 w-3.5 text-white drop-shadow" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setEtDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button className="bg-teal-600 hover:bg-teal-700" onClick={guardarEtiqueta}>
               Guardar
             </Button>
           </DialogFooter>

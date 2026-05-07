@@ -16,10 +16,11 @@ import {
   Heart,
   Shirt,
 } from "lucide-react";
+
+const TALLAS = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"] as const;
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -41,6 +42,7 @@ import {
   guardarDatosPersonales,
   type DatosPersonalesCompletos,
 } from "@/features/mi-panel/actions/datos-personales-actions";
+import { guardarPerfilEmpleado } from "@/features/rrhh/actions/empleados-actions";
 import {
   BANCOS_ESPANA,
   buscarBancoPorCodigo,
@@ -57,6 +59,19 @@ import {
 
 interface Props {
   initial: DatosPersonalesCompletos;
+  /**
+   * Cuando es true, el formulario se renderiza en modo solo-lectura: inputs
+   * deshabilitados y sin botón de guardar. Lo usa Mi Panel — la edición
+   * ocurre desde RRHH (ficha de empleado), no desde la vista del propio
+   * trabajador.
+   */
+  readOnly?: boolean;
+  /**
+   * Cuando se proporciona, el guardado se hace contra el profile vinculado
+   * a ese empleado vía admin action (sólo admin/director). Si no se pasa,
+   * el guardado va contra el profile del usuario autenticado (caso Mi Panel).
+   */
+  targetEmpleadoId?: string;
 }
 
 type FormState = {
@@ -85,11 +100,8 @@ type FormState = {
   emergencia_nombre: string;
   emergencia_relacion: string;
   emergencia_telefono: string;
-  permiso_trabajo: string;
-  permiso_caducidad: string;
-  carnet_manipulador: string;
-  talla_uniforme: string;
-  alergias: string;
+  talla_camiseta: string;
+  talla_pantalon: string;
 };
 
 function fromInitial(d: DatosPersonalesCompletos): FormState {
@@ -119,15 +131,12 @@ function fromInitial(d: DatosPersonalesCompletos): FormState {
     emergencia_nombre: d.emergencia_nombre ?? "",
     emergencia_relacion: d.emergencia_relacion ?? "",
     emergencia_telefono: d.emergencia_telefono ?? "",
-    permiso_trabajo: d.permiso_trabajo ?? "",
-    permiso_caducidad: d.permiso_caducidad ?? "",
-    carnet_manipulador: d.carnet_manipulador ?? "",
-    talla_uniforme: d.talla_uniforme ?? "",
-    alergias: d.alergias ?? "",
+    talla_camiseta: d.talla_camiseta ?? "",
+    talla_pantalon: d.talla_pantalon ?? "",
   };
 }
 
-export function DatosPersonalesForm({ initial }: Props) {
+export function DatosPersonalesForm({ initial, readOnly = false, targetEmpleadoId }: Props) {
   const [form, setForm] = useState<FormState>(() => fromInitial(initial));
   const [saving, setSaving] = useState(false);
   const [bancoOpen, setBancoOpen] = useState(false);
@@ -201,15 +210,25 @@ export function DatosPersonalesForm({ initial }: Props) {
 
     setSaving(true);
     try {
-      const res = await guardarDatosPersonales({
+      const payload = {
         ...form,
         iban: form.iban ? form.iban.replace(/\s+/g, "").toUpperCase() : null,
         tipo_documento: form.tipo_documento || null,
-      });
+      };
+      // Si hay targetEmpleadoId, escribimos en el profile vinculado vía admin
+      // action. En caso contrario, escribimos en el profile del usuario
+      // autenticado (Mi Panel).
+      const res = targetEmpleadoId
+        ? await guardarPerfilEmpleado(targetEmpleadoId, payload)
+        : await guardarDatosPersonales(payload);
       if (!res.ok) {
-        toast.error(res.error ?? "No se pudieron guardar tus datos");
+        toast.error(res.error ?? "No se pudieron guardar los datos");
       } else {
-        toast.success("Datos personales guardados");
+        toast.success(
+          targetEmpleadoId
+            ? "Cambios guardados — visibles para el empleado al instante"
+            : "Datos personales guardados",
+        );
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error inesperado";
@@ -223,6 +242,10 @@ export function DatosPersonalesForm({ initial }: Props) {
 
   return (
     <form onSubmit={onSubmit} className="space-y-6">
+      <fieldset
+        disabled={readOnly}
+        className={readOnly ? "space-y-6 pointer-events-none" : "space-y-6"}
+      >
       <Section title="Identidad" icon={<IdCard className="h-4 w-4" />}>
         <Grid>
           <Field label="Nombre" required>
@@ -566,77 +589,64 @@ export function DatosPersonalesForm({ initial }: Props) {
         </Grid>
       </Section>
 
-      <Section title="Trabajo y prevención" icon={<Shirt className="h-4 w-4" />}>
+      <Section title="Uniforme" icon={<Shirt className="h-4 w-4" />}>
         <Grid>
-          <Field label="Permiso de trabajo">
-            <Input
-              value={form.permiso_trabajo}
-              onChange={(e) => update("permiso_trabajo", e.target.value)}
-              placeholder="Tipo / Nº permiso"
-            />
-          </Field>
-          <Field label="Caducidad permiso">
-            <Input
-              type="date"
-              value={form.permiso_caducidad}
-              onChange={(e) => update("permiso_caducidad", e.target.value)}
-            />
-          </Field>
-          <Field label="Carnet manipulador (caducidad)">
-            <Input
-              type="date"
-              value={form.carnet_manipulador}
-              onChange={(e) => update("carnet_manipulador", e.target.value)}
-            />
-          </Field>
-          <Field label="Talla uniforme">
+          <Field label="Talla de camiseta">
             <Select
-              value={form.talla_uniforme || undefined}
-              onValueChange={(v) => update("talla_uniforme", v)}
+              value={form.talla_camiseta || undefined}
+              onValueChange={(v) => update("talla_camiseta", v)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Talla" />
               </SelectTrigger>
               <SelectContent>
-                {["XS", "S", "M", "L", "XL", "XXL", "XXXL"].map((t) => (
-                  <SelectItem key={t} value={t}>
-                    {t}
-                  </SelectItem>
+                {TALLAS.map((t) => (
+                  <SelectItem key={t} value={t}>{t}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Alergias / observaciones médicas" wide>
-            <Textarea
-              value={form.alergias}
-              onChange={(e) => update("alergias", e.target.value)}
-              placeholder="Información médica relevante para emergencias"
-              rows={3}
-            />
+          <Field label="Talla de pantalón">
+            <Select
+              value={form.talla_pantalon || undefined}
+              onValueChange={(v) => update("talla_pantalon", v)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Talla" />
+              </SelectTrigger>
+              <SelectContent>
+                {TALLAS.map((t) => (
+                  <SelectItem key={t} value={t}>{t}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
         </Grid>
       </Section>
+      </fieldset>
 
-      <div className="flex justify-end">
-        <Button
-          type="submit"
-          size="lg"
-          className="gap-2"
-          disabled={saving}
-        >
-          {saving ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Guardando…
-            </>
-          ) : (
-            <>
-              <Save className="h-4 w-4" />
-              Guardar datos personales
-            </>
-          )}
-        </Button>
-      </div>
+      {!readOnly && (
+        <div className="flex justify-end">
+          <Button
+            type="submit"
+            size="lg"
+            className="gap-2"
+            disabled={saving}
+          >
+            {saving ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Guardando…
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4" />
+                Guardar datos personales
+              </>
+            )}
+          </Button>
+        </div>
+      )}
     </form>
   );
 }

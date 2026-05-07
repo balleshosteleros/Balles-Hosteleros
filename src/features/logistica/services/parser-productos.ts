@@ -10,8 +10,6 @@ function normalizeEstado(raw: string | null): ProductoEstado {
   if (!raw) return "Activo";
   const lower = raw.toLowerCase();
   if (lower.startsWith("inactiv")) return "Inactivo";
-  if (lower.startsWith("descatalog")) return "Descatalogado";
-  if (lower.startsWith("revis") || lower.includes("pending")) return "En revisión";
   return "Activo";
 }
 

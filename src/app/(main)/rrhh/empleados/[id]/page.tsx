@@ -1,53 +1,82 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { getEmpleadosPorEmpresa } from "@/features/rrhh/data/rrhh";
-import { getFichaEmpleado } from "@/features/rrhh/data/empleados-ficha";
 import { FichaEmpleadoHeader } from "@/features/rrhh/components/empleados/FichaEmpleadoHeader";
 import {
-  DatosPersonalesSection, DatosLaboralesSection, CamposPersonalizadosSection,
-  FormacionSection, JourneySection, AccesosSection, RolesSection,
-  AutomatizacionesSection, ConfiguracionSection,
-} from "@/features/rrhh/components/empleados/perfilSections";
-import {
-  FichajesTab, AusenciasTab, EstadisticasTab, ContratosTab,
-  DocumentosTab, HorariosTab, EvaluacionesTab,
+  FichajesTab, HorariosTab,
 } from "@/features/rrhh/components/empleados/FichaTabsContent";
-import { toast } from "sonner";
+import { SubmoduloPorEmpleadoPlaceholder } from "@/features/rrhh/components/empleados/SubmoduloPorEmpleadoPlaceholder";
+import { DatosPersonalesForm } from "@/features/mi-panel/components/DatosPersonalesForm";
+import type { DatosPersonalesCompletos } from "@/features/mi-panel/actions/datos-personales-actions";
+import { getEmpleadoConPerfil } from "@/features/rrhh/actions/empleados-actions";
+import type { Empleado } from "@/features/rrhh/data/rrhh";
+import { getFichaEmpleado } from "@/features/rrhh/data/empleados-ficha";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { cn } from "@/shared/lib/utils";
 import {
-  User, Briefcase, ListChecks, GraduationCap, Milestone,
-  ShieldCheck, UserCog, Zap, Settings,
-  Clock, CalendarDays, BarChart3, FileSignature, FolderOpen, Timer, Star,
+  User,
+  Fingerprint, Inbox, FileSignature, Calendar, Timer,
+  UserRoundSearch, UserCheck, Gift, Trophy, HandCoins,
+  GraduationCap, ClipboardList, FileQuestion,
 } from "lucide-react";
 
 const TOP_TABS = [
-  { id: "perfil", label: "Perfil", icon: User },
-  { id: "fichajes", label: "Fichajes", icon: Clock },
-  { id: "ausencias", label: "Ausencias y vacaciones", icon: CalendarDays },
-  { id: "estadisticas", label: "Estadísticas", icon: BarChart3 },
-  { id: "contratos", label: "Contratos", icon: FileSignature },
-  { id: "documentos", label: "Documentos", icon: FolderOpen },
-  { id: "horarios", label: "Horarios", icon: Timer },
-  { id: "evaluaciones", label: "Evaluaciones", icon: Star },
-] as const;
-
-const PERFIL_SECTIONS = [
-  { id: "datos-personales", label: "Datos personales", icon: User },
-  { id: "datos-laborales", label: "Datos laborales", icon: Briefcase },
-  { id: "campos-personalizados", label: "Campos personalizados", icon: ListChecks },
-  { id: "formacion", label: "Formación y habilidades", icon: GraduationCap },
-  { id: "journey", label: "Journey", icon: Milestone },
-  { id: "accesos", label: "Accesos", icon: ShieldCheck },
-  { id: "roles", label: "Roles", icon: UserCog },
-  { id: "automatizaciones", label: "Automatizaciones", icon: Zap },
-  { id: "configuracion", label: "Configuración", icon: Settings },
+  { id: "perfil",          label: "Perfil",         icon: User              },
+  { id: "fichajes",        label: "Fichajes",       icon: Fingerprint       },
+  { id: "solicitudes",     label: "Solicitudes",    icon: Inbox             },
+  { id: "firmas",          label: "Firmas",         icon: FileSignature     },
+  { id: "calendarios",     label: "Calendarios",    icon: Calendar          },
+  { id: "horarios",        label: "Horarios",       icon: Timer             },
+  { id: "reclutamiento",   label: "Reclutamiento",  icon: UserRoundSearch   },
+  { id: "boarding",        label: "Boarding",       icon: UserCheck         },
+  { id: "bonus",           label: "Bonus",          icon: Gift              },
+  { id: "points",          label: "Points",         icon: Trophy            },
+  { id: "pagos",           label: "Pagos",          icon: HandCoins         },
+  { id: "formacion",       label: "Formación",      icon: GraduationCap     },
+  { id: "encuestas",       label: "Encuestas",      icon: ClipboardList     },
+  { id: "cuestionarios",   label: "Cuestionarios",  icon: FileQuestion      },
 ] as const;
 
 type TopTab = typeof TOP_TABS[number]["id"];
-type PerfilSection = typeof PERFIL_SECTIONS[number]["id"];
+
+// Forma del row real de Supabase (joineado con departamentos).
+type EmpleadoBD = {
+  id: string;
+  nombre: string;
+  apellidos: string | null;
+  email_personal: string | null;
+  email_empresa: string | null;
+  telefono: string | null;
+  user_id: string;
+  departamento_id: string | null;
+  estado: string;
+  departamentos?: { nombre: string } | null;
+};
+
+/**
+ * Convierte el empleado de BD al shape `Empleado` que esperan los tabs
+ * heredados (FichajesTab, HorariosTab) — esos componentes son mock-driven
+ * y aún no se han migrado.
+ */
+function bdToEmpleadoMock(emp: EmpleadoBD): Empleado {
+  return {
+    id: emp.id,
+    nombre: emp.nombre ?? "",
+    apellidos: emp.apellidos ?? "",
+    estado: "trabajando",
+    horarioTipo: "—",
+    horarioSemanal: "—",
+    horasHoy: "—",
+    departamento: emp.departamentos?.nombre ?? "—",
+    telefono: emp.telefono ?? "—",
+    fichajes: 0,
+    emailEmpresa: emp.email_empresa ?? "",
+    emailPersonal: emp.email_personal ?? "",
+    validadorFichajes: "—",
+  };
+}
 
 export default function FichaEmpleadoPage() {
   const params = useParams();
@@ -55,84 +84,118 @@ export default function FichaEmpleadoPage() {
   const router = useRouter();
   const { empresaActual } = useEmpresa();
 
-  const empleados = useMemo(() => getEmpleadosPorEmpresa(empresaActual.id), [empresaActual.id]);
-  const empleado = useMemo(() => empleados.find((e) => e.id === id), [empleados, id]);
-  const ficha = useMemo(() => (id ? getFichaEmpleado(empresaActual.id, id) : null), [empresaActual.id, id]);
-
+  const [loading, setLoading] = useState(true);
+  const [empleadoBD, setEmpleadoBD] = useState<EmpleadoBD | null>(null);
+  const [datosPersonales, setDatosPersonales] = useState<DatosPersonalesCompletos | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TopTab>("perfil");
-  const [activePerfilSection, setActivePerfilSection] = useState<PerfilSection>("datos-personales");
 
-  if (!empleado || !ficha) {
+  useEffect(() => {
+    if (!id) return;
+    let alive = true;
+    setLoading(true);
+    getEmpleadoConPerfil(id).then((res) => {
+      if (!alive) return;
+      if (!res.ok) {
+        setError(res.error ?? "Empleado no encontrado");
+        setEmpleadoBD(null);
+        setDatosPersonales(null);
+      } else {
+        setEmpleadoBD(res.empleado as EmpleadoBD);
+        setDatosPersonales(res.datosPersonales ?? null);
+        setError(null);
+      }
+      setLoading(false);
+    });
+    return () => { alive = false; };
+  }, [id]);
+
+  const empleadoMock = useMemo(
+    () => (empleadoBD ? bdToEmpleadoMock(empleadoBD) : null),
+    [empleadoBD],
+  );
+  // La ficha "vieja" (mocks legacy) se sigue consultando para los tabs que aún
+  // no se han migrado a BD. Si el id no coincide con un mock, devuelve null y
+  // los tabs heredados muestran un fallback.
+  const ficha = useMemo(
+    () => (id ? getFichaEmpleado(empresaActual.id, id) : null),
+    [id, empresaActual.id],
+  );
+
+  if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-muted-foreground">Empleado no encontrado.</p>
+      <div className="flex items-center justify-center h-full p-12">
+        <LoadingSpinner />
       </div>
     );
   }
 
-  function handleSave() {
-    toast.success("Cambios guardados correctamente");
-  }
-
-  function renderPerfilContent() {
-    switch (activePerfilSection) {
-      case "datos-personales": return <DatosPersonalesSection ficha={ficha!} />;
-      case "datos-laborales": return <DatosLaboralesSection ficha={ficha!} />;
-      case "campos-personalizados": return <CamposPersonalizadosSection ficha={ficha!} />;
-      case "formacion": return <FormacionSection ficha={ficha!} />;
-      case "journey": return <JourneySection ficha={ficha!} />;
-      case "accesos": return <AccesosSection ficha={ficha!} empresaId={empresaActual.id} />;
-      case "roles": return <RolesSection ficha={ficha!} />;
-      case "automatizaciones": return <AutomatizacionesSection />;
-      case "configuracion": return <ConfiguracionSection />;
-    }
+  if (error || !empleadoBD || !empleadoMock || !datosPersonales) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-2">
+        <p className="text-muted-foreground">{error ?? "Empleado no encontrado."}</p>
+        <button
+          onClick={() => router.push("/rrhh/empleados")}
+          className="text-sm text-primary hover:underline"
+        >
+          Volver al listado
+        </button>
+      </div>
+    );
   }
 
   function renderTabContent() {
     switch (activeTab) {
       case "perfil":
+        // Mismo formulario que el empleado ve en Mi Panel → Perfil, pero en
+        // modo editable. El guardado va contra el profile vinculado al
+        // empleado vía la admin action `guardarPerfilEmpleado`.
         return (
-          <div className="flex flex-1 min-h-0">
-            <nav className="w-56 shrink-0 border-r bg-muted/30 py-4 space-y-0.5">
-              {PERFIL_SECTIONS.map((s) => {
-                const isConfig = s.id === "configuracion";
-                return (
-                  <button
-                    key={s.id}
-                    onClick={() => setActivePerfilSection(s.id)}
-                    aria-label={s.label}
-                    className={cn(
-                      "flex items-center gap-2.5 w-full px-4 py-2 text-sm transition-colors text-left",
-                      isConfig && "justify-end",
-                      activePerfilSection === s.id
-                        ? "bg-primary/10 text-primary font-medium border-r-2 border-primary"
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                    )}
-                  >
-                    <s.icon className="h-4 w-4 shrink-0" strokeWidth={isConfig ? 1.75 : undefined} />
-                    {!isConfig && s.label}
-                  </button>
-                );
-              })}
-            </nav>
-            <div className="flex-1 p-6 overflow-auto">
-              {renderPerfilContent()}
-            </div>
+          <div className="p-4 md:p-6 max-w-3xl mx-auto">
+            <DatosPersonalesForm
+              initial={datosPersonales!}
+              targetEmpleadoId={empleadoBD!.id}
+            />
           </div>
         );
-      case "fichajes": return <div className="p-6"><FichajesTab empleado={empleado!} /></div>;
-      case "ausencias": return <div className="p-6"><AusenciasTab /></div>;
-      case "estadisticas": return <div className="p-6"><EstadisticasTab empleado={empleado!} /></div>;
-      case "contratos": return <div className="p-6"><ContratosTab ficha={ficha!} /></div>;
-      case "documentos": return <div className="p-6"><DocumentosTab ficha={ficha!} /></div>;
-      case "horarios": return <div className="p-6"><HorariosTab empleado={empleado!} ficha={ficha!} /></div>;
-      case "evaluaciones": return <div className="p-6"><EvaluacionesTab ficha={ficha!} /></div>;
+      case "fichajes":
+        return <div className="p-6"><FichajesTab empleado={empleadoMock!} /></div>;
+      case "horarios":
+        return ficha
+          ? <div className="p-6"><HorariosTab empleado={empleadoMock!} ficha={ficha} /></div>
+          : <SubmoduloPorEmpleadoPlaceholder modulo="Horarios" path="/rrhh/horarios" empleado={empleadoMock!} />;
+      case "solicitudes":
+        return <SubmoduloPorEmpleadoPlaceholder modulo="Solicitudes" path="/rrhh/solicitudes" empleado={empleadoMock!} />;
+      case "firmas":
+        return <SubmoduloPorEmpleadoPlaceholder modulo="Firmas" path="/rrhh/firmas" empleado={empleadoMock!} />;
+      case "calendarios":
+        return <SubmoduloPorEmpleadoPlaceholder modulo="Calendarios" path="/rrhh/calendarios" empleado={empleadoMock!} />;
+      case "reclutamiento":
+        return <SubmoduloPorEmpleadoPlaceholder modulo="Reclutamiento" path="/rrhh/reclutamiento" empleado={empleadoMock!} />;
+      case "boarding":
+        return <SubmoduloPorEmpleadoPlaceholder modulo="Boarding" path="/rrhh/boarding" empleado={empleadoMock!} />;
+      case "bonus":
+        return <SubmoduloPorEmpleadoPlaceholder modulo="Bonus" path="/rrhh/bonus" empleado={empleadoMock!} />;
+      case "points":
+        return <SubmoduloPorEmpleadoPlaceholder modulo="Points" path="/rrhh/points" empleado={empleadoMock!} />;
+      case "pagos":
+        return <SubmoduloPorEmpleadoPlaceholder modulo="Pagos" path="/rrhh/pagos" empleado={empleadoMock!} />;
+      case "formacion":
+        return <SubmoduloPorEmpleadoPlaceholder modulo="Formación" path="/rrhh/formacion" empleado={empleadoMock!} />;
+      case "encuestas":
+        return <SubmoduloPorEmpleadoPlaceholder modulo="Encuestas" path="/rrhh/encuestas" empleado={empleadoMock!} />;
+      case "cuestionarios":
+        return <SubmoduloPorEmpleadoPlaceholder modulo="Cuestionarios" path="/rrhh/cuestionarios" empleado={empleadoMock!} />;
     }
   }
 
   return (
     <div className="flex flex-col h-full">
-      <FichaEmpleadoHeader empleado={empleado} onBack={() => router.push("/rrhh/empleados")} onSave={handleSave} />
+      <FichaEmpleadoHeader
+        empleado={empleadoMock}
+        onBack={() => router.push("/rrhh/empleados")}
+        onSave={() => { /* el form gestiona su propio guardado */ }}
+      />
 
       <div className="border-b bg-card px-6 flex gap-0 overflow-x-auto shrink-0">
         {TOP_TABS.map((tab) => (

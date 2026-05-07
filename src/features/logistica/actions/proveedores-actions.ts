@@ -128,9 +128,11 @@ export async function createProveedor(input: ProveedorImport) {
       persona_contacto: personaContacto,
       telefono_principal: telefonoPrincipal,
       telefono_secundario: input.telefonoSecundario ?? null,
+      telefono_comercial: input.telefonoComercial ?? null,
       email_principal: emailPrincipal,
+      email_comercial: input.emailComercial ?? null,
       email_pedidos: input.emailPedidos ?? null,
-      email_incidencias: input.emailIncidencias ?? null,
+      email_contabilidad: input.emailContabilidad ?? null,
       web: input.web ?? null,
       direccion: input.direccion ? capitalizeText(input.direccion) : null,
       ciudad: input.ciudad ? capitalizeText(input.ciudad) : null,
@@ -138,9 +140,18 @@ export async function createProveedor(input: ProveedorImport) {
       pais: input.pais ? capitalizeText(input.pais) : "España",
       codigo_postal: input.codigoPostal ?? null,
       dias_reparto: input.diasReparto ?? [],
+      horario_reparto: input.horarioReparto ?? {},
+      dias_reparto_negociados: input.diasRepartoNegociados ?? [],
+      horario_reparto_negociado: input.horarioRepartoNegociado ?? {},
+      dia_reparto_negociado: input.diaRepartoNegociado ?? null,
+      via_pago: input.viaPago ?? null,
+      via_pago_negociada: input.viaPagoNegociada ?? null,
+      plazo_pago: input.plazoPago ?? null,
+      plazo_pago_negociado: input.plazoPagoNegociado ?? null,
       condiciones_pago: input.condicionesPago ?? null,
       plazo_entrega: input.plazoEntrega ?? null,
       observaciones: input.observaciones ?? null,
+      observaciones_logisticas: input.observacionesLogisticas ?? null,
       comentarios_internos: input.comentariosInternos ?? null,
       created_by: user.id,
     });
@@ -187,9 +198,11 @@ export async function updateProveedor(id: string, input: Partial<ProveedorImport
     if (input.personaContacto !== undefined) updates.persona_contacto = input.personaContacto ? capitalizeText(input.personaContacto) : input.personaContacto;
     if (input.telefonoPrincipal !== undefined) updates.telefono_principal = input.telefonoPrincipal;
     if (input.telefonoSecundario !== undefined) updates.telefono_secundario = input.telefonoSecundario;
+    if (input.telefonoComercial !== undefined) updates.telefono_comercial = input.telefonoComercial;
     if (input.emailPrincipal !== undefined) updates.email_principal = input.emailPrincipal;
+    if (input.emailComercial !== undefined) updates.email_comercial = input.emailComercial;
     if (input.emailPedidos !== undefined) updates.email_pedidos = input.emailPedidos;
-    if (input.emailIncidencias !== undefined) updates.email_incidencias = input.emailIncidencias;
+    if (input.emailContabilidad !== undefined) updates.email_contabilidad = input.emailContabilidad;
     if (input.web !== undefined) updates.web = input.web;
     if (input.direccion !== undefined) updates.direccion = input.direccion ? capitalizeText(input.direccion) : input.direccion;
     if (input.ciudad !== undefined) updates.ciudad = input.ciudad ? capitalizeText(input.ciudad) : input.ciudad;
@@ -197,9 +210,18 @@ export async function updateProveedor(id: string, input: Partial<ProveedorImport
     if (input.pais !== undefined) updates.pais = input.pais ? capitalizeText(input.pais) : input.pais;
     if (input.codigoPostal !== undefined) updates.codigo_postal = input.codigoPostal;
     if (input.diasReparto !== undefined) updates.dias_reparto = input.diasReparto;
+    if (input.horarioReparto !== undefined) updates.horario_reparto = input.horarioReparto;
+    if (input.diasRepartoNegociados !== undefined) updates.dias_reparto_negociados = input.diasRepartoNegociados;
+    if (input.horarioRepartoNegociado !== undefined) updates.horario_reparto_negociado = input.horarioRepartoNegociado;
+    if (input.diaRepartoNegociado !== undefined) updates.dia_reparto_negociado = input.diaRepartoNegociado;
+    if (input.viaPago !== undefined) updates.via_pago = input.viaPago;
+    if (input.viaPagoNegociada !== undefined) updates.via_pago_negociada = input.viaPagoNegociada;
+    if (input.plazoPago !== undefined) updates.plazo_pago = input.plazoPago;
+    if (input.plazoPagoNegociado !== undefined) updates.plazo_pago_negociado = input.plazoPagoNegociado;
     if (input.condicionesPago !== undefined) updates.condiciones_pago = input.condicionesPago;
     if (input.plazoEntrega !== undefined) updates.plazo_entrega = input.plazoEntrega;
     if (input.observaciones !== undefined) updates.observaciones = input.observaciones;
+    if (input.observacionesLogisticas !== undefined) updates.observaciones_logisticas = input.observacionesLogisticas;
     if (input.comentariosInternos !== undefined) updates.comentarios_internos = input.comentariosInternos;
 
     const { error } = await supabase.from("proveedores").update(updates).eq("id", id);
@@ -295,9 +317,11 @@ export async function bulkImportProveedores(proveedores: ProveedorImport[]) {
         persona_contacto: p.personaContacto ? capitalizeText(p.personaContacto) : null,
         telefono_principal: p.telefonoPrincipal ?? null,
         telefono_secundario: p.telefonoSecundario ?? null,
+        telefono_comercial: p.telefonoComercial ?? null,
         email_principal: p.emailPrincipal ?? null,
+        email_comercial: p.emailComercial ?? null,
         email_pedidos: p.emailPedidos ?? null,
-        email_incidencias: p.emailIncidencias ?? null,
+        email_contabilidad: p.emailContabilidad ?? null,
         web: p.web ?? null,
         direccion: p.direccion ? capitalizeText(p.direccion) : null,
         ciudad: p.ciudad ? capitalizeText(p.ciudad) : null,
@@ -305,9 +329,18 @@ export async function bulkImportProveedores(proveedores: ProveedorImport[]) {
         pais: p.pais ? capitalizeText(p.pais) : "España",
         codigo_postal: p.codigoPostal ?? null,
         dias_reparto: p.diasReparto ?? [],
+        horario_reparto: p.horarioReparto ?? {},
+        dias_reparto_negociados: p.diasRepartoNegociados ?? [],
+        horario_reparto_negociado: p.horarioRepartoNegociado ?? {},
+        dia_reparto_negociado: p.diaRepartoNegociado ?? null,
+        via_pago: p.viaPago ?? null,
+        via_pago_negociada: p.viaPagoNegociada ?? null,
+        plazo_pago: p.plazoPago ?? null,
+        plazo_pago_negociado: p.plazoPagoNegociado ?? null,
         condiciones_pago: p.condicionesPago ?? null,
         plazo_entrega: p.plazoEntrega ?? null,
         observaciones: p.observaciones ?? null,
+        observaciones_logisticas: p.observacionesLogisticas ?? null,
         comentarios_internos: p.comentariosInternos ?? null,
         created_by: user.id,
       }));

@@ -346,7 +346,7 @@ export async function getEmpleadosSinAcceso() {
     .select('id, nombre, apellidos, email_personal, email_empresa, departamentos(nombre)')
     .eq('empresa_id', profile.empresa_id)
     .eq('estado', 'Activo')
-    .is('profile_id', null)
+    .is('user_id', null)
     .order('nombre')
 
   if (error) return { error: error.message, data: [] }

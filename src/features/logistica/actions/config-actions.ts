@@ -6,7 +6,7 @@ import {
   type TipoProducto,
 } from "@/features/logistica/data/productos";
 
-type Seccion = "categorias" | "familias" | "estados";
+type Seccion = "categorias" | "familias" | "estados" | "umbral_coste";
 type ConfigTipo = TipoProducto | "global";
 
 /** Lee los valores de una sección. Si no existe en BD devuelve los defaults. */
@@ -58,6 +58,7 @@ export async function saveProductoConfigSection(
 
 function defaultValues(tipo: ConfigTipo, seccion: Seccion): string[] {
   if (seccion === "estados") return [...ESTADOS_PRODUCTO];
+  if (seccion === "umbral_coste") return ["30", "40"];
   if (tipo === "global") return [];
   if (seccion === "categorias") return getCategorias(tipo as TipoProducto);
   return getFamilias(tipo as TipoProducto);

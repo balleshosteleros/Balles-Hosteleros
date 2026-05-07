@@ -2,17 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 
 async function getContext() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { supabase, user: null, empresaId: null as string | null };
-  const { data } = await supabase
-    .from("profiles")
-    .select("empresa_id")
-    .eq("user_id", user.id)
-    .single();
-  return { supabase, user, empresaId: (data?.empresa_id ?? null) as string | null };
+  const empresaId = await getEmpresaActivaForUser(supabase, user.id);
+  return { supabase, user, empresaId };
 }
 
 export async function listCandidatosReales() {
@@ -134,10 +131,13 @@ export async function iniciarOffboarding(empleadoId: string) {
 
     if (error) throw error;
 
-    // Marcar empleado como en proceso de baja (estado y fecha de baja se completan al cerrar el proceso)
+    // Marcar empleado como Baja temporal (constraint exige fecha_baja para cualquier baja)
     await supabase
       .from("empleados")
-      .update({ estado: "ausente" })
+      .update({
+        estado: "Baja temporal",
+        fecha_baja: new Date().toISOString().slice(0, 10),
+      })
       .eq("id", empleadoId)
       .eq("empresa_id", empresaId);
 

@@ -66,10 +66,8 @@ export async function saveEmpresaIdentidad(input: {
   try {
     const supabase = await createClient();
     const updates: Record<string, unknown> = {};
-    if (input.nombre !== undefined) {
-      updates.nombre = input.nombre;
-      updates.slug = slugify(input.nombre);
-    }
+    // Slug es FK estable; nunca se regenera en updates.
+    if (input.nombre !== undefined) updates.nombre = input.nombre;
     if (input.iniciales !== undefined) updates.iniciales = input.iniciales;
     if (input.color !== undefined) updates.color = input.color;
     if (input.estado !== undefined) updates.estado = input.estado;
@@ -96,6 +94,9 @@ export async function saveEmpresaAjustes(input: {
     const updates: Record<string, unknown> = {};
     if (input.datosGenerales !== undefined) updates.datos_generales = input.datosGenerales;
     if (input.configOperativa !== undefined) updates.config_operativa = input.configOperativa;
+    // Fuente de verdad: nombreComercial manda sobre empresas.nombre.
+    const nc = input.datosGenerales?.nombreComercial?.trim();
+    if (nc) updates.nombre = nc;
 
     if (Object.keys(updates).length === 0) return { ok: true };
 
@@ -124,6 +125,7 @@ export async function createEmpresa(input: {
         slug,
         iniciales: input.iniciales,
         color: input.color,
+        datos_generales: { nombreComercial: input.nombre },
       })
       .select("id, slug, nombre, iniciales, color, estado")
       .single();
