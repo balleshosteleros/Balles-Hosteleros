@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Plus, MessageCircle, Pencil, Trash2, Send, AlertCircle } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Plus, MessageCircle, Pencil, Trash2, Send, AlertCircle, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -23,9 +23,12 @@ import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
   aplicarOrdenToolbar,
+  colVisible,
+  ordenarColumnas,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
+  type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
 
 const IDIOMAS = [
@@ -45,6 +48,8 @@ export function CampanasWhatsAppView() {
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
+  const [showConfig, setShowConfig] = useState(false);
 
   useEffect(() => {
     verificarIntegracionesAction().then((r) => setWaOk(r.whatsapp));
@@ -121,6 +126,54 @@ export function CampanasWhatsAppView() {
     }
   }
 
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "campana", label: "Campaña" },
+    { campo: "plantilla", label: "Plantilla" },
+    { campo: "segmento", label: "Segmento" },
+    { campo: "estado", label: "Estado" },
+    { campo: "enviados", label: "Enviados" },
+    { campo: "leidos", label: "Leídos" },
+  ];
+
+  const columnDefs: Record<string, { th: ReactNode; td: (c: CampanaWhatsApp) => ReactNode }> = {
+    campana: {
+      th: <th key="campana" className="text-left px-4 py-2.5 font-semibold">Campaña</th>,
+      td: (c) => <td key="campana" className="px-4 py-2 font-medium">{c.nombre}</td>,
+    },
+    plantilla: {
+      th: <th key="plantilla" className="text-left px-4 py-2.5 font-semibold">Plantilla</th>,
+      td: (c) => <td key="plantilla" className="px-4 py-2 text-muted-foreground font-mono text-xs">{c.plantilla || "—"}</td>,
+    },
+    segmento: {
+      th: <th key="segmento" className="text-left px-4 py-2.5 font-semibold">Segmento</th>,
+      td: (c) => (
+        <td key="segmento" className="px-4 py-2 text-xs">
+          {SEGMENTOS_CLIENTE.find((s) => s.value === c.segmento)?.label ?? c.segmento}
+        </td>
+      ),
+    },
+    estado: {
+      th: <th key="estado" className="text-left px-4 py-2.5 font-semibold">Estado</th>,
+      td: (c) => (
+        <td key="estado" className="px-4 py-2">
+          <Badge variant="outline">{ESTADOS_CAMPANA.find((e) => e.value === c.estado)?.label}</Badge>
+        </td>
+      ),
+    },
+    enviados: {
+      th: <th key="enviados" className="text-right px-4 py-2.5 font-semibold">Enviados</th>,
+      td: (c) => <td key="enviados" className="px-4 py-2 text-right tabular-nums">{c.estadisticas.enviados}</td>,
+    },
+    leidos: {
+      th: <th key="leidos" className="text-right px-4 py-2.5 font-semibold">Leídos</th>,
+      td: (c) => <td key="leidos" className="px-4 py-2 text-right tabular-nums">{c.estadisticas.leidos}</td>,
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
   return (
     <div className="p-4 md:p-6 space-y-4">
       <div className="flex items-center gap-3">
@@ -134,43 +187,29 @@ export function CampanasWhatsAppView() {
       <SubmoduleToolbar
         busqueda={busqueda}
         onBusquedaChange={setBusqueda}
-        placeholderBusqueda="Buscar campaña..."
+        placeholderBusqueda="Buscar"
         onNuevo={abrirNuevo}
-        textoNuevo="Nueva campaña"
-        campos={[
-          {
-            campo: "estado",
-            label: "Estado",
-            tipo: "lista",
-            opciones: ESTADOS_CAMPANA.map((e) => e.label),
-          },
-          {
-            campo: "segmento",
-            label: "Segmento",
-            tipo: "lista",
-            opciones: SEGMENTOS_CLIENTE.map((s) => s.label),
-          },
-          { campo: "enviados", label: "Enviados", tipo: "numero" },
-        ]}
         filtros={filtros}
         onFiltrosChange={setFiltros}
-        ordenOpciones={[
-          { campo: "nombre", label: "Nombre" },
-          { campo: "enviados", label: "Enviados" },
-          { campo: "leidos", label: "Leídos" },
-        ]}
         orden={orden}
         onOrdenChange={setOrden}
-        columnas={[
-          { campo: "campana", label: "Campaña" },
-          { campo: "plantilla", label: "Plantilla" },
-          { campo: "segmento", label: "Segmento" },
-          { campo: "estado", label: "Estado" },
-          { campo: "enviados", label: "Enviados" },
-          { campo: "leidos", label: "Leídos" },
-        ]}
+        columnas={columnasDef}
         columnasVisibles={columnasVisibles}
         onColumnasVisiblesChange={setColumnasVisibles}
+        columnasOrden={columnasOrden}
+        onColumnasOrdenChange={setColumnasOrden}
+        extraDerecha={
+          <Button
+            size="icon"
+            variant={showConfig ? "default" : "outline"}
+            className="h-9 w-9"
+            onClick={() => setShowConfig((v) => !v)}
+            title="Configuración"
+            aria-label="Configuración"
+          >
+            <Settings className="h-4 w-4" strokeWidth={1.75} />
+          </Button>
+        }
       />
 
       {(modoLocal || waOk === false) && (
@@ -205,28 +244,14 @@ export function CampanasWhatsAppView() {
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
-                <th className="text-left px-4 py-2.5 font-semibold">Campaña</th>
-                <th className="text-left px-4 py-2.5 font-semibold">Plantilla</th>
-                <th className="text-left px-4 py-2.5 font-semibold">Segmento</th>
-                <th className="text-left px-4 py-2.5 font-semibold">Estado</th>
-                <th className="text-right px-4 py-2.5 font-semibold">Enviados</th>
-                <th className="text-right px-4 py-2.5 font-semibold">Leídos</th>
+                {columnasRender.map((c) => columnDefs[c.campo]?.th)}
                 <th className="px-4 py-2.5"></th>
               </tr>
             </thead>
             <tbody>
               {filtrados.map((c) => (
                 <tr key={c.id} className="border-t hover:bg-muted/30">
-                  <td className="px-4 py-2 font-medium">{c.nombre}</td>
-                  <td className="px-4 py-2 text-muted-foreground font-mono text-xs">{c.plantilla || "—"}</td>
-                  <td className="px-4 py-2 text-xs">
-                    {SEGMENTOS_CLIENTE.find((s) => s.value === c.segmento)?.label ?? c.segmento}
-                  </td>
-                  <td className="px-4 py-2">
-                    <Badge variant="outline">{ESTADOS_CAMPANA.find((e) => e.value === c.estado)?.label}</Badge>
-                  </td>
-                  <td className="px-4 py-2 text-right tabular-nums">{c.estadisticas.enviados}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{c.estadisticas.leidos}</td>
+                  {columnasRender.map((col) => columnDefs[col.campo]?.td(c))}
                   <td className="px-4 py-2">
                     <div className="flex items-center justify-end gap-1">
                       {c.estado === "borrador" && (

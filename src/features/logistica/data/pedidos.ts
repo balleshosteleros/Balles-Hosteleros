@@ -61,6 +61,7 @@ export interface LineaPedido {
 
 export interface Pedido {
   id: string;
+  numeroSecuencial?: number;
   numero: string;
   empresaId: string;
   empresa: string;
@@ -99,6 +100,7 @@ export interface LineaAlbaran {
 
 export interface Albaran {
   id: string;
+  numeroSecuencial?: number;
   numero: string;
   empresaId: string;
   empresa: string;

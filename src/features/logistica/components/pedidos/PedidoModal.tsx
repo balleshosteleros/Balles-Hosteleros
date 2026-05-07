@@ -1,17 +1,15 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { ALMACENES, type Pedido, type LineaPedido, calcLineaTotal } from "@/features/logistica/data/pedidos";
 import { listProveedores } from "@/features/logistica/actions/proveedores-actions";
 import { listProductos } from "@/features/logistica/actions/producto-actions";
 import type { Producto } from "@/features/logistica/data/productos";
-import { Trash2, Plus, Check, ChevronsUpDown } from "lucide-react";
+import { Trash2, Plus, Check, ChevronsUpDown, Search } from "lucide-react";
 
 interface Props {
   open: boolean;
@@ -28,7 +26,7 @@ const emptyLinea = (): LineaPedido => ({
   precioUC: 0, impuesto: 10, dtoPct: 0, dtoEur: 0, total: 0,
 });
 
-// ── Buscador de producto — Combobox con Popover (evita clipping del modal) ──────
+// ── Buscador de producto — dropdown nativo (sin portal, funciona dentro de Dialog) ──────
 interface ProductoSearchProps {
   value: string;       // nombre del producto seleccionado
   productoId: string;  // id del producto ("" = sin seleccionar)
@@ -42,12 +40,26 @@ function ProductoSearch({ value, productoId, onSelectProduct, onClear, proveedor
   const [open, setOpen] = useState(false);
   const [soloProveedor, setSoloProveedor] = useState(false);
   const [query, setQuery] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Resetear query al abrir
-  const handleOpen = (v: boolean) => {
-    if (v) setQuery("");
-    setOpen(v);
-  };
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  useEffect(() => {
+    if (open) {
+      setQuery("");
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }, [open]);
 
   const filtered = useMemo(() => {
     let list = productos;
@@ -64,36 +76,43 @@ function ProductoSearch({ value, productoId, onSelectProduct, onClear, proveedor
   const isSelected = !!productoId;
 
   return (
-    <Popover open={open} onOpenChange={handleOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className={`flex h-8 w-full min-w-[180px] items-center justify-between rounded-md border px-2 text-xs transition-colors
-            ${isSelected ? "border-green-500 bg-green-50/30 dark:bg-green-950/20" : "border-input bg-background hover:bg-muted/30"}
-          `}
-        >
-          <span className={`truncate ${!value ? "text-muted-foreground" : ""}`}>
-            {value || "Seleccionar producto..."}
-          </span>
-          <span className="ml-1 shrink-0">
-            {isSelected
-              ? <Check className="h-3 w-3 text-green-500" />
-              : <ChevronsUpDown className="h-3 w-3 text-muted-foreground" />
-            }
-          </span>
-        </button>
-      </PopoverTrigger>
+    <div ref={containerRef} className="relative w-full min-w-[180px]">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={`flex h-8 w-full items-center justify-between rounded-md border px-2 text-xs transition-colors
+          ${isSelected ? "border-green-500 bg-green-50/30 dark:bg-green-950/20" : "border-input bg-background hover:bg-muted/30"}
+        `}
+      >
+        <span className={`truncate ${!value ? "text-muted-foreground" : ""}`}>
+          {value || "Seleccionar producto..."}
+        </span>
+        <span className="ml-1 shrink-0">
+          {isSelected
+            ? <Check className="h-3 w-3 text-green-500" />
+            : <ChevronsUpDown className="h-3 w-3 text-muted-foreground" />
+          }
+        </span>
+      </button>
 
-      <PopoverContent className="w-80 p-0" align="start" side="bottom" sideOffset={4}>
-        <Command shouldFilter={false}>
-          <CommandInput
-            placeholder="Buscar producto..."
-            value={query}
-            onValueChange={setQuery}
-            className="text-xs"
-          />
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-1 w-80 rounded-md border bg-popover text-popover-foreground shadow-md">
+          <div className="flex items-center border-b px-3">
+            <Search className="mr-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === "Escape") { setOpen(false); }
+              }}
+              placeholder="Buscar producto..."
+              className="flex h-9 w-full bg-transparent py-2 text-xs outline-none placeholder:text-muted-foreground"
+              autoComplete="off"
+            />
+          </div>
 
-          {/* Filtro por proveedor */}
           {proveedor && (
             <div className="border-b px-3 py-2">
               <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
@@ -103,37 +122,35 @@ function ProductoSearch({ value, productoId, onSelectProduct, onClear, proveedor
                   onChange={(e) => setSoloProveedor(e.target.checked)}
                   className="h-3 w-3"
                 />
-                <span>Solo de <span className="font-semibold text-foreground">{proveedor}</span></span>
+                <span>Solo de <span className="font-semibold text-foreground uppercase">{proveedor}</span></span>
               </label>
             </div>
           )}
 
-          <CommandList className="max-h-56">
-            <CommandEmpty className="py-3 text-center text-xs text-muted-foreground">
-              Sin resultados
-            </CommandEmpty>
-            <CommandGroup>
-              {filtered.map((p) => (
-                <CommandItem
+          <div className="max-h-56 overflow-y-auto p-1">
+            {filtered.length === 0 ? (
+              <div className="py-3 text-center text-xs text-muted-foreground">Sin resultados</div>
+            ) : (
+              filtered.map((p) => (
+                <button
+                  type="button"
                   key={p.id}
-                  value={p.id}
-                  onSelect={() => {
+                  onClick={() => {
                     const precio = parseFloat(p.precioCompra ?? "0") || 0;
                     const iva = parseFloat(p.iva ?? "10") || 10;
                     onSelectProduct(p.nombre, p.unidad, precio, p.id, iva);
                     setOpen(false);
                   }}
-                  className="flex items-center justify-between gap-2 text-xs cursor-pointer"
+                  className="flex w-full items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-xs hover:bg-accent hover:text-accent-foreground transition-colors text-left"
                 >
                   <span className="truncate font-medium">{p.nombre}</span>
                   <span className="text-muted-foreground shrink-0">{p.unidad}</span>
                   {p.id === productoId && <Check className="h-3 w-3 text-green-500 shrink-0" />}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
+                </button>
+              ))
+            )}
+          </div>
 
-          {/* Limpiar selección */}
           {isSelected && (
             <div className="border-t p-1">
               <button
@@ -145,9 +162,9 @@ function ProductoSearch({ value, productoId, onSelectProduct, onClear, proveedor
               </button>
             </div>
           )}
-        </Command>
-      </PopoverContent>
-    </Popover>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -267,10 +284,10 @@ export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNom
               Proveedor <span className="text-destructive">*</span>
             </Label>
             <Select value={form.proveedor} onValueChange={(v) => { setField("proveedor", v); setSaveError(null); }}>
-              <SelectTrigger className={!form.proveedor ? "border-destructive" : ""}>
+              <SelectTrigger className={`uppercase ${!form.proveedor ? "border-destructive" : ""}`}>
                 <SelectValue placeholder="Seleccionar proveedor..." />
               </SelectTrigger>
-              <SelectContent>{proveedoresList.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+              <SelectContent>{proveedoresList.map((p) => <SelectItem key={p} value={p} className="uppercase">{p}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div><Label className="text-xs font-semibold">Almacén</Label>

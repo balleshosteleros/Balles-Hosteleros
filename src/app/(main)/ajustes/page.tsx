@@ -1,6 +1,6 @@
 "use client";
 
-import { Users, Shield, Layers, Store, AppWindow, Palette } from "lucide-react";
+import { Users, Shield, Layers, Store, AppWindow, Palette, Truck } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UsuariosTab } from "@/features/ajustes/components/UsuariosTab";
@@ -9,6 +9,7 @@ import { DepartamentosTab } from "@/features/ajustes/components/DepartamentosTab
 import { EmpresasTab } from "@/features/ajustes/components/EmpresasTab";
 import { AplicacionesTab } from "@/features/ajustes/components/AplicacionesTab";
 import { ImagenMarcaTab } from "@/features/ajustes/components/ImagenMarcaTab";
+import { ProveedoresTab } from "@/features/ajustes/components/ProveedoresTab";
 import { useHydrateUsuarios } from "@/features/ajustes/hooks/use-hydrate-usuarios";
 
 const tabs = [
@@ -17,6 +18,7 @@ const tabs = [
   { id: "usuarios",       label: "Usuarios",        icon: Users     },
   { id: "roles",          label: "Roles",           icon: Shield    },
   { id: "departamentos",  label: "Departamentos",   icon: Layers    },
+  { id: "proveedores",    label: "Proveedores",     icon: Truck     },
   { id: "aplicaciones",   label: "Aplicaciones",    icon: AppWindow },
 ];
 
@@ -47,6 +49,7 @@ export default function AjustesPage() {
         <TabsContent value="usuarios"><UsuariosTab /></TabsContent>
         <TabsContent value="roles"><RolesTab /></TabsContent>
         <TabsContent value="departamentos"><DepartamentosTab /></TabsContent>
+        <TabsContent value="proveedores"><ProveedoresTab /></TabsContent>
         <TabsContent value="aplicaciones"><AplicacionesTab /></TabsContent>
       </Tabs>
     </div>

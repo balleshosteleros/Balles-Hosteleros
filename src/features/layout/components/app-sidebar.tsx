@@ -43,7 +43,7 @@ import { useAuth } from "@/features/auth/contexts/auth-context";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarMenuSub, SidebarMenuSubItem,
-  SidebarHeader, SidebarFooter, SidebarRail, useSidebar,
+  SidebarHeader, SidebarFooter, useSidebar,
 } from "@/components/ui/sidebar";
 import { PanelLeft } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -64,6 +64,7 @@ const contabilidadSubs = [
 const gestoriaSubs = [
   { title: "MODELOS", url: "/gestoria/modelos", icon: FileSearch },
   { title: "PRESENTACIONES", url: "/gestoria/presentaciones", icon: FileUp },
+  { title: "CONTRATACIONES", url: "/gestoria/contrataciones", icon: UserPlus },
 ];
 const juridicoSubs = [
   { title: "PROCESOS", url: "/juridico/procesos", icon: Gavel },
@@ -385,8 +386,6 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border/60" />
-      {/* Franja vertical clickeable en el borde — permite expandir/colapsar pulsando el lateral */}
-      <SidebarRail />
     </Sidebar>
   );
 }

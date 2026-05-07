@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
@@ -34,9 +34,11 @@ import {
   aplicarOrdenToolbar,
   coincideBusquedaUniversal,
   colVisible,
+  ordenarColumnas,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
+  type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
@@ -69,6 +71,7 @@ function mapDbToPedido(row: Record<string, unknown>): Pedido {
   const rawLineas = Array.isArray(row.lineas) ? row.lineas as Record<string, unknown>[] : [];
   return {
     id: row.id as string,
+    numeroSecuencial: typeof row.numero_secuencial === "number" ? row.numero_secuencial : undefined,
     numero: (row.numero as string) ?? (row.id as string)?.slice(0, 8).toUpperCase() ?? "",
     empresaId: (row.empresa_id as string) ?? "",
     empresa: (row.empresa as string) ?? "",
@@ -102,6 +105,7 @@ export function PedidosView() {
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [tab, setTab] = useState<"pedidos" | "albaranes">("pedidos");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [modalOpen, setModalOpen] = useState(false);
@@ -134,6 +138,7 @@ export function PedidosView() {
       if (res.ok) {
         const mapped: Albaran[] = (res.data as Record<string, unknown>[]).map((r) => ({
           id: r.id as string,
+          numeroSecuencial: typeof r.numero_secuencial === "number" ? r.numero_secuencial : undefined,
           numero: (r.numero as string) ?? "",
           empresaId: (r.empresa_id as string) ?? "",
           empresa: "",
@@ -185,6 +190,7 @@ export function PedidosView() {
     lista = aplicarOrdenToolbar(lista, orden, accesoPedido);
     return lista;
   }, [pedidos, search, filtros, orden]);
+
 
   // Stats
   const statCounts: Record<string, number> = {};
@@ -390,6 +396,178 @@ export function PedidosView() {
   }
 
   // ── Main list view ───
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "idSecuencial", label: "ID", bloqueada: true },
+    { campo: "numero", label: "Nº", bloqueada: true },
+    { campo: "fecha", label: "Fecha" },
+    { campo: "fechaEntrega", label: "F. Entrega" },
+    { campo: "almacen", label: "Almacén" },
+    { campo: "proveedor", label: "Proveedor" },
+    { campo: "estado", label: "Estado" },
+    { campo: "base", label: "Base (€)" },
+    { campo: "total", label: "Total (€)" },
+  ];
+
+  const columnDefs: Record<string, { th: ReactNode; td: (p: Pedido) => ReactNode }> = {
+    idSecuencial: {
+      th: <TableColumnHeader key="idSecuencial" label="ID" />,
+      td: (p) => (
+        <td key="idSecuencial" className="px-3 py-2.5 text-xs tabular-nums font-medium text-muted-foreground whitespace-nowrap">
+          {p.numeroSecuencial != null ? `PED-${p.numeroSecuencial}` : "—"}
+        </td>
+      ),
+    },
+    numero: {
+      th: (
+        <TableColumnHeader
+          key="numero"
+          label="Nº"
+          campo="numero"
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (p) => (
+        <td key="numero" className="px-3 py-2.5 font-semibold text-primary whitespace-nowrap">
+          {p.numero}
+        </td>
+      ),
+    },
+    fecha: {
+      th: (
+        <TableColumnHeader
+          key="fecha"
+          label="Fecha"
+          campo="fecha"
+          filtroTipo="fecha"
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (p) => (
+        <td key="fecha" className="px-3 py-2.5 text-xs whitespace-nowrap">
+          {p.fecha}
+        </td>
+      ),
+    },
+    fechaEntrega: {
+      th: (
+        <TableColumnHeader
+          key="fechaEntrega"
+          label="F. Entrega"
+          campo="fechaEntrega"
+          filtroTipo="fecha"
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (p) => (
+        <td key="fechaEntrega" className="px-3 py-2.5 text-xs whitespace-nowrap">
+          {p.fechaEntrega || "—"}
+        </td>
+      ),
+    },
+    almacen: {
+      th: (
+        <TableColumnHeader
+          key="almacen"
+          label="Almacén"
+          campo="almacen"
+          filtroTipo="lista"
+          opciones={almacenesUsados}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (p) => (
+        <td key="almacen" className="px-3 py-2.5 text-xs">
+          {p.almacen}
+        </td>
+      ),
+    },
+    proveedor: {
+      th: (
+        <TableColumnHeader
+          key="proveedor"
+          label="Proveedor"
+          campo="proveedor"
+          filtroTipo="lista"
+          opciones={proveedoresUsados}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (p) => (
+        <td key="proveedor" className="px-3 py-2.5 text-xs font-medium max-w-[200px] truncate uppercase">
+          {p.proveedor}
+        </td>
+      ),
+    },
+    estado: {
+      th: (
+        <TableColumnHeader
+          key="estado"
+          label="Estado"
+          campo="estado"
+          filtroTipo="lista"
+          opciones={ESTADOS_PEDIDO.filter((e) => e !== "Archivado") as unknown as string[]}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (p) => (
+        <td key="estado" className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+          <Select value={p.estado} onValueChange={(v) => updatePedidoEstado(p.id, v)}>
+            <SelectTrigger className="h-8 text-xs w-[120px] border-0 p-0"><EstadoPedidoBadge value={p.estado} /></SelectTrigger>
+            <SelectContent>{ESTADOS_PEDIDO.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
+          </Select>
+        </td>
+      ),
+    },
+    base: {
+      th: <TableColumnHeader key="base" label="Base (€)" align="right" />,
+      td: (p) => {
+        const t = calcularTotalesLineas(p.lineas);
+        return (
+          <td key="base" className="px-3 py-2.5 text-xs font-semibold text-right">
+            {t.base.toFixed(2)}
+          </td>
+        );
+      },
+    },
+    total: {
+      th: <TableColumnHeader key="total" label="Total (€)" align="right" />,
+      td: (p) => {
+        const t = calcularTotalesLineas(p.lineas);
+        return (
+          <td key="total" className="px-3 py-2.5 text-xs font-bold text-right">
+            {t.total.toFixed(2)}
+          </td>
+        );
+      },
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
   return (
     <div className="p-4 md:p-6 space-y-5">
       {/* Header removed — title shown in top bar */}
@@ -427,18 +605,11 @@ export function PedidosView() {
             onNuevo={() => { setEditItem(null); setModalOpen(true); }}
             filtros={filtros}
             onFiltrosChange={setFiltros}
-            columnas={[
-              { campo: "numero", label: "Nº", bloqueada: true },
-              { campo: "fecha", label: "Fecha" },
-              { campo: "fechaEntrega", label: "F. Entrega" },
-              { campo: "almacen", label: "Almacén" },
-              { campo: "proveedor", label: "Proveedor" },
-              { campo: "estado", label: "Estado" },
-              { campo: "base", label: "Base (€)" },
-              { campo: "total", label: "Total (€)" },
-            ]}
+            columnas={columnasDef}
             columnasVisibles={columnasVisibles}
             onColumnasVisiblesChange={setColumnasVisibles}
+            columnasOrden={columnasOrden}
+            onColumnasOrdenChange={setColumnasOrden}
             extraIzquierda={
               <>
                 <Button variant="outline" size="sm" className="gap-2" onClick={() => setSugerenciasOpen(true)}>
@@ -495,125 +666,21 @@ export function PedidosView() {
               <thead>
                 <tr className="border-b bg-muted/50">
                   <th className="px-3 py-3 w-10"><Checkbox checked={selected.size === filteredPedidos.length && filteredPedidos.length > 0} onCheckedChange={toggleAll} /></th>
-                  <TableColumnHeader
-                    label="Nº"
-                    campo="numero"
-                    ordenable
-                    orden={orden}
-                    onOrdenChange={setOrden}
-                  />
-                  {colVisible(columnasVisibles, "fecha") && (
-                    <TableColumnHeader
-                      label="Fecha"
-                      campo="fecha"
-                      filtroTipo="fecha"
-                      filtros={filtros}
-                      onFiltrosChange={setFiltros}
-                      ordenable
-                      orden={orden}
-                      onOrdenChange={setOrden}
-                    />
-                  )}
-                  {colVisible(columnasVisibles, "fechaEntrega") && (
-                    <TableColumnHeader
-                      label="F. Entrega"
-                      campo="fechaEntrega"
-                      filtroTipo="fecha"
-                      filtros={filtros}
-                      onFiltrosChange={setFiltros}
-                      ordenable
-                      orden={orden}
-                      onOrdenChange={setOrden}
-                    />
-                  )}
-                  {colVisible(columnasVisibles, "almacen") && (
-                    <TableColumnHeader
-                      label="Almacén"
-                      campo="almacen"
-                      filtroTipo="lista"
-                      opciones={almacenesUsados}
-                      filtros={filtros}
-                      onFiltrosChange={setFiltros}
-                      ordenable
-                      orden={orden}
-                      onOrdenChange={setOrden}
-                    />
-                  )}
-                  {colVisible(columnasVisibles, "proveedor") && (
-                    <TableColumnHeader
-                      label="Proveedor"
-                      campo="proveedor"
-                      filtroTipo="lista"
-                      opciones={proveedoresUsados}
-                      filtros={filtros}
-                      onFiltrosChange={setFiltros}
-                      ordenable
-                      orden={orden}
-                      onOrdenChange={setOrden}
-                    />
-                  )}
-                  {colVisible(columnasVisibles, "estado") && (
-                    <TableColumnHeader
-                      label="Estado"
-                      campo="estado"
-                      filtroTipo="lista"
-                      opciones={ESTADOS_PEDIDO.filter((e) => e !== "Archivado") as unknown as string[]}
-                      filtros={filtros}
-                      onFiltrosChange={setFiltros}
-                      ordenable
-                      orden={orden}
-                      onOrdenChange={setOrden}
-                    />
-                  )}
-                  {colVisible(columnasVisibles, "base") && (
-                    <TableColumnHeader label="Base (€)" align="right" />
-                  )}
-                  {colVisible(columnasVisibles, "total") && (
-                    <TableColumnHeader label="Total (€)" align="right" />
-                  )}
+                  {columnasRender.map((c) => columnDefs[c.campo]?.th)}
                 </tr>
               </thead>
               <tbody>
-                {filteredPedidos.map((p) => {
-                  const t = calcularTotalesLineas(p.lineas);
-                  return (
-                    <tr key={p.id} className="border-b hover:bg-muted/30 transition-colors cursor-pointer" onClick={async () => {
-                        const res = await getPedido(p.id);
-                        setDetallePedido(res.ok && res.data ? mapDbToPedido(res.data as Record<string, unknown>) : p);
-                      }}>
-                      <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                        <Checkbox checked={selected.has(p.id)} onCheckedChange={() => toggleSelect(p.id)} />
-                      </td>
-                      <td className="px-3 py-2.5 font-semibold text-primary whitespace-nowrap">{p.numero}</td>
-                      {colVisible(columnasVisibles, "fecha") && (
-                        <td className="px-3 py-2.5 text-xs whitespace-nowrap">{p.fecha}</td>
-                      )}
-                      {colVisible(columnasVisibles, "fechaEntrega") && (
-                        <td className="px-3 py-2.5 text-xs whitespace-nowrap">{p.fechaEntrega || "—"}</td>
-                      )}
-                      {colVisible(columnasVisibles, "almacen") && (
-                        <td className="px-3 py-2.5 text-xs">{p.almacen}</td>
-                      )}
-                      {colVisible(columnasVisibles, "proveedor") && (
-                        <td className="px-3 py-2.5 text-xs font-medium max-w-[200px] truncate">{p.proveedor}</td>
-                      )}
-                      {colVisible(columnasVisibles, "estado") && (
-                        <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                          <Select value={p.estado} onValueChange={(v) => updatePedidoEstado(p.id, v)}>
-                            <SelectTrigger className="h-8 text-xs w-[120px] border-0 p-0"><EstadoPedidoBadge value={p.estado} /></SelectTrigger>
-                            <SelectContent>{ESTADOS_PEDIDO.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
-                          </Select>
-                        </td>
-                      )}
-                      {colVisible(columnasVisibles, "base") && (
-                        <td className="px-3 py-2.5 text-xs font-semibold text-right">{t.base.toFixed(2)}</td>
-                      )}
-                      {colVisible(columnasVisibles, "total") && (
-                        <td className="px-3 py-2.5 text-xs font-bold text-right">{t.total.toFixed(2)}</td>
-                      )}
-                    </tr>
-                  );
-                })}
+                {filteredPedidos.map((p) => (
+                  <tr key={p.id} className="border-b hover:bg-muted/30 transition-colors cursor-pointer" onClick={async () => {
+                      const res = await getPedido(p.id);
+                      setDetallePedido(res.ok && res.data ? mapDbToPedido(res.data as Record<string, unknown>) : p);
+                    }}>
+                    <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                      <Checkbox checked={selected.has(p.id)} onCheckedChange={() => toggleSelect(p.id)} />
+                    </td>
+                    {columnasRender.map((c) => columnDefs[c.campo]?.td(p))}
+                  </tr>
+                ))}
                 {filteredPedidos.length === 0 && (
                   <tr><td colSpan={20} className="text-center py-12 text-muted-foreground">No se encontraron pedidos.</td></tr>
                 )}
@@ -630,7 +697,7 @@ export function PedidosView() {
           <div className="bg-card rounded-lg border overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="border-b bg-muted/50">
-                {["Nº Albarán", "Proveedor", "Documento", "Almacén", "Fecha", "Estado", "Pedido", "Total (€)"].map((h) => (
+                {["ID", "Nº Albarán", "Proveedor", "Documento", "Almacén", "Fecha", "Estado", "Pedido", "Total (€)"].map((h) => (
                   <TableColumnHeader key={h} label={h} />
                 ))}
               </tr></thead>
@@ -639,8 +706,9 @@ export function PedidosView() {
                   const t = calcularTotalesLineas(a.lineas);
                   return (
                     <tr key={a.id} className="border-b hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setDetalleAlbaran(a)}>
+                      <td className="px-3 py-2.5 text-xs tabular-nums font-medium text-muted-foreground whitespace-nowrap">{a.numeroSecuencial != null ? `ALB-${a.numeroSecuencial}` : "—"}</td>
                       <td className="px-3 py-2.5 font-semibold text-primary whitespace-nowrap">{a.numero}</td>
-                      <td className="px-3 py-2.5 text-xs font-medium">{a.proveedor}</td>
+                      <td className="px-3 py-2.5 text-xs font-medium uppercase">{a.proveedor}</td>
                       <td className="px-3 py-2.5 text-xs">{a.documento}</td>
                       <td className="px-3 py-2.5 text-xs">{a.almacen}</td>
                       <td className="px-3 py-2.5 text-xs whitespace-nowrap">{a.fecha}</td>
@@ -653,7 +721,7 @@ export function PedidosView() {
                   );
                 })}
                 {albaranes.length === 0 && (
-                  <tr><td colSpan={8} className="text-center py-12 text-muted-foreground">No hay albaranes generados.</td></tr>
+                  <tr><td colSpan={9} className="text-center py-12 text-muted-foreground">No hay albaranes generados.</td></tr>
                 )}
               </tbody>
             </table>

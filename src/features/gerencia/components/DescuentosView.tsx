@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Descuento, ResultadoMensual, buildDefaultDescuentos, buildDefaultResultados } from "@/features/gerencia/data/descuentos";
 import { listDescuentos, createDescuento, updateDescuento, deleteDescuento } from "@/features/gerencia/actions/descuentos-actions";
@@ -16,14 +16,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, PieChart, Pie, Cell, LineChart, Line, ResponsiveContainer } from "recharts";
-import { Pencil, Trash2, Eye, BarChart3, Upload, FileText } from "lucide-react";
+import { Pencil, Trash2, Eye, BarChart3, Upload, FileText, Settings } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
   aplicarOrdenToolbar,
+  ordenarColumnas,
+  colVisible,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
+  type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
 import { toast } from "sonner";
 import { IOActions } from "@/shared/io";
@@ -61,11 +64,13 @@ export function DescuentosView() {
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [modalOpen, setModalOpen] = useState(false);
   const [detalleOpen, setDetalleOpen] = useState(false);
   const [editando, setEditando] = useState<Descuento | null>(null);
   const [detalle, setDetalle] = useState<Descuento | null>(null);
   const [form, setForm] = useState<Partial<Descuento>>({});
+  const [showConfig, setShowConfig] = useState(false);
 
   const loadDescuentos = useCallback(async () => {
     setLoading(true);
@@ -154,6 +159,51 @@ export function DescuentosView() {
   const pieData = useMemo(() => ultimoMes ? ultimoMes.datos.map((d) => ({ name: d.codigoDescuento, value: d.totalDescontado })) : [], [ultimoMes]);
   const chartConfig = { total: { label: "Total descontado (€)", color: "hsl(var(--primary))" }, usos: { label: "Nº de usos", color: "hsl(210 60% 55%)" } };
 
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "codigo", label: "Código" },
+    { campo: "ejecucion", label: "Ejecución" },
+    { campo: "tenerEnCuenta", label: "A tener en cuenta" },
+    { campo: "activo", label: "Activo" },
+    { campo: "ultimaActualizacion", label: "Actualizado" },
+  ];
+
+  const columnDefs: Record<string, { th: ReactNode; td: (d: Descuento) => ReactNode }> = {
+    codigo: {
+      th: <TableHead key="codigo" className="w-[180px]">Código</TableHead>,
+      td: (d) => (
+        <TableCell key="codigo" className="font-semibold text-foreground">{d.codigo}</TableCell>
+      ),
+    },
+    ejecucion: {
+      th: <TableHead key="ejecucion">Ejecución</TableHead>,
+      td: (d) => (
+        <TableCell key="ejecucion" className="text-muted-foreground max-w-[250px] truncate">{d.ejecucion}</TableCell>
+      ),
+    },
+    tenerEnCuenta: {
+      th: <TableHead key="tenerEnCuenta">A tener en cuenta</TableHead>,
+      td: (d) => (
+        <TableCell key="tenerEnCuenta" className="text-muted-foreground max-w-[220px] truncate">{d.tenerEnCuenta}</TableCell>
+      ),
+    },
+    activo: {
+      th: <TableHead key="activo" className="w-[90px] text-center">Activo</TableHead>,
+      td: (d) => (
+        <TableCell key="activo" className="text-center"><Switch checked={d.activo} onCheckedChange={() => toggleActivo(d)} /></TableCell>
+      ),
+    },
+    ultimaActualizacion: {
+      th: <TableHead key="ultimaActualizacion" className="w-[140px]">Actualizado</TableHead>,
+      td: (d) => (
+        <TableCell key="ultimaActualizacion" className="text-xs text-muted-foreground">{d.ultimaActualizacion}</TableCell>
+      ),
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
   return (
     <div className="flex-1 overflow-auto">
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
@@ -167,31 +217,31 @@ export function DescuentosView() {
             <SubmoduleToolbar
               busqueda={busqueda}
               onBusquedaChange={setBusqueda}
-              placeholderBusqueda="Buscar descuento…"
+              placeholderBusqueda="Buscar"
               onNuevo={openCrear}
-              campos={[
-                { campo: "activo", label: "Activo", tipo: "booleano" },
-              ]}
               filtros={filtros}
               onFiltrosChange={setFiltros}
-              ordenOpciones={[
-                { campo: "codigo", label: "Código" },
-                { campo: "ejecucion", label: "Ejecución" },
-                { campo: "ultimaActualizacion", label: "Actualizado" },
-              ]}
               orden={orden}
               onOrdenChange={setOrden}
-              columnas={[
-                { campo: "codigo", label: "Código" },
-                { campo: "ejecucion", label: "Ejecución" },
-                { campo: "tenerEnCuenta", label: "A tener en cuenta" },
-                { campo: "activo", label: "Activo" },
-                { campo: "ultimaActualizacion", label: "Actualizado" },
-              ]}
+              columnas={columnasDef}
               columnasVisibles={columnasVisibles}
               onColumnasVisiblesChange={setColumnasVisibles}
+              columnasOrden={columnasOrden}
+              onColumnasOrdenChange={setColumnasOrden}
               extraDerecha={
-                <IOActions config={descuentosIO} onSuccess={() => window.location.reload()} />
+                <>
+                  <IOActions config={descuentosIO} onSuccess={() => window.location.reload()} />
+                  <Button
+                    size="icon"
+                    variant={showConfig ? "default" : "outline"}
+                    className="h-9 w-9"
+                    onClick={() => setShowConfig((v) => !v)}
+                    title="Configuración"
+                    aria-label="Configuración"
+                  >
+                    <Settings className="h-4 w-4" strokeWidth={1.75} />
+                  </Button>
+                </>
               }
             />
 
@@ -200,11 +250,7 @@ export function DescuentosView() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[180px]">Código</TableHead>
-                      <TableHead>Ejecución</TableHead>
-                      <TableHead>A tener en cuenta</TableHead>
-                      <TableHead className="w-[90px] text-center">Activo</TableHead>
-                      <TableHead className="w-[140px]">Actualizado</TableHead>
+                      {columnasRender.map((c) => columnDefs[c.campo]?.th)}
                       <TableHead className="w-[120px] text-right">Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -212,11 +258,7 @@ export function DescuentosView() {
                     {filtrados.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No se encontraron descuentos</TableCell></TableRow>}
                     {filtrados.map((d) => (
                       <TableRow key={d.id}>
-                        <TableCell className="font-semibold text-foreground">{d.codigo}</TableCell>
-                        <TableCell className="text-muted-foreground max-w-[250px] truncate">{d.ejecucion}</TableCell>
-                        <TableCell className="text-muted-foreground max-w-[220px] truncate">{d.tenerEnCuenta}</TableCell>
-                        <TableCell className="text-center"><Switch checked={d.activo} onCheckedChange={() => toggleActivo(d)} /></TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{d.ultimaActualizacion}</TableCell>
+                        {columnasRender.map((c) => columnDefs[c.campo]?.td(d))}
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
                             <Button variant="ghost" size="icon" onClick={() => { setDetalle(d); setDetalleOpen(true); }}><Eye className="h-4 w-4" /></Button>

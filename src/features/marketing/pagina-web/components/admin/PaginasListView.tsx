@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
@@ -11,6 +11,7 @@ import {
   Trash2,
   Eye,
   Archive,
+  Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,9 +29,12 @@ import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
   aplicarOrdenToolbar,
+  colVisible,
+  ordenarColumnas,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
+  type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
 import {
   AlertDialog,
@@ -70,12 +74,14 @@ export function PaginasListView() {
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [nuevaOpen, setNuevaOpen] = useState(false);
   const [confirmar, setConfirmar] = useState<
     | { tipo: "archivar" | "eliminar"; id: string; nombre: string }
     | null
   >(null);
   const [renombrando, setRenombrando] = useState<{ id: string; nombre: string } | null>(null);
+  const [showConfig, setShowConfig] = useState(false);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -135,6 +141,82 @@ export function PaginasListView() {
     setRenombrando(null);
   };
 
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "nombre", label: "Nombre" },
+    { campo: "tipo", label: "Tipo" },
+    { campo: "slug", label: "Slug" },
+    { campo: "estado", label: "Estado" },
+    { campo: "actualizada", label: "Actualizada" },
+  ];
+
+  const columnDefs: Record<string, { th: ReactNode; td: (p: PaginaWeb) => ReactNode }> = {
+    nombre: {
+      th: <TableHead key="nombre">Nombre</TableHead>,
+      td: (p) => (
+        <TableCell key="nombre" className="font-medium max-w-[320px] truncate">
+          <Link
+            href={`/marketing/pagina-web/${p.id}`}
+            className="hover:underline"
+          >
+            {p.nombre}
+          </Link>
+        </TableCell>
+      ),
+    },
+    tipo: {
+      th: <TableHead key="tipo">Tipo</TableHead>,
+      td: (p) => (
+        <TableCell key="tipo" className="text-xs">
+          <Badge variant="outline" className="font-normal">
+            {p.tipo === "WEB_PRINCIPAL" ? (
+              <>
+                <Globe className="h-3 w-3 mr-1" /> Web principal
+              </>
+            ) : (
+              <>
+                <LayoutTemplate className="h-3 w-3 mr-1" /> One-page
+              </>
+            )}
+          </Badge>
+        </TableCell>
+      ),
+    },
+    slug: {
+      th: <TableHead key="slug">Slug</TableHead>,
+      td: (p) => (
+        <TableCell key="slug" className="font-mono text-xs text-muted-foreground max-w-[200px] truncate">
+          {p.slug_interno}
+        </TableCell>
+      ),
+    },
+    estado: {
+      th: <TableHead key="estado">Estado</TableHead>,
+      td: (p) => (
+        <TableCell key="estado">
+          <Badge variant="outline" className={ESTADO_COLOR[p.estado]}>
+            {ESTADO_LABEL[p.estado]}
+          </Badge>
+        </TableCell>
+      ),
+    },
+    actualizada: {
+      th: <TableHead key="actualizada">Actualizada</TableHead>,
+      td: (p) => (
+        <TableCell key="actualizada" className="text-sm text-muted-foreground whitespace-nowrap">
+          {new Date(p.updated_at).toLocaleDateString("es-ES", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          })}
+        </TableCell>
+      ),
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
   return (
     <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
       {/* Header */}
@@ -150,44 +232,33 @@ export function PaginasListView() {
       <SubmoduleToolbar
         busqueda={search}
         onBusquedaChange={setSearch}
-        placeholderBusqueda="Buscar por nombre o slug..."
+        placeholderBusqueda="Buscar"
         onNuevo={() => setNuevaOpen(true)}
-        textoNuevo="Nueva página"
-        campos={[
-          {
-            campo: "estado",
-            label: "Estado",
-            tipo: "lista",
-            opciones: Object.values(ESTADO_LABEL),
-          },
-          {
-            campo: "tipo",
-            label: "Tipo",
-            tipo: "lista",
-            opciones: ["Web principal", "One-page"],
-          },
-        ]}
         filtros={filtros}
         onFiltrosChange={setFiltros}
-        ordenOpciones={[
-          { campo: "nombre", label: "Nombre" },
-          { campo: "updated_at", label: "Actualizada" },
-        ]}
         orden={orden}
         onOrdenChange={setOrden}
-        columnas={[
-          { campo: "nombre", label: "Nombre" },
-          { campo: "tipo", label: "Tipo" },
-          { campo: "slug", label: "Slug" },
-          { campo: "estado", label: "Estado" },
-          { campo: "actualizada", label: "Actualizada" },
-        ]}
+        columnas={columnasDef}
         columnasVisibles={columnasVisibles}
         onColumnasVisiblesChange={setColumnasVisibles}
+        columnasOrden={columnasOrden}
+        onColumnasOrdenChange={setColumnasOrden}
         extraDerecha={
-          <span className="text-xs text-muted-foreground">
-            {filtered.length} página{filtered.length !== 1 ? "s" : ""}
-          </span>
+          <>
+            <span className="text-xs text-muted-foreground">
+              {filtered.length} página{filtered.length !== 1 ? "s" : ""}
+            </span>
+            <Button
+              size="icon"
+              variant={showConfig ? "default" : "outline"}
+              className="h-9 w-9"
+              onClick={() => setShowConfig((v) => !v)}
+              title="Configuración"
+              aria-label="Configuración"
+            >
+              <Settings className="h-4 w-4" strokeWidth={1.75} />
+            </Button>
+          </>
         }
       />
 
@@ -196,11 +267,7 @@ export function PaginasListView() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Nombre</TableHead>
-              <TableHead>Tipo</TableHead>
-              <TableHead>Slug</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead>Actualizada</TableHead>
+              {columnasRender.map((c) => columnDefs[c.campo]?.th)}
               <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
@@ -230,42 +297,7 @@ export function PaginasListView() {
             {!loading &&
               filtered.map((p) => (
                 <TableRow key={p.id} className="hover:bg-muted/30">
-                  <TableCell className="font-medium max-w-[320px] truncate">
-                    <Link
-                      href={`/marketing/pagina-web/${p.id}`}
-                      className="hover:underline"
-                    >
-                      {p.nombre}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-xs">
-                    <Badge variant="outline" className="font-normal">
-                      {p.tipo === "WEB_PRINCIPAL" ? (
-                        <>
-                          <Globe className="h-3 w-3 mr-1" /> Web principal
-                        </>
-                      ) : (
-                        <>
-                          <LayoutTemplate className="h-3 w-3 mr-1" /> One-page
-                        </>
-                      )}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground max-w-[200px] truncate">
-                    {p.slug_interno}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={ESTADO_COLOR[p.estado]}>
-                      {ESTADO_LABEL[p.estado]}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                    {new Date(p.updated_at).toLocaleDateString("es-ES", {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric",
-                    })}
-                  </TableCell>
+                  {columnasRender.map((c) => columnDefs[c.campo]?.td(p))}
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
                       <Link href={`/marketing/pagina-web/${p.id}`}>

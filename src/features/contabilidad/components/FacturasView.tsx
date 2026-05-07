@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MoreVertical, FileText } from "lucide-react";
+import { MoreVertical, FileText, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FacturaContable, EstadoFactura, TipoFactura } from "@/features/contabilidad/data/contabilidad";
 import { listFacturas } from "@/features/contabilidad/actions/contabilidad-actions";
@@ -12,10 +12,14 @@ import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
   aplicarOrdenToolbar,
+  colVisible,
+  ordenarColumnas,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
+  type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
+import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { IOActions } from "@/shared/io";
 import { facturasIO } from "@/features/contabilidad/io/facturas.io";
 import { toast } from "sonner";
@@ -53,6 +57,8 @@ export function FacturasView() {
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
+  const [showConfig, setShowConfig] = useState(false);
 
   const loadFacturas = useCallback(async () => {
     setLoading(true);
@@ -108,6 +114,58 @@ export function FacturasView() {
     return "✗ Pendiente";
   };
 
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "cliente", label: "Cliente" },
+    { campo: "fechaEmision", label: "Fecha emisión" },
+    { campo: "fechaPago", label: "Fecha pago" },
+    { campo: "estado", label: "Estado" },
+    { campo: "total", label: "Total" },
+  ];
+
+  const columnDefs: Record<string, { th: ReactNode; td: (f: FacturaContable) => ReactNode }> = {
+    cliente: {
+      th: <TableColumnHeader key="cliente" label="Cliente" />,
+      td: (f) => (
+        <td key="cliente" className="px-3 py-3">
+          <p className="font-semibold">{f.cliente}</p>
+          <p className="text-[10px] text-muted-foreground">{f.numeroFactura} · {f.tipoFactura}</p>
+        </td>
+      ),
+    },
+    fechaEmision: {
+      th: <TableColumnHeader key="fechaEmision" label="Fecha de emisión" />,
+      td: (f) => (
+        <td key="fechaEmision" className="px-3 py-3 text-muted-foreground">{f.fechaEmision}</td>
+      ),
+    },
+    fechaPago: {
+      th: <TableColumnHeader key="fechaPago" label="Fecha de pago" />,
+      td: (f) => (
+        <td key="fechaPago" className="px-3 py-3 text-muted-foreground">{f.fechaPago || "—"}</td>
+      ),
+    },
+    estado: {
+      th: <TableColumnHeader key="estado" label="Estado" />,
+      td: (f) => (
+        <td key="estado" className="px-3 py-3">
+          <Badge className={cn("text-[10px]", estadoStyles[f.estado])} variant="outline">{estadoLabel(f)}</Badge>
+        </td>
+      ),
+    },
+    total: {
+      th: <TableColumnHeader key="total" label="Total" />,
+      td: (f) => (
+        <td key="total" className="px-3 py-3 text-right font-mono font-semibold">
+          {f.total.toLocaleString("es-ES", { minimumFractionDigits: 2 })} €
+        </td>
+      ),
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden">
       {/* Tabs */}
@@ -126,37 +184,31 @@ export function FacturasView() {
         <SubmoduleToolbar
           busqueda={busqueda}
           onBusquedaChange={setBusqueda}
-          placeholderBusqueda="Buscar por descripción, número…"
+          placeholderBusqueda="Buscar"
           onNuevo={() => { /* nuevo */ }}
-          campos={[
-            { campo: "estado", label: "Estado", tipo: "lista", opciones: ["PENDIENTE", "PAGADO", "COBRADO", "VENCIDO"] },
-            { campo: "tipo", label: "Tipo", tipo: "lista", opciones: ["VENTA", "COMPRA"] },
-            { campo: "cliente", label: "Cliente", tipo: "lista", opciones: clientesUsados },
-            { campo: "total", label: "Total €", tipo: "numero" },
-            { campo: "fechaEmision", label: "Fecha emisión", tipo: "fecha" },
-          ]}
           filtros={filtros}
           onFiltrosChange={setFiltros}
-          ordenOpciones={[
-            { campo: "fechaEmision", label: "Fecha emisión" },
-            { campo: "fechaPago", label: "Fecha pago" },
-            { campo: "cliente", label: "Cliente" },
-            { campo: "total", label: "Total" },
-            { campo: "estado", label: "Estado" },
-          ]}
           orden={orden}
           onOrdenChange={setOrden}
-          columnas={[
-            { campo: "cliente", label: "Cliente" },
-            { campo: "fechaEmision", label: "Fecha emisión" },
-            { campo: "fechaPago", label: "Fecha pago" },
-            { campo: "estado", label: "Estado" },
-            { campo: "total", label: "Total" },
-          ]}
+          columnas={columnasDef}
           columnasVisibles={columnasVisibles}
           onColumnasVisiblesChange={setColumnasVisibles}
+          columnasOrden={columnasOrden}
+          onColumnasOrdenChange={setColumnasOrden}
           extraDerecha={
-            <IOActions config={facturasIO} onSuccess={() => window.location.reload()} />
+            <>
+              <IOActions config={facturasIO} onSuccess={() => window.location.reload()} />
+              <Button
+                size="icon"
+                variant={showConfig ? "default" : "outline"}
+                className="h-9 w-9"
+                onClick={() => setShowConfig((v) => !v)}
+                title="Configuración"
+                aria-label="Configuración"
+              >
+                <Settings className="h-4 w-4" strokeWidth={1.75} />
+              </Button>
+            </>
           }
         />
       </div>
@@ -169,11 +221,7 @@ export function FacturasView() {
             <thead>
               <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase tracking-wider">
                 <th className="px-3 py-3 w-8"></th>
-                <th className="px-3 py-3 font-medium">Cliente</th>
-                <th className="px-3 py-3 font-medium">Fecha de emisión</th>
-                <th className="px-3 py-3 font-medium">Fecha de pago</th>
-                <th className="px-3 py-3 font-medium">Estado</th>
-                <th className="px-3 py-3 font-medium text-right">Total</th>
+                {columnasRender.map((c) => columnDefs[c.campo]?.th)}
                 <th className="px-3 py-3 w-8"></th>
               </tr>
             </thead>
@@ -181,18 +229,7 @@ export function FacturasView() {
               {filtradas.map(f => (
                 <tr key={f.id} className="border-b hover:bg-muted/30 transition-colors">
                   <td className="px-3 py-3"><FileText className="h-4 w-4 text-muted-foreground" /></td>
-                  <td className="px-3 py-3">
-                    <p className="font-semibold">{f.cliente}</p>
-                    <p className="text-[10px] text-muted-foreground">{f.numeroFactura} · {f.tipoFactura}</p>
-                  </td>
-                  <td className="px-3 py-3 text-muted-foreground">{f.fechaEmision}</td>
-                  <td className="px-3 py-3 text-muted-foreground">{f.fechaPago || "—"}</td>
-                  <td className="px-3 py-3">
-                    <Badge className={cn("text-[10px]", estadoStyles[f.estado])} variant="outline">{estadoLabel(f)}</Badge>
-                  </td>
-                  <td className="px-3 py-3 text-right font-mono font-semibold">
-                    {f.total.toLocaleString("es-ES", { minimumFractionDigits: 2 })} €
-                  </td>
+                  {columnasRender.map((c) => columnDefs[c.campo]?.td(f))}
                   <td className="px-3 py-3"><Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-3.5 w-3.5" /></Button></td>
                 </tr>
               ))}

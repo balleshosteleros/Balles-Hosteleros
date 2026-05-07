@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { GripVertical, Pencil, Trash2, Zap } from "lucide-react";
+import { GripVertical, Pencil, Trash2, Zap, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SAMPLE_REGLAS, ReglaAutomatica } from "@/features/contabilidad/data/contabilidad";
 import {
@@ -31,6 +31,7 @@ export function ReglasView() {
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [reglas, setReglas] = useState(SAMPLE_REGLAS);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
 
   const acceso = (r: ReglaAutomatica, campo: string): unknown => {
     if (campo === "nombre") return r.nombre;
@@ -55,22 +56,26 @@ export function ReglasView() {
       <SubmoduleToolbar
         busqueda={busqueda}
         onBusquedaChange={setBusqueda}
-        placeholderBusqueda="Buscar reglas..."
+        placeholderBusqueda="Buscar"
         onNuevo={() => setDialogOpen(true)}
-        campos={[
-          { campo: "prioridad", label: "Prioridad", tipo: "lista", opciones: ["ALTA", "MEDIA", "BAJA"] },
-          { campo: "activa", label: "Activa", tipo: "booleano" },
-        ]}
         filtros={filtros}
         onFiltrosChange={setFiltros}
-        ordenOpciones={[
-          { campo: "nombre", label: "Nombre" },
-          { campo: "prioridad", label: "Prioridad" },
-        ]}
         orden={orden}
         onOrdenChange={setOrden}
         extraDerecha={
-          <IOActions config={reglasIO} onSuccess={() => window.location.reload()} />
+          <>
+            <IOActions config={reglasIO} onSuccess={() => window.location.reload()} />
+            <Button
+              size="icon"
+              variant={showConfig ? "default" : "outline"}
+              className="h-9 w-9"
+              onClick={() => setShowConfig((v) => !v)}
+              title="Configuración"
+              aria-label="Configuración"
+            >
+              <Settings className="h-4 w-4" strokeWidth={1.75} />
+            </Button>
+          </>
         }
       />
 

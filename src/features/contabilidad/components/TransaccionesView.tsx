@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Paperclip, MoreVertical } from "lucide-react";
+import { Paperclip, MoreVertical, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TransaccionContable, TipoTransaccion } from "@/features/contabilidad/data/contabilidad";
 import { listTransacciones } from "@/features/contabilidad/actions/contabilidad-actions";
@@ -12,9 +12,12 @@ import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
   aplicarOrdenToolbar,
+  colVisible,
+  ordenarColumnas,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
+  type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
 import { IOActions } from "@/shared/io";
 import { transaccionesIO } from "@/features/contabilidad/io/transacciones.io";
@@ -45,6 +48,8 @@ export function TransaccionesView() {
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
+  const [showConfig, setShowConfig] = useState(false);
 
   const loadTransacciones = useCallback(async () => {
     setLoading(true);
@@ -92,6 +97,71 @@ export function TransaccionesView() {
     return lista;
   }, [txs, tab, busqueda, filtros, orden]);
 
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "concepto", label: "Concepto" },
+    { campo: "etiquetas", label: "Etiquetas" },
+    { campo: "fecha", label: "Fecha" },
+    { campo: "documentos", label: "Documentos" },
+    { campo: "importe", label: "Cantidad" },
+  ];
+
+  const columnDefs: Record<string, { th: ReactNode; td: (t: TransaccionContable) => ReactNode }> = {
+    concepto: {
+      th: <th key="concepto" className="px-3 py-3 font-medium">Concepto</th>,
+      td: (t) => (
+        <td key="concepto" className="px-3 py-3">
+          <p className="font-semibold">{t.concepto}</p>
+          <p className="text-[10px] text-muted-foreground">{t.banco}</p>
+        </td>
+      ),
+    },
+    etiquetas: {
+      th: <th key="etiquetas" className="px-3 py-3 font-medium">Etiquetas</th>,
+      td: (t) => (
+        <td key="etiquetas" className="px-3 py-3">
+          <div className="flex gap-1 flex-wrap">
+            {t.etiquetas.map((e, i) => (
+              <Badge key={i} className={cn("text-[9px] border", e.color)} variant="outline">
+                {e.categoria}{e.detalle ? ` · ${e.detalle}` : ""}
+              </Badge>
+            ))}
+          </div>
+        </td>
+      ),
+    },
+    fecha: {
+      th: <th key="fecha" className="px-3 py-3 font-medium">Fecha</th>,
+      td: (t) => (
+        <td key="fecha" className="px-3 py-3 text-muted-foreground">{t.fecha}</td>
+      ),
+    },
+    documentos: {
+      th: <th key="documentos" className="px-3 py-3 font-medium">Documentos</th>,
+      td: (t) => (
+        <td key="documentos" className="px-3 py-3">
+          {t.documentos > 0 && (
+            <span className="flex items-center gap-1 text-muted-foreground text-xs">
+              <Paperclip className="h-3 w-3" />
+              <Badge variant="destructive" className="text-[9px] h-4 w-4 p-0 flex items-center justify-center rounded-full">{t.documentos}</Badge>
+            </span>
+          )}
+        </td>
+      ),
+    },
+    importe: {
+      th: <th key="importe" className="px-3 py-3 font-medium text-right">Cantidad</th>,
+      td: (t) => (
+        <td key="importe" className={cn("px-3 py-3 text-right font-mono font-semibold", t.importe >= 0 ? "text-emerald-600" : "")}>
+          {t.importe >= 0 ? "" : "↙ "}{t.importe.toLocaleString("es-ES", { minimumFractionDigits: 2 })} €
+        </td>
+      ),
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden">
       {/* Tabs */}
@@ -110,36 +180,31 @@ export function TransaccionesView() {
         <SubmoduleToolbar
           busqueda={busqueda}
           onBusquedaChange={setBusqueda}
-          placeholderBusqueda="Buscar transacciones de todos tus bancos…"
+          placeholderBusqueda="Buscar"
           onNuevo={() => { /* nuevo */ }}
-          campos={[
-            { campo: "tipo", label: "Tipo", tipo: "lista", opciones: ["COBRO", "PAGO"] },
-            { campo: "banco", label: "Banco", tipo: "lista", opciones: bancosUsados },
-            { campo: "conciliada", label: "Estado", tipo: "lista", opciones: ["Conciliada", "Sin conciliar"] },
-            { campo: "importe", label: "Importe €", tipo: "numero" },
-            { campo: "fecha", label: "Fecha", tipo: "fecha" },
-          ]}
           filtros={filtros}
           onFiltrosChange={setFiltros}
-          ordenOpciones={[
-            { campo: "fecha", label: "Fecha" },
-            { campo: "concepto", label: "Concepto" },
-            { campo: "importe", label: "Importe" },
-            { campo: "banco", label: "Banco" },
-          ]}
           orden={orden}
           onOrdenChange={setOrden}
-          columnas={[
-            { campo: "concepto", label: "Concepto" },
-            { campo: "etiquetas", label: "Etiquetas" },
-            { campo: "fecha", label: "Fecha" },
-            { campo: "documentos", label: "Documentos" },
-            { campo: "importe", label: "Cantidad" },
-          ]}
+          columnas={columnasDef}
           columnasVisibles={columnasVisibles}
           onColumnasVisiblesChange={setColumnasVisibles}
+          columnasOrden={columnasOrden}
+          onColumnasOrdenChange={setColumnasOrden}
           extraDerecha={
-            <IOActions config={transaccionesIO} onSuccess={() => window.location.reload()} />
+            <>
+              <IOActions config={transaccionesIO} onSuccess={() => window.location.reload()} />
+              <Button
+                size="icon"
+                variant={showConfig ? "default" : "outline"}
+                className="h-9 w-9"
+                onClick={() => setShowConfig((v) => !v)}
+                title="Configuración"
+                aria-label="Configuración"
+              >
+                <Settings className="h-4 w-4" strokeWidth={1.75} />
+              </Button>
+            </>
           }
         />
       </div>
@@ -152,11 +217,7 @@ export function TransaccionesView() {
             <thead>
               <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase tracking-wider">
                 <th className="px-3 py-3 w-8"></th>
-                <th className="px-3 py-3 font-medium">Concepto</th>
-                <th className="px-3 py-3 font-medium">Etiquetas</th>
-                <th className="px-3 py-3 font-medium">Fecha</th>
-                <th className="px-3 py-3 font-medium">Documentos</th>
-                <th className="px-3 py-3 font-medium text-right">Cantidad</th>
+                {columnasRender.map((c) => columnDefs[c.campo]?.th)}
                 <th className="px-3 py-3 w-8"></th>
               </tr>
             </thead>
@@ -164,31 +225,7 @@ export function TransaccionesView() {
               {filtradas.map(t => (
                 <tr key={t.id} className="border-b hover:bg-muted/30 transition-colors">
                   <td className="px-3 py-3 text-muted-foreground text-xs font-mono">℞</td>
-                  <td className="px-3 py-3">
-                    <p className="font-semibold">{t.concepto}</p>
-                    <p className="text-[10px] text-muted-foreground">{t.banco}</p>
-                  </td>
-                  <td className="px-3 py-3">
-                    <div className="flex gap-1 flex-wrap">
-                      {t.etiquetas.map((e, i) => (
-                        <Badge key={i} className={cn("text-[9px] border", e.color)} variant="outline">
-                          {e.categoria}{e.detalle ? ` · ${e.detalle}` : ""}
-                        </Badge>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-3 py-3 text-muted-foreground">{t.fecha}</td>
-                  <td className="px-3 py-3">
-                    {t.documentos > 0 && (
-                      <span className="flex items-center gap-1 text-muted-foreground text-xs">
-                        <Paperclip className="h-3 w-3" />
-                        <Badge variant="destructive" className="text-[9px] h-4 w-4 p-0 flex items-center justify-center rounded-full">{t.documentos}</Badge>
-                      </span>
-                    )}
-                  </td>
-                  <td className={cn("px-3 py-3 text-right font-mono font-semibold", t.importe >= 0 ? "text-emerald-600" : "")}>
-                    {t.importe >= 0 ? "" : "↙ "}{t.importe.toLocaleString("es-ES", { minimumFractionDigits: 2 })} €
-                  </td>
+                  {columnasRender.map((c) => columnDefs[c.campo]?.td(t))}
                   <td className="px-3 py-3"><Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-3.5 w-3.5" /></Button></td>
                 </tr>
               ))}

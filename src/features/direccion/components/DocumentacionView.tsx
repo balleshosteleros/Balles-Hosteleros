@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
   Documento, CATEGORIAS_DOCUMENTALES, NIVELES_ACCESO,
@@ -21,9 +21,12 @@ import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
   aplicarOrdenToolbar,
+  ordenarColumnas,
+  colVisible,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
+  type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
 import {
   Upload, List, LayoutGrid, FileText, FileSpreadsheet,
@@ -116,9 +119,11 @@ export function DocumentacionView() {
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [vista, setVista] = useState<"lista" | "tarjetas">("lista");
   const [selected, setSelected] = useState<Documento | null>(null);
   const [mainTab, setMainTab] = useState("biblioteca");
+  const [showConfig, setShowConfig] = useState(false);
 
   const acceso = (d: Documento, campo: string): unknown => {
     if (campo === "estado") return ESTADOS_DOCUMENTO.find((x) => x.value === d.estado)?.label ?? d.estado;
@@ -141,6 +146,67 @@ export function DocumentacionView() {
     return r;
   }, [docs, search, filtros, orden]);
 
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "nombre", label: "Nombre" },
+    { campo: "categoria", label: "Categoría" },
+    { campo: "carpeta", label: "Carpeta" },
+    { campo: "estado", label: "Estado" },
+    { campo: "acceso", label: "Acceso" },
+    { campo: "fecha", label: "Fecha" },
+    { campo: "tamano", label: "Tamaño" },
+  ];
+
+  const columnDefs: Record<string, { th: ReactNode; td: (d: Documento) => ReactNode }> = {
+    nombre: {
+      th: <TableHead key="nombre">Nombre</TableHead>,
+      td: (d) => (
+        <TableCell key="nombre" className="font-medium max-w-[260px] truncate">{d.nombre}</TableCell>
+      ),
+    },
+    categoria: {
+      th: <TableHead key="categoria">Categoría</TableHead>,
+      td: (d) => (
+        <TableCell key="categoria" className="text-sm text-muted-foreground">{d.categoria}</TableCell>
+      ),
+    },
+    carpeta: {
+      th: <TableHead key="carpeta">Carpeta</TableHead>,
+      td: (d) => (
+        <TableCell key="carpeta" className="text-sm text-muted-foreground">{d.carpeta}</TableCell>
+      ),
+    },
+    estado: {
+      th: <TableHead key="estado">Estado</TableHead>,
+      td: (d) => (
+        <TableCell key="estado">{estadoBadge(d.estado)}</TableCell>
+      ),
+    },
+    acceso: {
+      th: <TableHead key="acceso">Acceso</TableHead>,
+      td: (d) => (
+        <TableCell key="acceso">
+          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">{accesoIcon(d.nivelAcceso)} {accesoLabel(d.nivelAcceso)}</span>
+        </TableCell>
+      ),
+    },
+    fecha: {
+      th: <TableHead key="fecha">Fecha</TableHead>,
+      td: (d) => (
+        <TableCell key="fecha" className="text-sm text-muted-foreground whitespace-nowrap">{d.ultimaActualizacion}</TableCell>
+      ),
+    },
+    tamano: {
+      th: <TableHead key="tamano">Tamaño</TableHead>,
+      td: (d) => (
+        <TableCell key="tamano" className="text-sm text-muted-foreground">{d.tamano}</TableCell>
+      ),
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
   return (
     <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
       {/* Main Tabs */}
@@ -157,41 +223,34 @@ export function DocumentacionView() {
           <SubmoduleToolbar
             busqueda={search}
             onBusquedaChange={setSearch}
-            placeholderBusqueda="Buscar documentos..."
-            textoNuevo="Subir documento"
+            placeholderBusqueda="Buscar"
             onNuevo={() => { /* abrir uploader */ }}
-            campos={[
-              { campo: "categoria", label: "Categoría", tipo: "lista", opciones: [...CATEGORIAS_DOCUMENTALES] },
-              { campo: "estado", label: "Estado", tipo: "lista", opciones: ESTADOS_DOCUMENTO.map((e) => e.label) },
-              { campo: "carpeta", label: "Carpeta", tipo: "lista", opciones: [...CARPETAS] },
-              { campo: "fecha", label: "Fecha", tipo: "fecha" },
-            ]}
             filtros={filtros}
             onFiltrosChange={setFiltros}
-            ordenOpciones={[
-              { campo: "nombre", label: "Nombre" },
-              { campo: "categoria", label: "Categoría" },
-              { campo: "fecha", label: "Fecha" },
-              { campo: "version", label: "Versión" },
-            ]}
             orden={orden}
             onOrdenChange={setOrden}
-            columnas={[
-              { campo: "nombre", label: "Nombre" },
-              { campo: "categoria", label: "Categoría" },
-              { campo: "carpeta", label: "Carpeta" },
-              { campo: "estado", label: "Estado" },
-              { campo: "acceso", label: "Acceso" },
-              { campo: "fecha", label: "Fecha" },
-              { campo: "tamano", label: "Tamaño" },
-            ]}
+            columnas={columnasDef}
             columnasVisibles={columnasVisibles}
             onColumnasVisiblesChange={setColumnasVisibles}
+            columnasOrden={columnasOrden}
+            onColumnasOrdenChange={setColumnasOrden}
             extraDerecha={
-              <div className="flex gap-1">
-                <Button variant={vista === "lista" ? "secondary" : "ghost"} size="icon" onClick={() => setVista("lista")}><List className="h-4 w-4" /></Button>
-                <Button variant={vista === "tarjetas" ? "secondary" : "ghost"} size="icon" onClick={() => setVista("tarjetas")}><LayoutGrid className="h-4 w-4" /></Button>
-              </div>
+              <>
+                <div className="flex gap-1">
+                  <Button variant={vista === "lista" ? "secondary" : "ghost"} size="icon" onClick={() => setVista("lista")}><List className="h-4 w-4" /></Button>
+                  <Button variant={vista === "tarjetas" ? "secondary" : "ghost"} size="icon" onClick={() => setVista("tarjetas")}><LayoutGrid className="h-4 w-4" /></Button>
+                </div>
+                <Button
+                  size="icon"
+                  variant={showConfig ? "default" : "outline"}
+                  className="h-9 w-9"
+                  onClick={() => setShowConfig((v) => !v)}
+                  title="Configuración"
+                  aria-label="Configuración"
+                >
+                  <Settings className="h-4 w-4" strokeWidth={1.75} />
+                </Button>
+              </>
             }
           />
 
@@ -206,13 +265,7 @@ export function DocumentacionView() {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-10"></TableHead>
-                      <TableHead>Nombre</TableHead>
-                      <TableHead>Categoría</TableHead>
-                      <TableHead>Carpeta</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead>Acceso</TableHead>
-                      <TableHead>Fecha</TableHead>
-                      <TableHead>Tamaño</TableHead>
+                      {columnasRender.map((c) => columnDefs[c.campo]?.th)}
                       <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -220,15 +273,7 @@ export function DocumentacionView() {
                     {filtered.map((d) => (
                       <TableRow key={d.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelected(d)}>
                         <TableCell>{tipoIcono(d.tipoArchivo)}</TableCell>
-                        <TableCell className="font-medium max-w-[260px] truncate">{d.nombre}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{d.categoria}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{d.carpeta}</TableCell>
-                        <TableCell>{estadoBadge(d.estado)}</TableCell>
-                        <TableCell>
-                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">{accesoIcon(d.nivelAcceso)} {accesoLabel(d.nivelAcceso)}</span>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{d.ultimaActualizacion}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{d.tamano}</TableCell>
+                        {columnasRender.map((c) => columnDefs[c.campo]?.td(d))}
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setSelected(d); }}><Eye className="h-3.5 w-3.5" /></Button>

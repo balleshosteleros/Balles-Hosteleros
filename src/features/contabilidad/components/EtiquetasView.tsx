@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, GripVertical, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, GripVertical, Pencil, Trash2, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SubmoduleToolbar } from "@/shared/components/SubmoduleToolbar";
 
@@ -64,6 +64,7 @@ export function EtiquetasView() {
   const [tabActiva, setTabActiva] = useState("Categorías");
   const [categorias] = useState(SAMPLE_CATEGORIAS);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
 
   const filtradas = useMemo(() => {
     if (!busqueda) return categorias;
@@ -94,8 +95,20 @@ export function EtiquetasView() {
           <SubmoduleToolbar
             busqueda={busqueda}
             onBusquedaChange={setBusqueda}
-            placeholderBusqueda="Filtrar por nombre de la etiqueta..."
+            placeholderBusqueda="Buscar"
             onNuevo={() => setDialogOpen(true)}
+            extraDerecha={
+              <Button
+                size="icon"
+                variant={showConfig ? "default" : "outline"}
+                className="h-9 w-9"
+                onClick={() => setShowConfig((v) => !v)}
+                title="Configuración"
+                aria-label="Configuración"
+              >
+                <Settings className="h-4 w-4" strokeWidth={1.75} />
+              </Button>
+            }
           />
         </div>
 

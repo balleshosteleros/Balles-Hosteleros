@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
   TipoProducto, getCategorias,
   ESTADOS_PRODUCTO, ESTADO_COLOR, EstadoProducto, type Producto, type Conservacion,
   type PreparacionVenta,
-  IVA_OPCIONES, CONSERVACION_OPCIONES, getFormatosPorUnidad,
+  IVA_OPCIONES, CONSERVACION_OPCIONES, UNIDADES_PRODUCTO, getFormatosPorUnidad, getUnidadDeFormato,
   PREPARACION_OPCIONES, getPartidasPorPreparacion,
 } from "@/features/logistica/data/productos";
 import {
@@ -16,18 +16,19 @@ import {
   getProductoConfigSection, saveProductoConfigSection,
 } from "@/features/logistica/actions/config-actions";
 import { listEscandallosConPrecios, addEscandallo, removeEscandallo, getCosteEscandallo } from "@/features/logistica/actions/escandallos-actions";
-import { UNIDADES_STOCK } from "@/features/logistica/data/stock";
+import { listProveedores } from "@/features/logistica/actions/proveedores-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import {
   Plus, ShoppingCart, Store, Settings,
   ArrowLeft, Pencil, Trash2, AlertTriangle, ChefHat, X, FlaskConical,
+  Check, ChevronsUpDown, Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import { IOActions } from "@/shared/io";
@@ -42,17 +43,142 @@ import {
   aplicarOrdenToolbar,
   coincideBusquedaUniversal,
   colVisible,
+  ordenarColumnas,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
+  type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { EstiloProductoVenta } from "@/features/logistica/components/productos/EstiloProductoVenta";
+import { PreciosCompraSection } from "@/features/logistica/components/productos/PreciosCompraSection";
+import { PreciosPorProveedorSection } from "@/features/logistica/components/productos/PreciosPorProveedorSection";
 
 function EstadoBadge({ estado }: { estado: EstadoProducto }) {
   return <Badge variant="outline" className={`text-[10px] ${ESTADO_COLOR[estado]}`}>{estado}</Badge>;
+}
+
+/* ─── Selector de proveedor con búsqueda (solo activos) ─── */
+function ProveedorCombobox({
+  value,
+  onChange,
+  placeholder = "Seleccionar proveedor",
+}: {
+  value: string;
+  onChange: (nombre: string) => void;
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [opciones, setOpciones] = useState<string[]>([]);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    listProveedores().then((res) => {
+      if (!res.ok) return;
+      const activos = (res.data as unknown as Array<Record<string, unknown>>)
+        .filter((r) => (r.estado as string) === "Activo")
+        .map((r) => (r.nombre_comercial as string) ?? "")
+        .filter((n) => !!n)
+        .sort((a, b) => a.localeCompare(b, "es"));
+      setOpciones(Array.from(new Set(activos)));
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  useEffect(() => {
+    if (open) {
+      setQuery("");
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }, [open]);
+
+  const filtered = useMemo(() => {
+    const s = query.trim().toLowerCase();
+    if (!s) return opciones.slice(0, 50);
+    return opciones.filter((n) => n.toLowerCase().includes(s)).slice(0, 50);
+  }, [opciones, query]);
+
+  return (
+    <div ref={containerRef} className="relative w-full">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 text-sm transition-colors hover:bg-muted/30"
+      >
+        <span className={`truncate ${!value ? "text-muted-foreground" : ""}`}>
+          {value || placeholder}
+        </span>
+        <span className="ml-2 shrink-0">
+          {value
+            ? <Check className="h-3.5 w-3.5 text-emerald-500" />
+            : <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground" />}
+        </span>
+      </button>
+      {open && (
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-md border bg-popover text-popover-foreground shadow-md">
+          <div className="flex items-center border-b px-3">
+            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === "Escape") { setOpen(false); }
+              }}
+              placeholder="Buscar proveedor..."
+              className="flex h-10 w-full bg-transparent py-2 text-sm outline-none placeholder:text-muted-foreground"
+              autoComplete="off"
+            />
+          </div>
+          <div className="max-h-60 overflow-y-auto p-1">
+            {filtered.length === 0 ? (
+              <div className="py-3 text-center text-xs text-muted-foreground">
+                {opciones.length === 0 ? "Sin proveedores activos" : "Sin resultados"}
+              </div>
+            ) : (
+              filtered.map((nombre) => (
+                <button
+                  type="button"
+                  key={nombre}
+                  onClick={() => { onChange(nombre); setOpen(false); }}
+                  className="flex w-full items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground transition-colors text-left"
+                >
+                  <span className="truncate">{nombre}</span>
+                  {nombre === value && <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />}
+                </button>
+              ))
+            )}
+          </div>
+          {value && (
+            <div className="border-t p-1">
+              <button
+                type="button"
+                onClick={() => { onChange(""); setOpen(false); }}
+                className="w-full rounded px-2 py-1.5 text-xs text-destructive hover:bg-destructive/10 transition-colors text-left"
+              >
+                Quitar proveedor
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function parseImporte(s: string | null | undefined): number {
@@ -293,48 +419,85 @@ function Composicion({ productoVentaId, precioVenta }: { productoVentaId: string
 
 /* ─── DETALLE PRODUCTO (editable inline) ─── */
 function ProductoDetalle({
-  producto, onBack, onSaved, onDeleted,
+  producto, tipo, onBack, onSaved, onDeleted,
   categoriasOpts, estadosOpts,
 }: {
-  producto: Producto;
+  producto: Producto | null;
+  tipo: TipoProducto;
   onBack: () => void;
   onSaved: (p: Producto) => void;
   onDeleted: () => void;
   categoriasOpts?: string[];
   estadosOpts?: string[];
 }) {
-  const esCompra = producto.tipo === "compra";
-  const esVenta = producto.tipo === "venta";
-  const esElaboracion = producto.tipo === "elaboracion";
+  const isNew = producto === null;
+  const esCompra = tipo === "compra";
+  const esVenta = tipo === "venta";
+  const esElaboracion = tipo === "elaboracion";
   const mostrarConservacion = !esVenta;
   const mostrarIva = !esElaboracion;
   const mostrarFormato = esCompra || esElaboracion;
-  const categorias = categoriasOpts ?? getCategorias(producto.tipo);
+  const categorias = categoriasOpts ?? getCategorias(tipo);
   const estadosList = estadosOpts ?? [...ESTADOS_PRODUCTO];
   const { empresaActual } = useEmpresa();
 
-  const [nombre, setNombre] = useState(producto.nombre);
-  const [categoria, setCategoria] = useState(producto.categoria);
-  const [unidad, setUnidad] = useState(producto.unidad || "ud");
-  const [estado, setEstado] = useState<EstadoProducto>(producto.estado);
-  const [proveedor, setProveedor] = useState(producto.proveedor ?? "");
-  const [precioCompra, setPrecioCompra] = useState(producto.precioCompra ?? "");
-  const [precioVenta, setPrecioVenta] = useState(producto.precioVenta ?? "");
-  const [coste, setCoste] = useState(producto.coste ?? "");
-  const [iva, setIva] = useState(producto.iva ?? "");
-  const [formato, setFormato] = useState(producto.formato ?? "");
-  const [conservacion, setConservacion] = useState<Conservacion | "">(producto.conservacion ?? "");
-  const [preparacion, setPreparacion] = useState<PreparacionVenta | "">(producto.preparacion ?? "");
-  const [partida, setPartida] = useState(producto.partida ?? "");
-  const [observaciones, setObservaciones] = useState(producto.observaciones ?? "");
-  const [textoTicket, setTextoTicket] = useState(producto.textoTicket ?? "");
-  const [textoComanda, setTextoComanda] = useState(producto.textoComanda ?? "");
-  const [estiloColor, setEstiloColor] = useState<string | null>(producto.estiloColor ?? null);
-  const [estiloImagenUrl, setEstiloImagenUrl] = useState<string | null>(producto.estiloImagenUrl ?? null);
-  const [cartaNombre, setCartaNombre] = useState<string>(producto.cartaNombre ?? "");
-  const [cartaTexto, setCartaTexto] = useState<string>(producto.cartaTexto ?? "");
+  const [nombre, setNombre] = useState(producto?.nombre ?? "");
+  const [categoria, setCategoria] = useState(producto?.categoria ?? "");
+  const [unidad, setUnidad] = useState(producto?.unidad || "ud");
+  const [estado, setEstado] = useState<EstadoProducto>(producto?.estado ?? "Activo");
+  const [proveedor, setProveedor] = useState(producto?.proveedor ?? "");
+  const [precioCompra, setPrecioCompra] = useState(producto?.precioCompra ?? "");
+  const [precioVenta, setPrecioVenta] = useState(producto?.precioVenta ?? "");
+  const [coste, setCoste] = useState(producto?.coste ?? "");
+  const [iva, setIva] = useState(producto?.iva ?? "");
+  const [formato, setFormato] = useState(producto?.formato ?? "");
+  const [conservacion, setConservacion] = useState<Conservacion | "">(producto?.conservacion ?? "");
+  const [preparacion, setPreparacion] = useState<PreparacionVenta | "">(producto?.preparacion ?? "");
+  const [partida, setPartida] = useState(producto?.partida ?? "");
+  const [textoTicket, setTextoTicket] = useState(producto?.textoTicket ?? "");
+  const [textoComanda, setTextoComanda] = useState(producto?.textoComanda ?? "");
+  const [estiloColor, setEstiloColor] = useState<string | null>(producto?.estiloColor ?? null);
+  const [estiloImagenUrl, setEstiloImagenUrl] = useState<string | null>(producto?.estiloImagenUrl ?? null);
+  const [cartaNombre, setCartaNombre] = useState<string>(producto?.cartaNombre ?? "");
+  const [cartaTexto, setCartaTexto] = useState<string>(producto?.cartaTexto ?? "");
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [preciosVersion, setPreciosVersion] = useState(0);
+
+  // Sincronización con precio vigente (solo productos de compra).
+  // Persistimos la preferencia por producto en localStorage; default = true.
+  const usarVigenteKey = `producto:${producto?.id ?? "nuevo"}:usarVigente`;
+  const [usarVigente, setUsarVigente] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    if (isNew) return false;
+    const stored = window.localStorage.getItem(usarVigenteKey);
+    return stored === null ? true : stored === "1";
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (isNew) return;
+    window.localStorage.setItem(usarVigenteKey, usarVigente ? "1" : "0");
+  }, [usarVigente, usarVigenteKey, isNew]);
+
+  const [vigenteSnapshot, setVigenteSnapshot] = useState<{ proveedor: string; formato: string } | null>(null);
+  const [vigenteLoaded, setVigenteLoaded] = useState(false);
+
+  // Cuando hay vigente cargado y el check está activo, propagar (o limpiar) los campos.
+  // El formato manda: si el formato del vigente pertenece a otra unidad, ajustamos la unidad
+  // para evitar combos imposibles tipo "Litros + 1 K".
+  useEffect(() => {
+    if (!esCompra) return;
+    if (!vigenteLoaded) return;
+    if (!usarVigente) return;
+    const fmt = vigenteSnapshot?.formato ?? "";
+    const prov = vigenteSnapshot?.proveedor ?? "";
+    setProveedor(prov);
+    setFormato(fmt);
+    if (fmt) {
+      const u = getUnidadDeFormato(fmt);
+      if (u) setUnidad(u);
+    }
+  }, [esCompra, usarVigente, vigenteSnapshot, vigenteLoaded]);
 
   const formatosUnidad = getFormatosPorUnidad(unidad);
   const partidasOpts = getPartidasPorPreparacion(preparacion);
@@ -361,20 +524,19 @@ function ProductoDetalle({
     if (errs.length > 0) { setErrors(errs); return; }
 
     setSaving(true);
-    const payload = {
+    // Para productos de compra: precio + iva los gestiona PreciosCompraSection,
+    // así que NO los enviamos aquí (evita sobrescribir el sync del histórico).
+    const payload: Record<string, unknown> = {
       nombre: nombre.trim(),
-      tipo: producto.tipo,
+      tipo,
       categoria,
-      familia: producto.familia || null,
+      familia: producto?.familia || null,
       estado,
       proveedor: esCompra ? (proveedor || null) : null,
-      precioCompra: esCompra ? (precioCompra || null) : null,
       precioVenta: !esCompra ? (precioVenta || null) : null,
       coste: !esCompra ? (coste || null) : null,
-      iva: mostrarIva && iva && iva !== "none" ? iva : null,
       unidad,
       formato: mostrarFormato ? (formato || null) : null,
-      observaciones: observaciones || null,
       conservacion: mostrarConservacion ? (conservacion || null) : null,
       preparacion: esVenta ? (preparacion || null) : null,
       partida: esVenta ? (partida.trim() || null) : null,
@@ -385,15 +547,30 @@ function ProductoDetalle({
       cartaNombre: esVenta ? (cartaNombre.trim() || null) : null,
       cartaTexto: esVenta ? (cartaTexto.trim() || null) : null,
     };
+    if (!esCompra) {
+      payload.iva = mostrarIva && iva && iva !== "none" ? iva : null;
+    }
 
-    const res = await updateProducto(producto.id, payload);
+    if (isNew) {
+      // En el alta de un producto de compra, el precio + IVA llegan vía
+      // PreciosCompraSection tras el primer guardado, no en este payload.
+      const res = await createProducto(payload as Parameters<typeof createProducto>[0]);
+      setSaving(false);
+      if (res.error || !res.producto) { toast.error(res.error ?? "No se pudo crear"); return; }
+      toast.success("Producto creado");
+      onSaved(res.producto);
+      return;
+    }
+
+    const res = await updateProducto(producto!.id, payload);
     setSaving(false);
     if (res.error) { toast.error(res.error); return; }
     toast.success("Producto actualizado");
-    onSaved({ ...producto, ...payload } as Producto);
+    onSaved({ ...producto!, ...payload } as Producto);
   };
 
   const handleDelete = async () => {
+    if (!producto) return;
     if (!confirm(`¿Eliminar "${producto.nombre}"?`)) return;
     const res = await deleteProducto(producto.id);
     if (res.error) { toast.error(res.error); return; }
@@ -415,21 +592,18 @@ function ProductoDetalle({
 
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <Input
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              placeholder="Nombre del producto"
-              className="text-xl font-black tracking-tight h-auto py-1 max-w-xl"
-            />
-            <EstadoBadge estado={estado} />
-          </div>
+          <Input
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            placeholder="Nombre del producto"
+            className="text-xl font-black tracking-tight h-auto py-1 w-full"
+          />
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
             <div>
               <Label className="text-xs text-muted-foreground block mb-1">Tipo</Label>
-              <div className="font-medium capitalize py-2">{producto.tipo}</div>
+              <div className="font-medium capitalize py-2">{tipo}</div>
             </div>
             <div>
               <Label className="text-xs text-muted-foreground block mb-1">Categoría *</Label>
@@ -483,33 +657,6 @@ function ProductoDetalle({
               </>
             )}
             <div>
-              <Label className="text-xs text-muted-foreground block mb-1">Unidad *</Label>
-              <Select value={unidad} onValueChange={setUnidad}>
-                <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                <SelectContent>
-                  {UNIDADES_STOCK.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            {mostrarFormato && (
-              <div>
-                <Label className="text-xs text-muted-foreground block mb-1">Formato</Label>
-                <Select
-                  value={formato || "none"}
-                  onValueChange={(v) => setFormato(v === "none" ? "" : v)}
-                  disabled={formatosUnidad.length === 0}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={formatosUnidad.length === 0 ? "Elige unidad primero" : "Seleccionar"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sin especificar</SelectItem>
-                    {formatosUnidad.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <div>
               <Label className="text-xs text-muted-foreground block mb-1">Estado</Label>
               <Select value={estado} onValueChange={(v) => setEstado(v as EstadoProducto)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -518,17 +665,50 @@ function ProductoDetalle({
                 </SelectContent>
               </Select>
             </div>
+            <div>
+              <Label className="text-xs text-muted-foreground block mb-1">Unidad *</Label>
+              <Select value={unidad} onValueChange={setUnidad}>
+                <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                <SelectContent>
+                  {UNIDADES_PRODUCTO.map((u) => <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {mostrarFormato && (
+              <div>
+                <Label className="text-xs text-muted-foreground block mb-1">Formato</Label>
+                {esCompra && usarVigente ? (
+                  <div className="flex h-9 w-full items-center rounded-md border border-input bg-muted/30 px-3 text-sm text-muted-foreground">
+                    {formato || <span className="italic">Sin formato vigente</span>}
+                  </div>
+                ) : (
+                  <Select
+                    value={formato || "none"}
+                    onValueChange={(v) => setFormato(v === "none" ? "" : v)}
+                    disabled={formatosUnidad.length === 0}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={formatosUnidad.length === 0 ? "Elige unidad primero" : "Seleccionar"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sin especificar</SelectItem>
+                      {formatosUnidad.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            )}
             {esCompra ? (
-              <>
-                <div>
-                  <Label className="text-xs text-muted-foreground block mb-1">Proveedor</Label>
-                  <Input value={proveedor} onChange={(e) => setProveedor(e.target.value)} placeholder="Nombre del proveedor" />
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground block mb-1">Precio compra</Label>
-                  <Input value={precioCompra} onChange={(e) => setPrecioCompra(e.target.value)} placeholder="Ej: 12,50 €/kg" />
-                </div>
-              </>
+              <div>
+                <Label className="text-xs text-muted-foreground block mb-1">Proveedor</Label>
+                {usarVigente ? (
+                  <div className="flex h-9 w-full items-center rounded-md border border-input bg-muted/30 px-3 text-sm text-muted-foreground uppercase">
+                    {proveedor || <span className="italic normal-case">Sin proveedor vigente</span>}
+                  </div>
+                ) : (
+                  <ProveedorCombobox value={proveedor} onChange={setProveedor} />
+                )}
+              </div>
             ) : (
               <>
                 <div>
@@ -541,7 +721,7 @@ function ProductoDetalle({
                 </div>
               </>
             )}
-            {mostrarIva && (
+            {mostrarIva && !esCompra && (
               <div>
                 <Label className="text-xs text-muted-foreground block mb-1">IVA</Label>
                 <Select value={iva || "none"} onValueChange={setIva}>
@@ -553,19 +733,55 @@ function ProductoDetalle({
                 </Select>
               </div>
             )}
-            <div>
-              <Label className="text-xs text-muted-foreground block mb-1">Últ. actualización</Label>
-              <div className="font-medium py-2">{producto.ultimaActualizacion}</div>
-            </div>
-            <div className="md:col-span-2 lg:col-span-4">
-              <Label className="text-xs text-muted-foreground block mb-1">Observaciones</Label>
-              <Input value={observaciones} onChange={(e) => setObservaciones(e.target.value)} />
-            </div>
+            {!esCompra && !isNew && (
+              <div>
+                <Label className="text-xs text-muted-foreground block mb-1">Últ. actualización</Label>
+                <div className="font-medium py-2">{producto!.ultimaActualizacion}</div>
+              </div>
+            )}
           </div>
+
+          {esCompra && (
+            <label className="mt-3 flex items-start gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+              <Checkbox
+                checked={usarVigente}
+                onCheckedChange={(v) => setUsarVigente(v === true)}
+                className="mt-0.5"
+              />
+              <span>
+                Coger unidad, formato y proveedor del precio vigente
+                <span className="block text-[11px] opacity-80">
+                  Si lo activas, estos campos se rellenan automáticamente con el precio de compra vigente y se actualizan cuando cambia. Desactívalo para editarlos a mano.
+                </span>
+              </span>
+            </label>
+          )}
 
           <AtenciónModal messages={errors} onClose={() => setErrors([])} />
         </CardContent>
       </Card>
+
+      {/* Histórico de precios de compra (solo productos de tipo compra ya creados) */}
+      {esCompra && !isNew && (
+        <>
+          <PreciosCompraSection
+            productoId={producto!.id}
+            unidad={unidad}
+            onCurrentChange={(vig) => {
+              setVigenteSnapshot({
+                proveedor: vig?.proveedor ?? "",
+                formato: vig?.formato ?? "",
+              });
+              setVigenteLoaded(true);
+            }}
+            onItemsChange={() => setPreciosVersion((v) => v + 1)}
+          />
+          <PreciosPorProveedorSection
+            productoId={producto!.id}
+            refreshKey={preciosVersion}
+          />
+        </>
+      )}
 
       {/* Estilo de impresión (solo productos de venta) */}
       {esVenta && (
@@ -580,7 +796,7 @@ function ProductoDetalle({
                 <Input
                   value={textoTicket}
                   onChange={(e) => setTextoTicket(e.target.value)}
-                  placeholder={producto.nombre}
+                  placeholder={producto?.nombre ?? nombre}
                 />
               </div>
               <div>
@@ -588,7 +804,7 @@ function ProductoDetalle({
                 <Input
                   value={textoComanda}
                   onChange={(e) => setTextoComanda(e.target.value)}
-                  placeholder={producto.nombre}
+                  placeholder={producto?.nombre ?? nombre}
                 />
               </div>
             </div>
@@ -596,12 +812,12 @@ function ProductoDetalle({
         </Card>
       )}
 
-      {/* Estilo POS — solo productos de venta */}
-      {esVenta && (
+      {/* Estilo POS — solo productos de venta ya creados */}
+      {esVenta && !isNew && (
         <EstiloProductoVenta
-          productoId={producto.id}
+          productoId={producto!.id}
           empresaId={empresaActual.id}
-          nombre={nombre.trim() || producto.nombre}
+          nombre={nombre.trim() || producto!.nombre}
           estiloColor={estiloColor}
           estiloImagenUrl={estiloImagenUrl}
           onChange={({ estiloColor: c, estiloImagenUrl: u }) => {
@@ -642,16 +858,18 @@ function ProductoDetalle({
         </Card>
       )}
 
-      {/* Composición para productos de venta y elaboraciones */}
-      {(producto.tipo === "venta" || producto.tipo === "elaboracion") && (
-        <Composicion productoVentaId={producto.id} precioVenta={producto.precioVenta ?? undefined} />
+      {/* Composición para productos de venta y elaboraciones ya creados */}
+      {!isNew && (tipo === "venta" || tipo === "elaboracion") && (
+        <Composicion productoVentaId={producto!.id} precioVenta={producto!.precioVenta ?? undefined} />
       )}
 
-      <div className="flex justify-end pt-2">
-        <Button variant="outline" size="sm" className="gap-1 text-destructive" onClick={handleDelete}>
-          <Trash2 className="h-4 w-4" /> Eliminar producto
-        </Button>
-      </div>
+      {!isNew && (
+        <div className="flex justify-end pt-2">
+          <Button variant="outline" size="sm" className="gap-1 text-destructive" onClick={handleDelete}>
+            <Trash2 className="h-4 w-4" /> Eliminar producto
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -688,8 +906,11 @@ function TablaProductos({
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>(
-    tipo === "venta" || tipo === "elaboracion" ? { iva: false } : {},
+    tipo === "venta" || tipo === "elaboracion"
+      ? { iva: false }
+      : {},
   );
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
 
   const esCompra = tipo === "compra";
   const esVenta = tipo === "venta";
@@ -699,7 +920,11 @@ function TablaProductos({
   const mostrarFormato = esCompra || esElaboracion;
 
   useEffect(() => {
-    setColumnasVisibles(tipo === "venta" || tipo === "elaboracion" ? { iva: false } : {});
+    setColumnasVisibles(
+      tipo === "venta" || tipo === "elaboracion"
+        ? { iva: false }
+        : {},
+    );
   }, [tipo]);
 
   const categoriasUsadas = useMemo(
@@ -741,6 +966,285 @@ function TablaProductos({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productos, busqueda, filtros, orden, esCompra]);
 
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "numero", label: "ID", bloqueada: true },
+    { campo: "nombre", label: "Nombre", bloqueada: true },
+    { campo: "categoria", label: "Categoría" },
+    ...(mostrarConservacion ? [{ campo: "conservacion", label: "Conservación" }] : []),
+    ...(esVenta ? [
+      { campo: "preparacion", label: "Preparación" },
+      { campo: "partida", label: "Partida" },
+    ] : []),
+    { campo: "estado", label: "Estado" },
+    ...(esCompra
+      ? [
+          { campo: "proveedor", label: "Proveedor" },
+          { campo: "precio", label: "Precio compra" },
+        ]
+      : [
+          { campo: "precio", label: esElaboracion ? "Precio elaboración" : "Precio venta" },
+          { campo: "coste", label: "Coste" },
+          ...(esVenta ? [{ campo: "porcCoste", label: "% Coste" }] : []),
+        ]),
+    ...(mostrarIva ? [{ campo: "iva", label: "IVA" }] : []),
+    { campo: "unidad", label: "Unidad" },
+    ...(mostrarFormato ? [{ campo: "formato", label: "Formato" }] : []),
+    { campo: "fecha", label: "Actualización" },
+  ];
+
+  const columnDefs: Record<string, { th: ReactNode; td: (p: Producto) => ReactNode }> = {
+    numero: {
+      th: <TableColumnHeader key="numero" label="ID" />,
+      td: (p) => (
+        <td key="numero" className="px-3 py-1.5 text-xs tabular-nums text-muted-foreground">
+          {p.numeroSecuencial ?? "—"}
+        </td>
+      ),
+    },
+    nombre: {
+      th: (
+        <TableColumnHeader
+          key="nombre"
+          label="Nombre"
+          campo="nombre"
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (p) => (
+        <td key="nombre" className="px-3 py-1.5 font-semibold text-primary whitespace-nowrap">
+          {p.nombre}
+        </td>
+      ),
+    },
+    categoria: {
+      th: (
+        <TableColumnHeader
+          key="categoria"
+          label="Categoría"
+          campo="categoria"
+          filtroTipo="lista"
+          opciones={categoriasUsadas}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (p) => (
+        <td key="categoria" className="px-3 py-1.5 text-muted-foreground">
+          {p.categoria || "—"}
+        </td>
+      ),
+    },
+    conservacion: {
+      th: (
+        <TableColumnHeader
+          key="conservacion"
+          label="Conservación"
+          campo="conservacion"
+          filtroTipo="lista"
+          opciones={[...CONSERVACION_OPCIONES]}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (p) => (
+        <td key="conservacion" className="px-3 py-1.5 text-muted-foreground">
+          {p.conservacion ?? "—"}
+        </td>
+      ),
+    },
+    preparacion: {
+      th: (
+        <TableColumnHeader
+          key="preparacion"
+          label="Preparación"
+          campo="preparacion"
+          filtroTipo="lista"
+          opciones={[...PREPARACION_OPCIONES]}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (p) => (
+        <td key="preparacion" className="px-3 py-1.5 text-muted-foreground">
+          {p.preparacion ?? "—"}
+        </td>
+      ),
+    },
+    partida: {
+      th: (
+        <TableColumnHeader
+          key="partida"
+          label="Partida"
+          campo="partida"
+          filtroTipo="lista"
+          opciones={partidasUsadas}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (p) => (
+        <td key="partida" className="px-3 py-1.5 text-muted-foreground">
+          {p.partida ?? "—"}
+        </td>
+      ),
+    },
+    estado: {
+      th: (
+        <TableColumnHeader
+          key="estado"
+          label="Estado"
+          campo="estado"
+          filtroTipo="lista"
+          opciones={[...ESTADOS_PRODUCTO]}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (p) => (
+        <td key="estado" className="px-3 py-1.5">
+          <EstadoBadge estado={p.estado} />
+        </td>
+      ),
+    },
+    proveedor: {
+      th: (
+        <TableColumnHeader
+          key="proveedor"
+          label="Proveedor"
+          campo="proveedor"
+          filtroTipo="lista"
+          opciones={proveedoresUsados}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (p) => (
+        <td key="proveedor" className="px-3 py-1.5 text-muted-foreground uppercase">
+          {p.proveedor ?? "—"}
+        </td>
+      ),
+    },
+    precio: {
+      th: (
+        <TableColumnHeader
+          key="precio"
+          label={esCompra ? "Precio compra" : esElaboracion ? "Precio de elaboración" : "Precio de venta"}
+          campo="precio"
+          filtroTipo="numero"
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (p) => (
+        <td key="precio" className="px-3 py-1.5 font-medium text-foreground">
+          {(esCompra ? p.precioCompra : p.precioVenta) ?? "—"}
+        </td>
+      ),
+    },
+    coste: {
+      th: <TableColumnHeader key="coste" label="Coste" />,
+      td: (p) => (
+        <td key="coste" className="px-3 py-1.5 text-muted-foreground">
+          {p.coste ?? "—"}
+        </td>
+      ),
+    },
+    porcCoste: {
+      th: <TableColumnHeader key="porcCoste" label="% Coste" />,
+      td: (p) => (
+        <td key="porcCoste" className="px-3 py-1.5">
+          <PorcCosteBadge
+            coste={p.coste}
+            precioVenta={p.precioVenta}
+            umbralVerde={umbralVerde}
+            umbralNaranja={umbralNaranja}
+          />
+        </td>
+      ),
+    },
+    iva: {
+      th: <TableColumnHeader key="iva" label="IVA" />,
+      td: (p) => (
+        <td key="iva" className="px-3 py-1.5 text-muted-foreground">
+          {p.iva ?? "—"}
+        </td>
+      ),
+    },
+    unidad: {
+      th: (
+        <TableColumnHeader
+          key="unidad"
+          label="Unidad"
+          campo="unidad"
+          filtroTipo="lista"
+          opciones={unidadesUsadas}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+        />
+      ),
+      td: (p) => (
+        <td key="unidad" className="px-3 py-1.5 text-muted-foreground">
+          {p.unidad}
+        </td>
+      ),
+    },
+    formato: {
+      th: <TableColumnHeader key="formato" label="Formato" />,
+      td: (p) => (
+        <td key="formato" className="px-3 py-1.5 text-muted-foreground">
+          {p.formato ?? "—"}
+        </td>
+      ),
+    },
+    fecha: {
+      th: (
+        <TableColumnHeader
+          key="fecha"
+          label="Actualización"
+          campo="fecha"
+          filtroTipo="fecha"
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (p) => (
+        <td key="fecha" className="px-3 py-1.5 text-xs text-muted-foreground">
+          {p.ultimaActualizacion}
+        </td>
+      ),
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
   return (
     <div className="space-y-4">
       <SubmoduleToolbar
@@ -750,32 +1254,11 @@ function TablaProductos({
         onNuevo={onAddClick}
         filtros={filtros}
         onFiltrosChange={setFiltros}
-        columnas={[
-          { campo: "nombre", label: "Nombre", bloqueada: true },
-          { campo: "categoria", label: "Categoría" },
-          ...(mostrarConservacion ? [{ campo: "conservacion", label: "Conservación" }] : []),
-          ...(esVenta ? [
-            { campo: "preparacion", label: "Preparación" },
-            { campo: "partida", label: "Partida" },
-          ] : []),
-          { campo: "estado", label: "Estado" },
-          ...(esCompra
-            ? [
-                { campo: "proveedor", label: "Proveedor" },
-                { campo: "precio", label: "Precio compra" },
-              ]
-            : [
-                { campo: "precio", label: esElaboracion ? "Precio elaboración" : "Precio venta" },
-                { campo: "coste", label: "Coste" },
-                ...(esVenta ? [{ campo: "porcCoste", label: "% Coste" }] : []),
-              ]),
-          ...(mostrarIva ? [{ campo: "iva", label: "IVA" }] : []),
-          { campo: "unidad", label: "Unidad" },
-          ...(mostrarFormato ? [{ campo: "formato", label: "Formato" }] : []),
-          { campo: "fecha", label: "Actualización" },
-        ]}
+        columnas={columnasDef}
         columnasVisibles={columnasVisibles}
         onColumnasVisiblesChange={setColumnasVisibles}
+        columnasOrden={columnasOrden}
+        onColumnasOrdenChange={setColumnasOrden}
         extraDerecha={
           <>
             <IOActions
@@ -800,218 +1283,17 @@ function TablaProductos({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-muted/50">
-              <TableColumnHeader
-                label="Nombre"
-                campo="nombre"
-                ordenable
-                orden={orden}
-                onOrdenChange={setOrden}
-              />
-              {colVisible(columnasVisibles, "categoria") && (
-                <TableColumnHeader
-                  label="Categoría"
-                  campo="categoria"
-                  filtroTipo="lista"
-                  opciones={categoriasUsadas}
-                  filtros={filtros}
-                  onFiltrosChange={setFiltros}
-                  ordenable
-                  orden={orden}
-                  onOrdenChange={setOrden}
-                />
-              )}
-              {mostrarConservacion && colVisible(columnasVisibles, "conservacion") && (
-                <TableColumnHeader
-                  label="Conservación"
-                  campo="conservacion"
-                  filtroTipo="lista"
-                  opciones={[...CONSERVACION_OPCIONES]}
-                  filtros={filtros}
-                  onFiltrosChange={setFiltros}
-                  ordenable
-                  orden={orden}
-                  onOrdenChange={setOrden}
-                />
-              )}
-              {esVenta && colVisible(columnasVisibles, "preparacion") && (
-                <TableColumnHeader
-                  label="Preparación"
-                  campo="preparacion"
-                  filtroTipo="lista"
-                  opciones={[...PREPARACION_OPCIONES]}
-                  filtros={filtros}
-                  onFiltrosChange={setFiltros}
-                  ordenable
-                  orden={orden}
-                  onOrdenChange={setOrden}
-                />
-              )}
-              {esVenta && colVisible(columnasVisibles, "partida") && (
-                <TableColumnHeader
-                  label="Partida"
-                  campo="partida"
-                  filtroTipo="lista"
-                  opciones={partidasUsadas}
-                  filtros={filtros}
-                  onFiltrosChange={setFiltros}
-                  ordenable
-                  orden={orden}
-                  onOrdenChange={setOrden}
-                />
-              )}
-              {colVisible(columnasVisibles, "estado") && (
-                <TableColumnHeader
-                  label="Estado"
-                  campo="estado"
-                  filtroTipo="lista"
-                  opciones={[...ESTADOS_PRODUCTO]}
-                  filtros={filtros}
-                  onFiltrosChange={setFiltros}
-                  ordenable
-                  orden={orden}
-                  onOrdenChange={setOrden}
-                />
-              )}
-              {esCompra ? (
-                <>
-                  {colVisible(columnasVisibles, "proveedor") && (
-                    <TableColumnHeader
-                      label="Proveedor"
-                      campo="proveedor"
-                      filtroTipo="lista"
-                      opciones={proveedoresUsados}
-                      filtros={filtros}
-                      onFiltrosChange={setFiltros}
-                      ordenable
-                      orden={orden}
-                      onOrdenChange={setOrden}
-                    />
-                  )}
-                  {colVisible(columnasVisibles, "precio") && (
-                    <TableColumnHeader
-                      label="Precio compra"
-                      campo="precio"
-                      filtroTipo="numero"
-                      filtros={filtros}
-                      onFiltrosChange={setFiltros}
-                      ordenable
-                      orden={orden}
-                      onOrdenChange={setOrden}
-                    />
-                  )}
-                </>
-              ) : (
-                <>
-                  {colVisible(columnasVisibles, "precio") && (
-                    <TableColumnHeader
-                      label={esElaboracion ? "Precio de elaboración" : "Precio de venta"}
-                      campo="precio"
-                      filtroTipo="numero"
-                      filtros={filtros}
-                      onFiltrosChange={setFiltros}
-                      ordenable
-                      orden={orden}
-                      onOrdenChange={setOrden}
-                    />
-                  )}
-                  {colVisible(columnasVisibles, "coste") && (
-                    <TableColumnHeader label="Coste" />
-                  )}
-                  {esVenta && colVisible(columnasVisibles, "porcCoste") && (
-                    <TableColumnHeader label="% Coste" />
-                  )}
-                </>
-              )}
-              {mostrarIva && colVisible(columnasVisibles, "iva") && <TableColumnHeader label="IVA" />}
-              {colVisible(columnasVisibles, "unidad") && (
-                <TableColumnHeader
-                  label="Unidad"
-                  campo="unidad"
-                  filtroTipo="lista"
-                  opciones={unidadesUsadas}
-                  filtros={filtros}
-                  onFiltrosChange={setFiltros}
-                />
-              )}
-              {mostrarFormato && colVisible(columnasVisibles, "formato") && (
-                <TableColumnHeader label="Formato" />
-              )}
-              {colVisible(columnasVisibles, "fecha") && (
-                <TableColumnHeader
-                  label="Actualización"
-                  campo="fecha"
-                  filtroTipo="fecha"
-                  filtros={filtros}
-                  onFiltrosChange={setFiltros}
-                  ordenable
-                  orden={orden}
-                  onOrdenChange={setOrden}
-                />
-              )}
+              {columnasRender.map((c) => columnDefs[c.campo]?.th)}
             </tr>
           </thead>
           <tbody>
             {filtrados.map((p) => (
-              <tr key={p.id}
+              <tr
+                key={p.id}
                 className="border-b hover:bg-muted/30 cursor-pointer transition-colors"
-                onClick={() => onRowClick(p)}>
-                <td className="px-3 py-1.5 font-semibold text-primary whitespace-nowrap">{p.nombre}</td>
-                {colVisible(columnasVisibles, "categoria") && (
-                  <td className="px-3 py-1.5 text-muted-foreground">{p.categoria || "—"}</td>
-                )}
-                {mostrarConservacion && colVisible(columnasVisibles, "conservacion") && (
-                  <td className="px-3 py-1.5 text-muted-foreground">{p.conservacion ?? "—"}</td>
-                )}
-                {esVenta && colVisible(columnasVisibles, "preparacion") && (
-                  <td className="px-3 py-1.5 text-muted-foreground">{p.preparacion ?? "—"}</td>
-                )}
-                {esVenta && colVisible(columnasVisibles, "partida") && (
-                  <td className="px-3 py-1.5 text-muted-foreground">{p.partida ?? "—"}</td>
-                )}
-                {colVisible(columnasVisibles, "estado") && (
-                  <td className="px-3 py-1.5"><EstadoBadge estado={p.estado} /></td>
-                )}
-                {esCompra ? (
-                  <>
-                    {colVisible(columnasVisibles, "proveedor") && (
-                      <td className="px-3 py-1.5 text-muted-foreground">{p.proveedor ?? "—"}</td>
-                    )}
-                    {colVisible(columnasVisibles, "precio") && (
-                      <td className="px-3 py-1.5 font-medium text-foreground">{p.precioCompra ?? "—"}</td>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    {colVisible(columnasVisibles, "precio") && (
-                      <td className="px-3 py-1.5 font-medium text-foreground">{p.precioVenta ?? "—"}</td>
-                    )}
-                    {colVisible(columnasVisibles, "coste") && (
-                      <td className="px-3 py-1.5 text-muted-foreground">{p.coste ?? "—"}</td>
-                    )}
-                    {esVenta && colVisible(columnasVisibles, "porcCoste") && (
-                      <td className="px-3 py-1.5">
-                        <PorcCosteBadge
-                          coste={p.coste}
-                          precioVenta={p.precioVenta}
-                          umbralVerde={umbralVerde}
-                          umbralNaranja={umbralNaranja}
-                        />
-                      </td>
-                    )}
-                  </>
-                )}
-                {mostrarIva && colVisible(columnasVisibles, "iva") && (
-                  <td className="px-3 py-1.5 text-muted-foreground">{p.iva ?? "—"}</td>
-                )}
-                {colVisible(columnasVisibles, "unidad") && (
-                  <td className="px-3 py-1.5 text-muted-foreground">{p.unidad}</td>
-                )}
-                {mostrarFormato && colVisible(columnasVisibles, "formato") && (
-                  <td className="px-3 py-1.5 text-muted-foreground">{p.formato ?? "—"}</td>
-                )}
-                {colVisible(columnasVisibles, "fecha") && (
-                  <td className="px-3 py-1.5 text-xs text-muted-foreground">{p.ultimaActualizacion}</td>
-                )}
+                onClick={() => onRowClick(p)}
+              >
+                {columnasRender.map((c) => columnDefs[c.campo]?.td(p))}
               </tr>
             ))}
             {loading && productos.length === 0 && (
@@ -1094,7 +1376,7 @@ function PipelineProductos({ tipo, onCardClick, reloadKey }: {
                       <span className="text-xs font-semibold text-foreground">{p.precioVenta ?? "—"}</span>
                     )}
                     {tipo === "compra" && p.proveedor && (
-                      <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">{p.proveedor}</span>
+                      <span className="text-[10px] text-muted-foreground truncate max-w-[120px] uppercase">{p.proveedor}</span>
                     )}
                     {tipo === "venta" && p.coste && (
                       <span className="text-[10px] text-muted-foreground">Coste: {p.coste}</span>
@@ -1274,7 +1556,12 @@ function UmbralCosteEditor({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Food cost</h4>
+        <div>
+          <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Precio coste</h4>
+          <p className="text-xs text-muted-foreground/80 mt-1">
+            Define los umbrales de coste sobre PVP que pintan cada producto en verde (saludable), naranja (aviso) o rojo (margen insuficiente).
+          </p>
+        </div>
         {dirty && (
           <Button size="sm" className="h-7 px-3 text-xs" onClick={handleSave} disabled={saving || !valido}>
             {saving ? "…" : "Guardar"}
@@ -1403,287 +1690,15 @@ function AtenciónModal({ messages, onClose }: { messages: string[]; onClose: ()
   );
 }
 
-/* ─── MODAL CREAR / EDITAR PRODUCTO ─── */
-function ProductoModal({
-  open, onClose, tipo, editItem, onSaved, categoriasOpts, estadosOpts,
-}: {
-  open: boolean;
-  onClose: () => void;
-  tipo: TipoProducto;
-  editItem: Producto | null;
-  onSaved: () => void;
-  categoriasOpts?: string[];
-  estadosOpts?: string[];
-}) {
-  const esCompra = tipo === "compra";
-  const esVenta = tipo === "venta";
-  const esElaboracion = tipo === "elaboracion";
-  const mostrarConservacion = !esVenta;
-  const mostrarIva = !esElaboracion;
-  const mostrarFormato = esCompra || esElaboracion;
-  const categorias = categoriasOpts ?? getCategorias(tipo);
-  const estadosList = estadosOpts ?? [...ESTADOS_PRODUCTO];
-  const isEdit = !!editItem;
-
-  const [nombre, setNombre] = useState("");
-  const [categoria, setCategoria] = useState("");
-  const [unidad, setUnidad] = useState("ud");
-  const [estado, setEstado] = useState<EstadoProducto>("Activo");
-  const [proveedor, setProveedor] = useState("");
-  const [precioCompra, setPrecioCompra] = useState("");
-  const [precioVenta, setPrecioVenta] = useState("");
-  const [coste, setCoste] = useState("");
-  const [iva, setIva] = useState("");
-  const [formato, setFormato] = useState("");
-  const [conservacion, setConservacion] = useState<Conservacion | "">("");
-  const [preparacion, setPreparacion] = useState<PreparacionVenta | "">("");
-  const [partida, setPartida] = useState("");
-  const [observaciones, setObservaciones] = useState("");
-  const [errors, setErrors] = useState<string[]>([]);
-  const [saving, setSaving] = useState(false);
-
-  const formatosUnidad = getFormatosPorUnidad(unidad);
-  const partidasOpts = getPartidasPorPreparacion(preparacion);
-
-  useEffect(() => {
-    if (formato && formatosUnidad.length > 0 && !formatosUnidad.includes(formato)) {
-      setFormato("");
-    }
-  }, [unidad]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (partida && partidasOpts.length > 0 && !partidasOpts.includes(partida)) {
-      setPartida("");
-    }
-  }, [preparacion]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (editItem) {
-      setNombre(editItem.nombre);
-      setCategoria(editItem.categoria);
-      setUnidad(editItem.unidad || "ud");
-      setEstado(editItem.estado);
-      setProveedor(editItem.proveedor ?? "");
-      setPrecioCompra(editItem.precioCompra ?? "");
-      setPrecioVenta(editItem.precioVenta ?? "");
-      setCoste(editItem.coste ?? "");
-      setIva(editItem.iva ?? "");
-      setFormato(editItem.formato ?? "");
-      setConservacion(editItem.conservacion ?? "");
-      setPreparacion(editItem.preparacion ?? "");
-      setPartida(editItem.partida ?? "");
-      setObservaciones(editItem.observaciones ?? "");
-    } else {
-      setNombre(""); setCategoria(""); setUnidad("ud");
-      setEstado("Activo"); setProveedor(""); setPrecioCompra(""); setPrecioVenta("");
-      setCoste(""); setIva(""); setFormato(""); setConservacion("");
-      setPreparacion(""); setPartida("");
-      setObservaciones("");
-    }
-    setErrors([]);
-  }, [editItem, open]);
-
-  const handleSave = async () => {
-    const errs: string[] = [];
-    if (!nombre.trim()) errs.push("El nombre es obligatorio");
-    if (!categoria) errs.push("Selecciona una categoría");
-    if (!unidad) errs.push("Selecciona una unidad");
-    if (errs.length > 0) { setErrors(errs); return; }
-
-    setSaving(true);
-    const payload = {
-      nombre: nombre.trim(),
-      tipo,
-      categoria,
-      familia: editItem?.familia || null,
-      estado,
-      proveedor: esCompra ? (proveedor || null) : null,
-      precioCompra: esCompra ? (precioCompra || null) : null,
-      precioVenta: !esCompra ? (precioVenta || null) : null,
-      coste: !esCompra ? (coste || null) : null,
-      iva: mostrarIva && iva && iva !== "none" ? iva : null,
-      unidad,
-      formato: mostrarFormato ? (formato || null) : null,
-      observaciones: observaciones || null,
-      conservacion: mostrarConservacion ? (conservacion || null) : null,
-      preparacion: esVenta ? (preparacion || null) : null,
-      partida: esVenta ? (partida.trim() || null) : null,
-    };
-
-    const res = isEdit
-      ? await updateProducto(editItem!.id, payload)
-      : await createProducto(payload);
-    setSaving(false);
-
-    if (res.error) { toast.error(res.error); return; }
-    toast.success(isEdit ? "Producto actualizado" : "Producto creado");
-    onSaved();
-    onClose();
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {isEdit ? "Editar producto" : `Nuevo${tipo === "elaboracion" ? "a " : " producto de "}${tipo === "elaboracion" ? "elaboración" : tipo}`}
-          </DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="md:col-span-2">
-              <Label className="text-xs font-bold">Nombre *</Label>
-              <Input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre del producto" />
-            </div>
-            <div>
-              <Label className="text-xs font-bold">Unidad *</Label>
-              <Select value={unidad} onValueChange={setUnidad}>
-                <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                <SelectContent>
-                  {UNIDADES_STOCK.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            {mostrarFormato && (
-              <div>
-                <Label className="text-xs font-bold">Formato</Label>
-                <Select
-                  value={formato || "none"}
-                  onValueChange={(v) => setFormato(v === "none" ? "" : v)}
-                  disabled={formatosUnidad.length === 0}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={formatosUnidad.length === 0 ? "Elige unidad primero" : "Seleccionar"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sin especificar</SelectItem>
-                    {formatosUnidad.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <div>
-              <Label className="text-xs font-bold">Estado</Label>
-              <Select value={estado} onValueChange={(v) => setEstado(v as EstadoProducto)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {estadosList.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs font-bold">Categoría *</Label>
-              <Select value={categoria} onValueChange={setCategoria}>
-                <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                <SelectContent>
-                  {categorias.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            {mostrarConservacion && (
-              <div>
-                <Label className="text-xs font-bold">Conservación</Label>
-                <Select value={conservacion || "none"} onValueChange={(v) => setConservacion(v === "none" ? "" : (v as Conservacion))}>
-                  <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sin especificar</SelectItem>
-                    {CONSERVACION_OPCIONES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            {esVenta && (
-              <>
-                <div>
-                  <Label className="text-xs font-bold">Preparación</Label>
-                  <Select value={preparacion || "none"} onValueChange={(v) => setPreparacion(v === "none" ? "" : (v as PreparacionVenta))}>
-                    <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Sin especificar</SelectItem>
-                      {PREPARACION_OPCIONES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs font-bold">Partida</Label>
-                  <Select
-                    value={partida || "none"}
-                    onValueChange={(v) => setPartida(v === "none" ? "" : v)}
-                    disabled={!preparacion}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={!preparacion ? "Elige preparación" : "Seleccionar"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Sin especificar</SelectItem>
-                      {partidasOpts.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </>
-            )}
-            {esCompra ? (
-              <>
-                <div>
-                  <Label className="text-xs font-bold">Proveedor</Label>
-                  <Input value={proveedor} onChange={(e) => setProveedor(e.target.value)} placeholder="Nombre del proveedor" />
-                </div>
-                <div>
-                  <Label className="text-xs font-bold">Precio compra</Label>
-                  <Input value={precioCompra} onChange={(e) => setPrecioCompra(e.target.value)} placeholder="Ej: 12,50 €/kg" />
-                </div>
-              </>
-            ) : (
-              <>
-                <div>
-                  <Label className="text-xs font-bold">Precio venta</Label>
-                  <Input value={precioVenta} onChange={(e) => setPrecioVenta(e.target.value)} placeholder="Ej: 18,00 €" />
-                </div>
-                <div>
-                  <Label className="text-xs font-bold">Coste</Label>
-                  <Input value={coste} onChange={(e) => setCoste(e.target.value)} placeholder="Ej: 6,20 €" />
-                </div>
-              </>
-            )}
-            {mostrarIva && (
-              <div>
-                <Label className="text-xs font-bold">IVA</Label>
-                <Select value={iva} onValueChange={setIva}>
-                  <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sin especificar</SelectItem>
-                    {IVA_OPCIONES.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <div className="md:col-span-2">
-              <Label className="text-xs font-bold">Observaciones</Label>
-              <Input value={observaciones} onChange={(e) => setObservaciones(e.target.value)} />
-            </div>
-          </div>
-
-          <AtenciónModal messages={errors} onClose={() => setErrors([])} />
-        </div>
-        <Separator />
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? "Guardando…" : isEdit ? "Guardar cambios" : "Crear producto"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 /* ─── PÁGINA PRINCIPAL ─── */
 export function ProductosView() {
   const [tipoActivo, setTipoActivo] = useState<TipoProducto>("compra");
   const [showConfig, setShowConfig] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editItem, setEditItem] = useState<Producto | null>(null);
   const [detalle, setDetalle] = useState<Producto | null>(null);
+  // Cuando es true, ProductoDetalle entra en modo "alta" (sin producto.id).
+  // El producto solo se persiste al pulsar Guardar (evita huecos en el nº secuencial).
+  const [nuevoModo, setNuevoModo] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const config = useProductConfig(tipoActivo);
 
@@ -1699,15 +1714,16 @@ export function ProductosView() {
 
   const triggerReload = () => setReloadKey((k) => k + 1);
 
-  if (detalle) {
+  if (detalle || nuevoModo) {
     return (
       <div className="p-4 md:p-6">
         <ProductoDetalle
-          key={detalle.id}
+          key={detalle?.id ?? "nuevo"}
           producto={detalle}
-          onBack={() => setDetalle(null)}
-          onSaved={(p) => { setDetalle(p); triggerReload(); }}
-          onDeleted={() => { setDetalle(null); triggerReload(); }}
+          tipo={detalle?.tipo ?? tipoActivo}
+          onBack={() => { setDetalle(null); setNuevoModo(false); }}
+          onSaved={(p) => { setDetalle(p); setNuevoModo(false); triggerReload(); }}
+          onDeleted={() => { setDetalle(null); setNuevoModo(false); triggerReload(); }}
           categoriasOpts={config.categorias}
           estadosOpts={config.estados}
         />
@@ -1765,7 +1781,7 @@ export function ProductosView() {
       ) : (
         <TablaProductos
           tipo={tipoActivo}
-          onAddClick={() => { setEditItem(null); setModalOpen(true); }}
+          onAddClick={() => setNuevoModo(true)}
           onRowClick={(p) => setDetalle(p)}
           reloadKey={reloadKey}
           showConfig={showConfig}
@@ -1774,16 +1790,6 @@ export function ProductosView() {
           umbralNaranja={config.umbralNaranja}
         />
       )}
-
-      <ProductoModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        tipo={tipoActivo}
-        editItem={editItem}
-        onSaved={triggerReload}
-        categoriasOpts={config.categorias}
-        estadosOpts={config.estados}
-      />
     </div>
   );
 }

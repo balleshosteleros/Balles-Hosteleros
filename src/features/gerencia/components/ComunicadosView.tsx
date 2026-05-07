@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { getComunicadosByEmpresa, type Comunicado, ESTADO_COMUNICADO_LABELS, RECURRENCIA_LABELS, type EstadoComunicado, type Recurrencia } from "@/features/rrhh/data/comunicados";
 import { getEmpleadosPorEmpresa, DEPARTAMENTOS } from "@/features/rrhh/data/rrhh";
@@ -29,15 +29,18 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Search, Plus, CalendarDays, MoreHorizontal, Eye, Copy, Clock, Archive,
   Trash2, FileText, Users, Building2, ArrowLeft, Save, Upload, X, AlertTriangle, ImageIcon, Bell,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, Settings,
 } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
   aplicarOrdenToolbar,
+  ordenarColumnas,
+  colVisible,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
+  type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
 import { IOActions } from "@/shared/io";
 import { comunicadosIO } from "@/features/gerencia/io/comunicados.io";
@@ -632,10 +635,12 @@ export function ComunicadosView() {
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editorMode, setEditorMode] = useState<"list" | "create" | "edit">("list");
   const [editingComunicado, setEditingComunicado] = useState<Comunicado | null>(null);
   const [faltantesComunicado, setFaltantesComunicado] = useState<string[]>([]);
+  const [showConfig, setShowConfig] = useState(false);
   const { validar: validarComunicado } = useReglasSubmodulo("gerencia", "comunicados");
 
   const accesoComunicado = (c: Comunicado, campo: string): unknown => {
@@ -743,6 +748,81 @@ export function ComunicadosView() {
     );
   }
 
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "titulo", label: "Título" },
+    { campo: "estado", label: "Estado" },
+    { campo: "creadoEl", label: "Creado el" },
+    { campo: "envio", label: "Envío" },
+    { campo: "recurrencia", label: "Recurrencia" },
+    { campo: "alcance", label: "Alcance" },
+    { campo: "destinatarios", label: "Destinatarios" },
+  ];
+
+  const columnDefs: Record<string, { th: ReactNode; td: (c: Comunicado) => ReactNode }> = {
+    titulo: {
+      th: <TableHead key="titulo">Título</TableHead>,
+      td: (c) => (
+        <TableCell key="titulo">
+          <div>
+            <p className="font-semibold text-sm">{c.titulo}</p>
+            <p className="text-xs text-muted-foreground">Empresa: {empresaActual?.nombre}</p>
+          </div>
+        </TableCell>
+      ),
+    },
+    estado: {
+      th: <TableHead key="estado">Estado</TableHead>,
+      td: (c) => (
+        <TableCell key="estado"><EstadoBadge estado={c.estado} /></TableCell>
+      ),
+    },
+    creadoEl: {
+      th: <TableHead key="creadoEl">Creado el</TableHead>,
+      td: (c) => (
+        <TableCell key="creadoEl" className="text-sm text-muted-foreground whitespace-nowrap">{c.creadoEl}</TableCell>
+      ),
+    },
+    envio: {
+      th: <TableHead key="envio">Envío</TableHead>,
+      td: (c) => (
+        <TableCell key="envio" className="text-sm text-muted-foreground whitespace-nowrap">{c.envio || "—"}</TableCell>
+      ),
+    },
+    recurrencia: {
+      th: <TableHead key="recurrencia">Recurrencia</TableHead>,
+      td: (c) => (
+        <TableCell key="recurrencia"><Badge variant="outline" className="text-xs">{RECURRENCIA_LABELS[c.recurrencia]}</Badge></TableCell>
+      ),
+    },
+    alcance: {
+      th: <TableHead key="alcance">Alcance</TableHead>,
+      td: (c) => (
+        <TableCell key="alcance"><AlcanceCircle pct={c.alcancePct} /></TableCell>
+      ),
+    },
+    destinatarios: {
+      th: <TableHead key="destinatarios">Destinatarios</TableHead>,
+      td: (c) => (
+        <TableCell key="destinatarios">
+          <div className="flex flex-wrap gap-1">
+            {c.todaEmpresa ? (
+              <Badge variant="secondary" className="text-[11px] gap-1"><Building2 className="h-3 w-3" />{c.destinatarios.empresas} empresa</Badge>
+            ) : (
+              <>
+                <Badge variant="secondary" className="text-[11px] gap-1"><Users className="h-3 w-3" />{c.destinatarios.departamentos} dptos</Badge>
+                <Badge variant="outline" className="text-[11px] gap-1">{c.destinatarios.empleados} empleados</Badge>
+              </>
+            )}
+          </div>
+        </TableCell>
+      ),
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
   return (
     <div className="p-6 space-y-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -763,37 +843,31 @@ export function ComunicadosView() {
             <SubmoduleToolbar
               busqueda={search}
               onBusquedaChange={setSearch}
-              placeholderBusqueda="Buscar comunicado..."
+              placeholderBusqueda="Buscar"
               onNuevo={openCreate}
-              campos={[
-                { campo: "estado", label: "Estado", tipo: "lista", opciones: ["borrador", "programado", "publicado", "archivado"] },
-                { campo: "recurrencia", label: "Recurrencia", tipo: "lista", opciones: ["sin_repeticion", "semanal", "mensual", "personalizado"] },
-                { campo: "prioridad", label: "Prioridad", tipo: "lista", opciones: ["baja", "normal", "alta", "urgente"] },
-                { campo: "alcancePct", label: "Alcance %", tipo: "numero" },
-              ]}
               filtros={filtros}
               onFiltrosChange={setFiltros}
-              ordenOpciones={[
-                { campo: "titulo", label: "Título" },
-                { campo: "creadoEl", label: "Creado el" },
-                { campo: "envio", label: "Envío" },
-                { campo: "alcancePct", label: "Alcance" },
-              ]}
               orden={orden}
               onOrdenChange={setOrden}
-              columnas={[
-                { campo: "titulo", label: "Título" },
-                { campo: "estado", label: "Estado" },
-                { campo: "creadoEl", label: "Creado el" },
-                { campo: "envio", label: "Envío" },
-                { campo: "recurrencia", label: "Recurrencia" },
-                { campo: "alcance", label: "Alcance" },
-                { campo: "destinatarios", label: "Destinatarios" },
-              ]}
+              columnas={columnasDef}
               columnasVisibles={columnasVisibles}
               onColumnasVisiblesChange={setColumnasVisibles}
+              columnasOrden={columnasOrden}
+              onColumnasOrdenChange={setColumnasOrden}
               extraDerecha={
-                <IOActions config={comunicadosIO} onSuccess={() => window.location.reload()} />
+                <>
+                  <IOActions config={comunicadosIO} onSuccess={() => window.location.reload()} />
+                  <Button
+                    size="icon"
+                    variant={showConfig ? "default" : "outline"}
+                    className="h-9 w-9"
+                    onClick={() => setShowConfig((v) => !v)}
+                    title="Configuración"
+                    aria-label="Configuración"
+                  >
+                    <Settings className="h-4 w-4" strokeWidth={1.75} />
+                  </Button>
+                </>
               }
             />
           </div>
@@ -803,13 +877,7 @@ export function ComunicadosView() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-10"><Checkbox checked={selected.size === filtered.length && filtered.length > 0} onCheckedChange={toggleAll} /></TableHead>
-                  <TableHead>Título</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Creado el</TableHead>
-                  <TableHead>Envío</TableHead>
-                  <TableHead>Recurrencia</TableHead>
-                  <TableHead>Alcance</TableHead>
-                  <TableHead>Destinatarios</TableHead>
+                  {columnasRender.map((c) => columnDefs[c.campo]?.th)}
                   <TableHead className="w-10"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -817,29 +885,7 @@ export function ComunicadosView() {
                 {filtered.map(c => (
                   <TableRow key={c.id}>
                     <TableCell><Checkbox checked={selected.has(c.id)} onCheckedChange={() => toggleSelect(c.id)} /></TableCell>
-                    <TableCell>
-                      <div>
-                        <p className="font-semibold text-sm">{c.titulo}</p>
-                        <p className="text-xs text-muted-foreground">Empresa: {empresaActual?.nombre}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell><EstadoBadge estado={c.estado} /></TableCell>
-                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{c.creadoEl}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{c.envio || "—"}</TableCell>
-                    <TableCell><Badge variant="outline" className="text-xs">{RECURRENCIA_LABELS[c.recurrencia]}</Badge></TableCell>
-                    <TableCell><AlcanceCircle pct={c.alcancePct} /></TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {c.todaEmpresa ? (
-                          <Badge variant="secondary" className="text-[11px] gap-1"><Building2 className="h-3 w-3" />{c.destinatarios.empresas} empresa</Badge>
-                        ) : (
-                          <>
-                            <Badge variant="secondary" className="text-[11px] gap-1"><Users className="h-3 w-3" />{c.destinatarios.departamentos} dptos</Badge>
-                            <Badge variant="outline" className="text-[11px] gap-1">{c.destinatarios.empleados} empleados</Badge>
-                          </>
-                        )}
-                      </div>
-                    </TableCell>
+                    {columnasRender.map((col) => columnDefs[col.campo]?.td(c))}
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>

@@ -5,8 +5,14 @@ export type EstadoProducto = "Activo" | "Inactivo";
 export const IVA_OPCIONES = ["0%", "4%", "10%", "21%"] as const;
 export type IvaOpcion = typeof IVA_OPCIONES[number];
 
-export const CONSERVACION_OPCIONES = ["Frío", "Congelador", "Seco"] as const;
+export const CONSERVACION_OPCIONES = ["Frigorífico", "Congelador", "Seco"] as const;
 export type Conservacion = typeof CONSERVACION_OPCIONES[number];
+
+export const UNIDADES_PRODUCTO = [
+  { value: "kg", label: "Kg" },
+  { value: "L",  label: "L"  },
+  { value: "ud", label: "Ud" },
+] as const;
 
 export const PREPARACION_OPCIONES = ["Barra", "Cocina"] as const;
 export type PreparacionVenta = typeof PREPARACION_OPCIONES[number];
@@ -23,6 +29,7 @@ export function getPartidasPorPreparacion(p: PreparacionVenta | "" | null | unde
 
 export interface Producto {
   id: string;
+  numeroSecuencial?: number;
   nombre: string;
   tipo: TipoProducto;
   categoria: string;
@@ -36,6 +43,8 @@ export interface Producto {
   unidad: string;
   formato?: string;
   ultimaActualizacion: string;
+  // Marca temporal de creación; se usa para asignar el nº correlativo estable.
+  createdAt?: string;
   observaciones?: string;
   conservacion?: Conservacion | null;
   preparacion?: PreparacionVenta | null;
@@ -79,17 +88,23 @@ export function getColorPOSByHex(hex?: string | null): ColorPOS | null {
 // ─── Formatos por unidad ───
 // El formato disponible depende de la unidad elegida.
 // Se usa en productos de compra y de elaboración.
+// Se muestran solo las iniciales de la unidad: L, U, K.
 export const FORMATOS_POR_UNIDAD: Record<string, string[]> = {
-  kg:   ["Granel", "Saco 25 kg", "Caja 10 kg", "Bandeja 5 kg", "Bandeja 1 kg", "Bolsa 500 g", "Bolsa 250 g"],
-  L:    ["Granel", "Garrafa 25 L", "Garrafa 5 L", "Botella 1 L", "Botella 750 ml", "Botella 500 ml", "Brick 1 L"],
-  ud:   ["Suelta", "Caja 24 ud", "Caja 12 ud", "Caja 6 ud", "Pack 6 ud", "Pack 4 ud", "Bandeja"],
-  bot:  ["Botella 1 L", "Botella 750 ml", "Botella 500 ml", "Botella 330 ml", "Botella 200 ml"],
-  caja: ["Caja 24 ud", "Caja 12 ud", "Caja 6 ud", "Caja mixta"],
-  pack: ["Pack 24 ud", "Pack 12 ud", "Pack 6 ud", "Pack 4 ud"],
+  kg: ["0,05 K", "0,1 K", "0,2 K", "0,5 K", "1 K", "2 K", "2,5 K", "8 K", "10 K"],
+  L:  ["0,70 L", "1 L", "1,5 L", "2 L", "5 L", "50 L"],
+  ud: Array.from({ length: 100 }, (_, i) => `${i + 1} U`),
 };
 
 export function getFormatosPorUnidad(unidad: string): string[] {
   return FORMATOS_POR_UNIDAD[unidad] ?? [];
+}
+
+export function getUnidadDeFormato(formato: string): string | null {
+  if (!formato) return null;
+  for (const [u, formatos] of Object.entries(FORMATOS_POR_UNIDAD)) {
+    if (formatos.includes(formato)) return u;
+  }
+  return null;
 }
 
 // ─── Categorías y familias ───

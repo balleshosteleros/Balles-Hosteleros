@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { getSalariosEmpresa, type PuestoSalarial, type NormaSalarial, DEPARTAMENTOS_DISPONIBLES } from "@/features/rrhh/data/salarios";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -10,16 +10,19 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ConfigButton } from "@/shared/components/config-button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  ArrowLeft, Plus, Eye, Settings2, DollarSign, Clock, Calendar,
+  ArrowLeft, Plus, Eye, Settings, Settings2, DollarSign, Clock, Calendar,
   Briefcase, ChevronDown, ChevronRight, Target, AlertTriangle, FileText,
 } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
   aplicarOrdenToolbar,
+  colVisible,
+  ordenarColumnas,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
+  type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
 import { IOActions } from "@/shared/io";
 import { salariosIO } from "@/features/rrhh/io/salarios.io";
@@ -76,7 +79,9 @@ function ListView({
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [showConfig, setShowConfig] = useState(false);
 
   const deptos = useMemo(
     () => [...new Set(puestos.map((p) => p.departamento))].sort(),
@@ -116,6 +121,56 @@ function ListView({
   }, [filtered]);
 
   const toggle = (d: string) => setExpanded((prev) => ({ ...prev, [d]: !prev[d] }));
+
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "puesto", label: "Puesto", bloqueada: true },
+    { campo: "nominaNeta", label: "Nómina neta" },
+    { campo: "efectivoExtra", label: "Efectivo extra" },
+    { campo: "salarioNeto", label: "Salario neto" },
+    { campo: "jornada", label: "Jornada" },
+    { campo: "horasSemanales", label: "Horas/sem" },
+    { campo: "diasLibres", label: "Días libres" },
+    { campo: "estado", label: "Estado" },
+  ];
+
+  const columnDefs: Record<string, { th: ReactNode; td: (p: PuestoSalarial) => ReactNode }> = {
+    puesto: {
+      th: <TableHead key="puesto">Puesto</TableHead>,
+      td: (p) => <TableCell key="puesto" className="font-medium">{p.puesto}</TableCell>,
+    },
+    nominaNeta: {
+      th: <TableHead key="nominaNeta" className="text-right">Nómina neta</TableHead>,
+      td: (p) => <TableCell key="nominaNeta" className="text-right">{eur(p.nominaNeta)}</TableCell>,
+    },
+    efectivoExtra: {
+      th: <TableHead key="efectivoExtra" className="text-right">Efectivo extra</TableHead>,
+      td: (p) => <TableCell key="efectivoExtra" className="text-right">{p.efectivoExtra > 0 ? eur(p.efectivoExtra) : "—"}</TableCell>,
+    },
+    salarioNeto: {
+      th: <TableHead key="salarioNeto" className="text-right">Salario neto</TableHead>,
+      td: (p) => <TableCell key="salarioNeto" className="text-right font-semibold">{eur(p.salarioNeto)}</TableCell>,
+    },
+    jornada: {
+      th: <TableHead key="jornada" className="text-center">Jornada</TableHead>,
+      td: (p) => <TableCell key="jornada" className="text-center">{p.jornadaContrato}</TableCell>,
+    },
+    horasSemanales: {
+      th: <TableHead key="horasSemanales" className="text-center">Horas/sem</TableHead>,
+      td: (p) => <TableCell key="horasSemanales" className="text-center">{p.horasSemanales}h</TableCell>,
+    },
+    diasLibres: {
+      th: <TableHead key="diasLibres" className="text-center">Días libres</TableHead>,
+      td: (p) => <TableCell key="diasLibres" className="text-center">{p.diasLibres}</TableCell>,
+    },
+    estado: {
+      th: <TableHead key="estado" className="text-center">Estado</TableHead>,
+      td: (p) => <TableCell key="estado" className="text-center">{estadoBadge(p.estado)}</TableCell>,
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
 
   return (
     <div className="space-y-4 p-4 md:p-6">
@@ -158,44 +213,35 @@ function ListView({
       <SubmoduleToolbar
         busqueda={busqueda}
         onBusquedaChange={setBusqueda}
-        placeholderBusqueda="Buscar puesto o departamento..."
-        textoNuevo="Crear puesto"
+        placeholderBusqueda="Buscar"
         onNuevo={() => { /* TODO: abrir crear puesto */ }}
-        campos={[
-          { campo: "departamento", label: "Departamento", tipo: "lista", opciones: deptos },
-          { campo: "jornada", label: "Jornada", tipo: "lista", opciones: jornadas },
-          { campo: "estado", label: "Estado", tipo: "lista", opciones: ["Activo", "Borrador", "Inactivo"] },
-          { campo: "salarioNeto", label: "Salario neto", tipo: "numero" },
-          { campo: "horasSemanales", label: "Horas / semana", tipo: "numero" },
-        ]}
         filtros={filtros}
         onFiltrosChange={setFiltros}
-        ordenOpciones={[
-          { campo: "puesto", label: "Puesto" },
-          { campo: "departamento", label: "Departamento" },
-          { campo: "salarioNeto", label: "Salario neto" },
-          { campo: "horasSemanales", label: "Horas / semana" },
-        ]}
         orden={orden}
         onOrdenChange={setOrden}
-        columnas={[
-          { campo: "puesto", label: "Puesto" },
-          { campo: "nominaNeta", label: "Nómina neta" },
-          { campo: "efectivoExtra", label: "Efectivo extra" },
-          { campo: "salarioNeto", label: "Salario neto" },
-          { campo: "jornada", label: "Jornada" },
-          { campo: "horasSemanales", label: "Horas/sem" },
-          { campo: "diasLibres", label: "Días libres" },
-          { campo: "estado", label: "Estado" },
-        ]}
+        columnas={columnasDef}
         columnasVisibles={columnasVisibles}
         onColumnasVisiblesChange={setColumnasVisibles}
+        columnasOrden={columnasOrden}
+        onColumnasOrdenChange={setColumnasOrden}
         extraDerecha={
-          <IOActions
-            config={salariosIO}
-            context={{ empresaId }}
-            onSuccess={() => window.location.reload()}
-          />
+          <>
+            <IOActions
+              config={salariosIO}
+              context={{ empresaId }}
+              onSuccess={() => window.location.reload()}
+            />
+            <Button
+              size="icon"
+              variant={showConfig ? "default" : "outline"}
+              className="h-9 w-9"
+              onClick={() => setShowConfig((v) => !v)}
+              title="Configuración"
+              aria-label="Configuración"
+            >
+              <Settings className="h-4 w-4" strokeWidth={1.75} />
+            </Button>
+          </>
         }
       />
 
@@ -222,28 +268,14 @@ function ListView({
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Puesto</TableHead>
-                      <TableHead className="text-right">Nómina neta</TableHead>
-                      <TableHead className="text-right">Efectivo extra</TableHead>
-                      <TableHead className="text-right">Salario neto</TableHead>
-                      <TableHead className="text-center">Jornada</TableHead>
-                      <TableHead className="text-center">Horas/sem</TableHead>
-                      <TableHead className="text-center">Días libres</TableHead>
-                      <TableHead className="text-center">Estado</TableHead>
+                      {columnasRender.map((c) => columnDefs[c.campo]?.th)}
                       <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {items.map((p) => (
                       <TableRow key={p.id} className="hover:bg-muted/30">
-                        <TableCell className="font-medium">{p.puesto}</TableCell>
-                        <TableCell className="text-right">{eur(p.nominaNeta)}</TableCell>
-                        <TableCell className="text-right">{p.efectivoExtra > 0 ? eur(p.efectivoExtra) : "—"}</TableCell>
-                        <TableCell className="text-right font-semibold">{eur(p.salarioNeto)}</TableCell>
-                        <TableCell className="text-center">{p.jornadaContrato}</TableCell>
-                        <TableCell className="text-center">{p.horasSemanales}h</TableCell>
-                        <TableCell className="text-center">{p.diasLibres}</TableCell>
-                        <TableCell className="text-center">{estadoBadge(p.estado)}</TableCell>
+                        {columnasRender.map((c) => columnDefs[c.campo]?.td(p))}
                         <TableCell className="text-right">
                           <Button variant="ghost" size="sm" onClick={() => onDetail(p.id)}>
                             <Eye className="h-4 w-4 mr-1" /> Ver detalle

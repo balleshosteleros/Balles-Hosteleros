@@ -6,6 +6,15 @@ import type { ProveedorRow } from "@/features/logistica/types/db";
 import { capitalizeText } from "@/shared/lib/utils";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+/**
+ * El nombre comercial del proveedor se guarda y se muestra SIEMPRE en
+ * mayúsculas (regla de negocio). Sólo aplica al campo visible del proveedor;
+ * el resto de campos siguen `capitalizeText`.
+ */
+function upperName(str: string): string {
+  return str.trim().toUpperCase();
+}
+
 async function getContext() {
   const { supabase, userId, empresaId } = await getLogisticaContext();
   return { supabase, user: userId ? { id: userId } : null, empresaId };
@@ -113,7 +122,7 @@ export async function createProveedor(input: ProveedorImport) {
       return { ok: false as const, error: "La categoría es obligatoria" };
     }
 
-    const nombreComercial = capitalizeText(input.nombreComercial.trim());
+    const nombreComercial = upperName(input.nombreComercial);
     const personaContacto = input.personaContacto ? capitalizeText(input.personaContacto) : null;
     const telefonoPrincipal = input.telefonoPrincipal ?? null;
     const emailPrincipal = input.emailPrincipal ?? null;
@@ -190,7 +199,7 @@ export async function updateProveedor(id: string, input: Partial<ProveedorImport
       updated_at: new Date().toISOString(),
     };
 
-    if (input.nombreComercial !== undefined) updates.nombre_comercial = input.nombreComercial ? capitalizeText(input.nombreComercial) : input.nombreComercial;
+    if (input.nombreComercial !== undefined) updates.nombre_comercial = input.nombreComercial ? upperName(input.nombreComercial) : input.nombreComercial;
     if (input.razonSocial !== undefined) updates.razon_social = input.razonSocial ? capitalizeText(input.razonSocial) : input.razonSocial;
     if (input.cifNif !== undefined) updates.cif_nif = input.cifNif;
     if (input.categoria !== undefined) updates.categoria = input.categoria ? capitalizeText(input.categoria) : input.categoria;
@@ -229,7 +238,7 @@ export async function updateProveedor(id: string, input: Partial<ProveedorImport
 
     if (before?.empresa_id && user) {
       const finalNombreComercial = input.nombreComercial !== undefined && input.nombreComercial
-        ? capitalizeText(input.nombreComercial)
+        ? upperName(input.nombreComercial)
         : (before.nombre_comercial as string);
       const finalPersonaContacto = input.personaContacto !== undefined
         ? (input.personaContacto ? capitalizeText(input.personaContacto) : null)
@@ -309,7 +318,7 @@ export async function bulkImportProveedores(proveedores: ProveedorImport[]) {
       .filter((p) => p.nombreComercial && p.categoria)
       .map((p) => ({
         empresa_id: empresaId,
-        nombre_comercial: capitalizeText(p.nombreComercial.trim()),
+        nombre_comercial: upperName(p.nombreComercial),
         razon_social: p.razonSocial ? capitalizeText(p.razonSocial) : null,
         cif_nif: p.cifNif ?? null,
         categoria: capitalizeText(p.categoria.trim()),
