@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useMemo, type ReactNode } from "react";
+import { useState, useMemo, useEffect, useRef, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
+import { toast } from "sonner";
 import {
   Search,
   SlidersHorizontal,
@@ -11,6 +13,8 @@ import {
   X,
   Check,
   Lock,
+  Save,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +33,12 @@ import {
   PopoverTrigger,
 } from "@/shared/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/features/auth/contexts/auth-context";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import {
+  loadViewPreferences,
+  saveViewPreferences,
+} from "@/shared/io/view-preferences";
 
 export type ToolbarFiltroTipo = "lista" | "numero" | "fecha" | "booleano";
 
@@ -94,6 +104,14 @@ interface SubmoduleToolbarProps {
   columnas?: ToolbarColumna[];
   columnasVisibles?: ToolbarColumnaVisible;
   onColumnasVisiblesChange?: (v: ToolbarColumnaVisible) => void;
+
+  /**
+   * Identificador estable de esta vista para persistir preferencias
+   * (visibilidad de columnas) por usuario × empresa × vista.
+   * Si se omite, se deriva del `pathname` actual (recomendado: cada
+   * submódulo vive en una ruta única).
+   */
+  viewKey?: string;
 
   // Slot para acciones extra (ej. importar, exportar)
   extraIzquierda?: ReactNode;
