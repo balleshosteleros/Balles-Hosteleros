@@ -352,19 +352,15 @@ export function UsuariosTab() {
 
   return (
     <div className="space-y-2">
-      {/* Header */}
-      <div className="flex justify-end">
-        <Button size="sm" className="gap-1.5" onClick={() => setShowCreateModal(true)}>
-          <Plus className="h-4 w-4" />Nuevo
-        </Button>
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 -mt-10">
+      {/* Header + Filters en una sola fila */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="relative flex-1 min-w-[220px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Buscar por nombre, email o rol..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} className="pl-9" />
         </div>
+        <Button size="sm" className="gap-1.5" onClick={() => setShowCreateModal(true)}>
+          <Plus className="h-4 w-4" />Nuevo
+        </Button>
       </div>
 
       {/* Users table — todos los usuarios de Supabase en una única tabla */}

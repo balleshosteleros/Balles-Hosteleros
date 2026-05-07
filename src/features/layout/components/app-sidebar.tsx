@@ -10,7 +10,7 @@ import {
   PenLine, CheckCircle2, BarChart3, Landmark, Tag, Zap, ContactRound,
   Heart, UserPlus, Apple, CreditCard, Presentation, QrCode, Globe,
   Send, Wallet, Fingerprint, Inbox, FileSignature, Trophy, UserCircle, LayoutDashboard,
-  FileQuestion,
+  FileQuestion, LayoutGrid,
 } from "lucide-react";
 import { useViewMode } from "@/features/layout/contexts/view-mode-context";
 
@@ -70,6 +70,7 @@ const juridicoSubs = [
 ];
 const salaSubs = [
   { title: "PUNTO DE VENTA", url: "/sala/pos", icon: CreditCard },
+  { title: "VENTAS", url: "/sala/ventas", icon: TrendingUp },
   { title: "RESERVAS", url: "/sala/reservas", icon: BookOpen },
   { title: "CLIENTES", url: "/sala/clientes", icon: Contact },
 ];
@@ -78,7 +79,7 @@ const cocinaSubs = [
   { title: "NUEVAS RECETAS", url: "/cocina/nuevas-recetas", icon: Sparkles },
   { title: "FICHAS TÉCNICAS", url: "/cocina/fichas-tecnicas", icon: Utensils },
   { title: "ELABORACIONES", url: "/cocina/elaboraciones", icon: FlaskConical },
-  { title: "PARTIDAS", url: "/cocina/partidas", icon: ChefHat },
+  { title: "PARTIDAS", url: "/cocina/partidas", icon: LayoutGrid },
   { title: "TEMPERATURAS", url: "/cocina/temperaturas", icon: Thermometer },
 ];
 const logisticaSubs = [
@@ -120,7 +121,7 @@ const calidadSubs = [
   { title: "INSPECCIONES", url: "/calidad/inspecciones", icon: FileSearch },
 ];
 const miPanelSubs = [
-  { title: "DATOS PERSONALES", url: "/mi-panel/datos-personales", icon: UserCircle },
+  { title: "PERFIL", url: "/mi-panel/datos-personales", icon: UserCircle },
   { title: "POINTS", url: "/mi-panel/points", icon: Trophy },
   { title: "CALENDARIO", url: "/mi-panel/calendario", icon: CalendarDays },
   { title: "HORARIO", url: "/mi-panel/horario", icon: Timer },

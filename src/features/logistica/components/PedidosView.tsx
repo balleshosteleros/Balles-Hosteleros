@@ -22,7 +22,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Copy, Pencil, Trash2, Printer, MoreHorizontal, ClipboardList, Truck,
-  ChevronDown, Package,
+  ChevronDown, Package, Settings,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
@@ -32,10 +32,14 @@ import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
   aplicarOrdenToolbar,
+  coincideBusquedaUniversal,
+  colVisible,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
 } from "@/shared/components/SubmoduleToolbar";
+import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
+import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 import { IOActions } from "@/shared/io";
 import { pedidosIO } from "@/features/logistica/io/pedidos.io";
 import { toast } from "sonner";
@@ -106,6 +110,7 @@ export function PedidosView() {
   const [detalleAlbaran, setDetalleAlbaran] = useState<Albaran | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [sugerenciasOpen, setSugerenciasOpen] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
 
   const loadPedidos = useCallback(async () => {
     setLoading(true);
@@ -173,12 +178,9 @@ export function PedidosView() {
 
   // Filtered pedidos
   const filteredPedidos = useMemo(() => {
-    let lista = pedidos.filter((p) => {
-      if (p.estado === "Archivado") return false;
-      if (!search) return true;
-      const s = search.toLowerCase();
-      return p.numero.toLowerCase().includes(s) || p.proveedor.toLowerCase().includes(s);
-    });
+    let lista = pedidos.filter(
+      (p) => p.estado !== "Archivado" && coincideBusquedaUniversal(p, search),
+    );
     lista = aplicarFiltrosToolbar(lista, filtros, accesoPedido);
     lista = aplicarOrdenToolbar(lista, orden, accesoPedido);
     return lista;
@@ -421,28 +423,12 @@ export function PedidosView() {
           <SubmoduleToolbar
             busqueda={search}
             onBusquedaChange={setSearch}
-            placeholderBusqueda="Buscar por nombre..."
+            placeholderBusqueda="Buscar"
             onNuevo={() => { setEditItem(null); setModalOpen(true); }}
-            campos={[
-              { campo: "estado", label: "Estado", tipo: "lista", opciones: ESTADOS_PEDIDO.filter((e) => e !== "Archivado") as unknown as string[] },
-              { campo: "proveedor", label: "Proveedor", tipo: "lista", opciones: proveedoresUsados },
-              { campo: "almacen", label: "Almacén", tipo: "lista", opciones: almacenesUsados },
-              { campo: "fecha", label: "Fecha pedido", tipo: "fecha" },
-              { campo: "fechaEntrega", label: "Fecha entrega", tipo: "fecha" },
-            ]}
             filtros={filtros}
             onFiltrosChange={setFiltros}
-            ordenOpciones={[
-              { campo: "numero", label: "Nº" },
-              { campo: "fecha", label: "Fecha" },
-              { campo: "fechaEntrega", label: "Fecha entrega" },
-              { campo: "proveedor", label: "Proveedor" },
-              { campo: "estado", label: "Estado" },
-            ]}
-            orden={orden}
-            onOrdenChange={setOrden}
             columnas={[
-              { campo: "numero", label: "Nº" },
+              { campo: "numero", label: "Nº", bloqueada: true },
               { campo: "fecha", label: "Fecha" },
               { campo: "fechaEntrega", label: "F. Entrega" },
               { campo: "almacen", label: "Almacén" },
@@ -487,19 +473,106 @@ export function PedidosView() {
               </>
             }
             extraDerecha={
-              <IOActions config={pedidosIO} onSuccess={() => window.location.reload()} />
+              <>
+                <IOActions config={pedidosIO} onSuccess={() => window.location.reload()} />
+                <Button size="icon" variant={showConfig ? "default" : "outline"} className="h-9 w-9" onClick={() => setShowConfig((v) => !v)} title="Configuración" aria-label="Configuración">
+                  <Settings className="h-4 w-4" strokeWidth={1.75} />
+                </Button>
+              </>
             }
           />
 
+          {showConfig && (
+            <div className="rounded-xl border bg-card p-5">
+              <p className="text-sm text-muted-foreground">Configuración de pedidos — próximamente.</p>
+            </div>
+          )}
+
           {/* Table */}
+          <ResizableColumnsProvider storageKey="logistica-pedidos">
           <div className="bg-card rounded-lg border overflow-x-auto">
             <table className="w-full text-sm">
-              <thead><tr className="border-b bg-muted/50">
-                <th className="px-3 py-3 w-10"><Checkbox checked={selected.size === filteredPedidos.length && filteredPedidos.length > 0} onCheckedChange={toggleAll} /></th>
-                {["Nº", "Fecha", "F. Entrega", "Almacén", "Proveedor", "Estado", "Base (€)", "Total (€)"].map((h) => (
-                  <th key={h} className="px-3 py-3 text-left text-xs font-bold text-muted-foreground whitespace-nowrap">{h}</th>
-                ))}
-              </tr></thead>
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  <th className="px-3 py-3 w-10"><Checkbox checked={selected.size === filteredPedidos.length && filteredPedidos.length > 0} onCheckedChange={toggleAll} /></th>
+                  <TableColumnHeader
+                    label="Nº"
+                    campo="numero"
+                    ordenable
+                    orden={orden}
+                    onOrdenChange={setOrden}
+                  />
+                  {colVisible(columnasVisibles, "fecha") && (
+                    <TableColumnHeader
+                      label="Fecha"
+                      campo="fecha"
+                      filtroTipo="fecha"
+                      filtros={filtros}
+                      onFiltrosChange={setFiltros}
+                      ordenable
+                      orden={orden}
+                      onOrdenChange={setOrden}
+                    />
+                  )}
+                  {colVisible(columnasVisibles, "fechaEntrega") && (
+                    <TableColumnHeader
+                      label="F. Entrega"
+                      campo="fechaEntrega"
+                      filtroTipo="fecha"
+                      filtros={filtros}
+                      onFiltrosChange={setFiltros}
+                      ordenable
+                      orden={orden}
+                      onOrdenChange={setOrden}
+                    />
+                  )}
+                  {colVisible(columnasVisibles, "almacen") && (
+                    <TableColumnHeader
+                      label="Almacén"
+                      campo="almacen"
+                      filtroTipo="lista"
+                      opciones={almacenesUsados}
+                      filtros={filtros}
+                      onFiltrosChange={setFiltros}
+                      ordenable
+                      orden={orden}
+                      onOrdenChange={setOrden}
+                    />
+                  )}
+                  {colVisible(columnasVisibles, "proveedor") && (
+                    <TableColumnHeader
+                      label="Proveedor"
+                      campo="proveedor"
+                      filtroTipo="lista"
+                      opciones={proveedoresUsados}
+                      filtros={filtros}
+                      onFiltrosChange={setFiltros}
+                      ordenable
+                      orden={orden}
+                      onOrdenChange={setOrden}
+                    />
+                  )}
+                  {colVisible(columnasVisibles, "estado") && (
+                    <TableColumnHeader
+                      label="Estado"
+                      campo="estado"
+                      filtroTipo="lista"
+                      opciones={ESTADOS_PEDIDO.filter((e) => e !== "Archivado") as unknown as string[]}
+                      filtros={filtros}
+                      onFiltrosChange={setFiltros}
+                      ordenable
+                      orden={orden}
+                      onOrdenChange={setOrden}
+                    />
+                  )}
+                  {colVisible(columnasVisibles, "base") && (
+                    <TableColumnHeader label="Base (€)" align="right" />
+                  )}
+                  {colVisible(columnasVisibles, "total") && (
+                    <TableColumnHeader label="Total (€)" align="right" />
+                  )}
+                </tr>
+              </thead>
               <tbody>
                 {filteredPedidos.map((p) => {
                   const t = calcularTotalesLineas(p.lineas);
@@ -512,37 +585,53 @@ export function PedidosView() {
                         <Checkbox checked={selected.has(p.id)} onCheckedChange={() => toggleSelect(p.id)} />
                       </td>
                       <td className="px-3 py-2.5 font-semibold text-primary whitespace-nowrap">{p.numero}</td>
-                      <td className="px-3 py-2.5 text-xs whitespace-nowrap">{p.fecha}</td>
-                      <td className="px-3 py-2.5 text-xs whitespace-nowrap">{p.fechaEntrega || "—"}</td>
-                      <td className="px-3 py-2.5 text-xs">{p.almacen}</td>
-                      <td className="px-3 py-2.5 text-xs font-medium max-w-[200px] truncate">{p.proveedor}</td>
-                      <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                        <Select value={p.estado} onValueChange={(v) => updatePedidoEstado(p.id, v)}>
-                          <SelectTrigger className="h-8 text-xs w-[120px] border-0 p-0"><EstadoPedidoBadge value={p.estado} /></SelectTrigger>
-                          <SelectContent>{ESTADOS_PEDIDO.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
-                        </Select>
-                      </td>
-                      <td className="px-3 py-2.5 text-xs font-semibold text-right">{t.base.toFixed(2)}</td>
-                      <td className="px-3 py-2.5 text-xs font-bold text-right">{t.total.toFixed(2)}</td>
+                      {colVisible(columnasVisibles, "fecha") && (
+                        <td className="px-3 py-2.5 text-xs whitespace-nowrap">{p.fecha}</td>
+                      )}
+                      {colVisible(columnasVisibles, "fechaEntrega") && (
+                        <td className="px-3 py-2.5 text-xs whitespace-nowrap">{p.fechaEntrega || "—"}</td>
+                      )}
+                      {colVisible(columnasVisibles, "almacen") && (
+                        <td className="px-3 py-2.5 text-xs">{p.almacen}</td>
+                      )}
+                      {colVisible(columnasVisibles, "proveedor") && (
+                        <td className="px-3 py-2.5 text-xs font-medium max-w-[200px] truncate">{p.proveedor}</td>
+                      )}
+                      {colVisible(columnasVisibles, "estado") && (
+                        <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                          <Select value={p.estado} onValueChange={(v) => updatePedidoEstado(p.id, v)}>
+                            <SelectTrigger className="h-8 text-xs w-[120px] border-0 p-0"><EstadoPedidoBadge value={p.estado} /></SelectTrigger>
+                            <SelectContent>{ESTADOS_PEDIDO.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
+                          </Select>
+                        </td>
+                      )}
+                      {colVisible(columnasVisibles, "base") && (
+                        <td className="px-3 py-2.5 text-xs font-semibold text-right">{t.base.toFixed(2)}</td>
+                      )}
+                      {colVisible(columnasVisibles, "total") && (
+                        <td className="px-3 py-2.5 text-xs font-bold text-right">{t.total.toFixed(2)}</td>
+                      )}
                     </tr>
                   );
                 })}
                 {filteredPedidos.length === 0 && (
-                  <tr><td colSpan={9} className="text-center py-12 text-muted-foreground">No se encontraron pedidos.</td></tr>
+                  <tr><td colSpan={20} className="text-center py-12 text-muted-foreground">No se encontraron pedidos.</td></tr>
                 )}
               </tbody>
             </table>
           </div>
+          </ResizableColumnsProvider>
           <div className="text-xs text-muted-foreground text-right">{filteredPedidos.length} de {pedidos.length} pedidos</div>
         </div>}
 
         {/* ALBARANES TAB */}
         {tab === "albaranes" && <div className="space-y-4">
+          <ResizableColumnsProvider storageKey="logistica-albaranes">
           <div className="bg-card rounded-lg border overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="border-b bg-muted/50">
                 {["Nº Albarán", "Proveedor", "Documento", "Almacén", "Fecha", "Estado", "Pedido", "Total (€)"].map((h) => (
-                  <th key={h} className="px-3 py-3 text-left text-xs font-bold text-muted-foreground whitespace-nowrap">{h}</th>
+                  <TableColumnHeader key={h} label={h} />
                 ))}
               </tr></thead>
               <tbody>
@@ -569,6 +658,7 @@ export function PedidosView() {
               </tbody>
             </table>
           </div>
+          </ResizableColumnsProvider>
         </div>}
       </div>
 

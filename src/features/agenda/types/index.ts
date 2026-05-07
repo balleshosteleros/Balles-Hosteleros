@@ -3,6 +3,7 @@ export const CONTACTO_CATEGORIAS = [
   "proveedores",
   "servicios",
   "emergencias",
+  "empleados",
   "otros",
 ] as const;
 
@@ -13,8 +14,39 @@ export const CATEGORIA_LABELS: Record<ContactoCategoria, string> = {
   proveedores: "Proveedores",
   servicios: "Servicios",
   emergencias: "Emergencias",
+  empleados: "Empleados",
   otros: "Otros",
 };
+
+export const ETIQUETA_COLORES = [
+  "slate",
+  "amber",
+  "blue",
+  "violet",
+  "red",
+  "emerald",
+  "pink",
+  "orange",
+] as const;
+
+export type EtiquetaColor = (typeof ETIQUETA_COLORES)[number];
+
+export interface Etiqueta {
+  id: string;
+  empresa_id: string | null;
+  categoria: ContactoCategoria;
+  nombre: string;
+  color: EtiquetaColor;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+}
+
+export interface EtiquetaInput {
+  categoria: ContactoCategoria;
+  nombre: string;
+  color: EtiquetaColor;
+}
 
 export interface Contacto {
   id: string;
@@ -22,6 +54,7 @@ export interface Contacto {
   nombre: string;
   empresa_contacto: string | null;
   categoria: ContactoCategoria;
+  etiqueta_id: string | null;
   telefono: string | null;
   email: string | null;
   whatsapp: string | null;
@@ -36,6 +69,7 @@ export interface ContactoInput {
   nombre: string;
   empresa_contacto?: string | null;
   categoria: ContactoCategoria;
+  etiqueta_id?: string | null;
   telefono?: string | null;
   email?: string | null;
   whatsapp?: string | null;

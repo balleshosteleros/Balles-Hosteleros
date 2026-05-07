@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Save, Cake, Search } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { actualizarFechaAlta } from "@/features/toques/actions/toques-admin-actions";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 
 type Row = Record<string, unknown>;
 
@@ -43,6 +44,8 @@ function formatAntiguedad(meses: number): string {
 
 export function AntiguedadEmpleadosPanel() {
   const supabase = useMemo(() => createClient(), []);
+  const { empresaActual } = useEmpresa();
+  const empresaActualDbId = empresaActual.dbId ?? null;
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -62,12 +65,7 @@ export function AntiguedadEmpleadosPanel() {
         setLoading(false);
         return;
       }
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("empresa_id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      const eId = (profile?.empresa_id as string) ?? null;
+      const eId = empresaActualDbId;
       if (!eId) {
         setError("Sin empresa asignada");
         setLoading(false);
@@ -97,7 +95,7 @@ export function AntiguedadEmpleadosPanel() {
     } finally {
       setLoading(false);
     }
-  }, [supabase]);
+  }, [supabase, empresaActualDbId]);
 
   useEffect(() => {
     void cargar();

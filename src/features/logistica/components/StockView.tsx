@@ -27,10 +27,14 @@ import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
   aplicarOrdenToolbar,
+  coincideBusquedaUniversal,
+  colVisible,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
 } from "@/shared/components/SubmoduleToolbar";
+import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
+import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 import { IOActions } from "@/shared/io";
 import { stockIO } from "@/features/logistica/io/stock.io";
 import { toast } from "sonner";
@@ -131,14 +135,31 @@ export function StockView() {
   const [tempPopoverOpen, setTempPopoverOpen] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
 
+  const PRESETS_TEMPORADA = ["Verano", "Invierno"] as const;
+  const temporadasPersonalizadas = useMemo(
+    () =>
+      temporadas.filter(
+        (t) => !PRESETS_TEMPORADA.some((p) => p.toLowerCase() === t.nombre.trim().toLowerCase()),
+      ),
+    [temporadas],
+  );
+
   const temporadaActiva = useMemo(() => {
     if (temporadaSeleccionada === "base") return null;
+    if (temporadaSeleccionada === "preset-verano") {
+      return temporadas.find((t) => t.nombre.trim().toLowerCase() === "verano") || null;
+    }
+    if (temporadaSeleccionada === "preset-invierno") {
+      return temporadas.find((t) => t.nombre.trim().toLowerCase() === "invierno") || null;
+    }
     return temporadas.find((t) => t.id === temporadaSeleccionada) || null;
   }, [temporadaSeleccionada, temporadas]);
 
   const temporadaLabel = useMemo(() => {
-    if (temporadaSeleccionada === "base") return "Base";
-    return temporadas.find((t) => t.id === temporadaSeleccionada)?.nombre ?? "Base";
+    if (temporadaSeleccionada === "base") return "General";
+    if (temporadaSeleccionada === "preset-verano") return "Verano";
+    if (temporadaSeleccionada === "preset-invierno") return "Invierno";
+    return temporadas.find((t) => t.id === temporadaSeleccionada)?.nombre ?? "General";
   }, [temporadaSeleccionada, temporadas]);
 
   const [search, setSearch] = useState("");
@@ -185,11 +206,7 @@ export function StockView() {
   };
 
   const filtered = useMemo(() => {
-    let lista = enriched.filter((p) => {
-      if (!search) return true;
-      const s = search.toLowerCase();
-      return p.nombre.toLowerCase().includes(s) || p.categoria.toLowerCase().includes(s);
-    });
+    let lista = enriched.filter((p) => coincideBusquedaUniversal(p, search));
     lista = aplicarFiltrosToolbar(lista, filtros, accesoStock);
     lista = aplicarOrdenToolbar(lista, orden, accesoStock);
     return lista;
@@ -348,26 +365,12 @@ export function StockView() {
           <SubmoduleToolbar
             busqueda={search}
             onBusquedaChange={setSearch}
-            placeholderBusqueda="Buscar producto…"
+            placeholderBusqueda="Buscar"
             ocultarNuevo
-            campos={[
-              { campo: "categoria", label: "Categoría", tipo: "lista", opciones: CATEGORIAS_STOCK as unknown as string[] },
-              { campo: "estadoStock", label: "Estado stock", tipo: "lista", opciones: ["Stock bajo", "Atención", "Correcto"] },
-              { campo: "unidad", label: "Unidad", tipo: "lista", opciones: unidadesUsadas },
-            ]}
             filtros={filtros}
             onFiltrosChange={setFiltros}
-            ordenOpciones={[
-              { campo: "nombre", label: "Producto" },
-              { campo: "categoria", label: "Categoría" },
-              { campo: "stockActual", label: "Stock actual" },
-              { campo: "stockMaximo", label: "Stock Máximo" },
-              { campo: "stockSeguridad", label: "Stock Mínimo" },
-            ]}
-            orden={orden}
-            onOrdenChange={setOrden}
             columnas={[
-              { campo: "nombre", label: "Producto" },
+              { campo: "nombre", label: "Producto", bloqueada: true },
               { campo: "categoria", label: "Categoría" },
               { campo: "unidad", label: "Unidad" },
               { campo: "stockMaximo", label: "Stock Máximo" },
@@ -384,38 +387,48 @@ export function StockView() {
               <>
                 <Popover open={tempPopoverOpen} onOpenChange={setTempPopoverOpen}>
                   <PopoverTrigger asChild>
-                    <Button size="sm" variant="outline" className="gap-1.5">
+                    <Button size="sm" variant="primary" className="gap-1.5">
+                      {temporadaLabel}
                       <ChevronDown className="h-4 w-4" />
-                      {temporadaLabel === "Base" ? "Temporada" : temporadaLabel}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-52 p-2" align="start">
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1.5">Ver temporada</p>
-                    <button
-                      onClick={() => { setTemporadaSeleccionada("base"); setTempPopoverOpen(false); }}
-                      className={`w-full text-left text-sm px-2.5 py-1.5 rounded-md transition-colors ${
-                        temporadaSeleccionada === "base" || !temporadas.find((t) => t.id === temporadaSeleccionada)
-                          ? "bg-primary/10 text-primary font-semibold"
-                          : "hover:bg-muted"
-                      }`}
-                    >
-                      Base
-                    </button>
-                    {temporadas.map((t) => (
+                    {([
+                      { id: "base", label: "General" },
+                      { id: "preset-verano", label: "Verano" },
+                      { id: "preset-invierno", label: "Invierno" },
+                    ] as const).map((opt) => (
                       <button
-                        key={t.id}
-                        onClick={() => { setTemporadaSeleccionada(t.id); setTempPopoverOpen(false); }}
+                        key={opt.id}
+                        onClick={() => { setTemporadaSeleccionada(opt.id); setTempPopoverOpen(false); }}
                         className={`w-full text-left text-sm px-2.5 py-1.5 rounded-md transition-colors ${
-                          temporadaSeleccionada === t.id
+                          temporadaSeleccionada === opt.id
                             ? "bg-primary/10 text-primary font-semibold"
                             : "hover:bg-muted"
                         }`}
                       >
-                        {t.nombre}
+                        {opt.label}
                       </button>
                     ))}
-                    {temporadas.length === 0 && (
-                      <p className="text-xs text-muted-foreground text-center py-2 italic">Sin temporadas — configura una con ⚙️</p>
+                    {temporadasPersonalizadas.length > 0 && (
+                      <>
+                        <Separator className="my-1.5" />
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">Personalizadas</p>
+                        {temporadasPersonalizadas.map((t) => (
+                          <button
+                            key={t.id}
+                            onClick={() => { setTemporadaSeleccionada(t.id); setTempPopoverOpen(false); }}
+                            className={`w-full text-left text-sm px-2.5 py-1.5 rounded-md transition-colors ${
+                              temporadaSeleccionada === t.id
+                                ? "bg-primary/10 text-primary font-semibold"
+                                : "hover:bg-muted"
+                            }`}
+                          >
+                            {t.nombre}
+                          </button>
+                        ))}
+                      </>
                     )}
                   </PopoverContent>
                 </Popover>
@@ -465,6 +478,7 @@ export function StockView() {
               )}
 
               {/* Table */}
+              <ResizableColumnsProvider storageKey="logistica-stock">
               <div className="bg-card rounded-lg border overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -472,9 +486,92 @@ export function StockView() {
                       <th className="px-3 py-3 w-10">
                         <Checkbox checked={selected.size === filtered.length && filtered.length > 0} onCheckedChange={toggleAll} />
                       </th>
-                      {["Producto", "Categoría", "Unidad", "Stock Máximo", "Stock Mínimo", "Stock Actual", "Stock Reposición", "Estado", "Últ. Inventario", "Fecha Inv.", ""].map((h) => (
-                        <th key={h} className="px-3 py-3 text-left text-xs font-bold text-muted-foreground whitespace-nowrap">{h}</th>
-                      ))}
+                      <TableColumnHeader
+                        label="Producto"
+                        campo="nombre"
+                        ordenable
+                        orden={orden}
+                        onOrdenChange={setOrden}
+                      />
+                      {colVisible(columnasVisibles, "categoria") && (
+                        <TableColumnHeader
+                          label="Categoría"
+                          campo="categoria"
+                          filtroTipo="lista"
+                          opciones={CATEGORIAS_STOCK as unknown as string[]}
+                          filtros={filtros}
+                          onFiltrosChange={setFiltros}
+                          ordenable
+                          orden={orden}
+                          onOrdenChange={setOrden}
+                        />
+                      )}
+                      {colVisible(columnasVisibles, "unidad") && (
+                        <TableColumnHeader
+                          label="Unidad"
+                          campo="unidad"
+                          filtroTipo="lista"
+                          opciones={unidadesUsadas}
+                          filtros={filtros}
+                          onFiltrosChange={setFiltros}
+                        />
+                      )}
+                      {colVisible(columnasVisibles, "stockMaximo") && (
+                        <TableColumnHeader
+                          label="Stock Máximo"
+                          campo="stockMaximo"
+                          filtroTipo="numero"
+                          filtros={filtros}
+                          onFiltrosChange={setFiltros}
+                          ordenable
+                          orden={orden}
+                          onOrdenChange={setOrden}
+                        />
+                      )}
+                      {colVisible(columnasVisibles, "stockSeguridad") && (
+                        <TableColumnHeader
+                          label="Stock Mínimo"
+                          campo="stockSeguridad"
+                          filtroTipo="numero"
+                          filtros={filtros}
+                          onFiltrosChange={setFiltros}
+                          ordenable
+                          orden={orden}
+                          onOrdenChange={setOrden}
+                        />
+                      )}
+                      {colVisible(columnasVisibles, "stockActual") && (
+                        <TableColumnHeader
+                          label="Stock Actual"
+                          campo="stockActual"
+                          filtroTipo="numero"
+                          filtros={filtros}
+                          onFiltrosChange={setFiltros}
+                          ordenable
+                          orden={orden}
+                          onOrdenChange={setOrden}
+                        />
+                      )}
+                      {colVisible(columnasVisibles, "stockReposicion") && (
+                        <TableColumnHeader label="Stock Reposición" />
+                      )}
+                      {colVisible(columnasVisibles, "estado") && (
+                        <TableColumnHeader
+                          label="Estado"
+                          campo="estadoStock"
+                          filtroTipo="lista"
+                          opciones={["Stock bajo", "Atención", "Correcto"]}
+                          filtros={filtros}
+                          onFiltrosChange={setFiltros}
+                        />
+                      )}
+                      {colVisible(columnasVisibles, "ultimoInventario") && (
+                        <TableColumnHeader label="Últ. Inventario" />
+                      )}
+                      {colVisible(columnasVisibles, "ultimoInventarioFecha") && (
+                        <TableColumnHeader label="Fecha Inv." />
+                      )}
+                      <TableColumnHeader label="" />
                     </tr>
                   </thead>
                   <tbody>
@@ -491,36 +588,49 @@ export function StockView() {
                             {p.nombre}
                             {p.esTemporada && <Sun className="inline h-3 w-3 ml-1 text-primary" />}
                           </td>
-                          <td className="px-3 py-2.5 text-xs">{p.categoria}</td>
-                          <td className="px-3 py-2.5 text-xs">{p.unidad}</td>
-                          {/* Stock Máximo */}
-                          <td className="px-3 py-2.5 text-xs">
-                            {isEditing
-                              ? <Input type="number" className="h-7 w-20 text-xs" value={editValues.stockMaximo} onChange={(e) => setEditValues((v) => ({ ...v, stockMaximo: +e.target.value }))} />
-                              : <span className="font-medium">{p.displayMaximo}</span>}
-                          </td>
-                          {/* Stock Mínimo */}
-                          <td className="px-3 py-2.5 text-xs">
-                            {isEditing
-                              ? <Input type="number" className="h-7 w-20 text-xs" value={editValues.stockSeguridad} onChange={(e) => setEditValues((v) => ({ ...v, stockSeguridad: +e.target.value }))} />
-                              : <span className="font-medium">{p.displaySeguridad}</span>}
-                          </td>
-                          {/* Stock Actual */}
-                          <td className="px-3 py-2.5 text-xs">
-                            <span className="font-bold text-foreground">{p.stockActual}</span>
-                          </td>
-                          {/* Stock Reposición */}
-                          <td className="px-3 py-2.5 text-xs">
-                            {reposicion > 0
-                              ? <span className="font-medium text-amber-600 dark:text-amber-400">{reposicion}</span>
-                              : <span className="text-muted-foreground">—</span>}
-                          </td>
-                          {/* Estado */}
-                          <td className="px-3 py-2.5">
-                            <Badge variant="outline" className={`text-[11px] font-bold px-2 py-0.5 ${statusColors[st]}`}>{statusLabels[st]}</Badge>
-                          </td>
-                          <td className="px-3 py-2.5 text-xs"><InventarioBadge value={p.ultimoInventario} /></td>
-                          <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{p.ultimoInventarioFecha || "—"}</td>
+                          {colVisible(columnasVisibles, "categoria") && (
+                            <td className="px-3 py-2.5 text-xs">{p.categoria}</td>
+                          )}
+                          {colVisible(columnasVisibles, "unidad") && (
+                            <td className="px-3 py-2.5 text-xs">{p.unidad}</td>
+                          )}
+                          {colVisible(columnasVisibles, "stockMaximo") && (
+                            <td className="px-3 py-2.5 text-xs">
+                              {isEditing
+                                ? <Input type="number" className="h-7 w-20 text-xs" value={editValues.stockMaximo} onChange={(e) => setEditValues((v) => ({ ...v, stockMaximo: +e.target.value }))} />
+                                : <span className="font-medium">{p.displayMaximo}</span>}
+                            </td>
+                          )}
+                          {colVisible(columnasVisibles, "stockSeguridad") && (
+                            <td className="px-3 py-2.5 text-xs">
+                              {isEditing
+                                ? <Input type="number" className="h-7 w-20 text-xs" value={editValues.stockSeguridad} onChange={(e) => setEditValues((v) => ({ ...v, stockSeguridad: +e.target.value }))} />
+                                : <span className="font-medium">{p.displaySeguridad}</span>}
+                            </td>
+                          )}
+                          {colVisible(columnasVisibles, "stockActual") && (
+                            <td className="px-3 py-2.5 text-xs">
+                              <span className="font-bold text-foreground">{p.stockActual}</span>
+                            </td>
+                          )}
+                          {colVisible(columnasVisibles, "stockReposicion") && (
+                            <td className="px-3 py-2.5 text-xs">
+                              {reposicion > 0
+                                ? <span className="font-medium text-amber-600 dark:text-amber-400">{reposicion}</span>
+                                : <span className="text-muted-foreground">—</span>}
+                            </td>
+                          )}
+                          {colVisible(columnasVisibles, "estado") && (
+                            <td className="px-3 py-2.5">
+                              <Badge variant="outline" className={`text-[11px] font-bold px-2 py-0.5 ${statusColors[st]}`}>{statusLabels[st]}</Badge>
+                            </td>
+                          )}
+                          {colVisible(columnasVisibles, "ultimoInventario") && (
+                            <td className="px-3 py-2.5 text-xs"><InventarioBadge value={p.ultimoInventario} /></td>
+                          )}
+                          {colVisible(columnasVisibles, "ultimoInventarioFecha") && (
+                            <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{p.ultimoInventarioFecha || "—"}</td>
+                          )}
                           <td className="px-3 py-2.5">
                             {isEditing ? (
                               <div className="flex gap-1">
@@ -535,11 +645,12 @@ export function StockView() {
                       );
                     })}
                     {filtered.length === 0 && (
-                      <tr><td colSpan={12} className="text-center py-12 text-muted-foreground">No se encontraron productos.</td></tr>
+                      <tr><td colSpan={20} className="text-center py-12 text-muted-foreground">No se encontraron productos.</td></tr>
                     )}
                   </tbody>
                 </table>
               </div>
+              </ResizableColumnsProvider>
               <div className="text-xs text-muted-foreground text-right">{filtered.length} de {enriched.length} productos</div>
             </>
           )}

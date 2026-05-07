@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { getEmpleadosPorEmpresa, ESTADOS_LABEL, ESTADOS_COLOR, type EstadoEmpleado } from "@/features/rrhh/data/rrhh";
+import { ESTADOS_LABEL, ESTADOS_COLOR, type EstadoEmpleado, type Empleado } from "@/features/rrhh/data/rrhh";
+import { listEmpleados } from "@/features/rrhh/actions/empleados-actions";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -45,10 +46,55 @@ function FichajeBar({ fichajes }: { fichajes: number }) {
   );
 }
 
+// Adapta el row de la tabla `empleados` (BD) al shape `Empleado` que esperan
+// los componentes de listado/filtros. Los campos que la BD aún no tiene se
+// dejan como guiones — se irán rellenando cuando se conecten los submódulos
+// reales (fichajes, horarios, etc.).
+type EmpleadoBDRow = {
+  id: string;
+  nombre: string;
+  apellidos: string | null;
+  email_personal: string | null;
+  email_empresa: string | null;
+  telefono: string | null;
+  estado: string;
+  departamentos?: { nombre: string } | null;
+};
+
+function bdToEmpleado(row: EmpleadoBDRow): Empleado {
+  return {
+    id: row.id,
+    nombre: row.nombre ?? "",
+    apellidos: row.apellidos ?? "",
+    estado: "trabajando", // Mientras no haya estado real desde fichajes
+    horarioTipo: "—",
+    horarioSemanal: "—",
+    horasHoy: "—",
+    departamento: row.departamentos?.nombre ?? "—",
+    telefono: row.telefono ?? "—",
+    fichajes: 0,
+    emailEmpresa: row.email_empresa ?? "",
+    emailPersonal: row.email_personal ?? "",
+    validadorFichajes: "—",
+  };
+}
+
 export function EmpleadosView() {
   const { empresaActual } = useEmpresa();
   const router = useRouter();
-  const empleados = useMemo(() => getEmpleadosPorEmpresa(empresaActual.id), [empresaActual.id]);
+
+  const [empleados, setEmpleados] = useState<Empleado[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const cargar = useCallback(async () => {
+    setLoading(true);
+    const res = await listEmpleados();
+    const rows = (res.data ?? []) as EmpleadoBDRow[];
+    setEmpleados(rows.map(bdToEmpleado));
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { cargar(); }, [cargar, empresaActual.id]);
 
   const [busqueda, setBusqueda] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
@@ -209,7 +255,21 @@ export function EmpleadosView() {
                 <TableCell><span className="text-sm text-foreground whitespace-nowrap">{emp.validadorFichajes}</span></TableCell>
               </TableRow>
             ))}
-            {filtrados.length === 0 && (
+            {loading && empleados.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={11} className="text-center py-12 text-muted-foreground">
+                  Cargando empleados…
+                </TableCell>
+              </TableRow>
+            )}
+            {!loading && empleados.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={11} className="text-center py-12 text-muted-foreground">
+                  No hay empleados todavía. Pulsa <span className="font-medium text-foreground">+ Nuevo</span> para dar de alta el primero.
+                </TableCell>
+              </TableRow>
+            )}
+            {!loading && empleados.length > 0 && filtrados.length === 0 && (
               <TableRow>
                 <TableCell colSpan={11} className="text-center py-12 text-muted-foreground">
                   No se encontraron empleados con los filtros seleccionados.

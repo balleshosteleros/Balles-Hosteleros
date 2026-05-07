@@ -12,10 +12,13 @@ import {
   ESTADOS_CONFIG,
   TIPO_JORNADA_LABELS,
 } from "@/features/rrhh/data/reclutamiento";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 
 export function OfertasTrabajoConfig() {
+  const { empresaActual } = useEmpresa();
   const categorias = ["Sala", "Dirección", "Entretenimiento", "Operaciones", "Administración"];
-  const ubicaciones = ["La Habana — Sala principal", "La Habana — Terraza", "La Habana — Planta baja", "Bacanal — Central", "Bacanal — Sala VIP", "Bacanal — Oficina"];
+  const zonas = ["Sala principal", "Terraza", "Planta baja", "Oficina"];
+  const ubicaciones = zonas.map((z) => `${empresaActual.nombre} — ${z}`);
 
   return (
     <div className="space-y-6">

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { generarPresentacion } from "@/features/direccion/presentaciones/services/ia-presentacion";
 import { GeminiKeyMissingError } from "@/lib/ia/gemini";
 
@@ -23,12 +24,7 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("empresa_id")
-      .eq("user_id", user.id)
-      .single();
-    const empresaId = profile?.empresa_id;
+    const empresaId = await getEmpresaActivaForUser(supabase, user.id);
     if (!empresaId) return NextResponse.json({ error: "Sin empresa" }, { status: 403 });
 
     // Branding snapshot

@@ -110,10 +110,8 @@ export async function parseFileToProductos(
 
     // Normalizar estado (si viene en minúsculas o traducido)
     const estadoRaw = mapped.estado?.toLowerCase?.() ?? "";
-    let estado: "Activo" | "Inactivo" | "En revisión" = "Activo";
+    let estado: "Activo" | "Inactivo" = "Activo";
     if (estadoRaw.startsWith("inactiv")) estado = "Inactivo";
-    else if (estadoRaw.startsWith("revis") || estadoRaw.startsWith("pending"))
-      estado = "En revisión";
 
     productos.push({
       nombre: mapped.nombre,

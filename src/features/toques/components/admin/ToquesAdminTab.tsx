@@ -27,6 +27,7 @@ import {
 import { Loader2, Plus, Trash2, Save, Award, Gift, Crown, Trophy, Cake } from "lucide-react";
 import { AntiguedadEmpleadosPanel } from "./AntiguedadEmpleadosPanel";
 import { createClient } from "@/lib/supabase/client";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
   getNiveles,
   getReglas,
@@ -52,6 +53,8 @@ const TIPOS_RECOMPENSA: { value: RecompensaTipo; label: string }[] = [
 
 export function ToquesAdminTab() {
   const supabase = useMemo(() => createClient(), []);
+  const { empresaActual } = useEmpresa();
+  const empresaActualDbId = empresaActual.dbId ?? null;
   const [empresaId, setEmpresaId] = useState<string | null>(null);
   const [reglas, setReglas] = useState<Regla[]>([]);
   const [niveles, setNiveles] = useState<Nivel[]>([]);
@@ -92,12 +95,7 @@ export function ToquesAdminTab() {
         setLoading(false);
         return;
       }
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("empresa_id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      const eId = (profile?.empresa_id as string) ?? null;
+      const eId = empresaActualDbId;
       setEmpresaId(eId);
       if (!eId) {
         setError("Sin empresa asignada");
@@ -150,7 +148,7 @@ export function ToquesAdminTab() {
     } finally {
       setLoading(false);
     }
-  }, [supabase]);
+  }, [supabase, empresaActualDbId]);
 
   useEffect(() => {
     void cargar();

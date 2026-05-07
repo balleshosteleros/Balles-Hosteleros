@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   X,
   Check,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,6 +64,7 @@ export type ToolbarOrdenActivo = {
 export type ToolbarColumna = {
   campo: string;
   label: string;
+  bloqueada?: boolean;
 };
 
 export type ToolbarColumnaVisible = Record<string, boolean>;
@@ -188,8 +190,8 @@ export function SubmoduleToolbar({
         {extraDerecha}
       </div>
 
-      {filtros.length > 0 && tieneFiltros && (
-        <FiltrosChips filtros={filtros} onChange={onFiltrosChange!} />
+      {filtros.length > 0 && !!onFiltrosChange && (
+        <FiltrosChips filtros={filtros} onChange={onFiltrosChange} />
       )}
     </div>
   );
@@ -596,7 +598,19 @@ function ColumnasPopover({
         </p>
         <div className="space-y-0.5 max-h-72 overflow-y-auto">
           {columnas.map((c) => {
-            const visible = visibles[c.campo] ?? true;
+            const visible = c.bloqueada ? true : (visibles[c.campo] ?? true);
+            if (c.bloqueada) {
+              return (
+                <div
+                  key={c.campo}
+                  className="w-full flex items-center justify-between gap-2 px-1.5 py-1 rounded text-sm cursor-not-allowed opacity-70"
+                  title="Esta columna no puede ocultarse"
+                >
+                  <span className="text-foreground">{c.label}</span>
+                  <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                </div>
+              );
+            }
             return (
               <button
                 key={c.campo}
@@ -618,6 +632,17 @@ function ColumnasPopover({
       </PopoverContent>
     </Popover>
   );
+}
+
+/**
+ * Devuelve true si la columna está visible (por defecto sí).
+ * Las columnas con `bloqueada: true` siempre se muestran, sin importar el estado.
+ */
+export function colVisible(
+  visibles: ToolbarColumnaVisible,
+  campo: string,
+): boolean {
+  return visibles[campo] ?? true;
 }
 
 export function aplicarFiltrosToolbar<T>(
@@ -652,6 +677,29 @@ export function aplicarFiltrosToolbar<T>(
       return true;
     }),
   );
+}
+
+export function coincideBusquedaUniversal(item: unknown, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+
+  const visit = (value: unknown, depth: number): boolean => {
+    if (value == null) return false;
+    if (depth > 4) return false;
+    if (typeof value === "string") return value.toLowerCase().includes(q);
+    if (typeof value === "number" || typeof value === "boolean") {
+      return String(value).toLowerCase().includes(q);
+    }
+    if (Array.isArray(value)) return value.some((v) => visit(v, depth + 1));
+    if (typeof value === "object") {
+      return Object.values(value as Record<string, unknown>).some((v) =>
+        visit(v, depth + 1),
+      );
+    }
+    return false;
+  };
+
+  return visit(item, 0);
 }
 
 export function aplicarOrdenToolbar<T>(

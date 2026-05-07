@@ -41,6 +41,8 @@ import {
 } from "@/shared/components/SubmoduleToolbar";
 import { IOActions } from "@/shared/io";
 import { comunicadosIO } from "@/features/gerencia/io/comunicados.io";
+import { useReglasSubmodulo } from "@/features/ajustes/hooks/use-reglas-submodulo";
+import { ValidacionFaltantesDialog } from "@/features/ajustes/components/ValidacionFaltantesDialog";
 
 function EstadoBadge({ estado }: { estado: EstadoComunicado }) {
   const colors: Record<EstadoComunicado, string> = {
@@ -633,6 +635,8 @@ export function ComunicadosView() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editorMode, setEditorMode] = useState<"list" | "create" | "edit">("list");
   const [editingComunicado, setEditingComunicado] = useState<Comunicado | null>(null);
+  const [faltantesComunicado, setFaltantesComunicado] = useState<string[]>([]);
+  const { validar: validarComunicado } = useReglasSubmodulo("gerencia", "comunicados");
 
   const accesoComunicado = (c: Comunicado, campo: string): unknown => {
     if (campo === "estado") return c.estado;
@@ -675,9 +679,20 @@ export function ComunicadosView() {
   const closeEditor = () => { setEditorMode("list"); setEditingComunicado(null); };
 
   const saveEditor = async (form: EditorForm) => {
-    if (!form.titulo.trim()) {
-      toast.error("El título es obligatorio");
-      return;
+    // Solo validamos al CREAR (al editar dejamos pasar).
+    if (editorMode === "create") {
+      const { labelsFaltantes } = validarComunicado({
+        titulo: form.titulo,
+        asunto: form.asunto,
+        cuerpo: form.cuerpo,
+        prioridad: form.prioridad,
+        estado: form.estado,
+        envioFecha: form.envioFecha,
+      });
+      if (labelsFaltantes.length > 0) {
+        setFaltantesComunicado(labelsFaltantes);
+        return;
+      }
     }
     const envio = form.programado && form.envioFecha
       ? `${form.envioFecha}${form.envioHora ? `T${form.envioHora}:00` : "T00:00:00"}`
@@ -709,14 +724,22 @@ export function ComunicadosView() {
 
   if (editorMode !== "list") {
     return (
-      <ComunicadoEditor
-        comunicado={editingComunicado}
-        onBack={closeEditor}
-        onSave={saveEditor}
-        empleados={empleados}
-        empleadosReales={empleadosReales}
-        empresaNombre={empresaActual?.nombre || ""}
-      />
+      <>
+        <ComunicadoEditor
+          comunicado={editingComunicado}
+          onBack={closeEditor}
+          onSave={saveEditor}
+          empleados={empleados}
+          empleadosReales={empleadosReales}
+          empresaNombre={empresaActual?.nombre || ""}
+        />
+        <ValidacionFaltantesDialog
+          open={faltantesComunicado.length > 0}
+          onClose={() => setFaltantesComunicado([])}
+          campos={faltantesComunicado}
+          submoduloLabel="Comunicados"
+        />
+      </>
     );
   }
 

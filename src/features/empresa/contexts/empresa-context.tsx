@@ -1,10 +1,12 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode, useCallback, useEffect } from "react";
+import { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { Incidencia, SAMPLE_DATA } from "@/features/empresa/data/mantenimiento";
 import { AjustesEmpresa, buildDefaultAjustes, DatosGenerales, ConfigOperativa } from "@/features/ajustes/data/ajustes";
 import { getLogoUrls } from "@/features/empresa/actions/logo-actions";
 import { listEmpresasCompletas } from "@/features/empresa/actions/empresas-actions";
+import { setEmpresaActiva, getEmpresaActivaId } from "@/features/empresa/actions/empresa-activa-actions";
 
 export interface Empresa {
   id: string;       // slug — identificador lógico estable para FK en accesos_apps, etc.
@@ -99,6 +101,8 @@ interface EmpresaContextValue {
 const EmpresaContext = createContext<EmpresaContextValue | null>(null);
 
 export function EmpresaProvider({ children }: { children: ReactNode }) {
+  const router = useRouter();
+  const isHydrated = useRef(false);
   const [empresasList, setEmpresasList] = useState<Empresa[]>(EMPRESAS);
   const [empresaId, setEmpresaId] = useState(EMPRESAS[0].id);
   const [allData, setAllData] = useState<Record<string, Incidencia[]>>(buildInitialData);
@@ -114,8 +118,8 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
   // Hidratar empresas + ajustes desde Supabase (fuente de verdad)
   useEffect(() => {
     let alive = true;
-    listEmpresasCompletas()
-      .then((rows) => {
+    Promise.all([listEmpresasCompletas(), getEmpresaActivaId()])
+      .then(([rows, activaDbId]) => {
         if (!alive || rows.length === 0) return;
 
         const list: Empresa[] = rows.map((r) => ({
@@ -127,7 +131,14 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
         }));
 
         setEmpresasList(list);
-        setEmpresaId((prev) => list.some((e) => e.id === prev) ? prev : list[0].id);
+
+        const matchByCookie = activaDbId ? list.find((e) => e.dbId === activaDbId) : null;
+        if (matchByCookie) {
+          setEmpresaId(matchByCookie.id);
+        } else {
+          setEmpresaId((prev) => list.some((e) => e.id === prev) ? prev : list[0].id);
+        }
+        isHydrated.current = true;
 
         // Hidratar ajustes con lo que haya en Supabase, mergeado contra los defaults.
         setAllAjustes((prev) => {
@@ -234,9 +245,19 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
     setAllAjustes((prev) => { const next = { ...prev }; delete next[id]; return next; });
   }, []);
 
+  const handleSetEmpresaId = useCallback((id: string) => {
+    setEmpresaId(id);
+    if (!isHydrated.current) return;
+    const empresa = empresasList.find((e) => e.id === id);
+    if (!empresa?.dbId) return;
+    setEmpresaActiva(empresa.dbId)
+      .then((res) => { if (res.ok) router.refresh(); })
+      .catch((err) => console.error("[empresa-context] setEmpresaActiva:", err));
+  }, [empresasList, router]);
+
   return (
     <EmpresaContext.Provider
-      value={{ empresas: empresasList, empresaActual, setEmpresaId, datos, setDatos, ajustes, setAjustes, getLogoUrl, setLogoUrl, addEmpresa, updateEmpresa, deleteEmpresa }}
+      value={{ empresas: empresasList, empresaActual, setEmpresaId: handleSetEmpresaId, datos, setDatos, ajustes, setAjustes, getLogoUrl, setLogoUrl, addEmpresa, updateEmpresa, deleteEmpresa }}
     >
       {children}
     </EmpresaContext.Provider>
