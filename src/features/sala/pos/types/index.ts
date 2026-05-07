@@ -120,5 +120,7 @@ export interface ProductoPOS {
   precioVenta: number;
   ivaPct: number;
   imagenUrl: string | null;
+  /** Color de fondo personalizado (hex) — ignorado si hay imagenUrl. */
+  colorBg: string | null;
   destino: LineaDestino;
 }

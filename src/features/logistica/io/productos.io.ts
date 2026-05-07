@@ -7,8 +7,10 @@ import {
 } from "@/features/logistica/actions/producto-actions";
 import type { TipoProducto } from "@/features/logistica/data/productos";
 
-const ESTADOS = ["Activo", "Inactivo", "En revisión"] as const;
+const ESTADOS = ["Activo", "Inactivo"] as const;
 const TIPOS = ["compra", "venta", "elaboracion"] as const;
+const CONSERVACIONES = ["Frío", "Congelador", "Seco"] as const;
+const PREPARACIONES = ["Barra", "Cocina"] as const;
 
 const productoIOSchema = z.object({
   nombre: z.string().min(1, "El nombre es obligatorio"),
@@ -22,7 +24,15 @@ const productoIOSchema = z.object({
   coste: z.string().nullable().optional(),
   iva: z.string().nullable().optional(),
   unidad: z.string().default("ud"),
+  formato: z.string().nullable().optional(),
   observaciones: z.string().nullable().optional(),
+  conservacion: z.enum(CONSERVACIONES).nullable().optional(),
+  preparacion: z.enum(PREPARACIONES).nullable().optional(),
+  partida: z.string().nullable().optional(),
+  estiloColor: z.string().nullable().optional(),
+  estiloImagenUrl: z.string().nullable().optional(),
+  textoTicket: z.string().nullable().optional(),
+  textoComanda: z.string().nullable().optional(),
 });
 
 const schema = productoIOSchema as unknown as RowSchema<ProductoInput>;
@@ -30,6 +40,7 @@ const schema = productoIOSchema as unknown as RowSchema<ProductoInput>;
 function makeConfig(variant: TipoProducto): ModuleIO<ProductoInput> {
   const isCompra = variant === "compra";
   const isVenta = variant === "venta";
+  const showConservacion = !isVenta;
   return {
     module: "logistica",
     submodule: `productos-${variant}`,
@@ -65,7 +76,36 @@ function makeConfig(variant: TipoProducto): ModuleIO<ProductoInput> {
         key: "familia",
         label: "Familia",
         aliases: ["family", "subcategoria"],
-        example: "Hortalizas",
+        hideInImport: true,
+        hideInExport: true,
+      },
+      {
+        key: "conservacion",
+        label: "Conservación",
+        type: "enum",
+        values: CONSERVACIONES,
+        aliases: ["conservation", "almacenamiento"],
+        hideInImport: !showConservacion,
+        hideInExport: !showConservacion,
+        example: "Frío",
+      },
+      {
+        key: "preparacion",
+        label: "Preparación",
+        type: "enum",
+        values: PREPARACIONES,
+        aliases: ["zona preparacion", "prep zone", "area"],
+        hideInImport: !isVenta,
+        hideInExport: !isVenta,
+        example: "Cocina",
+      },
+      {
+        key: "partida",
+        label: "Partida",
+        aliases: ["station", "puesto"],
+        hideInImport: !isVenta,
+        hideInExport: !isVenta,
+        example: "FRÍO + POSTRES",
       },
       {
         key: "estado",
@@ -109,6 +149,8 @@ function makeConfig(variant: TipoProducto): ModuleIO<ProductoInput> {
         key: "iva",
         label: "IVA",
         aliases: ["impuesto", "tax"],
+        hideInImport: variant === "elaboracion",
+        hideInExport: variant === "elaboracion",
         example: "10%",
       },
       {
@@ -116,6 +158,14 @@ function makeConfig(variant: TipoProducto): ModuleIO<ProductoInput> {
         label: "Unidad",
         aliases: ["unit", "uds"],
         example: "kg",
+      },
+      {
+        key: "formato",
+        label: "Formato",
+        aliases: ["format", "presentacion", "envase"],
+        hideInImport: isVenta,
+        hideInExport: isVenta,
+        example: "Caja 10 kg",
       },
       {
         key: "observaciones",
@@ -137,7 +187,15 @@ function makeConfig(variant: TipoProducto): ModuleIO<ProductoInput> {
         coste: p.coste ?? null,
         iva: p.iva ?? null,
         unidad: p.unidad,
+        formato: p.formato ?? null,
         observaciones: p.observaciones ?? null,
+        conservacion: p.conservacion ?? null,
+        preparacion: p.preparacion ?? null,
+        partida: p.partida ?? null,
+        estiloColor: p.estiloColor ?? null,
+        estiloImagenUrl: p.estiloImagenUrl ?? null,
+        textoTicket: p.textoTicket ?? null,
+        textoComanda: p.textoComanda ?? null,
       }));
     },
     upsert: async (rows) => {
