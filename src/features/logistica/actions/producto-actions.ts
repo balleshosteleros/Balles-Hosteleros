@@ -9,10 +9,13 @@ import type {
   Producto,
   TipoProducto,
   EstadoProducto,
+  Conservacion,
 } from "@/features/logistica/data/productos";
 
-const ESTADOS = ["Activo", "Inactivo", "En revisión"] as const;
+const ESTADOS = ["Activo", "Inactivo"] as const;
 const TIPOS = ["compra", "venta", "elaboracion"] as const;
+const CONSERVACIONES = ["Frío", "Congelador", "Seco"] as const;
+const PREPARACIONES = ["Barra", "Cocina"] as const;
 
 const productoInputSchema = z.object({
   nombre: z.string().min(1, "El nombre es obligatorio").transform(capitalizeText),
@@ -26,7 +29,17 @@ const productoInputSchema = z.object({
   coste: z.string().nullable().optional(),
   iva: z.string().nullable().optional(),
   unidad: z.string().default("ud"),
+  formato: z.string().nullable().optional(),
   observaciones: z.string().nullable().optional(),
+  conservacion: z.enum(CONSERVACIONES).nullable().optional(),
+  preparacion: z.enum(PREPARACIONES).nullable().optional(),
+  partida: z.string().nullable().optional(),
+  estiloColor: z.string().nullable().optional(),
+  estiloImagenUrl: z.string().nullable().optional(),
+  textoTicket: z.string().nullable().optional(),
+  textoComanda: z.string().nullable().optional(),
+  cartaNombre: z.string().nullable().optional(),
+  cartaTexto: z.string().nullable().optional(),
 });
 
 export type ProductoInput = z.infer<typeof productoInputSchema>;
@@ -46,7 +59,17 @@ type ProductoRow = {
   coste: string | null;
   iva: string | null;
   unidad: string;
+  formato: string | null;
   observaciones: string | null;
+  conservacion: Conservacion | null;
+  preparacion: "Barra" | "Cocina" | null;
+  partida: string | null;
+  estilo_color: string | null;
+  estilo_imagen_url: string | null;
+  texto_ticket: string | null;
+  texto_comanda: string | null;
+  carta_nombre: string | null;
+  carta_texto: string | null;
   updated_at: string;
 };
 
@@ -64,7 +87,17 @@ function rowToProducto(r: ProductoRow): Producto {
     coste: r.coste ?? undefined,
     iva: r.iva ?? undefined,
     unidad: r.unidad,
+    formato: r.formato ?? undefined,
     observaciones: r.observaciones ?? undefined,
+    conservacion: r.conservacion ?? null,
+    preparacion: r.preparacion ?? null,
+    partida: r.partida ?? null,
+    estiloColor: r.estilo_color ?? null,
+    estiloImagenUrl: r.estilo_imagen_url ?? null,
+    textoTicket: r.texto_ticket ?? undefined,
+    textoComanda: r.texto_comanda ?? undefined,
+    cartaNombre: r.carta_nombre ?? null,
+    cartaTexto: r.carta_texto ?? null,
     ultimaActualizacion: r.updated_at?.slice(0, 10) ?? "",
   };
 }
@@ -159,7 +192,17 @@ export async function createProducto(
       coste: parsed.data.coste,
       iva: parsed.data.iva,
       unidad: parsed.data.unidad,
+      formato: parsed.data.formato ?? null,
       observaciones: parsed.data.observaciones,
+      conservacion: parsed.data.conservacion ?? null,
+      preparacion: parsed.data.preparacion ?? null,
+      partida: parsed.data.partida ?? null,
+      estilo_color: parsed.data.estiloColor ?? null,
+      estilo_imagen_url: parsed.data.estiloImagenUrl ?? null,
+      texto_ticket: parsed.data.textoTicket ?? null,
+      texto_comanda: parsed.data.textoComanda ?? null,
+      carta_nombre: parsed.data.cartaNombre ?? null,
+      carta_texto: parsed.data.cartaTexto ?? null,
       created_by: user.id,
     });
 
@@ -226,7 +269,17 @@ export async function bulkImportProductos(
       coste: p.coste ?? null,
       iva: p.iva ?? null,
       unidad: p.unidad,
+      formato: p.formato ?? null,
       observaciones: p.observaciones ?? null,
+      conservacion: p.conservacion ?? null,
+      preparacion: p.preparacion ?? null,
+      partida: p.partida ?? null,
+      estilo_color: p.estiloColor ?? null,
+      estilo_imagen_url: p.estiloImagenUrl ?? null,
+      texto_ticket: p.textoTicket ?? null,
+      texto_comanda: p.textoComanda ?? null,
+      carta_nombre: p.cartaNombre ?? null,
+      carta_texto: p.cartaTexto ?? null,
       created_by: user.id,
     }));
 
@@ -277,7 +330,17 @@ export async function updateProducto(
     if (input.coste !== undefined) updates.coste = input.coste;
     if (input.iva !== undefined) updates.iva = input.iva;
     if (input.unidad !== undefined) updates.unidad = input.unidad;
+    if (input.formato !== undefined) updates.formato = input.formato;
     if (input.observaciones !== undefined) updates.observaciones = input.observaciones;
+    if (input.conservacion !== undefined) updates.conservacion = input.conservacion;
+    if (input.preparacion !== undefined) updates.preparacion = input.preparacion;
+    if (input.partida !== undefined) updates.partida = input.partida;
+    if (input.estiloColor !== undefined) updates.estilo_color = input.estiloColor;
+    if (input.estiloImagenUrl !== undefined) updates.estilo_imagen_url = input.estiloImagenUrl;
+    if (input.textoTicket !== undefined) updates.texto_ticket = input.textoTicket;
+    if (input.textoComanda !== undefined) updates.texto_comanda = input.textoComanda;
+    if (input.cartaNombre !== undefined) updates.carta_nombre = input.cartaNombre;
+    if (input.cartaTexto !== undefined) updates.carta_texto = input.cartaTexto;
 
     const { error } = await supabase.from("productos").update(updates).eq("id", id);
     if (error) return { error: error.message };

@@ -16,7 +16,7 @@ export async function listProductosPOS(): Promise<
 
     const { data, error } = await supabase
       .from("productos")
-      .select("id, nombre, categoria, familia, precio_venta, tipo, estado")
+      .select("id, nombre, categoria, familia, precio_venta, tipo, estado, estilo_color, estilo_imagen_url")
       .eq("empresa_id", empresaId)
       .eq("tipo", "venta")
       .eq("estado", "Activo")
@@ -35,6 +35,8 @@ export async function listProductosPOS(): Promise<
       // precio_venta viene como text en BD → parseamos con tolerancia a comas
       const pvRaw = (p as { precio_venta: string | number | null }).precio_venta;
       const pvNum = pvRaw == null ? 0 : Number(String(pvRaw).replace(",", "."));
+      const estiloColor = (p as { estilo_color: string | null }).estilo_color ?? null;
+      const estiloImagenUrl = (p as { estilo_imagen_url: string | null }).estilo_imagen_url ?? null;
       return {
         id: p.id as string,
         nombre: p.nombre as string,
@@ -42,7 +44,8 @@ export async function listProductosPOS(): Promise<
         familia: familia ?? null,
         precioVenta: isNaN(pvNum) ? 0 : pvNum,
         ivaPct,
-        imagenUrl: null,
+        imagenUrl: estiloImagenUrl,
+        colorBg: estiloColor,
         destino,
       };
     });
