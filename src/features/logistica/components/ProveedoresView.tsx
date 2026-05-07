@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
@@ -8,6 +8,7 @@ import {
   type Proveedor, type EstadoProveedor,
 } from "@/features/logistica/data/proveedores";
 import { listProveedores, createProveedor, updateProveedor, deleteProveedor } from "@/features/logistica/actions/proveedores-actions";
+import { listCategoriasProveedor } from "@/features/logistica/actions/categorias-proveedor-actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,9 +25,11 @@ import {
   aplicarOrdenToolbar,
   coincideBusquedaUniversal,
   colVisible,
+  ordenarColumnas,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
+  type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
@@ -49,6 +52,7 @@ function EstadoBadge({ value }: { value: EstadoProveedor }) {
 function mapDbToProveedor(row: Record<string, unknown>): Proveedor {
   return {
     id: row.id as string,
+    numeroSecuencial: typeof row.numero_secuencial === "number" ? row.numero_secuencial : undefined,
     empresaId: (row.empresa_id as string) ?? "",
     nombreComercial: (row.nombre_comercial as string) ?? (row.nombre as string) ?? "",
     razonSocial: (row.razon_social as string) ?? "",
@@ -104,10 +108,18 @@ export function ProveedoresView() {
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [detalleProveedor, setDetalleProveedor] = useState<Proveedor | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editItem, setEditItem] = useState<Proveedor | null>(null);
   const [showConfig, setShowConfig] = useState(false);
+  const [categoriasBD, setCategoriasBD] = useState<string[]>([]);
+
+  useEffect(() => {
+    listCategoriasProveedor().then((res) => {
+      if (res.ok) setCategoriasBD(res.data.filter((c) => c.activa).map((c) => c.nombre));
+    });
+  }, []);
 
   const loadProveedores = useCallback(async () => {
     setLoading(true);
@@ -217,6 +229,139 @@ export function ProveedoresView() {
   }
 
   // ── Main list view ──
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "id", label: "ID", bloqueada: true },
+    { campo: "proveedor", label: "Proveedor", bloqueada: true },
+    { campo: "categoria", label: "Categoría" },
+    { campo: "contacto", label: "Contacto" },
+    { campo: "telefono", label: "Teléfono" },
+    { campo: "emailPedidos", label: "Email pedidos" },
+    { campo: "estado", label: "Estado" },
+    { campo: "ultimaActualizacion", label: "Últ. Actualización" },
+  ];
+
+  const columnDefs: Record<string, { th: ReactNode; td: (p: Proveedor) => ReactNode }> = {
+    id: {
+      th: <TableColumnHeader key="id" label="ID" />,
+      td: (p) => (
+        <td key="id" className="px-3 py-2.5 text-xs tabular-nums text-muted-foreground">
+          {p.numeroSecuencial ?? "—"}
+        </td>
+      ),
+    },
+    proveedor: {
+      th: (
+        <TableColumnHeader
+          key="proveedor"
+          label="Proveedor"
+          campo="nombreComercial"
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (p) => (
+        <td key="proveedor" className="px-3 py-2.5 font-semibold text-primary whitespace-nowrap uppercase">
+          {p.nombreComercial}
+        </td>
+      ),
+    },
+    categoria: {
+      th: (
+        <TableColumnHeader
+          key="categoria"
+          label="Categoría"
+          campo="categoria"
+          filtroTipo="lista"
+          opciones={categoriasBD.length > 0 ? categoriasBD : (categoriasUsadas.length > 0 ? categoriasUsadas : (CATEGORIAS_PROVEEDOR as unknown as string[]))}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (p) => (
+        <td key="categoria" className="px-3 py-2.5 text-xs">
+          {p.categoria}
+        </td>
+      ),
+    },
+    contacto: {
+      th: <TableColumnHeader key="contacto" label="Contacto" />,
+      td: (p) => (
+        <td key="contacto" className="px-3 py-2.5 text-xs font-medium">
+          {p.personaContacto || "—"}
+        </td>
+      ),
+    },
+    telefono: {
+      th: <TableColumnHeader key="telefono" label="Teléfono" />,
+      td: (p) => (
+        <td key="telefono" className="px-3 py-2.5 text-xs">
+          {p.telefonoPrincipal || "—"}
+        </td>
+      ),
+    },
+    emailPedidos: {
+      th: <TableColumnHeader key="emailPedidos" label="Email pedidos" />,
+      td: (p) => (
+        <td key="emailPedidos" className="px-3 py-2.5 text-xs">
+          {p.emailPedidos ? (
+            <span className="flex items-center gap-1"><Mail className="h-3 w-3 text-muted-foreground" /> {p.emailPedidos}</span>
+          ) : (
+            <span className="flex items-center gap-1 text-destructive"><AlertTriangle className="h-3 w-3" /> Sin configurar</span>
+          )}
+        </td>
+      ),
+    },
+    estado: {
+      th: (
+        <TableColumnHeader
+          key="estado"
+          label="Estado"
+          campo="estado"
+          filtroTipo="lista"
+          opciones={ESTADOS_PROVEEDOR as unknown as string[]}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (p) => (
+        <td key="estado" className="px-3 py-2.5">
+          <EstadoBadge value={p.estado} />
+        </td>
+      ),
+    },
+    ultimaActualizacion: {
+      th: (
+        <TableColumnHeader
+          key="ultimaActualizacion"
+          label="Últ. Actualización"
+          campo="ultimaActualizacion"
+          filtroTipo="fecha"
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (p) => (
+        <td key="ultimaActualizacion" className="px-3 py-2.5 text-xs text-muted-foreground">
+          {p.ultimaActualizacion}
+        </td>
+      ),
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
   return (
     <div className="p-4 md:p-6 space-y-5">
       {/* Header removed — title shown in top bar */}
@@ -229,17 +374,11 @@ export function ProveedoresView() {
         onNuevo={() => { setEditItem(null); setModalOpen(true); }}
         filtros={filtros}
         onFiltrosChange={setFiltros}
-        columnas={[
-          { campo: "proveedor", label: "Proveedor", bloqueada: true },
-          { campo: "categoria", label: "Categoría" },
-          { campo: "contacto", label: "Contacto" },
-          { campo: "telefono", label: "Teléfono" },
-          { campo: "emailPedidos", label: "Email pedidos" },
-          { campo: "estado", label: "Estado" },
-          { campo: "ultimaActualizacion", label: "Últ. Actualización" },
-        ]}
+        columnas={columnasDef}
         columnasVisibles={columnasVisibles}
         onColumnasVisiblesChange={setColumnasVisibles}
+        columnasOrden={columnasOrden}
+        onColumnasOrdenChange={setColumnasOrden}
         extraDerecha={
           <>
             <IOActions config={proveedoresIO} onSuccess={() => window.location.reload()} />
@@ -262,84 +401,13 @@ export function ProveedoresView() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-muted/50">
-              <TableColumnHeader
-                label="Proveedor"
-                campo="nombreComercial"
-                ordenable
-                orden={orden}
-                onOrdenChange={setOrden}
-              />
-              {colVisible(columnasVisibles, "categoria") && (
-                <TableColumnHeader
-                  label="Categoría"
-                  campo="categoria"
-                  filtroTipo="lista"
-                  opciones={categoriasUsadas.length > 0 ? categoriasUsadas : (CATEGORIAS_PROVEEDOR as unknown as string[])}
-                  filtros={filtros}
-                  onFiltrosChange={setFiltros}
-                  ordenable
-                  orden={orden}
-                  onOrdenChange={setOrden}
-                />
-              )}
-              {colVisible(columnasVisibles, "contacto") && <TableColumnHeader label="Contacto" />}
-              {colVisible(columnasVisibles, "telefono") && <TableColumnHeader label="Teléfono" />}
-              {colVisible(columnasVisibles, "emailPedidos") && <TableColumnHeader label="Email pedidos" />}
-              {colVisible(columnasVisibles, "estado") && (
-                <TableColumnHeader
-                  label="Estado"
-                  campo="estado"
-                  filtroTipo="lista"
-                  opciones={ESTADOS_PROVEEDOR as unknown as string[]}
-                  filtros={filtros}
-                  onFiltrosChange={setFiltros}
-                  ordenable
-                  orden={orden}
-                  onOrdenChange={setOrden}
-                />
-              )}
-              {colVisible(columnasVisibles, "ultimaActualizacion") && (
-                <TableColumnHeader
-                  label="Últ. Actualización"
-                  campo="ultimaActualizacion"
-                  filtroTipo="fecha"
-                  filtros={filtros}
-                  onFiltrosChange={setFiltros}
-                  ordenable
-                  orden={orden}
-                  onOrdenChange={setOrden}
-                />
-              )}
+              {columnasRender.map((c) => columnDefs[c.campo]?.th)}
             </tr>
           </thead>
           <tbody>
             {filtered.map((p) => (
               <tr key={p.id} className="border-b hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setDetalleProveedor(p)}>
-                <td className="px-3 py-2.5 font-semibold text-primary whitespace-nowrap">{p.nombreComercial}</td>
-                {colVisible(columnasVisibles, "categoria") && (
-                  <td className="px-3 py-2.5 text-xs">{p.categoria}</td>
-                )}
-                {colVisible(columnasVisibles, "contacto") && (
-                  <td className="px-3 py-2.5 text-xs font-medium">{p.personaContacto || "—"}</td>
-                )}
-                {colVisible(columnasVisibles, "telefono") && (
-                  <td className="px-3 py-2.5 text-xs">{p.telefonoPrincipal || "—"}</td>
-                )}
-                {colVisible(columnasVisibles, "emailPedidos") && (
-                  <td className="px-3 py-2.5 text-xs">
-                    {p.emailPedidos ? (
-                      <span className="flex items-center gap-1"><Mail className="h-3 w-3 text-muted-foreground" /> {p.emailPedidos}</span>
-                    ) : (
-                      <span className="flex items-center gap-1 text-destructive"><AlertTriangle className="h-3 w-3" /> Sin configurar</span>
-                    )}
-                  </td>
-                )}
-                {colVisible(columnasVisibles, "estado") && (
-                  <td className="px-3 py-2.5"><EstadoBadge value={p.estado} /></td>
-                )}
-                {colVisible(columnasVisibles, "ultimaActualizacion") && (
-                  <td className="px-3 py-2.5 text-xs text-muted-foreground">{p.ultimaActualizacion}</td>
-                )}
+                {columnasRender.map((c) => columnDefs[c.campo]?.td(p))}
               </tr>
             ))}
             {filtered.length === 0 && (
@@ -352,18 +420,19 @@ export function ProveedoresView() {
       <div className="text-xs text-muted-foreground text-right">{filtered.length} de {proveedores.length} proveedores</div>
 
       {/* Modal */}
-      <ProveedorModal open={modalOpen} onClose={() => setModalOpen(false)} onSave={handleSave} item={editItem} empresaId={empresaActual.id} />
+      <ProveedorModal open={modalOpen} onClose={() => setModalOpen(false)} onSave={handleSave} item={editItem} empresaId={empresaActual.id} categorias={categoriasBD} />
     </div>
   );
 }
 
 // ─── Modal ────────────────────────────────────────────────
 
-function ProveedorModal({ open, onClose, onSave, item, empresaId }: { open: boolean; onClose: () => void; onSave: (p: Proveedor) => void; item: Proveedor | null; empresaId: string }) {
+function ProveedorModal({ open, onClose, onSave, item, empresaId, categorias }: { open: boolean; onClose: () => void; onSave: (p: Proveedor) => void; item: Proveedor | null; empresaId: string; categorias: string[] }) {
   const isEdit = !!item;
+  const opcionesCategoria = categorias.length > 0 ? categorias : (CATEGORIAS_PROVEEDOR as unknown as string[]);
   const blank: Proveedor = {
     id: `prov-${Date.now()}`, empresaId, nombreComercial: "", razonSocial: "", cifNif: "",
-    categoria: CATEGORIAS_PROVEEDOR[0], estado: "Activo", observaciones: "",
+    categoria: opcionesCategoria[0], estado: "Activo", observaciones: "",
     personaContacto: "", telefonoPrincipal: "", telefonoSecundario: "", telefonoComercial: "",
     emailPrincipal: "", emailComercial: "", emailPedidos: "", emailContabilidad: "", web: "",
     direccion: "", ciudad: "", provincia: "", pais: "España", codigoPostal: "",
@@ -424,14 +493,14 @@ function ProveedorModal({ open, onClose, onSave, item, empresaId }: { open: bool
           <div>
             <h3 className="text-sm font-bold text-foreground mb-3">Datos generales</h3>
             <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2"><Label>Nombre comercial *</Label><Input value={form.nombreComercial} onChange={(e) => upd("nombreComercial", e.target.value)} /></div>
+              <div className="col-span-2"><Label>Nombre comercial *</Label><Input className="uppercase" value={form.nombreComercial} onChange={(e) => upd("nombreComercial", e.target.value.toUpperCase())} /></div>
               <div><Label>Razón social</Label><Input value={form.razonSocial} onChange={(e) => upd("razonSocial", e.target.value)} /></div>
               <div><Label>CIF/NIF</Label><Input value={form.cifNif} onChange={(e) => upd("cifNif", e.target.value)} /></div>
               <div>
                 <Label>Categoría</Label>
-                <Select value={form.categoria || CATEGORIAS_PROVEEDOR[0]} onValueChange={(v) => upd("categoria", v)}>
+                <Select value={form.categoria || opcionesCategoria[0]} onValueChange={(v) => upd("categoria", v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{CATEGORIAS_PROVEEDOR.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                  <SelectContent>{opcionesCategoria.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div>

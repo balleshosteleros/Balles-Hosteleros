@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { getPagosPorEmpresa, getResumenPagos, type PagoEmpleado } from "@/features/rrhh/data/pagos";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,14 +11,17 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Edit2, Banknote, TrendingUp, TrendingDown, PiggyBank, HandCoins, Wallet } from "lucide-react";
+import { Edit2, Banknote, TrendingUp, TrendingDown, PiggyBank, HandCoins, Wallet, Settings } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
   aplicarOrdenToolbar,
+  colVisible,
+  ordenarColumnas,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
+  type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
 import { IOActions } from "@/shared/io";
 import { pagosIO } from "@/features/rrhh/io/pagos.io";
@@ -29,9 +32,11 @@ export function PagosView() {
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [editando, setEditando] = useState<PagoEmpleado | null>(null);
   const [pagos, setPagos] = useState<PagoEmpleado[]>([]);
   const [initialized, setInitialized] = useState("");
+  const [showConfig, setShowConfig] = useState(false);
 
   if (initialized !== empresaActual.id) {
     setPagos(getPagosPorEmpresa(empresaActual.id));
@@ -90,6 +95,78 @@ export function PagosView() {
     { label: "Propinas acum.", value: fmt(resumen.propinasAcumuladas), icon: Wallet, color: "text-sky-600" },
   ];
 
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "fijo", label: "Fijo" },
+    { campo: "pago", label: "Pago" },
+    { campo: "nomina", label: "Nómina" },
+    { campo: "horasReales", label: "H.R" },
+    { campo: "horasTrabajadas", label: "H.T" },
+    { campo: "propina", label: "Propina" },
+    { campo: "descuento", label: "Descuento" },
+    { campo: "horasExtras", label: "H.Extras" },
+    { campo: "bonus", label: "Bonus" },
+    { campo: "propinaMantenimiento", label: "Prop. Mant." },
+    { campo: "total", label: "Total" },
+    { campo: "pagado", label: "Pagado" },
+  ];
+
+  const columnDefs: Record<string, { th: ReactNode; td: (p: PagoEmpleado) => ReactNode }> = {
+    fijo: {
+      th: <TableHead key="fijo" className="text-center w-[60px]">Fijo</TableHead>,
+      td: (p) => (
+        <TableCell key="fijo" className="text-center">{p.fijo ? <Badge variant="secondary" className="text-[10px]">FIJO</Badge> : <span className="text-muted-foreground text-xs">—</span>}</TableCell>
+      ),
+    },
+    pago: {
+      th: <TableHead key="pago" className="text-right">Pago</TableHead>,
+      td: (p) => <TableCell key="pago" className="text-right tabular-nums">{fmt(p.pago)}</TableCell>,
+    },
+    nomina: {
+      th: <TableHead key="nomina" className="text-right">Nómina</TableHead>,
+      td: (p) => <TableCell key="nomina" className="text-right tabular-nums">{fmt(p.nomina)}</TableCell>,
+    },
+    horasReales: {
+      th: <TableHead key="horasReales" className="text-right">H.R</TableHead>,
+      td: (p) => <TableCell key="horasReales" className="text-right tabular-nums">{p.horasReales}h</TableCell>,
+    },
+    horasTrabajadas: {
+      th: <TableHead key="horasTrabajadas" className="text-right">H.T</TableHead>,
+      td: (p) => <TableCell key="horasTrabajadas" className="text-right tabular-nums">{p.horasTrabajadas}h</TableCell>,
+    },
+    propina: {
+      th: <TableHead key="propina" className="text-right">Propina</TableHead>,
+      td: (p) => <TableCell key="propina" className="text-right tabular-nums">{fmt(p.propina)}</TableCell>,
+    },
+    descuento: {
+      th: <TableHead key="descuento" className="text-right">Descuento</TableHead>,
+      td: (p) => <TableCell key="descuento" className="text-right tabular-nums text-destructive">{p.descuento > 0 ? `-${fmt(p.descuento)}` : "—"}</TableCell>,
+    },
+    horasExtras: {
+      th: <TableHead key="horasExtras" className="text-right">H.Extras</TableHead>,
+      td: (p) => <TableCell key="horasExtras" className="text-right tabular-nums">{p.horasExtras > 0 ? fmt(p.horasExtras) : "—"}</TableCell>,
+    },
+    bonus: {
+      th: <TableHead key="bonus" className="text-right">Bonus</TableHead>,
+      td: (p) => <TableCell key="bonus" className="text-right tabular-nums">{p.bonus > 0 ? fmt(p.bonus) : "—"}</TableCell>,
+    },
+    propinaMantenimiento: {
+      th: <TableHead key="propinaMantenimiento" className="text-right">Prop. Mant.</TableHead>,
+      td: (p) => <TableCell key="propinaMantenimiento" className="text-right tabular-nums">{p.propinaMantenimiento > 0 ? fmt(p.propinaMantenimiento) : "—"}</TableCell>,
+    },
+    total: {
+      th: <TableHead key="total" className="text-right font-bold">Total</TableHead>,
+      td: (p) => <TableCell key="total" className="text-right font-bold tabular-nums">{fmt(p.total)}</TableCell>,
+    },
+    pagado: {
+      th: <TableHead key="pagado" className="text-center w-[80px]">Pagado</TableHead>,
+      td: (p) => <TableCell key="pagado" className="text-center"><Checkbox checked={p.pagado} onCheckedChange={() => togglePagado(p.id)} /></TableCell>,
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
   return (
     <div className="p-6 space-y-6 max-w-[1600px] mx-auto">
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -107,47 +184,35 @@ export function PagosView() {
       <SubmoduleToolbar
         busqueda={busqueda}
         onBusquedaChange={setBusqueda}
-        placeholderBusqueda="Buscar empleado..."
+        placeholderBusqueda="Buscar"
         ocultarNuevo
-        campos={[
-          { campo: "pagado", label: "Pagado", tipo: "booleano" },
-          { campo: "fijo", label: "Fijo", tipo: "booleano" },
-          { campo: "total", label: "Total", tipo: "numero" },
-          { campo: "bonus", label: "Bonus", tipo: "numero" },
-          { campo: "horasExtras", label: "H. Extras", tipo: "numero" },
-        ]}
         filtros={filtros}
         onFiltrosChange={setFiltros}
-        ordenOpciones={[
-          { campo: "empleado", label: "Empleado" },
-          { campo: "total", label: "Total" },
-          { campo: "nomina", label: "Nómina" },
-          { campo: "bonus", label: "Bonus" },
-        ]}
         orden={orden}
         onOrdenChange={setOrden}
-        columnas={[
-          { campo: "fijo", label: "Fijo" },
-          { campo: "pago", label: "Pago" },
-          { campo: "nomina", label: "Nómina" },
-          { campo: "horasReales", label: "H.R" },
-          { campo: "horasTrabajadas", label: "H.T" },
-          { campo: "propina", label: "Propina" },
-          { campo: "descuento", label: "Descuento" },
-          { campo: "horasExtras", label: "H.Extras" },
-          { campo: "bonus", label: "Bonus" },
-          { campo: "propinaMantenimiento", label: "Prop. Mant." },
-          { campo: "total", label: "Total" },
-          { campo: "pagado", label: "Pagado" },
-        ]}
+        columnas={columnasDef}
         columnasVisibles={columnasVisibles}
         onColumnasVisiblesChange={setColumnasVisibles}
+        columnasOrden={columnasOrden}
+        onColumnasOrdenChange={setColumnasOrden}
         extraDerecha={
-          <IOActions
-            config={pagosIO}
-            context={{ empresaId: empresaActual.id }}
-            onSuccess={() => window.location.reload()}
-          />
+          <>
+            <IOActions
+              config={pagosIO}
+              context={{ empresaId: empresaActual.id }}
+              onSuccess={() => window.location.reload()}
+            />
+            <Button
+              size="icon"
+              variant={showConfig ? "default" : "outline"}
+              className="h-9 w-9"
+              onClick={() => setShowConfig((v) => !v)}
+              title="Configuración"
+              aria-label="Configuración"
+            >
+              <Settings className="h-4 w-4" strokeWidth={1.75} />
+            </Button>
+          </>
         }
       />
 
@@ -159,31 +224,15 @@ export function PagosView() {
               <TableHeader>
                 <TableRow className="bg-muted/40">
                   <TableHead className="min-w-[180px]">Empleado</TableHead>
-                  <TableHead className="text-center w-[60px]">Fijo</TableHead>
-                  <TableHead className="text-right">Pago</TableHead><TableHead className="text-right">Nómina</TableHead>
-                  <TableHead className="text-right">H.R</TableHead><TableHead className="text-right">H.T</TableHead>
-                  <TableHead className="text-right">Propina</TableHead><TableHead className="text-right">Descuento</TableHead>
-                  <TableHead className="text-right">H.Extras</TableHead><TableHead className="text-right">Bonus</TableHead>
-                  <TableHead className="text-right">Prop. Mant.</TableHead><TableHead className="text-right font-bold">Total</TableHead>
-                  <TableHead className="text-center w-[80px]">Pagado</TableHead><TableHead className="w-[50px]"></TableHead>
+                  {columnasRender.map((c) => columnDefs[c.campo]?.th)}
+                  <TableHead className="w-[50px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {pagosFiltrados.map(p => (
                   <TableRow key={p.id} className={p.pagado ? "bg-emerald-50/40 dark:bg-emerald-950/10" : ""}>
                     <TableCell className="font-medium">{p.empleadoNombre}</TableCell>
-                    <TableCell className="text-center">{p.fijo ? <Badge variant="secondary" className="text-[10px]">FIJO</Badge> : <span className="text-muted-foreground text-xs">—</span>}</TableCell>
-                    <TableCell className="text-right tabular-nums">{fmt(p.pago)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{fmt(p.nomina)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{p.horasReales}h</TableCell>
-                    <TableCell className="text-right tabular-nums">{p.horasTrabajadas}h</TableCell>
-                    <TableCell className="text-right tabular-nums">{fmt(p.propina)}</TableCell>
-                    <TableCell className="text-right tabular-nums text-destructive">{p.descuento > 0 ? `-${fmt(p.descuento)}` : "—"}</TableCell>
-                    <TableCell className="text-right tabular-nums">{p.horasExtras > 0 ? fmt(p.horasExtras) : "—"}</TableCell>
-                    <TableCell className="text-right tabular-nums">{p.bonus > 0 ? fmt(p.bonus) : "—"}</TableCell>
-                    <TableCell className="text-right tabular-nums">{p.propinaMantenimiento > 0 ? fmt(p.propinaMantenimiento) : "—"}</TableCell>
-                    <TableCell className="text-right font-bold tabular-nums">{fmt(p.total)}</TableCell>
-                    <TableCell className="text-center"><Checkbox checked={p.pagado} onCheckedChange={() => togglePagado(p.id)} /></TableCell>
+                    {columnasRender.map((c) => columnDefs[c.campo]?.td(p))}
                     <TableCell><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditando(p)}><Edit2 className="h-3.5 w-3.5" /></Button></TableCell>
                   </TableRow>
                 ))}

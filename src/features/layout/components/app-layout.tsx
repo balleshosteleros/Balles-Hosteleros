@@ -230,6 +230,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/contabilidad/reglas": "REGLAS AUTOMÁTICAS",
   "/gestoria/presentaciones": "PRESENTACIONES",
   "/gestoria/modelos": "MODELOS",
+  "/gestoria/contrataciones": "CONTRATACIONES",
   "/juridico/procesos": "PROCESOS",
 };
 
@@ -391,6 +392,7 @@ const ROUTE_ICONS: Record<string, LucideIcon> = {
   "/gestoria": FileText,
   "/gestoria/modelos": FileSearch,
   "/gestoria/presentaciones": FileUp,
+  "/gestoria/contrataciones": UserPlus,
 
   // JURÍDICO
   "/juridico": Scale,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
   crearFichaVacia, calcularMargen,
@@ -34,6 +34,16 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  colVisible,
+  ordenarColumnas,
+  type ToolbarColumnaVisible,
+  type ToolbarColumna,
+  type ToolbarFiltroActivo,
+} from "@/shared/components/SubmoduleToolbar";
+import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 
 // ─── Estado colors ─────────────────────────────────────────────
 const ESTADO_COLORS: Record<EstadoFicha, string> = {
@@ -699,8 +709,9 @@ export function FichasTecnicasView() {
   const [view, setView] = useState<"lista" | "pipeline">("lista");
   const [tab, setTab] = useState("fichas");
   const [search, setSearch] = useState("");
-  const [filtroCategoria, setFiltroCategoria] = useState("todas");
-  const [filtroEstado, setFiltroEstado] = useState("todos");
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [detalleFicha, setDetalleFicha] = useState<FichaTecnica | null>(null);
   const [detalleOpen, setDetalleOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -711,10 +722,13 @@ export function FichasTecnicasView() {
       const s = search.toLowerCase();
       list = list.filter((f) => f.nombre.toLowerCase().includes(s) || f.responsable.toLowerCase().includes(s));
     }
-    if (filtroCategoria !== "todas") list = list.filter((f) => f.categoriaId === filtroCategoria);
-    if (filtroEstado !== "todos") list = list.filter((f) => f.estado === filtroEstado);
+    list = aplicarFiltrosToolbar(list, filtros, (f, campo) => {
+      if (campo === "categoria") return empresaCats.find((c) => c.id === f.categoriaId)?.nombre ?? "";
+      if (campo === "estado") return ESTADO_FICHA_LABELS[f.estado];
+      return (f as unknown as Record<string, unknown>)[campo];
+    });
     return list;
-  }, [empresaFichas, search, filtroCategoria, filtroEstado]);
+  }, [empresaFichas, empresaCats, search, filtros]);
 
   const openDetail = (f: FichaTecnica) => { setDetalleFicha(f); setDetalleOpen(true); };
 
@@ -841,13 +855,137 @@ export function FichasTecnicasView() {
     return <LoadingSpinner className="p-4 md:p-6 min-h-[300px]" size="lg" />;
   }
 
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "ficha", label: "Ficha técnica", bloqueada: true },
+    { campo: "categoria", label: "Categoría" },
+    { campo: "coste", label: "Coste" },
+    { campo: "pvp", label: "Precio de Venta" },
+    { campo: "margen", label: "Margen" },
+    { campo: "estado", label: "Estado" },
+    { campo: "actualizacion", label: "Actualización" },
+    { campo: "creador", label: "Creador" },
+  ];
+
+  const columnDefs: Record<string, { th: ReactNode; td: (f: FichaTecnica) => ReactNode }> = {
+    ficha: {
+      th: <TableHead key="ficha" className="text-xs min-w-[200px]">Ficha técnica</TableHead>,
+      td: (f) => (
+        <TableCell key="ficha">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-foreground">{f.nombre}</span>
+            {f.delicatessen && <Badge variant="secondary" className="text-[9px] bg-amber-100 text-amber-700 border-amber-200">★</Badge>}
+            {f.shareEnabled && <Link2 className="h-3 w-3 text-primary" />}
+          </div>
+        </TableCell>
+      ),
+    },
+    categoria: {
+      th: (
+        <TableColumnHeader
+          key="categoria"
+          label="Categoría"
+          campo="categoria"
+          filtroTipo="lista"
+          opciones={activeCats.map((c) => c.nombre)}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+        />
+      ),
+      td: (f) => {
+        const cat = empresaCats.find((c) => c.id === f.categoriaId);
+        return <TableCell key="categoria"><Badge variant="outline" className="text-[10px]">{cat?.nombre}</Badge></TableCell>;
+      },
+    },
+    coste: {
+      th: <TableHead key="coste" className="text-xs text-right">Coste</TableHead>,
+      td: (f) => <TableCell key="coste" className="text-right text-sm">{f.costeTotal.toFixed(2)}€</TableCell>,
+    },
+    pvp: {
+      th: <TableHead key="pvp" className="text-xs text-right">Precio de Venta</TableHead>,
+      td: (f) => <TableCell key="pvp" className="text-right text-sm font-medium">{f.pvp.toFixed(2)}€</TableCell>,
+    },
+    margen: {
+      th: <TableHead key="margen" className="text-xs text-right">Margen</TableHead>,
+      td: (f) => {
+        const m = calcularMargen(f.pvp, f.costeTotal);
+        return (
+          <TableCell key="margen" className="text-right">
+            <span className={`text-sm font-semibold ${m >= 60 ? "text-emerald-600" : m >= 40 ? "text-amber-600" : "text-destructive"}`}>{m}%</span>
+          </TableCell>
+        );
+      },
+    },
+    estado: {
+      th: (
+        <TableColumnHeader
+          key="estado"
+          label="Estado"
+          campo="estado"
+          filtroTipo="lista"
+          opciones={(Object.keys(ESTADO_FICHA_LABELS) as EstadoFicha[]).map((e) => ESTADO_FICHA_LABELS[e])}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+        />
+      ),
+      td: (f) => (
+        <TableCell key="estado" className="text-center">
+          <Badge className={`text-[10px] border ${ESTADO_COLORS[f.estado]}`}>{ESTADO_FICHA_LABELS[f.estado]}</Badge>
+        </TableCell>
+      ),
+    },
+    actualizacion: {
+      th: <TableHead key="actualizacion" className="text-xs">Actualización</TableHead>,
+      td: (f) => <TableCell key="actualizacion" className="text-sm text-muted-foreground">{f.fechaActualizacion}</TableCell>,
+    },
+    creador: {
+      th: <TableHead key="creador" className="text-xs">Creador</TableHead>,
+      td: (f) => <TableCell key="creador" className="text-sm text-muted-foreground">{f.responsable}</TableCell>,
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
   return (
     <div className="p-4 md:p-6 space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-end">
-        <Button className="gap-1.5" onClick={openNew}>
-          <Plus className="h-4 w-4" /> Nueva ficha
-        </Button>
+      {/* Toolbar estándar (BARRA HORIZONTAL 1) */}
+      <SubmoduleToolbar
+        busqueda={search}
+        onBusquedaChange={setSearch}
+        placeholderBusqueda="Buscar"
+        onNuevo={openNew}
+        filtros={filtros}
+        onFiltrosChange={setFiltros}
+        columnas={columnasDef}
+        columnasVisibles={columnasVisibles}
+        onColumnasVisiblesChange={setColumnasVisibles}
+        columnasOrden={columnasOrden}
+        onColumnasOrdenChange={setColumnasOrden}
+        extraDerecha={
+          <Button
+            size="icon"
+            variant={tab === "config" ? "default" : "outline"}
+            className="h-9 w-9"
+            onClick={() => setTab(tab === "config" ? "fichas" : "config")}
+            title="Configuración"
+            aria-label="Configuración"
+          >
+            <Settings className="h-4 w-4" strokeWidth={1.75} />
+          </Button>
+        }
+      />
+
+      {/* Toggle vista (fuera de la toolbar) */}
+      <div className="flex justify-end">
+        <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+          <Button variant={view === "lista" ? "default" : "ghost"} size="sm" className="h-7 text-xs gap-1" onClick={() => setView("lista")}>
+            <List className="h-3.5 w-3.5" /> Lista
+          </Button>
+          <Button variant={view === "pipeline" ? "default" : "ghost"} size="sm" className="h-7 text-xs gap-1" onClick={() => setView("pipeline")}>
+            <LayoutGrid className="h-3.5 w-3.5" /> Pipeline
+          </Button>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -871,57 +1009,17 @@ export function FichasTecnicasView() {
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <div className="flex items-center justify-between">
-          <TabsList className="h-9">
-            <TabsTrigger value="fichas" className="text-xs gap-1"><ChefHat className="h-3.5 w-3.5" /> Fichas</TabsTrigger>
-            <TabsTrigger value="config" aria-label="Configuración" className="ml-auto"><Settings className="h-3.5 w-3.5" strokeWidth={1.75} /></TabsTrigger>
-          </TabsList>
-          {tab === "fichas" && (
-            <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
-              <Button variant={view === "lista" ? "default" : "ghost"} size="sm" className="h-7 text-xs gap-1" onClick={() => setView("lista")}>
-                <List className="h-3.5 w-3.5" /> Lista
+        <TabsContent value="fichas" className="space-y-4 mt-4">
+          {selected.size > 0 && (
+            <div className="flex gap-1.5 justify-end">
+              <Button size="sm" variant="outline" className="gap-1 text-xs h-9" onClick={handleMassPrint}>
+                <Printer className="h-3.5 w-3.5" /> Imprimir ({selected.size})
               </Button>
-              <Button variant={view === "pipeline" ? "default" : "ghost"} size="sm" className="h-7 text-xs gap-1" onClick={() => setView("pipeline")}>
-                <LayoutGrid className="h-3.5 w-3.5" /> Pipeline
+              <Button size="sm" variant="outline" className="gap-1 text-xs h-9" onClick={handleMassExport}>
+                <FileDown className="h-3.5 w-3.5" /> Exportar dossier ({selected.size})
               </Button>
             </div>
           )}
-        </div>
-
-        <TabsContent value="fichas" className="space-y-4 mt-4">
-          {/* Filters + mass actions */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative flex-1 min-w-[200px] max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Buscar ficha..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
-            </div>
-            <Select value={filtroCategoria} onValueChange={setFiltroCategoria}>
-              <SelectTrigger className="w-44 h-9"><SelectValue placeholder="Categoría" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todas">Todas las categorías</SelectItem>
-                {activeCats.map((c) => (<SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>))}
-              </SelectContent>
-            </Select>
-            <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-              <SelectTrigger className="w-36 h-9"><SelectValue placeholder="Estado" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                {(Object.keys(ESTADO_FICHA_LABELS) as EstadoFicha[]).map((e) => (
-                  <SelectItem key={e} value={e}>{ESTADO_FICHA_LABELS[e]}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {selected.size > 0 && (
-              <div className="flex gap-1.5 ml-auto">
-                <Button size="sm" variant="outline" className="gap-1 text-xs h-9" onClick={handleMassPrint}>
-                  <Printer className="h-3.5 w-3.5" /> Imprimir ({selected.size})
-                </Button>
-                <Button size="sm" variant="outline" className="gap-1 text-xs h-9" onClick={handleMassExport}>
-                  <FileDown className="h-3.5 w-3.5" /> Exportar dossier ({selected.size})
-                </Button>
-              </div>
-            )}
-          </div>
 
           {/* List View */}
           {view === "lista" && (
@@ -933,69 +1031,41 @@ export function FichasTecnicasView() {
                       <Checkbox checked={selected.size === filtered.length && filtered.length > 0} onCheckedChange={toggleAll} />
                     </TableHead>
                     <TableHead className="text-xs w-12" />
-                    <TableHead className="text-xs min-w-[200px]">Ficha técnica</TableHead>
-                    <TableHead className="text-xs">Categoría</TableHead>
-                    <TableHead className="text-xs text-right">Coste</TableHead>
-                    <TableHead className="text-xs text-right">Precio de Venta</TableHead>
-                    <TableHead className="text-xs text-right">Margen</TableHead>
-                    <TableHead className="text-xs text-center">Estado</TableHead>
-                    <TableHead className="text-xs">Actualización</TableHead>
-                    <TableHead className="text-xs">Creador</TableHead>
+                    {columnasRender.map((c) => columnDefs[c.campo]?.th)}
                     <TableHead className="text-xs w-24" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filtered.length === 0 && (
-                    <TableRow><TableCell colSpan={11} className="text-center py-12 text-muted-foreground">No se encontraron fichas técnicas.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={20} className="text-center py-12 text-muted-foreground">No se encontraron fichas técnicas.</TableCell></TableRow>
                   )}
-                  {filtered.map((f) => {
-                    const cat = empresaCats.find((c) => c.id === f.categoriaId);
-                    const m = calcularMargen(f.pvp, f.costeTotal);
-                    return (
-                      <TableRow key={f.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openDetail(f)}>
-                        <TableCell onClick={(e) => e.stopPropagation()}>
-                          <Checkbox checked={selected.has(f.id)} onCheckedChange={() => toggleSelect(f.id)} />
-                        </TableCell>
-                        <TableCell>
-                          {f.foto ? (
-                            <img src={f.foto} alt="" className="w-9 h-9 rounded object-cover" />
-                          ) : (
-                            <div className="w-9 h-9 rounded bg-muted/40 flex items-center justify-center">
-                              <ImageIcon className="h-4 w-4 text-muted-foreground/40" />
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-foreground">{f.nombre}</span>
-                            {f.delicatessen && <Badge variant="secondary" className="text-[9px] bg-amber-100 text-amber-700 border-amber-200">★</Badge>}
-                            {f.shareEnabled && <Link2 className="h-3 w-3 text-primary" />}
+                  {filtered.map((f) => (
+                    <TableRow key={f.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openDetail(f)}>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <Checkbox checked={selected.has(f.id)} onCheckedChange={() => toggleSelect(f.id)} />
+                      </TableCell>
+                      <TableCell>
+                        {f.foto ? (
+                          <img src={f.foto} alt="" className="w-9 h-9 rounded object-cover" />
+                        ) : (
+                          <div className="w-9 h-9 rounded bg-muted/40 flex items-center justify-center">
+                            <ImageIcon className="h-4 w-4 text-muted-foreground/40" />
                           </div>
-                        </TableCell>
-                        <TableCell><Badge variant="outline" className="text-[10px]">{cat?.nombre}</Badge></TableCell>
-                        <TableCell className="text-right text-sm">{f.costeTotal.toFixed(2)}€</TableCell>
-                        <TableCell className="text-right text-sm font-medium">{f.pvp.toFixed(2)}€</TableCell>
-                        <TableCell className="text-right">
-                          <span className={`text-sm font-semibold ${m >= 60 ? "text-emerald-600" : m >= 40 ? "text-amber-600" : "text-destructive"}`}>{m}%</span>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Badge className={`text-[10px] border ${ESTADO_COLORS[f.estado]}`}>{ESTADO_FICHA_LABELS[f.estado]}</Badge>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{f.fechaActualizacion}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{f.responsable}</TableCell>
-                        <TableCell onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center gap-1">
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => duplicar(f)}>
-                              <Copy className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => archivar(f.id)}>
-                              <Archive className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                        )}
+                      </TableCell>
+                      {columnasRender.map((c) => columnDefs[c.campo]?.td(f))}
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => duplicar(f)}>
+                            <Copy className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => archivar(f.id)}>
+                            <Archive className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </Card>

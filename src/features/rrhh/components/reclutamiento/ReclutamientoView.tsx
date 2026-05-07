@@ -42,7 +42,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Search, Star, MoreHorizontal, MapPin, Clock, CalendarDays,
   FileText, Users, Send, ArrowLeft, User, Phone, Mail, Tag, Kanban, List,
-  Pencil, Share2, EyeOff, Trash2, Utensils, Building2,
+  Pencil, Share2, EyeOff, Trash2, Utensils, Building2, Settings,
 } from "lucide-react";
 import { DialogSnippetEmbed } from "@/features/empleo-publico/components/DialogSnippetEmbed";
 import {
@@ -486,6 +486,7 @@ export function ReclutamientoView() {
 
   // Selector de área (vacantes operativas vs. administrativas)
   const [areaFiltro, setAreaFiltro] = useState<"operativa" | "administrativa">("operativa");
+  const [showConfig, setShowConfig] = useState(false);
 
   const categorias = useMemo(() => [...new Set(vacantes.map((v) => v.categoria))], [vacantes]);
 
@@ -628,41 +629,30 @@ export function ReclutamientoView() {
           <SubmoduleToolbar
             busqueda={search}
             onBusquedaChange={setSearch}
-            placeholderBusqueda="Buscar vacante..."
-            textoNuevo="Nueva vacante"
+            placeholderBusqueda="Buscar"
             onNuevo={() => setNuevaOfertaOpen(true)}
-            campos={[
-              {
-                campo: "estadoPublicacion",
-                label: "Estado",
-                tipo: "lista",
-                opciones: Object.values(ESTADO_PUBLICACION_LABELS),
-              },
-              { campo: "categoria", label: "Categoría", tipo: "lista", opciones: categorias },
-              {
-                campo: "tipoJornada",
-                label: "Jornada",
-                tipo: "lista",
-                opciones: [...new Set(vacantes.map((v) => TIPO_JORNADA_LABELS[v.tipoJornada]))],
-              },
-              { campo: "favorita", label: "Favorita", tipo: "booleano" },
-            ]}
             filtros={filtros}
             onFiltrosChange={setFiltros}
-            ordenOpciones={[
-              { campo: "puesto", label: "Puesto" },
-              { campo: "ubicacion", label: "Ubicación" },
-              { campo: "estadoPublicacion", label: "Estado" },
-              { campo: "categoria", label: "Categoría" },
-            ]}
             orden={orden}
             onOrdenChange={setOrden}
             extraDerecha={
-              empresaActual.id ? (
-                <Button variant="outline" size="sm" onClick={() => setSnippetGlobalOpen(true)} className="gap-1.5">
-                  <Share2 className="h-3.5 w-3.5" /> Compartir portal
+              <>
+                {empresaActual.id ? (
+                  <Button variant="outline" size="sm" onClick={() => setSnippetGlobalOpen(true)} className="gap-1.5">
+                    <Share2 className="h-3.5 w-3.5" /> Compartir portal
+                  </Button>
+                ) : null}
+                <Button
+                  size="icon"
+                  variant={showConfig ? "default" : "outline"}
+                  className="h-9 w-9"
+                  onClick={() => setShowConfig((v) => !v)}
+                  title="Configuración"
+                  aria-label="Configuración"
+                >
+                  <Settings className="h-4 w-4" strokeWidth={1.75} />
                 </Button>
-              ) : null
+              </>
             }
           />
 

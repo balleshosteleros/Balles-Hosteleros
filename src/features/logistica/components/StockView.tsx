@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
@@ -29,9 +29,11 @@ import {
   aplicarOrdenToolbar,
   coincideBusquedaUniversal,
   colVisible,
+  ordenarColumnas,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
+  type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
@@ -166,6 +168,7 @@ export function StockView() {
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<{ stockMaximo: number; stockSeguridad: number }>({ stockMaximo: 0, stockSeguridad: 0 });
@@ -358,6 +361,203 @@ export function StockView() {
     }
   };
 
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "nombre", label: "Producto", bloqueada: true },
+    { campo: "categoria", label: "Categoría" },
+    { campo: "unidad", label: "Unidad" },
+    { campo: "stockMaximo", label: "Stock Máximo" },
+    { campo: "stockSeguridad", label: "Stock Mínimo" },
+    { campo: "stockActual", label: "Stock Actual" },
+    { campo: "stockReposicion", label: "Stock Reposición" },
+    { campo: "estado", label: "Estado" },
+    { campo: "ultimoInventario", label: "Últ. Inventario" },
+    { campo: "ultimoInventarioFecha", label: "Fecha Inv." },
+  ];
+
+  const columnDefs: Record<string, { th: ReactNode; td: (p: ProductoStock & { displayMaximo: number; displaySeguridad: number; esTemporada: boolean }) => ReactNode }> = {
+    nombre: {
+      th: (
+        <TableColumnHeader
+          key="nombre"
+          label="Producto"
+          campo="nombre"
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (p) => (
+        <td key="nombre" className="px-3 py-2.5 font-semibold text-foreground">
+          {p.nombre}
+          {p.esTemporada && <Sun className="inline h-3 w-3 ml-1 text-primary" />}
+        </td>
+      ),
+    },
+    categoria: {
+      th: (
+        <TableColumnHeader
+          key="categoria"
+          label="Categoría"
+          campo="categoria"
+          filtroTipo="lista"
+          opciones={CATEGORIAS_STOCK as unknown as string[]}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (p) => (
+        <td key="categoria" className="px-3 py-2.5 text-xs">
+          {p.categoria}
+        </td>
+      ),
+    },
+    unidad: {
+      th: (
+        <TableColumnHeader
+          key="unidad"
+          label="Unidad"
+          campo="unidad"
+          filtroTipo="lista"
+          opciones={unidadesUsadas}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+        />
+      ),
+      td: (p) => (
+        <td key="unidad" className="px-3 py-2.5 text-xs">
+          {p.unidad}
+        </td>
+      ),
+    },
+    stockMaximo: {
+      th: (
+        <TableColumnHeader
+          key="stockMaximo"
+          label="Stock Máximo"
+          campo="stockMaximo"
+          filtroTipo="numero"
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (p) => {
+        const isEditing = editingId === p.id;
+        return (
+          <td key="stockMaximo" className="px-3 py-2.5 text-xs">
+            {isEditing
+              ? <Input type="number" className="h-7 w-20 text-xs" value={editValues.stockMaximo} onChange={(e) => setEditValues((v) => ({ ...v, stockMaximo: +e.target.value }))} />
+              : <span className="font-medium">{p.displayMaximo}</span>}
+          </td>
+        );
+      },
+    },
+    stockSeguridad: {
+      th: (
+        <TableColumnHeader
+          key="stockSeguridad"
+          label="Stock Mínimo"
+          campo="stockSeguridad"
+          filtroTipo="numero"
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (p) => {
+        const isEditing = editingId === p.id;
+        return (
+          <td key="stockSeguridad" className="px-3 py-2.5 text-xs">
+            {isEditing
+              ? <Input type="number" className="h-7 w-20 text-xs" value={editValues.stockSeguridad} onChange={(e) => setEditValues((v) => ({ ...v, stockSeguridad: +e.target.value }))} />
+              : <span className="font-medium">{p.displaySeguridad}</span>}
+          </td>
+        );
+      },
+    },
+    stockActual: {
+      th: (
+        <TableColumnHeader
+          key="stockActual"
+          label="Stock Actual"
+          campo="stockActual"
+          filtroTipo="numero"
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (p) => (
+        <td key="stockActual" className="px-3 py-2.5 text-xs">
+          <span className="font-bold text-foreground">{p.stockActual}</span>
+        </td>
+      ),
+    },
+    stockReposicion: {
+      th: <TableColumnHeader key="stockReposicion" label="Stock Reposición" />,
+      td: (p) => {
+        const reposicion = Math.max(0, p.displayMaximo - p.stockActual);
+        return (
+          <td key="stockReposicion" className="px-3 py-2.5 text-xs">
+            {reposicion > 0
+              ? <span className="font-medium text-amber-600 dark:text-amber-400">{reposicion}</span>
+              : <span className="text-muted-foreground">—</span>}
+          </td>
+        );
+      },
+    },
+    estado: {
+      th: (
+        <TableColumnHeader
+          key="estado"
+          label="Estado"
+          campo="estadoStock"
+          filtroTipo="lista"
+          opciones={["Stock bajo", "Atención", "Correcto"]}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+        />
+      ),
+      td: (p) => {
+        const st = stockStatus(p.stockActual, p.displaySeguridad);
+        return (
+          <td key="estado" className="px-3 py-2.5">
+            <Badge variant="outline" className={`text-[11px] font-bold px-2 py-0.5 ${statusColors[st]}`}>{statusLabels[st]}</Badge>
+          </td>
+        );
+      },
+    },
+    ultimoInventario: {
+      th: <TableColumnHeader key="ultimoInventario" label="Últ. Inventario" />,
+      td: (p) => (
+        <td key="ultimoInventario" className="px-3 py-2.5 text-xs">
+          <InventarioBadge value={p.ultimoInventario} />
+        </td>
+      ),
+    },
+    ultimoInventarioFecha: {
+      th: <TableColumnHeader key="ultimoInventarioFecha" label="Fecha Inv." />,
+      td: (p) => (
+        <td key="ultimoInventarioFecha" className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
+          {p.ultimoInventarioFecha || "—"}
+        </td>
+      ),
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
   return (
     <div className="p-4 md:p-6 space-y-5">
       <div className="space-y-4">
@@ -369,20 +569,11 @@ export function StockView() {
             ocultarNuevo
             filtros={filtros}
             onFiltrosChange={setFiltros}
-            columnas={[
-              { campo: "nombre", label: "Producto", bloqueada: true },
-              { campo: "categoria", label: "Categoría" },
-              { campo: "unidad", label: "Unidad" },
-              { campo: "stockMaximo", label: "Stock Máximo" },
-              { campo: "stockSeguridad", label: "Stock Mínimo" },
-              { campo: "stockActual", label: "Stock Actual" },
-              { campo: "stockReposicion", label: "Stock Reposición" },
-              { campo: "estado", label: "Estado" },
-              { campo: "ultimoInventario", label: "Últ. Inventario" },
-              { campo: "ultimoInventarioFecha", label: "Fecha Inv." },
-            ]}
+            columnas={columnasDef}
             columnasVisibles={columnasVisibles}
             onColumnasVisiblesChange={setColumnasVisibles}
+            columnasOrden={columnasOrden}
+            onColumnasOrdenChange={setColumnasOrden}
             extraIzquierda={
               <>
                 <Popover open={tempPopoverOpen} onOpenChange={setTempPopoverOpen}>
@@ -486,151 +677,19 @@ export function StockView() {
                       <th className="px-3 py-3 w-10">
                         <Checkbox checked={selected.size === filtered.length && filtered.length > 0} onCheckedChange={toggleAll} />
                       </th>
-                      <TableColumnHeader
-                        label="Producto"
-                        campo="nombre"
-                        ordenable
-                        orden={orden}
-                        onOrdenChange={setOrden}
-                      />
-                      {colVisible(columnasVisibles, "categoria") && (
-                        <TableColumnHeader
-                          label="Categoría"
-                          campo="categoria"
-                          filtroTipo="lista"
-                          opciones={CATEGORIAS_STOCK as unknown as string[]}
-                          filtros={filtros}
-                          onFiltrosChange={setFiltros}
-                          ordenable
-                          orden={orden}
-                          onOrdenChange={setOrden}
-                        />
-                      )}
-                      {colVisible(columnasVisibles, "unidad") && (
-                        <TableColumnHeader
-                          label="Unidad"
-                          campo="unidad"
-                          filtroTipo="lista"
-                          opciones={unidadesUsadas}
-                          filtros={filtros}
-                          onFiltrosChange={setFiltros}
-                        />
-                      )}
-                      {colVisible(columnasVisibles, "stockMaximo") && (
-                        <TableColumnHeader
-                          label="Stock Máximo"
-                          campo="stockMaximo"
-                          filtroTipo="numero"
-                          filtros={filtros}
-                          onFiltrosChange={setFiltros}
-                          ordenable
-                          orden={orden}
-                          onOrdenChange={setOrden}
-                        />
-                      )}
-                      {colVisible(columnasVisibles, "stockSeguridad") && (
-                        <TableColumnHeader
-                          label="Stock Mínimo"
-                          campo="stockSeguridad"
-                          filtroTipo="numero"
-                          filtros={filtros}
-                          onFiltrosChange={setFiltros}
-                          ordenable
-                          orden={orden}
-                          onOrdenChange={setOrden}
-                        />
-                      )}
-                      {colVisible(columnasVisibles, "stockActual") && (
-                        <TableColumnHeader
-                          label="Stock Actual"
-                          campo="stockActual"
-                          filtroTipo="numero"
-                          filtros={filtros}
-                          onFiltrosChange={setFiltros}
-                          ordenable
-                          orden={orden}
-                          onOrdenChange={setOrden}
-                        />
-                      )}
-                      {colVisible(columnasVisibles, "stockReposicion") && (
-                        <TableColumnHeader label="Stock Reposición" />
-                      )}
-                      {colVisible(columnasVisibles, "estado") && (
-                        <TableColumnHeader
-                          label="Estado"
-                          campo="estadoStock"
-                          filtroTipo="lista"
-                          opciones={["Stock bajo", "Atención", "Correcto"]}
-                          filtros={filtros}
-                          onFiltrosChange={setFiltros}
-                        />
-                      )}
-                      {colVisible(columnasVisibles, "ultimoInventario") && (
-                        <TableColumnHeader label="Últ. Inventario" />
-                      )}
-                      {colVisible(columnasVisibles, "ultimoInventarioFecha") && (
-                        <TableColumnHeader label="Fecha Inv." />
-                      )}
+                      {columnasRender.map((c) => columnDefs[c.campo]?.th)}
                       <TableColumnHeader label="" />
                     </tr>
                   </thead>
                   <tbody>
                     {filtered.map((p) => {
-                      const st = stockStatus(p.stockActual, p.displaySeguridad);
                       const isEditing = editingId === p.id;
-                      const reposicion = Math.max(0, p.displayMaximo - p.stockActual);
                       return (
                         <tr key={p.id} className="border-b hover:bg-muted/30 transition-colors">
                           <td className="px-3 py-2.5">
                             <Checkbox checked={selected.has(p.id)} onCheckedChange={() => toggleSelect(p.id)} />
                           </td>
-                          <td className="px-3 py-2.5 font-semibold text-foreground">
-                            {p.nombre}
-                            {p.esTemporada && <Sun className="inline h-3 w-3 ml-1 text-primary" />}
-                          </td>
-                          {colVisible(columnasVisibles, "categoria") && (
-                            <td className="px-3 py-2.5 text-xs">{p.categoria}</td>
-                          )}
-                          {colVisible(columnasVisibles, "unidad") && (
-                            <td className="px-3 py-2.5 text-xs">{p.unidad}</td>
-                          )}
-                          {colVisible(columnasVisibles, "stockMaximo") && (
-                            <td className="px-3 py-2.5 text-xs">
-                              {isEditing
-                                ? <Input type="number" className="h-7 w-20 text-xs" value={editValues.stockMaximo} onChange={(e) => setEditValues((v) => ({ ...v, stockMaximo: +e.target.value }))} />
-                                : <span className="font-medium">{p.displayMaximo}</span>}
-                            </td>
-                          )}
-                          {colVisible(columnasVisibles, "stockSeguridad") && (
-                            <td className="px-3 py-2.5 text-xs">
-                              {isEditing
-                                ? <Input type="number" className="h-7 w-20 text-xs" value={editValues.stockSeguridad} onChange={(e) => setEditValues((v) => ({ ...v, stockSeguridad: +e.target.value }))} />
-                                : <span className="font-medium">{p.displaySeguridad}</span>}
-                            </td>
-                          )}
-                          {colVisible(columnasVisibles, "stockActual") && (
-                            <td className="px-3 py-2.5 text-xs">
-                              <span className="font-bold text-foreground">{p.stockActual}</span>
-                            </td>
-                          )}
-                          {colVisible(columnasVisibles, "stockReposicion") && (
-                            <td className="px-3 py-2.5 text-xs">
-                              {reposicion > 0
-                                ? <span className="font-medium text-amber-600 dark:text-amber-400">{reposicion}</span>
-                                : <span className="text-muted-foreground">—</span>}
-                            </td>
-                          )}
-                          {colVisible(columnasVisibles, "estado") && (
-                            <td className="px-3 py-2.5">
-                              <Badge variant="outline" className={`text-[11px] font-bold px-2 py-0.5 ${statusColors[st]}`}>{statusLabels[st]}</Badge>
-                            </td>
-                          )}
-                          {colVisible(columnasVisibles, "ultimoInventario") && (
-                            <td className="px-3 py-2.5 text-xs"><InventarioBadge value={p.ultimoInventario} /></td>
-                          )}
-                          {colVisible(columnasVisibles, "ultimoInventarioFecha") && (
-                            <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{p.ultimoInventarioFecha || "—"}</td>
-                          )}
+                          {columnasRender.map((c) => columnDefs[c.campo]?.td(p))}
                           <td className="px-3 py-2.5">
                             {isEditing ? (
                               <div className="flex gap-1">

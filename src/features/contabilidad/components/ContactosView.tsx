@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MoreVertical, Building2, User, Briefcase } from "lucide-react";
+import { MoreVertical, Building2, User, Briefcase, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ContactoContable, TipoContacto } from "@/features/contabilidad/data/contabilidad";
 import { listContactos } from "@/features/contabilidad/actions/contabilidad-actions";
@@ -12,10 +12,14 @@ import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
   aplicarOrdenToolbar,
+  colVisible,
+  ordenarColumnas,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
+  type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
+import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { IOActions } from "@/shared/io";
 import { contactosContablesIO } from "@/features/contabilidad/io/contactos.io";
 import { toast } from "sonner";
@@ -51,6 +55,8 @@ export function ContactosView() {
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
+  const [showConfig, setShowConfig] = useState(false);
 
   const loadContactos = useCallback(async () => {
     setLoading(true);
@@ -108,6 +114,58 @@ export function ContactosView() {
     return lista;
   }, [contactos, tab, busqueda, filtros, orden]);
 
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "nombre", label: "Nombre" },
+    { campo: "documento", label: "Nº documento" },
+    { campo: "email", label: "Email" },
+    { campo: "categoria", label: "Conceptos de etiqueta" },
+    { campo: "etiquetas", label: "Etiquetas" },
+  ];
+
+  const columnDefs: Record<string, { th: ReactNode; td: (c: ContactoContable) => ReactNode }> = {
+    nombre: {
+      th: <TableColumnHeader key="nombre" label="Nombre" />,
+      td: (c) => (
+        <td key="nombre" className="px-3 py-3">
+          <p className="font-semibold">{c.nombre}</p>
+          <p className="text-[10px] text-muted-foreground">{c.tipo === "EMPRESA" ? "Empresa" : c.tipo === "AUTONOMO" ? "Autónomo" : "Particular"}</p>
+        </td>
+      ),
+    },
+    documento: {
+      th: <TableColumnHeader key="documento" label="Nº documento" />,
+      td: (c) => (
+        <td key="documento" className="px-3 py-3 text-muted-foreground">{c.documento || "—"}</td>
+      ),
+    },
+    email: {
+      th: <TableColumnHeader key="email" label="Email" />,
+      td: (c) => (
+        <td key="email" className="px-3 py-3 text-muted-foreground">{c.email || "—"}</td>
+      ),
+    },
+    categoria: {
+      th: <TableColumnHeader key="categoria" label="Conceptos de etiqueta" />,
+      td: (c) => (
+        <td key="categoria" className="px-3 py-3 text-muted-foreground">{c.categoria || "—"}</td>
+      ),
+    },
+    etiquetas: {
+      th: <TableColumnHeader key="etiquetas" label="Etiquetas" />,
+      td: (c) => (
+        <td key="etiquetas" className="px-3 py-3">
+          <div className="flex gap-1 flex-wrap">
+            {c.etiquetas.map(e => <Badge key={e} variant="secondary" className="text-[10px]">{e}</Badge>)}
+          </div>
+        </td>
+      ),
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden">
       {/* Tabs */}
@@ -126,33 +184,31 @@ export function ContactosView() {
         <SubmoduleToolbar
           busqueda={busqueda}
           onBusquedaChange={setBusqueda}
-          placeholderBusqueda="Buscar contactos…"
+          placeholderBusqueda="Buscar"
           onNuevo={() => { /* nuevo */ }}
-          campos={[
-            { campo: "tipo", label: "Tipo", tipo: "lista", opciones: ["EMPRESA", "AUTONOMO", "PARTICULAR"] },
-            { campo: "categoria", label: "Categoría", tipo: "lista", opciones: categoriasUsadas },
-            { campo: "etiquetas", label: "Etiquetas", tipo: "lista", opciones: etiquetasUsadas },
-          ]}
           filtros={filtros}
           onFiltrosChange={setFiltros}
-          ordenOpciones={[
-            { campo: "nombre", label: "Nombre" },
-            { campo: "email", label: "Email" },
-            { campo: "categoria", label: "Categoría" },
-          ]}
           orden={orden}
           onOrdenChange={setOrden}
-          columnas={[
-            { campo: "nombre", label: "Nombre" },
-            { campo: "documento", label: "Nº documento" },
-            { campo: "email", label: "Email" },
-            { campo: "categoria", label: "Conceptos de etiqueta" },
-            { campo: "etiquetas", label: "Etiquetas" },
-          ]}
+          columnas={columnasDef}
           columnasVisibles={columnasVisibles}
           onColumnasVisiblesChange={setColumnasVisibles}
+          columnasOrden={columnasOrden}
+          onColumnasOrdenChange={setColumnasOrden}
           extraDerecha={
-            <IOActions config={contactosContablesIO} onSuccess={() => window.location.reload()} />
+            <>
+              <IOActions config={contactosContablesIO} onSuccess={() => window.location.reload()} />
+              <Button
+                size="icon"
+                variant={showConfig ? "default" : "outline"}
+                className="h-9 w-9"
+                onClick={() => setShowConfig((v) => !v)}
+                title="Configuración"
+                aria-label="Configuración"
+              >
+                <Settings className="h-4 w-4" strokeWidth={1.75} />
+              </Button>
+            </>
           }
         />
       </div>
@@ -165,11 +221,7 @@ export function ContactosView() {
             <thead>
               <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase tracking-wider">
                 <th className="px-3 py-3 w-8"></th>
-                <th className="px-3 py-3 font-medium">Nombre</th>
-                <th className="px-3 py-3 font-medium">Nº documento</th>
-                <th className="px-3 py-3 font-medium">Email</th>
-                <th className="px-3 py-3 font-medium">Conceptos de etiqueta</th>
-                <th className="px-3 py-3 font-medium">Etiquetas</th>
+                {columnasRender.map((c) => columnDefs[c.campo]?.th)}
                 <th className="px-3 py-3 w-10"></th>
               </tr>
             </thead>
@@ -179,18 +231,7 @@ export function ContactosView() {
                 return (
                   <tr key={c.id} className="border-b hover:bg-muted/30 transition-colors">
                     <td className="px-3 py-3"><Icon className="h-4 w-4 text-muted-foreground" /></td>
-                    <td className="px-3 py-3">
-                      <p className="font-semibold">{c.nombre}</p>
-                      <p className="text-[10px] text-muted-foreground">{c.tipo === "EMPRESA" ? "Empresa" : c.tipo === "AUTONOMO" ? "Autónomo" : "Particular"}</p>
-                    </td>
-                    <td className="px-3 py-3 text-muted-foreground">{c.documento || "—"}</td>
-                    <td className="px-3 py-3 text-muted-foreground">{c.email || "—"}</td>
-                    <td className="px-3 py-3 text-muted-foreground">{c.categoria || "—"}</td>
-                    <td className="px-3 py-3">
-                      <div className="flex gap-1 flex-wrap">
-                        {c.etiquetas.map(e => <Badge key={e} variant="secondary" className="text-[10px]">{e}</Badge>)}
-                      </div>
-                    </td>
+                    {columnasRender.map((col) => columnDefs[col.campo]?.td(c))}
                     <td className="px-3 py-3"><Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-3.5 w-3.5" /></Button></td>
                   </tr>
                 );

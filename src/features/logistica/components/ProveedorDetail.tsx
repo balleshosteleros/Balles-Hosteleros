@@ -13,6 +13,7 @@ import {
 } from "@/features/logistica/data/proveedores";
 import type { Producto } from "@/features/logistica/data/productos";
 import { listProductos } from "@/features/logistica/actions/producto-actions";
+import { listCategoriasProveedor } from "@/features/logistica/actions/categorias-proveedor-actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -62,12 +63,19 @@ export function ProveedorDetail({ proveedor, onBack, onSave }: Props) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loadingProductos, setLoadingProductos] = useState(true);
+  const [categoriasBD, setCategoriasBD] = useState<string[]>([]);
   const originalRef = useRef<Proveedor>(proveedor);
 
   useEffect(() => {
     setForm(proveedor);
     originalRef.current = proveedor;
   }, [proveedor.id]);
+
+  useEffect(() => {
+    listCategoriasProveedor().then((res) => {
+      if (res.ok) setCategoriasBD(res.data.filter((c) => c.activa).map((c) => c.nombre));
+    });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -186,9 +194,9 @@ export function ProveedorDetail({ proveedor, onBack, onSave }: Props) {
             <div className="flex-1 min-w-[260px]">
               <Label className="text-xs">Nombre comercial *</Label>
               <Input
-                className="text-xl font-black tracking-tight h-11"
+                className="text-xl font-black tracking-tight h-11 uppercase"
                 value={form.nombreComercial}
-                onChange={(e) => upd("nombreComercial", e.target.value)}
+                onChange={(e) => upd("nombreComercial", e.target.value.toUpperCase())}
               />
             </div>
             <div className="flex items-end gap-3 flex-wrap">
@@ -202,7 +210,7 @@ export function ProveedorDetail({ proveedor, onBack, onSave }: Props) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {ESTADOS_PROVEEDOR.map((e) => (
+                    {ESTADOS_PROVEEDOR.filter((e) => e !== "Archivado").map((e) => (
                       <SelectItem key={e} value={e}>
                         {e}
                       </SelectItem>
@@ -211,16 +219,16 @@ export function ProveedorDetail({ proveedor, onBack, onSave }: Props) {
                 </Select>
               </div>
               <div className="min-w-[180px]">
-                <Label className="text-xs">Categoría principal</Label>
+                <Label className="text-xs">Categoría</Label>
                 <Select
-                  value={form.categoria || CATEGORIAS_PROVEEDOR[0]}
+                  value={form.categoria || categoriasBD[0] || CATEGORIAS_PROVEEDOR[0]}
                   onValueChange={(v) => upd("categoria", v)}
                 >
                   <SelectTrigger className="h-9">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {CATEGORIAS_PROVEEDOR.map((c) => (
+                    {(categoriasBD.length > 0 ? categoriasBD : (CATEGORIAS_PROVEEDOR as unknown as string[])).map((c) => (
                       <SelectItem key={c} value={c}>
                         {c}
                       </SelectItem>

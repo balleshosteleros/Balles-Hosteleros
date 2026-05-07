@@ -15,7 +15,25 @@ import {
   Lock,
   Save,
   Loader2,
+  GripVertical,
 } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+  sortableKeyboardCoordinates,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -104,6 +122,13 @@ interface SubmoduleToolbarProps {
   columnas?: ToolbarColumna[];
   columnasVisibles?: ToolbarColumnaVisible;
   onColumnasVisiblesChange?: (v: ToolbarColumnaVisible) => void;
+  /**
+   * Orden personalizado de columnas no bloqueadas (lista de `campo`).
+   * Si se pasa, se respeta tras hidratación; si no, el orden viene del código.
+   * Las columnas bloqueadas siempre van primero, en el orden del código.
+   */
+  columnasOrden?: string[];
+  onColumnasOrdenChange?: (orden: string[]) => void;
 
   /**
    * Identificador estable de esta vista para persistir preferencias
@@ -136,6 +161,8 @@ export function SubmoduleToolbar({
   columnas = [],
   columnasVisibles = {},
   onColumnasVisiblesChange,
+  columnasOrden,
+  onColumnasOrdenChange,
   viewKey,
   extraIzquierda,
   extraDerecha,
@@ -155,29 +182,42 @@ export function SubmoduleToolbar({
   const { user } = useAuth();
   const { empresaActual } = useEmpresa();
   const empresaDbId = empresaActual?.dbId ?? null;
-  const persistKey = `${user?.id ?? ""}|${empresaDbId ?? ""}|${resolvedViewKey}`;
+  const userId = user?.id ?? null;
+  const persistKey = `${userId ?? ""}|${empresaDbId ?? ""}|${resolvedViewKey}`;
   const hydratedRef = useRef<string | null>(null);
 
   // Hidratar visibilidad guardada cuando cambia (usuario × empresa × vista).
   // Solo se aplica una vez por combinación para no pisar cambios locales del usuario.
   useEffect(() => {
     if (!tieneColumnas) return;
-    if (!user?.id || !empresaDbId || !resolvedViewKey) return;
+    if (!userId || !empresaDbId || !resolvedViewKey) return;
     if (hydratedRef.current === persistKey) return;
     hydratedRef.current = persistKey;
 
     let cancelled = false;
-    loadViewPreferences(resolvedViewKey, empresaDbId)
+    loadViewPreferences(resolvedViewKey, empresaDbId, userId)
       .then((prefs) => {
         if (cancelled) return;
         const hidden = prefs?.columnsHidden;
-        if (!hidden) return;
-        // Reconstruimos el record { campo: visible } a partir del subset oculto.
-        const next: ToolbarColumnaVisible = {};
-        for (const col of columnas) {
-          next[col.campo] = !hidden[col.campo];
+        if (hidden) {
+          // Reconstruimos el record { campo: visible } a partir del subset oculto.
+          const next: ToolbarColumnaVisible = {};
+          for (const col of columnas) {
+            next[col.campo] = !hidden[col.campo];
+          }
+          onColumnasVisiblesChange?.(next);
         }
-        onColumnasVisiblesChange?.(next);
+        const ordenGuardado = prefs?.columnsOrder;
+        if (ordenGuardado && ordenGuardado.length > 0) {
+          // Solo emitimos campos que existen y no son bloqueados.
+          const camposNoBloqueados = new Set(
+            columnas.filter((c) => !c.bloqueada).map((c) => c.campo),
+          );
+          const filtrado = ordenGuardado.filter((c) => camposNoBloqueados.has(c));
+          if (filtrado.length > 0) {
+            onColumnasOrdenChange?.(filtrado);
+          }
+        }
       })
       .catch((err) => {
         console.error("[SubmoduleToolbar] hidratar prefs falló", err);
@@ -190,7 +230,7 @@ export function SubmoduleToolbar({
   }, [persistKey, tieneColumnas]);
 
   const puedeGuardar =
-    tieneColumnas && !!user?.id && !!empresaDbId && !!resolvedViewKey;
+    tieneColumnas && !!userId && !!empresaDbId && !!resolvedViewKey;
 
   return (
     <div
@@ -249,8 +289,11 @@ export function SubmoduleToolbar({
             columnas={columnas}
             visibles={columnasVisibles}
             onChange={onColumnasVisiblesChange!}
+            orden={columnasOrden}
+            onOrdenChange={onColumnasOrdenChange}
             viewKey={resolvedViewKey}
             empresaDbId={empresaDbId}
+            userId={userId}
             puedeGuardar={puedeGuardar}
           />
         )}
@@ -640,21 +683,72 @@ function ColumnasPopover({
   columnas,
   visibles,
   onChange,
+  orden,
+  onOrdenChange,
   viewKey,
   empresaDbId,
+  userId,
   puedeGuardar,
 }: {
   columnas: ToolbarColumna[];
   visibles: ToolbarColumnaVisible;
   onChange: (v: ToolbarColumnaVisible) => void;
+  orden: string[] | undefined;
+  onOrdenChange: ((orden: string[]) => void) | undefined;
   viewKey: string;
   empresaDbId: string | null;
+  userId: string | null;
   puedeGuardar: boolean;
 }) {
   const [guardando, setGuardando] = useState(false);
 
+  const bloqueadas = useMemo(
+    () => columnas.filter((c) => c.bloqueada),
+    [columnas],
+  );
+  const noBloqueadas = useMemo(
+    () => columnas.filter((c) => !c.bloqueada),
+    [columnas],
+  );
+
+  // Orden efectivo de las no bloqueadas: respeta `orden` cuando existe,
+  // y añade al final cualquier columna nueva que aún no esté en `orden`.
+  const ordenEfectivo = useMemo(() => {
+    if (!orden || orden.length === 0) return noBloqueadas.map((c) => c.campo);
+    const set = new Set(noBloqueadas.map((c) => c.campo));
+    const usadas = new Set<string>();
+    const result: string[] = [];
+    for (const campo of orden) {
+      if (set.has(campo) && !usadas.has(campo)) {
+        result.push(campo);
+        usadas.add(campo);
+      }
+    }
+    for (const c of noBloqueadas) {
+      if (!usadas.has(c.campo)) result.push(c.campo);
+    }
+    return result;
+  }, [orden, noBloqueadas]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+
   function toggle(campo: string) {
     onChange({ ...visibles, [campo]: !(visibles[campo] ?? true) });
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = ordenEfectivo.indexOf(String(active.id));
+    const newIndex = ordenEfectivo.indexOf(String(over.id));
+    if (oldIndex < 0 || newIndex < 0) return;
+    const next = arrayMove(ordenEfectivo, oldIndex, newIndex);
+    onOrdenChange?.(next);
   }
 
   async function handleGuardar() {
@@ -671,7 +765,10 @@ function ColumnasPopover({
           columnsHidden[c.campo] = true;
         }
       }
-      await saveViewPreferences(viewKey, empresaDbId, { columnsHidden });
+      await saveViewPreferences(viewKey, empresaDbId, userId, {
+        columnsHidden,
+        columnsOrder: ordenEfectivo,
+      });
       toast.success("Configuración de columnas guardada");
     } catch (err) {
       console.error("[ColumnasPopover] guardar prefs falló", err);
@@ -680,6 +777,12 @@ function ColumnasPopover({
       setGuardando(false);
     }
   }
+
+  const labelDe = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of columnas) m.set(c.campo, c.label);
+    return m;
+  }, [columnas]);
 
   return (
     <Popover>
@@ -693,43 +796,69 @@ function ColumnasPopover({
           <Columns3 className="h-4 w-4" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-60 p-2" align="end">
+      <PopoverContent className="w-64 p-2" align="end">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1.5 py-1">
           Columnas visibles
         </p>
-        <div className="space-y-0.5 max-h-72 overflow-y-auto">
-          {columnas.map((c) => {
-            const visible = c.bloqueada ? true : (visibles[c.campo] ?? true);
-            if (c.bloqueada) {
-              return (
-                <div
-                  key={c.campo}
-                  className="w-full flex items-center justify-between gap-2 px-1.5 py-1 rounded text-sm cursor-not-allowed opacity-70"
-                  title="Esta columna no puede ocultarse"
-                >
-                  <span className="text-foreground">{c.label}</span>
-                  <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-                </div>
-              );
-            }
-            return (
-              <button
-                key={c.campo}
-                onClick={() => toggle(c.campo)}
-                className="w-full flex items-center justify-between gap-2 px-1.5 py-1 rounded hover:bg-muted text-sm"
+        <div className="space-y-0.5 max-h-80 overflow-y-auto">
+          {bloqueadas.map((c) => (
+            <div
+              key={c.campo}
+              className="w-full flex items-center justify-between gap-2 px-1.5 py-1 rounded text-sm cursor-not-allowed opacity-70"
+              title="Esta columna no puede ocultarse ni reordenarse"
+            >
+              <span className="text-foreground">{c.label}</span>
+              <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+            </div>
+          ))}
+          {onOrdenChange ? (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={ordenEfectivo}
+                strategy={verticalListSortingStrategy}
               >
-                <span
-                  className={cn(
-                    !visible && "text-muted-foreground line-through",
-                  )}
+                {ordenEfectivo.map((campo) => (
+                  <SortableColumnItem
+                    key={campo}
+                    campo={campo}
+                    label={labelDe.get(campo) ?? campo}
+                    visible={visibles[campo] ?? true}
+                    onToggle={() => toggle(campo)}
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
+          ) : (
+            ordenEfectivo.map((campo) => {
+              const visible = visibles[campo] ?? true;
+              return (
+                <button
+                  key={campo}
+                  onClick={() => toggle(campo)}
+                  className="w-full flex items-center justify-between gap-2 px-1.5 py-1 rounded hover:bg-muted text-sm"
                 >
-                  {c.label}
-                </span>
-                {visible && <Check className="h-3.5 w-3.5 text-primary" />}
-              </button>
-            );
-          })}
+                  <span
+                    className={cn(
+                      !visible && "text-muted-foreground line-through",
+                    )}
+                  >
+                    {labelDe.get(campo) ?? campo}
+                  </span>
+                  {visible && <Check className="h-3.5 w-3.5 text-primary" />}
+                </button>
+              );
+            })
+          )}
         </div>
+        {onOrdenChange && (
+          <p className="mt-1 px-1.5 text-[10px] text-muted-foreground leading-tight">
+            Arrastra para reordenar.
+          </p>
+        )}
         <div className="mt-2 border-t pt-2">
           <Button
             size="sm"
@@ -758,6 +887,67 @@ function ColumnasPopover({
   );
 }
 
+function SortableColumnItem({
+  campo,
+  label,
+  visible,
+  onToggle,
+}: {
+  campo: string;
+  label: string;
+  visible: boolean;
+  onToggle: () => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: campo });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : undefined,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "w-full flex items-center gap-1 px-1 py-1 rounded text-sm",
+        isDragging ? "bg-muted" : "hover:bg-muted",
+      )}
+    >
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        aria-label={`Reordenar ${label}`}
+        className="cursor-grab active:cursor-grabbing touch-none p-0.5 text-muted-foreground hover:text-foreground"
+      >
+        <GripVertical className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex-1 flex items-center justify-between gap-2 text-left"
+      >
+        <span
+          className={cn(!visible && "text-muted-foreground line-through")}
+        >
+          {label}
+        </span>
+        {visible && <Check className="h-3.5 w-3.5 text-primary" />}
+      </button>
+    </div>
+  );
+}
+
 /**
  * Devuelve true si la columna está visible (por defecto sí).
  * Las columnas con `bloqueada: true` siempre se muestran, sin importar el estado.
@@ -767,6 +957,40 @@ export function colVisible(
   campo: string,
 ): boolean {
   return visibles[campo] ?? true;
+}
+
+/**
+ * Devuelve la lista de columnas en el orden efectivo:
+ * 1. Columnas bloqueadas primero, en el orden del código.
+ * 2. Columnas no bloqueadas en el orden de `orden` (si se pasó).
+ * 3. Columnas no bloqueadas que no estén en `orden` se añaden al final
+ *    en el orden del código (caso típico: columna nueva añadida en código
+ *    posterior a la última vez que el usuario guardó su orden).
+ *
+ * Esta es la función que cada vista debe usar para iterar sus headers
+ * y celdas, garantizando que el reordenamiento del usuario se respete.
+ */
+export function ordenarColumnas(
+  columnas: ToolbarColumna[],
+  orden: string[] | undefined,
+): ToolbarColumna[] {
+  const bloqueadas = columnas.filter((c) => c.bloqueada);
+  const noBloqueadas = columnas.filter((c) => !c.bloqueada);
+  if (!orden || orden.length === 0) return [...bloqueadas, ...noBloqueadas];
+  const map = new Map(noBloqueadas.map((c) => [c.campo, c]));
+  const ordenadas: ToolbarColumna[] = [];
+  const usadas = new Set<string>();
+  for (const campo of orden) {
+    const col = map.get(campo);
+    if (col && !usadas.has(campo)) {
+      ordenadas.push(col);
+      usadas.add(campo);
+    }
+  }
+  for (const col of noBloqueadas) {
+    if (!usadas.has(col.campo)) ordenadas.push(col);
+  }
+  return [...bloqueadas, ...ordenadas];
 }
 
 export function aplicarFiltrosToolbar<T>(

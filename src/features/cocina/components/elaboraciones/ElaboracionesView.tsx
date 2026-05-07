@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
   calcularCosteElaboracion,
@@ -21,10 +21,21 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Separator } from "@/components/ui/separator";
 import {
   Search, Plus, Eye, Pencil, Trash2, Check, ArrowLeft,
-  ChevronDown, Package, AlertTriangle, Table2, LayoutGrid,
+  ChevronDown, Package, AlertTriangle, Table2, LayoutGrid, Settings,
 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  colVisible,
+  ordenarColumnas,
+  type ToolbarColumnaVisible,
+  type ToolbarColumna,
+  type ToolbarFiltroActivo,
+} from "@/shared/components/SubmoduleToolbar";
+import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
+import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 
 const ALL = "__ALL__";
 
@@ -456,24 +467,27 @@ export function ElaboracionesView() {
   }, [loadElaboraciones]);
 
   const [search, setSearch] = useState("");
-  const [filterEstado, setFilterEstado] = useState(ALL);
-  const [filterAlmacen, setFilterAlmacen] = useState(ALL);
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingElab, setEditingElab] = useState<Elaboracion | null>(null);
   const [vistaActiva, setVistaActiva] = useState<"tabla" | "pipeline">("tabla");
+  const [showConfig, setShowConfig] = useState(false);
 
   const filtered = useMemo(() => {
-    return elaboraciones.filter(e => {
-      if (filterEstado !== ALL && e.estado !== filterEstado) return false;
-      if (filterAlmacen !== ALL && e.almacen !== filterAlmacen) return false;
-      if (search) {
-        const s = search.toLowerCase();
-        return e.nombre.toLowerCase().includes(s) || e.creador.toLowerCase().includes(s);
-      }
-      return true;
+    let lista = elaboraciones.filter(e => {
+      if (!search) return true;
+      const s = search.toLowerCase();
+      return e.nombre.toLowerCase().includes(s) || e.creador.toLowerCase().includes(s);
     });
-  }, [elaboraciones, search, filterEstado, filterAlmacen]);
+    lista = aplicarFiltrosToolbar(lista, filtros, (e, campo) => {
+      if (campo === "estado") return ESTADO_ELABORACION_LABEL[e.estado];
+      return (e as unknown as Record<string, unknown>)[campo];
+    });
+    return lista;
+  }, [elaboraciones, search, filtros]);
 
   const selectedElab = elaboraciones.find(e => e.id === selectedId) || null;
 
@@ -599,15 +613,82 @@ export function ElaboracionesView() {
     );
   }
 
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "nombre", label: "Nombre", bloqueada: true },
+    { campo: "fecha", label: "Fecha" },
+    { campo: "cantidad", label: "Cantidad" },
+    { campo: "almacen", label: "Almacén" },
+    { campo: "estado", label: "Estado" },
+    { campo: "creador", label: "Creador" },
+    { campo: "coste", label: "Coste" },
+  ];
+
+  const columnDefs: Record<string, { th: ReactNode; td: (e: Elaboracion) => ReactNode }> = {
+    nombre: {
+      th: <TableColumnHeader key="nombre" label="Nombre" />,
+      td: (e) => <td key="nombre" className="px-4 py-3 font-semibold text-foreground">{e.nombre}</td>,
+    },
+    fecha: {
+      th: <TableColumnHeader key="fecha" label="Fecha" />,
+      td: (e) => <td key="fecha" className="px-4 py-3 text-muted-foreground">{e.fecha}</td>,
+    },
+    cantidad: {
+      th: <TableColumnHeader key="cantidad" label="Cantidad" />,
+      td: (e) => <td key="cantidad" className="px-4 py-3">{e.cantidadProducida} {e.unidad}</td>,
+    },
+    almacen: {
+      th: (
+        <TableColumnHeader
+          key="almacen"
+          label="Almacén"
+          campo="almacen"
+          filtroTipo="lista"
+          opciones={["COCINA", "BARRA"]}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+        />
+      ),
+      td: (e) => <td key="almacen" className="px-4 py-3"><Badge variant="outline" className="text-[10px]">{e.almacen}</Badge></td>,
+    },
+    estado: {
+      th: (
+        <TableColumnHeader
+          key="estado"
+          label="Estado"
+          campo="estado"
+          filtroTipo="lista"
+          opciones={["Borrador", "En proceso", "Confirmado", "Archivado"]}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+        />
+      ),
+      td: (e) => (
+        <td key="estado" className="px-4 py-3">
+          <Badge variant="outline" className={`text-[10px] font-bold ${ESTADO_ELABORACION_COLOR[e.estado]}`}>
+            {ESTADO_ELABORACION_LABEL[e.estado]}
+          </Badge>
+        </td>
+      ),
+    },
+    creador: {
+      th: <TableColumnHeader key="creador" label="Creador" />,
+      td: (e) => <td key="creador" className="px-4 py-3 text-muted-foreground">{e.creador}</td>,
+    },
+    coste: {
+      th: <TableColumnHeader key="coste" label="Coste" />,
+      td: (e) => {
+        const coste = calcularCosteElaboracion(e.componentes);
+        return <td key="coste" className="px-4 py-3 font-medium">{coste > 0 ? `${coste.toFixed(2)} €` : "—"}</td>;
+      },
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
   return (
     <div className="p-4 md:p-6 space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-end">
-        <Button className="gap-1.5" onClick={() => { setEditingElab(null); setModalOpen(true); }}>
-          <Plus className="h-4 w-4" /> Nueva elaboración
-        </Button>
-      </div>
-
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="rounded-lg border bg-card p-3 text-center">
@@ -628,31 +709,36 @@ export function ElaboracionesView() {
         </div>
       </div>
 
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar elaboración..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
-        </div>
-        <Select value={filterEstado} onValueChange={setFilterEstado}>
-          <SelectTrigger className="w-[160px]"><SelectValue placeholder="Estado" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>Todos los estados</SelectItem>
-            <SelectItem value="borrador">Borrador</SelectItem>
-            <SelectItem value="en_proceso">En proceso</SelectItem>
-            <SelectItem value="confirmado">Confirmado</SelectItem>
-            <SelectItem value="archivado">Archivado</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={filterAlmacen} onValueChange={setFilterAlmacen}>
-          <SelectTrigger className="w-[140px]"><SelectValue placeholder="Almacén" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>Todos</SelectItem>
-            <SelectItem value="COCINA">COCINA</SelectItem>
-            <SelectItem value="BARRA">BARRA</SelectItem>
-          </SelectContent>
-        </Select>
-        <div className="ml-auto flex items-center gap-1 bg-muted/50 rounded-md p-0.5">
+      {/* Toolbar estándar (BARRA HORIZONTAL 1) */}
+      <SubmoduleToolbar
+        busqueda={search}
+        onBusquedaChange={setSearch}
+        placeholderBusqueda="Buscar"
+        onNuevo={() => { setEditingElab(null); setModalOpen(true); }}
+        filtros={filtros}
+        onFiltrosChange={setFiltros}
+        columnas={columnasDef}
+        columnasVisibles={columnasVisibles}
+        onColumnasVisiblesChange={setColumnasVisibles}
+        columnasOrden={columnasOrden}
+        onColumnasOrdenChange={setColumnasOrden}
+        extraDerecha={
+          <Button
+            size="icon"
+            variant={showConfig ? "default" : "outline"}
+            className="h-9 w-9"
+            onClick={() => setShowConfig((v) => !v)}
+            title="Configuración"
+            aria-label="Configuración"
+          >
+            <Settings className="h-4 w-4" strokeWidth={1.75} />
+          </Button>
+        }
+      />
+
+      {/* Toggle vista (fuera de la toolbar) */}
+      <div className="flex justify-end">
+        <div className="flex items-center gap-1 bg-muted/50 rounded-md p-0.5">
           <Button variant={vistaActiva === "tabla" ? "secondary" : "ghost"} size="sm" className="gap-1.5 h-8" onClick={() => setVistaActiva("tabla")}>
             <Table2 className="h-3.5 w-3.5" /> Tabla
           </Button>
@@ -664,51 +750,39 @@ export function ElaboracionesView() {
 
       {/* Content */}
       {vistaActiva === "tabla" ? (
+        <ResizableColumnsProvider storageKey="cocina-elaboraciones">
         <div className="bg-card rounded-lg border overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
-                {["Nombre", "Fecha", "Cantidad", "Almacén", "Estado", "Creador", "Coste", ""].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-xs font-bold text-muted-foreground whitespace-nowrap">{h}</th>
-                ))}
+                {columnasRender.map((c) => columnDefs[c.campo]?.th)}
+                <TableColumnHeader label="" />
               </tr>
             </thead>
             <tbody>
-              {filtered.map(e => {
-                const coste = calcularCosteElaboracion(e.componentes);
-                return (
-                  <tr key={e.id} className="border-b hover:bg-muted/30 cursor-pointer transition-colors" onClick={() => setSelectedId(e.id)}>
-                    <td className="px-4 py-3 font-semibold text-foreground">{e.nombre}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{e.fecha}</td>
-                    <td className="px-4 py-3">{e.cantidadProducida} {e.unidad}</td>
-                    <td className="px-4 py-3"><Badge variant="outline" className="text-[10px]">{e.almacen}</Badge></td>
-                    <td className="px-4 py-3">
-                      <Badge variant="outline" className={`text-[10px] font-bold ${ESTADO_ELABORACION_COLOR[e.estado]}`}>
-                        {ESTADO_ELABORACION_LABEL[e.estado]}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">{e.creador}</td>
-                    <td className="px-4 py-3 font-medium">{coste > 0 ? `${coste.toFixed(2)} €` : "—"}</td>
-                    <td className="px-4 py-3" onClick={ev => ev.stopPropagation()}>
-                      <div className="flex gap-1">
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setSelectedId(e.id)}><Eye className="h-3.5 w-3.5" /></Button>
-                        {e.estado !== "confirmado" && e.estado !== "archivado" && (
-                          <>
-                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleEdit(e)}><Pencil className="h-3.5 w-3.5" /></Button>
-                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleDelete(e.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+              {filtered.map((e) => (
+                <tr key={e.id} className="border-b hover:bg-muted/30 cursor-pointer transition-colors" onClick={() => setSelectedId(e.id)}>
+                  {columnasRender.map((c) => columnDefs[c.campo]?.td(e))}
+                  <td className="px-4 py-3" onClick={ev => ev.stopPropagation()}>
+                    <div className="flex gap-1">
+                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setSelectedId(e.id)}><Eye className="h-3.5 w-3.5" /></Button>
+                      {e.estado !== "confirmado" && e.estado !== "archivado" && (
+                        <>
+                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleEdit(e)}><Pencil className="h-3.5 w-3.5" /></Button>
+                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleDelete(e.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={8} className="text-center py-12 text-muted-foreground">No se encontraron elaboraciones.</td></tr>
+                <tr><td colSpan={20} className="text-center py-12 text-muted-foreground">No se encontraron elaboraciones.</td></tr>
               )}
             </tbody>
           </table>
         </div>
+        </ResizableColumnsProvider>
       ) : (
         <div className="flex gap-4 overflow-x-auto pb-4">
           {(["borrador", "en_proceso", "confirmado", "archivado"] as EstadoElaboracion[]).map(estado => {

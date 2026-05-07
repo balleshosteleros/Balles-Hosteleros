@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Megaphone, Pencil, Trash2, Cloud, CloudOff, Play, Pause, RefreshCw, AlertCircle, Sparkles } from "lucide-react";
+import { Plus, Megaphone, Pencil, Trash2, Cloud, CloudOff, Play, Pause, RefreshCw, AlertCircle, Sparkles, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -44,6 +44,7 @@ export function CampanasMetaView() {
   const [busqueda, setBusqueda] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [showConfig, setShowConfig] = useState(false);
 
   useEffect(() => {
     verificarIntegracionesAction().then((r) => setMetaConfigured(r.meta));
@@ -157,36 +158,24 @@ export function CampanasMetaView() {
       <SubmoduleToolbar
         busqueda={busqueda}
         onBusquedaChange={setBusqueda}
-        placeholderBusqueda="Buscar campaña..."
+        placeholderBusqueda="Buscar"
         onNuevo={abrirNuevo}
-        textoNuevo="Nueva campaña"
-        campos={[
-          {
-            campo: "estado",
-            label: "Estado",
-            tipo: "lista",
-            opciones: ESTADOS_CAMPANA.map((e) => e.label),
-          },
-          {
-            campo: "objetivo",
-            label: "Objetivo",
-            tipo: "lista",
-            opciones: OBJETIVOS_META.map((o) => o.label),
-          },
-          { campo: "presupuestoDiario", label: "Presupuesto diario", tipo: "numero" },
-          { campo: "gasto", label: "Gasto", tipo: "numero" },
-        ]}
         filtros={filtros}
         onFiltrosChange={setFiltros}
-        ordenOpciones={[
-          { campo: "nombre", label: "Nombre" },
-          { campo: "presupuestoDiario", label: "Presupuesto" },
-          { campo: "impresiones", label: "Impresiones" },
-          { campo: "clicks", label: "Clicks" },
-          { campo: "gasto", label: "Gasto" },
-        ]}
         orden={orden}
         onOrdenChange={setOrden}
+        extraDerecha={
+          <Button
+            size="icon"
+            variant={showConfig ? "default" : "outline"}
+            className="h-9 w-9"
+            onClick={() => setShowConfig((v) => !v)}
+            title="Configuración"
+            aria-label="Configuración"
+          >
+            <Settings className="h-4 w-4" strokeWidth={1.75} />
+          </Button>
+        }
       />
 
       {(modoLocal || metaConfigured === false) && (

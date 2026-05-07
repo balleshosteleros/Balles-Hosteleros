@@ -9,7 +9,7 @@ import type { TipoProducto } from "@/features/logistica/data/productos";
 
 const ESTADOS = ["Activo", "Inactivo"] as const;
 const TIPOS = ["compra", "venta", "elaboracion"] as const;
-const CONSERVACIONES = ["Frío", "Congelador", "Seco"] as const;
+const CONSERVACIONES = ["Frigorífico", "Congelador", "Seco"] as const;
 const PREPARACIONES = ["Barra", "Cocina"] as const;
 
 const productoIOSchema = z.object({
@@ -87,7 +87,7 @@ function makeConfig(variant: TipoProducto): ModuleIO<ProductoInput> {
         aliases: ["conservation", "almacenamiento"],
         hideInImport: !showConservacion,
         hideInExport: !showConservacion,
-        example: "Frío",
+        example: "Frigorífico",
       },
       {
         key: "preparacion",

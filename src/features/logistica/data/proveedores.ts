@@ -33,6 +33,7 @@ export const FRANJAS_REPARTO = [
 
 export interface Proveedor {
   id: string;
+  numeroSecuencial?: number;
   empresaId: string;
   nombreComercial: string;
   razonSocial: string;
