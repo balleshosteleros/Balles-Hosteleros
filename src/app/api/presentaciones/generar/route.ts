@@ -56,6 +56,7 @@ export async function POST(request: Request) {
       .insert({
         empresa_id: empresaId,
         titulo: ia.data.titulo,
+        nombre: ia.data.titulo, // Mantenemos "nombre" para evitar el error de la DB antigua
         prompt_original: input.prompt,
         audiencia: input.audiencia ?? null,
         tono: input.tono,

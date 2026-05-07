@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   listTareasMias,
-  seedTareasCronogramaHoy,
+  syncTareasCronograma,
   toggleTareaHecha,
   type TareaRow,
 } from "@/features/tareas/actions/tareas-actions";
@@ -33,7 +33,7 @@ export function MisTareasCronogramaWidget() {
 
   const cargar = useCallback(async (mostrarSpinner = false) => {
     if (mostrarSpinner) setRefreshing(true);
-    const seed = await seedTareasCronogramaHoy();
+    const seed = await syncTareasCronograma();
     if (seed.ok) setRol(seed.data.rol);
     const list = await listTareasMias();
     if (list.ok) setTareas(list.data);
