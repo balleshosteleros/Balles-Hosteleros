@@ -1,4 +1,4 @@
-﻿"use server";
+"use server";
 
 import { getAppContext } from "@/lib/supabase/get-context";
 import { createClient } from "@/lib/supabase/server";
@@ -418,5 +418,27 @@ export async function guardarPerfilEmpleado(
     const msg = err instanceof Error ? err.message : "Error guardando perfil";
     console.error("[rrhh] guardarPerfilEmpleado:", msg);
     return { ok: false, error: msg };
+  }
+}
+export async function getMiInformacionLaboral() {
+  try {
+    const { supabase, userId } = await getAppContext();
+    if (!userId) return { ok: false, error: "No autenticado" };
+
+    const { data, error } = await supabase
+      .from("empleados")
+      .select(`
+        *,
+        departamentos(nombre),
+        puestos_trabajo(nombre)
+      `)
+      .eq("profile_id", userId)
+      .maybeSingle();
+
+    if (error) throw error;
+    return { ok: true, data };
+  } catch (err) {
+    console.error("[rrhh] getMiInformacionLaboral:", err);
+    return { ok: false, error: "Error al obtener info laboral" };
   }
 }
