@@ -970,11 +970,9 @@ function TablaProductos({
     { campo: "numero", label: "ID", bloqueada: true },
     { campo: "nombre", label: "Nombre", bloqueada: true },
     { campo: "categoria", label: "Categoría" },
+    ...(esVenta ? [{ campo: "preparacion", label: "Preparación" }] : []),
     ...(mostrarConservacion ? [{ campo: "conservacion", label: "Conservación" }] : []),
-    ...(esVenta ? [
-      { campo: "preparacion", label: "Preparación" },
-      { campo: "partida", label: "Partida" },
-    ] : []),
+    ...(esVenta ? [{ campo: "partida", label: "Partida" }] : []),
     { campo: "estado", label: "Estado" },
     ...(esCompra
       ? [
