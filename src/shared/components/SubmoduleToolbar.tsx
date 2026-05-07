@@ -136,6 +136,7 @@ export function SubmoduleToolbar({
   columnas = [],
   columnasVisibles = {},
   onColumnasVisiblesChange,
+  viewKey,
   extraIzquierda,
   extraDerecha,
   className,
@@ -144,6 +145,52 @@ export function SubmoduleToolbar({
   const tieneFiltros = campos.length > 0 && !!onFiltrosChange;
   const tieneOrden = ordenOpciones.length > 0 && !!onOrdenChange;
   const tieneColumnas = columnas.length > 0 && !!onColumnasVisiblesChange;
+
+  // Persistencia de visibilidad de columnas por usuario × empresa × vista.
+  // El viewKey por defecto es el pathname (sin slashes laterales) — cada
+  // submódulo tiene su propia ruta, así que es un identificador natural.
+  const pathname = usePathname();
+  const resolvedViewKey =
+    viewKey ?? (pathname ?? "").replace(/^\/+|\/+$/g, "");
+  const { user } = useAuth();
+  const { empresaActual } = useEmpresa();
+  const empresaDbId = empresaActual?.dbId ?? null;
+  const persistKey = `${user?.id ?? ""}|${empresaDbId ?? ""}|${resolvedViewKey}`;
+  const hydratedRef = useRef<string | null>(null);
+
+  // Hidratar visibilidad guardada cuando cambia (usuario × empresa × vista).
+  // Solo se aplica una vez por combinación para no pisar cambios locales del usuario.
+  useEffect(() => {
+    if (!tieneColumnas) return;
+    if (!user?.id || !empresaDbId || !resolvedViewKey) return;
+    if (hydratedRef.current === persistKey) return;
+    hydratedRef.current = persistKey;
+
+    let cancelled = false;
+    loadViewPreferences(resolvedViewKey, empresaDbId)
+      .then((prefs) => {
+        if (cancelled) return;
+        const hidden = prefs?.columnsHidden;
+        if (!hidden) return;
+        // Reconstruimos el record { campo: visible } a partir del subset oculto.
+        const next: ToolbarColumnaVisible = {};
+        for (const col of columnas) {
+          next[col.campo] = !hidden[col.campo];
+        }
+        onColumnasVisiblesChange?.(next);
+      })
+      .catch((err) => {
+        console.error("[SubmoduleToolbar] hidratar prefs falló", err);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // columnas se referencia por sus campos; evitamos re-fetch en cada render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [persistKey, tieneColumnas]);
+
+  const puedeGuardar =
+    tieneColumnas && !!user?.id && !!empresaDbId && !!resolvedViewKey;
 
   return (
     <div
@@ -202,6 +249,9 @@ export function SubmoduleToolbar({
             columnas={columnas}
             visibles={columnasVisibles}
             onChange={onColumnasVisiblesChange!}
+            viewKey={resolvedViewKey}
+            empresaDbId={empresaDbId}
+            puedeGuardar={puedeGuardar}
           />
         )}
 
@@ -590,14 +640,47 @@ function ColumnasPopover({
   columnas,
   visibles,
   onChange,
+  viewKey,
+  empresaDbId,
+  puedeGuardar,
 }: {
   columnas: ToolbarColumna[];
   visibles: ToolbarColumnaVisible;
   onChange: (v: ToolbarColumnaVisible) => void;
+  viewKey: string;
+  empresaDbId: string | null;
+  puedeGuardar: boolean;
 }) {
+  const [guardando, setGuardando] = useState(false);
+
   function toggle(campo: string) {
     onChange({ ...visibles, [campo]: !(visibles[campo] ?? true) });
   }
+
+  async function handleGuardar() {
+    if (!puedeGuardar || guardando) return;
+    setGuardando(true);
+    try {
+      // Persistimos solo las columnas explícitamente OCULTAS.
+      // Así, columnas nuevas que se añadan al código en el futuro aparecen
+      // por defecto visibles para todos los usuarios.
+      const columnsHidden: Record<string, boolean> = {};
+      for (const c of columnas) {
+        if (c.bloqueada) continue;
+        if (visibles[c.campo] === false) {
+          columnsHidden[c.campo] = true;
+        }
+      }
+      await saveViewPreferences(viewKey, empresaDbId, { columnsHidden });
+      toast.success("Configuración de columnas guardada");
+    } catch (err) {
+      console.error("[ColumnasPopover] guardar prefs falló", err);
+      toast.error("No se pudo guardar la configuración");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -610,7 +693,7 @@ function ColumnasPopover({
           <Columns3 className="h-4 w-4" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-56 p-2" align="end">
+      <PopoverContent className="w-60 p-2" align="end">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1.5 py-1">
           Columnas visibles
         </p>
@@ -646,6 +729,29 @@ function ColumnasPopover({
               </button>
             );
           })}
+        </div>
+        <div className="mt-2 border-t pt-2">
+          <Button
+            size="sm"
+            className="w-full gap-1.5"
+            onClick={handleGuardar}
+            disabled={!puedeGuardar || guardando}
+            title={
+              puedeGuardar
+                ? "Guardar esta configuración para esta vista"
+                : "Inicia sesión y selecciona una empresa para guardar"
+            }
+          >
+            {guardando ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Save className="h-3.5 w-3.5" />
+            )}
+            Guardar configuración
+          </Button>
+          <p className="mt-1 text-[10px] text-muted-foreground text-center leading-tight">
+            Se guarda solo para tu usuario en esta empresa.
+          </p>
         </div>
       </PopoverContent>
     </Popover>
