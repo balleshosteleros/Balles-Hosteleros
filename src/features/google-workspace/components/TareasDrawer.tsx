@@ -4,7 +4,6 @@ import { ReactNode, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   CheckSquare2, Square, Plus, Trash2, ChevronLeft, ChevronRight, Link2, Sparkles,
-  CalendarClock,
 } from "lucide-react";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
@@ -20,11 +19,12 @@ import { es } from "date-fns/locale";
 import { toast } from "sonner";
 import {
   listTareasMias, crearTareaManual,
-  toggleTareaHecha as toggleTareaHechaAction,
+  marcarTarea as toggleTareaHechaAction, // Usar marcarTarea que es la que existe
   deleteTarea as deleteTareaAction,
-  seedTareasCronogramaHoy,
+  listTareasSugeridas, completarTareaSugerida,
   type TareaRow,
 } from "@/features/tareas/actions/tareas-actions";
+
 
 // Tipo legacy mantenido por compatibilidad con otras importaciones.
 export interface Tarea {
@@ -54,25 +54,26 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
   const [newPrio, setNewPrio] = useState<Tarea["prioridad"]>("media");
   const [refDate, setRefDate] = useState(new Date());
   const [open, setOpen] = useState(false);
-  const [rolUsuario, setRolUsuario] = useState<string | null>(null);
+
+  const [sugeridas, setSugeridas] = useState<any[]>([]);
 
   const cargar = useCallback(async () => {
     const res = await listTareasMias();
     if (res.ok) setTareas(res.data);
   }, []);
 
+  const cargarSugeridas = useCallback(async () => {
+    const res = await listTareasSugeridas();
+    if (res.ok) setSugeridas(res.data);
+  }, []);
+
   useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
-    (async () => {
-      const seed = await seedTareasCronogramaHoy();
-      if (!cancelled && seed.ok) setRolUsuario(seed.data.rol);
-      await cargar();
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [open, cargar]);
+    if (open) {
+      cargar();
+      cargarSugeridas();
+    }
+  }, [open, cargar, cargarSugeridas]);
+
 
   const addTarea = async () => {
     const titulo = newTitulo.trim();
@@ -95,6 +96,14 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
     if (!res.ok) { toast.error(res.error); return; }
     await cargar();
   };
+
+  const handleCompletarSugerida = async (cronogramaId: string, titulo: string) => {
+    const res = await completarTareaSugerida(cronogramaId, titulo);
+    if (!res.ok) { toast.error(res.error as string); return; }
+    toast.success("Tarea del cronograma registrada");
+    await cargar();
+  };
+
 
   const tareasForDay = (day: Date) =>
     tareas.filter((t) => isSameDay(parseISO(t.fecha), day));
@@ -162,7 +171,7 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>{children}</SheetTrigger>
-      <SheetContent side="right" className="flex flex-col gap-0 p-0">
+      <SheetContent side="right" className="w-full max-w-lg flex flex-col gap-0 p-0">
         <SheetHeader className="border-b px-5 py-3">
           <div className="flex items-center justify-between">
             <SheetTitle className="flex items-center gap-2 text-base">
@@ -236,52 +245,67 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
                 </Button>
               </div>
 
-              {tareasHoy.length === 0 ? (
+              {tareasHoy.length === 0 && sugeridas.length === 0 ? (
                 <div className="flex flex-col items-center justify-center flex-1 text-muted-foreground">
                   <CheckSquare2 className="h-10 w-10 opacity-20 mb-3" />
                   <p className="text-sm">Sin tareas para hoy</p>
                   <p className="text-xs mt-1 opacity-70">Añade una tarea o espera asignaciones de otros</p>
                 </div>
               ) : (
-                (() => {
-                  const cron = tareasHoy.filter((t) => t.tipo === "cronograma");
-                  const otras = tareasHoy.filter((t) => t.tipo !== "cronograma");
-                  return (
-                    <div className="flex-1">
-                      {cron.length > 0 && (
-                        <>
-                          <div className="px-5 py-2 bg-violet-50/70 border-b border-violet-100 flex items-center gap-2">
-                            <CalendarClock className="h-3.5 w-3.5 text-violet-700" />
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-violet-800">
-                              Tareas del cronograma{rolUsuario ? ` · ${rolUsuario}` : ""}
-                            </span>
-                            <Badge variant="secondary" className="ml-auto text-[10px] h-4 px-1.5">
-                              {cron.filter((t) => !t.hecha).length} pendientes
-                            </Badge>
-                          </div>
-                          <div className="divide-y bg-violet-50/20">
-                            {cron.map((t) => <TareaItem key={t.id} t={t} />)}
-                          </div>
-                        </>
-                      )}
-                      {otras.length > 0 && (
-                        <>
-                          {cron.length > 0 && (
-                            <div className="px-5 py-2 bg-muted/30 border-b">
-                              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                                Otras tareas
-                              </span>
+                <div className="divide-y flex-1 overflow-y-auto">
+                  {/* Tareas Sugeridas (Cronograma) */}
+                  {sugeridas.length > 0 && (
+                    <div className="bg-violet-50/30">
+                      <div className="px-5 py-2 text-[10px] font-bold text-violet-600 uppercase tracking-tighter flex items-center gap-1.5 border-b border-violet-100">
+                        <Sparkles className="h-3 w-3" />
+                        Cronograma Operativo ({sugeridas[0].rol})
+                      </div>
+                      {sugeridas.map((s) => {
+                        const yaHecha = tareasHoy.some(t => t.ref_tabla === 'cronogramas_operativos' && t.ref_id === s.id);
+                        return (
+                          <div key={s.id} className={`py-3 px-5 flex items-center gap-3 border-b border-violet-100/50 ${yaHecha ? "opacity-50" : ""}`}>
+                            <button 
+                              disabled={yaHecha}
+                              onClick={() => handleCompletarSugerida(s.id, s.tarea)} 
+                              className="shrink-0"
+                            >
+                              {yaHecha ? (
+                                <CheckSquare2 className="h-5 w-5 text-violet-600" />
+                              ) : (
+                                <Square className="h-5 w-5 text-violet-400 hover:text-violet-600 transition-colors" />
+                              )}
+                            </button>
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-sm ${yaHecha ? "line-through" : ""}`}>{s.tarea}</p>
+                              <div className="flex gap-2 mt-0.5">
+                                 <Badge variant="outline" className="text-[8px] h-3.5 px-1 py-0 uppercase border-violet-200 text-violet-600 bg-white">
+                                   {s.frecuencia}
+                                 </Badge>
+                                 {s.formacion && (
+                                   <span className="text-[9px] text-muted-foreground italic truncate">req: {s.formacion}</span>
+                                 )}
+                              </div>
                             </div>
-                          )}
-                          <div className="divide-y">
-                            {otras.map((t) => <TareaItem key={t.id} t={t} />)}
                           </div>
-                        </>
-                      )}
+                        );
+                      })}
                     </div>
-                  );
-                })()
+                  )}
+
+                  {/* Tareas Manuales/Asignadas */}
+                  {tareasHoy.length > 0 && (
+                    <>
+                      {sugeridas.length > 0 && (
+                        <div className="px-5 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-tighter bg-muted/5 border-b">
+                          Otras Tareas
+                        </div>
+                      )}
+                      {tareasHoy.map((t) => <TareaItem key={t.id} t={t} />)}
+                    </>
+                  )}
+                </div>
               )}
+
             </>
           )}
 
