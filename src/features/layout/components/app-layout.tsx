@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/features/layout/components/app-sidebar";
 import { useAuth } from "@/features/auth/contexts/auth-context";
@@ -279,6 +279,15 @@ function getDynamicTitle(pathname: string): string {
   return "";
 }
 
+const AJUSTES_TAB_TITLES: Record<string, string> = {
+  empresas: "EMPRESAS",
+  "imagen-marca": "IMAGEN DE MARCA",
+  usuarios: "USUARIOS",
+  roles: "ROLES",
+  departamentos: "DEPARTAMENTOS",
+  aplicaciones: "APLICACIONES",
+};
+
 const ROUTE_ICONS: Record<string, LucideIcon> = {
   "/": LayoutDashboard,
   "/mi-panel": UserCircle,
@@ -430,6 +439,7 @@ function NavBadge({ count, color = "blue" }: { count: number; color?: string }) 
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { user, profile, roles, signOut } = useAuth();
   const devBypass = process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true";
   const [isDemoHost, setIsDemoHost] = useState(false);
@@ -447,6 +457,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const moduleShort = MODULE_LABELS[modulePath] ?? ROUTE_TITLES[modulePath] ?? "";
   let submoduleTitle = ROUTE_TITLES[pathname] ?? "";
   if (!submoduleTitle) submoduleTitle = getDynamicTitle(pathname);
+  if (pathname === "/ajustes") {
+    const tab = searchParams.get("tab") ?? "empresas";
+    if (AJUSTES_TAB_TITLES[tab]) submoduleTitle = AJUSTES_TAB_TITLES[tab];
+  }
   const headerLabel = submoduleTitle || moduleShort;
 
   // Preferimos profiles.rol_label (ej. "JEFE DE COCINA") sobre el rol RBAC

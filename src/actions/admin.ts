@@ -146,6 +146,21 @@ export async function createEmployee(formData: FormData) {
 
   if (roleError) return { error: roleError.message }
 
+  // Asignar empresas a las que el usuario tendrá acceso (multi-empresa).
+  // El cliente envía 0..N campos `empresa_ids`. Si no llega ninguno, asignamos
+  // como mínimo la del invocador para no dejar al usuario huérfano.
+  const empresaIdsRaw = formData.getAll('empresa_ids') as string[]
+  const empresaIds = Array.from(
+    new Set(empresaIdsRaw.map((s) => (s ?? '').trim()).filter(Boolean)),
+  )
+  const finalEmpresaIds = empresaIds.length > 0 ? empresaIds : [empresaId]
+
+  const { error: empresasError } = await admin
+    .from('user_empresas')
+    .insert(finalEmpresaIds.map((eid) => ({ user_id: data.user.id, empresa_id: eid })))
+
+  if (empresasError) return { error: empresasError.message }
+
   revalidatePath('/admin/empleados')
   revalidatePath('/ajustes')
   return { success: true }

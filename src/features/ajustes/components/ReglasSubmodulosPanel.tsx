@@ -19,6 +19,12 @@ import {
   listReglasSubmodulo,
   upsertReglaSubmodulo,
 } from "@/features/ajustes/actions/reglas-submodulo-actions";
+import {
+  getProveedoresConfig,
+  saveProveedoresConfig,
+  type ProveedoresConfig,
+} from "@/features/logistica/actions/categorias-proveedor-actions";
+import { Checkbox } from "@/components/ui/checkbox";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 // ============================================================
@@ -230,6 +236,65 @@ function ChecklistCampos({
 }
 
 // ============================================================
+// Operativa de compra de Proveedores (3 toggles guardados en
+// `proveedores_config`). Aparece sólo bajo el submódulo Proveedores,
+// debajo del checklist de campos obligatorios. Auto-guardado por toggle.
+// ============================================================
+
+const OPERATIVA_COMPRA_FIELDS: Array<{ key: keyof ProveedoresConfig; label: string }> = [
+  { key: "mostrar_solo_productos_proveedor", label: "Mostrar solo productos de este proveedor en documentos de compra." },
+  { key: "avisar_doc_existente", label: "Avisar al crear un documento de compra con un número de documento existente." },
+  { key: "ocultar_precios_compra_impresion", label: "Ocultar precios de compra al imprimir pedidos de compra." },
+];
+
+function OperativaCompraProveedores() {
+  const [config, setConfig] = useState<ProveedoresConfig | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    getProveedoresConfig().then((res) => {
+      if (alive && res.ok) setConfig(res.data);
+    });
+    return () => { alive = false; };
+  }, []);
+
+  const toggle = async (key: keyof ProveedoresConfig) => {
+    if (!config || saving) return;
+    const next = { ...config, [key]: !config[key] };
+    setConfig(next);
+    setSaving(true);
+    const res = await saveProveedoresConfig(next);
+    setSaving(false);
+    if (!res.ok) {
+      toast.error(res.error ?? "Error al guardar");
+      setConfig(config);
+    }
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+        Operativa de compra
+      </p>
+      <div className="rounded-md border bg-card p-2.5 space-y-2">
+        {OPERATIVA_COMPRA_FIELDS.map((f) => (
+          <label key={f.key} className="flex items-start gap-2 cursor-pointer">
+            <Checkbox
+              checked={!!config?.[f.key]}
+              onCheckedChange={() => toggle(f.key)}
+              disabled={!config || saving}
+              className="mt-0.5"
+            />
+            <span className="text-xs leading-snug">{f.label}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
 // Fila de submódulo (acordeón anidado dentro del módulo)
 // ============================================================
 
@@ -323,6 +388,8 @@ function SubmoduloRow({
             onTogglePersonalizado={toggleCampo}
             bloqueadoPorModulo={bloqueadoPorModulo}
           />
+
+          {submodulo.key === "proveedores" && <OperativaCompraProveedores />}
         </div>
       )}
     </div>

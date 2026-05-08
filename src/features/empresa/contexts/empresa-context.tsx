@@ -6,6 +6,7 @@ import { Incidencia, SAMPLE_DATA } from "@/features/empresa/data/mantenimiento";
 import { AjustesEmpresa, buildDefaultAjustes, DatosGenerales, ConfigOperativa } from "@/features/ajustes/data/ajustes";
 import { getLogoUrls } from "@/features/empresa/actions/logo-actions";
 import { listEmpresasCompletas } from "@/features/empresa/actions/empresas-actions";
+import { listEmpresasDeUsuario } from "@/features/empresa/actions/user-empresas-actions";
 import { setEmpresaActiva, getEmpresaActivaId } from "@/features/empresa/actions/empresa-activa-actions";
 
 export interface Empresa {
@@ -35,17 +36,48 @@ function buildInitialData(): Record<string, Incidencia[]> {
 
 const AJUSTES_STORAGE_KEY = "balles_ajustes_v1";
 
-// Roles legados (forma departamento o genéricos). Si los detectamos en
-// localStorage descartamos el snapshot y volvemos a sembrar con la forma persona.
+// Roles legados que detectamos en localStorage para descartar el snapshot
+// y volver a sembrar desde defaults / Supabase.
+//
+// Cubre:
+//   1) Forma genérica antigua: "Administrador", "Solo lectura"
+//   2) Forma mixed-case antigua: "Dirección", "RRHH", "Cocina"…
+//   3) Forma persona antigua (pre-migración 087): "DIRECTOR",
+//      "JEFE DE COCINA", "RESPONSABLE RRHH", "ABOGADO", etc.
+//
+// Tras 087 el nombre del rol coincide con el del departamento (DIRECCIÓN,
+// COCINA, RECURSOS HUMANOS, JURÍDICO…), así que cualquier nombre persona
+// que aún quede en localStorage es basura y debe descartarse.
 const ROLES_OBSOLETOS = [
   "Administrador", "Solo lectura", "Dirección",
   "RRHH", "Logística", "Cocina", "Gerencia",
   "Contabilidad", "Gestoría", "Jurídico", "Marketing",
+  // Forma persona pre-087:
+  "DIRECTOR",
+  "RESPONSABLE RRHH",
+  "JEFE DE LOGÍSTICA",
+  "JEFE DE COCINA",
+  "JEFE DE SALA",
+  "GERENTE",
+  "CONTABLE",
+  "GESTOR",
+  "ABOGADO",
+  "RESPONSABLE MARKETING",
+  "RESPONSABLE CALIDAD",
 ];
+
+// Módulos en formato legacy (mixed-case). Si aparecen en permisos[].modulo
+// quiere decir que el snapshot es de antes de la migración a uppercase
+// — descartamos y volvemos a sembrar con los defaults canónicos.
+const MODULOS_LEGACY = ["Dirección", "RRHH", "Logística", "Cocina", "Gerencia", "Contabilidad", "Gestoría", "Jurídico", "Marketing", "Ajustes", "Sala", "Calidad"];
 
 function migrateRoles(storedRoles: AjustesEmpresa["roles"], defaultRoles: AjustesEmpresa["roles"]): AjustesEmpresa["roles"] {
   const tieneRolesObsoletos = storedRoles.some((r) => ROLES_OBSOLETOS.includes(r.nombre));
-  return tieneRolesObsoletos ? defaultRoles : storedRoles;
+  if (tieneRolesObsoletos) return defaultRoles;
+  const tienePermisosLegacy = storedRoles.some((r) =>
+    r.permisos?.some((p) => MODULOS_LEGACY.includes(p.modulo))
+  );
+  return tienePermisosLegacy ? defaultRoles : storedRoles;
 }
 
 function mergeWithDefaults(stored: AjustesEmpresa, nombre: string): AjustesEmpresa {
@@ -115,14 +147,28 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
     getLogoUrls().then(setLogoUrls).catch(() => {});
   }, []);
 
-  // Hidratar empresas + ajustes desde Supabase (fuente de verdad)
+  // Hidratar empresas + ajustes desde Supabase (fuente de verdad).
+  // El selector solo debe mostrar las empresas a las que el usuario logueado
+  // tiene acceso (user_empresas). Si el usuario no tiene filas en user_empresas
+  // (cuenta legacy o admin global), caemos al listado completo para no dejarle
+  // sin acceso a nada.
   useEffect(() => {
     let alive = true;
-    Promise.all([listEmpresasCompletas(), getEmpresaActivaId()])
-      .then(([rows, activaDbId]) => {
+    Promise.all([
+      listEmpresasCompletas(),
+      getEmpresaActivaId(),
+      listEmpresasDeUsuario(),
+    ])
+      .then(([rows, activaDbId, userEmpresaIds]) => {
         if (!alive || rows.length === 0) return;
 
-        const list: Empresa[] = rows.map((r) => ({
+        const allowed = new Set(userEmpresaIds);
+        const filtered = allowed.size > 0
+          ? rows.filter((r) => allowed.has(r.id))
+          : rows;
+        const baseRows = filtered.length > 0 ? filtered : rows;
+
+        const list: Empresa[] = baseRows.map((r) => ({
           id: r.slug,
           dbId: r.id,
           nombre: r.nombre,
@@ -143,7 +189,7 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
         // Hidratar ajustes con lo que haya en Supabase, mergeado contra los defaults.
         setAllAjustes((prev) => {
           const next: Record<string, AjustesEmpresa> = { ...prev };
-          for (const r of rows) {
+          for (const r of baseRows) {
             const defaults = buildDefaultAjustes(r.nombre);
             const stored = prev[r.slug];
             const baseAjustes = stored ? mergeWithDefaults(stored, r.nombre) : defaults;

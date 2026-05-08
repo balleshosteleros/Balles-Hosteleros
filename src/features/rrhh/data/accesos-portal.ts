@@ -34,35 +34,25 @@ const MODULOS_PORTAL = [
 ];
 
 // Mapa rol → módulo propio (solo ese módulo + Dashboard).
-// Roles en forma persona (GERENTE, CONTABLE, etc.) y aliases retro-compatibles.
+// El nombre del rol coincide con el del departamento (multi-tenant).
 const ROL_MODULO: Record<string, string> = {
-  // Forma persona (canónica)
-  "DIRECTOR": "Dirección",
-  "GERENTE": "Gerencia",
-  "CONTABLE": "Contabilidad",
-  "GESTOR": "Gestoría",
-  "ABOGADO": "Jurídico",
-  "RESPONSABLE RRHH": "RRHH",
-  "JEFE DE LOGÍSTICA": "Logística",
-  "RESPONSABLE MARKETING": "Marketing",
-  "JEFE DE COCINA": "Cocina",
-  "JEFE DE SALA": "Sala",
-  "RESPONSABLE CALIDAD": "Calidad",
-  // Aliases legacy (forma departamento)
-  "Dirección": "Dirección",
-  "RRHH": "RRHH",
-  "Logística": "Logística",
-  "Cocina": "Cocina",
-  "Gerencia": "Gerencia",
-  "Contabilidad": "Contabilidad",
-  "Gestoría": "Gestoría",
-  "Jurídico": "Jurídico",
-  "Marketing": "Marketing",
+  "DIRECCIÓN": "Dirección",
+  "RECURSOS HUMANOS": "RRHH",
+  "LOGÍSTICA": "Logística",
+  "COCINA": "Cocina",
+  "SALA": "Sala",
+  "GERENCIA": "Gerencia",
+  "CONTABILIDAD": "Contabilidad",
+  "GESTORÍA": "Gestoría",
+  "JURÍDICO": "Jurídico",
+  "MARKETING": "Marketing",
+  "CALIDAD": "Calidad",
 };
 
 export function permisosDesdeRol(rol: string): PermisoPortal[] {
-  // Acceso total
-  if (rol === "Administrador" || rol === "Director" || rol === "DIRECTOR") {
+  // Acceso total: rol de DIRECCIÓN (canónico) + alias legacy
+  const rolUpper = rol.trim().toUpperCase();
+  if (rolUpper === "DIRECCIÓN" || rolUpper === "DIRECCION" || rol === "Administrador" || rolUpper === "DIRECTOR") {
     return MODULOS_PORTAL.map((m) => ({ modulo: m, ver: true, editar: true }));
   }
   // Solo lectura global

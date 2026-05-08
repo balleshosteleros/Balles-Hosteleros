@@ -6,31 +6,12 @@ import { Rol, PermisoModulo } from '@/features/ajustes/data/ajustes'
 
 const DEV_EMPRESA_ID = '00000000-0000-0000-0000-000000000001'
 
-// Mapping departamento → nombre del rol responsable (forma persona).
-// El nombre del departamento se mantiene; el rol auto-creado adopta el cargo.
-// Si un departamento no está en el mapa, el rol toma el mismo nombre del dpto.
-const DEPT_TO_ROLE: Record<string, string> = {
-  'GERENCIA': 'GERENTE',
-  'CONTABILIDAD': 'CONTABLE',
-  'GESTORÍA': 'GESTOR',
-  'GESTORIA': 'GESTOR',
-  'JURÍDICO': 'ABOGADO',
-  'JURIDICO': 'ABOGADO',
-  'RECURSOS HUMANOS': 'RESPONSABLE RRHH',
-  'RRHH': 'RESPONSABLE RRHH',
-  'LOGÍSTICA': 'JEFE DE LOGÍSTICA',
-  'LOGISTICA': 'JEFE DE LOGÍSTICA',
-  'MARKETING': 'RESPONSABLE MARKETING',
-  'COCINA': 'JEFE DE COCINA',
-  'SALA': 'JEFE DE SALA',
-  'CALIDAD': 'RESPONSABLE CALIDAD',
-  'DIRECCIÓN': 'DIRECTOR',
-  'DIRECCION': 'DIRECTOR',
-}
-
+// El nombre del rol coincide siempre con el del departamento (multi-tenant
+// uniforme). El seed real de los 11 roles canónicos se hace por trigger en BD
+// — esta función queda para casos donde se cree un departamento custom y se
+// quiera el rol asociado con el mismo nombre.
 function rolFromDepartamento(nombreDepto: string): string {
-  const key = nombreDepto.trim().toUpperCase()
-  return DEPT_TO_ROLE[key] ?? nombreDepto.trim()
+  return nombreDepto.trim().toUpperCase()
 }
 
 /**
@@ -221,11 +202,14 @@ export async function saveRolesToSupabase(
     const authError = await requireDirectorAppRole()
     if (authError) return { error: authError }
 
-    const supabase = await createClient()
+    // Admin client por la misma razón que en loadRolesFromSupabase: la RLS
+    // limita a la empresa primaria. La autorización ya se validó arriba
+    // (sólo director) y `resolveEmpresaId` valida que la empresa elegida
+    // sea accesible para el usuario.
+    const admin = createAdminClient()
     const empresa_id = await resolveEmpresaId(empresaIdParam)
 
-    // Borrar todos los roles actuales de la empresa
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await admin
       .from('empresa_roles')
       .delete()
       .eq('empresa_id', empresa_id)
@@ -234,8 +218,7 @@ export async function saveRolesToSupabase(
 
     if (roles.length === 0) return {}
 
-    // Insertar todos los roles actuales
-    const { error: insertError } = await supabase
+    const { error: insertError } = await admin
       .from('empresa_roles')
       .insert(
         roles.map((r) => ({
@@ -257,10 +240,14 @@ export async function loadRolesFromSupabase(
   empresaIdParam?: string,
 ): Promise<Rol[] | null> {
   try {
-    const supabase = await createClient()
+    // Usamos admin client porque la RLS de empresa_roles sólo permite leer la
+    // empresa PRIMARIA del perfil, y el usuario puede estar viendo otra a la
+    // que tiene acceso vía user_empresas. `resolveEmpresaId` ya valida ese
+    // acceso, así que el bypass de RLS aquí es seguro.
+    const admin = createAdminClient()
     const empresa_id = await resolveEmpresaId(empresaIdParam)
 
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .from('empresa_roles')
       .select('id, nombre, descripcion, permisos')
       .eq('empresa_id', empresa_id)

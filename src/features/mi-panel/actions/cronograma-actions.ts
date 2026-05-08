@@ -1,10 +1,12 @@
 "use server";
 
 import { getAppContext } from "@/lib/supabase/get-context";
+import { CRONOGRAMA_ROLES } from "@/features/direccion/data/cronogramaAreas";
 
 export type MiCronogramaTarea = {
   id: string;
   rol: string;
+  departamento?: string | null;
   tarea: string;
   frecuencia: string;
   formacion?: string | null;
@@ -13,16 +15,26 @@ export type MiCronogramaTarea = {
   video_url?: string | null;
   parent_id?: string | null;
   orden?: number | null;
+  id_visible?: string | null;
   dia_semana?: number[] | null;
   dia_mes?: number | null;
   fecha_anual?: string | null;
   meses_trimestrales?: number[] | null;
   empleados_asignados?: string[] | null;
+  intervalo?: number | null;
+  termina_tipo?: "fecha" | "repeticiones" | null;
+  termina_fecha?: string | null;
+  termina_repeticiones?: number | null;
+  fecha_inicio?: string | null;
 };
+
+export type AreaMiCronograma = "OPERATIVA" | "ADMINISTRATIVA";
 
 export type MiCronogramaDepartamento = {
   rol: string;
   label: string;
+  area: AreaMiCronograma;
+  departamento: string;
   tareas: MiCronogramaTarea[];
 };
 
@@ -39,39 +51,94 @@ export type MiCronogramaResult =
 const norm = (s: string | null | undefined) =>
   (s ?? "")
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[̀-ͯ]/g, "")
     .toUpperCase()
     .trim();
 
-const MODULO_TO_CRONOGRAMA_ROLES: Record<string, string[]> = {
-  DIRECCION: ["DIRECCION", "DIRECTOR"],
-  SALA: ["JEFE DE SALA", "SALA"],
-  COCINA: ["JEFE DE COCINA", "COCINA"],
-  GERENCIA: ["GERENTE", "GERENCIA"],
-  CALIDAD: ["CALIDAD", "RESPONSABLE CALIDAD"],
-  "RECURSOS HUMANOS": ["RECURSOS HUMANOS", "RRHH", "RESPONSABLE RRHH"],
-  RRHH: ["RECURSOS HUMANOS", "RRHH", "RESPONSABLE RRHH"],
-  MARKETING: ["MARKETING", "RESPONSABLE MARKETING"],
-  LOGISTICA: ["LOGISTICA", "JEFE DE LOGISTICA"],
-  CONTABILIDAD: ["CONTABILIDAD", "CONTABLE"],
-  GESTORIA: ["GESTORIA", "GESTOR"],
-  JURIDICO: ["JURIDICO", "ABOGADO"],
+// Mapeo cronograma rol (canónico) → módulo padre. Mismo catálogo que
+// CRONOGRAMA_TO_MODULO en cronogramaAreas, normalizado a las claves de
+// permisos de empresa_roles.
+const ROL_TO_MODULO: Record<string, string> = {
+  // Operativa
+  "JEFE DE SALA": "SALA",
+  "JEFE DE COCINA": "COCINA",
+  CAMARERO: "SALA",
+  COCINERO: "COCINA",
+  OFFICE: "COCINA",
+  LIMPIEZA: "COCINA",
+  SEGURIDAD: "SALA",
+  ARTISTA: "SALA",
+  // Administrativa
+  DIRECCION: "DIRECCION",
+  GERENTE: "GERENCIA",
+  "RECURSOS HUMANOS": "RECURSOS HUMANOS",
+  CALIDAD: "CALIDAD",
+  CONTABILIDAD: "CONTABILIDAD",
+  LOGISTICA: "LOGISTICA",
+  MARKETING: "MARKETING",
+  GESTORIA: "GESTORIA",
+  JURIDICO: "JURIDICO",
 };
 
-const DEPARTAMENTO_LABEL: Record<string, string> = {
+const ROL_LABEL: Record<string, string> = {
+  "JEFE DE SALA": "Jefe de Sala",
+  "JEFE DE COCINA": "Jefe de Cocina",
+  CAMARERO: "Camarero",
+  COCINERO: "Cocinero",
+  OFFICE: "Office",
+  LIMPIEZA: "Limpieza",
+  SEGURIDAD: "Seguridad",
+  ARTISTA: "Artista",
   DIRECCION: "Dirección",
-  SALA: "Sala",
-  COCINA: "Cocina",
-  GERENCIA: "Gerencia",
-  CALIDAD: "Calidad",
+  GERENTE: "Gerente",
   "RECURSOS HUMANOS": "Recursos Humanos",
-  RRHH: "Recursos Humanos",
-  MARKETING: "Marketing",
-  LOGISTICA: "Logística",
+  CALIDAD: "Calidad",
   CONTABILIDAD: "Contabilidad",
+  LOGISTICA: "Logística",
+  MARKETING: "Marketing",
   GESTORIA: "Gestoría",
   JURIDICO: "Jurídico",
 };
+
+const MODULO_LABEL: Record<string, string> = {
+  SALA: "Sala",
+  COCINA: "Cocina",
+  DIRECCION: "Dirección",
+  GERENCIA: "Gerencia",
+  "RECURSOS HUMANOS": "Recursos Humanos",
+  CALIDAD: "Calidad",
+  CONTABILIDAD: "Contabilidad",
+  LOGISTICA: "Logística",
+  MARKETING: "Marketing",
+  GESTORIA: "Gestoría",
+  JURIDICO: "Jurídico",
+};
+
+// modulo (normalizado) → puestos canónicos.
+const ROLS_POR_MODULO_NORM = (() => {
+  const map = new Map<string, string[]>();
+  for (const [rol, modulo] of Object.entries(ROL_TO_MODULO)) {
+    const k = norm(modulo);
+    const arr = map.get(k) ?? [];
+    arr.push(rol);
+    map.set(k, arr);
+  }
+  return map;
+})();
+
+const ORDEN_DEPARTAMENTOS = [
+  "DIRECCION",
+  "GERENCIA",
+  "RECURSOS HUMANOS",
+  "MARKETING",
+  "CALIDAD",
+  "CONTABILIDAD",
+  "LOGISTICA",
+  "GESTORIA",
+  "JURIDICO",
+  "COCINA",
+  "SALA",
+];
 
 export async function getMiCronograma(): Promise<MiCronogramaResult> {
   try {
@@ -113,21 +180,35 @@ export async function getMiCronograma(): Promise<MiCronogramaResult> {
       modulosUsuario.add(norm(rolLabel));
     }
 
-    if (modulosUsuario.size === 0) {
-      return { ok: true, data: { rolLabel, departamentos: [] } };
+    // Determinar puestos canónicos accesibles por el usuario.
+    const accessibleRols: string[] = [];
+    const pushRol = (r: string) => {
+      if (!accessibleRols.includes(r)) accessibleRols.push(r);
+    };
+    for (const m of modulosUsuario) {
+      const rols = ROLS_POR_MODULO_NORM.get(m);
+      if (rols && rols.length > 0) {
+        for (const r of rols) pushRol(r);
+      } else {
+        const canonical = CRONOGRAMA_ROLES.find((r) => norm(r.rol) === m);
+        if (canonical) pushRol(canonical.rol);
+      }
+    }
+    if (rolLabel) {
+      const canonical = CRONOGRAMA_ROLES.find(
+        (r) => norm(r.rol) === norm(rolLabel),
+      );
+      if (canonical) pushRol(canonical.rol);
     }
 
-    const candidatosPorModulo = new Map<string, Set<string>>();
-    for (const modulo of modulosUsuario) {
-      const candidatos = MODULO_TO_CRONOGRAMA_ROLES[modulo] ?? [modulo];
-      const set = new Set(candidatos.map(norm));
-      candidatosPorModulo.set(modulo, set);
+    if (accessibleRols.length === 0) {
+      return { ok: true, data: { rolLabel, departamentos: [] } };
     }
 
     const { data: rows, error } = await supabase
       .from("cronogramas_operativos")
       .select(
-        "id, rol, tarea, frecuencia, formacion, tiempo_requerido, resumen, video_url, parent_id, orden, empresa_id, dia_semana, dia_mes, fecha_anual, meses_trimestrales, empleados_asignados",
+        "id, rol, departamento, tarea, frecuencia, formacion, tiempo_requerido, resumen, video_url, parent_id, orden, id_visible, empresa_id, dia_semana, dia_mes, fecha_anual, meses_trimestrales, empleados_asignados, intervalo, termina_tipo, termina_fecha, termina_repeticiones, fecha_inicio",
       )
       .order("orden", { ascending: true })
       .order("created_at", { ascending: true });
@@ -137,8 +218,8 @@ export async function getMiCronograma(): Promise<MiCronogramaResult> {
       return { ok: false, error: error.message };
     }
 
-    const tareasPorModulo = new Map<string, MiCronogramaTarea[]>();
-    const rolCanonicoPorModulo = new Map<string, string>();
+    const accessibleSetNorm = new Set(accessibleRols.map(norm));
+    const tareasPorRol = new Map<string, MiCronogramaTarea[]>();
 
     for (const t of rows ?? []) {
       if (empresaId && t.empresa_id && t.empresa_id !== empresaId) continue;
@@ -146,54 +227,43 @@ export async function getMiCronograma(): Promise<MiCronogramaResult> {
       if (asig && asig.length > 0 && !asig.includes(userId)) continue;
 
       const rolNorm = norm(t.rol);
-      let moduloMatch: string | null = null;
-      for (const [modulo, candidatos] of candidatosPorModulo) {
-        if (candidatos.has(rolNorm)) {
-          moduloMatch = modulo;
-          break;
-        }
-      }
-      if (!moduloMatch) continue;
+      if (!accessibleSetNorm.has(rolNorm)) continue;
 
-      const arr = tareasPorModulo.get(moduloMatch) ?? [];
+      const canonical =
+        accessibleRols.find((r) => norm(r) === rolNorm) ?? (t.rol as string);
+      const arr = tareasPorRol.get(canonical) ?? [];
       arr.push(t as MiCronogramaTarea);
-      tareasPorModulo.set(moduloMatch, arr);
-      if (!rolCanonicoPorModulo.has(moduloMatch)) {
-        rolCanonicoPorModulo.set(moduloMatch, t.rol as string);
-      }
+      tareasPorRol.set(canonical, arr);
     }
 
-    const ordenDepts = [
-      "DIRECCION",
-      "GERENCIA",
-      "COCINA",
-      "SALA",
-      "LOGISTICA",
-      "RECURSOS HUMANOS",
-      "RRHH",
-      "MARKETING",
-      "CALIDAD",
-      "CONTABILIDAD",
-      "GESTORIA",
-      "JURIDICO",
-    ];
+    const departamentos: MiCronogramaDepartamento[] = accessibleRols.map(
+      (rol) => {
+        const modulo = ROL_TO_MODULO[rol] ?? rol;
+        const moduloKey = norm(modulo);
+        const area: AreaMiCronograma =
+          CRONOGRAMA_ROLES.find((r) => norm(r.rol) === norm(rol))?.area ??
+          "ADMINISTRATIVA";
+        return {
+          rol,
+          label: ROL_LABEL[rol] ?? rol,
+          area,
+          departamento: MODULO_LABEL[moduloKey] ?? modulo,
+          tareas: tareasPorRol.get(rol) ?? [],
+        };
+      },
+    );
 
-    const departamentos: MiCronogramaDepartamento[] = Array.from(
-      tareasPorModulo.entries(),
-    )
-      .map(([modulo, tareas]) => ({
-        rol: rolCanonicoPorModulo.get(modulo) ?? modulo,
-        label: DEPARTAMENTO_LABEL[modulo] ?? modulo,
-        tareas,
-      }))
-      .sort((a, b) => {
-        const ia = ordenDepts.indexOf(norm(a.label));
-        const ib = ordenDepts.indexOf(norm(b.label));
-        const aIdx = ia === -1 ? 999 : ia;
-        const bIdx = ib === -1 ? 999 : ib;
-        if (aIdx !== bIdx) return aIdx - bIdx;
-        return a.label.localeCompare(b.label);
-      });
+    departamentos.sort((a, b) => {
+      if (a.area !== b.area) return a.area === "OPERATIVA" ? -1 : 1;
+      const moduloA = norm(ROL_TO_MODULO[a.rol] ?? a.departamento);
+      const moduloB = norm(ROL_TO_MODULO[b.rol] ?? b.departamento);
+      const ia = ORDEN_DEPARTAMENTOS.indexOf(moduloA);
+      const ib = ORDEN_DEPARTAMENTOS.indexOf(moduloB);
+      const aIdx = ia === -1 ? 999 : ia;
+      const bIdx = ib === -1 ? 999 : ib;
+      if (aIdx !== bIdx) return aIdx - bIdx;
+      return a.label.localeCompare(b.label);
+    });
 
     return {
       ok: true,

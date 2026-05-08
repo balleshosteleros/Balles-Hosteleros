@@ -9,10 +9,17 @@ export interface UserPermisos {
   rolLabel: string | null
   empresaId: string | null
   appRoles: string[]
+  /**
+   * Departamento al que está asignado el empleado (`profiles.departamento`).
+   * Es un string libre con el nombre del departamento (mismo nombre que en
+   * `departamentos.nombre` cuando el dato es coherente). `null` si el
+   * empleado no tiene ningún departamento asignado.
+   */
+  departamento: string | null
 }
 
 export async function getUserPermisos(): Promise<UserPermisos> {
-  const empty: UserPermisos = { permisos: [], rolLabel: null, empresaId: null, appRoles: [] }
+  const empty: UserPermisos = { permisos: [], rolLabel: null, empresaId: null, appRoles: [], departamento: null }
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -25,6 +32,7 @@ export async function getUserPermisos(): Promise<UserPermisos> {
         rolLabel: 'Dirección',
         empresaId: '00000000-0000-0000-0000-000000000001',
         appRoles: ['director', 'admin'],
+        departamento: null,
       }
     }
 
@@ -33,7 +41,7 @@ export async function getUserPermisos(): Promise<UserPermisos> {
     const [{ data: profile }, { data: rolesRows }] = await Promise.all([
       admin
         .from('profiles')
-        .select('rol_label, empresa_id')
+        .select('rol_label, empresa_id, departamento')
         .eq('user_id', user.id)
         .single(),
       admin
@@ -45,9 +53,10 @@ export async function getUserPermisos(): Promise<UserPermisos> {
     const appRoles = (rolesRows ?? []).map((r) => r.role as string)
     const empresaId = (profile?.empresa_id as string | null) ?? null
     const rolLabel = (profile?.rol_label as string | null) ?? null
+    const departamento = ((profile?.departamento as string | null) ?? null) || null
 
     if (!empresaId || !rolLabel) {
-      return { permisos: [], rolLabel, empresaId, appRoles }
+      return { permisos: [], rolLabel, empresaId, appRoles, departamento }
     }
 
     const { data: rolRow } = await admin
@@ -62,6 +71,7 @@ export async function getUserPermisos(): Promise<UserPermisos> {
       rolLabel,
       empresaId,
       appRoles,
+      departamento,
     }
   } catch (e) {
     console.error('[getUserPermisos]', e)
