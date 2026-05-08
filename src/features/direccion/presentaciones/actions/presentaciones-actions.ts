@@ -91,7 +91,7 @@ export async function renombrarPresentacion(
 ): Promise<{ ok: boolean; error?: string }> {
   try {
     const { supabase } = await getContext();
-    const { error } = await supabase.from("presentaciones").update({ titulo }).eq("id", id);
+    const { error } = await supabase.from("presentaciones").update({ titulo, nombre: titulo }).eq("id", id);
     if (error) throw error;
     return { ok: true };
   } catch (err) {
