@@ -4,8 +4,9 @@ import { ReactNode, useState, useEffect, useCallback, useMemo, useRef } from "re
 import Link from "next/link";
 import {
   CheckSquare2, Square, Plus, Trash2, ChevronLeft, ChevronRight, Link2, Sparkles,
-  CalendarClock, Info, AlertTriangle, Users, RefreshCw,
+  CalendarClock, Info, AlertTriangle, Users, RefreshCw, Clock,
 } from "lucide-react";
+import { PosponerTareaDialog } from "./PosponerTareaDialog";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
 } from "@/components/ui/sheet";
@@ -25,6 +26,7 @@ import {
   syncTareasCronograma,
   syncTareasCronogramaRange,
   getRolesCronograma,
+  getDepartamentosVisibles,
   listCronogramasPorRol,
   type TareaRow,
 } from "@/features/tareas/actions/tareas-actions";
@@ -35,6 +37,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { getModuloForCronograma } from "@/features/direccion/data/cronogramaAreas";
 
 // Tipo legacy mantenido por compatibilidad con otras importaciones.
 export interface Tarea {
@@ -62,16 +65,21 @@ function TareaItem({
   compact = false,
   toggleHecha,
   deleteTarea,
+  posponerTarea,
   setOpen,
 }: {
   t: TareaRow;
   compact?: boolean;
   toggleHecha: (id: string) => void;
   deleteTarea: (id: string) => void;
+  posponerTarea: (t: TareaRow) => void;
   setOpen: (open: boolean) => void;
 }) {
   const esReceta = t.tipo === "nueva_receta_fase";
+  const esCronograma = t.tipo === "sistema";
   const icon = esReceta ? <Sparkles className="h-3 w-3 text-violet-600" /> : null;
+  const horaCorta = t.hora_inicio ? t.hora_inicio.slice(0, 5) : null;
+  const pospuestaCount = t.pospuesta_count ?? 0;
 
   const contenido = (
     <>
@@ -94,8 +102,26 @@ function TareaItem({
         }`}
       >
         {icon && <span className="inline-flex items-center mr-1">{icon}</span>}
+        {horaCorta && (
+          <span className="inline-flex items-center gap-0.5 mr-1.5 text-[10px] font-bold text-violet-700">
+            <Clock className="h-2.5 w-2.5" />
+            {horaCorta}
+          </span>
+        )}
         {t.titulo}
         {t.link_url && <Link2 className="h-3 w-3 inline ml-1 text-muted-foreground" />}
+        {pospuestaCount > 0 && (
+          <span
+            className={`ml-1.5 text-[9px] font-bold px-1 py-px rounded ${
+              pospuestaCount >= 3
+                ? "bg-red-100 text-red-700"
+                : "bg-amber-100 text-amber-700"
+            }`}
+            title={`Pospuesta ${pospuestaCount}× — última: ${t.pospuesta_ultima ?? ""}`}
+          >
+            {pospuestaCount}×
+          </span>
+        )}
       </span>
       <span
         className={`${
@@ -104,17 +130,33 @@ function TareaItem({
       >
         {compact ? t.prioridad.charAt(0).toUpperCase() : PRIO_LABEL[t.prioridad]}
       </span>
-      <Button
-        variant="ghost"
-        size="icon"
-        className={`${compact ? "h-5 w-5" : "h-6 w-6"} shrink-0 hover:text-red-500`}
-        onClick={(e) => {
-          e.stopPropagation();
-          deleteTarea(t.id);
-        }}
-      >
-        <Trash2 className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} />
-      </Button>
+      {esCronograma ? (
+        <Button
+          variant="ghost"
+          size="icon"
+          className={`${compact ? "h-5 w-5" : "h-6 w-6"} shrink-0 hover:text-violet-600`}
+          onClick={(e) => {
+            e.stopPropagation();
+            posponerTarea(t);
+          }}
+          title="Posponer"
+        >
+          <CalendarClock className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} />
+        </Button>
+      ) : (
+        <Button
+          variant="ghost"
+          size="icon"
+          className={`${compact ? "h-5 w-5" : "h-6 w-6"} shrink-0 hover:text-red-500`}
+          onClick={(e) => {
+            e.stopPropagation();
+            deleteTarea(t.id);
+          }}
+          title="Eliminar"
+        >
+          <Trash2 className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} />
+        </Button>
+      )}
     </>
   );
 
@@ -170,8 +212,11 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [open, setOpen] = useState(false);
+  const [tareaPosponer, setTareaPosponer] = useState<TareaRow | null>(null);
   const [rolUsuario, setRolUsuario] = useState<string | null>(null);
   const [availableRoles, setAvailableRoles] = useState<string[]>([]);
+  const [moduloPropio, setModuloPropio] = useState<string | null>(null);
+  const [modulosVisibles, setModulosVisibles] = useState<string[] | null>(null);
   const [selectedRol, setSelectedRol] = useState<string>("default");
   const [infoTareas, setInfoTareas] = useState<any[]>([]);
 
@@ -180,17 +225,19 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
     if (res.ok) setTareas(res.data);
   }, []);
 
-  // 1. Efecto para Cargar Roles (Al abrir)
+  // 1. Efecto para Cargar Roles + permisos del usuario (al abrir)
   useEffect(() => {
-    if (open) {
-      getRolesCronograma().then(res => {
-        if (res.ok) {
-          setAvailableRoles(res.data);
-        } else {
-          toast.error("Error al cargar roles: " + res.error);
+    if (!open) return;
+    Promise.all([getRolesCronograma(), getDepartamentosVisibles()]).then(
+      ([resRoles, resDept]) => {
+        if (resRoles.ok) setAvailableRoles(resRoles.data);
+        else toast.error("Error al cargar roles: " + resRoles.error);
+        if (resDept.ok) {
+          setModuloPropio(resDept.data.moduloPropio);
+          setModulosVisibles(resDept.data.modulosVisibles);
         }
-      });
-    }
+      },
+    );
   }, [open]);
 
   // 2. Escuchar evento para abrir desde fuera
@@ -230,9 +277,9 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
         if (tab === "hoy") {
           res = await syncTareasCronograma(undefined, forced);
           if (res.ok) {
-            setRolUsuario(res.data.rol);
+            if (!forced) setRolUsuario(res.data.rol);
             if (res.data.insertadas > 0) {
-              toast.success(`Sincronizadas ${res.data.insertadas} tareas para ${res.data.rol}`);
+              toast.success(`Sincronizadas ${res.data.insertadas} tareas para ${getModuloForCronograma(res.data.rol)}`);
             }
           }
         } else if (tab === "semana") {
@@ -329,12 +376,14 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
   const tareasHoy = filterBySelectedRol(tareas.filter((t) => isToday(parseISO(t.fecha))));
   const pendientesHoy = tareasHoy.filter((t) => !t.hecha).length;
 
-  const itemProps = { toggleHecha, deleteTarea, setOpen };
+  const handlePosponer = (t: TareaRow) => setTareaPosponer(t);
+
+  const itemProps = { toggleHecha, deleteTarea, posponerTarea: handlePosponer, setOpen };
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>{children}</SheetTrigger>
-      <SheetContent className="w-full sm:max-w-md p-0 flex flex-col gap-0 border-l-violet-100 shadow-2xl">
+      <SheetContent side="right" className="p-0 flex flex-col gap-0 border-l-violet-100 shadow-2xl">
         <SheetHeader className="border-b px-5 py-3 shrink-0 bg-white">
           <div className="flex items-center justify-between">
             <div className="flex flex-col gap-0.5">
@@ -344,7 +393,7 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
               </SheetTitle>
             </div>
             {pendientesHoy > 0 && (
-              <Badge className="bg-violet-600 text-white text-[10px] font-bold h-5 px-2 rounded-full">
+              <Badge className="bg-violet-600 text-white text-[10px] font-bold h-5 px-2 rounded-full mr-10">
                 {pendientesHoy} HOY
               </Badge>
             )}
@@ -355,26 +404,42 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
         <div className="px-5 py-3 bg-violet-50/50 border-b flex flex-col gap-2 shrink-0">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] font-bold text-violet-400 tracking-wider uppercase">
-              Filtrar por rol
+              Filtrar por departamento
             </span>
           </div>
           <Select value={selectedRol} onValueChange={setSelectedRol}>
             <SelectTrigger className={`h-9 text-xs font-bold border-violet-200 bg-white shadow-sm transition-all ${selectedRol !== "default" ? "ring-2 ring-violet-500/20 border-violet-500" : ""}`}>
-              <SelectValue placeholder="Elije un rol" />
+              <SelectValue placeholder="Elije un departamento" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="default" className="text-xs font-bold text-violet-700">
-                Mi Rol
+                {moduloPropio ?? (rolUsuario ? getModuloForCronograma(rolUsuario) : "Cargando…")}
               </SelectItem>
-              {availableRoles.length > 0 ? (
-                availableRoles.map(r => (
-                  <SelectItem key={r} value={r} className="text-xs font-medium uppercase">{r}</SelectItem>
-                ))
-              ) : (
-                <SelectItem value="_loading" disabled className="text-xs italic text-muted-foreground">
-                  Cargando roles...
-                </SelectItem>
-              )}
+              {(() => {
+                const visibles = modulosVisibles ?? [];
+                const items = availableRoles.filter((r) =>
+                  visibles.length === 0 ? true : visibles.includes(getModuloForCronograma(r)),
+                );
+                if (availableRoles.length === 0) {
+                  return (
+                    <SelectItem value="_loading" disabled className="text-xs italic text-muted-foreground">
+                      Cargando departamentos...
+                    </SelectItem>
+                  );
+                }
+                if (items.length === 0) {
+                  return (
+                    <SelectItem value="_empty" disabled className="text-xs italic text-muted-foreground">
+                      Sin departamentos accesibles
+                    </SelectItem>
+                  );
+                }
+                return items.map((r) => (
+                  <SelectItem key={r} value={r} className="text-xs font-medium uppercase">
+                    {getModuloForCronograma(r)}
+                  </SelectItem>
+                ));
+              })()}
             </SelectContent>
           </Select>
         </div>
@@ -669,6 +734,14 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
           )}
         </div>
       </SheetContent>
+      <PosponerTareaDialog
+        tarea={tareaPosponer}
+        onClose={() => setTareaPosponer(null)}
+        onDone={() => {
+          lastSyncedKey.current = "";
+          cargar();
+        }}
+      />
     </Sheet>
   );
 }

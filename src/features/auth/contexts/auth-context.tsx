@@ -14,6 +14,8 @@ export interface AuthProfile {
   empresa_id: string;
   avatar_url?: string | null;
   avatar_obligatorio?: boolean | null;
+  rol_label?: string | null;
+  departamento?: string | null;
 }
 
 interface AuthContextValue {
@@ -170,7 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const [profileRes, permisosRes] = await Promise.all([
               supabase
                 .from("profiles")
-                .select("nombre, apellidos, email, empresa_id, avatar_url, avatar_obligatorio")
+                .select("nombre, apellidos, email, empresa_id, avatar_url, avatar_obligatorio, rol_label, departamento")
                 .eq("user_id", userId)
                 .single(),
               getUserPermisos().catch((e) => {
