@@ -16,7 +16,6 @@ const productoIOSchema = z.object({
   nombre: z.string().min(1, "El nombre es obligatorio"),
   tipo: z.enum(TIPOS),
   categoria: z.string().min(1, "La categoría es obligatoria"),
-  familia: z.string().nullable().optional(),
   estado: z.enum(ESTADOS).default("Activo"),
   proveedor: z.string().nullable().optional(),
   precioCompra: z.string().nullable().optional(),
@@ -68,16 +67,9 @@ function makeConfig(variant: TipoProducto): ModuleIO<ProductoInput> {
       {
         key: "categoria",
         label: "Categoría",
-        aliases: ["categoria", "category", "familia principal"],
+        aliases: ["categoria", "category", "familia", "family", "subcategoria"],
         required: true,
         example: "Verduras",
-      },
-      {
-        key: "familia",
-        label: "Familia",
-        aliases: ["family", "subcategoria"],
-        hideInImport: true,
-        hideInExport: true,
       },
       {
         key: "conservacion",
@@ -179,7 +171,6 @@ function makeConfig(variant: TipoProducto): ModuleIO<ProductoInput> {
         nombre: p.nombre,
         tipo: p.tipo,
         categoria: p.categoria,
-        familia: p.familia || null,
         estado: p.estado,
         proveedor: p.proveedor ?? null,
         precioCompra: p.precioCompra ?? null,

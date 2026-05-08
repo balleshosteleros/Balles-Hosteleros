@@ -141,7 +141,7 @@ async function main() {
   console.log("  ✓ insertados:", proveedorRows.length);
 
   // ─── Parsear Excel de escandallos ────────────────────
-  console.log("\n📖 Leyendo Excel de fichas técnicas…");
+  console.log("\n📖 Leyendo Excel de escandallos…");
   const { escandallos, saltadas } = parseExcelEscandallos(EXCEL_PATH);
   console.log("  ✓ escandallos parseados:", escandallos.length);
   if (saltadas.length > 0) console.log("  ⚠ hojas sin escandallo detallado:", saltadas.join(", "));
@@ -306,7 +306,7 @@ async function main() {
   // Limpiar escandallos existentes para platos de esta empresa
   const ventaIds = (ventaInserted ?? []).map((v) => v.id);
   if (ventaIds.length > 0) {
-    await supabase.from("escandallos").delete().in("producto_venta_id", ventaIds);
+    await supabase.from("producto_composicion").delete().in("producto_venta_id", ventaIds);
   }
 
   if (finalRows.length > 0) {
@@ -314,7 +314,7 @@ async function main() {
     const BATCH = 500;
     for (let i = 0; i < finalRows.length; i += BATCH) {
       const batch = finalRows.slice(i, i + BATCH);
-      const { error } = await supabase.from("escandallos").insert(batch);
+      const { error } = await supabase.from("producto_composicion").insert(batch);
       if (error) throw error;
     }
   }

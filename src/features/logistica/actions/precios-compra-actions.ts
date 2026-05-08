@@ -160,9 +160,9 @@ export async function addPrecioCompra(input: {
       return { ok: false, error: "La fecha hasta no puede ser anterior a la fecha de inicio" };
     }
 
-    // Proveedor es obligatorio: un precio de compra siempre va asociado a un
-    // proveedor concreto.
-    const proveedorNorm = (input.proveedor ?? "").trim();
+    // Proveedor es obligatorio y se almacena en MAYÚSCULAS (regla de negocio
+    // compartida con `proveedores.nombre_comercial`).
+    const proveedorNorm = (input.proveedor ?? "").trim().toUpperCase();
     if (!proveedorNorm) {
       return { ok: false, error: "Selecciona un proveedor para el precio" };
     }
@@ -301,7 +301,7 @@ export async function updatePrecioCompra(input: {
     }
     if (!input.fechaInicio) return { ok: false, error: "Fecha de inicio inválida" };
 
-    const proveedorNorm = (input.proveedor ?? "").trim();
+    const proveedorNorm = (input.proveedor ?? "").trim().toUpperCase();
     if (!proveedorNorm) {
       return { ok: false, error: "Selecciona un proveedor para el precio" };
     }

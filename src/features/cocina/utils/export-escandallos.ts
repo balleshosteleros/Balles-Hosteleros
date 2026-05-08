@@ -1,9 +1,9 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import type { FichaTecnica, CategoriaFicha } from "../data/fichas-tecnicas";
-import { calcularMargen } from "../data/fichas-tecnicas";
+import type { Escandallo, CategoriaEscandallo } from "../data/escandallos";
+import { calcularMargen } from "../data/escandallos";
 
-export async function generarDossierPDF(fichas: FichaTecnica[], categorias: CategoriaFicha[], empresaNombre: string) {
+export async function generarDossierPDF(escandallos: Escandallo[], categorias: CategoriaEscandallo[], empresaNombre: string) {
   const doc = new jsPDF({
     orientation: "portrait",
     unit: "mm",
@@ -13,7 +13,7 @@ export async function generarDossierPDF(fichas: FichaTecnica[], categorias: Cate
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
 
-  fichas.forEach((ficha, index) => {
+  escandallos.forEach((escandallo, index) => {
     if (index > 0) doc.addPage();
 
     // Header
@@ -23,28 +23,28 @@ export async function generarDossierPDF(fichas: FichaTecnica[], categorias: Cate
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(22);
     doc.setFont("helvetica", "bold");
-    doc.text(ficha.nombre.toUpperCase(), 15, 20);
+    doc.text(escandallo.nombre.toUpperCase(), 15, 20);
 
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     doc.text(empresaNombre.toUpperCase(), 15, 30);
-    doc.text(`FECHA ACTUALIZACIÓN: ${ficha.fechaActualizacion || new Date().toISOString().slice(0, 10)}`, pageWidth - 15, 30, { align: "right" });
+    doc.text(`FECHA ACTUALIZACIÓN: ${escandallo.fechaActualizacion || new Date().toISOString().slice(0, 10)}`, pageWidth - 15, 30, { align: "right" });
 
     // Main Content
     let currentY = 50;
 
     // Summary Table
-    const catNombre = categorias.find(c => c.id === ficha.categoriaId)?.nombre || "—";
-    const margen = calcularMargen(ficha.pvp, ficha.costeTotal);
+    const catNombre = categorias.find(c => c.id === escandallo.categoriaId)?.nombre || "—";
+    const margen = calcularMargen(escandallo.pvp, escandallo.costeTotal);
 
     autoTable(doc, {
       startY: currentY,
       head: [["CATEGORÍA", "RESPONSABLE", "PVP", "COSTE TOTAL", "MARGEN %"]],
       body: [[
         catNombre,
-        ficha.responsable || "—",
-        `${ficha.pvp.toFixed(2)}€`,
-        `${ficha.costeTotal.toFixed(2)}€`,
+        escandallo.responsable || "—",
+        `${escandallo.pvp.toFixed(2)}€`,
+        `${escandallo.costeTotal.toFixed(2)}€`,
         `${margen}%`
       ]],
       theme: "striped",
@@ -63,7 +63,7 @@ export async function generarDossierPDF(fichas: FichaTecnica[], categorias: Cate
     doc.setTextColor(31, 41, 55);
     doc.text("INGREDIENTES", 15, currentY);
     
-    const ingredientesBody = ficha.ingredientes.map(i => [
+    const ingredientesBody = escandallo.ingredientes.map(i => [
       i.ingrediente,
       `${i.cantidad}${i.unidad}`
     ]);
@@ -83,11 +83,11 @@ export async function generarDossierPDF(fichas: FichaTecnica[], categorias: Cate
     doc.text("ALÉRGENOS", rightColX, currentY);
     
     let alergenosY = currentY + 10;
-    if (ficha.alergenos.length > 0) {
+    if (escandallo.alergenos.length > 0) {
       doc.setFontSize(9);
       doc.setFont("helvetica", "normal");
-      doc.text(ficha.alergenos.join(", "), rightColX, alergenosY, { maxWidth: colWidth });
-      alergenosY += (Math.ceil(ficha.alergenos.join(", ").length / 40) * 5) + 5;
+      doc.text(escandallo.alergenos.join(", "), rightColX, alergenosY, { maxWidth: colWidth });
+      alergenosY += (Math.ceil(escandallo.alergenos.join(", ").length / 40) * 5) + 5;
     } else {
       doc.setFontSize(9);
       doc.setFont("helvetica", "italic");
@@ -100,10 +100,10 @@ export async function generarDossierPDF(fichas: FichaTecnica[], categorias: Cate
     doc.text("RECOMENDACIONES", rightColX, alergenosY);
     
     let recoY = alergenosY + 10;
-    if (ficha.recomendaciones.length > 0) {
+    if (escandallo.recomendaciones.length > 0) {
       doc.setFontSize(9);
       doc.setFont("helvetica", "normal");
-      doc.text(ficha.recomendaciones.join(", "), rightColX, recoY, { maxWidth: colWidth });
+      doc.text(escandallo.recomendaciones.join(", "), rightColX, recoY, { maxWidth: colWidth });
     } else {
       doc.setFontSize(9);
       doc.setFont("helvetica", "italic");
@@ -121,7 +121,7 @@ export async function generarDossierPDF(fichas: FichaTecnica[], categorias: Cate
     autoTable(doc, {
       startY: currentY + 5,
       head: [["PROCESO / RECETA"]],
-      body: [[ficha.elaboracion || "No especificada"]],
+      body: [[escandallo.elaboracion || "No especificada"]],
       theme: "striped",
       headStyles: { fillColor: [243, 244, 246], textColor: [75, 85, 99], fontSize: 8 },
       styles: { fontSize: 10, cellPadding: 8 },
@@ -131,11 +131,11 @@ export async function generarDossierPDF(fichas: FichaTecnica[], categorias: Cate
 
     // Additional info
     const infoBody = [
-      ["PARTIDA", ficha.partida || "—"],
-      ["GUARNICIÓN", ficha.guarnicion || "—"],
-      ["DECORACIÓN", ficha.decoracion || "—"],
-      ["MENAJE", ficha.menaje || "—"],
-      ["PRESENTACIÓN MESA", ficha.presentacionMesa || "—"],
+      ["PARTIDA", escandallo.partida || "—"],
+      ["GUARNICIÓN", escandallo.guarnicion || "—"],
+      ["DECORACIÓN", escandallo.decoracion || "—"],
+      ["MENAJE", escandallo.menaje || "—"],
+      ["PRESENTACIÓN MESA", escandallo.presentacionMesa || "—"],
     ];
 
     autoTable(doc, {
@@ -151,15 +151,15 @@ export async function generarDossierPDF(fichas: FichaTecnica[], categorias: Cate
     doc.setFontSize(8);
     doc.setTextColor(156, 163, 175);
     doc.text(
-      `Página ${index + 1} de ${fichas.length} | Generado por Balles Hosteleros`,
+      `Página ${index + 1} de ${escandallos.length} | Generado por Balles Hosteleros`,
       pageWidth / 2,
       pageHeight - 10,
       { align: "center" }
     );
   });
 
-  const fileName = fichas.length === 1 
-    ? `FICHA_${fichas[0].nombre.replace(/\s+/g, "_")}.pdf`
+  const fileName = escandallos.length === 1 
+    ? `FICHA_${escandallos[0].nombre.replace(/\s+/g, "_")}.pdf`
     : `DOSSIER_FICHAS_${new Date().toISOString().slice(0, 10)}.pdf`;
 
   doc.save(fileName);

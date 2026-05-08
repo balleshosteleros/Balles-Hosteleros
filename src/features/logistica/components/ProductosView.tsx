@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback, useRef, type ReactNode } from "react";
+import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
-  TipoProducto, getCategorias,
+  TipoProducto,
   ESTADOS_PRODUCTO, ESTADO_COLOR, EstadoProducto, type Producto, type Conservacion,
   type PreparacionVenta,
   IVA_OPCIONES, CONSERVACION_OPCIONES, UNIDADES_PRODUCTO, getFormatosPorUnidad, getUnidadDeFormato,
@@ -15,8 +15,7 @@ import {
 import {
   getProductoConfigSection, saveProductoConfigSection,
 } from "@/features/logistica/actions/config-actions";
-import { listEscandallosConPrecios, addEscandallo, removeEscandallo, getCosteEscandallo } from "@/features/logistica/actions/escandallos-actions";
-import { listProveedores } from "@/features/logistica/actions/proveedores-actions";
+import { EscandalloEditor } from "@/features/logistica/components/EscandalloEditor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,8 +26,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Plus, ShoppingCart, Store, Settings,
-  ArrowLeft, Pencil, Trash2, AlertTriangle, ChefHat, X, FlaskConical,
-  Check, ChevronsUpDown, Search,
+  ArrowLeft, Pencil, Trash2, AlertTriangle, X, FlaskConical,
 } from "lucide-react";
 import { toast } from "sonner";
 import { IOActions } from "@/shared/io";
@@ -55,130 +53,12 @@ import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { EstiloProductoVenta } from "@/features/logistica/components/productos/EstiloProductoVenta";
 import { PreciosCompraSection } from "@/features/logistica/components/productos/PreciosCompraSection";
 import { PreciosPorProveedorSection } from "@/features/logistica/components/productos/PreciosPorProveedorSection";
+import { TarifaPreciosSection } from "@/features/logistica/components/productos/TarifaPreciosSection";
+import { ProveedorCombobox } from "@/features/logistica/components/productos/ProveedorCombobox";
+import { addPrecioCompra } from "@/features/logistica/actions/precios-compra-actions";
 
 function EstadoBadge({ estado }: { estado: EstadoProducto }) {
   return <Badge variant="outline" className={`text-[10px] ${ESTADO_COLOR[estado]}`}>{estado}</Badge>;
-}
-
-/* ─── Selector de proveedor con búsqueda (solo activos) ─── */
-function ProveedorCombobox({
-  value,
-  onChange,
-  placeholder = "Seleccionar proveedor",
-}: {
-  value: string;
-  onChange: (nombre: string) => void;
-  placeholder?: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [opciones, setOpciones] = useState<string[]>([]);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    listProveedores().then((res) => {
-      if (!res.ok) return;
-      const activos = (res.data as unknown as Array<Record<string, unknown>>)
-        .filter((r) => (r.estado as string) === "Activo")
-        .map((r) => (r.nombre_comercial as string) ?? "")
-        .filter((n) => !!n)
-        .sort((a, b) => a.localeCompare(b, "es"));
-      setOpciones(Array.from(new Set(activos)));
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open]);
-
-  useEffect(() => {
-    if (open) {
-      setQuery("");
-      requestAnimationFrame(() => inputRef.current?.focus());
-    }
-  }, [open]);
-
-  const filtered = useMemo(() => {
-    const s = query.trim().toLowerCase();
-    if (!s) return opciones.slice(0, 50);
-    return opciones.filter((n) => n.toLowerCase().includes(s)).slice(0, 50);
-  }, [opciones, query]);
-
-  return (
-    <div ref={containerRef} className="relative w-full">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 text-sm transition-colors hover:bg-muted/30"
-      >
-        <span className={`truncate ${!value ? "text-muted-foreground" : ""}`}>
-          {value || placeholder}
-        </span>
-        <span className="ml-2 shrink-0">
-          {value
-            ? <Check className="h-3.5 w-3.5 text-emerald-500" />
-            : <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground" />}
-        </span>
-      </button>
-      {open && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-md border bg-popover text-popover-foreground shadow-md">
-          <div className="flex items-center border-b px-3">
-            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-            <input
-              ref={inputRef}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                e.stopPropagation();
-                if (e.key === "Escape") { setOpen(false); }
-              }}
-              placeholder="Buscar proveedor..."
-              className="flex h-10 w-full bg-transparent py-2 text-sm outline-none placeholder:text-muted-foreground"
-              autoComplete="off"
-            />
-          </div>
-          <div className="max-h-60 overflow-y-auto p-1">
-            {filtered.length === 0 ? (
-              <div className="py-3 text-center text-xs text-muted-foreground">
-                {opciones.length === 0 ? "Sin proveedores activos" : "Sin resultados"}
-              </div>
-            ) : (
-              filtered.map((nombre) => (
-                <button
-                  type="button"
-                  key={nombre}
-                  onClick={() => { onChange(nombre); setOpen(false); }}
-                  className="flex w-full items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground transition-colors text-left"
-                >
-                  <span className="truncate">{nombre}</span>
-                  {nombre === value && <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />}
-                </button>
-              ))
-            )}
-          </div>
-          {value && (
-            <div className="border-t p-1">
-              <button
-                type="button"
-                onClick={() => { onChange(""); setOpen(false); }}
-                className="w-full rounded px-2 py-1.5 text-xs text-destructive hover:bg-destructive/10 transition-colors text-left"
-              >
-                Quitar proveedor
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
 }
 
 function parseImporte(s: string | null | undefined): number {
@@ -213,210 +93,6 @@ function PorcCosteBadge({
   return <Badge variant="outline" className={`text-[10px] font-semibold ${cls}`}>{pct.toFixed(1)}%</Badge>;
 }
 
-type Ingrediente = { id: string; nombre: string; unidad: string };
-
-type EscandalloLinea = {
-  id: string;
-  ingredienteId: string;
-  ingredienteNombre: string;
-  ingredienteUnidad: string;
-  cantidad: number;
-  mermaPct: number;
-  precioUnitario: number;
-  subtotal: number;
-};
-
-/* ─── COMPOSICIÓN (escandallo de un producto de venta) ─── */
-function Composicion({ productoVentaId, precioVenta }: { productoVentaId: string; precioVenta?: string }) {
-  const [lineas, setLineas] = useState<EscandalloLinea[]>([]);
-  const [costeTotal, setCosteTotal] = useState<number>(0);
-  const [loading, setLoading] = useState(true);
-  const [ingredientes, setIngredientes] = useState<Ingrediente[]>([]);
-  const [addOpen, setAddOpen] = useState(false);
-  const [selIng, setSelIng] = useState<string>("");
-  const [cantidad, setCantidad] = useState("");
-  const [merma, setMerma] = useState("0");
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    const [escandalloRes, costeRes] = await Promise.all([
-      listEscandallosConPrecios(productoVentaId),
-      getCosteEscandallo(productoVentaId),
-    ]);
-    if (escandalloRes.ok) setLineas(escandalloRes.data);
-    if (costeRes.ok) setCosteTotal(costeRes.coste);
-    setLoading(false);
-  }, [productoVentaId]);
-
-  useEffect(() => { load(); }, [load]);
-
-  useEffect(() => {
-    Promise.all([listProductos("compra"), listProductos("elaboracion")]).then(([compra, elab]) => {
-      const items = [...compra, ...elab]
-        .map((p) => ({
-          id: p.id,
-          nombre: p.tipo === "elaboracion" ? `[Elab.] ${p.nombre}` : p.nombre,
-          unidad: p.unidad,
-        }))
-        .sort((a, b) => a.nombre.localeCompare(b.nombre));
-      setIngredientes(items);
-    });
-  }, []);
-
-  const handleAdd = async () => {
-    if (!selIng) { toast.error("Selecciona un ingrediente"); return; }
-    const c = parseFloat(cantidad.replace(",", "."));
-    if (isNaN(c) || c <= 0) { toast.error("Cantidad inválida"); return; }
-    const m = parseFloat(merma.replace(",", ".")) || 0;
-    const res = await addEscandallo({
-      productoVentaId,
-      ingredienteId: selIng,
-      cantidad: c,
-      mermaPct: m,
-    });
-    if (!res.ok) { toast.error(res.error ?? "Error al añadir"); return; }
-    toast.success("Ingrediente añadido");
-    setAddOpen(false); setSelIng(""); setCantidad(""); setMerma("0");
-    load();
-  };
-
-  const handleRemove = async (id: string) => {
-    const res = await removeEscandallo(id);
-    if (!res.ok) { toast.error("Error al eliminar"); return; }
-    load();
-  };
-
-  return (
-    <Card>
-      <CardHeader className="pb-2 flex-row items-center justify-between space-y-0">
-        <CardTitle className="text-base flex items-center gap-2">
-          <ChefHat className="h-4 w-4" /> COMPOSICIÓN
-          <Badge variant="secondary" className="text-[10px]">{lineas.length}</Badge>
-        </CardTitle>
-        <Button size="sm" className="gap-1" onClick={() => setAddOpen(true)}>
-          <Plus className="h-3.5 w-3.5" /> Añadir ingrediente
-        </Button>
-      </CardHeader>
-      <CardContent>
-        {loading ? (
-          <LoadingSpinner className="py-6" />
-        ) : lineas.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-6">
-            Este plato no tiene composición. Añade ingredientes para definir el escandallo.
-          </p>
-        ) : (
-          <div className="space-y-3">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-xs text-muted-foreground">
-                    <th className="text-left py-2 font-bold">INGREDIENTE</th>
-                    <th className="text-right py-2 font-bold">CANTIDAD</th>
-                    <th className="text-right py-2 font-bold">MERMA %</th>
-                    <th className="text-right py-2 font-bold">REAL</th>
-                    <th className="text-right py-2 font-bold">PRECIO/U</th>
-                    <th className="text-right py-2 font-bold">SUBTOTAL</th>
-                    <th className="py-2"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lineas.map((l) => {
-                    const real = l.cantidad * (1 + l.mermaPct / 100);
-                    return (
-                      <tr key={l.id} className="border-b">
-                        <td className="py-2 font-medium">{l.ingredienteNombre}</td>
-                        <td className="py-2 text-right">{l.cantidad} {l.ingredienteUnidad}</td>
-                        <td className="py-2 text-right">{l.mermaPct}%</td>
-                        <td className="py-2 text-right text-muted-foreground">{real.toFixed(3)} {l.ingredienteUnidad}</td>
-                        <td className="py-2 text-right">
-                          {l.precioUnitario > 0
-                            ? <span className="text-muted-foreground">{l.precioUnitario.toFixed(2)} €</span>
-                            : <span className="text-muted-foreground/50 text-xs">sin precio</span>
-                          }
-                        </td>
-                        <td className="py-2 text-right font-medium">
-                          {l.subtotal > 0 ? `${l.subtotal.toFixed(3)} €` : "—"}
-                        </td>
-                        <td className="py-2 text-right">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRemove(l.id)}>
-                            <X className="h-3.5 w-3.5" />
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Resumen food cost */}
-            {costeTotal > 0 && (() => {
-              const pvNum = parseFloat(String(precioVenta ?? "").replace(/[^0-9.,]/g, "").replace(",", ".")) || 0;
-              const margen = pvNum > 0 ? ((pvNum - costeTotal) / pvNum) * 100 : null;
-              return (
-                <div className="flex flex-wrap gap-3 pt-1 border-t">
-                  <div className="flex items-center gap-2 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 px-3 py-1.5">
-                    <ChefHat className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-                    <span className="text-xs text-muted-foreground">Food cost:</span>
-                    <span className="text-sm font-bold text-amber-700 dark:text-amber-300">{costeTotal.toFixed(2)} €</span>
-                  </div>
-                  {pvNum > 0 && (
-                    <div className="flex items-center gap-2 rounded-md bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 px-3 py-1.5">
-                      <span className="text-xs text-muted-foreground">P.V.P:</span>
-                      <span className="text-sm font-bold">{pvNum.toFixed(2)} €</span>
-                    </div>
-                  )}
-                  {margen !== null && (
-                    <div className={`flex items-center gap-2 rounded-md px-3 py-1.5 border ${margen >= 65 ? "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-700" : margen >= 50 ? "bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700" : "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700"}`}>
-                      <span className="text-xs text-muted-foreground">Margen:</span>
-                      <span className={`text-sm font-bold ${margen >= 65 ? "text-emerald-700 dark:text-emerald-300" : margen >= 50 ? "text-amber-700 dark:text-amber-300" : "text-red-700 dark:text-red-300"}`}>
-                        {margen.toFixed(1)}%
-                      </span>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-          </div>
-        )}
-      </CardContent>
-
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Añadir ingrediente al escandallo</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label className="text-xs font-bold">Ingrediente *</Label>
-              <Select value={selIng} onValueChange={setSelIng}>
-                <SelectTrigger><SelectValue placeholder="Seleccionar ingrediente" /></SelectTrigger>
-                <SelectContent>
-                  {ingredientes.map((i) => (
-                    <SelectItem key={i.id} value={i.id}>{i.nombre} ({i.unidad})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs font-bold">Cantidad *</Label>
-                <Input value={cantidad} onChange={(e) => setCantidad(e.target.value)} placeholder="0,250" />
-              </div>
-              <div>
-                <Label className="text-xs font-bold">Merma %</Label>
-                <Input value={merma} onChange={(e) => setMerma(e.target.value)} placeholder="0" />
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddOpen(false)}>Cancelar</Button>
-            <Button onClick={handleAdd}>Añadir</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </Card>
-  );
-}
-
 /* ─── DETALLE PRODUCTO (editable inline) ─── */
 function ProductoDetalle({
   producto, tipo, onBack, onSaved, onDeleted,
@@ -437,7 +113,7 @@ function ProductoDetalle({
   const mostrarConservacion = !esVenta;
   const mostrarIva = !esElaboracion;
   const mostrarFormato = esCompra || esElaboracion;
-  const categorias = categoriasOpts ?? getCategorias(tipo);
+  const categorias = categoriasOpts ?? [];
   const estadosList = estadosOpts ?? [...ESTADOS_PRODUCTO];
   const { empresaActual } = useEmpresa();
 
@@ -463,6 +139,9 @@ function ProductoDetalle({
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [preciosVersion, setPreciosVersion] = useState(0);
+  // Solo en alta de productos de compra: precio de la primera entrada del histórico.
+  // Se persiste vía addPrecioCompra justo después de createProducto.
+  const [precioInicial, setPrecioInicial] = useState<string>("");
 
   // Sincronización con precio vigente (solo productos de compra).
   // Persistimos la preferencia por producto en localStorage; default = true.
@@ -530,7 +209,6 @@ function ProductoDetalle({
       nombre: nombre.trim(),
       tipo,
       categoria,
-      familia: producto?.familia || null,
       estado,
       proveedor: esCompra ? (proveedor || null) : null,
       precioVenta: !esCompra ? (precioVenta || null) : null,
@@ -552,11 +230,54 @@ function ProductoDetalle({
     }
 
     if (isNew) {
-      // En el alta de un producto de compra, el precio + IVA llegan vía
-      // PreciosCompraSection tras el primer guardado, no en este payload.
+      // En el alta de un producto de compra, el precio + IVA se capturan en la
+      // sección "Primer precio de compra" y se persisten con addPrecioCompra
+      // tras crear el producto.
+      let precioInicialNum: number | null = null;
+      if (esCompra) {
+        const raw = precioInicial.trim();
+        if (raw) {
+          precioInicialNum = parseFloat(raw.replace(",", "."));
+          if (!Number.isFinite(precioInicialNum) || precioInicialNum < 0) {
+            setSaving(false);
+            setErrors(["Precio inicial inválido"]);
+            return;
+          }
+          if (!proveedor.trim()) {
+            setSaving(false);
+            setErrors(["Selecciona un proveedor para el primer precio"]);
+            return;
+          }
+        }
+      }
       const res = await createProducto(payload as Parameters<typeof createProducto>[0]);
+      if (res.error || !res.producto) {
+        setSaving(false);
+        toast.error(res.error ?? "No se pudo crear");
+        return;
+      }
+      if (esCompra && precioInicialNum !== null) {
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, "0");
+        const dd = String(today.getDate()).padStart(2, "0");
+        const fechaInicio = `${yyyy}-${mm}-${dd}`;
+        const precioRes = await addPrecioCompra({
+          productoId: res.producto.id,
+          precio: precioInicialNum,
+          iva: iva && iva !== "none" ? iva : null,
+          proveedor: proveedor.trim(),
+          formato: formato || null,
+          fechaInicio,
+        });
+        if (!precioRes.ok) {
+          setSaving(false);
+          toast.error(precioRes.error ?? "Producto creado, pero no se pudo guardar el precio");
+          onSaved(res.producto);
+          return;
+        }
+      }
       setSaving(false);
-      if (res.error || !res.producto) { toast.error(res.error ?? "No se pudo crear"); return; }
       toast.success("Producto creado");
       onSaved(res.producto);
       return;
@@ -674,7 +395,7 @@ function ProductoDetalle({
                 </SelectContent>
               </Select>
             </div>
-            {mostrarFormato && (
+            {mostrarFormato && !(isNew && esCompra) && (
               <div>
                 <Label className="text-xs text-muted-foreground block mb-1">Formato</Label>
                 {esCompra && usarVigente ? (
@@ -698,18 +419,18 @@ function ProductoDetalle({
                 )}
               </div>
             )}
-            {esCompra ? (
+            {esCompra && !isNew ? (
               <div>
                 <Label className="text-xs text-muted-foreground block mb-1">Proveedor</Label>
                 {usarVigente ? (
-                  <div className="flex h-9 w-full items-center rounded-md border border-input bg-muted/30 px-3 text-sm text-muted-foreground uppercase">
-                    {proveedor || <span className="italic normal-case">Sin proveedor vigente</span>}
+                  <div className="flex h-9 w-full items-center rounded-md border border-input bg-muted/30 px-3 text-sm text-muted-foreground">
+                    {proveedor || <span className="italic">Sin proveedor vigente</span>}
                   </div>
                 ) : (
                   <ProveedorCombobox value={proveedor} onChange={setProveedor} />
                 )}
               </div>
-            ) : (
+            ) : esCompra && isNew ? null : (
               <>
                 <div>
                   <Label className="text-xs text-muted-foreground block mb-1">Precio venta</Label>
@@ -741,7 +462,7 @@ function ProductoDetalle({
             )}
           </div>
 
-          {esCompra && (
+          {esCompra && !isNew && (
             <label className="mt-3 flex items-start gap-2 text-xs text-muted-foreground cursor-pointer select-none">
               <Checkbox
                 checked={usarVigente}
@@ -760,6 +481,62 @@ function ProductoDetalle({
           <AtenciónModal messages={errors} onClose={() => setErrors([])} />
         </CardContent>
       </Card>
+
+      {/* Precios de compra: en alta capturamos el primer precio inline y se persiste
+          tras crear el producto. En edición, histórico completo con PreciosCompraSection. */}
+      {esCompra && isNew && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Primer precio de compra</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+              <div>
+                <Label className="text-xs text-muted-foreground block mb-1">Proveedor *</Label>
+                <ProveedorCombobox value={proveedor} onChange={setProveedor} />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground block mb-1">Precio (sin IVA)</Label>
+                <Input
+                  value={precioInicial}
+                  onChange={(e) => setPrecioInicial(e.target.value)}
+                  placeholder="Ej: 12,50"
+                  inputMode="decimal"
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground block mb-1">IVA</Label>
+                <Select value={iva || "none"} onValueChange={(v) => setIva(v === "none" ? "" : v)}>
+                  <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin especificar</SelectItem>
+                    {IVA_OPCIONES.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground block mb-1">Formato</Label>
+                <Select
+                  value={formato || "none"}
+                  onValueChange={(v) => setFormato(v === "none" ? "" : v)}
+                  disabled={formatosUnidad.length === 0}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={formatosUnidad.length === 0 ? "Elige unidad primero" : "Seleccionar"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin especificar</SelectItem>
+                    {formatosUnidad.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <p className="mt-3 text-[11px] text-muted-foreground italic">
+              Al guardar, este precio queda registrado como vigente. Después podrás añadir más entradas en el histórico.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Histórico de precios de compra (solo productos de tipo compra ya creados) */}
       {esCompra && !isNew && (
@@ -858,9 +635,17 @@ function ProductoDetalle({
         </Card>
       )}
 
-      {/* Composición para productos de venta y elaboraciones ya creados */}
+      {/* Escandallo para productos de venta y elaboraciones ya creados */}
       {!isNew && (tipo === "venta" || tipo === "elaboracion") && (
-        <Composicion productoVentaId={producto!.id} precioVenta={producto!.precioVenta ?? undefined} />
+        <EscandalloEditor productoVentaId={producto!.id} precioVenta={producto!.precioVenta ?? undefined} />
+      )}
+
+      {/* Tarifas — solo productos de venta ya creados */}
+      {!isNew && esVenta && (
+        <TarifaPreciosSection
+          productoId={producto!.id}
+          precioVentaProducto={producto!.precioVenta ?? null}
+        />
       )}
 
       {!isNew && (
@@ -1137,7 +922,7 @@ function TablaProductos({
         />
       ),
       td: (p) => (
-        <td key="proveedor" className="px-3 py-1.5 text-muted-foreground uppercase">
+        <td key="proveedor" className="px-3 py-1.5 text-muted-foreground">
           {p.proveedor ?? "—"}
         </td>
       ),
@@ -1374,7 +1159,7 @@ function PipelineProductos({ tipo, onCardClick, reloadKey }: {
                       <span className="text-xs font-semibold text-foreground">{p.precioVenta ?? "—"}</span>
                     )}
                     {tipo === "compra" && p.proveedor && (
-                      <span className="text-[10px] text-muted-foreground truncate max-w-[120px] uppercase">{p.proveedor}</span>
+                      <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">{p.proveedor}</span>
                     )}
                     {tipo === "venta" && p.coste && (
                       <span className="text-[10px] text-muted-foreground">Coste: {p.coste}</span>
@@ -1396,17 +1181,20 @@ function PipelineProductos({ tipo, onCardClick, reloadKey }: {
 /* ─── CONFIGURACIÓN ─── */
 /* ─── HOOK: config persistente en Supabase ─── */
 function useProductConfig(tipo: TipoProducto) {
-  const [categorias, setCatRaw] = useState<string[]>(getCategorias(tipo));
+  const [categorias, setCatRaw] = useState<string[]>([]);
   const [estados, setEstRaw] = useState<string[]>([...ESTADOS_PRODUCTO]);
   const [umbralVerde, setUmbralVerdeRaw] = useState<number>(30);
   const [umbralNaranja, setUmbralNaranjaRaw] = useState<number>(40);
 
   useEffect(() => {
+    setCatRaw([]);
+    let cancelled = false;
     Promise.all([
       getProductoConfigSection(tipo, "categorias"),
       getProductoConfigSection("global", "estados"),
       getProductoConfigSection("venta", "umbral_coste"),
     ]).then(([cats, ests, umbral]) => {
+      if (cancelled) return;
       setCatRaw(cats);
       setEstRaw(ests);
       const v = parseFloat(umbral?.[0] ?? "30");
@@ -1414,6 +1202,7 @@ function useProductConfig(tipo: TipoProducto) {
       if (!Number.isNaN(v)) setUmbralVerdeRaw(v);
       if (!Number.isNaN(n)) setUmbralNaranjaRaw(n);
     });
+    return () => { cancelled = true; };
   }, [tipo]);
 
   const setCategorias = async (v: string[]) => {
@@ -1433,7 +1222,7 @@ function useProductConfig(tipo: TipoProducto) {
   return { categorias, setCategorias, estados, setEstados, umbralVerde, umbralNaranja, setUmbrales };
 }
 
-/* ─── LIST MANAGER: sección editable (categorías / familias / estados) ─── */
+/* ─── LIST MANAGER: sección editable (categorías / estados) ─── */
 function ListManager({ title, items, onChange, readOnly = false }: {
   title: string;
   items: string[];

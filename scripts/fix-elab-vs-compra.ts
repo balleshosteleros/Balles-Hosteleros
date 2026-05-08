@@ -63,7 +63,7 @@ async function main() {
   for (const m of toMerge) {
     // Redirect escandallos que apuntan a compra → elaboracion
     const { error: updErr } = await supabase
-      .from("escandallos")
+      .from("producto_composicion")
       .update({ ingrediente_id: m.elabId })
       .eq("ingrediente_id", m.compraId);
     if (updErr) { console.error(`  ⚠ redirect escandallos "${m.nombre}":`, updErr.message); continue; }

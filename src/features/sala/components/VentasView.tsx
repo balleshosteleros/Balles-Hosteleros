@@ -473,7 +473,6 @@ export function VentasView() {
                         <TableHead className="w-[60px]">#</TableHead>
                         <TableHead>Producto</TableHead>
                         <TableHead>Categoría</TableHead>
-                        <TableHead>Familia</TableHead>
                         <TableHead className="text-right">Cant.</TableHead>
                         <TableHead className="text-right">Ingresos</TableHead>
                         <TableHead className="text-right">Coste/u</TableHead>
@@ -488,7 +487,6 @@ export function VentasView() {
                           <TableCell className="text-muted-foreground">{i + 1}</TableCell>
                           <TableCell className="font-medium">{p.nombre}</TableCell>
                           <TableCell className="text-muted-foreground">{p.categoria}</TableCell>
-                          <TableCell className="text-muted-foreground">{p.familia ?? "—"}</TableCell>
                           <TableCell className="text-right">{fmtInt(p.cantidad)}</TableCell>
                           <TableCell className="text-right">{fmtEUR(p.ingresos)}</TableCell>
                           <TableCell className="text-right">{fmtEUR(p.costeUnitario)}</TableCell>
@@ -501,7 +499,7 @@ export function VentasView() {
                       ))}
                       {(data?.porProducto ?? []).length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={10} className="py-8 text-center text-muted-foreground">
+                          <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
                             Sin ventas en el período seleccionado
                           </TableCell>
                         </TableRow>
@@ -513,79 +511,42 @@ export function VentasView() {
             </Card>
           </TabsContent>
 
-          {/* ─── Categorías / Familias ───────────────────────── */}
+          {/* ─── Categorías ──────────────────────────────────── */}
           <TabsContent value="categorias" className="mt-4 space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Por categoría</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Categoría</TableHead>
-                        <TableHead className="text-right">Cant.</TableHead>
-                        <TableHead className="text-right">Ingresos</TableHead>
-                        <TableHead className="text-right">% mix</TableHead>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Por categoría</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Categoría</TableHead>
+                      <TableHead className="text-right">Cant.</TableHead>
+                      <TableHead className="text-right">Ingresos</TableHead>
+                      <TableHead className="text-right">% mix</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(data?.porCategoria ?? []).map((c) => (
+                      <TableRow key={c.categoria}>
+                        <TableCell className="font-medium">{c.categoria}</TableCell>
+                        <TableCell className="text-right">{fmtInt(c.cantidad)}</TableCell>
+                        <TableCell className="text-right">{fmtEUR(c.ingresos)}</TableCell>
+                        <TableCell className="text-right">{fmtPct(c.pct)}</TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {(data?.porCategoria ?? []).map((c) => (
-                        <TableRow key={c.categoria}>
-                          <TableCell className="font-medium">{c.categoria}</TableCell>
-                          <TableCell className="text-right">{fmtInt(c.cantidad)}</TableCell>
-                          <TableCell className="text-right">{fmtEUR(c.ingresos)}</TableCell>
-                          <TableCell className="text-right">{fmtPct(c.pct)}</TableCell>
-                        </TableRow>
-                      ))}
-                      {(data?.porCategoria ?? []).length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
-                            Sin datos
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Por familia</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <Table>
-                    <TableHeader>
+                    ))}
+                    {(data?.porCategoria ?? []).length === 0 && (
                       <TableRow>
-                        <TableHead>Familia</TableHead>
-                        <TableHead className="text-right">Cant.</TableHead>
-                        <TableHead className="text-right">Ingresos</TableHead>
-                        <TableHead className="text-right">% mix</TableHead>
+                        <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
+                          Sin datos
+                        </TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {(data?.porFamilia ?? []).map((f) => (
-                        <TableRow key={f.familia}>
-                          <TableCell className="font-medium">{f.familia}</TableCell>
-                          <TableCell className="text-right">{fmtInt(f.cantidad)}</TableCell>
-                          <TableCell className="text-right">{fmtEUR(f.ingresos)}</TableCell>
-                          <TableCell className="text-right">{fmtPct(f.pct)}</TableCell>
-                        </TableRow>
-                      ))}
-                      {(data?.porFamilia ?? []).length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
-                            Sin datos
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </div>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* ─── Menu Engineering ────────────────────────────── */}

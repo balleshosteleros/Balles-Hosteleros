@@ -3,17 +3,17 @@
 import { useState, useMemo, useCallback, useEffect, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
-  crearFichaVacia, calcularMargen,
-  generateShareToken, registerSharedFicha, unregisterSharedFicha,
-  type FichaTecnica, type CategoriaFicha, type EstadoFicha, type ConfigFichas,
-  ESTADO_FICHA_LABELS, DEFAULT_ALERGENOS, DEFAULT_RECOMENDACIONES, DEFAULT_PARTIDAS, DEFAULT_MENAJE,
-} from "@/features/cocina/data/fichas-tecnicas";
+  crearEscandalloVacio, calcularMargen,
+  generateShareToken, registerSharedEscandallo, unregisterSharedEscandallo,
+  type Escandallo, type CategoriaEscandallo, type EstadoEscandallo, type ConfigEscandallos,
+  ESTADO_ESCANDALLO_LABELS, DEFAULT_ALERGENOS, DEFAULT_RECOMENDACIONES, DEFAULT_PARTIDAS, DEFAULT_MENAJE,
+} from "@/features/cocina/data/escandallos";
 import { getEmpleadosPorEmpresa } from "@/features/rrhh/data/rrhh";
 import {
-  listFichas, createFicha, updateFicha, deleteFicha,
-} from "@/features/cocina/actions/fichas-tecnicas-actions";
-import { useFichasConfig, type FichaConfigItem, type GrupoCodigo } from "@/features/cocina/hooks/useFichasConfig";
-import { listConfigItems } from "@/features/cocina/actions/fichas-config-actions";
+  listEscandallos, createEscandallo, updateEscandallo, deleteEscandallo,
+} from "@/features/cocina/actions/escandallos-actions";
+import { useEscandallosConfig, type EscandalloConfigItem, type GrupoCodigo } from "@/features/cocina/hooks/useEscandallosConfig";
+import { listConfigItems } from "@/features/cocina/actions/escandallos-config-actions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,7 +46,7 @@ import {
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 
 // ─── Estado colors ─────────────────────────────────────────────
-const ESTADO_COLORS: Record<EstadoFicha, string> = {
+const ESTADO_COLORS: Record<EstadoEscandallo, string> = {
   activa: "bg-emerald-100 text-emerald-700 border-emerald-200",
   borrador: "bg-amber-100 text-amber-700 border-amber-200",
   archivada: "bg-muted text-muted-foreground border-border",
@@ -66,7 +66,7 @@ function ConfigItemsEditor({
   showActiva?: boolean;
   onChanged?: () => void;
 }) {
-  const { items, loading, create, update, remove } = useFichasConfig(grupo);
+  const { items, loading, create, update, remove } = useEscandallosConfig(grupo);
   const [nuevo, setNuevo] = useState("");
   const [editId, setEditId] = useState<string | null>(null);
   const [editVal, setEditVal] = useState("");
@@ -92,7 +92,7 @@ function ConfigItemsEditor({
     }
   };
 
-  const startEdit = (it: FichaConfigItem) => {
+  const startEdit = (it: EscandalloConfigItem) => {
     setEditId(it.id);
     setEditVal(it.nombre);
   };
@@ -114,7 +114,7 @@ function ConfigItemsEditor({
     if (ok) fire();
   };
 
-  const toggleActiva = async (it: FichaConfigItem) => {
+  const toggleActiva = async (it: EscandalloConfigItem) => {
     const ok = await update(it.id, { activa: !it.activa });
     if (ok) fire();
   };
@@ -256,22 +256,22 @@ function FotoUploader({ foto, onChange }: { foto?: string; onChange: (url?: stri
 }
 
 // ─── Detail / Edit Dialog ──────────────────────────────────────
-function FichaDetalle({
-  ficha, open, onClose, categorias, onSave, config, empresaId,
+function EscandalloDetalle({
+  escandallo, open, onClose, categorias, onSave, config, empresaId,
 }: {
-  ficha: FichaTecnica | null; open: boolean; onClose: () => void;
-  categorias: CategoriaFicha[]; onSave: (f: FichaTecnica) => void;
-  config: ConfigFichas; empresaId: string;
+  escandallo: Escandallo | null; open: boolean; onClose: () => void;
+  categorias: CategoriaEscandallo[]; onSave: (f: Escandallo) => void;
+  config: ConfigEscandallos; empresaId: string;
 }) {
-  const [form, setForm] = useState<FichaTecnica | null>(null);
-  useMemo(() => { if (ficha) setForm({ ...ficha }); }, [ficha]);
+  const [form, setForm] = useState<Escandallo | null>(null);
+  useMemo(() => { if (escandallo) setForm({ ...escandallo }); }, [escandallo]);
   if (!form) return null;
 
   const empleados = getEmpleadosPorEmpresa(empresaId);
   const margen = calcularMargen(form.pvp, form.costeTotal);
   const costePct = form.pvp > 0 ? ((form.costeTotal / form.pvp) * 100).toFixed(2) : "0.00";
 
-  const update = (partial: Partial<FichaTecnica>) => setForm((prev) => prev ? { ...prev, ...partial } : prev);
+  const update = (partial: Partial<Escandallo>) => setForm((prev) => prev ? { ...prev, ...partial } : prev);
   const toggleArray = (arr: string[], item: string) => arr.includes(item) ? arr.filter((x) => x !== item) : [...arr, item];
 
   const addIngrediente = () => {
@@ -284,7 +284,7 @@ function FichaDetalle({
   const handleSave = () => {
     if (!form.nombre.trim()) { toast.error("El nombre es obligatorio"); return; }
     onSave({ ...form, fechaActualizacion: new Date().toISOString().slice(0, 10) });
-    toast.success("Ficha guardada correctamente");
+    toast.success("Escandallo guardado correctamente");
     onClose();
   };
 
@@ -294,15 +294,15 @@ function FichaDetalle({
     const token = form.shareToken || generateShareToken();
     const catNombre = categorias.find((c) => c.id === form.categoriaId)?.nombre || "";
     const updated = { ...form, shareToken: token, shareEnabled: true };
-    registerSharedFicha(updated, catNombre);
+    registerSharedEscandallo(updated, catNombre);
     update({ shareToken: token, shareEnabled: true });
-    const url = `${window.location.origin}/ficha-publica/${token}`;
+    const url = `${window.location.origin}/escandallo-publico/${token}`;
     navigator.clipboard.writeText(url);
     toast.success("Enlace copiado al portapapeles");
   };
 
   const handleDisableShare = () => {
-    if (form.shareToken) unregisterSharedFicha(form.shareToken);
+    if (form.shareToken) unregisterSharedEscandallo(form.shareToken);
     update({ shareEnabled: false });
     toast.info("Enlace desactivado");
   };
@@ -316,7 +316,7 @@ function FichaDetalle({
               <div className="flex items-center justify-between">
                 <DialogTitle className="flex items-center gap-2 text-lg">
                   <ChefHat className="h-5 w-5 text-primary" />
-                  {form.id.startsWith("ft-new") ? "Nueva ficha técnica" : "Editar ficha técnica"}
+                  {form.id.startsWith("ft-new") ? "Nueva escandallo" : "Editar escandallo"}
                 </DialogTitle>
                 <div className="flex gap-1.5">
                   <Button size="sm" variant="outline" className="gap-1 text-xs h-8" onClick={handlePrint}>
@@ -337,10 +337,10 @@ function FichaDetalle({
                 <div className="flex items-center gap-2 mt-2 p-2 rounded-lg bg-muted/50 border text-xs">
                   <Link2 className="h-3.5 w-3.5 text-primary" />
                   <span className="text-muted-foreground truncate flex-1">
-                    {window.location.origin}/ficha-publica/{form.shareToken}
+                    {window.location.origin}/escandallo-publico/{form.shareToken}
                   </span>
                   <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => {
-                    navigator.clipboard.writeText(`${window.location.origin}/ficha-publica/${form.shareToken}`);
+                    navigator.clipboard.writeText(`${window.location.origin}/escandallo-publico/${form.shareToken}`);
                     toast.success("Enlace copiado");
                   }}>
                     Copiar
@@ -372,11 +372,11 @@ function FichaDetalle({
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs">Estado</Label>
-                    <Select value={form.estado} onValueChange={(v) => update({ estado: v as EstadoFicha })}>
+                    <Select value={form.estado} onValueChange={(v) => update({ estado: v as EstadoEscandallo })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {(Object.keys(ESTADO_FICHA_LABELS) as EstadoFicha[]).map((e) => (
-                          <SelectItem key={e} value={e}>{ESTADO_FICHA_LABELS[e]}</SelectItem>
+                        {(Object.keys(ESTADO_ESCANDALLO_LABELS) as EstadoEscandallo[]).map((e) => (
+                          <SelectItem key={e} value={e}>{ESTADO_ESCANDALLO_LABELS[e]}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -598,7 +598,7 @@ function FichaDetalle({
 
             <DialogFooter className="pt-4">
               <Button variant="outline" onClick={onClose}>Cancelar</Button>
-              <Button onClick={handleSave}>Guardar ficha</Button>
+              <Button onClick={handleSave}>Guardar escandallo</Button>
             </DialogFooter>
           </div>
         </ScrollArea>
@@ -608,21 +608,21 @@ function FichaDetalle({
 }
 
 // ─── Main Page ─────────────────────────────────────────────────
-export function FichasTecnicasView() {
+export function EscandallosView() {
   const { empresaActual } = useEmpresa();
 
-  const [fichas, setFichas] = useState<Record<string, FichaTecnica[]>>({});
-  const [categorias, setCategorias] = useState<Record<string, CategoriaFicha[]>>({});
-  const [configs, setConfigs] = useState<Record<string, ConfigFichas>>({});
+  const [escandallos, setEscandallos] = useState<Record<string, Escandallo[]>>({});
+  const [categorias, setCategorias] = useState<Record<string, CategoriaEscandallo[]>>({});
+  const [configs, setConfigs] = useState<Record<string, ConfigEscandallos>>({});
   const [loading, setLoading] = useState(true);
 
-  // --- Helper: map DB row → FichaTecnica ---
-  const mapDbToFicha = useCallback((row: Record<string, unknown>): FichaTecnica => {
+  // --- Helper: map DB row → Escandallo ---
+  const mapDbToEscandallo = useCallback((row: Record<string, unknown>): Escandallo => {
     return {
       id: row.id as string,
       nombre: (row.nombre as string) ?? "",
       categoriaId: (row.categoria as string) ?? "",
-      estado: ((row.estado as string) ?? "borrador") as EstadoFicha,
+      estado: ((row.estado as string) ?? "borrador") as EstadoEscandallo,
       responsable: (row.created_by as string) ?? "",
       fechaCreacion: (row.created_at as string)?.slice(0, 10) ?? "",
       fechaActualizacion: (row.updated_at as string)?.slice(0, 10) ?? "",
@@ -646,23 +646,23 @@ export function FichasTecnicasView() {
     };
   }, []);
 
-  // --- Load fichas from server ---
-  const loadFichas = useCallback(async () => {
+  // --- Load escandallos from server ---
+  const loadEscandallos = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await listFichas();
+      const res = await listEscandallos();
       if (res.ok) {
-        const mapped = (res.data as Record<string, unknown>[]).map(mapDbToFicha);
-        setFichas((prev) => ({ ...prev, [empresaActual.id]: mapped }));
+        const mapped = (res.data as Record<string, unknown>[]).map(mapDbToEscandallo);
+        setEscandallos((prev) => ({ ...prev, [empresaActual.id]: mapped }));
       } else {
-        toast.error("Error al cargar fichas técnicas");
+        toast.error("Error al cargar escandallos");
       }
     } catch {
-      toast.error("Error de conexión al cargar fichas");
+      toast.error("Error de conexión al cargar escandallos");
     } finally {
       setLoading(false);
     }
-  }, [empresaActual.id, mapDbToFicha]);
+  }, [empresaActual.id, mapDbToEscandallo]);
 
   // --- Load config (categorias + alergenos/partidas/menaje/recomendaciones) ---
   const loadConfig = useCallback(async () => {
@@ -675,7 +675,7 @@ export function FichasTecnicasView() {
         listConfigItems("recomendaciones"),
       ]);
 
-      const mappedCats: CategoriaFicha[] = (cats.data ?? []).map((it) => ({
+      const mappedCats: CategoriaEscandallo[] = (cats.data ?? []).map((it) => ({
         id: it.id,
         nombre: it.nombre,
         orden: it.orden,
@@ -683,7 +683,7 @@ export function FichasTecnicasView() {
       }));
       setCategorias((prev) => ({ ...prev, [empresaActual.id]: mappedCats }));
 
-      const cfg: ConfigFichas = {
+      const cfg: ConfigEscandallos = {
         alergenos: (alg.data ?? []).filter((i) => i.activa).map((i) => i.nombre),
         partidas: (par.data ?? []).filter((i) => i.activa).map((i) => i.nombre),
         menaje: (men.data ?? []).filter((i) => i.activa).map((i) => i.nombre),
@@ -691,58 +691,58 @@ export function FichasTecnicasView() {
       };
       setConfigs((prev) => ({ ...prev, [empresaActual.id]: cfg }));
     } catch (err) {
-      console.error("[fichas-tecnicas] loadConfig:", err);
+      console.error("[escandallos] loadConfig:", err);
       toast.error("Error al cargar la configuración");
     }
   }, [empresaActual.id]);
 
   useEffect(() => {
-    loadFichas();
+    loadEscandallos();
     loadConfig();
-  }, [loadFichas, loadConfig]);
+  }, [loadEscandallos, loadConfig]);
 
-  const empresaFichas = fichas[empresaActual.id] ?? [];
+  const empresaEscandallos = escandallos[empresaActual.id] ?? [];
   const empresaCats = categorias[empresaActual.id] ?? [];
-  const defaultConfig: ConfigFichas = { alergenos: DEFAULT_ALERGENOS, partidas: DEFAULT_PARTIDAS, menaje: DEFAULT_MENAJE, recomendaciones: DEFAULT_RECOMENDACIONES };
+  const defaultConfig: ConfigEscandallos = { alergenos: DEFAULT_ALERGENOS, partidas: DEFAULT_PARTIDAS, menaje: DEFAULT_MENAJE, recomendaciones: DEFAULT_RECOMENDACIONES };
   const empresaConfig = configs[empresaActual.id] ?? defaultConfig;
 
   const [view, setView] = useState<"lista" | "pipeline">("lista");
-  const [tab, setTab] = useState("fichas");
+  const [tab, setTab] = useState("escandallos");
   const [search, setSearch] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
-  const [detalleFicha, setDetalleFicha] = useState<FichaTecnica | null>(null);
+  const [detalleEscandallo, setDetalleEscandallo] = useState<Escandallo | null>(null);
   const [detalleOpen, setDetalleOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const filtered = useMemo(() => {
-    let list = empresaFichas;
+    let list = empresaEscandallos;
     if (search) {
       const s = search.toLowerCase();
       list = list.filter((f) => f.nombre.toLowerCase().includes(s) || f.responsable.toLowerCase().includes(s));
     }
     list = aplicarFiltrosToolbar(list, filtros, (f, campo) => {
       if (campo === "categoria") return empresaCats.find((c) => c.id === f.categoriaId)?.nombre ?? "";
-      if (campo === "estado") return ESTADO_FICHA_LABELS[f.estado];
+      if (campo === "estado") return ESTADO_ESCANDALLO_LABELS[f.estado];
       return (f as unknown as Record<string, unknown>)[campo];
     });
     return list;
-  }, [empresaFichas, empresaCats, search, filtros]);
+  }, [empresaEscandallos, empresaCats, search, filtros]);
 
-  const openDetail = (f: FichaTecnica) => { setDetalleFicha(f); setDetalleOpen(true); };
+  const openDetail = (f: Escandallo) => { setDetalleEscandallo(f); setDetalleOpen(true); };
 
   const openNew = () => {
     const cat = empresaCats.find((c) => c.activa)?.id ?? "cat-1";
-    const nueva = { ...crearFichaVacia(empresaActual.id, cat), id: `ft-new-${Date.now()}` };
-    setDetalleFicha(nueva);
+    const nueva = { ...crearEscandalloVacio(empresaActual.id, cat), id: `ft-new-${Date.now()}` };
+    setDetalleEscandallo(nueva);
     setDetalleOpen(true);
   };
 
-  const handleSave = useCallback(async (f: FichaTecnica) => {
+  const handleSave = useCallback(async (f: Escandallo) => {
     const isNew = f.id.startsWith("ft-new");
     // Optimistic update
-    setFichas((prev) => {
+    setEscandallos((prev) => {
       const list = prev[empresaActual.id] ?? [];
       const exists = list.find((x) => x.id === f.id);
       const updated = exists ? list.map((x) => x.id === f.id ? f : x) : [...list, { ...f, id: isNew ? `ft-${Date.now()}` : f.id }];
@@ -751,12 +751,12 @@ export function FichasTecnicasView() {
     // Re-register share if enabled
     if (f.shareEnabled && f.shareToken) {
       const catNombre = empresaCats.find((c) => c.id === f.categoriaId)?.nombre || "";
-      registerSharedFicha(f, catNombre);
+      registerSharedEscandallo(f, catNombre);
     }
     // Persist to server
     try {
       if (isNew) {
-        const res = await createFicha({
+        const res = await createEscandallo({
           nombre: f.nombre,
           categoria: f.categoriaId,
           raciones: undefined,
@@ -769,34 +769,34 @@ export function FichasTecnicasView() {
             coste: 0,
           })),
         });
-        if (!res.ok) { toast.error("Error al crear ficha en servidor"); loadFichas(); }
+        if (!res.ok) { toast.error("Error al crear escandallo en servidor"); loadEscandallos(); }
       } else {
-        const res = await updateFicha(f.id, {
+        const res = await updateEscandallo(f.id, {
           nombre: f.nombre,
           categoria: f.categoriaId,
           notas: f.elaboracion || undefined,
         });
-        if (!res.ok) { toast.error("Error al actualizar ficha en servidor"); loadFichas(); }
+        if (!res.ok) { toast.error("Error al actualizar escandallo en servidor"); loadEscandallos(); }
       }
     } catch {
-      toast.error("Error de conexión al guardar ficha");
-      loadFichas();
+      toast.error("Error de conexión al guardar escandallo");
+      loadEscandallos();
     }
-  }, [empresaActual.id, empresaCats, loadFichas]);
+  }, [empresaActual.id, empresaCats, loadEscandallos]);
 
-  const duplicar = (f: FichaTecnica) => {
-    const copia: FichaTecnica = { ...f, id: `ft-${Date.now()}`, nombre: `${f.nombre} (copia)`, estado: "borrador", fechaCreacion: new Date().toISOString().slice(0, 10), fechaActualizacion: new Date().toISOString().slice(0, 10), shareToken: undefined, shareEnabled: false, foto: f.foto };
-    setFichas((prev) => ({ ...prev, [empresaActual.id]: [...(prev[empresaActual.id] ?? []), copia] }));
-    toast.success("Ficha duplicada");
+  const duplicar = (f: Escandallo) => {
+    const copia: Escandallo = { ...f, id: `ft-${Date.now()}`, nombre: `${f.nombre} (copia)`, estado: "borrador", fechaCreacion: new Date().toISOString().slice(0, 10), fechaActualizacion: new Date().toISOString().slice(0, 10), shareToken: undefined, shareEnabled: false, foto: f.foto };
+    setEscandallos((prev) => ({ ...prev, [empresaActual.id]: [...(prev[empresaActual.id] ?? []), copia] }));
+    toast.success("Escandallo duplicado");
   };
 
   const archivar = async (id: string) => {
-    setFichas((prev) => ({ ...prev, [empresaActual.id]: (prev[empresaActual.id] ?? []).map((f) => f.id === id ? { ...f, estado: "archivada" as EstadoFicha } : f) }));
-    toast.success("Ficha archivada");
+    setEscandallos((prev) => ({ ...prev, [empresaActual.id]: (prev[empresaActual.id] ?? []).map((f) => f.id === id ? { ...f, estado: "archivada" as EstadoEscandallo } : f) }));
+    toast.success("Escandallo archivado");
     try {
-      const res = await updateFicha(id, { nombre: undefined });
-      if (!res.ok) loadFichas();
-    } catch { loadFichas(); }
+      const res = await updateEscandallo(id, { nombre: undefined });
+      if (!res.ok) loadEscandallos();
+    } catch { loadEscandallos(); }
   };
 
   const toggleSelect = (id: string) => {
@@ -808,16 +808,16 @@ export function FichasTecnicasView() {
   };
 
   const handleMassPrint = () => {
-    if (selected.size === 0) { toast.info("Selecciona al menos una ficha"); return; }
-    toast.success(`Preparando impresión de ${selected.size} ficha(s)…`);
+    if (selected.size === 0) { toast.info("Selecciona al menos un escandallo"); return; }
+    toast.success(`Preparando impresión de ${selected.size} escandallo(s)…`);
     window.print();
   };
 
   const handleMassExport = () => {
-    if (selected.size === 0) { toast.info("Selecciona al menos una ficha"); return; }
+    if (selected.size === 0) { toast.info("Selecciona al menos un escandallo"); return; }
     // Generate a simple text export (in a real app this would be PDF)
-    const selectedFichas = empresaFichas.filter((f) => selected.has(f.id));
-    const content = selectedFichas.map((f) => {
+    const selectedEscandallos = empresaEscandallos.filter((f) => selected.has(f.id));
+    const content = selectedEscandallos.map((f) => {
       const cat = empresaCats.find((c) => c.id === f.categoriaId);
       return [
         `═══ ${f.nombre} ═══`,
@@ -837,26 +837,26 @@ export function FichasTecnicasView() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `fichas-tecnicas-${empresaActual.id}-${new Date().toISOString().slice(0, 10)}.txt`;
+    a.download = `escandallos-${empresaActual.id}-${new Date().toISOString().slice(0, 10)}.txt`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success(`Dossier exportado con ${selected.size} ficha(s)`);
+    toast.success(`Dossier exportado con ${selected.size} escandallo(s)`);
   };
 
   const activeCats = empresaCats.filter((c) => c.activa).sort((a, b) => a.orden - b.orden);
 
   // Stats
-  const totalActivas = empresaFichas.filter((f) => f.estado === "activa").length;
-  const costeMedio = empresaFichas.length > 0 ? (empresaFichas.reduce((s, f) => s + f.costeTotal, 0) / empresaFichas.length).toFixed(2) : "0.00";
-  const pvpMedio = empresaFichas.length > 0 ? (empresaFichas.reduce((s, f) => s + f.pvp, 0) / empresaFichas.length).toFixed(2) : "0.00";
-  const margenMedio = empresaFichas.length > 0 ? Math.round(empresaFichas.reduce((s, f) => s + calcularMargen(f.pvp, f.costeTotal), 0) / empresaFichas.length) : 0;
+  const totalActivas = empresaEscandallos.filter((f) => f.estado === "activa").length;
+  const costeMedio = empresaEscandallos.length > 0 ? (empresaEscandallos.reduce((s, f) => s + f.costeTotal, 0) / empresaEscandallos.length).toFixed(2) : "0.00";
+  const pvpMedio = empresaEscandallos.length > 0 ? (empresaEscandallos.reduce((s, f) => s + f.pvp, 0) / empresaEscandallos.length).toFixed(2) : "0.00";
+  const margenMedio = empresaEscandallos.length > 0 ? Math.round(empresaEscandallos.reduce((s, f) => s + calcularMargen(f.pvp, f.costeTotal), 0) / empresaEscandallos.length) : 0;
 
   if (loading) {
     return <LoadingSpinner className="p-4 md:p-6 min-h-[300px]" size="lg" />;
   }
 
   const columnasDef: ToolbarColumna[] = [
-    { campo: "ficha", label: "Ficha técnica", bloqueada: true },
+    { campo: "escandallo", label: "Escandallo", bloqueada: true },
     { campo: "categoria", label: "Categoría" },
     { campo: "coste", label: "Coste" },
     { campo: "pvp", label: "Precio de Venta" },
@@ -866,11 +866,11 @@ export function FichasTecnicasView() {
     { campo: "creador", label: "Creador" },
   ];
 
-  const columnDefs: Record<string, { th: ReactNode; td: (f: FichaTecnica) => ReactNode }> = {
-    ficha: {
-      th: <TableHead key="ficha" className="text-xs min-w-[200px]">Ficha técnica</TableHead>,
+  const columnDefs: Record<string, { th: ReactNode; td: (f: Escandallo) => ReactNode }> = {
+    escandallo: {
+      th: <TableHead key="escandallo" className="text-xs min-w-[200px]">Escandallo</TableHead>,
       td: (f) => (
-        <TableCell key="ficha">
+        <TableCell key="escandallo">
           <div className="flex items-center gap-2">
             <span className="font-medium text-foreground">{f.nombre}</span>
             {f.delicatessen && <Badge variant="secondary" className="text-[9px] bg-amber-100 text-amber-700 border-amber-200">★</Badge>}
@@ -922,14 +922,14 @@ export function FichasTecnicasView() {
           label="Estado"
           campo="estado"
           filtroTipo="lista"
-          opciones={(Object.keys(ESTADO_FICHA_LABELS) as EstadoFicha[]).map((e) => ESTADO_FICHA_LABELS[e])}
+          opciones={(Object.keys(ESTADO_ESCANDALLO_LABELS) as EstadoEscandallo[]).map((e) => ESTADO_ESCANDALLO_LABELS[e])}
           filtros={filtros}
           onFiltrosChange={setFiltros}
         />
       ),
       td: (f) => (
         <TableCell key="estado" className="text-center">
-          <Badge className={`text-[10px] border ${ESTADO_COLORS[f.estado]}`}>{ESTADO_FICHA_LABELS[f.estado]}</Badge>
+          <Badge className={`text-[10px] border ${ESTADO_COLORS[f.estado]}`}>{ESTADO_ESCANDALLO_LABELS[f.estado]}</Badge>
         </TableCell>
       ),
     },
@@ -967,7 +967,7 @@ export function FichasTecnicasView() {
             size="icon"
             variant={tab === "config" ? "default" : "outline"}
             className="h-9 w-9"
-            onClick={() => setTab(tab === "config" ? "fichas" : "config")}
+            onClick={() => setTab(tab === "config" ? "escandallos" : "config")}
             title="Configuración"
             aria-label="Configuración"
           >
@@ -991,8 +991,8 @@ export function FichasTecnicasView() {
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card><CardContent className="p-4 text-center">
-          <p className="text-2xl font-bold text-foreground">{empresaFichas.length}</p>
-          <p className="text-xs text-muted-foreground">Total fichas</p>
+          <p className="text-2xl font-bold text-foreground">{empresaEscandallos.length}</p>
+          <p className="text-xs text-muted-foreground">Total escandallos</p>
         </CardContent></Card>
         <Card><CardContent className="p-4 text-center">
           <p className="text-2xl font-bold text-emerald-600">{totalActivas}</p>
@@ -1009,7 +1009,7 @@ export function FichasTecnicasView() {
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsContent value="fichas" className="space-y-4 mt-4">
+        <TabsContent value="escandallos" className="space-y-4 mt-4">
           {selected.size > 0 && (
             <div className="flex gap-1.5 justify-end">
               <Button size="sm" variant="outline" className="gap-1 text-xs h-9" onClick={handleMassPrint}>
@@ -1037,7 +1037,7 @@ export function FichasTecnicasView() {
                 </TableHeader>
                 <TableBody>
                   {filtered.length === 0 && (
-                    <TableRow><TableCell colSpan={20} className="text-center py-12 text-muted-foreground">No se encontraron fichas técnicas.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={20} className="text-center py-12 text-muted-foreground">No se encontraron escandallos.</TableCell></TableRow>
                   )}
                   {filtered.map((f) => (
                     <TableRow key={f.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openDetail(f)}>
@@ -1086,7 +1086,7 @@ export function FichasTecnicasView() {
                     </div>
                     <div className="border border-t-0 border-border rounded-b-lg p-2 space-y-2 min-h-[100px] bg-muted/10">
                       {catFichas.length === 0 && (
-                        <p className="text-xs text-muted-foreground text-center py-6">Sin fichas</p>
+                        <p className="text-xs text-muted-foreground text-center py-6">Sin escandallos</p>
                       )}
                       {catFichas.map((f) => {
                         const m = calcularMargen(f.pvp, f.costeTotal);
@@ -1102,7 +1102,7 @@ export function FichasTecnicasView() {
                                 <span>{f.costeTotal.toFixed(2)}€ → {f.pvp.toFixed(2)}€</span>
                                 <span className={`font-semibold ${m >= 60 ? "text-emerald-600" : m >= 40 ? "text-amber-600" : "text-destructive"}`}>{m}%</span>
                               </div>
-                              <Badge className={`text-[9px] border ${ESTADO_COLORS[f.estado]}`}>{ESTADO_FICHA_LABELS[f.estado]}</Badge>
+                              <Badge className={`text-[9px] border ${ESTADO_COLORS[f.estado]}`}>{ESTADO_ESCANDALLO_LABELS[f.estado]}</Badge>
                             </CardContent>
                           </Card>
                         );
@@ -1121,8 +1121,8 @@ export function FichasTecnicasView() {
       </Tabs>
 
       {/* Detail modal */}
-      <FichaDetalle
-        ficha={detalleFicha} open={detalleOpen} onClose={() => setDetalleOpen(false)}
+      <EscandalloDetalle
+        escandallo={detalleEscandallo} open={detalleOpen} onClose={() => setDetalleOpen(false)}
         categorias={empresaCats} onSave={handleSave} config={empresaConfig} empresaId={empresaActual.id}
       />
     </div>

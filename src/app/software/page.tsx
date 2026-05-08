@@ -34,7 +34,7 @@ const gallery = [
   {
     src: "/images/landing/cocina.jpg",
     title: "Cocina",
-    caption: "Fichas, escandallos y mermas medidas.",
+    caption: "Escandallos, partidas y mermas medidas.",
   },
   {
     src: "/images/landing/equipo.jpg",
@@ -59,36 +59,12 @@ const gallery = [
 ];
 
 const modules = [
-  {
-    icon: LayoutDashboard,
-    title: "Dirección",
-    desc: "Visión completa de tu negocio. Estructura, indicadores y control desde un solo lugar.",
-  },
-  {
-    icon: ChefHat,
-    title: "Cocina",
-    desc: "Fichas técnicas, escandallos, partidas y elaboraciones. Todo medido, todo costeado.",
-  },
-  {
-    icon: Users,
-    title: "RRHH",
-    desc: "Contratos, nóminas, turnos, vacaciones y documentación de tu equipo. Sin papeles sueltos.",
-  },
-  {
-    icon: Truck,
-    title: "Logística",
-    desc: "Proveedores, pedidos, inventario y control de mermas. Compra con criterio, no por inercia.",
-  },
-  {
-    icon: BarChart3,
-    title: "Contabilidad",
-    desc: "Facturas, gastos, impuestos y cuenta de resultados. Números claros para decisiones reales.",
-  },
-  {
-    icon: Shield,
-    title: "Jurídico y Gestoría",
-    desc: "Licencias, contratos, inspecciones y comunicaciones con tu gestoría. Todo en orden.",
-  },
+  { icon: LayoutDashboard, title: "Dirección" },
+  { icon: ChefHat, title: "Cocina" },
+  { icon: Users, title: "RRHH" },
+  { icon: Truck, title: "Logística" },
+  { icon: BarChart3, title: "Contabilidad" },
+  { icon: Shield, title: "Jurídico y Gestoría" },
 ];
 
 const steps = [
@@ -148,7 +124,7 @@ const plans: Plan[] = [
     features: [
       "1 centro de trabajo",
       "Dirección y estructura",
-      "Cocina y fichas técnicas",
+      "Cocina y escandallos",
       "RRHH básico",
       "Soporte por email",
     ],
@@ -533,8 +509,7 @@ export default function SoftwareLanding() {
                   size={24}
                   className="mb-4 text-blue-400 transition group-hover:text-blue-300"
                 />
-                <h3 className="mb-2 text-[15px] font-semibold">{m.title}</h3>
-                <p className="text-sm leading-relaxed text-slate-400">{m.desc}</p>
+                <h3 className="text-[15px] font-semibold">{m.title}</h3>
               </div>
             ))}
           </div>

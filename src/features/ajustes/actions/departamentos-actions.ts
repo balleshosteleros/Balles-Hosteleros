@@ -13,6 +13,7 @@ export type DepartamentoRow = {
   descripcion: string
   responsable_id: string | null
   estado: 'Activo' | 'Inactivo'
+  area: 'OPERATIVA' | 'ADMINISTRATIVA'
   created_at: string
   updated_at: string
 }
@@ -62,7 +63,7 @@ export async function listDepartamentos(empresaIdParam?: string): Promise<Depart
     const empresa_id = await resolveEmpresaId(empresaIdParam)
     const { data, error } = await admin
       .from('departamentos')
-      .select('id, empresa_id, nombre, descripcion, responsable_id, estado, created_at, updated_at')
+      .select('id, empresa_id, nombre, descripcion, responsable_id, estado, area, created_at, updated_at')
       .eq('empresa_id', empresa_id)
       .order('nombre', { ascending: true })
     if (error || !data) return []
@@ -94,7 +95,7 @@ export async function createDepartamento(input: {
         responsable_id: input.responsableId ?? null,
         estado: input.estado ?? 'Activo',
       })
-      .select('id, empresa_id, nombre, descripcion, responsable_id, estado, created_at, updated_at')
+      .select('id, empresa_id, nombre, descripcion, responsable_id, estado, area, created_at, updated_at')
       .single()
 
     if (error) {
@@ -130,7 +131,7 @@ export async function updateDepartamento(
       .update(update)
       .eq('id', id)
       .eq('empresa_id', empresa_id)
-      .select('id, empresa_id, nombre, descripcion, responsable_id, estado, created_at, updated_at')
+      .select('id, empresa_id, nombre, descripcion, responsable_id, estado, area, created_at, updated_at')
       .single()
 
     if (error) {

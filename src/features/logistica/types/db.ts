@@ -21,7 +21,6 @@ export interface ProductoRow {
   tipo: ProductoTipo;
   nombre: string;
   categoria: string;
-  familia: string | null;
   estado: ProductoEstado;
   proveedor: string | null;
   precio_compra: string | null;

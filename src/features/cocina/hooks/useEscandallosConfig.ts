@@ -7,14 +7,14 @@ import {
   createConfigItem,
   updateConfigItem,
   deleteConfigItem,
-  type FichaConfigItem,
+  type EscandalloConfigItem,
   type GrupoCodigo,
-} from "@/features/cocina/actions/fichas-config-actions";
+} from "@/features/cocina/actions/escandallos-config-actions";
 
-export type { FichaConfigItem, GrupoCodigo };
+export type { EscandalloConfigItem, GrupoCodigo };
 
-export function useFichasConfig(grupo: GrupoCodigo) {
-  const [items, setItems] = useState<FichaConfigItem[]>([]);
+export function useEscandallosConfig(grupo: GrupoCodigo) {
+  const [items, setItems] = useState<EscandalloConfigItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const reload = useCallback(async () => {
@@ -27,7 +27,7 @@ export function useFichasConfig(grupo: GrupoCodigo) {
         toast.error(`Error al cargar ${grupo}: ${res.error ?? "desconocido"}`);
       }
     } catch (err) {
-      console.error("[useFichasConfig] reload:", err);
+      console.error("[useEscandallosConfig] reload:", err);
       toast.error("Error de conexión");
     } finally {
       setLoading(false);

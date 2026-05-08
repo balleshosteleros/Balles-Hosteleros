@@ -8,6 +8,8 @@ export type Frecuencia = "DIARIO" | "SEMANAL" | "MENSUAL" | "TRIMESTRAL" | "ANUA
 export interface CronogramaOperativo {
   id: string;
   rol: string;
+  /** Departamento al que pertenece el puesto. Nullable en filas legacy. */
+  departamento?: string | null;
   tarea: string;
   frecuencia: Frecuencia | string;
   formacion?: string;
@@ -25,7 +27,15 @@ export interface CronogramaOperativo {
   fecha_anual?: string | null;            // 'MM-DD' (ANUAL)
   meses_trimestrales?: number[] | null;   // default [1,4,7,10]
   empleados_asignados?: string[] | null;  // null = todos los del rol
+  // Periodicidad estilo Google Calendar
+  intervalo?: number | null;              // cada N unidades (default 1)
+  termina_tipo?: TerminaTipo | null;      // null = nunca
+  termina_fecha?: string | null;          // 'YYYY-MM-DD' si termina_tipo='fecha'
+  termina_repeticiones?: number | null;   // si termina_tipo='repeticiones'
+  fecha_inicio?: string | null;           // 'YYYY-MM-DD' ancla del intervalo
 }
+
+export type TerminaTipo = "fecha" | "repeticiones";
 
 import { fallbackCronogramas } from "../data/cronogramasMockData";
 
@@ -67,9 +77,21 @@ export function useCronogramasOperativos() {
   }, []);
 
   const addTarea = async (nueva: Partial<CronogramaOperativo>) => {
+    let departamento = nueva.departamento ?? null;
+    if (!departamento && nueva.rol) {
+      const ref = data.find((d) => d.rol === nueva.rol && !!d.departamento);
+      if (ref?.departamento) departamento = ref.departamento;
+    }
+    if (!departamento) {
+      const error = new Error("Falta el departamento. Cada puesto debe tener un departamento asignado.");
+      console.error("[addTarea] departamento obligatorio:", { rol: nueva.rol });
+      return { inserted: null, error };
+    }
+
+    const payload = { ...nueva, departamento };
     const { data: inserted, error } = await supabase
       .from("cronogramas_operativos")
-      .insert(nueva)
+      .insert(payload)
       .select()
       .single();
 
@@ -78,7 +100,7 @@ export function useCronogramasOperativos() {
     } else {
       console.error("Supabase Error [addTarea]:", error);
       const mockId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
-      setData((prev) => [...prev, { ...nueva, id: mockId } as CronogramaOperativo]);
+      setData((prev) => [...prev, { ...payload, id: mockId } as CronogramaOperativo]);
     }
     return { inserted, error };
   };

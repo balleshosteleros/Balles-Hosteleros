@@ -20,8 +20,8 @@ interface Props {
   recetaId: string;
   numero: 1 | 2;
   escandallo: {
-    ft_coste_estimado: number | null;
-    ft_pvp_propuesto: number | null;
+    esc_coste_estimado: number | null;
+    esc_pvp_propuesto: number | null;
   };
   onChanged?: () => void;
 }
@@ -163,11 +163,11 @@ export function CataTab({ recetaId, numero, escandallo, onChanged }: Props) {
         <CardContent className="p-3 grid grid-cols-2 gap-3 text-center">
           <div>
             <p className="text-[10px] uppercase text-muted-foreground">Coste estimado</p>
-            <p className="text-lg font-bold">{escandallo.ft_coste_estimado?.toFixed(2) ?? "—"} €</p>
+            <p className="text-lg font-bold">{escandallo.esc_coste_estimado?.toFixed(2) ?? "—"} €</p>
           </div>
           <div>
             <p className="text-[10px] uppercase text-muted-foreground">PVP propuesto</p>
-            <p className="text-lg font-bold">{escandallo.ft_pvp_propuesto?.toFixed(2) ?? "—"} €</p>
+            <p className="text-lg font-bold">{escandallo.esc_pvp_propuesto?.toFixed(2) ?? "—"} €</p>
           </div>
         </CardContent>
       </Card>

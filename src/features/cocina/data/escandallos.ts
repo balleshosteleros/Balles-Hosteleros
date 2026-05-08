@@ -1,14 +1,14 @@
 // ─── Types ──────────────────────────────────────────────────────
-export interface CategoriaFicha {
+export interface CategoriaEscandallo {
   id: string;
   nombre: string;
   orden: number;
   activa: boolean;
 }
 
-export type EstadoFicha = "activa" | "borrador" | "archivada";
+export type EstadoEscandallo = "activa" | "borrador" | "archivada";
 
-export const ESTADO_FICHA_LABELS: Record<EstadoFicha, string> = {
+export const ESTADO_ESCANDALLO_LABELS: Record<EstadoEscandallo, string> = {
   activa: "Activa",
   borrador: "Borrador",
   archivada: "Archivada",
@@ -42,7 +42,7 @@ export const DEFAULT_MENAJE = [
   "Bowl de bambú", "Aro de presentación en plato llano",
 ];
 
-export interface ConfigFichas {
+export interface ConfigEscandallos {
   alergenos: string[];
   partidas: string[];
   menaje: string[];
@@ -50,7 +50,7 @@ export interface ConfigFichas {
 }
 
 
-export interface IngredienteFicha {
+export interface IngredienteEscandallo {
   id: string;
   ingrediente: string;
   unidad: string;
@@ -70,16 +70,16 @@ export interface DesgloseEconomico {
   costeNeto: number;
 }
 
-export interface FichaTecnica {
+export interface Escandallo {
   id: string;
   nombre: string;
   categoriaId: string;
   delicatessen: boolean;
-  estado: EstadoFicha;
+  estado: EstadoEscandallo;
   fechaCreacion: string;
   fechaActualizacion: string;
   responsable: string;
-  ingredientes: IngredienteFicha[];
+  ingredientes: IngredienteEscandallo[];
   partida: string;
   elaboracion: string;
   guarnicion: string;
@@ -98,7 +98,7 @@ export interface FichaTecnica {
 }
 
 // ─── Default categories ────────────────────────────────────────
-export const DEFAULT_CATEGORIAS: CategoriaFicha[] = [
+export const DEFAULT_CATEGORIAS: CategoriaEscandallo[] = [
   { id: "cat-1", nombre: "PARA EMPEZAR", orden: 1, activa: true },
   { id: "cat-2", nombre: "ARROCES", orden: 2, activa: true },
   { id: "cat-3", nombre: "PRA VEGANOS", orden: 3, activa: true },
@@ -128,7 +128,7 @@ function desglose(ingrediente: string, cu: string, conv: number, bruto: number, 
 }
 
 // ─── Sample data: HABANA ───────────────────────────────────────
-const fichasHabana: FichaTecnica[] = [
+const fichasHabana: Escandallo[] = [
   {
     id: "ft-h1", nombre: "Croquetas de Jamón Ibérico", categoriaId: "cat-1",
     delicatessen: false, estado: "activa", fechaCreacion: "2026-01-10", fechaActualizacion: "2026-03-15",
@@ -294,7 +294,7 @@ const fichasHabana: FichaTecnica[] = [
 ];
 
 // ─── Sample data: BACANAL ──────────────────────────────────────
-const fichasBacanal: FichaTecnica[] = [
+const fichasBacanal: Escandallo[] = [
   {
     id: "ft-b1", nombre: "Tartar de Salmón", categoriaId: "cat-1",
     delicatessen: false, estado: "activa", fechaCreacion: "2026-01-18", fechaActualizacion: "2026-03-20",
@@ -428,30 +428,30 @@ const fichasBacanal: FichaTecnica[] = [
 ];
 
 // ─── Public API ────────────────────────────────────────────────
-const allFichas: Record<string, FichaTecnica[]> = {
+const allFichas: Record<string, Escandallo[]> = {
   habana: fichasHabana,
   bacanal: fichasBacanal,
 };
 
-const allCategorias: Record<string, CategoriaFicha[]> = {
+const allCategorias: Record<string, CategoriaEscandallo[]> = {
   habana: DEFAULT_CATEGORIAS.map((c) => ({ ...c })),
   bacanal: DEFAULT_CATEGORIAS.map((c) => ({ ...c })),
 };
 
-const allConfigs: Record<string, ConfigFichas> = {
+const allConfigs: Record<string, ConfigEscandallos> = {
   habana: { alergenos: [...DEFAULT_ALERGENOS], partidas: [...DEFAULT_PARTIDAS], menaje: [...DEFAULT_MENAJE], recomendaciones: [...DEFAULT_RECOMENDACIONES] },
   bacanal: { alergenos: [...DEFAULT_ALERGENOS], partidas: [...DEFAULT_PARTIDAS], menaje: [...DEFAULT_MENAJE], recomendaciones: [...DEFAULT_RECOMENDACIONES] },
 };
 
-export function getFichasPorEmpresa(empresaId: string): FichaTecnica[] {
+export function getEscandallosPorEmpresa(empresaId: string): Escandallo[] {
   return allFichas[empresaId] ?? [];
 }
 
-export function getCategoriasPorEmpresa(empresaId: string): CategoriaFicha[] {
+export function getCategoriasPorEmpresa(empresaId: string): CategoriaEscandallo[] {
   return allCategorias[empresaId] ?? DEFAULT_CATEGORIAS.map((c) => ({ ...c }));
 }
 
-export function getConfigFichasPorEmpresa(empresaId: string): ConfigFichas {
+export function getConfigEscandallosPorEmpresa(empresaId: string): ConfigEscandallos {
   return allConfigs[empresaId] ?? {
     alergenos: [...DEFAULT_ALERGENOS],
     partidas: [...DEFAULT_PARTIDAS],
@@ -460,7 +460,7 @@ export function getConfigFichasPorEmpresa(empresaId: string): ConfigFichas {
   };
 }
 
-export function crearFichaVacia(empresaId: string, categoriaId: string): FichaTecnica {
+export function crearEscandalloVacio(empresaId: string, categoriaId: string): Escandallo {
   const hoy = new Date().toISOString().slice(0, 10);
   return {
     id: `ft-${Date.now()}`,
@@ -495,19 +495,19 @@ export function generateShareToken(): string {
   return `ft-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-// Global store for shared fichas (simulated)
-const sharedFichas: Record<string, { ficha: FichaTecnica; categoriaNombre: string }> = {};
+// Global store for shared escandallos (simulated)
+const sharedFichas: Record<string, { escandallo: Escandallo; categoriaNombre: string }> = {};
 
-export function registerSharedFicha(ficha: FichaTecnica, categoriaNombre: string) {
-  if (ficha.shareToken) {
-    sharedFichas[ficha.shareToken] = { ficha, categoriaNombre };
+export function registerSharedEscandallo(escandallo: Escandallo, categoriaNombre: string) {
+  if (escandallo.shareToken) {
+    sharedFichas[escandallo.shareToken] = { escandallo, categoriaNombre };
   }
 }
 
-export function getSharedFicha(token: string): { ficha: FichaTecnica; categoriaNombre: string } | null {
+export function getSharedEscandallo(token: string): { escandallo: Escandallo; categoriaNombre: string } | null {
   return sharedFichas[token] ?? null;
 }
 
-export function unregisterSharedFicha(token: string) {
+export function unregisterSharedEscandallo(token: string) {
   delete sharedFichas[token];
 }

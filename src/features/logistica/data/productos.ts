@@ -33,7 +33,6 @@ export interface Producto {
   nombre: string;
   tipo: TipoProducto;
   categoria: string;
-  familia: string;
   estado: EstadoProducto;
   proveedor?: string;
   precioCompra?: string;
@@ -107,24 +106,14 @@ export function getUnidadDeFormato(formato: string): string | null {
   return null;
 }
 
-// ─── Categorías y familias ───
+// ─── Categorías ───
 
 export const CATEGORIAS_COMPRA = [
   "Materias primas", "Bebidas", "Limpieza", "Utensilios", "Consumibles", "Ingredientes",
 ];
 
-export const FAMILIAS_COMPRA = [
-  "Cárnicos", "Pescados", "Lácteos", "Verduras y frutas", "Bebidas alcohólicas",
-  "Bebidas sin alcohol", "Higiene", "Menaje", "Otros",
-];
-
 export const CATEGORIAS_VENTA = [
   "Platos", "Bebidas", "Cócteles", "Postres", "Menús", "Extras",
-];
-
-export const FAMILIAS_VENTA = [
-  "Entrantes", "Principales", "Postres", "Bebidas carta", "Cócteles carta",
-  "Menú degustación", "Menú del día", "Extras",
 ];
 
 export const ESTADOS_PRODUCTO: EstadoProducto[] = ["Activo", "Inactivo"];
@@ -147,18 +136,8 @@ export const CATEGORIAS_ELABORACION = [
   "Rellenos", "Postres base", "Otros",
 ];
 
-export const FAMILIAS_ELABORACION = [
-  "Preparaciones frías", "Preparaciones calientes", "Bases", "Acompañamientos", "Otros",
-];
-
 export function getCategorias(tipo: TipoProducto): string[] {
   if (tipo === "compra") return CATEGORIAS_COMPRA;
   if (tipo === "elaboracion") return CATEGORIAS_ELABORACION;
   return CATEGORIAS_VENTA;
-}
-
-export function getFamilias(tipo: TipoProducto): string[] {
-  if (tipo === "compra") return FAMILIAS_COMPRA;
-  if (tipo === "elaboracion") return FAMILIAS_ELABORACION;
-  return FAMILIAS_VENTA;
 }
