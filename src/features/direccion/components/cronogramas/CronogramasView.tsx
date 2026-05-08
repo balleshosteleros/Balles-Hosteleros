@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Plus, Trash2, CalendarDays, Edit2, ChevronDown, ChevronRight, Video, Upload, X, ArrowLeft, CheckSquare2,
+  Plus, Trash2, CalendarDays, Edit2, ChevronDown, ChevronRight, Video, Upload, X, ArrowLeft,
   Hand, Table2, CalendarRange,
 } from "lucide-react";
 import {
@@ -28,9 +28,12 @@ import { toast } from "sonner";
 import {
   uploadCronogramaVideo, deleteCronogramaVideo, updateCronogramaResumen,
 } from "../../actions/cronograma-video-actions";
+import { deleteCronogramaRolMultiEmpresa } from "../../actions/cronograma-multiempresa-actions";
 import { CronogramasHome } from "./CronogramasHome";
 import { SelectorDiasTarea, BadgesDiasTarea } from "./SelectorDiasTarea";
 import { CalendarioCronograma } from "./CalendarioCronograma";
+import { SelectorEmpresasDialog, type SelectorAccion } from "./SelectorEmpresasDialog";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
   AREA_BADGE_CLASS,
   AREA_LABEL,
@@ -40,6 +43,7 @@ import {
 } from "../../data/cronogramaAreas";
 import { cn } from "@/lib/utils";
 import { listDepartamentos, type DepartamentoRow } from "@/features/ajustes/actions/departamentos-actions";
+import { getUserPermisos } from "@/features/auth/actions/permisos-actions";
 
 const ORDERED_FREQUENCIES: Frecuencia[] = [
   "DIARIO", "SEMANAL", "MENSUAL", "TRIMESTRAL", "ANUAL", "POR NECESIDAD",
@@ -58,15 +62,28 @@ interface Grupo {
   subs: CronogramaOperativo[];
 }
 
+interface PendingSelector {
+  accion: SelectorAccion;
+  run: (empresaIds: string[]) => Promise<void>;
+}
+
 export function CronogramasView() {
   const router = useRouter();
-  const { data, isLoading, addTarea, updateTarea, deleteTarea, refresh } = useCronogramasOperativos();
+  const { empresas } = useEmpresa();
+  const todosDbIds = useMemo(
+    () => empresas.filter((e) => !!e.dbId).map((e) => e.dbId!),
+    [empresas],
+  );
+  const haySoloUnaEmpresa = todosDbIds.length === 1;
+
+  const { data, isLoading, addTareaMulti, updateTareaMulti, deleteTareaMulti, refresh } = useCronogramasOperativos();
   const [selectedRol, setSelectedRol] = useState<string>("");
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [detalle, setDetalle] = useState<CronogramaOperativo | null>(null);
   const [nuevaDraft, setNuevaDraft] = useState<{
     parentId: string | null;
+    parentClaveTarea: string | null;
     parentIdVisible: string | null;
     subCount: number;
     nextOrden: number;
@@ -75,10 +92,60 @@ export function CronogramasView() {
   const [filtroAreaSelect, setFiltroAreaSelect] = useState<"TODAS" | AreaCronograma>("TODAS");
   const [vistaModo, setVistaModo] = useState<"TABLA" | "CALENDARIO">("TABLA");
   const [departamentos, setDepartamentos] = useState<DepartamentoRow[]>([]);
+  const [pendingSelector, setPendingSelector] = useState<PendingSelector | null>(null);
+
+  /**
+   * Abre el selector de empresas y, al confirmar, ejecuta la acción.
+   * Si solo hay 1 empresa en el grupo, la acción se ejecuta directamente.
+   */
+  const askEmpresasYEjecutar = (
+    accion: SelectorAccion,
+    run: (empresaIds: string[]) => Promise<void>,
+  ) => {
+    if (haySoloUnaEmpresa) {
+      void run(todosDbIds);
+      return;
+    }
+    setPendingSelector({ accion, run });
+  };
 
   useEffect(() => {
     listDepartamentos().then((rows) => setDepartamentos(rows ?? []));
   }, []);
+
+  // Departamento al que está asignado el usuario (`profiles.departamento`).
+  // Sólo verá los cronogramas de su propio departamento. `null` = aún
+  // cargando → no filtramos para evitar parpadeo. Director/admin (app_role)
+  // reciben acceso total (sentinela "*"). Si el usuario no tiene
+  // departamento asignado, el set queda vacío → no ve ningún cronograma.
+  const [accessibleModulos, setAccessibleModulos] = useState<Set<string> | null>(null);
+  useEffect(() => {
+    let alive = true;
+    getUserPermisos()
+      .then((res) => {
+        if (!alive) return;
+        const set = new Set<string>();
+        const esDirectorApp = res.appRoles?.some(
+          (r) => r === "director" || r === "admin",
+        );
+        if (esDirectorApp) {
+          set.add("*");
+        } else if (res.departamento) {
+          set.add(normalizeNombre(res.departamento));
+        }
+        setAccessibleModulos(set);
+      })
+      .catch(() => setAccessibleModulos(new Set()));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const moduloAccesible = (modulo: string) => {
+    if (accessibleModulos === null) return true; // cargando: no filtrar
+    if (accessibleModulos.has("*")) return true;
+    return accessibleModulos.has(normalizeNombre(modulo));
+  };
 
   // nombre departamento (normalizado) → área. Permite resolver el área de un
   // puesto a partir de su departamento sin volver a consultar la BD.
@@ -114,6 +181,7 @@ export function CronogramasView() {
   // Fila pendiente (nueva subtarea inline en tabla)
   const [pendingNew, setPendingNew] = useState<{
     parentId: string | null;
+    parentClaveTarea: string | null;
     parentIdVisible: string | null;
     subCount: number;
     nextOrden: number;
@@ -206,6 +274,7 @@ export function CronogramasView() {
     const nextOrden = Math.max(0, ...tareasDeRol.map((t) => t.orden ?? 0)) + 1;
     setNuevaDraft({
       parentId: null,
+      parentClaveTarea: null,
       parentIdVisible: null,
       subCount: 0,
       nextOrden,
@@ -222,6 +291,7 @@ export function CronogramasView() {
     setExpandedGroups((p) => ({ ...p, [parent.id]: true }));
     setPendingNew({
       parentId: parent.id,
+      parentClaveTarea: parent.clave_tarea ?? null,
       parentIdVisible: parent.id_visible ?? null,
       subCount,
       nextOrden,
@@ -233,11 +303,12 @@ export function CronogramasView() {
     if (!pendingNew) return;
     const text = pendingNew.text.trim();
     if (!text) { setPendingNew(null); return; } // vacío → descartar
-    const { parentId, parentIdVisible, subCount, nextOrden } = pendingNew;
+    const { parentId, parentClaveTarea, parentIdVisible, subCount, nextOrden } = pendingNew;
     const nextIdVis = parentId
       ? `${parentIdVisible ?? ""}.${subCount + 1}`
       : String(grupos.length + 1);
-    await addTarea({
+
+    const base: Partial<CronogramaOperativo> = {
       rol: rolActivo,
       departamento: rolToDepartamento.get(rolActivo) ?? null,
       tarea: text,
@@ -245,9 +316,19 @@ export function CronogramasView() {
       tiempo_requerido: "",
       id_visible: nextIdVis,
       orden: nextOrden,
-      parent_id: parentId,
-    });
+    };
+
     setPendingNew(null);
+
+    askEmpresasYEjecutar("crear", async (empresaIds) => {
+      const res = await addTareaMulti({
+        base,
+        empresaIds,
+        parentClaveTarea: parentClaveTarea ?? undefined,
+      });
+      if (!res.ok) toast.error(res.error);
+      else toast.success("Tarea creada");
+    });
   };
 
   const renderPendingRow = (isSub: boolean) => {
@@ -303,6 +384,21 @@ export function CronogramasView() {
         </td>
       </tr>
     );
+  };
+
+  const handleDeleteTarea = (item: CronogramaOperativo) => {
+    if (!item.clave_tarea) {
+      toast.error("Tarea sin clave_tarea — refresca la página.");
+      return;
+    }
+    askEmpresasYEjecutar("eliminar", async (empresaIds) => {
+      const res = await deleteTareaMulti({
+        claveTarea: item.clave_tarea!,
+        empresaIds,
+      });
+      if (!res.ok) toast.error(res.error);
+      else toast.success("Tarea eliminada");
+    });
   };
 
   const renderRow = (item: CronogramaOperativo, isSub: boolean, hasSubs: boolean) => {
@@ -402,7 +498,7 @@ export function CronogramasView() {
               className="h-8 w-8 hover:bg-red-50 hover:text-red-600"
               onClick={(e) => {
                 e.stopPropagation();
-                if (confirm(`¿Eliminar "${item.tarea}"?`)) deleteTarea(item.id);
+                handleDeleteTarea(item);
               }}
               title="Eliminar tarea"
             >
@@ -424,19 +520,48 @@ export function CronogramasView() {
     );
   };
 
+  /**
+   * Crear nuevo PUESTO. Los puestos siempre se crean en TODAS las empresas
+   * del grupo (no se pregunta), porque rol/departamento son compartidos.
+   * Lo único que se replica es la tarea inicial vacía.
+   */
   const handleCreatePuesto = async (puesto: string, departamentoNombre: string) => {
-    await addTarea({
-      rol: puesto,
-      departamento: departamentoNombre,
-      tarea: "Añadir misión de " + puesto,
-      frecuencia: "OTRO",
-      tiempo_requerido: "",
-      id_visible: "1",
-      orden: 1,
-      parent_id: null,
+    const res = await addTareaMulti({
+      base: {
+        rol: puesto,
+        departamento: departamentoNombre,
+        tarea: "Añadir misión de " + puesto,
+        frecuencia: "OTRO",
+        tiempo_requerido: "",
+        id_visible: "1",
+        orden: 1,
+        parent_id: null,
+      },
+      empresaIds: todosDbIds,
     });
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
     setSelectedRol(puesto);
     setShowNewDialog(false);
+  };
+
+  const handleDeleteRolCompleto = () => {
+    if (!rolActivo) return;
+    askEmpresasYEjecutar("eliminar", async (empresaIds) => {
+      const res = await deleteCronogramaRolMultiEmpresa({
+        rol: rolActivo,
+        empresaIds,
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success(`Cronograma "${rolActivo}" eliminado`);
+      setSelectedRol("");
+      await refresh();
+    });
   };
 
   // HOME (cards por departamento) cuando no hay rol seleccionado
@@ -449,6 +574,14 @@ export function CronogramasView() {
           onSelect={setSelectedRol}
           onCrearCronograma={() => setShowNewDialog(true)}
           onIrProductividad={() => router.push("/direccion/cronogramas/productividad")}
+          isRolAccesible={(rol) => {
+            // Un puesto es accesible si su departamento (o el módulo derivado
+            // del nombre del puesto) está dentro de los módulos con `ver: true`
+            // del rol del usuario en empresa_roles.
+            const dep = rolToDepartamento.get(rol);
+            if (dep && moduloAccesible(dep)) return true;
+            return moduloAccesible(getModuloForCronograma(rol));
+          }}
         />
         <NuevoPuestoDialog
           open={showNewDialog}
@@ -456,6 +589,17 @@ export function CronogramasView() {
           departamentos={departamentos}
           onCreate={handleCreatePuesto}
         />
+        {pendingSelector && (
+          <SelectorEmpresasDialog
+            open
+            onOpenChange={(v) => { if (!v) setPendingSelector(null); }}
+            accion={pendingSelector.accion}
+            onConfirm={async (ids) => {
+              await pendingSelector.run(ids);
+              setPendingSelector(null);
+            }}
+          />
+        )}
       </>
     );
   }
@@ -522,16 +666,25 @@ export function CronogramasView() {
                     filtroAreaSelect === "TODAS"
                       ? ["OPERATIVA", "ADMINISTRATIVA"]
                       : [filtroAreaSelect];
+                  // Sólo mostramos áreas/departamentos a los que el usuario
+                  // actual tiene acceso según su rol en empresa_roles
+                  // (`permisos[].ver`). Director/admin pasa todo (sentinela "*").
                   const areasConPuestos = areasVisibles.filter((a) =>
-                    Array.from(puestosPorAreaYDepto.tree[a].values()).some((p) => p.length > 0),
+                    Array.from(puestosPorAreaYDepto.tree[a].entries()).some(
+                      ([depto, p]) => p.length > 0 && moduloAccesible(depto),
+                    ),
                   );
                   const huerfanosVisibles =
-                    filtroAreaSelect === "TODAS" ? puestosPorAreaYDepto.huerfanos : [];
+                    filtroAreaSelect === "TODAS"
+                      ? puestosPorAreaYDepto.huerfanos.filter((rol) =>
+                          moduloAccesible(getModuloForCronograma(rol)),
+                        )
+                      : [];
 
                   if (areasConPuestos.length === 0 && huerfanosVisibles.length === 0) {
                     return (
                       <div className="px-2 py-3 text-xs text-muted-foreground text-center">
-                        Sin cronogramas en esta área.
+                        Sin cronogramas accesibles para tu rol.
                       </div>
                     );
                   }
@@ -541,18 +694,23 @@ export function CronogramasView() {
                       {areasConPuestos.map((area, idx) => {
                         const deptosConPuestos = Array.from(
                           puestosPorAreaYDepto.tree[area].entries(),
-                        ).filter(([, puestos]) => puestos.length > 0);
+                        ).filter(
+                          ([depto, puestos]) =>
+                            puestos.length > 0 && moduloAccesible(depto),
+                        );
                         return (
                           <Fragment key={area}>
                             {idx > 0 && <SelectSeparator />}
-                            <SelectLabel
-                              className={cn(
-                                "text-[10px] font-semibold uppercase tracking-wider",
-                                AREA_BADGE_CLASS[area],
-                              )}
-                            >
-                              {AREA_LABEL[area]}
-                            </SelectLabel>
+                            <SelectGroup>
+                              <SelectLabel
+                                className={cn(
+                                  "text-[10px] font-semibold uppercase tracking-wider",
+                                  AREA_BADGE_CLASS[area],
+                                )}
+                              >
+                                {AREA_LABEL[area]}
+                              </SelectLabel>
+                            </SelectGroup>
                             {deptosConPuestos.map(([depto, puestos]) => (
                               <SelectGroup key={depto}>
                                 <SelectLabel className="pl-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -593,12 +751,7 @@ export function CronogramasView() {
               <Button
                 type="button" variant="ghost" size="icon"
                 className="h-8 w-8 text-muted-foreground hover:text-red-500 hover:bg-red-50"
-                onClick={async () => {
-                  if (confirm(`¿Eliminar TODO el cronograma de ${rolActivo}?`)) {
-                    for (const t of tareasDeRol) await deleteTarea(t.id);
-                    setSelectedRol("");
-                  }
-                }}
+                onClick={handleDeleteRolCompleto}
                 title={`Eliminar cronograma ${rolActivo}`}
               >
                 <Trash2 className="h-4 w-4" />
@@ -757,8 +910,30 @@ export function CronogramasView() {
           tarea={detalle}
           mode="edit"
           onClose={() => setDetalle(null)}
-          onSaved={() => { refresh(); }}
-          onUpdateTarea={updateTarea}
+          onSubmitEdit={async (patch) => {
+            if (!detalle.clave_tarea) {
+              toast.error("Tarea sin clave_tarea — refresca la página.");
+              return;
+            }
+            const claveTarea = detalle.clave_tarea;
+            const tareaId = detalle.id;
+            askEmpresasYEjecutar("editar", async (empresaIds) => {
+              const res = await updateTareaMulti({
+                claveTarea,
+                empresaIds,
+                patch,
+              });
+              if (!res.ok) {
+                toast.error(res.error);
+                return;
+              }
+              if (typeof patch.resumen !== "undefined") {
+                await updateCronogramaResumen(tareaId, patch.resumen ?? "");
+              }
+              toast.success("Cambios guardados");
+              setDetalle(null);
+            });
+          }}
         />
       )}
 
@@ -777,18 +952,40 @@ export function CronogramasView() {
             parent_id: nuevaDraft.parentId,
           }}
           onClose={() => setNuevaDraft(null)}
-          onSaved={() => { refresh(); }}
-          onUpdateTarea={updateTarea}
-          onCreateTarea={async (payload) => {
-            const res = await addTarea({
-              ...payload,
-              rol: rolActivo,
-              departamento: rolToDepartamento.get(rolActivo) ?? null,
-              parent_id: nuevaDraft.parentId,
-              id_visible: nuevaDraft.nextIdVisible,
-              orden: nuevaDraft.nextOrden,
+          onSubmitCreate={async (payload) => {
+            const draft = nuevaDraft;
+            askEmpresasYEjecutar("crear", async (empresaIds) => {
+              const res = await addTareaMulti({
+                base: {
+                  ...payload,
+                  rol: rolActivo,
+                  departamento: rolToDepartamento.get(rolActivo) ?? null,
+                  parent_id: draft.parentId,
+                  id_visible: draft.nextIdVisible,
+                  orden: draft.nextOrden,
+                },
+                empresaIds,
+                parentClaveTarea: draft.parentClaveTarea ?? undefined,
+              });
+              if (!res.ok) {
+                toast.error(res.error);
+                return;
+              }
+              toast.success("Tarea creada");
+              setNuevaDraft(null);
             });
-            return res;
+          }}
+        />
+      )}
+
+      {pendingSelector && (
+        <SelectorEmpresasDialog
+          open
+          onOpenChange={(v) => { if (!v) setPendingSelector(null); }}
+          accion={pendingSelector.accion}
+          onConfirm={async (ids) => {
+            await pendingSelector.run(ids);
+            setPendingSelector(null);
           }}
         />
       )}
@@ -799,14 +996,15 @@ export function CronogramasView() {
 /* ───────────── DETALLE DE TAREA (dialog con resumen + video) ───────────── */
 
 function DetalleTareaDialog({
-  tarea, mode, onClose, onSaved, onUpdateTarea, onCreateTarea,
+  tarea, mode, onClose, onSubmitCreate, onSubmitEdit,
 }: {
   tarea: CronogramaOperativo;
   mode: "edit" | "create";
   onClose: () => void;
-  onSaved: () => void;
-  onUpdateTarea: (id: string, patch: Partial<CronogramaOperativo>) => Promise<unknown>;
-  onCreateTarea?: (payload: Partial<CronogramaOperativo>) => Promise<unknown>;
+  /** En modo create: callback que recibe el payload ya armado. El parent decide en qué empresas crearlo. */
+  onSubmitCreate?: (payload: Partial<CronogramaOperativo>) => Promise<void>;
+  /** En modo edit: callback que recibe el patch. El parent decide en qué empresas aplicarlo. */
+  onSubmitEdit?: (patch: Partial<CronogramaOperativo>) => Promise<void>;
 }) {
   const isCreate = mode === "create";
   const [nombre, setNombre] = useState(tarea.tarea ?? "");
@@ -849,28 +1047,7 @@ function DetalleTareaDialog({
     }
     setSaving(true);
     try {
-      if (isCreate && onCreateTarea) {
-        await onCreateTarea({
-          tarea: nombreLimpio,
-          frecuencia: cal.frecuencia,
-          dia_semana: cal.dia_semana,
-          dia_mes: cal.dia_mes,
-          fecha_anual: cal.fecha_anual,
-          meses_trimestrales: cal.meses_trimestrales,
-          tiempo_requerido: cal.tiempo_requerido,
-          intervalo: cal.intervalo,
-          termina_tipo: cal.termina_tipo,
-          termina_fecha: cal.termina_fecha,
-          termina_repeticiones: cal.termina_repeticiones,
-          fecha_inicio: cal.fecha_inicio,
-          resumen,
-        });
-        toast.success("Tarea creada");
-        onSaved();
-        onClose();
-        return;
-      }
-      await onUpdateTarea(tarea.id, {
+      const payload: Partial<CronogramaOperativo> = {
         tarea: nombreLimpio,
         frecuencia: cal.frecuencia,
         dia_semana: cal.dia_semana,
@@ -883,12 +1060,14 @@ function DetalleTareaDialog({
         termina_fecha: cal.termina_fecha,
         termina_repeticiones: cal.termina_repeticiones,
         fecha_inicio: cal.fecha_inicio,
-      });
-      const res = await updateCronogramaResumen(tarea.id, resumen);
-      if (!res.ok) { toast.error(res.error); return; }
-      toast.success("Cambios guardados");
-      onSaved();
-      onClose();
+        resumen,
+      };
+
+      if (isCreate && onSubmitCreate) {
+        await onSubmitCreate(payload);
+      } else if (!isCreate && onSubmitEdit) {
+        await onSubmitEdit(payload);
+      }
     } finally {
       setSaving(false);
     }
@@ -903,7 +1082,6 @@ function DetalleTareaDialog({
       if (!res.ok) { toast.error(res.error); return; }
       setVideoUrl(res.url);
       toast.success("Video subido");
-      onSaved();
     } finally {
       setUploading(false);
     }
@@ -916,7 +1094,6 @@ function DetalleTareaDialog({
     if (!res.ok) { toast.error(res.error); return; }
     setVideoUrl("");
     toast.success("Video eliminado");
-    onSaved();
   };
 
   return (

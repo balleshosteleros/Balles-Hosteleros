@@ -1,7 +1,7 @@
 "use client";
 
-import { Users, Shield, Layers, Store, AppWindow, Palette, Truck } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { Users, Shield, Layers, Store, AppWindow, Palette } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UsuariosTab } from "@/features/ajustes/components/UsuariosTab";
 import { RolesTab } from "@/features/ajustes/components/RolesTab";
@@ -9,7 +9,6 @@ import { DepartamentosTab } from "@/features/ajustes/components/DepartamentosTab
 import { EmpresasTab } from "@/features/ajustes/components/EmpresasTab";
 import { AplicacionesTab } from "@/features/ajustes/components/AplicacionesTab";
 import { ImagenMarcaTab } from "@/features/ajustes/components/ImagenMarcaTab";
-import { ProveedoresTab } from "@/features/ajustes/components/ProveedoresTab";
 import { useHydrateUsuarios } from "@/features/ajustes/hooks/use-hydrate-usuarios";
 
 const tabs = [
@@ -18,18 +17,22 @@ const tabs = [
   { id: "usuarios",       label: "Usuarios",        icon: Users     },
   { id: "roles",          label: "Roles",           icon: Shield    },
   { id: "departamentos",  label: "Departamentos",   icon: Layers    },
-  { id: "proveedores",    label: "Proveedores",     icon: Truck     },
   { id: "aplicaciones",   label: "Aplicaciones",    icon: AppWindow },
 ];
 
 export default function AjustesPage() {
   useHydrateUsuarios();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
-  const initialTab = tabs.some((t) => t.id === tabParam) ? tabParam! : "empresas";
+  const activeTab = tabs.some((t) => t.id === tabParam) ? tabParam! : "empresas";
   return (
     <div className="p-3 md:p-4 space-y-2">
-      <Tabs defaultValue={initialTab} className="space-y-2">
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => router.replace(`/ajustes?tab=${value}`, { scroll: false })}
+        className="space-y-2"
+      >
         <TabsList className="flex flex-wrap h-auto gap-1 bg-muted/50 p-1">
           {tabs.map((t) => (
             <TabsTrigger
@@ -49,7 +52,6 @@ export default function AjustesPage() {
         <TabsContent value="usuarios"><UsuariosTab /></TabsContent>
         <TabsContent value="roles"><RolesTab /></TabsContent>
         <TabsContent value="departamentos"><DepartamentosTab /></TabsContent>
-        <TabsContent value="proveedores"><ProveedoresTab /></TabsContent>
         <TabsContent value="aplicaciones"><AplicacionesTab /></TabsContent>
       </Tabs>
     </div>

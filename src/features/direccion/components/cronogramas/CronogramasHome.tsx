@@ -27,6 +27,13 @@ interface Props {
   onCrearCronograma: () => void;
   onIrProductividad: () => void;
   isLoading: boolean;
+  /**
+   * Filtra qué cards se muestran. Recibe el rol y devuelve true si el usuario
+   * actual tiene acceso al módulo asociado (según `permisos` de su rol en
+   * empresa_roles). Si no se pasa, no filtra (acceso total). Las áreas/badges
+   * que queden sin cards visibles desaparecen automáticamente.
+   */
+  isRolAccesible?: (rol: string) => boolean;
 }
 
 // Mapeo visual de departamentos — iconos alineados con el sidebar.
@@ -108,7 +115,7 @@ function FrecuenciaBar({
 
 type FiltroArea = "TODAS" | AreaCronograma;
 
-export function CronogramasHome({ data, onSelect, onCrearCronograma, onIrProductividad, isLoading }: Props) {
+export function CronogramasHome({ data, onSelect, onCrearCronograma, onIrProductividad, isLoading, isRolAccesible }: Props) {
   const [filtroArea, setFiltroArea] = useState<FiltroArea>("TODAS");
 
   const grupos = useMemo(() => {
@@ -122,6 +129,13 @@ export function CronogramasHome({ data, onSelect, onCrearCronograma, onIrProduct
     // Sembrar cronogramas canónicos aunque no tengan tareas en BD todavía.
     for (const r of CRONOGRAMA_ROLES) {
       if (!byRol.has(r.rol)) byRol.set(r.rol, []);
+    }
+    // Aplicar filtro de acceso del usuario actual: si la prop está definida,
+    // descartamos los rols a los que no tiene `ver: true` en su rol de empresa.
+    if (isRolAccesible) {
+      for (const rol of Array.from(byRol.keys())) {
+        if (!isRolAccesible(rol)) byRol.delete(rol);
+      }
     }
     return Array.from(byRol.entries())
       .map(([rol, tareas]) => {
@@ -147,7 +161,7 @@ export function CronogramasHome({ data, onSelect, onCrearCronograma, onIrProduct
         if (a.area !== b.area) return a.area === "OPERATIVA" ? -1 : 1;
         return a.rol.localeCompare(b.rol);
       });
-  }, [data]);
+  }, [data, isRolAccesible]);
 
   const gruposFiltrados = useMemo(
     () => (filtroArea === "TODAS" ? grupos : grupos.filter((g) => g.area === filtroArea)),
@@ -171,6 +185,10 @@ export function CronogramasHome({ data, onSelect, onCrearCronograma, onIrProduct
           {(["TODAS", "OPERATIVA", "ADMINISTRATIVA"] as const).map((opt) => {
             const active = filtroArea === opt;
             const label = opt === "TODAS" ? "Todas" : AREA_LABEL[opt];
+            // Ocultamos áreas vacías para el usuario actual: si tras filtrar
+            // por sus permisos no le queda ningún puesto en esa área, no
+            // tiene sentido mostrar el botón de filtro. "Todas" siempre se ve.
+            if (opt !== "TODAS" && counts[opt] === 0) return null;
             return (
               <Button
                 key={opt}

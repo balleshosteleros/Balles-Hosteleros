@@ -13,7 +13,10 @@ import {
   createCategoriaProveedor,
   updateCategoriaProveedor,
   deleteCategoriaProveedor,
+  getProveedoresConfig,
+  saveProveedoresConfig,
   type CategoriaProveedorRow,
+  type ProveedoresConfig,
 } from "@/features/logistica/actions/categorias-proveedor-actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -120,15 +123,41 @@ export function ProveedoresView() {
   const [editItem, setEditItem] = useState<Proveedor | null>(null);
   const [showConfig, setShowConfig] = useState(false);
   const [categoriasFull, setCategoriasFull] = useState<CategoriaProveedorRow[]>([]);
+  const [operativa, setOperativa] = useState<ProveedoresConfig>({
+    mostrar_solo_productos_proveedor: true,
+    avisar_doc_existente: true,
+    ocultar_precios_compra_impresion: false,
+  });
+  const [savingOperativa, setSavingOperativa] = useState(false);
 
   const reloadCategorias = useCallback(async () => {
     const res = await listCategoriasProveedor();
     if (res.ok) setCategoriasFull(res.data);
   }, []);
 
+  const reloadOperativa = useCallback(async () => {
+    const res = await getProveedoresConfig();
+    if (res.ok) setOperativa(res.data);
+  }, []);
+
   useEffect(() => {
     reloadCategorias();
-  }, [reloadCategorias]);
+    reloadOperativa();
+  }, [reloadCategorias, reloadOperativa]);
+
+  const handleGuardarOperativa = async () => {
+    setSavingOperativa(true);
+    try {
+      const res = await saveProveedoresConfig(operativa);
+      if (!res.ok) {
+        toast.error(res.error ?? "Error al guardar configuración");
+        return;
+      }
+      toast.success("Configuración guardada");
+    } finally {
+      setSavingOperativa(false);
+    }
+  };
 
   const categoriasBD = useMemo(
     () => categoriasFull.filter((c) => c.activa).map((c) => c.nombre),
@@ -381,12 +410,64 @@ export function ProveedoresView() {
       {/* Header removed — title shown in top bar */}
 
       {showConfig ? (
-        <div className="bg-card border rounded-lg p-5 space-y-4">
+        <div className="bg-card border rounded-lg p-5 space-y-5">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-foreground">CONFIGURACIÓN — PROVEEDORES</h3>
             <Button size="sm" variant="outline" onClick={() => setShowConfig(false)}>Volver</Button>
           </div>
+
           <CategoriasProveedorManager items={categoriasFull} onChanged={reloadCategorias} />
+
+          <Separator />
+
+          <div className="space-y-3">
+            <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Operativa de compra</h4>
+
+            <Label className="flex items-start gap-3 cursor-pointer">
+              <Checkbox
+                checked={operativa.mostrar_solo_productos_proveedor}
+                onCheckedChange={(v) =>
+                  setOperativa((prev) => ({ ...prev, mostrar_solo_productos_proveedor: !!v }))
+                }
+                className="mt-0.5"
+              />
+              <span className="text-sm font-normal">
+                Mostrar solo productos de este proveedor en documentos de compra.
+              </span>
+            </Label>
+
+            <Label className="flex items-start gap-3 cursor-pointer">
+              <Checkbox
+                checked={operativa.avisar_doc_existente}
+                onCheckedChange={(v) =>
+                  setOperativa((prev) => ({ ...prev, avisar_doc_existente: !!v }))
+                }
+                className="mt-0.5"
+              />
+              <span className="text-sm font-normal">
+                Avisar al crear un documento de compra con un número de documento existente.
+              </span>
+            </Label>
+
+            <Label className="flex items-start gap-3 cursor-pointer">
+              <Checkbox
+                checked={operativa.ocultar_precios_compra_impresion}
+                onCheckedChange={(v) =>
+                  setOperativa((prev) => ({ ...prev, ocultar_precios_compra_impresion: !!v }))
+                }
+                className="mt-0.5"
+              />
+              <span className="text-sm font-normal">
+                Ocultar precios de compra al imprimir pedidos de compra.
+              </span>
+            </Label>
+
+            <div className="flex justify-end">
+              <Button size="sm" onClick={handleGuardarOperativa} disabled={savingOperativa}>
+                {savingOperativa ? "Guardando…" : "Guardar configuración"}
+              </Button>
+            </div>
+          </div>
         </div>
       ) : (
         <>

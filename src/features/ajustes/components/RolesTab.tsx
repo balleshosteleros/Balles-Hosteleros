@@ -63,13 +63,14 @@ export function RolesTab() {
   const [usuariosSupabase, setUsuariosSupabase] = useState<UsuarioRol[]>([]);
 
   // Cargar roles desde Supabase al montar y al cambiar de empresa.
+  // Si la BD no devuelve nada (auth aún cargando, error transitorio, etc.) NO
+  // tocamos el state — escribir [] dispararía el fallback a defaults en
+  // mergeWithDefaults y mostraríamos permisos en cero falsos.
   useEffect(() => {
     (async () => {
       const rolesRemote = await loadRolesFromSupabase(empresaDbId);
       if (rolesRemote && rolesRemote.length > 0) {
         setAjustes((prev) => ({ ...prev, roles: rolesRemote }));
-      } else {
-        setAjustes((prev) => ({ ...prev, roles: [] }));
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
