@@ -175,7 +175,7 @@ export function PreciosPorProveedorSection({ productoId, refreshKey = 0 }: Props
                       )}
                       <span
                         className={`font-medium truncate ${
-                          provKey === SIN_PROVEEDOR ? "italic text-muted-foreground" : "uppercase"
+                          provKey === SIN_PROVEEDOR ? "italic text-muted-foreground" : ""
                         }`}
                       >
                         {proveedor}

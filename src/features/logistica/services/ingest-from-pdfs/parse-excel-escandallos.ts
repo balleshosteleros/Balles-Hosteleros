@@ -1,6 +1,6 @@
 /**
  * Parser del Excel "FICHAS TECNICAS - PRODUCTO .xlsx".
- * Cada hoja es la ficha técnica de un plato con su escandallo.
+ * Cada hoja es el escandallo de un plato con su escandallo.
  *
  * Estructura detectada de cada hoja:
  *   Fila 1:      Nombre del plato

@@ -633,7 +633,7 @@ export function ProveedorDetail({ proveedor, onBack, onSave }: Props) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted/30">
-                    {["Producto", "Categoría", "Familia", "Unidad", "Precio compra", "Estado"].map(
+                    {["Producto", "Categoría", "Conservación", "Unidad", "Formato", "Precio compra", "IVA", "Estado"].map(
                       (h) => (
                         <th
                           key={h}
@@ -652,11 +652,13 @@ export function ProveedorDetail({ proveedor, onBack, onSave }: Props) {
                         {p.nombre}
                       </td>
                       <td className="px-3 py-2 text-xs">{p.categoria || "—"}</td>
-                      <td className="px-3 py-2 text-xs">{p.familia || "—"}</td>
+                      <td className="px-3 py-2 text-xs">{p.conservacion || "—"}</td>
                       <td className="px-3 py-2 text-xs">{p.unidad || "—"}</td>
+                      <td className="px-3 py-2 text-xs">{p.formato || "—"}</td>
                       <td className="px-3 py-2 text-xs">
                         {p.precioCompra ? `${p.precioCompra} €` : "—"}
                       </td>
+                      <td className="px-3 py-2 text-xs">{p.iva || "—"}</td>
                       <td className="px-3 py-2 text-xs">{p.estado}</td>
                     </tr>
                   ))}

@@ -64,7 +64,7 @@ export function ProveedorCombobox({
         onClick={() => setOpen((v) => !v)}
         className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 text-sm transition-colors hover:bg-muted/30"
       >
-        <span className={`truncate ${!value ? "text-muted-foreground" : "uppercase"}`}>
+        <span className={`truncate ${!value ? "text-muted-foreground" : ""}`}>
           {value || placeholder}
         </span>
         <span className="ml-2 shrink-0">
@@ -112,7 +112,7 @@ export function ProveedorCombobox({
                   }}
                   className="flex w-full items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground transition-colors text-left"
                 >
-                  <span className="truncate uppercase">{nombre}</span>
+                  <span className="truncate">{nombre}</span>
                   {nombre === value && <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />}
                 </button>
               ))

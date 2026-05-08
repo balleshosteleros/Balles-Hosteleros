@@ -119,7 +119,7 @@ async function main() {
     .eq("tipo", "elaboracion");
   if (prevElab && prevElab.length > 0) {
     const prevIds = prevElab.map((r) => r.id);
-    await supabase.from("escandallos").delete().in("producto_venta_id", prevIds);
+    await supabase.from("producto_composicion").delete().in("producto_venta_id", prevIds);
     await supabase.from("productos").delete().in("id", prevIds);
     console.log(`  🗑  Eliminadas ${prevElab.length} elaboraciones previas.`);
   }
@@ -197,7 +197,7 @@ async function main() {
 
     if (escRows.length > 0) {
       const { error: escErr } = await supabase
-        .from("escandallos")
+        .from("producto_composicion")
         .upsert(escRows, { onConflict: "producto_venta_id,ingrediente_id" });
       if (escErr) console.error(`    ⚠ Escandallos falla ${elab.nombre}:`, escErr.message);
       else totalEscandallos += escRows.length;

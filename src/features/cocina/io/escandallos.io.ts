@@ -1,11 +1,11 @@
 import { z } from "zod";
 import type { ModuleIO, RowSchema } from "@/shared/io";
-import { listFichas } from "@/features/cocina/actions/fichas-tecnicas-actions";
-import type { FichaTecnica } from "@/features/cocina/data/fichas-tecnicas";
+import { listEscandallos } from "@/features/cocina/actions/escandallos-actions";
+import type { Escandallo } from "@/features/cocina/data/escandallos";
 
 const ESTADOS = ["activa", "borrador", "archivada"] as const;
 
-const fichaSchema = z.object({
+const escandalloSchema = z.object({
   id: z.string(),
   nombre: z.string().min(1),
   categoriaId: z.string(),
@@ -29,12 +29,12 @@ const fichaSchema = z.object({
   empresaId: z.string(),
 });
 
-const schema = fichaSchema as unknown as RowSchema<FichaTecnica>;
+const schema = escandalloSchema as unknown as RowSchema<Escandallo>;
 
-export const fichasTecnicasIO: ModuleIO<FichaTecnica> = {
+export const escandallosIO: ModuleIO<Escandallo> = {
   module: "cocina",
-  submodule: "fichas-tecnicas",
-  label: "Fichas técnicas",
+  submodule: "escandallos",
+  label: "Escandallos",
   description: "Catálogo de platos con ingredientes, alérgenos, costes y PVP.",
   schema,
   uniqueBy: "nombre",
@@ -62,8 +62,8 @@ export const fichasTecnicasIO: ModuleIO<FichaTecnica> = {
     { key: "empresaId", label: "Empresa", hideInExport: true, hideInImport: true },
   ],
   fetchAll: async () => {
-    const result = await listFichas();
+    const result = await listEscandallos();
     if (!result.ok) return [];
-    return (result.data ?? []) as FichaTecnica[];
+    return (result.data ?? []) as Escandallo[];
   },
 };

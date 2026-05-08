@@ -11,6 +11,8 @@ export interface ProductividadFila {
   hechas: number;
   pendientes: number;
   omitidas: number;
+  pospuestas: number;
+  pospuestas_totales: number;
   pct_cumplimiento: number | null;
 }
 

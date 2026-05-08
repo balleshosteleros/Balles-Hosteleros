@@ -127,7 +127,7 @@ const CAMPOS_INVENTARIOS: CampoSubmodulo[] = [
   { key: "responsable", label: "Responsable" },
 ];
 
-const CAMPOS_FICHAS_TECNICAS: CampoSubmodulo[] = [
+const CAMPOS_ESCANDALLOS: CampoSubmodulo[] = [
   { key: "nombre", label: "Nombre del plato" },
   { key: "destino", label: "Destino (cocina/sala)" },
   { key: "descripcion", label: "Descripción" },
@@ -229,13 +229,13 @@ export const CATALOGO: ModuloDef[] = [
         },
       },
       {
-        key: "fichas_tecnicas",
-        label: "Fichas técnicas",
-        campos: CAMPOS_FICHAS_TECNICAS,
+        key: "escandallos",
+        label: "Escandallos",
+        campos: CAMPOS_ESCANDALLOS,
         presets: {
           basico: ["nombre"],
           estandar: ["nombre", "destino", "pvp"],
-          avanzado: todos(CAMPOS_FICHAS_TECNICAS),
+          avanzado: todos(CAMPOS_ESCANDALLOS),
         },
       },
       placeholder("elaboraciones", "Elaboraciones"),
@@ -281,6 +281,7 @@ export const CATALOGO: ModuloDef[] = [
           avanzado: todos(CAMPOS_INVENTARIOS),
         },
       },
+      placeholder("tarifas", "Tarifas"),
     ],
   },
 

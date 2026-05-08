@@ -5,9 +5,9 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Briefcase, Utensils, ClipboardCheck, Users, Megaphone, Truck,
-  Calculator, FileText, Scale, Shield, ChevronRight, Plus, Video, BarChart3,
-  Wine, Sparkles, ChefHat, Music, ShieldCheck, UtensilsCrossed,
+  Briefcase, Crown, User, Camera, Package, CheckCircle2,
+  Calculator, FileText, Scale, ChevronRight, Plus, Video, BarChart3,
+  ChefHat, UtensilsCrossed,
   CheckSquare2,
 } from "lucide-react";
 import type { CronogramaOperativo } from "../../hooks/useCronogramasOperativos";
@@ -29,33 +29,37 @@ interface Props {
   isLoading: boolean;
 }
 
-// Mapeo visual de departamentos
+// Mapeo visual de departamentos — iconos alineados con el sidebar.
+// Cada rol hereda el icono del módulo padre (ver CRONOGRAMA_TO_MODULO).
 const DEPTO_CONFIG: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
-  DIRECCION:   { icon: Briefcase,     color: "text-indigo-600", bg: "bg-indigo-50 border-indigo-200" },
-  DIRECCIÓN:   { icon: Briefcase,     color: "text-indigo-600", bg: "bg-indigo-50 border-indigo-200" },
-  COCINA:      { icon: Utensils,      color: "text-orange-600", bg: "bg-orange-50 border-orange-200" },
-  "JEFE DE COCINA": { icon: ChefHat,  color: "text-orange-700", bg: "bg-orange-50 border-orange-200" },
-  COCINERO:    { icon: ChefHat,       color: "text-orange-600", bg: "bg-orange-50 border-orange-200" },
-  SALA:        { icon: Users,         color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
-  "JEFE DE SALA": { icon: Users,      color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200" },
-  CAMARERO:    { icon: Wine,          color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
-  OFFICE:      { icon: UtensilsCrossed, color: "text-cyan-600", bg: "bg-cyan-50 border-cyan-200" },
-  LIMPIEZA:    { icon: Sparkles,      color: "text-sky-600",    bg: "bg-sky-50 border-sky-200" },
-  SEGURIDAD:   { icon: ShieldCheck,   color: "text-red-600",    bg: "bg-red-50 border-red-200" },
-  ARTISTA:     { icon: Music,         color: "text-fuchsia-600", bg: "bg-fuchsia-50 border-fuchsia-200" },
-  CALIDAD:     { icon: ClipboardCheck,color: "text-blue-600",   bg: "bg-blue-50 border-blue-200" },
-  RRHH:        { icon: Users,         color: "text-pink-600",   bg: "bg-pink-50 border-pink-200" },
-  "RECURSOS HUMANOS": { icon: Users,  color: "text-pink-600",   bg: "bg-pink-50 border-pink-200" },
-  MARKETING:   { icon: Megaphone,     color: "text-purple-600", bg: "bg-purple-50 border-purple-200" },
-  LOGISTICA:   { icon: Truck,         color: "text-amber-600",  bg: "bg-amber-50 border-amber-200" },
-  LOGÍSTICA:   { icon: Truck,         color: "text-amber-600",  bg: "bg-amber-50 border-amber-200" },
-  CONTABILIDAD:{ icon: Calculator,    color: "text-teal-600",   bg: "bg-teal-50 border-teal-200" },
-  GESTORIA:    { icon: FileText,      color: "text-slate-600",  bg: "bg-slate-50 border-slate-200" },
-  GESTORÍA:    { icon: FileText,      color: "text-slate-600",  bg: "bg-slate-50 border-slate-200" },
-  JURIDICO:    { icon: Scale,         color: "text-zinc-700",   bg: "bg-zinc-50 border-zinc-200" },
-  JURÍDICO:    { icon: Scale,         color: "text-zinc-700",   bg: "bg-zinc-50 border-zinc-200" },
-  GERENCIA:    { icon: Shield,        color: "text-rose-600",   bg: "bg-rose-50 border-rose-200" },
-  GERENTE:     { icon: Shield,        color: "text-rose-600",   bg: "bg-rose-50 border-rose-200" },
+  // Administrativa — coinciden con sidebar
+  DIRECCION:          { icon: Crown,           color: "text-indigo-600", bg: "bg-indigo-50 border-indigo-200" },
+  DIRECCIÓN:          { icon: Crown,           color: "text-indigo-600", bg: "bg-indigo-50 border-indigo-200" },
+  GERENCIA:           { icon: Briefcase,       color: "text-rose-600",   bg: "bg-rose-50 border-rose-200" },
+  GERENTE:            { icon: Briefcase,       color: "text-rose-600",   bg: "bg-rose-50 border-rose-200" },
+  RRHH:               { icon: User,            color: "text-pink-600",   bg: "bg-pink-50 border-pink-200" },
+  "RECURSOS HUMANOS": { icon: User,            color: "text-pink-600",   bg: "bg-pink-50 border-pink-200" },
+  CALIDAD:            { icon: CheckCircle2,    color: "text-blue-600",   bg: "bg-blue-50 border-blue-200" },
+  CONTABILIDAD:       { icon: Calculator,      color: "text-teal-600",   bg: "bg-teal-50 border-teal-200" },
+  LOGISTICA:          { icon: Package,         color: "text-amber-600",  bg: "bg-amber-50 border-amber-200" },
+  LOGÍSTICA:          { icon: Package,         color: "text-amber-600",  bg: "bg-amber-50 border-amber-200" },
+  MARKETING:          { icon: Camera,          color: "text-purple-600", bg: "bg-purple-50 border-purple-200" },
+  GESTORIA:           { icon: FileText,        color: "text-sky-600",    bg: "bg-sky-50 border-sky-200" },
+  GESTORÍA:           { icon: FileText,        color: "text-sky-600",    bg: "bg-sky-50 border-sky-200" },
+  JURIDICO:           { icon: Scale,           color: "text-fuchsia-600", bg: "bg-fuchsia-50 border-fuchsia-200" },
+  JURÍDICO:           { icon: Scale,           color: "text-fuchsia-600", bg: "bg-fuchsia-50 border-fuchsia-200" },
+
+  // Operativa — heredan icono del módulo padre (SALA / COCINA en sidebar)
+  SALA:               { icon: UtensilsCrossed, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
+  "JEFE DE SALA":     { icon: UtensilsCrossed, color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200" },
+  CAMARERO:           { icon: UtensilsCrossed, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
+  SEGURIDAD:          { icon: UtensilsCrossed, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
+  ARTISTA:            { icon: UtensilsCrossed, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
+  COCINA:             { icon: ChefHat,         color: "text-orange-600", bg: "bg-orange-50 border-orange-200" },
+  "JEFE DE COCINA":   { icon: ChefHat,         color: "text-orange-700", bg: "bg-orange-50 border-orange-200" },
+  COCINERO:           { icon: ChefHat,         color: "text-orange-600", bg: "bg-orange-50 border-orange-200" },
+  OFFICE:             { icon: ChefHat,         color: "text-orange-600", bg: "bg-orange-50 border-orange-200" },
+  LIMPIEZA:           { icon: ChefHat,         color: "text-orange-600", bg: "bg-orange-50 border-orange-200" },
 };
 
 function getDeptoConfig(rol: string) {
@@ -158,55 +162,47 @@ export function CronogramasHome({ data, onSelect, onCrearCronograma, onIrProduct
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-muted/20">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b bg-card">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight">Cronogramas</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Organiza las tareas de cada departamento por día.
-          </p>
+      {/* Filtro por área + acciones */}
+      <div className="flex items-center justify-between gap-2 px-6 py-3 border-b bg-card">
+        <div className="flex items-center gap-2">
+          <span className="text-xs uppercase tracking-wider text-muted-foreground mr-1">
+            Área
+          </span>
+          {(["TODAS", "OPERATIVA", "ADMINISTRATIVA"] as const).map((opt) => {
+            const active = filtroArea === opt;
+            const label = opt === "TODAS" ? "Todas" : AREA_LABEL[opt];
+            return (
+              <Button
+                key={opt}
+                type="button"
+                variant={active ? "primary" : "outline"}
+                size="sm"
+                onClick={() => setFiltroArea(opt)}
+                className="gap-2"
+              >
+                {label}
+                <span
+                  className={cn(
+                    "text-[10px] font-mono px-1.5 py-0.5 rounded",
+                    active ? "bg-background/30" : "bg-muted",
+                  )}
+                >
+                  {counts[opt]}
+                </span>
+              </Button>
+            );
+          })}
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="lg" onClick={onIrProductividad}>
+          <Button variant="outline" size="sm" onClick={onIrProductividad}>
             <BarChart3 className="h-4 w-4 mr-2" />
             Productividad
           </Button>
-          <Button variant="primary" size="lg" onClick={onCrearCronograma}>
+          <Button variant="primary" size="sm" onClick={onCrearCronograma}>
             <Plus className="h-4 w-4 mr-2" />
             Nuevo
           </Button>
         </div>
-      </div>
-
-      {/* Filtro por área */}
-      <div className="flex items-center gap-2 px-6 py-3 border-b bg-card">
-        <span className="text-xs uppercase tracking-wider text-muted-foreground mr-1">
-          Área
-        </span>
-        {(["TODAS", "OPERATIVA", "ADMINISTRATIVA"] as const).map((opt) => {
-          const active = filtroArea === opt;
-          const label = opt === "TODAS" ? "Todas" : AREA_LABEL[opt];
-          return (
-            <Button
-              key={opt}
-              type="button"
-              variant={active ? "primary" : "outline"}
-              size="sm"
-              onClick={() => setFiltroArea(opt)}
-              className="gap-2"
-            >
-              {label}
-              <span
-                className={cn(
-                  "text-[10px] font-mono px-1.5 py-0.5 rounded",
-                  active ? "bg-background/30" : "bg-muted",
-                )}
-              >
-                {counts[opt]}
-              </span>
-            </Button>
-          );
-        })}
       </div>
 
       {/* Grid de cards */}

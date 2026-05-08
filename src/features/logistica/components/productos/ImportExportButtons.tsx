@@ -128,7 +128,6 @@ export function ImportExportButtons({ tipo, onImportSuccess }: ImportExportButto
                   <tr className="border-b">
                     <th className="text-left px-3 py-2 font-semibold">Nombre</th>
                     <th className="text-left px-3 py-2 font-semibold">Categoría</th>
-                    <th className="text-left px-3 py-2 font-semibold">Familia</th>
                     <th className="text-left px-3 py-2 font-semibold">Estado</th>
                     {tipo === "compra" && (
                       <>
@@ -150,7 +149,6 @@ export function ImportExportButtons({ tipo, onImportSuccess }: ImportExportButto
                     <tr key={i} className="border-b hover:bg-muted/30">
                       <td className="px-3 py-2 font-medium">{p.nombre}</td>
                       <td className="px-3 py-2 text-muted-foreground">{p.categoria}</td>
-                      <td className="px-3 py-2 text-muted-foreground">{p.familia ?? "—"}</td>
                       <td className="px-3 py-2 text-muted-foreground">{p.estado}</td>
                       {tipo === "compra" && (
                         <>

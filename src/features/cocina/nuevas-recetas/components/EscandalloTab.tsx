@@ -18,17 +18,17 @@ interface Props {
   definirEtiquetasFinales?: boolean;
 }
 
-export function FichaTecnicaTab({ receta, onChanged, definirEtiquetasFinales }: Props) {
+export function EscandalloTab({ receta, onChanged, definirEtiquetasFinales }: Props) {
   const [nombre, setNombre] = useState(receta.nombre);
-  const [descripcion, setDescripcion] = useState(receta.ft_descripcion ?? "");
-  const [elaboracion, setElaboracion] = useState(receta.ft_elaboracion ?? "");
-  const [tiempo, setTiempo] = useState(receta.ft_tiempo_preparacion?.toString() ?? "");
-  const [partida, setPartida] = useState(receta.ft_partida ?? "");
-  const [pvp, setPvp] = useState(receta.ft_pvp_propuesto?.toString() ?? "");
-  const [coste, setCoste] = useState(receta.ft_coste_estimado?.toString() ?? "");
-  const [alergenos, setAlergenos] = useState<string[]>(receta.ft_alergenos ?? []);
+  const [descripcion, setDescripcion] = useState(receta.esc_descripcion ?? "");
+  const [elaboracion, setElaboracion] = useState(receta.esc_elaboracion ?? "");
+  const [tiempo, setTiempo] = useState(receta.esc_tiempo_preparacion?.toString() ?? "");
+  const [partida, setPartida] = useState(receta.esc_partida ?? "");
+  const [pvp, setPvp] = useState(receta.esc_pvp_propuesto?.toString() ?? "");
+  const [coste, setCoste] = useState(receta.esc_coste_estimado?.toString() ?? "");
+  const [alergenos, setAlergenos] = useState<string[]>(receta.esc_alergenos ?? []);
   const [nuevoAlergeno, setNuevoAlergeno] = useState("");
-  const [etiquetas, setEtiquetas] = useState<string[]>(receta.ft_etiquetas_finales ?? []);
+  const [etiquetas, setEtiquetas] = useState<string[]>(receta.esc_etiquetas_finales ?? []);
   const [nuevaEtiqueta, setNuevaEtiqueta] = useState("");
 
   const [ingredientes, setIngredientes] = useState<IngredienteLinea[]>(
@@ -60,14 +60,14 @@ export function FichaTecnicaTab({ receta, onChanged, definirEtiquetasFinales }: 
     try {
       const res1 = await updateReceta(receta.id, {
         nombre,
-        ft_descripcion: descripcion || null,
-        ft_elaboracion: elaboracion || null,
-        ft_tiempo_preparacion: tiempo ? parseInt(tiempo, 10) : null,
-        ft_partida: partida || null,
-        ft_pvp_propuesto: pvp ? parseFloat(pvp) : null,
-        ft_coste_estimado: coste ? parseFloat(coste) : null,
-        ft_alergenos: alergenos,
-        ft_etiquetas_finales: etiquetas,
+        esc_descripcion: descripcion || null,
+        esc_elaboracion: elaboracion || null,
+        esc_tiempo_preparacion: tiempo ? parseInt(tiempo, 10) : null,
+        esc_partida: partida || null,
+        esc_pvp_propuesto: pvp ? parseFloat(pvp) : null,
+        esc_coste_estimado: coste ? parseFloat(coste) : null,
+        esc_alergenos: alergenos,
+        esc_etiquetas_finales: etiquetas,
       });
       if (!res1.ok) { toast.error(res1.error); return; }
 
@@ -85,7 +85,7 @@ export function FichaTecnicaTab({ receta, onChanged, definirEtiquetasFinales }: 
       );
       if (!res2.ok) { toast.error(res2.error); return; }
 
-      toast.success("Ficha técnica guardada");
+      toast.success("Escandallo guardada");
       onChanged();
     } finally {
       setSaving(false);
@@ -174,7 +174,7 @@ export function FichaTecnicaTab({ receta, onChanged, definirEtiquetasFinales }: 
               <Tags className="h-3.5 w-3.5" /> Etiquetas finales
             </Label>
             <p className="text-[11px] text-muted-foreground mb-1">
-              Etiquetas definitivas que aparecerán en carta y ficha técnica oficial
+              Etiquetas definitivas que aparecerán en carta y escandallo oficial
             </p>
             <div className="flex flex-wrap gap-1 mb-2">
               {etiquetas.map((e, i) => (
@@ -211,7 +211,7 @@ export function FichaTecnicaTab({ receta, onChanged, definirEtiquetasFinales }: 
       <div className="flex justify-end pt-2 border-t">
         <Button onClick={guardar} disabled={saving}>
           <Save className="h-4 w-4 mr-1.5" />
-          {saving ? "Guardando..." : "Guardar ficha técnica"}
+          {saving ? "Guardando..." : "Guardar escandallo"}
         </Button>
       </div>
     </div>

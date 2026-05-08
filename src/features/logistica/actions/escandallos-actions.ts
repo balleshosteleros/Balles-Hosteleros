@@ -16,7 +16,7 @@ export async function listEscandallos(productoVentaId: string) {
   try {
     const { supabase } = await getContext();
     const { data, error } = await supabase
-      .from("escandallos")
+      .from("producto_composicion")
       .select("*, ingrediente:ingrediente_id(id, nombre, unidad, unidad_uso, factor_conversion)")
       .eq("producto_venta_id", productoVentaId);
     if (error) throw error;
@@ -36,7 +36,7 @@ export async function addEscandallo(input: {
 }) {
   try {
     const { supabase } = await getContext();
-    const { error } = await supabase.from("escandallos").insert({
+    const { error } = await supabase.from("producto_composicion").insert({
       producto_venta_id: input.productoVentaId,
       ingrediente_id: input.ingredienteId,
       cantidad: input.cantidad,
@@ -55,7 +55,7 @@ export async function addEscandallo(input: {
 export async function removeEscandallo(id: string) {
   try {
     const { supabase } = await getContext();
-    const { error } = await supabase.from("escandallos").delete().eq("id", id);
+    const { error } = await supabase.from("producto_composicion").delete().eq("id", id);
     if (error) throw error;
     return { ok: true as const };
   } catch (err) {
@@ -143,7 +143,7 @@ export async function bulkImportEscandallos(escandallos: EscandalloImport[]) {
 
     // upsert para re-importaciones (unique en producto_venta_id + ingrediente_id)
     const { error } = await supabase
-      .from("escandallos")
+      .from("producto_composicion")
       .upsert(rows, { onConflict: "producto_venta_id,ingrediente_id" });
     if (error) throw error;
 
@@ -170,7 +170,7 @@ export async function listEscandallosConPrecios(productoVentaId: string) {
     const { supabase } = await getContext();
 
     const { data, error } = await supabase
-      .from("escandallos")
+      .from("producto_composicion")
       .select("id, ingrediente_id, cantidad, merma_pct, ingrediente:ingrediente_id(id, nombre, unidad, factor_conversion)")
       .eq("producto_venta_id", productoVentaId);
 

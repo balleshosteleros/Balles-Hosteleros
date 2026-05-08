@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo, useCallback, type ReactNode } from "react
 import Link from "next/link";
 import { toast } from "sonner";
 import {
-  Plus, Sparkles, Archive, Trash2, Eye, Pencil, Palette, Settings,
+  Plus, Sparkles, Archive, Trash2, Eye, Pencil, Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +32,7 @@ import {
   listPresentaciones, archivarPresentacion, eliminarPresentacion, renombrarPresentacion,
 } from "../actions/presentaciones-actions";
 import { GeneradorInteligenteModal } from "./GeneradorInteligenteModal";
+import { BrandingDialog } from "./BrandingDialog";
 import type { Presentacion, Estado } from "../types/presentaciones";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
@@ -63,7 +64,7 @@ export function BibliotecaView() {
     { tipo: "archivar" | "eliminar"; id: string; titulo: string } | null
   >(null);
   const [renombrando, setRenombrando] = useState<{ id: string; titulo: string } | null>(null);
-  const [showConfig, setShowConfig] = useState(false);
+  const [brandingOpen, setBrandingOpen] = useState(false);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -191,24 +192,7 @@ export function BibliotecaView() {
   );
 
   return (
-    <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Sparkles className="h-6 w-6" /> Presentaciones
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Genera presentaciones con IA manteniendo tu imagen de marca.
-          </p>
-        </div>
-        <Link href="/direccion/presentaciones/branding">
-          <Button variant="outline" size="sm">
-            <Palette className="h-4 w-4 mr-2" /> Imagen de marca
-          </Button>
-        </Link>
-      </div>
-
+    <div className="p-6 space-y-4 max-w-[1400px] mx-auto">
       <SubmoduleToolbar
         busqueda={search}
         onBusquedaChange={setSearch}
@@ -226,19 +210,16 @@ export function BibliotecaView() {
         extraDerecha={
           <Button
             size="icon"
-            variant={showConfig ? "default" : "outline"}
+            variant="outline"
             className="h-9 w-9"
-            onClick={() => setShowConfig((v) => !v)}
-            title="Configuración"
-            aria-label="Configuración"
+            onClick={() => setBrandingOpen(true)}
+            title="Imagen de marca"
+            aria-label="Imagen de marca"
           >
             <Settings className="h-4 w-4" strokeWidth={1.75} />
           </Button>
         }
       />
-      <p className="text-xs text-muted-foreground text-right">
-        {filtered.length} presentación{filtered.length !== 1 ? "es" : ""}
-      </p>
 
       {/* Tabla */}
       <Card>
@@ -330,6 +311,9 @@ export function BibliotecaView() {
 
       {/* Modal crear */}
       <GeneradorInteligenteModal open={nuevaOpen} onOpenChange={setNuevaOpen} onSuccess={cargar} />
+
+      {/* Imagen de marca */}
+      <BrandingDialog open={brandingOpen} onOpenChange={setBrandingOpen} />
 
       {/* Confirmación archivar/eliminar */}
       <AlertDialog open={!!confirmar} onOpenChange={(o) => !o && setConfirmar(null)}>

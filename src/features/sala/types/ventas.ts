@@ -38,7 +38,6 @@ export interface VentaProducto {
   productoId: string | null;
   nombre: string;
   categoria: string;
-  familia: string | null;
   cantidad: number;
   ingresos: number;
   precioMedio: number;
@@ -57,20 +56,12 @@ export interface VentaCategoria {
   pct: number;
 }
 
-export interface VentaFamilia {
-  familia: string;
-  cantidad: number;
-  ingresos: number;
-  pct: number;
-}
-
 export interface VentasDashboard {
   rango: { from: string; to: string };
   resumen: VentasResumen;
   porDia: VentaDia[];
   porProducto: VentaProducto[];
   porCategoria: VentaCategoria[];
-  porFamilia: VentaFamilia[];
 }
 
 export const MENU_CLASS_LABEL: Record<MenuClass, string> = {

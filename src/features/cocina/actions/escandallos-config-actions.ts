@@ -9,7 +9,7 @@ export type GrupoCodigo =
   | "menaje"
   | "recomendaciones";
 
-export type FichaConfigItem = {
+export type EscandalloConfigItem = {
   id: string;
   empresa_id: string;
   grupo_codigo: GrupoCodigo;
@@ -24,21 +24,21 @@ export type FichaConfigItem = {
 export async function listConfigItems(grupo: GrupoCodigo) {
   try {
     const { supabase, empresaId } = await getAppContext();
-    if (!empresaId) return { ok: false, data: [] as FichaConfigItem[], error: "No autenticado" };
+    if (!empresaId) return { ok: false, data: [] as EscandalloConfigItem[], error: "No autenticado" };
 
     const { data, error } = await supabase
-      .from("fichas_config_items")
+      .from("escandallos_config_items")
       .select("*")
       .eq("empresa_id", empresaId)
       .eq("grupo_codigo", grupo)
       .order("orden", { ascending: true });
 
     if (error) throw error;
-    return { ok: true, data: (data ?? []) as FichaConfigItem[] };
+    return { ok: true, data: (data ?? []) as EscandalloConfigItem[] };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[fichas-config] listConfigItems:", msg);
-    return { ok: false, data: [] as FichaConfigItem[], error: msg };
+    console.error("[escandallos-config] listConfigItems:", msg);
+    return { ok: false, data: [] as EscandalloConfigItem[], error: msg };
   }
 }
 
@@ -57,7 +57,7 @@ export async function createConfigItem(input: {
 
     // Calcular siguiente orden
     const { data: ultimo, error: errOrden } = await supabase
-      .from("fichas_config_items")
+      .from("escandallos_config_items")
       .select("orden")
       .eq("empresa_id", empresaId)
       .eq("grupo_codigo", input.grupo)
@@ -68,7 +68,7 @@ export async function createConfigItem(input: {
     const nextOrden = (ultimo?.orden ?? 0) + 1;
 
     const { data, error } = await supabase
-      .from("fichas_config_items")
+      .from("escandallos_config_items")
       .insert({
         empresa_id: empresaId,
         grupo_codigo: input.grupo,
@@ -87,10 +87,10 @@ export async function createConfigItem(input: {
       }
       throw error;
     }
-    return { ok: true, data: data as FichaConfigItem };
+    return { ok: true, data: data as EscandalloConfigItem };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[fichas-config] createConfigItem:", msg);
+    console.error("[escandallos-config] createConfigItem:", msg);
     return { ok: false, error: msg };
   }
 }
@@ -109,7 +109,7 @@ export async function updateConfigItem(
     if (input.orden !== undefined) payload.orden = input.orden;
 
     const { data, error } = await supabase
-      .from("fichas_config_items")
+      .from("escandallos_config_items")
       .update(payload)
       .eq("id", id)
       .select()
@@ -121,10 +121,10 @@ export async function updateConfigItem(
       }
       throw error;
     }
-    return { ok: true, data: data as FichaConfigItem };
+    return { ok: true, data: data as EscandalloConfigItem };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[fichas-config] updateConfigItem:", msg);
+    console.error("[escandallos-config] updateConfigItem:", msg);
     return { ok: false, error: msg };
   }
 }
@@ -132,12 +132,12 @@ export async function updateConfigItem(
 export async function deleteConfigItem(id: string) {
   try {
     const { supabase } = await getAppContext();
-    const { error } = await supabase.from("fichas_config_items").delete().eq("id", id);
+    const { error } = await supabase.from("escandallos_config_items").delete().eq("id", id);
     if (error) throw error;
     return { ok: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[fichas-config] deleteConfigItem:", msg);
+    console.error("[escandallos-config] deleteConfigItem:", msg);
     return { ok: false, error: msg };
   }
 }

@@ -579,8 +579,8 @@ export function PreciosCompraSection({ productoId, unidad, onCurrentChange, onIt
                           </Badge>
                         )}
                       </td>
-                      <td className="px-3 py-1.5 text-muted-foreground whitespace-nowrap uppercase">
-                        {it.proveedor ?? <span className="italic normal-case">—</span>}
+                      <td className="px-3 py-1.5 text-muted-foreground whitespace-nowrap">
+                        {it.proveedor ?? <span className="italic">—</span>}
                       </td>
                       <td className="px-3 py-1.5 text-muted-foreground whitespace-nowrap">
                         {it.formato ?? <span className="italic">—</span>}

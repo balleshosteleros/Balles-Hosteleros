@@ -32,9 +32,14 @@ export async function parseProductosFile(
       nombre,
       tipo,
       categoria:
-        getField(row, ["categoria", "category", "familia principal"]) ??
-        "Sin categoría",
-      familia: getField(row, ["familia", "family", "subcategoria"]),
+        getField(row, [
+          "categoria",
+          "category",
+          "familia",
+          "family",
+          "familia principal",
+          "subcategoria",
+        ]) ?? "Sin categoría",
       estado: normalizeEstado(getField(row, ["estado", "status"])),
       proveedor: getField(row, ["proveedor", "supplier", "vendor"]),
       precioCompra: getField(row, [

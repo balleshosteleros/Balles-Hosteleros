@@ -92,14 +92,14 @@ async function main() {
     // Redirect escandallos, evitando conflicto único (producto_venta_id + ingrediente_id)
     // Si ya existe un escandallo con esa combinación, borramos el de compra en vez de duplicar.
     const { data: duplicados } = await supabase
-      .from("escandallos")
+      .from("producto_composicion")
       .select("producto_venta_id")
       .eq("ingrediente_id", m.compraId);
 
     if (duplicados && duplicados.length > 0) {
       const ventaIds = duplicados.map((d) => d.producto_venta_id);
       const { data: existing } = await supabase
-        .from("escandallos")
+        .from("producto_composicion")
         .select("producto_venta_id")
         .eq("ingrediente_id", m.elabId)
         .in("producto_venta_id", ventaIds);
@@ -109,14 +109,14 @@ async function main() {
         if (conflictSet.has(d.producto_venta_id)) {
           // Borrar duplicado
           await supabase
-            .from("escandallos")
+            .from("producto_composicion")
             .delete()
             .eq("ingrediente_id", m.compraId)
             .eq("producto_venta_id", d.producto_venta_id);
         } else {
           // Redirigir
           await supabase
-            .from("escandallos")
+            .from("producto_composicion")
             .update({ ingrediente_id: m.elabId })
             .eq("ingrediente_id", m.compraId)
             .eq("producto_venta_id", d.producto_venta_id);

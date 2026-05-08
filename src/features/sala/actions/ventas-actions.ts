@@ -6,7 +6,6 @@ import type {
   VentaDia,
   VentaProducto,
   VentaCategoria,
-  VentaFamilia,
   MenuClass,
 } from "../types/ventas";
 
@@ -28,7 +27,6 @@ function emptyDashboard(fromIso: string, toIso: string): VentasDashboard {
     porDia: [],
     porProducto: [],
     porCategoria: [],
-    porFamilia: [],
   };
 }
 
@@ -85,17 +83,16 @@ export async function getVentasDashboard(
     const productoIds = Array.from(
       new Set(lineas.map((l) => l.producto_id).filter((x): x is string => Boolean(x))),
     );
-    const productosMap = new Map<string, { categoria: string; familia: string | null; coste: number }>();
+    const productosMap = new Map<string, { categoria: string; coste: number }>();
     if (productoIds.length > 0) {
       const { data: prods, error: prodErr } = await supabase
         .from("productos")
-        .select("id, categoria, familia, coste")
+        .select("id, categoria, coste")
         .in("id", productoIds);
       if (prodErr) throw prodErr;
       for (const p of prods ?? []) {
         productosMap.set(p.id as string, {
           categoria: ((p as { categoria: string | null }).categoria) ?? "Sin categoría",
-          familia: ((p as { familia: string | null }).familia) ?? null,
           coste: toNum((p as { coste: unknown }).coste),
         });
       }
@@ -124,7 +121,6 @@ export async function getVentasDashboard(
       productoId: string | null;
       nombre: string;
       categoria: string;
-      familia: string | null;
       cantidad: number;
       ingresos: number;
       coste: number;
@@ -140,7 +136,6 @@ export async function getVentasDashboard(
           productoId: pid,
           nombre: (l.nombre as string) ?? "Sin nombre",
           categoria: meta?.categoria ?? "Sin categoría",
-          familia: meta?.familia ?? null,
           cantidad: 0,
           ingresos: 0,
           coste: 0,
@@ -184,7 +179,6 @@ export async function getVentasDashboard(
           productoId: p.productoId,
           nombre: p.nombre,
           categoria: p.categoria,
-          familia: p.familia,
           cantidad: p.cantidad,
           ingresos: p.ingresos,
           precioMedio: p.cantidad > 0 ? p.ingresos / p.cantidad : 0,
@@ -198,33 +192,18 @@ export async function getVentasDashboard(
       })
       .sort((a, b) => b.ingresos - a.ingresos);
 
-    // ─── Agregación por categoría / familia ────────────────────
+    // ─── Agregación por categoría ──────────────────────────────
     const ingresosLineas = productosAgg.reduce((s, p) => s + p.ingresos, 0);
     const catMap = new Map<string, { cantidad: number; ingresos: number }>();
-    const famMap = new Map<string, { cantidad: number; ingresos: number }>();
     for (const p of productosAgg) {
       const c = catMap.get(p.categoria) ?? { cantidad: 0, ingresos: 0 };
       c.cantidad += p.cantidad;
       c.ingresos += p.ingresos;
       catMap.set(p.categoria, c);
-
-      const fam = p.familia ?? "Sin familia";
-      const f = famMap.get(fam) ?? { cantidad: 0, ingresos: 0 };
-      f.cantidad += p.cantidad;
-      f.ingresos += p.ingresos;
-      famMap.set(fam, f);
     }
     const porCategoria: VentaCategoria[] = [...catMap.entries()]
       .map(([categoria, v]) => ({
         categoria,
-        cantidad: v.cantidad,
-        ingresos: v.ingresos,
-        pct: ingresosLineas > 0 ? v.ingresos / ingresosLineas : 0,
-      }))
-      .sort((a, b) => b.ingresos - a.ingresos);
-    const porFamilia: VentaFamilia[] = [...famMap.entries()]
-      .map(([familia, v]) => ({
-        familia,
         cantidad: v.cantidad,
         ingresos: v.ingresos,
         pct: ingresosLineas > 0 ? v.ingresos / ingresosLineas : 0,
@@ -255,7 +234,6 @@ export async function getVentasDashboard(
         porDia,
         porProducto,
         porCategoria,
-        porFamilia,
       },
     };
   } catch (err) {

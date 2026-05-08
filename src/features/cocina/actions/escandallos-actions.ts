@@ -2,11 +2,11 @@
 
 import { getAppContext } from "@/lib/supabase/get-context";
 
-export async function listFichas() {
+export async function listEscandallos() {
   try {
     const { supabase, empresaId } = await getAppContext();
     const query = supabase
-      .from("fichas_tecnicas")
+      .from("producto_composicion")
       .select("*")
       .order("created_at", { ascending: false });
     if (empresaId) query.eq("empresa_id", empresaId);
@@ -14,12 +14,12 @@ export async function listFichas() {
     if (error) throw error;
     return { ok: true, data: data ?? [] };
   } catch (err) {
-    console.error("[fichas-tecnicas] listFichas:", err);
+    console.error("[escandallos] listEscandallos:", err);
     return { ok: false, data: [] };
   }
 }
 
-export async function createFicha(input: {
+export async function createEscandallo(input: {
   nombre: string;
   categoria?: string;
   raciones?: number;
@@ -31,8 +31,8 @@ export async function createFicha(input: {
     const { supabase, userId, empresaId } = await getAppContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
 
-    const { data: ficha, error: fichaErr } = await supabase
-      .from("fichas_tecnicas")
+    const { data: escandallo, error: fichaErr } = await supabase
+      .from("producto_composicion")
       .insert({
         empresa_id: empresaId,
         nombre: input.nombre,
@@ -47,7 +47,7 @@ export async function createFicha(input: {
 
     if (input.ingredientes && input.ingredientes.length > 0) {
       const rows = input.ingredientes.map((ing) => ({
-        ficha_id: ficha.id,
+        escandallo_id: escandallo.id,
         nombre: ing.producto_nombre,
         cantidad: ing.cantidad,
         unidad: ing.unidad ?? "kg",
@@ -55,20 +55,20 @@ export async function createFicha(input: {
         coste_total: (ing.coste ?? 0) * ing.cantidad,
       }));
       const { error: ingErr } = await supabase
-        .from("ingredientes_ficha")
+        .from("escandallo_ingredientes")
         .insert(rows);
       if (ingErr) throw ingErr;
     }
 
-    return { ok: true, data: ficha };
+    return { ok: true, data: escandallo };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[fichas-tecnicas] createFicha:", msg);
+    console.error("[escandallos] createEscandallo:", msg);
     return { ok: false, error: msg };
   }
 }
 
-export async function updateFicha(
+export async function updateEscandallo(
   id: string,
   input: {
     nombre?: string;
@@ -88,30 +88,30 @@ export async function updateFicha(
     if (input.notas !== undefined) payload.notas = input.notas;
 
     const { error } = await supabase
-      .from("fichas_tecnicas")
+      .from("producto_composicion")
       .update(payload)
       .eq("id", id);
     if (error) throw error;
     return { ok: true };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[fichas-tecnicas] updateFicha:", msg);
+    console.error("[escandallos] updateEscandallo:", msg);
     return { ok: false, error: msg };
   }
 }
 
-export async function deleteFicha(id: string) {
+export async function deleteEscandallo(id: string) {
   try {
     const { supabase } = await getAppContext();
     const { error } = await supabase
-      .from("fichas_tecnicas")
+      .from("producto_composicion")
       .delete()
       .eq("id", id);
     if (error) throw error;
     return { ok: true };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[fichas-tecnicas] deleteFicha:", msg);
+    console.error("[escandallos] deleteEscandallo:", msg);
     return { ok: false, error: msg };
   }
 }

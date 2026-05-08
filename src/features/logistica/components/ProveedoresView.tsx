@@ -8,7 +8,13 @@ import {
   type Proveedor, type EstadoProveedor,
 } from "@/features/logistica/data/proveedores";
 import { listProveedores, createProveedor, updateProveedor, deleteProveedor } from "@/features/logistica/actions/proveedores-actions";
-import { listCategoriasProveedor } from "@/features/logistica/actions/categorias-proveedor-actions";
+import {
+  listCategoriasProveedor,
+  createCategoriaProveedor,
+  updateCategoriaProveedor,
+  deleteCategoriaProveedor,
+  type CategoriaProveedorRow,
+} from "@/features/logistica/actions/categorias-proveedor-actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +24,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Mail, AlertTriangle, Settings } from "lucide-react";
+import { Mail, AlertTriangle, Settings, Pencil, Trash2, Plus, X } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -113,13 +119,21 @@ export function ProveedoresView() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editItem, setEditItem] = useState<Proveedor | null>(null);
   const [showConfig, setShowConfig] = useState(false);
-  const [categoriasBD, setCategoriasBD] = useState<string[]>([]);
+  const [categoriasFull, setCategoriasFull] = useState<CategoriaProveedorRow[]>([]);
+
+  const reloadCategorias = useCallback(async () => {
+    const res = await listCategoriasProveedor();
+    if (res.ok) setCategoriasFull(res.data);
+  }, []);
 
   useEffect(() => {
-    listCategoriasProveedor().then((res) => {
-      if (res.ok) setCategoriasBD(res.data.filter((c) => c.activa).map((c) => c.nombre));
-    });
-  }, []);
+    reloadCategorias();
+  }, [reloadCategorias]);
+
+  const categoriasBD = useMemo(
+    () => categoriasFull.filter((c) => c.activa).map((c) => c.nombre),
+    [categoriasFull],
+  );
 
   const loadProveedores = useCallback(async () => {
     setLoading(true);
@@ -261,7 +275,7 @@ export function ProveedoresView() {
         />
       ),
       td: (p) => (
-        <td key="proveedor" className="px-3 py-2.5 font-semibold text-primary whitespace-nowrap uppercase">
+        <td key="proveedor" className="px-3 py-2.5 font-semibold text-primary whitespace-nowrap">
           {p.nombreComercial}
         </td>
       ),
@@ -366,58 +380,64 @@ export function ProveedoresView() {
     <div className="p-4 md:p-6 space-y-5">
       {/* Header removed — title shown in top bar */}
 
-      {/* Toolbar */}
-      <SubmoduleToolbar
-        busqueda={search}
-        onBusquedaChange={setSearch}
-        placeholderBusqueda="Buscar"
-        onNuevo={() => { setEditItem(null); setModalOpen(true); }}
-        filtros={filtros}
-        onFiltrosChange={setFiltros}
-        columnas={columnasDef}
-        columnasVisibles={columnasVisibles}
-        onColumnasVisiblesChange={setColumnasVisibles}
-        columnasOrden={columnasOrden}
-        onColumnasOrdenChange={setColumnasOrden}
-        extraDerecha={
-          <>
-            <IOActions config={proveedoresIO} onSuccess={() => window.location.reload()} />
-            <Button size="icon" variant={showConfig ? "default" : "outline"} className="h-9 w-9" onClick={() => setShowConfig((v) => !v)} title="Configuración" aria-label="Configuración">
-              <Settings className="h-4 w-4" strokeWidth={1.75} />
-            </Button>
-          </>
-        }
-      />
-
-      {showConfig && (
-        <div className="rounded-xl border bg-card p-5">
-          <p className="text-sm text-muted-foreground">Configuración de proveedores — próximamente.</p>
+      {showConfig ? (
+        <div className="bg-card border rounded-lg p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-foreground">CONFIGURACIÓN — PROVEEDORES</h3>
+            <Button size="sm" variant="outline" onClick={() => setShowConfig(false)}>Volver</Button>
+          </div>
+          <CategoriasProveedorManager items={categoriasFull} onChanged={reloadCategorias} />
         </div>
-      )}
+      ) : (
+        <>
+          {/* Toolbar */}
+          <SubmoduleToolbar
+            busqueda={search}
+            onBusquedaChange={setSearch}
+            placeholderBusqueda="Buscar"
+            onNuevo={() => { setEditItem(null); setModalOpen(true); }}
+            filtros={filtros}
+            onFiltrosChange={setFiltros}
+            columnas={columnasDef}
+            columnasVisibles={columnasVisibles}
+            onColumnasVisiblesChange={setColumnasVisibles}
+            columnasOrden={columnasOrden}
+            onColumnasOrdenChange={setColumnasOrden}
+            extraDerecha={
+              <>
+                <IOActions config={proveedoresIO} onSuccess={() => window.location.reload()} />
+                <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => setShowConfig(true)} title="Configuración" aria-label="Configuración">
+                  <Settings className="h-4 w-4" strokeWidth={1.75} />
+                </Button>
+              </>
+            }
+          />
 
-      {/* Table */}
-      <ResizableColumnsProvider storageKey="logistica-proveedores">
-      <div className="bg-card rounded-lg border overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b bg-muted/50">
-              {columnasRender.map((c) => columnDefs[c.campo]?.th)}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((p) => (
-              <tr key={p.id} className="border-b hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setDetalleProveedor(p)}>
-                {columnasRender.map((c) => columnDefs[c.campo]?.td(p))}
-              </tr>
-            ))}
-            {filtered.length === 0 && (
-              <tr><td colSpan={20} className="text-center py-12 text-muted-foreground">No se encontraron proveedores.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-      </ResizableColumnsProvider>
-      <div className="text-xs text-muted-foreground text-right">{filtered.length} de {proveedores.length} proveedores</div>
+          {/* Table */}
+          <ResizableColumnsProvider storageKey="logistica-proveedores">
+          <div className="bg-card rounded-lg border overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  {columnasRender.map((c) => columnDefs[c.campo]?.th)}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((p) => (
+                  <tr key={p.id} className="border-b hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setDetalleProveedor(p)}>
+                    {columnasRender.map((c) => columnDefs[c.campo]?.td(p))}
+                  </tr>
+                ))}
+                {filtered.length === 0 && (
+                  <tr><td colSpan={20} className="text-center py-12 text-muted-foreground">No se encontraron proveedores.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          </ResizableColumnsProvider>
+          <div className="text-xs text-muted-foreground text-right">{filtered.length} de {proveedores.length} proveedores</div>
+        </>
+      )}
 
       {/* Modal */}
       <ProveedorModal open={modalOpen} onClose={() => setModalOpen(false)} onSave={handleSave} item={editItem} empresaId={empresaActual.id} categorias={categoriasBD} />
@@ -619,5 +639,130 @@ function ProveedorModal({ open, onClose, onSave, item, empresaId, categorias }: 
         submoduloLabel="Proveedores"
       />
     </Dialog>
+  );
+}
+
+// ─── Configuración: editor inline de categorías de proveedor ──────
+
+function CategoriasProveedorManager({
+  items,
+  onChanged,
+}: {
+  items: CategoriaProveedorRow[];
+  onChanged: () => Promise<void>;
+}) {
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editVal, setEditVal] = useState("");
+  const [newVal, setNewVal] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const startEdit = (id: string, nombre: string) => {
+    setEditId(id);
+    setEditVal(nombre);
+  };
+
+  const confirmEdit = async () => {
+    if (!editId) return;
+    const trimmed = editVal.trim();
+    if (!trimmed) return;
+    setBusy(true);
+    const res = await updateCategoriaProveedor(editId, { nombre: trimmed });
+    setBusy(false);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    setEditId(null);
+    await onChanged();
+    toast.success("Categoría actualizada");
+  };
+
+  const remove = async (id: string) => {
+    setBusy(true);
+    const res = await deleteCategoriaProveedor(id);
+    setBusy(false);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    await onChanged();
+    toast.success("Categoría eliminada");
+  };
+
+  const add = async () => {
+    const trimmed = newVal.trim();
+    if (!trimmed) return;
+    setBusy(true);
+    const res = await createCategoriaProveedor({ nombre: trimmed });
+    setBusy(false);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    setNewVal("");
+    await onChanged();
+    toast.success("Categoría creada");
+  };
+
+  return (
+    <div className="space-y-2">
+      <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Categorías</h4>
+      <div className="rounded-md border divide-y">
+        {items.map((it) => (
+          <div key={it.id} className="flex items-center gap-2 px-3 py-1.5">
+            {editId === it.id ? (
+              <>
+                <Input
+                  autoFocus
+                  value={editVal}
+                  onChange={(e) => setEditVal(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") confirmEdit();
+                    if (e.key === "Escape") setEditId(null);
+                  }}
+                  className="h-7 text-sm flex-1"
+                />
+                <Button size="sm" className="h-7 px-2 text-xs" disabled={busy} onClick={confirmEdit}>
+                  Guardar
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setEditId(null)}>
+                  <X className="h-3 w-3" />
+                </Button>
+              </>
+            ) : (
+              <>
+                <span className="flex-1 text-sm">{it.nombre}</span>
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => startEdit(it.id, it.nombre)}>
+                  <Pencil className="h-3 w-3" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                  disabled={busy}
+                  onClick={() => remove(it.id)}
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </>
+            )}
+          </div>
+        ))}
+        <div className="flex items-center gap-2 px-3 py-1.5">
+          <Input
+            value={newVal}
+            onChange={(e) => setNewVal(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") add();
+            }}
+            placeholder="Nueva categoría…"
+            className="h-7 text-sm flex-1"
+          />
+          <Button size="sm" className="h-7 px-3 text-xs gap-1" disabled={busy} onClick={add}>
+            <Plus className="h-3 w-3" /> Añadir
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }

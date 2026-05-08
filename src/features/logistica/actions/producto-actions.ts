@@ -21,9 +21,10 @@ const productoInputSchema = z.object({
   nombre: z.string().min(1, "El nombre es obligatorio").transform(capitalizeText),
   tipo: z.enum(TIPOS),
   categoria: z.string().min(1, "La categoría es obligatoria").transform(capitalizeText),
-  familia: z.string().nullable().optional().transform((v) => v ? capitalizeText(v) : v),
   estado: z.enum(ESTADOS).default("Activo"),
-  proveedor: z.string().nullable().optional().transform((v) => v ? capitalizeText(v) : v),
+  // El nombre del proveedor se almacena SIEMPRE en MAYÚSCULAS (regla de
+  // negocio compartida con la tabla `proveedores.nombre_comercial`).
+  proveedor: z.string().nullable().optional().transform((v) => v ? v.trim().toUpperCase() : v),
   precioCompra: z.string().nullable().optional(),
   precioVenta: z.string().nullable().optional(),
   coste: z.string().nullable().optional(),
@@ -52,7 +53,6 @@ type ProductoRow = {
   nombre: string;
   tipo: TipoProducto;
   categoria: string;
-  familia: string | null;
   estado: EstadoProducto;
   proveedor: string | null;
   precio_compra: string | null;
@@ -81,7 +81,6 @@ function rowToProducto(r: ProductoRow): Producto {
     nombre: r.nombre,
     tipo: r.tipo,
     categoria: r.categoria,
-    familia: r.familia ?? "",
     estado: r.estado,
     proveedor: r.proveedor ?? undefined,
     precioCompra: r.precio_compra ?? undefined,
@@ -220,7 +219,6 @@ export async function createProducto(
         nombre: parsed.data.nombre,
         tipo: parsed.data.tipo,
         categoria: parsed.data.categoria,
-        familia: parsed.data.familia,
         estado: parsed.data.estado,
         proveedor: parsed.data.proveedor,
         precio_compra: parsed.data.precioCompra,
@@ -323,7 +321,6 @@ export async function bulkImportProductos(
       nombre: p.nombre,
       tipo: p.tipo,
       categoria: p.categoria,
-      familia: p.familia ?? null,
       estado: p.estado,
       proveedor: p.proveedor ?? null,
       precio_compra: p.precioCompra ?? null,
@@ -383,9 +380,8 @@ export async function updateProducto(
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (input.nombre !== undefined) updates.nombre = input.nombre ? capitalizeText(input.nombre) : input.nombre;
     if (input.categoria !== undefined) updates.categoria = input.categoria ? capitalizeText(input.categoria) : input.categoria;
-    if (input.familia !== undefined) updates.familia = input.familia ? capitalizeText(input.familia) : input.familia;
     if (input.estado !== undefined) updates.estado = input.estado;
-    if (input.proveedor !== undefined) updates.proveedor = input.proveedor ? capitalizeText(input.proveedor) : input.proveedor;
+    if (input.proveedor !== undefined) updates.proveedor = input.proveedor ? input.proveedor.trim().toUpperCase() : input.proveedor;
     if (input.precioCompra !== undefined) updates.precio_compra = input.precioCompra;
     if (input.precioVenta !== undefined) updates.precio_venta = input.precioVenta;
     if (input.coste !== undefined) updates.coste = input.coste;

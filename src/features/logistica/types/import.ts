@@ -49,7 +49,6 @@ export interface ProductoImport {
   nombre: string;
   tipo: ProductoTipo;
   categoria: string;
-  familia?: string | null;
   estado?: ProductoEstado;
   proveedor?: string | null;
   precioCompra?: string | null;
