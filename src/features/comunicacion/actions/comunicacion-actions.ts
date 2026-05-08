@@ -25,16 +25,104 @@ async function getContext() {
   };
 }
 
+const COMBINING_MARKS = /[\u0300-\u036f]/g;
+function normalizar(s: string): string {
+  return s.normalize("NFD").replace(COMBINING_MARKS, "").toUpperCase().trim();
+}
+
+// Sinónimos para matchear nombre de canal (ej "RR.HH") contra módulo de permisos
+// (ej "RECURSOS HUMANOS"). Cada array agrupa equivalentes; cualquier elemento
+// del array matchea cualquier otro.
+const SINONIMOS_DEPT: string[][] = [
+  ["RECURSOS HUMANOS", "RRHH", "RR.HH", "RR HH", "RESPONSABLE RRHH"],
+  ["DIRECCION", "DIRECTOR"],
+  ["COCINA", "JEFE DE COCINA"],
+  ["SALA", "JEFE DE SALA"],
+  ["LOGISTICA", "JEFE DE LOGISTICA"],
+  ["GERENCIA", "GERENTE"],
+  ["CALIDAD", "RESPONSABLE CALIDAD"],
+  ["MARKETING", "RESPONSABLE MARKETING"],
+  ["CONTABILIDAD", "CONTABLE"],
+  ["GESTORIA", "GESTOR"],
+  ["JURIDICO", "ABOGADO"],
+];
+
+function matchDepartamento(canalNombre: string, candidatos: string[]): boolean {
+  const target = normalizar(canalNombre);
+  const candNorm = candidatos.map(normalizar);
+  if (candNorm.includes(target)) return true;
+  // Buscamos el grupo de sinónimos del target y comprobamos si algún
+  // candidato cae en el mismo grupo.
+  const grupo = SINONIMOS_DEPT.find((g) => g.map(normalizar).includes(target));
+  if (!grupo) return false;
+  const grupoNorm = grupo.map(normalizar);
+  return candNorm.some((c) => grupoNorm.includes(c));
+}
+
 export async function listCanales(empresaSlug: string) {
   try {
-    const { supabase } = await getContext();
+    const { supabase, user, empresaId } = await getContext();
     const { data, error } = await supabase
       .from("canales")
       .select("*")
       .eq("empresa_id", empresaSlug)
       .order("nombre");
     if (error) throw error;
-    return { ok: true, data: data ?? [] };
+    const rows = data ?? [];
+
+    if (!user) return { ok: true, data: rows };
+
+    // Director / admin: ven todos los canales.
+    const { data: rolesRows } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id);
+    const appRoles = (rolesRows ?? []).map((r) => r.role as string);
+    if (appRoles.includes("director") || appRoles.includes("admin")) {
+      return { ok: true, data: rows };
+    }
+
+    // Resto: filtramos por permisos reales (empresa_roles.permisos) +
+    // membresía explícita en canales tipo asunto/grupo/directo.
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("rol_label, departamento")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const rolLabel = ((profile?.rol_label as string | null) ?? "").trim();
+    const departamento = ((profile?.departamento as string | null) ?? "").trim();
+
+    const candidatos: string[] = [];
+    if (departamento) candidatos.push(departamento);
+    if (rolLabel) candidatos.push(rolLabel);
+
+    if (rolLabel && empresaId) {
+      const { data: rolRow } = await supabase
+        .from("empresa_roles")
+        .select("permisos")
+        .eq("empresa_id", empresaId)
+        .ilike("nombre", rolLabel)
+        .maybeSingle();
+      const permisos = (rolRow?.permisos ?? []) as Array<{
+        modulo: string;
+        ver: boolean;
+      }>;
+      for (const p of permisos) {
+        if (p?.ver && p.modulo) candidatos.push(p.modulo);
+      }
+    }
+
+    const filtered = rows.filter((row) => {
+      const tipo = row.tipo as string | null;
+      const miembros = (row.miembros_user_ids as string[] | null) ?? [];
+      if (tipo === "departamento") {
+        return matchDepartamento(String(row.nombre ?? ""), candidatos);
+      }
+      // asunto / grupo / directo: solo si está en la lista de miembros.
+      return miembros.includes(user.id);
+    });
+
+    return { ok: true, data: filtered };
   } catch (err) {
     console.error("[comunicacion] listCanales:", err);
     return { ok: false, data: [] };

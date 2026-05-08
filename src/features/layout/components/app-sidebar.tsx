@@ -10,7 +10,7 @@ import {
   PenLine, CheckCircle2, BarChart3, Landmark, Tag, Zap, ContactRound,
   Heart, UserPlus, Apple, CreditCard, Presentation, QrCode, Globe,
   Send, Wallet, Fingerprint, Inbox, FileSignature, Trophy, UserCircle, LayoutDashboard,
-  FileQuestion, LayoutGrid,
+  FileQuestion, LayoutGrid, CalendarClock,
 } from "lucide-react";
 import { useViewMode } from "@/features/layout/contexts/view-mode-context";
 
@@ -78,7 +78,7 @@ const salaSubs = [
 const cocinaSubs = [
   { title: "COMANDAS", url: "/cocina/comandas", icon: Timer },
   { title: "NUEVAS RECETAS", url: "/cocina/nuevas-recetas", icon: Sparkles },
-  { title: "FICHAS TÉCNICAS", url: "/cocina/fichas-tecnicas", icon: Utensils },
+  { title: "ESCANDALLOS", url: "/cocina/escandallos", icon: Utensils },
   { title: "ELABORACIONES", url: "/cocina/elaboraciones", icon: FlaskConical },
   { title: "PARTIDAS", url: "/cocina/partidas", icon: LayoutGrid },
   { title: "TEMPERATURAS", url: "/cocina/temperaturas", icon: Thermometer },
@@ -89,6 +89,7 @@ const logisticaSubs = [
   { title: "PEDIDOS", url: "/logistica/pedidos", icon: ShoppingCart },
   { title: "STOCK", url: "/logistica/stock", icon: Warehouse },
   { title: "INVENTARIOS", url: "/logistica/inventarios", icon: ClipboardList },
+  { title: "TARIFAS", url: "/logistica/tarifas", icon: Tag },
 ];
 const marketingSubs = [
   { title: "CALENDARIO", url: "/marketing/calendario", icon: CalendarDays },
@@ -125,6 +126,7 @@ const miPanelSubs = [
   { title: "PERFIL", url: "/mi-panel/datos-personales", icon: UserCircle },
   { title: "POINTS", url: "/mi-panel/points", icon: Trophy },
   { title: "CALENDARIO", url: "/mi-panel/calendario", icon: CalendarDays },
+  { title: "CRONOGRAMA", url: "/mi-panel/cronograma", icon: CalendarClock },
   { title: "HORARIO", url: "/mi-panel/horario", icon: Timer },
   { title: "FICHAJES", url: "/mi-panel/fichajes", icon: Fingerprint },
   { title: "FORMACIÓN", url: "/mi-panel/formacion", icon: GraduationCap },

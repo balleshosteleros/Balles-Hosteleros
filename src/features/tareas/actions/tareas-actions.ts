@@ -16,6 +16,8 @@ export interface TareaRow {
   titulo: string;
   descripcion: string | null;
   fecha: string;
+  hora_inicio: string | null;
+  duracion_minutos: number | null;
   hecha: boolean;
   prioridad: TareaPrioridad;
   tipo: TareaTipo;
@@ -23,6 +25,8 @@ export interface TareaRow {
   ref_tabla: string | null;
   ref_id: string | null;
   ref_rol: string | null;
+  pospuesta_count: number;
+  pospuesta_ultima: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -165,15 +169,106 @@ export async function toggleTareaHecha(id: string): Promise<Result> {
   return marcarTarea(id, !current?.hecha);
 }
 
-/** Elimina una tarea */
+/** Elimina una tarea (solo permitido para tareas tipo 'manual') */
 export async function deleteTarea(id: string): Promise<Result> {
   try {
     const { supabase } = await getAppContext();
+    const { data: tarea } = await supabase
+      .from("tareas")
+      .select("tipo")
+      .eq("id", id)
+      .maybeSingle();
+    if (tarea && tarea.tipo === "sistema") {
+      return { ok: false, error: "Las tareas del cronograma no se pueden eliminar — usa Posponer." };
+    }
     const { error } = await supabase.from("tareas").delete().eq("id", id);
     if (error) throw error;
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Error al eliminar" };
+  }
+}
+
+/**
+ * Pospone una tarea: mueve fecha y/o hora_inicio, incrementa el contador de
+ * pospuestas en `tareas` y, si la tarea proviene del cronograma, también en
+ * la fila correspondiente de `cronograma_ejecuciones` para que las métricas
+ * de productividad lo reflejen.
+ *
+ * `nuevaHora` puede ser null (sin franja horaria asignada). `nuevaFecha` es
+ * obligatoria en formato YYYY-MM-DD.
+ */
+export async function posponerTarea(input: {
+  id: string;
+  nuevaFecha: string;
+  nuevaHora?: string | null;
+}): Promise<Result<TareaRow>> {
+  try {
+    const { supabase, userId } = await getAppContext();
+    if (!userId) return { ok: false, error: "No autenticado" };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(input.nuevaFecha)) {
+      return { ok: false, error: "Fecha inválida" };
+    }
+
+    const { data: actual, error: readErr } = await supabase
+      .from("tareas")
+      .select("id, user_id, fecha, tipo, ref_tabla, ref_id, pospuesta_count")
+      .eq("id", input.id)
+      .maybeSingle();
+    if (readErr) throw readErr;
+    if (!actual) return { ok: false, error: "Tarea no encontrada" };
+
+    const ahora = new Date().toISOString();
+    const nuevoCount = (actual.pospuesta_count ?? 0) + 1;
+
+    const { data: actualizada, error: upErr } = await supabase
+      .from("tareas")
+      .update({
+        fecha: input.nuevaFecha,
+        hora_inicio: input.nuevaHora ?? null,
+        pospuesta_count: nuevoCount,
+        pospuesta_ultima: ahora,
+        updated_at: ahora,
+      })
+      .eq("id", input.id)
+      .select()
+      .single();
+    if (upErr) throw upErr;
+
+    // Si es tarea de cronograma, replicar en cronograma_ejecuciones
+    const esCronograma =
+      actual.tipo === "sistema" &&
+      typeof actual.ref_tabla === "string" &&
+      actual.ref_tabla.startsWith("cronogramas_operativos") &&
+      actual.ref_id;
+
+    if (esCronograma) {
+      const { data: ejec } = await supabase
+        .from("cronograma_ejecuciones")
+        .select("id, pospuesta_count")
+        .eq("tarea_id", actual.ref_id)
+        .eq("user_id", actual.user_id ?? userId)
+        .eq("fecha_programada", actual.fecha)
+        .maybeSingle();
+
+      if (ejec) {
+        await supabase
+          .from("cronograma_ejecuciones")
+          .update({
+            fecha_programada: input.nuevaFecha,
+            hora_inicio: input.nuevaHora ?? null,
+            pospuesta_count: (ejec.pospuesta_count ?? 0) + 1,
+            pospuesta_ultima: ahora,
+            updated_at: ahora,
+          })
+          .eq("id", ejec.id);
+      }
+    }
+
+    return { ok: true, data: actualizada as TareaRow };
+  } catch (err) {
+    console.error("[posponerTarea]", err);
+    return { ok: false, error: err instanceof Error ? err.message : "Error al posponer" };
   }
 }
 
@@ -287,6 +382,20 @@ function ymd(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+/** Parsea "30 MIN" / "1 HORA" / "2 HORAS" / "1.5 HORAS" / "45M" → minutos. */
+function parseDuracionMinutos(raw: string | null | undefined): number | null {
+  if (!raw) return null;
+  const s = raw.trim().toUpperCase();
+  const m = s.match(/^([\d.,]+)\s*([A-Z]*)$/);
+  if (!m) return null;
+  const n = parseFloat(m[1].replace(",", "."));
+  if (!isFinite(n)) return null;
+  const unit = m[2];
+  if (unit.startsWith("H")) return Math.round(n * 60);
+  if (unit.startsWith("M") || unit === "") return Math.round(n);
+  return null;
 }
 
 function isoWeekday(d: Date): number {
@@ -428,6 +537,105 @@ export async function getRolesCronograma(): Promise<Result<string[]>> {
   }
 }
 
+/**
+ * Devuelve los módulos/departamentos visibles para el rol del usuario actual.
+ * Lee `profiles.rol_label` y consulta `empresa_roles.permisos` (JSONB
+ * `[{modulo, ver, editar}]`).
+ *
+ * Resultado:
+ *   - moduloPropio: módulo asignado al rol del usuario (puede ser null si no
+ *     se encuentra mapeo).
+ *   - modulosVisibles: lista única de módulos con `ver=true` para el rol.
+ *
+ * Si el usuario es director (bypass total), devuelve todos los módulos.
+ */
+export async function getDepartamentosVisibles(): Promise<
+  Result<{ moduloPropio: string | null; modulosVisibles: string[] }>
+> {
+  try {
+    const { supabase, userId, empresaId } = await getAppContext();
+    if (!userId || !empresaId) {
+      return { ok: true, data: { moduloPropio: null, modulosVisibles: [] } };
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("rol_label")
+      .eq("user_id", userId)
+      .maybeSingle();
+    const rolLabel = (profile?.rol_label as string | null)?.trim() ?? null;
+
+    // Director del SaaS: bypass — ve todo.
+    const { data: rolesRows } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId);
+    const appRoles = (rolesRows ?? []).map((r) => r.role as string);
+    const esDirectorGlobal = appRoles.includes("director") || appRoles.includes("admin");
+
+    let modulosVisibles: string[] = [];
+    let moduloPropio: string | null = null;
+
+    if (rolLabel) {
+      const { data: rolRow } = await supabase
+        .from("empresa_roles")
+        .select("permisos")
+        .eq("empresa_id", empresaId)
+        .ilike("nombre", rolLabel)
+        .maybeSingle();
+      const permisos = (rolRow?.permisos ?? []) as Array<{
+        modulo: string;
+        ver: boolean;
+        editar: boolean;
+      }>;
+      modulosVisibles = permisos
+        .filter((p) => p.ver)
+        .map((p) => p.modulo)
+        .filter(Boolean);
+    }
+
+    if (esDirectorGlobal && modulosVisibles.length === 0) {
+      // Bypass: si no hay permisos cargados, asume acceso a todos los módulos
+      modulosVisibles = [
+        "Dirección", "Gerencia", "RRHH", "Logística", "Cocina",
+        "Sala", "Calidad", "Contabilidad", "Gestoría", "Jurídico", "Marketing",
+      ];
+    }
+
+    // Mapea el rol_label al módulo propio.
+    const ROLE_MODULE_MAP: Record<string, string> = {
+      "DIRECTOR": "Dirección",
+      "GERENTE": "Gerencia",
+      "RESPONSABLE RRHH": "RRHH",
+      "JEFE DE LOGÍSTICA": "Logística",
+      "JEFE DE COCINA": "Cocina",
+      "JEFE DE SALA": "Sala",
+      "RESPONSABLE CALIDAD": "Calidad",
+      "CONTABLE": "Contabilidad",
+      "GESTOR": "Gestoría",
+      "ABOGADO": "Jurídico",
+      "RESPONSABLE MARKETING": "Marketing",
+    };
+    if (rolLabel) {
+      moduloPropio = ROLE_MODULE_MAP[rolLabel.toUpperCase()] ?? null;
+    }
+
+    return {
+      ok: true,
+      data: {
+        moduloPropio,
+        modulosVisibles: Array.from(new Set(modulosVisibles)),
+      },
+    };
+  } catch (err: any) {
+    console.error("[getDepartamentosVisibles] Fatal:", err);
+    return {
+      ok: true,
+      data: { moduloPropio: null, modulosVisibles: [] },
+    };
+  }
+}
+
 export async function listCronogramasPorRol(rol: string): Promise<Result<any[]>> {
   try {
     const { supabase } = await getAppContext();
@@ -456,11 +664,23 @@ export async function syncTareasCronograma(dateIso?: string, forcedRol?: string)
 
     let rol = forcedRol;
     if (!rol) {
-      const { data: rData } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-      const roles = rData?.map(r => r.role as string) || [];
-      rol = roles.includes("admin") ? "Dirección" : (roles[0] || "Dirección");
+      // Preferimos profiles.rol_label / departamento (claves de cronogramas_operativos.rol)
+      // sobre user_roles.role (que es el rol RBAC del sistema: empleado/admin/etc).
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("rol_label, departamento")
+        .eq("user_id", userId)
+        .maybeSingle();
+      rol = (prof?.rol_label as string | null)?.trim()
+        || (prof?.departamento as string | null)?.trim()
+        || undefined;
+      if (!rol) {
+        const { data: rData } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+        const roles = rData?.map(r => r.role as string) || [];
+        rol = roles.includes("admin") ? "Dirección" : (roles[0] || "Dirección");
+      }
     }
-    
+
     if (!rol) return { ok: true, data: { rol: null, insertadas: 0, yaExistian: 0 } };
 
     // Búsqueda más flexible
@@ -517,10 +737,11 @@ export async function syncTareasCronograma(dateIso?: string, forcedRol?: string)
       titulo: t.tarea,
       descripcion: t.resumen ?? null,
       fecha: targetIso,
+      duracion_minutos: parseDuracionMinutos(t.tiempo_requerido),
       hecha: false,
       prioridad: "alta" as TareaPrioridad,
-      tipo: "sistema" as TareaTipo, // Cambiado de 'cronograma' a 'sistema' para cumplir con el check constraint de la DB
-      ref_tabla: `cronogramas_operativos:${t.rol}`, // Usamos ref_tabla para guardar el rol, ya que ref_rol no existe
+      tipo: "sistema" as TareaTipo,
+      ref_tabla: `cronogramas_operativos:${t.rol}`,
       ref_id: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(t.id) ? t.id : null,
       created_by: userId,
     }));
@@ -545,14 +766,24 @@ export async function syncTareasCronogramaRange(dates: string[], forcedRol?: str
 
     let rol = forcedRol;
     if (!rol) {
-      const { data: rData } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", userId);
-      const roles = rData?.map(r => r.role as string) || [];
-      rol = roles.includes("admin") ? "Dirección" : (roles[0] || "Dirección");
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("rol_label, departamento")
+        .eq("user_id", userId)
+        .maybeSingle();
+      rol = (prof?.rol_label as string | null)?.trim()
+        || (prof?.departamento as string | null)?.trim()
+        || undefined;
+      if (!rol) {
+        const { data: rData } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", userId);
+        const roles = rData?.map(r => r.role as string) || [];
+        rol = roles.includes("admin") ? "Dirección" : (roles[0] || "Dirección");
+      }
     }
-    
+
     console.log(`[sync] Iniciando para rol: ${rol}, fechas: ${dates.length}`);
     if (!rol) return { ok: true, data: undefined };
 
@@ -599,10 +830,11 @@ export async function syncTareasCronogramaRange(dates: string[], forcedRol?: str
             titulo: t.tarea,
             descripcion: t.resumen ?? null,
             fecha: dStr,
+            duracion_minutos: parseDuracionMinutos(t.tiempo_requerido),
             hecha: false,
             prioridad: "alta",
-            tipo: "sistema", // Cambiado de 'cronograma' a 'sistema'
-            ref_tabla: `cronogramas_operativos:${t.rol}`, // Usamos ref_tabla para guardar el rol
+            tipo: "sistema",
+            ref_tabla: `cronogramas_operativos:${t.rol}`,
             ref_id: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(t.id) ? t.id : null,
             created_by: userId,
           });

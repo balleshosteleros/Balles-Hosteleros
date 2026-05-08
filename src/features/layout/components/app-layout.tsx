@@ -160,7 +160,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/rrhh/reclutamiento": "RECLUTAMIENTO",
   "/rrhh/comunicados": "COMUNICADOS",
   "/logistica": "LOGÍSTICA",
-  "/logistica/fichas-tecnicas": "FICHAS TÉCNICAS",
+  "/logistica/escandallos": "ESCANDALLOS",
   "/logistica/partidas": "PARTIDAS",
   "/logistica/productos": "PRODUCTOS",
   "/marketing": "MARKETING",
@@ -185,7 +185,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/cocina": "COCINA",
   "/cocina/comandas": "COMANDAS",
   "/cocina/nuevas-recetas": "NUEVAS RECETAS",
-  "/cocina/fichas-tecnicas": "FICHAS TÉCNICAS",
+  "/cocina/escandallos": "ESCANDALLOS",
   "/cocina/elaboraciones": "ELABORACIONES",
   "/cocina/partidas": "PARTIDAS",
   "/cocina/temperaturas": "TEMPERATURAS",
@@ -315,7 +315,7 @@ const ROUTE_ICONS: Record<string, LucideIcon> = {
   "/cocina": ChefHat,
   "/cocina/comandas": Timer,
   "/cocina/nuevas-recetas": Sparkles,
-  "/cocina/fichas-tecnicas": Utensils,
+  "/cocina/escandallos": Utensils,
   "/cocina/elaboraciones": FlaskConical,
   "/cocina/partidas": LayoutGrid,
   "/cocina/temperaturas": Thermometer,
@@ -449,8 +449,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   if (!submoduleTitle) submoduleTitle = getDynamicTitle(pathname);
   const headerLabel = submoduleTitle || moduleShort;
 
-  const rolLabel =
-    roles.length > 0
+  // Preferimos profiles.rol_label (ej. "JEFE DE COCINA") sobre el rol RBAC
+  // del sistema (empleado/admin/director), que es genérico y no descriptivo.
+  const rolLabel = profile?.rol_label
+    ? profile.rol_label
+    : roles.length > 0
       ? roles[0].charAt(0).toUpperCase() + roles[0].slice(1)
       : "—";
 
