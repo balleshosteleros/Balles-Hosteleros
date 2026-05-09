@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo } from "react";
 import { useAuth, type AppRole } from "@/features/auth/contexts/auth-context";
 import { Card } from "@/components/ui/card";
 import {
@@ -33,28 +34,23 @@ interface DepartamentoTile {
   color: string;
 }
 
-const ALL_DEPARTAMENTOS: DepartamentoTile[] = [
-  { key: "direccion",    label: "DIRECCIÓN",    href: "/direccion",    icon: Crown,           description: "Organigrama, cronogramas, aperturas",       color: "text-amber-600" },
-  { key: "sala",         label: "SALA",         href: "/sala",         icon: UtensilsCrossed, description: "POS, reservas, clientes",                    color: "text-rose-600" },
-  { key: "cocina",       label: "COCINA",       href: "/cocina",       icon: ChefHat,         description: "Comandas, fichas técnicas, partidas",        color: "text-orange-600" },
-  { key: "gerencia",     label: "GERENCIA",     href: "/gerencia",     icon: Briefcase,       description: "Mantenimiento, cierres, ratios, comunicados", color: "text-blue-600" },
-  { key: "calidad",      label: "CALIDAD",      href: "/calidad",      icon: CheckCircle2,    description: "Auditorías, inspecciones",                   color: "text-emerald-600" },
-  { key: "rrhh",         label: "RECURSOS HUMANOS", href: "/rrhh",     icon: User,            description: "Empleados, fichajes, horarios, formación",   color: "text-violet-600" },
-  { key: "marketing",    label: "MARKETING",    href: "/marketing",    icon: Camera,          description: "Calendario, campañas, fidelización",         color: "text-pink-600" },
-  { key: "logistica",    label: "LOGÍSTICA",    href: "/logistica",    icon: Package,         description: "Proveedores, productos, pedidos, stock",     color: "text-teal-600" },
-  { key: "contabilidad", label: "CONTABILIDAD", href: "/contabilidad", icon: Calculator,      description: "Facturas, transacciones, conciliación",      color: "text-cyan-600" },
-  { key: "gestoria",     label: "GESTORÍA",     href: "/gestoria",     icon: FileText,        description: "Modelos y presentaciones",                   color: "text-slate-600" },
-  { key: "juridico",     label: "JURÍDICO",     href: "/juridico",     icon: Scale,           description: "Procesos legales",                           color: "text-zinc-700" },
-];
+interface DepartamentoTileExt extends DepartamentoTile {
+  modulo: string;
+}
 
-const ROLE_DEPARTAMENTOS: Record<AppRole, string[]> = {
-  admin:        ["direccion", "sala", "cocina", "gerencia", "calidad", "rrhh", "marketing", "logistica", "contabilidad", "gestoria", "juridico"],
-  director:     ["direccion", "sala", "cocina", "gerencia", "calidad", "rrhh", "marketing", "logistica", "contabilidad", "gestoria", "juridico"],
-  gerencia:     ["gerencia", "rrhh", "calidad", "marketing", "logistica", "contabilidad"],
-  responsable:  ["sala", "cocina", "gerencia", "rrhh", "calidad", "logistica"],
-  empleado:     ["rrhh"],
-  solo_lectura: ["gerencia"],
-};
+const ALL_DEPARTAMENTOS: DepartamentoTileExt[] = [
+  { key: "direccion",    modulo: "DIRECCIÓN",        label: "DIRECCIÓN",    href: "/direccion",    icon: Crown,           description: "Organigrama, cronogramas, aperturas",       color: "text-amber-600" },
+  { key: "sala",         modulo: "SALA",             label: "SALA",         href: "/sala",         icon: UtensilsCrossed, description: "POS, reservas, clientes",                    color: "text-rose-600" },
+  { key: "cocina",       modulo: "COCINA",           label: "COCINA",       href: "/cocina",       icon: ChefHat,         description: "Comandas, escandallos, partidas",            color: "text-orange-600" },
+  { key: "gerencia",     modulo: "GERENCIA",         label: "GERENCIA",     href: "/gerencia",     icon: Briefcase,       description: "Mantenimiento, cierres, ratios, comunicados", color: "text-blue-600" },
+  { key: "calidad",      modulo: "CALIDAD",          label: "CALIDAD",      href: "/calidad",      icon: CheckCircle2,    description: "Auditorías, inspecciones",                   color: "text-emerald-600" },
+  { key: "rrhh",         modulo: "RRHH",             label: "RECURSOS HUMANOS", href: "/rrhh",     icon: User,            description: "Empleados, fichajes, horarios, formación",   color: "text-violet-600" },
+  { key: "marketing",    modulo: "MARKETING",        label: "MARKETING",    href: "/marketing",    icon: Camera,          description: "Calendario, campañas, fidelización",         color: "text-pink-600" },
+  { key: "logistica",    modulo: "LOGÍSTICA",        label: "LOGÍSTICA",    href: "/logistica",    icon: Package,         description: "Proveedores, productos, pedidos, stock",     color: "text-teal-600" },
+  { key: "contabilidad", modulo: "CONTABILIDAD",     label: "CONTABILIDAD", href: "/contabilidad", icon: Calculator,      description: "Facturas, transacciones, conciliación",      color: "text-cyan-600" },
+  { key: "gestoria",     modulo: "GESTORÍA",         label: "GESTORÍA",     href: "/gestoria",     icon: FileText,        description: "Modelos y presentaciones",                   color: "text-sky-600" },
+  { key: "juridico",     modulo: "JURÍDICO",         label: "JURÍDICO",     href: "/juridico",     icon: Scale,           description: "Procesos legales",                           color: "text-fuchsia-600" },
+];
 
 function dashboardSubtitlePorRol(rol: AppRole | null): string {
   if (!rol) return "Estos son tus departamentos asignados.";
@@ -76,11 +72,17 @@ function dashboardSubtitlePorRol(rol: AppRole | null): string {
 }
 
 export function MisDepartamentosView() {
-  const { profile, user, roles } = useAuth();
+  const { profile, user, roles, puedeVer, permisosLoaded, hasRole } = useAuth();
   const rolPrincipal: AppRole | null = roles[0] ?? null;
 
-  const claves = rolPrincipal ? ROLE_DEPARTAMENTOS[rolPrincipal] : [];
-  const tiles = ALL_DEPARTAMENTOS.filter((d) => claves.includes(d.key));
+  const tiles = useMemo(() => {
+    // 'director' / 'admin' tienen bypass total — ven todos los departamentos.
+    if (hasRole("director") || hasRole("admin")) return ALL_DEPARTAMENTOS;
+    // Hasta que carguen permisos no mostramos nada para evitar el parpadeo
+    // "todo abierto" → "filtrado".
+    if (!permisosLoaded) return [];
+    return ALL_DEPARTAMENTOS.filter((d) => puedeVer(d.modulo));
+  }, [hasRole, permisosLoaded, puedeVer]);
 
   const today = new Date();
   const fechaLarga = `${DIAS_LARGOS[today.getDay()]} ${today.getDate()} de ${MESES_LARGOS[today.getMonth()]}`;

@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Button } from "@/components/ui/button";
-import { Search, ArrowLeftRight } from "lucide-react";
+import { Search, ArrowLeftRight, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SAMPLE_CONCILIACION } from "@/features/contabilidad/data/contabilidad";
 import { SubmoduleToolbar } from "@/shared/components/SubmoduleToolbar";
@@ -14,6 +14,7 @@ export function ConciliacionView() {
   const { empresaActual } = useEmpresa();
   const [tab, setTab] = useState("PENDIENTE");
   const [busqueda, setBusqueda] = useState("");
+  const [showConfig, setShowConfig] = useState(false);
   const [items] = useState(SAMPLE_CONCILIACION);
 
   const filtrados = useMemo(() => items.filter(i => {
@@ -31,8 +32,20 @@ export function ConciliacionView() {
         <SubmoduleToolbar
           busqueda={busqueda}
           onBusquedaChange={setBusqueda}
-          placeholderBusqueda="Buscar transacciones..."
+          placeholderBusqueda="Buscar"
           ocultarNuevo
+          extraDerecha={
+            <Button
+              size="icon"
+              variant={showConfig ? "default" : "outline"}
+              className="h-9 w-9"
+              onClick={() => setShowConfig((v) => !v)}
+              title="Configuración"
+              aria-label="Configuración"
+            >
+              <Settings className="h-4 w-4" strokeWidth={1.75} />
+            </Button>
+          }
         />
       </div>
       <div className="flex-1 overflow-auto px-6">

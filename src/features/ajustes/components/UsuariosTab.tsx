@@ -135,6 +135,7 @@ export function UsuariosTab() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createPrefill, setCreatePrefill] = useState<{ nombre: string; apellidos: string; email: string } | null>(null);
   const [createEsEmpleado, setCreateEsEmpleado] = useState(true);
+  const [createEmpresaIds, setCreateEmpresaIds] = useState<string[]>([]);
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [resetModal, setResetModal] = useState<{ id: string; nombre: string } | null>(null);
@@ -209,6 +210,16 @@ export function UsuariosTab() {
     }
     return map;
   }, [rolesData]);
+
+  // Lista de empresas con dbId (UUID real) para los checkboxes de acceso.
+  // Reutilizada por el modal de Crear y de Editar usuario.
+  const empresasDisponibles = useMemo(
+    () =>
+      empresas
+        .map((e) => ({ dbId: e.dbId, nombre: e.nombre }))
+        .filter((e): e is { dbId: string; nombre: string } => Boolean(e.dbId)),
+    [empresas],
+  );
 
   // Opciones únicas de departamentos derivadas de la config de roles.
   const departamentosOpciones = useMemo(() => {
@@ -352,19 +363,15 @@ export function UsuariosTab() {
 
   return (
     <div className="space-y-2">
-      {/* Header */}
-      <div className="flex justify-end">
-        <Button size="sm" className="gap-1.5" onClick={() => setShowCreateModal(true)}>
-          <Plus className="h-4 w-4" />Nuevo
-        </Button>
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 -mt-10">
+      {/* Header + Filters en una sola fila */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="relative flex-1 min-w-[220px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Buscar por nombre, email o rol..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} className="pl-9" />
         </div>
+        <Button size="sm" className="gap-1.5" onClick={() => setShowCreateModal(true)}>
+          <Plus className="h-4 w-4" />Nuevo
+        </Button>
       </div>
 
       {/* Users table — todos los usuarios de Supabase en una única tabla */}
@@ -543,10 +550,7 @@ export function UsuariosTab() {
         <EditarUsuarioModal
           acceso={editModal}
           roles={rolesEmpresa}
-          empresasDisponibles={empresas.map((e) => ({
-            dbId: e.dbId,
-            nombre: e.nombre,
-          })).filter((e): e is { dbId: string; nombre: string } => Boolean(e.dbId))}
+          empresasDisponibles={empresasDisponibles}
           onClose={() => setEditModal(null)}
           onSave={guardarEdicion}
         />
@@ -646,9 +650,13 @@ export function UsuariosTab() {
         open={showCreateModal}
         onOpenChange={(o) => {
           setShowCreateModal(o);
-          if (!o) {
+          if (o) {
+            // Por defecto, marcamos la empresa actual del invocador.
+            setCreateEmpresaIds(empresaActual.dbId ? [empresaActual.dbId] : []);
+          } else {
             setCreatePrefill(null);
             setCreateEsEmpleado(true);
+            setCreateEmpresaIds([]);
           }
         }}
       >
@@ -692,6 +700,44 @@ export function UsuariosTab() {
                 El rol determina los departamentos accesibles y los permisos. Configúralo en la pestaña Roles.
               </p>
             </div>
+            <div>
+              <Label className="text-xs font-bold">EMPRESAS A LAS QUE TENDRÁ ACCESO</Label>
+              {empresasDisponibles.length === 0 ? (
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  No hay empresas en la base de datos.
+                </p>
+              ) : (
+                <div className="mt-1.5 space-y-1.5 rounded-md border bg-muted/30 p-2 max-h-40 overflow-y-auto">
+                  {empresasDisponibles.map((emp) => {
+                    const checked = createEmpresaIds.includes(emp.dbId);
+                    return (
+                      <label
+                        key={emp.dbId}
+                        className="flex items-center gap-2 cursor-pointer hover:bg-background/60 rounded px-1.5 py-1"
+                      >
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={(v) => {
+                            setCreateEmpresaIds((prev) =>
+                              v
+                                ? Array.from(new Set([...prev, emp.dbId]))
+                                : prev.filter((id) => id !== emp.dbId),
+                            );
+                          }}
+                        />
+                        <span className="text-sm">{emp.nombre}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+              {createEmpresaIds.map((id) => (
+                <input key={id} type="hidden" name="empresa_ids" value={id} />
+              ))}
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Si marcas más de una, el usuario verá el selector de empresa arriba y podrá entrar a los departamentos asignados en cada una.
+              </p>
+            </div>
             <div className="rounded-md border bg-muted/30 px-2.5 py-2 mt-1">
               <label className="flex items-start gap-2 cursor-pointer">
                 <Checkbox
@@ -717,6 +763,7 @@ export function UsuariosTab() {
                   setShowCreateModal(false);
                   setCreatePrefill(null);
                   setCreateEsEmpleado(true);
+                  setCreateEmpresaIds([]);
                 }}
               >
                 Cancelar

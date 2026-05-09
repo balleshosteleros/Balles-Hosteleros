@@ -52,7 +52,7 @@ export async function getEmpleadoStatus(): Promise<EmpleadoStatus> {
     .select(
       "id, empresa_id, perfil_completado, nombre, apellidos, email_personal, telefono, dni_nie, fecha_nacimiento, direccion, iban, numero_ss, contacto_emergencia_nombre, contacto_emergencia_telefono, contacto_emergencia_relacion, talla_uniforme, alergias_medicas, avatar_url, dni_archivo_url"
     )
-    .eq("profile_id", user.id)
+    .eq("user_id", user.id)
     .maybeSingle();
 
   if (!empleado) {
@@ -140,7 +140,7 @@ export async function guardarPerfilCompleto(input: PerfilCompletoInput) {
   const { data: empleado } = await supabase
     .from("empleados")
     .select("id, empresa_id")
-    .eq("profile_id", user.id)
+    .eq("user_id", user.id)
     .maybeSingle();
 
   if (!empleado) return { ok: false, error: "No se encontró tu ficha de empleado" };
@@ -226,7 +226,7 @@ export async function uploadDocumentoEmpleado(input: {
   const { data: empleado } = await supabase
     .from("empleados")
     .select("id, empresa_id")
-    .eq("profile_id", user.id)
+    .eq("user_id", user.id)
     .maybeSingle();
 
   if (!empleado) return { ok: false, error: "No se encontró tu ficha de empleado" };

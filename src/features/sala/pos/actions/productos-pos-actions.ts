@@ -16,7 +16,7 @@ export async function listProductosPOS(): Promise<
 
     const { data, error } = await supabase
       .from("productos")
-      .select("id, nombre, categoria, familia, precio_venta, tipo, estado")
+      .select("id, nombre, categoria, precio_venta, tipo, estado, estilo_color, estilo_imagen_url")
       .eq("empresa_id", empresaId)
       .eq("tipo", "venta")
       .eq("estado", "Activo")
@@ -25,24 +25,25 @@ export async function listProductosPOS(): Promise<
 
     if (error) throw error;
 
+    const RE_BARRA = /coct|bebida|refresco|caf[eé]|t[eé]|licor|cerveza|vino|champagne|whisky|vodka|ron|gin|frapp|zumo|milshake|botella|infusi/i;
+    const RE_IVA_21 = /coct|licor|cerveza|vino|alcohol|champagne|whisky|vodka|ron|gin/i;
+
     const mapped: ProductoPOS[] = (data ?? []).map((p) => {
-      const familia = (p as { familia: string | null }).familia;
-      // Heurística: familias típicas de barra → BARRA; resto → COCINA
-      const esBarra = familia && /bebida|refresco|caf[eé]|licor|cerveza|vino/i.test(familia);
-      const destino: LineaDestino = esBarra ? "BARRA" : "COCINA";
-      // IVA por defecto: 10% restauración; bebidas alcohólicas 21% (heurística)
-      const ivaPct = familia && /licor|cerveza|vino|alcohol/i.test(familia) ? 21 : 10;
-      // precio_venta viene como text en BD → parseamos con tolerancia a comas
+      const categoria = (p.categoria as string) ?? "";
+      const destino: LineaDestino = RE_BARRA.test(categoria) ? "BARRA" : "COCINA";
+      const ivaPct = RE_IVA_21.test(categoria) ? 21 : 10;
       const pvRaw = (p as { precio_venta: string | number | null }).precio_venta;
       const pvNum = pvRaw == null ? 0 : Number(String(pvRaw).replace(",", "."));
+      const estiloColor = (p as { estilo_color: string | null }).estilo_color ?? null;
+      const estiloImagenUrl = (p as { estilo_imagen_url: string | null }).estilo_imagen_url ?? null;
       return {
         id: p.id as string,
         nombre: p.nombre as string,
-        categoria: (p.categoria as string) ?? "Sin categoría",
-        familia: familia ?? null,
+        categoria: categoria || "Sin categoría",
         precioVenta: isNaN(pvNum) ? 0 : pvNum,
         ivaPct,
-        imagenUrl: null,
+        imagenUrl: estiloImagenUrl,
+        colorBg: estiloColor,
         destino,
       };
     });

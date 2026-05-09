@@ -55,7 +55,7 @@ export async function upsertCata(input: {
     // Snapshot del escandallo actual
     const { data: receta } = await supabase
       .from("nuevas_recetas")
-      .select("ft_coste_estimado, ft_pvp_propuesto, ft_porciones, ft_etiquetas_finales")
+      .select("esc_coste_estimado, esc_pvp_propuesto, esc_porciones, esc_etiquetas_finales")
       .eq("id", input.receta_id)
       .single();
 

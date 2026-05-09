@@ -1,7 +1,7 @@
 "use client";
 
 import { Users, Shield, Layers, Store, AppWindow, Palette } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UsuariosTab } from "@/features/ajustes/components/UsuariosTab";
 import { RolesTab } from "@/features/ajustes/components/RolesTab";
@@ -22,12 +22,17 @@ const tabs = [
 
 export default function AjustesPage() {
   useHydrateUsuarios();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
-  const initialTab = tabs.some((t) => t.id === tabParam) ? tabParam! : "empresas";
+  const activeTab = tabs.some((t) => t.id === tabParam) ? tabParam! : "empresas";
   return (
     <div className="p-3 md:p-4 space-y-2">
-      <Tabs defaultValue={initialTab} className="space-y-2">
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => router.replace(`/ajustes?tab=${value}`, { scroll: false })}
+        className="space-y-2"
+      >
         <TabsList className="flex flex-wrap h-auto gap-1 bg-muted/50 p-1">
           {tabs.map((t) => (
             <TabsTrigger

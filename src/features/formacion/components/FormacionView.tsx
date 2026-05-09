@@ -31,7 +31,7 @@ const recorridoModulos: Array<{
   {
     href: "/cocina",
     titulo: "Cocina",
-    descripcion: "Fichas técnicas, partidas y elaboraciones.",
+    descripcion: "Escandallos, partidas y elaboraciones.",
   },
   {
     href: "/gerencia",
@@ -81,7 +81,7 @@ const materialPorPuesto: Array<{ puesto: string; items: string[] }> = [
       "Uniforme de cocina (chaquetilla, pantalón, gorro y zapato antideslizante)",
       "Cuchillos básicos y funda",
       "Termómetro y guantes anticorte",
-      "Acceso a fichas técnicas y planning de partidas",
+      "Acceso a escandallos y planning de partidas",
     ],
   },
   {

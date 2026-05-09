@@ -15,6 +15,7 @@ import {
   Sparkles,
   Siren,
   Tag,
+  Users,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,7 @@ const CATEGORIA_ICON: Record<ContactoCategoria, React.ElementType> = {
   proveedores: Truck,
   servicios: Sparkles,
   emergencias: Siren,
+  empleados: Users,
   otros: Tag,
 };
 
@@ -65,6 +67,7 @@ const CATEGORIA_COLOR: Record<ContactoCategoria, string> = {
   proveedores: "bg-blue-100 text-blue-700 border-blue-200",
   servicios: "bg-violet-100 text-violet-700 border-violet-200",
   emergencias: "bg-red-100 text-red-700 border-red-200",
+  empleados: "bg-emerald-100 text-emerald-700 border-emerald-200",
   otros: "bg-gray-100 text-gray-700 border-gray-200",
 };
 
@@ -72,6 +75,7 @@ const EMPTY_FORM: ContactoInput = {
   nombre: "",
   empresa_contacto: "",
   categoria: "proveedores",
+  etiqueta_id: null,
   telefono: "",
   email: "",
   whatsapp: "",
@@ -126,6 +130,7 @@ export function AgendaView() {
       proveedores: 0,
       servicios: 0,
       emergencias: 0,
+      empleados: 0,
       otros: 0,
     };
     contactos.forEach((x) => (c[x.categoria] += 1));
@@ -144,6 +149,7 @@ export function AgendaView() {
       nombre: c.nombre,
       empresa_contacto: c.empresa_contacto,
       categoria: c.categoria,
+      etiqueta_id: c.etiqueta_id,
       telefono: c.telefono,
       email: c.email,
       whatsapp: c.whatsapp,

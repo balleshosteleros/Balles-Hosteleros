@@ -2,7 +2,7 @@
  * Cliente Gemini — Google AI Studio (tier free).
  *
  * Uso: llamadas server-side únicamente. Lee GEMINI_API_KEY.
- * Prefiere structured output (responseSchema) a prompt engineering.
+ * Usa structured output (responseSchema) para garantizar JSON válido.
  */
 import { GoogleGenerativeAI, type Schema } from "@google/generative-ai";
 
@@ -33,12 +33,13 @@ export async function geminiJSON<T = unknown>(
   prompt: string,
   opts: GeminiJSONOptions,
 ): Promise<GeminiJSONResult<T>> {
-  const key = process.env.GEMINI_API_KEY;
+  const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) throw new GeminiKeyMissingError();
 
+  const modelo = opts.model || DEFAULT_MODEL;
   const genAI = new GoogleGenerativeAI(key);
   const model = genAI.getGenerativeModel({
-    model: opts.model ?? DEFAULT_MODEL,
+    model: modelo,
     systemInstruction: opts.systemInstruction,
     generationConfig: {
       responseMimeType: "application/json",
@@ -47,15 +48,22 @@ export async function geminiJSON<T = unknown>(
     },
   });
 
-  const res = await model.generateContent(prompt);
-  const text = res.response.text();
-  const data = JSON.parse(text) as T;
-  const usage = res.response.usageMetadata;
+  const result = await model.generateContent(prompt);
+  const text = result.response.text();
 
+  let data: T;
+  try {
+    data = JSON.parse(text) as T;
+  } catch (err) {
+    console.error("[gemini] JSON parse error. Raw output:", text);
+    throw new Error("El modelo no devolvió un JSON válido.");
+  }
+
+  const usage = result.response.usageMetadata;
   return {
     data,
     tokensInput: usage?.promptTokenCount ?? null,
     tokensOutput: usage?.candidatesTokenCount ?? null,
-    modelo: opts.model ?? DEFAULT_MODEL,
+    modelo,
   };
 }

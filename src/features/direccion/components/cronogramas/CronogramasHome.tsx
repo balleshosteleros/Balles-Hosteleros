@@ -5,9 +5,10 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Briefcase, Utensils, ClipboardCheck, Users, Megaphone, Truck,
-  Calculator, FileText, Scale, Shield, ChevronRight, Plus, Video, BarChart3,
-  Wine, Sparkles, ChefHat, Music, ShieldCheck, UtensilsCrossed,
+  Briefcase, Crown, User, Camera, Package, CheckCircle2,
+  Calculator, FileText, Scale, ChevronRight, Plus, Video, BarChart3,
+  ChefHat, UtensilsCrossed,
+  CheckSquare2,
 } from "lucide-react";
 import type { CronogramaOperativo } from "../../hooks/useCronogramasOperativos";
 import {
@@ -26,35 +27,46 @@ interface Props {
   onCrearCronograma: () => void;
   onIrProductividad: () => void;
   isLoading: boolean;
+  /**
+   * Filtra qué cards se muestran. Recibe el rol y devuelve true si el usuario
+   * actual tiene acceso al módulo asociado (según `permisos` de su rol en
+   * empresa_roles). Si no se pasa, no filtra (acceso total). Las áreas/badges
+   * que queden sin cards visibles desaparecen automáticamente.
+   */
+  isRolAccesible?: (rol: string) => boolean;
 }
 
-// Mapeo visual de departamentos
+// Mapeo visual de departamentos — iconos alineados con el sidebar.
+// Cada rol hereda el icono del módulo padre (ver CRONOGRAMA_TO_MODULO).
 const DEPTO_CONFIG: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
-  DIRECCION:   { icon: Briefcase,     color: "text-indigo-600", bg: "bg-indigo-50 border-indigo-200" },
-  DIRECCIÓN:   { icon: Briefcase,     color: "text-indigo-600", bg: "bg-indigo-50 border-indigo-200" },
-  COCINA:      { icon: Utensils,      color: "text-orange-600", bg: "bg-orange-50 border-orange-200" },
-  "JEFE DE COCINA": { icon: ChefHat,  color: "text-orange-700", bg: "bg-orange-50 border-orange-200" },
-  COCINERO:    { icon: ChefHat,       color: "text-orange-600", bg: "bg-orange-50 border-orange-200" },
-  SALA:        { icon: Users,         color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
-  "JEFE DE SALA": { icon: Users,      color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200" },
-  CAMARERO:    { icon: Wine,          color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
-  OFFICE:      { icon: UtensilsCrossed, color: "text-cyan-600", bg: "bg-cyan-50 border-cyan-200" },
-  LIMPIEZA:    { icon: Sparkles,      color: "text-sky-600",    bg: "bg-sky-50 border-sky-200" },
-  SEGURIDAD:   { icon: ShieldCheck,   color: "text-red-600",    bg: "bg-red-50 border-red-200" },
-  ARTISTA:     { icon: Music,         color: "text-fuchsia-600", bg: "bg-fuchsia-50 border-fuchsia-200" },
-  CALIDAD:     { icon: ClipboardCheck,color: "text-blue-600",   bg: "bg-blue-50 border-blue-200" },
-  RRHH:        { icon: Users,         color: "text-pink-600",   bg: "bg-pink-50 border-pink-200" },
-  "RECURSOS HUMANOS": { icon: Users,  color: "text-pink-600",   bg: "bg-pink-50 border-pink-200" },
-  MARKETING:   { icon: Megaphone,     color: "text-purple-600", bg: "bg-purple-50 border-purple-200" },
-  LOGISTICA:   { icon: Truck,         color: "text-amber-600",  bg: "bg-amber-50 border-amber-200" },
-  LOGÍSTICA:   { icon: Truck,         color: "text-amber-600",  bg: "bg-amber-50 border-amber-200" },
-  CONTABILIDAD:{ icon: Calculator,    color: "text-teal-600",   bg: "bg-teal-50 border-teal-200" },
-  GESTORIA:    { icon: FileText,      color: "text-slate-600",  bg: "bg-slate-50 border-slate-200" },
-  GESTORÍA:    { icon: FileText,      color: "text-slate-600",  bg: "bg-slate-50 border-slate-200" },
-  JURIDICO:    { icon: Scale,         color: "text-zinc-700",   bg: "bg-zinc-50 border-zinc-200" },
-  JURÍDICO:    { icon: Scale,         color: "text-zinc-700",   bg: "bg-zinc-50 border-zinc-200" },
-  GERENCIA:    { icon: Shield,        color: "text-rose-600",   bg: "bg-rose-50 border-rose-200" },
-  GERENTE:     { icon: Shield,        color: "text-rose-600",   bg: "bg-rose-50 border-rose-200" },
+  // Administrativa — coinciden con sidebar
+  DIRECCION:          { icon: Crown,           color: "text-indigo-600", bg: "bg-indigo-50 border-indigo-200" },
+  DIRECCIÓN:          { icon: Crown,           color: "text-indigo-600", bg: "bg-indigo-50 border-indigo-200" },
+  GERENCIA:           { icon: Briefcase,       color: "text-rose-600",   bg: "bg-rose-50 border-rose-200" },
+  GERENTE:            { icon: Briefcase,       color: "text-rose-600",   bg: "bg-rose-50 border-rose-200" },
+  RRHH:               { icon: User,            color: "text-pink-600",   bg: "bg-pink-50 border-pink-200" },
+  "RECURSOS HUMANOS": { icon: User,            color: "text-pink-600",   bg: "bg-pink-50 border-pink-200" },
+  CALIDAD:            { icon: CheckCircle2,    color: "text-blue-600",   bg: "bg-blue-50 border-blue-200" },
+  CONTABILIDAD:       { icon: Calculator,      color: "text-teal-600",   bg: "bg-teal-50 border-teal-200" },
+  LOGISTICA:          { icon: Package,         color: "text-amber-600",  bg: "bg-amber-50 border-amber-200" },
+  LOGÍSTICA:          { icon: Package,         color: "text-amber-600",  bg: "bg-amber-50 border-amber-200" },
+  MARKETING:          { icon: Camera,          color: "text-purple-600", bg: "bg-purple-50 border-purple-200" },
+  GESTORIA:           { icon: FileText,        color: "text-sky-600",    bg: "bg-sky-50 border-sky-200" },
+  GESTORÍA:           { icon: FileText,        color: "text-sky-600",    bg: "bg-sky-50 border-sky-200" },
+  JURIDICO:           { icon: Scale,           color: "text-fuchsia-600", bg: "bg-fuchsia-50 border-fuchsia-200" },
+  JURÍDICO:           { icon: Scale,           color: "text-fuchsia-600", bg: "bg-fuchsia-50 border-fuchsia-200" },
+
+  // Operativa — heredan icono del módulo padre (SALA / COCINA en sidebar)
+  SALA:               { icon: UtensilsCrossed, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
+  "JEFE DE SALA":     { icon: UtensilsCrossed, color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200" },
+  CAMARERO:           { icon: UtensilsCrossed, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
+  SEGURIDAD:          { icon: UtensilsCrossed, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
+  ARTISTA:            { icon: UtensilsCrossed, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
+  COCINA:             { icon: ChefHat,         color: "text-orange-600", bg: "bg-orange-50 border-orange-200" },
+  "JEFE DE COCINA":   { icon: ChefHat,         color: "text-orange-700", bg: "bg-orange-50 border-orange-200" },
+  COCINERO:           { icon: ChefHat,         color: "text-orange-600", bg: "bg-orange-50 border-orange-200" },
+  OFFICE:             { icon: ChefHat,         color: "text-orange-600", bg: "bg-orange-50 border-orange-200" },
+  LIMPIEZA:           { icon: ChefHat,         color: "text-orange-600", bg: "bg-orange-50 border-orange-200" },
 };
 
 function getDeptoConfig(rol: string) {
@@ -103,7 +115,7 @@ function FrecuenciaBar({
 
 type FiltroArea = "TODAS" | AreaCronograma;
 
-export function CronogramasHome({ data, onSelect, onCrearCronograma, onIrProductividad, isLoading }: Props) {
+export function CronogramasHome({ data, onSelect, onCrearCronograma, onIrProductividad, isLoading, isRolAccesible }: Props) {
   const [filtroArea, setFiltroArea] = useState<FiltroArea>("TODAS");
 
   const grupos = useMemo(() => {
@@ -117,6 +129,13 @@ export function CronogramasHome({ data, onSelect, onCrearCronograma, onIrProduct
     // Sembrar cronogramas canónicos aunque no tengan tareas en BD todavía.
     for (const r of CRONOGRAMA_ROLES) {
       if (!byRol.has(r.rol)) byRol.set(r.rol, []);
+    }
+    // Aplicar filtro de acceso del usuario actual: si la prop está definida,
+    // descartamos los rols a los que no tiene `ver: true` en su rol de empresa.
+    if (isRolAccesible) {
+      for (const rol of Array.from(byRol.keys())) {
+        if (!isRolAccesible(rol)) byRol.delete(rol);
+      }
     }
     return Array.from(byRol.entries())
       .map(([rol, tareas]) => {
@@ -142,7 +161,7 @@ export function CronogramasHome({ data, onSelect, onCrearCronograma, onIrProduct
         if (a.area !== b.area) return a.area === "OPERATIVA" ? -1 : 1;
         return a.rol.localeCompare(b.rol);
       });
-  }, [data]);
+  }, [data, isRolAccesible]);
 
   const gruposFiltrados = useMemo(
     () => (filtroArea === "TODAS" ? grupos : grupos.filter((g) => g.area === filtroArea)),
@@ -157,55 +176,51 @@ export function CronogramasHome({ data, onSelect, onCrearCronograma, onIrProduct
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-muted/20">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b bg-card">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight">Cronogramas</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Organiza las tareas de cada departamento por día.
-          </p>
+      {/* Filtro por área + acciones */}
+      <div className="flex items-center justify-between gap-2 px-6 py-3 border-b bg-card">
+        <div className="flex items-center gap-2">
+          <span className="text-xs uppercase tracking-wider text-muted-foreground mr-1">
+            Área
+          </span>
+          {(["TODAS", "OPERATIVA", "ADMINISTRATIVA"] as const).map((opt) => {
+            const active = filtroArea === opt;
+            const label = opt === "TODAS" ? "Todas" : AREA_LABEL[opt];
+            // Ocultamos áreas vacías para el usuario actual: si tras filtrar
+            // por sus permisos no le queda ningún puesto en esa área, no
+            // tiene sentido mostrar el botón de filtro. "Todas" siempre se ve.
+            if (opt !== "TODAS" && counts[opt] === 0) return null;
+            return (
+              <Button
+                key={opt}
+                type="button"
+                variant={active ? "primary" : "outline"}
+                size="sm"
+                onClick={() => setFiltroArea(opt)}
+                className="gap-2"
+              >
+                {label}
+                <span
+                  className={cn(
+                    "text-[10px] font-mono px-1.5 py-0.5 rounded",
+                    active ? "bg-background/30" : "bg-muted",
+                  )}
+                >
+                  {counts[opt]}
+                </span>
+              </Button>
+            );
+          })}
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="lg" onClick={onIrProductividad}>
+          <Button variant="outline" size="sm" onClick={onIrProductividad}>
             <BarChart3 className="h-4 w-4 mr-2" />
             Productividad
           </Button>
-          <Button variant="primary" size="lg" onClick={onCrearCronograma}>
+          <Button variant="primary" size="sm" onClick={onCrearCronograma}>
             <Plus className="h-4 w-4 mr-2" />
             Nuevo
           </Button>
         </div>
-      </div>
-
-      {/* Filtro por área */}
-      <div className="flex items-center gap-2 px-6 py-3 border-b bg-card">
-        <span className="text-xs uppercase tracking-wider text-muted-foreground mr-1">
-          Área
-        </span>
-        {(["TODAS", "OPERATIVA", "ADMINISTRATIVA"] as const).map((opt) => {
-          const active = filtroArea === opt;
-          const label = opt === "TODAS" ? "Todas" : AREA_LABEL[opt];
-          return (
-            <Button
-              key={opt}
-              type="button"
-              variant={active ? "primary" : "outline"}
-              size="sm"
-              onClick={() => setFiltroArea(opt)}
-              className="gap-2"
-            >
-              {label}
-              <span
-                className={cn(
-                  "text-[10px] font-mono px-1.5 py-0.5 rounded",
-                  active ? "bg-background/30" : "bg-muted",
-                )}
-              >
-                {counts[opt]}
-              </span>
-            </Button>
-          );
-        })}
       </div>
 
       {/* Grid de cards */}
@@ -249,7 +264,21 @@ export function CronogramasHome({ data, onSelect, onCrearCronograma, onIrProduct
                     <div className={cn("p-2.5 rounded-lg bg-background/70", color)}>
                       <Icon className="h-6 w-6" />
                     </div>
-                    <ChevronRight className="h-5 w-5 text-muted-foreground/50 group-hover:text-foreground transition-colors" />
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-violet-600 hover:bg-violet-50"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.dispatchEvent(new CustomEvent("open-tasks-drawer", { detail: { rol } }));
+                        }}
+                        title="Ver en Mis Tareas"
+                      >
+                        <CheckSquare2 className="h-5 w-5" />
+                      </Button>
+                      <ChevronRight className="h-5 w-5 text-muted-foreground/50 group-hover:text-foreground transition-colors" />
+                    </div>
                   </div>
 
                   <Badge

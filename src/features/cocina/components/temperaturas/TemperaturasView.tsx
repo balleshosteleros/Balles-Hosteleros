@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { Plus, Search, Thermometer, AlertTriangle, CheckCircle, Settings2, BarChart3 } from "lucide-react";
+import { Plus, Thermometer, AlertTriangle, CheckCircle, Settings, Settings2, BarChart3 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import {
   EquipoFrio, RegistroTemperatura, TipoEquipo, EstadoEquipo, AreaTemp,
@@ -20,6 +20,19 @@ import {
 } from "@/features/cocina/actions/temperaturas-actions";
 import { toast } from "sonner";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  colVisible,
+  ordenarColumnas,
+  type ToolbarColumnaVisible,
+  type ToolbarColumna,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+} from "@/shared/components/SubmoduleToolbar";
+import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
+import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 
 const TIPOS: TipoEquipo[] = ["NEVERA", "CONGELADOR", "CÁMARA", "BOTELLERO", "OTRO"];
 
@@ -104,23 +117,36 @@ export default function TemperaturasView({ area, equiposIniciales, registrosInic
     loadData();
   }, [loadData]);
   const [busqueda, setBusqueda] = useState("");
-  const [filtroEstado, setFiltroEstado] = useState("TODOS");
-  const [filtroEquipo, setFiltroEquipo] = useState("TODOS");
   const [showNuevoRegistro, setShowNuevoRegistro] = useState(false);
   const [showNuevoEquipo, setShowNuevoEquipo] = useState(false);
   const [selectedEquipo, setSelectedEquipo] = useState<EquipoFrio | null>(null);
+  const [showConfig, setShowConfig] = useState(false);
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
 
   const hoy = new Date().toISOString().split("T")[0];
+  const equiposNombres = useMemo(() => equipos.map(e => e.nombre).sort(), [equipos]);
 
   const registrosFiltrados = useMemo(() => {
-    return registros.filter(r => {
+    let lista = registros.filter(r => {
       const equipo = equipos.find(e => e.id === r.equipoId);
-      const matchBusqueda = !busqueda || equipo?.nombre.toLowerCase().includes(busqueda.toLowerCase()) || r.empleado.toLowerCase().includes(busqueda.toLowerCase());
-      const matchEstado = filtroEstado === "TODOS" || r.estado === filtroEstado;
-      const matchEquipo = filtroEquipo === "TODOS" || r.equipoId === filtroEquipo;
-      return matchBusqueda && matchEstado && matchEquipo;
-    }).sort((a, b) => `${b.fecha}${b.hora}`.localeCompare(`${a.fecha}${a.hora}`));
-  }, [registros, equipos, busqueda, filtroEstado, filtroEquipo]);
+      return !busqueda
+        || equipo?.nombre.toLowerCase().includes(busqueda.toLowerCase())
+        || r.empleado.toLowerCase().includes(busqueda.toLowerCase());
+    });
+    lista = aplicarFiltrosToolbar(lista, filtros, (r, campo) => {
+      if (campo === "equipo") return equipos.find(e => e.id === r.equipoId)?.nombre ?? "";
+      if (campo === "estado") return r.estado;
+      return (r as unknown as Record<string, unknown>)[campo];
+    });
+    lista = aplicarOrdenToolbar(lista, orden, (r, campo) => {
+      if (campo === "equipo") return equipos.find(e => e.id === r.equipoId)?.nombre ?? "";
+      return (r as unknown as Record<string, unknown>)[campo];
+    });
+    return orden ? lista : lista.sort((a, b) => `${b.fecha}${b.hora}`.localeCompare(`${a.fecha}${a.hora}`));
+  }, [registros, equipos, busqueda, filtros, orden]);
 
   const alertasHoy = registros.filter(r => r.fecha === hoy && r.estado === "ALERTA").length;
   const okHoy = registros.filter(r => r.fecha === hoy && r.estado === "OK").length;
@@ -167,22 +193,159 @@ export default function TemperaturasView({ area, equiposIniciales, registrosInic
     return <LoadingSpinner className="p-6 min-h-[300px]" size="lg" />;
   }
 
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "fecha", label: "Fecha", bloqueada: true },
+    { campo: "hora", label: "Hora" },
+    { campo: "equipo", label: "Equipo" },
+    { campo: "temperatura", label: "Temp." },
+    { campo: "rango", label: "Rango" },
+    { campo: "estado", label: "Estado" },
+    { campo: "empleado", label: "Empleado" },
+    { campo: "medidas", label: "Medidas tomadas" },
+  ];
+
+  const columnDefs: Record<string, { th: ReactNode; td: (r: RegistroTemperatura) => ReactNode }> = {
+    fecha: {
+      th: (
+        <TableColumnHeader
+          key="fecha"
+          label="Fecha"
+          campo="fecha"
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (r) => <td key="fecha" className="p-3">{r.fecha}</td>,
+    },
+    hora: {
+      th: (
+        <TableColumnHeader
+          key="hora"
+          label="Hora"
+          campo="hora"
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (r) => <td key="hora" className="p-3">{r.hora}</td>,
+    },
+    equipo: {
+      th: (
+        <TableColumnHeader
+          key="equipo"
+          label="Equipo"
+          campo="equipo"
+          filtroTipo="lista"
+          opciones={equiposNombres}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (r) => {
+        const eq = equipos.find(e => e.id === r.equipoId);
+        return <td key="equipo" className="p-3 font-medium">{eq?.nombre ?? "—"}</td>;
+      },
+    },
+    temperatura: {
+      th: (
+        <TableColumnHeader
+          key="temperatura"
+          label="Temp."
+          campo="temperatura"
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (r) => <td key="temperatura" className="p-3 font-mono font-semibold">{r.temperatura}°C</td>,
+    },
+    rango: {
+      th: <TableColumnHeader key="rango" label="Rango" />,
+      td: (r) => {
+        const eq = equipos.find(e => e.id === r.equipoId);
+        return <td key="rango" className="p-3 text-xs text-muted-foreground">{eq ? `${eq.rangoMin}° / ${eq.rangoMax}°` : "—"}</td>;
+      },
+    },
+    estado: {
+      th: (
+        <TableColumnHeader
+          key="estado"
+          label="Estado"
+          campo="estado"
+          filtroTipo="lista"
+          opciones={["OK", "ALERTA"]}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (r) => (
+        <td key="estado" className="p-3">
+          {r.estado === "OK"
+            ? <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">OK</Badge>
+            : <Badge variant="outline" className="bg-red-50 text-red-700 border-red-300">ALERTA</Badge>}
+        </td>
+      ),
+    },
+    empleado: {
+      th: <TableColumnHeader key="empleado" label="Empleado" />,
+      td: (r) => <td key="empleado" className="p-3">{r.empleado}</td>,
+    },
+    medidas: {
+      th: <TableColumnHeader key="medidas" label="Medidas tomadas" />,
+      td: (r) => <td key="medidas" className="p-3 text-muted-foreground text-xs max-w-[250px] truncate">{r.medidasTomadas || "—"}</td>,
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-end gap-2">
-        <Dialog open={showNuevoEquipo} onOpenChange={setShowNuevoEquipo}>
-          <DialogTrigger asChild><Button variant="outline"><Settings2 className="h-4 w-4 mr-2" />Nuevo equipo</Button></DialogTrigger>
-          <DialogContent><DialogHeader><DialogTitle>Nuevo equipo</DialogTitle></DialogHeader>
-            <NuevoEquipoForm area={area} onSave={handleCreateEquipo} onClose={() => setShowNuevoEquipo(false)} />
-          </DialogContent>
-        </Dialog>
-        <Dialog open={showNuevoRegistro} onOpenChange={setShowNuevoRegistro}>
-          <DialogTrigger asChild><Button variant="primary" size="sm"><Plus className="h-4 w-4" />Nuevo</Button></DialogTrigger>
-          <DialogContent><DialogHeader><DialogTitle>Registrar temperatura</DialogTitle></DialogHeader>
-            <NuevoRegistroForm equipos={equipos.filter(e => e.estado === "ACTIVO")} onSave={handleRegistrarTemp} onClose={() => setShowNuevoRegistro(false)} />
-          </DialogContent>
-        </Dialog>
-      </div>
+      <SubmoduleToolbar
+        busqueda={busqueda}
+        onBusquedaChange={setBusqueda}
+        placeholderBusqueda="Buscar"
+        onNuevo={() => setShowNuevoRegistro(true)}
+        filtros={filtros}
+        onFiltrosChange={setFiltros}
+        columnas={columnasDef}
+        columnasVisibles={columnasVisibles}
+        onColumnasVisiblesChange={setColumnasVisibles}
+        columnasOrden={columnasOrden}
+        onColumnasOrdenChange={setColumnasOrden}
+        extraDerecha={
+          <Button
+            size="icon"
+            variant={showConfig ? "default" : "outline"}
+            className="h-9 w-9"
+            onClick={() => setShowConfig((v) => !v)}
+            title="Configuración"
+            aria-label="Configuración"
+          >
+            <Settings className="h-4 w-4" strokeWidth={1.75} />
+          </Button>
+        }
+      />
+
+      <Dialog open={showNuevoEquipo} onOpenChange={setShowNuevoEquipo}>
+        <DialogContent><DialogHeader><DialogTitle>Nuevo equipo</DialogTitle></DialogHeader>
+          <NuevoEquipoForm area={area} onSave={handleCreateEquipo} onClose={() => setShowNuevoEquipo(false)} />
+        </DialogContent>
+      </Dialog>
+      <Dialog open={showNuevoRegistro} onOpenChange={setShowNuevoRegistro}>
+        <DialogContent><DialogHeader><DialogTitle>Registrar temperatura</DialogTitle></DialogHeader>
+          <NuevoRegistroForm equipos={equipos.filter(e => e.estado === "ACTIVO")} onSave={handleRegistrarTemp} onClose={() => setShowNuevoRegistro(false)} />
+        </DialogContent>
+      </Dialog>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -201,62 +364,36 @@ export default function TemperaturasView({ area, equiposIniciales, registrosInic
 
         {/* REGISTROS */}
         <TabsContent value="registros">
-          <div className="flex flex-wrap gap-2 mb-4">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Buscar equipo o empleado..." className="pl-9" value={busqueda} onChange={e => setBusqueda(e.target.value)} />
-            </div>
-            <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-              <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value="TODOS">Todos</SelectItem><SelectItem value="OK">Solo OK</SelectItem><SelectItem value="ALERTA">Solo alertas</SelectItem></SelectContent>
-            </Select>
-            <Select value={filtroEquipo} onValueChange={setFiltroEquipo}>
-              <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value="TODOS">Todos los equipos</SelectItem>{equipos.map(e => <SelectItem key={e.id} value={e.id}>{e.nombre}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <Card>
-            <CardContent className="p-0">
-              <table className="w-full text-sm">
-                <thead><tr className="border-b bg-muted/40">
-                  <th className="text-left p-3 font-medium">Fecha</th>
-                  <th className="text-left p-3 font-medium">Hora</th>
-                  <th className="text-left p-3 font-medium">Equipo</th>
-                  <th className="text-left p-3 font-medium">Temp.</th>
-                  <th className="text-left p-3 font-medium">Rango</th>
-                  <th className="text-left p-3 font-medium">Estado</th>
-                  <th className="text-left p-3 font-medium">Empleado</th>
-                  <th className="text-left p-3 font-medium">Medidas tomadas</th>
-                </tr></thead>
-                <tbody>
-                  {registrosFiltrados.map(r => {
-                    const eq = equipos.find(e => e.id === r.equipoId);
-                    return (
+          <ResizableColumnsProvider storageKey="cocina-temperaturas">
+            <Card>
+              <CardContent className="p-0">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/40">
+                      {columnasRender.map((c) => columnDefs[c.campo]?.th)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {registrosFiltrados.map(r => (
                       <tr key={r.id} className="border-b hover:bg-muted/20">
-                        <td className="p-3">{r.fecha}</td>
-                        <td className="p-3">{r.hora}</td>
-                        <td className="p-3 font-medium">{eq?.nombre ?? "—"}</td>
-                        <td className="p-3 font-mono font-semibold">{r.temperatura}°C</td>
-                        <td className="p-3 text-xs text-muted-foreground">{eq ? `${eq.rangoMin}° / ${eq.rangoMax}°` : "—"}</td>
-                        <td className="p-3">
-                          {r.estado === "OK"
-                            ? <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">OK</Badge>
-                            : <Badge variant="outline" className="bg-red-50 text-red-700 border-red-300">ALERTA</Badge>}
-                        </td>
-                        <td className="p-3">{r.empleado}</td>
-                        <td className="p-3 text-muted-foreground text-xs max-w-[250px] truncate">{r.medidasTomadas || "—"}</td>
+                        {columnasRender.map((c) => columnDefs[c.campo]?.td(r))}
                       </tr>
-                    );
-                  })}
-                  {registrosFiltrados.length === 0 && <tr><td colSpan={8} className="p-6 text-center text-muted-foreground">Sin registros</td></tr>}
-                </tbody>
-              </table>
-            </CardContent>
-          </Card>
+                    ))}
+                    {registrosFiltrados.length === 0 && <tr><td colSpan={8} className="p-6 text-center text-muted-foreground">Sin registros</td></tr>}
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
+          </ResizableColumnsProvider>
         </TabsContent>
 
         {/* EQUIPOS */}
         <TabsContent value="equipos">
+          <div className="flex justify-end mb-3">
+            <Button variant="outline" onClick={() => setShowNuevoEquipo(true)}>
+              <Plus className="h-4 w-4 mr-2" />Nuevo equipo
+            </Button>
+          </div>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {equipos.map(eq => {
               const ultimoReg = registros.filter(r => r.equipoId === eq.id).sort((a, b) => `${b.fecha}${b.hora}`.localeCompare(`${a.fecha}${a.hora}`))[0];

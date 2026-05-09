@@ -9,7 +9,6 @@ import { exportToPDF } from "@/features/logistica/lib/export-utils";
 const FIELD_LABELS: Record<string, string> = {
   nombre: "Nombre",
   categoria: "Categoría",
-  familia: "Familia",
   estado: "Estado",
   proveedor: "Proveedor",
   precioCompra: "Precio Compra",
@@ -38,8 +37,8 @@ function normalizeHeader(header: string): string | null {
     producto: "nombre",
     categoria: "categoria",
     category: "categoria",
-    familia: "familia",
-    family: "familia",
+    familia: "categoria",
+    family: "categoria",
     estado: "estado",
     status: "estado",
     proveedor: "proveedor",
@@ -110,16 +109,13 @@ export async function parseFileToProductos(
 
     // Normalizar estado (si viene en minúsculas o traducido)
     const estadoRaw = mapped.estado?.toLowerCase?.() ?? "";
-    let estado: "Activo" | "Inactivo" | "En revisión" = "Activo";
+    let estado: "Activo" | "Inactivo" = "Activo";
     if (estadoRaw.startsWith("inactiv")) estado = "Inactivo";
-    else if (estadoRaw.startsWith("revis") || estadoRaw.startsWith("pending"))
-      estado = "En revisión";
 
     productos.push({
       nombre: mapped.nombre,
       tipo,
       categoria: mapped.categoria || "Sin categoría",
-      familia: mapped.familia || null,
       estado,
       proveedor: mapped.proveedor || null,
       precioCompra: mapped.precioCompra || null,
@@ -228,7 +224,6 @@ export function downloadTemplateCSV(): void {
   const exampleRow = [
     "Solomillo de ternera",
     "Materias primas",
-    "Cárnicos",
     "Activo",
     "Proveedor Ejemplo S.L.",
     "18,50 €/kg",

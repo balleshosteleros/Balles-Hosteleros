@@ -14,6 +14,8 @@ export interface AuthProfile {
   empresa_id: string;
   avatar_url?: string | null;
   avatar_obligatorio?: boolean | null;
+  rol_label?: string | null;
+  departamento?: string | null;
 }
 
 interface AuthContextValue {
@@ -82,11 +84,13 @@ function getSupabase(): SupabaseClient | null {
   return supabaseInstance;
 }
 
-// Caché stale-while-revalidate de profile/roles/permisos por usuario.
+// Caché stale-while-revalidate de roles/permisos por usuario.
 // Permite que el sidebar y los gates de UI se muestren al instante en cargas
 // posteriores, mientras refrescamos en segundo plano contra Supabase.
+// Nota: el `profile` queda fuera del caché a propósito — el nombre/avatar se
+// lee siempre fresco para evitar mostrar datos antiguos durante unos cientos
+// de ms tras editarlos.
 interface AuthCache {
-  profile: AuthProfile | null;
   roles: AppRole[];
   permisos: PermisoModulo[];
 }
@@ -129,20 +133,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event: string, session: Session | null) => {
+      async (event: string, session: Session | null) => {
         setSession(session);
         setUser(session?.user ?? null);
+
+        // Cada vez que el usuario inicia sesión, la app abre en "Mis Paneles".
+        // Reseteamos el modo de vista persistido para que un cambio puntual a
+        // "Mis Departamentos" no se herede en el siguiente login.
+        if (event === "SIGNED_IN" && typeof window !== "undefined") {
+          try {
+            window.localStorage.setItem("bh_view_mode", "paneles");
+            const maxAge = 365 * 24 * 60 * 60;
+            document.cookie = `bh_view_mode=paneles; path=/; max-age=${maxAge}; samesite=lax`;
+          } catch {
+            // storage/cookies no disponibles → ignoramos
+          }
+        }
 
         if (session?.user) {
           const userId = session.user.id;
 
           // 1) Hidratación instantánea desde localStorage si hay caché del usuario.
           //    Así el sidebar y los gates pueden filtrar al primer render — sin
-          //    esperar a Supabase. Si no hay caché, seguimos en estado vacío hasta
-          //    el primer fetch.
+          //    esperar a Supabase. El profile (nombre/avatar) NO se hidrata aquí
+          //    para evitar mostrar valores antiguos: se carga fresco abajo.
           const cached = readAuthCache(userId);
           if (cached) {
-            if (cached.profile) setProfile(cached.profile);
             setRoles(cached.roles);
             setPermisos(cached.permisos);
             setPermisosLoaded(true);
@@ -156,7 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const [profileRes, permisosRes] = await Promise.all([
               supabase
                 .from("profiles")
-                .select("nombre, apellidos, email, empresa_id, avatar_url, avatar_obligatorio")
+                .select("nombre, apellidos, email, empresa_id, avatar_url, avatar_obligatorio, rol_label, departamento")
                 .eq("user_id", userId)
                 .single(),
               getUserPermisos().catch((e) => {
@@ -176,7 +192,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setLoading(false);
 
             writeAuthCache(userId, {
-              profile: nextProfile,
               roles: nextRoles,
               permisos: nextPermisos,
             });
@@ -255,13 +270,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Para los demás roles se enforza empresa_roles.permisos. Si la lista de
   // permisos está vacía y el usuario no es director, no ve nada salvo dashboard.
   const puedeVer = useCallback((modulo: string) => {
-    if (roles.includes("director")) return true;
+    if (roles.includes("director") || roles.includes("admin")) return true;
     const target = normalizarModulo(modulo);
     return permisos.some((p) => p.ver && normalizarModulo(p.modulo) === target);
   }, [roles, permisos]);
 
   const puedeEditar = useCallback((modulo: string) => {
-    if (roles.includes("director")) return true;
+    if (roles.includes("director") || roles.includes("admin")) return true;
     const target = normalizarModulo(modulo);
     return permisos.some((p) => p.editar && normalizarModulo(p.modulo) === target);
   }, [roles, permisos]);

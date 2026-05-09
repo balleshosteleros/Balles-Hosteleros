@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useAuth } from "@/features/auth/contexts/auth-context";
@@ -23,10 +23,16 @@ import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
   aplicarOrdenToolbar,
+  coincideBusquedaUniversal,
+  colVisible,
+  ordenarColumnas,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
+  type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
+import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
+import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 import { IOActions } from "@/shared/io";
 import { inventariosIO } from "@/features/logistica/io/inventarios.io";
 import { toast } from "sonner";
@@ -89,6 +95,7 @@ export function InventariosView() {
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [createOpen, setCreateOpen] = useState(false);
   const [detalleId, setDetalleId] = useState<string | null>(null);
@@ -108,11 +115,7 @@ export function InventariosView() {
   };
 
   const filtered = useMemo(() => {
-    let lista = inventarios.filter((inv) => {
-      if (!search) return true;
-      const s = search.toLowerCase();
-      return inv.almacen.toLowerCase().includes(s) || inv.motivo.toLowerCase().includes(s) || inv.usuario.toLowerCase().includes(s);
-    });
+    let lista = inventarios.filter((inv) => coincideBusquedaUniversal(inv, search));
     lista = aplicarFiltrosToolbar(lista, filtros, acceso);
     lista = aplicarOrdenToolbar(lista, orden, acceso);
     return lista;
@@ -266,40 +269,141 @@ export function InventariosView() {
   const borradorCount = inventarios.filter((i) => i.estado === "Borrador").length;
   const confirmadoCount = inventarios.filter((i) => i.estado === "Confirmado").length;
 
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "fecha", label: "Fecha", bloqueada: true },
+    { campo: "almacen", label: "Almacén" },
+    { campo: "motivo", label: "Motivo" },
+    { campo: "estado", label: "Estado" },
+    { campo: "usuario", label: "Usuario" },
+    { campo: "conteos", label: "Conteos" },
+  ];
+
+  const columnDefs: Record<string, { th: ReactNode; td: (inv: Inventario) => ReactNode }> = {
+    fecha: {
+      th: (
+        <TableColumnHeader
+          key="fecha"
+          label="Fecha"
+          campo="fecha"
+          filtroTipo="fecha"
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (inv) => (
+        <td key="fecha" className="px-3 py-2.5 font-semibold text-foreground whitespace-nowrap">
+          {inv.fecha}
+        </td>
+      ),
+    },
+    almacen: {
+      th: (
+        <TableColumnHeader
+          key="almacen"
+          label="Almacén"
+          campo="almacen"
+          filtroTipo="lista"
+          opciones={almacenesUsados}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (inv) => (
+        <td key="almacen" className="px-3 py-2.5 text-xs">
+          {inv.almacen}
+        </td>
+      ),
+    },
+    motivo: {
+      th: (
+        <TableColumnHeader
+          key="motivo"
+          label="Motivo"
+          campo="motivo"
+          filtroTipo="lista"
+          opciones={motivosUsados}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (inv) => (
+        <td key="motivo" className="px-3 py-2.5 text-xs">
+          {inv.motivo}
+          {inv.plantillaId && <Badge variant="secondary" className="ml-1.5 text-[9px]">Plantilla</Badge>}
+        </td>
+      ),
+    },
+    estado: {
+      th: (
+        <TableColumnHeader
+          key="estado"
+          label="Estado"
+          campo="estado"
+          filtroTipo="lista"
+          opciones={["Borrador", "Confirmado"]}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (inv) => (
+        <td key="estado" className="px-3 py-2.5">
+          <Badge variant="outline" className={inv.estado === "Confirmado"
+            ? "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-300 text-[11px] font-bold"
+            : "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 text-[11px] font-bold"}>
+            {inv.estado}
+          </Badge>
+        </td>
+      ),
+    },
+    usuario: {
+      th: <TableColumnHeader key="usuario" label="Usuario" />,
+      td: (inv) => (
+        <td key="usuario" className="px-3 py-2.5 text-xs text-muted-foreground">
+          {inv.usuario}
+        </td>
+      ),
+    },
+    conteos: {
+      th: <TableColumnHeader key="conteos" label="Conteos" />,
+      td: (inv) => (
+        <td key="conteos" className="px-3 py-2.5 text-xs font-medium">
+          {inv.conteos.length}
+        </td>
+      ),
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
   return (
     <div className="p-4 md:p-6 space-y-5">
       {/* Toolbar */}
       <SubmoduleToolbar
         busqueda={search}
         onBusquedaChange={setSearch}
-        placeholderBusqueda="Buscar…"
+        placeholderBusqueda="Buscar"
         onNuevo={() => setCreateOpen(true)}
-        campos={[
-          { campo: "estado", label: "Estado", tipo: "lista", opciones: ["Borrador", "Confirmado"] },
-          { campo: "almacen", label: "Almacén", tipo: "lista", opciones: almacenesUsados },
-          { campo: "motivo", label: "Motivo", tipo: "lista", opciones: motivosUsados },
-          { campo: "fecha", label: "Fecha", tipo: "fecha" },
-        ]}
         filtros={filtros}
         onFiltrosChange={setFiltros}
-        ordenOpciones={[
-          { campo: "fecha", label: "Fecha" },
-          { campo: "almacen", label: "Almacén" },
-          { campo: "motivo", label: "Motivo" },
-          { campo: "estado", label: "Estado" },
-        ]}
-        orden={orden}
-        onOrdenChange={setOrden}
-        columnas={[
-          { campo: "fecha", label: "Fecha" },
-          { campo: "almacen", label: "Almacén" },
-          { campo: "motivo", label: "Motivo" },
-          { campo: "estado", label: "Estado" },
-          { campo: "usuario", label: "Usuario" },
-          { campo: "conteos", label: "Conteos" },
-        ]}
+        columnas={columnasDef}
         columnasVisibles={columnasVisibles}
         onColumnasVisiblesChange={setColumnasVisibles}
+        columnasOrden={columnasOrden}
+        onColumnasOrdenChange={setColumnasOrden}
         extraDerecha={
           <>
             <IOActions config={inventariosIO} onSuccess={() => window.location.reload()} />
@@ -311,6 +415,7 @@ export function InventariosView() {
       />
 
       {/* Table */}
+      <ResizableColumnsProvider storageKey="logistica-inventarios">
       <div className="bg-card rounded-lg border overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -318,9 +423,8 @@ export function InventariosView() {
               <th className="px-3 py-3 w-10">
                 <Checkbox checked={selected.size === filtered.length && filtered.length > 0} onCheckedChange={toggleAll} />
               </th>
-              {["Fecha", "Almacén", "Motivo", "Estado", "Usuario", "Conteos", ""].map((h) => (
-                <th key={h} className="px-3 py-3 text-left text-xs font-bold text-muted-foreground whitespace-nowrap">{h}</th>
-              ))}
+              {columnasRender.map((c) => columnDefs[c.campo]?.th)}
+              <TableColumnHeader label="" />
             </tr>
           </thead>
           <tbody>
@@ -329,21 +433,7 @@ export function InventariosView() {
                 <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                   <Checkbox checked={selected.has(inv.id)} onCheckedChange={() => toggleSelect(inv.id)} />
                 </td>
-                <td className="px-3 py-2.5 font-semibold text-foreground whitespace-nowrap">{inv.fecha}</td>
-                <td className="px-3 py-2.5 text-xs">{inv.almacen}</td>
-                <td className="px-3 py-2.5 text-xs">
-                  {inv.motivo}
-                  {inv.plantillaId && <Badge variant="secondary" className="ml-1.5 text-[9px]">Plantilla</Badge>}
-                </td>
-                <td className="px-3 py-2.5">
-                  <Badge variant="outline" className={inv.estado === "Confirmado"
-                    ? "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-300 text-[11px] font-bold"
-                    : "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 text-[11px] font-bold"}>
-                    {inv.estado}
-                  </Badge>
-                </td>
-                <td className="px-3 py-2.5 text-xs text-muted-foreground">{inv.usuario}</td>
-                <td className="px-3 py-2.5 text-xs font-medium">{inv.conteos.length}</td>
+                {columnasRender.map((c) => columnDefs[c.campo]?.td(inv))}
                 <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                   <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setDetalleId(inv.id)} title="Ver detalle">
                     <Eye className="h-3.5 w-3.5" />
@@ -352,11 +442,12 @@ export function InventariosView() {
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={8} className="text-center py-12 text-muted-foreground">No se encontraron inventarios.</td></tr>
+              <tr><td colSpan={20} className="text-center py-12 text-muted-foreground">No se encontraron inventarios.</td></tr>
             )}
           </tbody>
         </table>
       </div>
+      </ResizableColumnsProvider>
       <div className="text-xs text-muted-foreground text-right">{filtered.length} de {inventarios.length} inventarios</div>
 
       {/* Create Modal */}

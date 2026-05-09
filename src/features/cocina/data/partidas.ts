@@ -20,7 +20,7 @@ export interface ProductoPartida {
   id: string;
   nombre: string;
   categoria: string;
-  fichaTecnicaId?: string; // link to fichas técnicas
+  escandalloId?: string; // link to escandallos
 }
 
 export interface Partida {
@@ -46,7 +46,7 @@ export interface ConfigPartidas {
 
 const defaultConfig: ConfigPartidas = {
   areas: ["COCINA", "BARRA"],
-  partidas: ["FRÍO + POSTRES", "FUEGOS + HORNOS", "FREIDORA + PLANCHA"],
+  partidas: ["FRIO + POSTRES", "FUEGOS + HORNO", "PLANCHA + FREIDORA"],
   categorias: [
     "PARA EMPEZAR", "ARROCES", "PRA VEGANOS", "DE LA MAR",
     "DE LA TIERRA", "MOMENTOS DULCES", "PARA NIÑOS",
@@ -60,7 +60,7 @@ const defaultConfig: ConfigPartidas = {
 const habanaPartidas: Partida[] = [
   {
     id: "h-p1",
-    nombre: "FRÍO + POSTRES",
+    nombre: "FRIO + POSTRES",
     area: "COCINA",
     estado: "activa",
     creador: "emp-h1",
@@ -96,7 +96,7 @@ const habanaPartidas: Partida[] = [
   },
   {
     id: "h-p2",
-    nombre: "FUEGOS + HORNOS",
+    nombre: "FUEGOS + HORNO",
     area: "COCINA",
     estado: "activa",
     creador: "emp-h2",
@@ -118,7 +118,7 @@ const habanaPartidas: Partida[] = [
   },
   {
     id: "h-p3",
-    nombre: "FREIDORA + PLANCHA",
+    nombre: "PLANCHA + FREIDORA",
     area: "COCINA",
     estado: "activa",
     creador: "emp-h1",
@@ -143,7 +143,7 @@ const habanaPartidas: Partida[] = [
 const bacanalPartidas: Partida[] = [
   {
     id: "b-p1",
-    nombre: "FRÍO + POSTRES",
+    nombre: "FRIO + POSTRES",
     area: "COCINA",
     estado: "activa",
     creador: "emp-b1",
@@ -164,7 +164,7 @@ const bacanalPartidas: Partida[] = [
   },
   {
     id: "b-p2",
-    nombre: "FUEGOS + HORNOS",
+    nombre: "FUEGOS + HORNO",
     area: "COCINA",
     estado: "activa",
     creador: "emp-b2",
@@ -182,7 +182,7 @@ const bacanalPartidas: Partida[] = [
   },
   {
     id: "b-p3",
-    nombre: "FREIDORA + PLANCHA",
+    nombre: "PLANCHA + FREIDORA",
     area: "COCINA",
     estado: "en_revision",
     creador: "emp-b1",

@@ -97,7 +97,7 @@ export async function descontarStockPorVentas(
 
   if (productoVentaIds.length > 0) {
     const { data: escandallos, error: errEsc } = await supabase
-      .from("escandallos")
+      .from("producto_composicion")
       .select(
         "producto_venta_id, ingrediente_id, cantidad, merma_pct, ingrediente:ingrediente_id(id, nombre)"
       )

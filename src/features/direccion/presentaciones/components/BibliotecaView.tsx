@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, type ReactNode } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
-  Plus, Sparkles, Archive, Trash2, Eye, Pencil, Palette,
+  Plus, Sparkles, Archive, Trash2, Eye, Pencil, Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,9 +17,12 @@ import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
   aplicarOrdenToolbar,
+  ordenarColumnas,
+  colVisible,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
+  type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -28,7 +31,8 @@ import {
 import {
   listPresentaciones, archivarPresentacion, eliminarPresentacion, renombrarPresentacion,
 } from "../actions/presentaciones-actions";
-import { NuevaPresentacionModal } from "./NuevaPresentacionModal";
+import { GeneradorInteligenteModal } from "./GeneradorInteligenteModal";
+import { BrandingDialog } from "./BrandingDialog";
 import type { Presentacion, Estado } from "../types/presentaciones";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
@@ -54,11 +58,13 @@ export function BibliotecaView() {
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [nuevaOpen, setNuevaOpen] = useState(false);
   const [confirmar, setConfirmar] = useState<
     { tipo: "archivar" | "eliminar"; id: string; titulo: string } | null
   >(null);
   const [renombrando, setRenombrando] = useState<{ id: string; titulo: string } | null>(null);
+  const [brandingOpen, setBrandingOpen] = useState(false);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -123,69 +129,104 @@ export function BibliotecaView() {
     setRenombrando(null);
   };
 
-  return (
-    <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Sparkles className="h-6 w-6" /> Presentaciones
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Genera presentaciones con IA manteniendo tu imagen de marca.
-          </p>
-        </div>
-        <Link href="/direccion/presentaciones/branding">
-          <Button variant="outline" size="sm">
-            <Palette className="h-4 w-4 mr-2" /> Imagen de marca
-          </Button>
-        </Link>
-      </div>
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "titulo", label: "Título" },
+    { campo: "audiencia", label: "Audiencia" },
+    { campo: "slides", label: "Slides" },
+    { campo: "estado", label: "Estado" },
+    { campo: "fecha", label: "Fecha" },
+  ];
 
+  const columnDefs: Record<string, { th: ReactNode; td: (p: Presentacion) => ReactNode }> = {
+    titulo: {
+      th: <TableHead key="titulo">Título</TableHead>,
+      td: (p) => (
+        <TableCell key="titulo" className="font-medium max-w-[320px] truncate">
+          <Link
+            href={`/direccion/presentaciones/${p.id}`}
+            className="hover:underline"
+          >
+            {p.titulo}
+          </Link>
+        </TableCell>
+      ),
+    },
+    audiencia: {
+      th: <TableHead key="audiencia">Audiencia</TableHead>,
+      td: (p) => (
+        <TableCell key="audiencia" className="text-sm text-muted-foreground max-w-[240px] truncate">
+          {p.audiencia ?? "—"}
+        </TableCell>
+      ),
+    },
+    slides: {
+      th: <TableHead key="slides">Slides</TableHead>,
+      td: (p) => <TableCell key="slides">{p.num_slides}</TableCell>,
+    },
+    estado: {
+      th: <TableHead key="estado">Estado</TableHead>,
+      td: (p) => (
+        <TableCell key="estado">
+          <Badge variant="outline" className={ESTADO_COLOR[p.estado]}>
+            {ESTADO_LABEL[p.estado]}
+          </Badge>
+        </TableCell>
+      ),
+    },
+    fecha: {
+      th: <TableHead key="fecha">Fecha</TableHead>,
+      td: (p) => (
+        <TableCell key="fecha" className="text-sm text-muted-foreground whitespace-nowrap">
+          {new Date(p.created_at).toLocaleDateString("es-ES", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          })}
+        </TableCell>
+      ),
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
+  return (
+    <div className="p-6 space-y-4 max-w-[1400px] mx-auto">
       <SubmoduleToolbar
         busqueda={search}
         onBusquedaChange={setSearch}
-        placeholderBusqueda="Buscar por título o prompt…"
+        placeholderBusqueda="Buscar"
         onNuevo={() => setNuevaOpen(true)}
-        textoNuevo="Nueva presentación"
-        campos={[
-          { campo: "estado", label: "Estado", tipo: "lista", opciones: Object.values(ESTADO_LABEL) },
-          { campo: "slides", label: "Slides", tipo: "numero" },
-          { campo: "fecha", label: "Fecha", tipo: "fecha" },
-        ]}
         filtros={filtros}
         onFiltrosChange={setFiltros}
-        ordenOpciones={[
-          { campo: "titulo", label: "Título" },
-          { campo: "fecha", label: "Fecha" },
-          { campo: "slides", label: "Slides" },
-        ]}
         orden={orden}
         onOrdenChange={setOrden}
-        columnas={[
-          { campo: "titulo", label: "Título" },
-          { campo: "audiencia", label: "Audiencia" },
-          { campo: "slides", label: "Slides" },
-          { campo: "estado", label: "Estado" },
-          { campo: "fecha", label: "Fecha" },
-        ]}
+        columnas={columnasDef}
         columnasVisibles={columnasVisibles}
         onColumnasVisiblesChange={setColumnasVisibles}
+        columnasOrden={columnasOrden}
+        onColumnasOrdenChange={setColumnasOrden}
+        extraDerecha={
+          <Button
+            size="icon"
+            variant="outline"
+            className="h-9 w-9"
+            onClick={() => setBrandingOpen(true)}
+            title="Imagen de marca"
+            aria-label="Imagen de marca"
+          >
+            <Settings className="h-4 w-4" strokeWidth={1.75} />
+          </Button>
+        }
       />
-      <p className="text-xs text-muted-foreground text-right">
-        {filtered.length} presentación{filtered.length !== 1 ? "es" : ""}
-      </p>
 
       {/* Tabla */}
       <Card>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Título</TableHead>
-              <TableHead>Audiencia</TableHead>
-              <TableHead>Slides</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead>Fecha</TableHead>
+              {columnasRender.map((c) => columnDefs[c.campo]?.th)}
               <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
@@ -219,30 +260,7 @@ export function BibliotecaView() {
             {!loading &&
               filtered.map((p) => (
                 <TableRow key={p.id} className="hover:bg-muted/30">
-                  <TableCell className="font-medium max-w-[320px] truncate">
-                    <Link
-                      href={`/direccion/presentaciones/${p.id}`}
-                      className="hover:underline"
-                    >
-                      {p.titulo}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground max-w-[240px] truncate">
-                    {p.audiencia ?? "—"}
-                  </TableCell>
-                  <TableCell>{p.num_slides}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={ESTADO_COLOR[p.estado]}>
-                      {ESTADO_LABEL[p.estado]}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                    {new Date(p.created_at).toLocaleDateString("es-ES", {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric",
-                    })}
-                  </TableCell>
+                  {columnasRender.map((c) => columnDefs[c.campo]?.td(p))}
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
                       <Link href={`/direccion/presentaciones/${p.id}`}>
@@ -292,7 +310,10 @@ export function BibliotecaView() {
       </Card>
 
       {/* Modal crear */}
-      <NuevaPresentacionModal open={nuevaOpen} onOpenChange={setNuevaOpen} />
+      <GeneradorInteligenteModal open={nuevaOpen} onOpenChange={setNuevaOpen} onSuccess={cargar} />
+
+      {/* Imagen de marca */}
+      <BrandingDialog open={brandingOpen} onOpenChange={setBrandingOpen} />
 
       {/* Confirmación archivar/eliminar */}
       <AlertDialog open={!!confirmar} onOpenChange={(o) => !o && setConfirmar(null)}>

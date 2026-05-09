@@ -137,7 +137,7 @@ function buildRoles(): Rol[] {
     { nombre: "Dirección", desc: "Gestión de aperturas y cronogramas" },
     { nombre: "RRHH", desc: "Gestión de personal y nóminas" },
     { nombre: "Logística", desc: "Proveedores, productos e inventario" },
-    { nombre: "Cocina", desc: "Fichas técnicas y producción" },
+    { nombre: "Cocina", desc: "Escandallos y producción" },
     { nombre: "Gerencia", desc: "Supervisión general y cuadros de mando" },
     { nombre: "Contabilidad", desc: "Facturas, operaciones y tesorería" },
     { nombre: "Gestoría", desc: "Gestión documental y fiscal" },

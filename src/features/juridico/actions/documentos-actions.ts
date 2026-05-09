@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import type { CategoriaDocumento, DocumentoProceso } from "@/features/juridico/data/procesos-juridicos";
 
 const BUCKET = "juridico-documentos";
@@ -10,12 +11,8 @@ async function getContext() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { supabase, user: null, empresaId: null as string | null };
-  const { data } = await supabase
-    .from("profiles")
-    .select("empresa_id")
-    .eq("user_id", user.id)
-    .single();
-  return { supabase, user, empresaId: (data?.empresa_id as string | null) ?? null };
+  const empresaId = await getEmpresaActivaForUser(supabase, user.id);
+  return { supabase, user, empresaId };
 }
 
 function sanitizeFilename(name: string): string {

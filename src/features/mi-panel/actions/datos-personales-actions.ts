@@ -35,11 +35,8 @@ export interface DatosPersonalesInput {
   emergencia_nombre?: string | null;
   emergencia_relacion?: string | null;
   emergencia_telefono?: string | null;
-  permiso_trabajo?: string | null;
-  permiso_caducidad?: string | null;
-  carnet_manipulador?: string | null;
-  talla_uniforme?: string | null;
-  alergias?: string | null;
+  talla_camiseta?: string | null;
+  talla_pantalon?: string | null;
 }
 
 export interface GuardarDatosResultado {
@@ -139,11 +136,8 @@ export async function guardarDatosPersonales(
       emergencia_nombre: trim(input.emergencia_nombre),
       emergencia_relacion: trim(input.emergencia_relacion),
       emergencia_telefono: trim(input.emergencia_telefono),
-      permiso_trabajo: trim(input.permiso_trabajo),
-      permiso_caducidad: trim(input.permiso_caducidad),
-      carnet_manipulador: trim(input.carnet_manipulador),
-      talla_uniforme: trim(input.talla_uniforme),
-      alergias: trim(input.alergias),
+      talla_camiseta: trim(input.talla_camiseta),
+      talla_pantalon: trim(input.talla_pantalon),
       datos_personales_actualizado_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -195,11 +189,8 @@ export interface DatosPersonalesCompletos {
   emergencia_nombre: string | null;
   emergencia_relacion: string | null;
   emergencia_telefono: string | null;
-  permiso_trabajo: string | null;
-  permiso_caducidad: string | null;
-  carnet_manipulador: string | null;
-  talla_uniforme: string | null;
-  alergias: string | null;
+  talla_camiseta: string | null;
+  talla_pantalon: string | null;
 }
 
 export async function cargarDatosPersonales(): Promise<DatosPersonalesCompletos | null> {
@@ -212,7 +203,7 @@ export async function cargarDatosPersonales(): Promise<DatosPersonalesCompletos 
     const { data, error } = await supabase
       .from("profiles")
       .select(
-        "nombre, apellidos, email, tipo_documento, dni_nie, fecha_nacimiento, nacionalidad, genero, estado_civil, numero_ss, telefono, telefono_empresa, email_personal, email_empresa, direccion, codigo_postal, ciudad, provincia, pais, iban, banco_codigo, banco_nombre, titular_cuenta, iban_verificado, emergencia_nombre, emergencia_relacion, emergencia_telefono, permiso_trabajo, permiso_caducidad, carnet_manipulador, talla_uniforme, alergias",
+        "nombre, apellidos, email, tipo_documento, dni_nie, fecha_nacimiento, nacionalidad, genero, estado_civil, numero_ss, telefono, telefono_empresa, email_personal, email_empresa, direccion, codigo_postal, ciudad, provincia, pais, iban, banco_codigo, banco_nombre, titular_cuenta, iban_verificado, emergencia_nombre, emergencia_relacion, emergencia_telefono, talla_camiseta, talla_pantalon",
       )
       .eq("user_id", user.id)
       .single();

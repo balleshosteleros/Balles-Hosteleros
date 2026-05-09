@@ -93,7 +93,7 @@ async function main() {
   // Ojo al orden: primero hijos, luego padres
   const tablas = [
     "pos_pagos", "pos_ticket_lineas", "pos_tickets", "pos_sesiones_caja",
-    "mermas", "fichas_tecnicas", "ingredientes_proveedor",
+    "mermas", "escandallos", "ingredientes_proveedor",
     "nominas", "contratos", "empleados",
     "productos", "proveedores",
     "aperturas", "campanas_marketing",
@@ -231,8 +231,8 @@ async function main() {
     nombre: p.nombre,
     estado: "Activa",
   }));
-  const { error: eFT } = await sb.from("fichas_tecnicas").insert(fichasRows);
-  if (eFT) console.log(`   ⚠️  fichas_tecnicas: ${eFT.message}`);
+  const { error: eFT } = await sb.from("producto_composicion").insert(fichasRows);
+  if (eFT) console.log(`   ⚠️  escandallos: ${eFT.message}`);
 
   // ---- 9) Mermas ----
   await log("9/11 Poblando mermas");

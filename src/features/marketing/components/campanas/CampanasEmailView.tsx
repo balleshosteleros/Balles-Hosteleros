@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Plus, Mail, Pencil, Trash2, Send } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Plus, Mail, Pencil, Trash2, Send, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -24,9 +24,12 @@ import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
   aplicarOrdenToolbar,
+  colVisible,
+  ordenarColumnas,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
+  type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
 
 function estadoColor(estado: CampanaEmail["estado"]) {
@@ -44,6 +47,8 @@ export function CampanasEmailView() {
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
+  const [showConfig, setShowConfig] = useState(false);
 
   useEffect(() => {
     verificarIntegracionesAction().then((r) => setResendOk(r.resend));
@@ -116,6 +121,56 @@ export function CampanasEmailView() {
     }
   }
 
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "campana", label: "Campaña" },
+    { campo: "asunto", label: "Asunto" },
+    { campo: "segmento", label: "Segmento" },
+    { campo: "estado", label: "Estado" },
+    { campo: "enviados", label: "Enviados" },
+    { campo: "abiertos", label: "Abiertos" },
+  ];
+
+  const columnDefs: Record<string, { th: ReactNode; td: (c: CampanaEmail) => ReactNode }> = {
+    campana: {
+      th: <th key="campana" className="text-left px-4 py-2.5 font-semibold">Campaña</th>,
+      td: (c) => <td key="campana" className="px-4 py-2 font-medium">{c.nombre}</td>,
+    },
+    asunto: {
+      th: <th key="asunto" className="text-left px-4 py-2.5 font-semibold">Asunto</th>,
+      td: (c) => <td key="asunto" className="px-4 py-2 text-muted-foreground">{c.asunto}</td>,
+    },
+    segmento: {
+      th: <th key="segmento" className="text-left px-4 py-2.5 font-semibold">Segmento</th>,
+      td: (c) => (
+        <td key="segmento" className="px-4 py-2 text-xs">
+          {SEGMENTOS_CLIENTE.find((s) => s.value === c.segmento)?.label ?? c.segmento}
+        </td>
+      ),
+    },
+    estado: {
+      th: <th key="estado" className="text-left px-4 py-2.5 font-semibold">Estado</th>,
+      td: (c) => (
+        <td key="estado" className="px-4 py-2">
+          <Badge variant="outline" className={`text-${estadoColor(c.estado)}-600`}>
+            {ESTADOS_CAMPANA.find((e) => e.value === c.estado)?.label}
+          </Badge>
+        </td>
+      ),
+    },
+    enviados: {
+      th: <th key="enviados" className="text-right px-4 py-2.5 font-semibold">Enviados</th>,
+      td: (c) => <td key="enviados" className="px-4 py-2 text-right tabular-nums">{c.estadisticas.enviados}</td>,
+    },
+    abiertos: {
+      th: <th key="abiertos" className="text-right px-4 py-2.5 font-semibold">Abiertos</th>,
+      td: (c) => <td key="abiertos" className="px-4 py-2 text-right tabular-nums">{c.estadisticas.abiertos}</td>,
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
   return (
     <div className="p-4 md:p-6 space-y-4">
       <div className="flex items-center gap-3">
@@ -129,45 +184,29 @@ export function CampanasEmailView() {
       <SubmoduleToolbar
         busqueda={busqueda}
         onBusquedaChange={setBusqueda}
-        placeholderBusqueda="Buscar campaña..."
+        placeholderBusqueda="Buscar"
         onNuevo={abrirNuevo}
-        textoNuevo="Nueva campaña"
-        campos={[
-          {
-            campo: "estado",
-            label: "Estado",
-            tipo: "lista",
-            opciones: ESTADOS_CAMPANA.map((e) => e.label),
-          },
-          {
-            campo: "segmento",
-            label: "Segmento",
-            tipo: "lista",
-            opciones: SEGMENTOS_CLIENTE.map((s) => s.label),
-          },
-          { campo: "enviados", label: "Enviados", tipo: "numero" },
-          { campo: "abiertos", label: "Abiertos", tipo: "numero" },
-        ]}
         filtros={filtros}
         onFiltrosChange={setFiltros}
-        ordenOpciones={[
-          { campo: "nombre", label: "Nombre" },
-          { campo: "asunto", label: "Asunto" },
-          { campo: "enviados", label: "Enviados" },
-          { campo: "abiertos", label: "Abiertos" },
-        ]}
         orden={orden}
         onOrdenChange={setOrden}
-        columnas={[
-          { campo: "campana", label: "Campaña" },
-          { campo: "asunto", label: "Asunto" },
-          { campo: "segmento", label: "Segmento" },
-          { campo: "estado", label: "Estado" },
-          { campo: "enviados", label: "Enviados" },
-          { campo: "abiertos", label: "Abiertos" },
-        ]}
+        columnas={columnasDef}
         columnasVisibles={columnasVisibles}
         onColumnasVisiblesChange={setColumnasVisibles}
+        columnasOrden={columnasOrden}
+        onColumnasOrdenChange={setColumnasOrden}
+        extraDerecha={
+          <Button
+            size="icon"
+            variant={showConfig ? "default" : "outline"}
+            className="h-9 w-9"
+            onClick={() => setShowConfig((v) => !v)}
+            title="Configuración"
+            aria-label="Configuración"
+          >
+            <Settings className="h-4 w-4" strokeWidth={1.75} />
+          </Button>
+        }
       />
 
       {(modoLocal || resendOk === false) && (
@@ -202,30 +241,14 @@ export function CampanasEmailView() {
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
-                <th className="text-left px-4 py-2.5 font-semibold">Campaña</th>
-                <th className="text-left px-4 py-2.5 font-semibold">Asunto</th>
-                <th className="text-left px-4 py-2.5 font-semibold">Segmento</th>
-                <th className="text-left px-4 py-2.5 font-semibold">Estado</th>
-                <th className="text-right px-4 py-2.5 font-semibold">Enviados</th>
-                <th className="text-right px-4 py-2.5 font-semibold">Abiertos</th>
+                {columnasRender.map((c) => columnDefs[c.campo]?.th)}
                 <th className="px-4 py-2.5"></th>
               </tr>
             </thead>
             <tbody>
               {filtrados.map((c) => (
                 <tr key={c.id} className="border-t hover:bg-muted/30">
-                  <td className="px-4 py-2 font-medium">{c.nombre}</td>
-                  <td className="px-4 py-2 text-muted-foreground">{c.asunto}</td>
-                  <td className="px-4 py-2 text-xs">
-                    {SEGMENTOS_CLIENTE.find((s) => s.value === c.segmento)?.label ?? c.segmento}
-                  </td>
-                  <td className="px-4 py-2">
-                    <Badge variant="outline" className={`text-${estadoColor(c.estado)}-600`}>
-                      {ESTADOS_CAMPANA.find((e) => e.value === c.estado)?.label}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-2 text-right tabular-nums">{c.estadisticas.enviados}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{c.estadisticas.abiertos}</td>
+                  {columnasRender.map((col) => columnDefs[col.campo]?.td(c))}
                   <td className="px-4 py-2">
                     <div className="flex items-center justify-end gap-1">
                       {c.estado === "borrador" && (

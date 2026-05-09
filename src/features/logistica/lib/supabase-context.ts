@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 
 type Ctx = {
   supabase: SupabaseClient;
@@ -15,14 +16,10 @@ export async function getLogisticaContext(): Promise<Ctx> {
   if (!user) {
     return { supabase: supabase as unknown as SupabaseClient, userId: null, empresaId: null };
   }
-  const { data } = await supabase
-    .from("profiles")
-    .select("empresa_id")
-    .eq("user_id", user.id)
-    .single();
+  const empresaId = await getEmpresaActivaForUser(supabase as unknown as SupabaseClient, user.id);
   return {
     supabase: supabase as unknown as SupabaseClient,
     userId: user.id,
-    empresaId: (data?.empresa_id as string) ?? null,
+    empresaId,
   };
 }

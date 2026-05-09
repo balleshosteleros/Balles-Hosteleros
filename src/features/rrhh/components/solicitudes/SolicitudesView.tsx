@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,13 +22,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { CheckCircle2, XCircle, Loader2, Inbox } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, Inbox, Settings } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
   aplicarOrdenToolbar,
+  colVisible,
+  ordenarColumnas,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+  type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
 import { toast } from "sonner";
 import {
@@ -76,11 +80,14 @@ export function SolicitudesView() {
   const [busqueda, setBusqueda] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
 
   const [revisando, setRevisando] = useState<SolicitudPersonal | null>(null);
   const [modo, setModo] = useState<Modo>("aprobar");
   const [notas, setNotas] = useState("");
   const [working, setWorking] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -149,6 +156,81 @@ export function SolicitudesView() {
     await load();
   }
 
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "empleado", label: "Empleado", bloqueada: true },
+    { campo: "tipo", label: "Tipo" },
+    { campo: "fechas", label: "Fechas" },
+    { campo: "motivo", label: "Motivo" },
+    { campo: "enviada", label: "Enviada" },
+    { campo: "estado", label: "Estado" },
+  ];
+
+  const columnDefs: Record<string, { th: ReactNode; td: (s: SolicitudPersonal) => ReactNode }> = {
+    empleado: {
+      th: <TableHead key="empleado">Empleado</TableHead>,
+      td: (s) => <TableCell key="empleado" className="font-medium">{s.empleadoNombre}</TableCell>,
+    },
+    tipo: {
+      th: <TableHead key="tipo">Tipo</TableHead>,
+      td: (s) => (
+        <TableCell key="tipo">
+          <div className="flex flex-col">
+            <span className="text-xs uppercase text-muted-foreground">
+              {s.tipo === "ausencia" ? "Ausencia" : "Trabajo"}
+            </span>
+            <span>{SUBTIPO_LABEL[s.subtipo]}</span>
+          </div>
+        </TableCell>
+      ),
+    },
+    fechas: {
+      th: <TableHead key="fechas">Fechas</TableHead>,
+      td: (s) => (
+        <TableCell key="fechas" className="text-sm">
+          {formatFecha(s.fechaInicio)}
+          {s.fechaFin && s.fechaFin !== s.fechaInicio && (
+            <> – {formatFecha(s.fechaFin)}</>
+          )}
+          {s.horas != null && (
+            <span className="text-muted-foreground"> · {s.horas}h</span>
+          )}
+        </TableCell>
+      ),
+    },
+    motivo: {
+      th: <TableHead key="motivo">Motivo</TableHead>,
+      td: (s) => (
+        <TableCell key="motivo" className="max-w-[260px]">
+          <span className="text-sm text-muted-foreground line-clamp-2">
+            {s.motivo || "—"}
+          </span>
+        </TableCell>
+      ),
+    },
+    enviada: {
+      th: <TableHead key="enviada">Enviada</TableHead>,
+      td: (s) => (
+        <TableCell key="enviada" className="text-xs text-muted-foreground">
+          {formatFechaHora(s.createdAt)}
+        </TableCell>
+      ),
+    },
+    estado: {
+      th: <TableHead key="estado">Estado</TableHead>,
+      td: (s) => (
+        <TableCell key="estado">
+          <Badge variant="outline" className={ESTADO_COLOR[s.estado]}>
+            {ESTADO_LABEL[s.estado]}
+          </Badge>
+        </TableCell>
+      ),
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-5">
       {/* Cabecera */}
@@ -186,34 +268,29 @@ export function SolicitudesView() {
           <SubmoduleToolbar
             busqueda={busqueda}
             onBusquedaChange={setBusqueda}
-            placeholderBusqueda="Buscar por empleado, tipo o motivo..."
+            placeholderBusqueda="Buscar"
             ocultarNuevo
-            campos={[
-              { campo: "tipo", label: "Tipo", tipo: "lista", opciones: ["Ausencia", "Trabajo"] },
-              {
-                campo: "subtipo",
-                label: "Subtipo",
-                tipo: "lista",
-                opciones: [...new Set(items.map((s) => SUBTIPO_LABEL[s.subtipo]))],
-              },
-              {
-                campo: "estado",
-                label: "Estado",
-                tipo: "lista",
-                opciones: [...new Set(items.map((s) => ESTADO_LABEL[s.estado]))],
-              },
-              { campo: "fechaInicio", label: "Fecha inicio", tipo: "fecha" },
-            ]}
             filtros={filtros}
             onFiltrosChange={setFiltros}
-            ordenOpciones={[
-              { campo: "empleado", label: "Empleado" },
-              { campo: "fechaInicio", label: "Fecha inicio" },
-              { campo: "createdAt", label: "Enviada" },
-              { campo: "estado", label: "Estado" },
-            ]}
             orden={orden}
             onOrdenChange={setOrden}
+            columnas={columnasDef}
+            columnasVisibles={columnasVisibles}
+            onColumnasVisiblesChange={setColumnasVisibles}
+            columnasOrden={columnasOrden}
+            onColumnasOrdenChange={setColumnasOrden}
+            extraDerecha={
+              <Button
+                size="icon"
+                variant={showConfig ? "default" : "outline"}
+                className="h-9 w-9"
+                onClick={() => setShowConfig((v) => !v)}
+                title="Configuración"
+                aria-label="Configuración"
+              >
+                <Settings className="h-4 w-4" strokeWidth={1.75} />
+              </Button>
+            }
           />
           <Card>
             {loading ? (
@@ -231,49 +308,14 @@ export function SolicitudesView() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Empleado</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Fechas</TableHead>
-                    <TableHead>Motivo</TableHead>
-                    <TableHead>Enviada</TableHead>
-                    <TableHead>Estado</TableHead>
+                    {columnasRender.map((c) => columnDefs[c.campo]?.th)}
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filtrados.map((s) => (
                     <TableRow key={s.id}>
-                      <TableCell className="font-medium">{s.empleadoNombre}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="text-xs uppercase text-muted-foreground">
-                            {s.tipo === "ausencia" ? "Ausencia" : "Trabajo"}
-                          </span>
-                          <span>{SUBTIPO_LABEL[s.subtipo]}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {formatFecha(s.fechaInicio)}
-                        {s.fechaFin && s.fechaFin !== s.fechaInicio && (
-                          <> – {formatFecha(s.fechaFin)}</>
-                        )}
-                        {s.horas != null && (
-                          <span className="text-muted-foreground"> · {s.horas}h</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="max-w-[260px]">
-                        <span className="text-sm text-muted-foreground line-clamp-2">
-                          {s.motivo || "—"}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {formatFechaHora(s.createdAt)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={ESTADO_COLOR[s.estado]}>
-                          {ESTADO_LABEL[s.estado]}
-                        </Badge>
-                      </TableCell>
+                      {columnasRender.map((c) => columnDefs[c.campo]?.td(s))}
                       <TableCell className="text-right">
                         {s.estado === "pendiente" ? (
                           <div className="flex justify-end gap-1">

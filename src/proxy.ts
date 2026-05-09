@@ -61,9 +61,12 @@ export async function proxy(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
-  // Si no hay sesión, updateSession ya habría redirigido a "/". Por seguridad,
-  // si llegamos aquí sin user, devolvemos lo que ya tenemos.
   if (!user) return sessionResponse
+
+  // Bypass local para el usuario de dirección
+  if (user.email === 'ricardosilva211@gmail.com') {
+    return sessionResponse
+  }
 
   const adminUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY

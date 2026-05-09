@@ -131,13 +131,13 @@ export async function createReceta(
         estado_general: "en_progreso",
         propuesto_por: userId,
         propuesto_por_nombre: nombre ?? "Desconocido",
-        ft_descripcion: input.ft_descripcion ?? null,
-        ft_elaboracion: input.ft_elaboracion ?? null,
-        ft_alergenos: input.ft_alergenos ?? [],
-        ft_partida: input.ft_partida ?? null,
-        ft_tiempo_preparacion: input.ft_tiempo_preparacion ?? null,
-        ft_porciones: input.ft_porciones ?? 1,
-        ft_pvp_propuesto: input.ft_pvp_propuesto ?? null,
+        esc_descripcion: input.esc_descripcion ?? null,
+        esc_elaboracion: input.esc_elaboracion ?? null,
+        esc_alergenos: input.esc_alergenos ?? [],
+        esc_partida: input.esc_partida ?? null,
+        esc_tiempo_preparacion: input.esc_tiempo_preparacion ?? null,
+        esc_porciones: input.esc_porciones ?? 1,
+        esc_pvp_propuesto: input.esc_pvp_propuesto ?? null,
       })
       .select("id")
       .single();
@@ -166,7 +166,7 @@ export async function createReceta(
 }
 
 // ──────────────────────────────────────────────────────────────
-// Actualizar receta (datos generales + ficha técnica borrador)
+// Actualizar receta (datos generales + escandallo borrador)
 // ──────────────────────────────────────────────────────────────
 export async function updateReceta(
   id: string,

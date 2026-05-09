@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Film, Camera, Clock, ExternalLink, Trash2, Edit, Video, BookOpen, ImageIcon } from "lucide-react";
+import { Film, Camera, Clock, ExternalLink, Trash2, Edit, Video, BookOpen, ImageIcon, Settings } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -142,6 +142,7 @@ export function ContenidoView() {
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editItem, setEditItem] = useState<ContenidoItem | null>(null);
+  const [showConfig, setShowConfig] = useState(false);
 
   const loadContenido = useCallback(async () => {
     setLoading(true);
@@ -237,33 +238,24 @@ export function ContenidoView() {
         <SubmoduleToolbar
           busqueda={search}
           onBusquedaChange={setSearch}
-          placeholderBusqueda="Buscar por título o descripción..."
+          placeholderBusqueda="Buscar"
           onNuevo={() => { setEditItem(null); setModalOpen(true); }}
-          textoNuevo="Nuevo"
-          campos={[
-            {
-              campo: "estado",
-              label: "Estado",
-              tipo: "lista",
-              opciones: ESTADOS.map((e) => e.label),
-            },
-            {
-              campo: "responsable",
-              label: "Responsable",
-              tipo: "lista",
-              opciones: [...new Set(items.map((i) => i.responsable).filter(Boolean))].sort(),
-            },
-            { campo: "fecha", label: "Fecha", tipo: "fecha" },
-          ]}
           filtros={filtros}
           onFiltrosChange={setFiltros}
-          ordenOpciones={[
-            { campo: "titulo", label: "Título" },
-            { campo: "fecha", label: "Fecha" },
-            { campo: "responsable", label: "Responsable" },
-          ]}
           orden={orden}
           onOrdenChange={setOrden}
+          extraDerecha={
+            <Button
+              size="icon"
+              variant={showConfig ? "default" : "outline"}
+              className="h-9 w-9"
+              onClick={() => setShowConfig((v) => !v)}
+              title="Configuración"
+              aria-label="Configuración"
+            >
+              <Settings className="h-4 w-4" strokeWidth={1.75} />
+            </Button>
+          }
           className="mb-4"
         />
 

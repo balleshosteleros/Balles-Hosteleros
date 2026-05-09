@@ -15,7 +15,7 @@ import type { RecetaConExtras } from "../actions/recetas-actions";
 import type { FaseConPolicies } from "../actions/fases-actions";
 import { toggleFavorita, cambiarEstadoGeneral } from "../actions/recetas-actions";
 import { ESTADO_GENERAL_LABELS, COLOR_PALETTE, type FaseColor } from "../types";
-import { FichaTecnicaTab } from "./FichaTecnicaTab";
+import { EscandalloTab } from "./EscandalloTab";
 import { CompraTab } from "./CompraTab";
 import { CataTab } from "./CataTab";
 import { MarketingTab } from "./MarketingTab";
@@ -30,7 +30,7 @@ interface Props {
 }
 
 export function RecetaDetailDialog({ open, onOpenChange, receta, fases, onRefresh }: Props) {
-  const [tab, setTab] = useState("ficha");
+  const [tab, setTab] = useState("escandallo");
 
   if (!receta) return null;
 
@@ -136,7 +136,7 @@ export function RecetaDetailDialog({ open, onOpenChange, receta, fases, onRefres
 
         <Tabs value={tab} onValueChange={setTab} className="flex-1 flex flex-col overflow-hidden">
           <TabsList className="grid grid-cols-6 w-full h-8">
-            <TabsTrigger value="ficha" className="text-xs">Ficha técnica</TabsTrigger>
+            <TabsTrigger value="escandallo" className="text-xs">Escandallo</TabsTrigger>
             <TabsTrigger value="compra" className="text-xs">Compra</TabsTrigger>
             <TabsTrigger value="cata1" className="text-xs">Cata 1</TabsTrigger>
             <TabsTrigger value="cata2" className="text-xs">Cata 2</TabsTrigger>
@@ -145,8 +145,8 @@ export function RecetaDetailDialog({ open, onOpenChange, receta, fases, onRefres
           </TabsList>
 
           <div className="flex-1 overflow-y-auto mt-3 pr-1">
-            <TabsContent value="ficha" className="mt-0">
-              <FichaTecnicaTab
+            <TabsContent value="escandallo" className="mt-0">
+              <EscandalloTab
                 receta={receta}
                 onChanged={onRefresh}
                 definirEtiquetasFinales={definirEtiquetasFinales}
@@ -162,8 +162,8 @@ export function RecetaDetailDialog({ open, onOpenChange, receta, fases, onRefres
                 recetaId={receta.id}
                 numero={1}
                 escandallo={{
-                  ft_coste_estimado: receta.ft_coste_estimado,
-                  ft_pvp_propuesto: receta.ft_pvp_propuesto,
+                  esc_coste_estimado: receta.esc_coste_estimado,
+                  esc_pvp_propuesto: receta.esc_pvp_propuesto,
                 }}
                 onChanged={onRefresh}
               />
@@ -174,8 +174,8 @@ export function RecetaDetailDialog({ open, onOpenChange, receta, fases, onRefres
                 recetaId={receta.id}
                 numero={2}
                 escandallo={{
-                  ft_coste_estimado: receta.ft_coste_estimado,
-                  ft_pvp_propuesto: receta.ft_pvp_propuesto,
+                  esc_coste_estimado: receta.esc_coste_estimado,
+                  esc_pvp_propuesto: receta.esc_pvp_propuesto,
                 }}
                 onChanged={onRefresh}
               />

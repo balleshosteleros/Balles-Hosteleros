@@ -20,6 +20,7 @@ import type {
 import { ColumnaEstado } from "./ColumnaEstado";
 import { FiltrosBar } from "./FiltrosBar";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { SubmoduleToolbar } from "@/shared/components/SubmoduleToolbar";
 
 // ─── Tabla de siguiente/anterior estado ───────────────────────
 const SIGUIENTE: Record<ColumnaKDS, LineaEstadoCocina | null> = {
@@ -50,10 +51,29 @@ function ComandasBoardInner() {
     destino: "TODOS",
     partidaId: null,
   });
-  const comandasFiltradas = useMemo(
-    () => aplicarFiltros(comandas, filtros),
-    [comandas, filtros],
-  );
+  const [busqueda, setBusqueda] = useState("");
+  const comandasFiltradas = useMemo(() => {
+    const base = aplicarFiltros(comandas, filtros);
+    const q = busqueda.trim().toLowerCase();
+    if (!q) return base;
+    return base
+      .map((c) => {
+        const mesaMatch = (c.mesaNombre ?? "").toLowerCase().includes(q);
+        const numeroMatch = (c.numero ?? "").toLowerCase().includes(q);
+        if (mesaMatch || numeroMatch) return c;
+        const lineasMatch = c.lineas.filter((l) =>
+          (l.nombre ?? "").toLowerCase().includes(q),
+        );
+        if (lineasMatch.length === 0) return null;
+        return {
+          ...c,
+          lineas: lineasMatch,
+          total: lineasMatch.length,
+          listos: lineasMatch.filter((l) => l.estadoCocina === "LISTO").length,
+        };
+      })
+      .filter((c): c is ComandaAgrupada => c !== null);
+  }, [comandas, filtros, busqueda]);
 
   // ─── Handlers de acciones ──────────────────────────────────
   const cambiarLinea = useCallback(
@@ -186,8 +206,17 @@ function ComandasBoardInner() {
         </span>
       </div>
 
-      {/* Filtros */}
-      <FiltrosBar value={filtros} onChange={setFiltros} />
+      {/* Toolbar estándar (BARRA HORIZONTAL 1) */}
+      <div className="px-2 pt-2 space-y-2">
+        <SubmoduleToolbar
+          busqueda={busqueda}
+          onBusquedaChange={setBusqueda}
+          placeholderBusqueda="Buscar"
+          ocultarNuevo
+        />
+        {/* Filtros específicos de comandas (fuera de la toolbar) */}
+        <FiltrosBar value={filtros} onChange={setFiltros} />
+      </div>
 
       {/* Kanban 4 columnas */}
       <div className="grid min-h-0 flex-1 grid-cols-4 gap-2 p-2">

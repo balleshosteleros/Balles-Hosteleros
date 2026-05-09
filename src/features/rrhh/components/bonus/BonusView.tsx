@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Plus, MoreHorizontal, ArrowLeft, Trash2, TrendingUp, Package, ClipboardCheck,
-  Heart, Coins, Gift, AlertTriangle, CreditCard, ShieldCheck, Users, Settings2, FileText,
+  Heart, Coins, Gift, AlertTriangle, CreditCard, ShieldCheck, Users, Settings, Settings2, FileText,
   BarChart3, Eye, Calendar, CheckCircle2, Info,
 } from "lucide-react";
 import {
@@ -57,6 +57,7 @@ function ListadoBonus({ bonus, onSelect, onCrear, empresaId }: {
   const [busqueda, setBusqueda] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [showConfig, setShowConfig] = useState(false);
 
   const tiposUsados = useMemo(
     () => [...new Set(bonus.map((b) => b.tipo))].sort(),
@@ -89,34 +90,26 @@ function ListadoBonus({ bonus, onSelect, onCrear, empresaId }: {
       <SubmoduleToolbar
         busqueda={busqueda}
         onBusquedaChange={setBusqueda}
-        placeholderBusqueda="Buscar bonus..."
+        placeholderBusqueda="Buscar"
         onNuevo={onCrear}
-        campos={[
-          {
-            campo: "estado",
-            label: "Estado",
-            tipo: "lista",
-            opciones: (Object.keys(ESTADO_BONUS_LABEL) as EstadoBonus[]).map((k) => ESTADO_BONUS_LABEL[k]),
-          },
-          { campo: "tipo", label: "Tipo", tipo: "lista", opciones: tiposUsados },
-          {
-            campo: "periodicidad",
-            label: "Periodicidad",
-            tipo: "lista",
-            opciones: [...new Set(bonus.map((b) => b.periodicidad))],
-          },
-        ]}
         filtros={filtros}
         onFiltrosChange={setFiltros}
-        ordenOpciones={[
-          { campo: "nombre", label: "Nombre" },
-          { campo: "tipo", label: "Tipo" },
-          { campo: "estado", label: "Estado" },
-        ]}
         orden={orden}
         onOrdenChange={setOrden}
         extraDerecha={
-          <IOActions config={bonusIO} context={{ empresaId: eId }} onSuccess={() => window.location.reload()} />
+          <>
+            <IOActions config={bonusIO} context={{ empresaId: eId }} onSuccess={() => window.location.reload()} />
+            <Button
+              size="icon"
+              variant={showConfig ? "default" : "outline"}
+              className="h-9 w-9"
+              onClick={() => setShowConfig((v) => !v)}
+              title="Configuración"
+              aria-label="Configuración"
+            >
+              <Settings className="h-4 w-4" strokeWidth={1.75} />
+            </Button>
+          </>
         }
       />
 

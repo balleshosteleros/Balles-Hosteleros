@@ -23,6 +23,7 @@ export function BancosView() {
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [showConfig, setShowConfig] = useState(false);
   const [bancos] = useState(SAMPLE_BANCOS);
 
   const acceso = (b: BancoConectado, campo: string): unknown => {
@@ -45,24 +46,26 @@ export function BancosView() {
       <SubmoduleToolbar
         busqueda={busqueda}
         onBusquedaChange={setBusqueda}
-        placeholderBusqueda="Buscar banco..."
-        textoNuevo="Conectar banco"
+        placeholderBusqueda="Buscar"
         onNuevo={() => { /* nuevo */ }}
-        campos={[
-          { campo: "sincronizacion", label: "Sincronización", tipo: "lista", opciones: ["Automática", "Manual"] },
-          { campo: "productos", label: "Productos", tipo: "numero" },
-        ]}
         filtros={filtros}
         onFiltrosChange={setFiltros}
-        ordenOpciones={[
-          { campo: "nombre", label: "Nombre" },
-          { campo: "productos", label: "Productos" },
-          { campo: "ultimaSync", label: "Última sync" },
-        ]}
         orden={orden}
         onOrdenChange={setOrden}
         extraDerecha={
-          <IOActions config={bancosIO} onSuccess={() => window.location.reload()} />
+          <>
+            <IOActions config={bancosIO} onSuccess={() => window.location.reload()} />
+            <Button
+              size="icon"
+              variant={showConfig ? "default" : "outline"}
+              className="h-9 w-9"
+              onClick={() => setShowConfig((v) => !v)}
+              title="Configuración"
+              aria-label="Configuración"
+            >
+              <Settings className="h-4 w-4" strokeWidth={1.75} />
+            </Button>
+          </>
         }
       />
 

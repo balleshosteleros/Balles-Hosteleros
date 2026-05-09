@@ -1,5 +1,6 @@
 # Dependencies
 /node_modules
+/node_modules_old_*
 /.pnp
 .pnp.js
 yarn.lock
@@ -74,3 +75,12 @@ Balles Hosteleros SAAS/
 # Capturas de pantalla (no subir al repo)
 Capturas/
 tsconfig.tsbuildinfo
+
+# Backups y Archivos Temporales
+BACKUP_*/
+node_modules_old*/
+scratch/
+*.txt
+CHANGELOG_*.md
+CONTINUA_CONTEXTO.md
+middleware.ts

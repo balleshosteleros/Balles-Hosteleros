@@ -10,8 +10,6 @@ function normalizeEstado(raw: string | null): ProductoEstado {
   if (!raw) return "Activo";
   const lower = raw.toLowerCase();
   if (lower.startsWith("inactiv")) return "Inactivo";
-  if (lower.startsWith("descatalog")) return "Descatalogado";
-  if (lower.startsWith("revis") || lower.includes("pending")) return "En revisión";
   return "Activo";
 }
 
@@ -34,9 +32,14 @@ export async function parseProductosFile(
       nombre,
       tipo,
       categoria:
-        getField(row, ["categoria", "category", "familia principal"]) ??
-        "Sin categoría",
-      familia: getField(row, ["familia", "family", "subcategoria"]),
+        getField(row, [
+          "categoria",
+          "category",
+          "familia",
+          "family",
+          "familia principal",
+          "subcategoria",
+        ]) ?? "Sin categoría",
       estado: normalizeEstado(getField(row, ["estado", "status"])),
       proveedor: getField(row, ["proveedor", "supplier", "vendor"]),
       precioCompra: getField(row, [

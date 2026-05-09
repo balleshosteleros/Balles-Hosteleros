@@ -1,19 +1,22 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MoreVertical, FileText } from "lucide-react";
+import { MoreVertical, FileText, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SAMPLE_OPERACIONES } from "@/features/contabilidad/data/contabilidad";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
   aplicarOrdenToolbar,
+  colVisible,
+  ordenarColumnas,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
+  type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
 import { IOActions } from "@/shared/io";
 import { operacionesIO } from "@/features/contabilidad/io/operaciones.io";
@@ -33,6 +36,8 @@ export function OperacionesView() {
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
+  const [showConfig, setShowConfig] = useState(false);
   const [ops] = useState(SAMPLE_OPERACIONES);
 
   const contactosUsados = useMemo(
@@ -74,6 +79,65 @@ export function OperacionesView() {
     return lista;
   }, [ops, tab, busqueda, filtros, orden]);
 
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "descripcion", label: "Descripción" },
+    { campo: "periodicidad", label: "Periodicidad" },
+    { campo: "fechaFin", label: "Finaliza" },
+    { campo: "etiquetas", label: "Etiquetas" },
+    { campo: "total", label: "Total" },
+  ];
+
+  const columnDefs: Record<string, { th: ReactNode; td: (o: typeof ops[number]) => ReactNode }> = {
+    descripcion: {
+      th: <th key="descripcion" className="px-3 py-3 font-medium">Descripción</th>,
+      td: (o) => (
+        <td key="descripcion" className="px-3 py-3">
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+            <div>
+              <p className="font-semibold">{o.descripcion}</p>
+              <p className="text-[10px] text-muted-foreground">{o.contacto || "—"}</p>
+            </div>
+          </div>
+        </td>
+      ),
+    },
+    periodicidad: {
+      th: <th key="periodicidad" className="px-3 py-3 font-medium">Periodicidad</th>,
+      td: (o) => (
+        <td key="periodicidad" className="px-3 py-3 text-muted-foreground">{perioLabel[o.periodicidad] ?? o.periodicidad}</td>
+      ),
+    },
+    fechaFin: {
+      th: <th key="fechaFin" className="px-3 py-3 font-medium">Finaliza</th>,
+      td: (o) => (
+        <td key="fechaFin" className="px-3 py-3 text-muted-foreground">{o.fechaFin || "—"}</td>
+      ),
+    },
+    etiquetas: {
+      th: <th key="etiquetas" className="px-3 py-3 font-medium">Etiquetas</th>,
+      td: (o) => (
+        <td key="etiquetas" className="px-3 py-3">
+          <div className="flex gap-1 flex-wrap">
+            {o.etiquetas.map(e => <Badge key={e} variant="secondary" className="text-[10px]">{e}</Badge>)}
+          </div>
+        </td>
+      ),
+    },
+    total: {
+      th: <th key="total" className="px-3 py-3 font-medium text-right">Total</th>,
+      td: (o) => (
+        <td key="total" className="px-3 py-3 text-right font-mono font-semibold">
+          {o.total.toLocaleString("es-ES", { minimumFractionDigits: 2 })} €
+        </td>
+      ),
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden">
       {/* Tabs */}
@@ -92,36 +156,31 @@ export function OperacionesView() {
         <SubmoduleToolbar
           busqueda={busqueda}
           onBusquedaChange={setBusqueda}
-          placeholderBusqueda="Buscar operaciones…"
+          placeholderBusqueda="Buscar"
           onNuevo={() => { /* nuevo */ }}
-          campos={[
-            { campo: "tipo", label: "Tipo", tipo: "lista", opciones: ["ENTRADA", "SALIDA"] },
-            { campo: "periodicidad", label: "Periodicidad", tipo: "lista", opciones: ["MENSUAL", "TRIMESTRAL", "ANUAL", "SEMANAL", "PUNTUAL"] },
-            { campo: "contacto", label: "Contacto", tipo: "lista", opciones: contactosUsados },
-            { campo: "etiquetas", label: "Etiquetas", tipo: "lista", opciones: etiquetasUsadas },
-            { campo: "total", label: "Total €", tipo: "numero" },
-          ]}
           filtros={filtros}
           onFiltrosChange={setFiltros}
-          ordenOpciones={[
-            { campo: "descripcion", label: "Descripción" },
-            { campo: "contacto", label: "Contacto" },
-            { campo: "total", label: "Total" },
-            { campo: "periodicidad", label: "Periodicidad" },
-          ]}
           orden={orden}
           onOrdenChange={setOrden}
-          columnas={[
-            { campo: "descripcion", label: "Descripción" },
-            { campo: "periodicidad", label: "Periodicidad" },
-            { campo: "fechaFin", label: "Finaliza" },
-            { campo: "etiquetas", label: "Etiquetas" },
-            { campo: "total", label: "Total" },
-          ]}
+          columnas={columnasDef}
           columnasVisibles={columnasVisibles}
           onColumnasVisiblesChange={setColumnasVisibles}
+          columnasOrden={columnasOrden}
+          onColumnasOrdenChange={setColumnasOrden}
           extraDerecha={
-            <IOActions config={operacionesIO} onSuccess={() => window.location.reload()} />
+            <>
+              <IOActions config={operacionesIO} onSuccess={() => window.location.reload()} />
+              <Button
+                size="icon"
+                variant={showConfig ? "default" : "outline"}
+                className="h-9 w-9"
+                onClick={() => setShowConfig((v) => !v)}
+                title="Configuración"
+                aria-label="Configuración"
+              >
+                <Settings className="h-4 w-4" strokeWidth={1.75} />
+              </Button>
+            </>
           }
         />
       </div>
@@ -133,36 +192,14 @@ export function OperacionesView() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase tracking-wider">
-                <th className="px-3 py-3 font-medium">Descripción</th>
-                <th className="px-3 py-3 font-medium">Periodicidad</th>
-                <th className="px-3 py-3 font-medium">Finaliza</th>
-                <th className="px-3 py-3 font-medium">Etiquetas</th>
-                <th className="px-3 py-3 font-medium text-right">Total</th>
+                {columnasRender.map((c) => columnDefs[c.campo]?.th)}
                 <th className="px-3 py-3 w-24"></th>
               </tr>
             </thead>
             <tbody>
               {filtradas.map(o => (
                 <tr key={o.id} className="border-b hover:bg-muted/30 transition-colors">
-                  <td className="px-3 py-3">
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <div>
-                        <p className="font-semibold">{o.descripcion}</p>
-                        <p className="text-[10px] text-muted-foreground">{o.contacto || "—"}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-3 py-3 text-muted-foreground">{perioLabel[o.periodicidad] ?? o.periodicidad}</td>
-                  <td className="px-3 py-3 text-muted-foreground">{o.fechaFin || "—"}</td>
-                  <td className="px-3 py-3">
-                    <div className="flex gap-1 flex-wrap">
-                      {o.etiquetas.map(e => <Badge key={e} variant="secondary" className="text-[10px]">{e}</Badge>)}
-                    </div>
-                  </td>
-                  <td className="px-3 py-3 text-right font-mono font-semibold">
-                    {o.total.toLocaleString("es-ES", { minimumFractionDigits: 2 })} €
-                  </td>
+                  {columnasRender.map((c) => columnDefs[c.campo]?.td(o))}
                   <td className="px-3 py-3 flex gap-1 justify-end">
                     <Button variant="outline" size="sm" className="text-xs h-7">Ver facturas</Button>
                     <Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-3.5 w-3.5" /></Button>

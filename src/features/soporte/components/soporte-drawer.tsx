@@ -174,8 +174,8 @@ export function SoporteDrawer({ children }: SoporteDrawerProps) {
     },
     {
       id: "f6",
-      pregunta: "¿Cómo accedo a las fichas técnicas de los platos?",
-      respuesta: "En el menú lateral, ve a Cocina → Fichas Técnicas. Puedes buscar por nombre de plato, alérgenos o partida. Solo tienes acceso a las fichas de tu departamento.",
+      pregunta: "¿Cómo accedo a las escandallos de los platos?",
+      respuesta: "En el menú lateral, ve a Cocina → Escandallos. Puedes buscar por nombre de plato, alérgenos o partida. Solo tienes acceso a las fichas de tu departamento.",
     },
     {
       id: "f7",

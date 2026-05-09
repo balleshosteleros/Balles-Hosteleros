@@ -110,49 +110,43 @@ export interface AjustesEmpresa {
   auditoria: EntradaAuditoria[];
 }
 
+// Formato canónico — debe coincidir con MODULOS_NAV en RolesTab y con
+// los valores que se persisten en empresa_roles.permisos[].modulo.
 const MODULOS = [
-  "Dirección", "RRHH", "Logística", "Cocina",
-  "Gerencia", "Contabilidad", "Gestoría", "Jurídico",
-  "Marketing", "Ajustes",
+  "DIRECCIÓN", "SALA", "COCINA", "GERENCIA", "CALIDAD",
+  "RECURSOS HUMANOS", "MARKETING", "LOGÍSTICA",
+  "CONTABILIDAD", "GESTORÍA", "JURÍDICO", "AJUSTES",
 ];
 
-// Mapa rol persona → módulo propio
-const ROLE_MODULE_MAP: Record<string, string> = {
-  "DIRECTOR": "Dirección",
-  "RESPONSABLE RRHH": "RRHH",
-  "JEFE DE LOGÍSTICA": "Logística",
-  "JEFE DE COCINA": "Cocina",
-  "JEFE DE SALA": "Sala",
-  "GERENTE": "Gerencia",
-  "CONTABLE": "Contabilidad",
-  "GESTOR": "Gestoría",
-  "ABOGADO": "Jurídico",
-  "RESPONSABLE MARKETING": "Marketing",
-  "RESPONSABLE CALIDAD": "Calidad",
-};
-
+// El nombre del rol coincide con el del departamento que representa
+// (multi-tenant uniforme). DIRECCIÓN es la excepción: representa al director
+// y recibe acceso a todos los módulos.
 function buildRoles(): Rol[] {
   const roleNames = [
-    { nombre: "DIRECTOR", desc: "Dirección general — gestión de aperturas y cronogramas" },
-    { nombre: "RESPONSABLE RRHH", desc: "Gestión de personal y nóminas" },
-    { nombre: "JEFE DE LOGÍSTICA", desc: "Proveedores, productos e inventario" },
-    { nombre: "JEFE DE COCINA", desc: "Fichas técnicas y producción" },
-    { nombre: "GERENTE", desc: "Supervisión general y cuadros de mando" },
-    { nombre: "CONTABLE", desc: "Facturas, operaciones y tesorería" },
-    { nombre: "GESTOR", desc: "Gestión documental y fiscal" },
-    { nombre: "ABOGADO", desc: "Procesos legales y normativa" },
-    { nombre: "RESPONSABLE MARKETING", desc: "Comunicación, campañas y reservas" },
+    { nombre: "DIRECCIÓN", desc: "Dirección general — acceso completo" },
+    { nombre: "RECURSOS HUMANOS", desc: "Gestión de personal y nóminas" },
+    { nombre: "LOGÍSTICA", desc: "Proveedores, productos e inventario" },
+    { nombre: "COCINA", desc: "Escandallos y producción" },
+    { nombre: "SALA", desc: "Servicio y atención en sala" },
+    { nombre: "GERENCIA", desc: "Supervisión general y cuadros de mando" },
+    { nombre: "CONTABILIDAD", desc: "Facturas, operaciones y tesorería" },
+    { nombre: "GESTORÍA", desc: "Gestión documental y fiscal" },
+    { nombre: "JURÍDICO", desc: "Procesos legales y normativa" },
+    { nombre: "MARKETING", desc: "Comunicación, campañas y reservas" },
+    { nombre: "CALIDAD", desc: "APPCC y control de calidad" },
   ];
   return roleNames.map((r, i) => {
-    const moduloPropio = ROLE_MODULE_MAP[r.nombre];
+    // DIRECCIÓN es excepción: acceso completo a todos los módulos
+    // (espejo del seed real en BD via seed_default_roles_for_empresa).
+    const accesoTotal = r.nombre === "DIRECCIÓN";
     return {
       id: `rol-${i}`,
       nombre: r.nombre,
       descripcion: r.desc,
       permisos: MODULOS.map((m) => ({
         modulo: m,
-        ver: m === moduloPropio,
-        editar: m === moduloPropio,
+        ver: accesoTotal || m === r.nombre,
+        editar: accesoTotal || m === r.nombre,
       })),
     };
   });

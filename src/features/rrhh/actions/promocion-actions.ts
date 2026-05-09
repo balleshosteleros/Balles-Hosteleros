@@ -192,7 +192,7 @@ export async function promoverCandidato(input: PromoverInput): Promise<PromoverR
   const emailLower = cand.email.toLowerCase();
   const dniNorm = normalizarDni(cand.dni_nie);
 
-  let empleadoExistente: { id: string; profile_id: string | null } | null = null;
+  let empleadoExistente: { id: string; user_id: string | null } | null = null;
   if (emailLower || dniNorm) {
     const orFilters: string[] = [];
     if (emailLower) orFilters.push(`email_personal.eq.${emailLower}`);
@@ -200,7 +200,7 @@ export async function promoverCandidato(input: PromoverInput): Promise<PromoverR
 
     const { data: matches } = await admin
       .from("empleados")
-      .select("id, profile_id")
+      .select("id, user_id")
       .eq("empresa_id", empresaId)
       .or(orFilters.join(","))
       .limit(1);
@@ -210,15 +210,26 @@ export async function promoverCandidato(input: PromoverInput): Promise<PromoverR
     }
   }
 
+  // Resolver nombre de puesto (la tabla empleados guarda puesto como TEXT, no FK)
+  let puestoNombre: string | null = null;
+  if (input.puestoId) {
+    const { data: p } = await admin
+      .from("puestos")
+      .select("nombre")
+      .eq("id", input.puestoId)
+      .maybeSingle();
+    puestoNombre = p?.nombre ?? null;
+  }
+
   // 4a. Reactivar empleado existente
   if (empleadoExistente) {
     await admin
       .from("empleados")
       .update({
-        estado: "activo",
+        estado: "Activo",
         fecha_baja: null,
         departamento_id: input.departamentoId ?? undefined,
-        puesto_id: input.puestoId ?? undefined,
+        puesto: puestoNombre ?? undefined,
       })
       .eq("id", empleadoExistente.id);
 
@@ -281,16 +292,17 @@ export async function promoverCandidato(input: PromoverInput): Promise<PromoverR
     .from("empleados")
     .insert({
       empresa_id: empresaId,
-      profile_id: newUserId,
+      user_id: newUserId,
       departamento_id: input.departamentoId ?? null,
-      puesto_id: input.puestoId ?? null,
+      puesto: puestoNombre,
       nombre: cand.nombre,
       apellidos: cand.apellidos,
       dni_nie: dniNorm,
       telefono: cand.telefono,
       email_personal: emailLower,
       fecha_alta: nowIso.slice(0, 10),
-      estado: "activo",
+      estado: "Activo",
+      tipo_jornada: "Completa",
       perfil_completado: false,
     })
     .select("id")
