@@ -153,7 +153,7 @@ export async function marcarTarea(id: string, hecha: boolean): Promise<Result> {
       .update({ hecha, updated_at: new Date().toISOString() })
       .eq("id", id);
     if (error) throw error;
-    return { ok: true };
+    return { ok: true, data: undefined };
   } catch (err) {
     return { ok: false, error: "No se pudo actualizar la tarea" };
   }
@@ -184,7 +184,7 @@ export async function deleteTarea(id: string): Promise<Result> {
     }
     const { error } = await supabase.from("tareas").delete().eq("id", id);
     if (error) throw error;
-    return { ok: true };
+    return { ok: true, data: undefined };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Error al eliminar" };
   }
@@ -369,7 +369,7 @@ interface CronogramaTareaRow {
   resumen: string | null;
   frecuencia: string | null;
   tiempo_requerido: string | null;
-  dia_semana: number[] | null;
+  dia_semana: number[] | string | number | null;
   dia_mes: number | null;
   fecha_anual: string | null;
   meses_trimestrales: number[] | null;

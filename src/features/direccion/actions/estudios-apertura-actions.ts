@@ -66,9 +66,11 @@ export type EstudioRow = {
   imagen_marca: ImagenMarcaEstudio;
   propuesta_gastronomica: PropuestaGastronomica;
   ocupacion: BloqueOcupacion;
+  share_slug: string | null;
+  share_active: boolean;
 };
 
-const SELECT_COLS = "id, nombre, ciudad, zona, datos, facturacion, costes, procedencia, destinos, amortizacion, foto_path, viabilidad, actividad, creado, created_at, local, imagen_marca, propuesta_gastronomica, ocupacion";
+const SELECT_COLS = "id, nombre, ciudad, zona, datos, facturacion, costes, procedencia, destinos, amortizacion, foto_path, viabilidad, actividad, creado, created_at, local, imagen_marca, propuesta_gastronomica, ocupacion, share_slug, share_active";
 
 async function getContext() {
   const supabase = await createClient();
@@ -177,6 +179,8 @@ async function rowToEstudio(
     imagen_marca: await firmaUrlsMarca(supabase, marca),
     propuesta_gastronomica: await firmaUrlsGastronomia(supabase, prop),
     ocupacion: normalizeBloqueOcupacion(row.ocupacion),
+    share_slug: (row.share_slug as string | null) ?? null,
+    share_active: Boolean(row.share_active ?? false),
   };
 }
 
@@ -565,6 +569,149 @@ export async function deleteFotoStorage(input: {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[estudios-apertura] deleteFotoStorage:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────
+ * Enlaces públicos compartibles (solo lectura).
+ *
+ * - El slug combina nombre legible + sufijo aleatorio: no adivinable.
+ * - share_active controla si el enlace responde (true) o devuelve 404 (false).
+ * - "Regenerar" cambia el sufijo (rompe enlaces antiguos) manteniendo el nombre.
+ * ────────────────────────────────────────────────────────────── */
+
+const SLUG_TOKEN_LEN = 6;
+const SLUG_ALPHABET = "abcdefghijkmnpqrstuvwxyz23456789"; // sin l/o/0/1 para evitar confusión
+
+function randomToken(len = SLUG_TOKEN_LEN): string {
+  let out = "";
+  const arr = new Uint8Array(len);
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+    crypto.getRandomValues(arr);
+  } else {
+    for (let i = 0; i < len; i++) arr[i] = Math.floor(Math.random() * 256);
+  }
+  for (let i = 0; i < len; i++) out += SLUG_ALPHABET[arr[i] % SLUG_ALPHABET.length];
+  return out;
+}
+
+function slugifyNombre(nombre: string): string {
+  const base = nombre
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+  return base || "estudio";
+}
+
+async function generarSlugUnico(
+  supabase: SupabaseClient,
+  nombre: string,
+): Promise<string> {
+  const base = slugifyNombre(nombre);
+  for (let intento = 0; intento < 8; intento++) {
+    const slug = `${base}-${randomToken()}`;
+    const { data } = await supabase
+      .from("estudios_apertura")
+      .select("id")
+      .eq("share_slug", slug)
+      .maybeSingle();
+    if (!data) return slug;
+  }
+  return `${base}-${randomToken(SLUG_TOKEN_LEN + 4)}`;
+}
+
+/** Activa el enlace público. Si no existe slug aún, lo genera. */
+export async function enableShareEstudio(
+  id: string,
+): Promise<{ ok: true; share_slug: string; share_active: true } | { ok: false; error: string }> {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    const { data: row, error: selErr } = await supabase
+      .from("estudios_apertura")
+      .select("nombre, share_slug")
+      .eq("id", id)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (selErr) return { ok: false, error: selErr.message };
+    if (!row) return { ok: false, error: "Estudio no encontrado" };
+
+    const nombre = (row.nombre as string) ?? "estudio";
+    const existente = (row.share_slug as string | null) ?? null;
+    const slug = existente ?? (await generarSlugUnico(supabase, nombre));
+
+    const { error: upErr } = await supabase
+      .from("estudios_apertura")
+      .update({ share_slug: slug, share_active: true })
+      .eq("id", id)
+      .eq("empresa_id", empresaId);
+    if (upErr) return { ok: false, error: upErr.message };
+
+    return { ok: true, share_slug: slug, share_active: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[estudios-apertura] enableShare:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/** Desactiva el enlace público (mantiene el slug por si se reactiva). */
+export async function disableShareEstudio(
+  id: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    const { error } = await supabase
+      .from("estudios_apertura")
+      .update({ share_active: false })
+      .eq("id", id)
+      .eq("empresa_id", empresaId);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[estudios-apertura] disableShare:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/** Genera un nuevo slug rompiendo enlaces antiguos. Mantiene share_active = true. */
+export async function regenerateShareEstudio(
+  id: string,
+): Promise<{ ok: true; share_slug: string } | { ok: false; error: string }> {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    const { data: row, error: selErr } = await supabase
+      .from("estudios_apertura")
+      .select("nombre")
+      .eq("id", id)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (selErr) return { ok: false, error: selErr.message };
+    if (!row) return { ok: false, error: "Estudio no encontrado" };
+
+    const nuevoSlug = await generarSlugUnico(supabase, (row.nombre as string) ?? "estudio");
+
+    const { error: upErr } = await supabase
+      .from("estudios_apertura")
+      .update({ share_slug: nuevoSlug, share_active: true })
+      .eq("id", id)
+      .eq("empresa_id", empresaId);
+    if (upErr) return { ok: false, error: upErr.message };
+
+    return { ok: true, share_slug: nuevoSlug };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[estudios-apertura] regenerateShare:", msg);
     return { ok: false, error: msg };
   }
 }

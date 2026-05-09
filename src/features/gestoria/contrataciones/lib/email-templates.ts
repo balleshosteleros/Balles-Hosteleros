@@ -13,7 +13,7 @@ function fmtFechaES(iso: string | null | undefined): string {
 export function altaEmailContent(input: AltaInput, empresa: string) {
   const nomina = trim(input.nomina) || "Según convenio";
   const horario = DIAS_SEMANA.map((d) => {
-    const v = trim((input as Record<string, unknown>)[`horario_${d.key}`] as string | undefined);
+    const v = trim((input as unknown as Record<string, unknown>)[`horario_${d.key}`] as string | undefined);
     return ` -${d.label.toUpperCase()}: ${v || "—"}`;
   }).join("\n");
 

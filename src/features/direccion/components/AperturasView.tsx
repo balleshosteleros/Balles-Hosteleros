@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { TrendingUp, TrendingDown, FileText, Calculator, ArrowLeft, Landmark, Target, Clock, Settings, ImagePlus, X, ChevronDown, ChevronRight, Plus, Trash2, Receipt, Building2, Sparkles, ChefHat, Activity, Ticket, Layers } from "lucide-react";
+import { TrendingUp, TrendingDown, FileText, Calculator, ArrowLeft, Landmark, Target, Clock, Settings, ImagePlus, X, ChevronDown, ChevronRight, Plus, Trash2, Receipt, Building2, Sparkles, ChefHat, Activity, Ticket, Layers, Share2, Link2, Copy, RefreshCw, EyeOff, Check } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -55,6 +55,9 @@ import {
   updateEstudioApertura,
   uploadFotoEstudio,
   deleteFotoEstudio,
+  enableShareEstudio,
+  disableShareEstudio,
+  regenerateShareEstudio,
   type EstudioRow,
 } from "@/features/direccion/actions/estudios-apertura-actions";
 import { prepararFotoParaSubida } from "@/features/direccion/lib/foto-upload";
@@ -76,6 +79,8 @@ function rowToEstudio(row: EstudioRow): EstudioApertura {
     imagenMarca: row.imagen_marca ?? imagenMarcaInicial(),
     propuesta: row.propuesta_gastronomica ?? propuestaGastronomicaInicial(),
     ocupacion: row.ocupacion ?? bloqueOcupacionInicial(),
+    shareSlug: row.share_slug,
+    shareActive: row.share_active,
   };
 }
 
@@ -226,6 +231,11 @@ export function AperturasView() {
           if (opts?.flush) void saveNow(e);
           else scheduleSave(e);
         }}
+        onSetViabilidad={(v) => setViabilidad(selected.id, v)}
+        onSetActividad={(v) => setActividad(selected.id, v)}
+        onEnableShare={() => handleEnableShare(selected.id)}
+        onDisableShare={() => handleDisableShare(selected.id)}
+        onRegenerateShare={() => handleRegenerateShare(selected.id)}
       />
     );
   }
@@ -246,6 +256,43 @@ export function AperturasView() {
     setEstudios(prev => prev.map(x => x.id === id ? { ...x, actividad } : x));
     const res = await updateEstudioApertura(id, { actividad });
     if (!res.ok) console.error("[aperturas] updateActividad:", res.error);
+  };
+
+  const handleEnableShare = async (id: string) => {
+    const res = await enableShareEstudio(id);
+    if (!res.ok) {
+      window.alert(`No se pudo activar el enlace: ${res.error}`);
+      return;
+    }
+    const slug = res.share_slug;
+    setEstudios(prev => prev.map(x => x.id === id ? { ...x, shareSlug: slug, shareActive: true } : x));
+    setSelected(s => s && s.id === id ? { ...s, shareSlug: slug, shareActive: true } : s);
+  };
+
+  const handleDisableShare = async (id: string) => {
+    setEstudios(prev => prev.map(x => x.id === id ? { ...x, shareActive: false } : x));
+    setSelected(s => s && s.id === id ? { ...s, shareActive: false } : s);
+    const res = await disableShareEstudio(id);
+    if (!res.ok) {
+      window.alert(`No se pudo desactivar el enlace: ${res.error}`);
+      setEstudios(prev => prev.map(x => x.id === id ? { ...x, shareActive: true } : x));
+      setSelected(s => s && s.id === id ? { ...s, shareActive: true } : s);
+    }
+  };
+
+  const handleRegenerateShare = async (id: string) => {
+    const ok = window.confirm(
+      "¿Regenerar el enlace? El enlace anterior dejará de funcionar inmediatamente.",
+    );
+    if (!ok) return;
+    const res = await regenerateShareEstudio(id);
+    if (!res.ok) {
+      window.alert(`No se pudo regenerar: ${res.error}`);
+      return;
+    }
+    const slug = res.share_slug;
+    setEstudios(prev => prev.map(x => x.id === id ? { ...x, shareSlug: slug, shareActive: true } : x));
+    setSelected(s => s && s.id === id ? { ...s, shareSlug: slug, shareActive: true } : s);
   };
 
   const onUploadImagen = async (id: string, file: File) => {
@@ -417,6 +464,13 @@ export function AperturasView() {
                       ]}
                       onChange={(v) => setActividad(e.id, v as EstadoActividad)}
                     />
+                    <ShareMenu
+                      slug={e.shareSlug ?? null}
+                      active={Boolean(e.shareActive)}
+                      onEnable={() => handleEnableShare(e.id)}
+                      onDisable={() => handleDisableShare(e.id)}
+                      onRegenerate={() => handleRegenerateShare(e.id)}
+                    />
                   </div>
                 </div>
               </CardHeader>
@@ -541,6 +595,97 @@ function EstadoBadgeMenu({
   );
 }
 
+/* ── Menú de compartir: estado + acciones (copiar / desactivar / regenerar) ── */
+function ShareMenu({
+  slug,
+  active,
+  onEnable,
+  onDisable,
+  onRegenerate,
+}: {
+  slug: string | null;
+  active: boolean;
+  onEnable: () => void;
+  onDisable: () => void;
+  onRegenerate: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const url = useMemo(() => {
+    if (!slug || typeof window === "undefined") return "";
+    return `${window.location.origin}/p/${slug}`;
+  }, [slug]);
+
+  const isOn = active && !!slug;
+
+  const copy = async () => {
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      window.prompt("Copia el enlace:", url);
+    }
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          title={isOn ? "Enlace público activo" : "Compartir"}
+          className={cn(
+            "inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+            isOn
+              ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+              : "bg-slate-100 text-slate-600 hover:bg-slate-200",
+          )}
+        >
+          {isOn ? <Link2 className="h-3.5 w-3.5" /> : <Share2 className="h-3.5 w-3.5" />}
+          <span className="hidden sm:inline">{isOn ? "Compartido" : "Compartir"}</span>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-72">
+        {!isOn ? (
+          <>
+            <div className="px-2 py-2 text-xs text-muted-foreground">
+              Genera un enlace de solo lectura para compartir este estudio.
+            </div>
+            <DropdownMenuItem
+              onSelect={(ev) => { ev.preventDefault(); onEnable(); }}
+            >
+              <Link2 className="mr-2 h-4 w-4" />
+              Activar enlace público
+            </DropdownMenuItem>
+          </>
+        ) : (
+          <>
+            <div className="px-2 py-2 space-y-1">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Enlace público</div>
+              <div className="text-xs break-all rounded bg-muted px-2 py-1.5 font-mono">{url}</div>
+            </div>
+            <DropdownMenuItem onSelect={(ev) => { ev.preventDefault(); void copy(); }}>
+              {copied ? <Check className="mr-2 h-4 w-4 text-emerald-600" /> : <Copy className="mr-2 h-4 w-4" />}
+              {copied ? "¡Copiado!" : "Copiar enlace"}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={(ev) => { ev.preventDefault(); onRegenerate(); }}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Regenerar (rompe el actual)
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={(ev) => { ev.preventDefault(); onDisable(); }}
+              className="text-red-600 focus:text-red-700"
+            >
+              <EyeOff className="mr-2 h-4 w-4" />
+              Desactivar enlace
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 /* ── Detalle completo del estudio ── */
 type Periodo = "mensual" | "trimestral" | "anual";
 const PERIODO_FACTOR: Record<Periodo, number> = { mensual: 1, trimestral: 3, anual: 12 };
@@ -548,7 +693,25 @@ const PERIODO_SUFIJO: Record<Periodo, string> = { mensual: "/mes", trimestral: "
 
 type KpiKey = "facturacion" | "costeTotal" | "beneficio" | "margen";
 
-function DetalleEstudio({ estudio, onBack, onUpdate }: { estudio: EstudioApertura; onBack: () => void; onUpdate: (e: EstudioApertura, opts?: { flush?: boolean }) => void }) {
+function DetalleEstudio({
+  estudio,
+  onBack,
+  onUpdate,
+  onSetViabilidad,
+  onSetActividad,
+  onEnableShare,
+  onDisableShare,
+  onRegenerateShare,
+}: {
+  estudio: EstudioApertura;
+  onBack: () => void;
+  onUpdate: (e: EstudioApertura, opts?: { flush?: boolean }) => void;
+  onSetViabilidad: (v: EstadoViabilidad) => void;
+  onSetActividad: (v: EstadoActividad) => void;
+  onEnableShare: () => void;
+  onDisableShare: () => void;
+  onRegenerateShare: () => void;
+}) {
   const [costes, setCostes] = useState<EstructuraCostes>(estudio.costes);
   const [facturacion, setFacturacion] = useState<EstructuraFacturacion>(estudio.facturacion);
   const [periodo, setPeriodo] = useState<Periodo>("mensual");
@@ -661,9 +824,34 @@ function DetalleEstudio({ estudio, onBack, onUpdate }: { estudio: EstudioApertur
     <div className="p-6 space-y-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="h-4 w-4" /></Button>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{estudio.datos.nombre}</h1>
-          <p className="text-muted-foreground text-sm">{estudio.datos.ciudad} — {estudio.datos.zona}</p>
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold tracking-tight truncate">{estudio.datos.nombre}</h1>
+          <p className="text-muted-foreground text-sm truncate">{estudio.datos.ciudad} — {estudio.datos.zona}</p>
+        </div>
+        <div className="ml-auto flex items-center gap-1.5 shrink-0">
+          <EstadoBadgeMenu
+            value={estudio.viabilidad}
+            options={[
+              { value: "viable", label: "Viable", className: "bg-green-500 text-white hover:bg-green-600" },
+              { value: "no_viable", label: "No viable", className: "bg-red-500 text-white hover:bg-red-600" },
+            ]}
+            onChange={(v) => onSetViabilidad(v as EstadoViabilidad)}
+          />
+          <EstadoBadgeMenu
+            value={estudio.actividad}
+            options={[
+              { value: "activo", label: "Activo", className: "bg-blue-500 text-white hover:bg-blue-600" },
+              { value: "no_activo", label: "No activo", className: "bg-gray-400 text-white hover:bg-gray-500" },
+            ]}
+            onChange={(v) => onSetActividad(v as EstadoActividad)}
+          />
+          <ShareMenu
+            slug={estudio.shareSlug ?? null}
+            active={Boolean(estudio.shareActive)}
+            onEnable={onEnableShare}
+            onDisable={onDisableShare}
+            onRegenerate={onRegenerateShare}
+          />
         </div>
       </div>
 

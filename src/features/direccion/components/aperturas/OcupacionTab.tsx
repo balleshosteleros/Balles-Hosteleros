@@ -4,8 +4,7 @@ import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Plus, Trash2, Activity, Users, Flame } from "lucide-react";
+import { Users, Flame } from "lucide-react";
 import {
   DIAS_SEMANA,
   FRANJAS_HORARIAS,
@@ -24,17 +23,6 @@ interface Props {
   plazasTotales: number;
   onChange: (next: BloqueOcupacion, opts?: { flush?: boolean }) => void;
 }
-
-const COLORES_DEFAULT = [
-  "hsl(220 70% 55%)",
-  "hsl(150 60% 45%)",
-  "hsl(40 90% 55%)",
-  "hsl(340 65% 55%)",
-  "hsl(265 60% 60%)",
-  "hsl(190 60% 50%)",
-];
-
-const uid = () => `esc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
 function clamp01_100(n: number): number {
   if (!Number.isFinite(n)) return 0;
@@ -78,29 +66,6 @@ export function OcupacionTab({ ocupacion, plazasTotales, onChange }: Props) {
       [dia]: { ...activo.matriz[dia], [franja]: clamp01_100(raw) },
     } as MatrizOcupacion;
     updateActivo({ matriz });
-  };
-
-  const addEscenario = () => {
-    const nuevo: EscenarioOcupacion = {
-      id: uid(),
-      nombre: `Escenario ${bloque.escenarios.length + 1}`,
-      color: COLORES_DEFAULT[bloque.escenarios.length % COLORES_DEFAULT.length],
-      matriz: matrizOcupacionVacia(),
-    };
-    const next = [...bloque.escenarios, nuevo];
-    setActivoId(nuevo.id);
-    setEscenarios(next, { flush: true }, nuevo.id);
-  };
-
-  const removeEscenario = (id: string) => {
-    if (bloque.escenarios.length <= 1) {
-      window.alert("Debe quedar al menos un escenario.");
-      return;
-    }
-    const restantes = bloque.escenarios.filter((e) => e.id !== id);
-    const nuevoActivo = id === activoId ? restantes[0].id : activoId;
-    setActivoId(nuevoActivo);
-    setEscenarios(restantes, { flush: true }, nuevoActivo);
   };
 
   const seleccionarEscenario = (id: string) => {
@@ -151,26 +116,12 @@ export function OcupacionTab({ ocupacion, plazasTotales, onChange }: Props) {
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Activity className="h-4 w-4" />
-            Ocupación estimada
-          </CardTitle>
-          <p className="text-xs text-muted-foreground mt-1">
-            Estima el porcentaje del aforo que se ocupará en cada franja horaria, por día de la semana.
-            Las franjas son fijas: <strong>Desayuno (06:00–12:00)</strong>, <strong>Comida (12:00–18:00)</strong> y <strong>Cena (18:00–24:00)</strong>.
-            Define varios escenarios (Conservador / Realista / Optimista) para presentar a inversores.
-          </p>
-        </CardHeader>
-      </Card>
-
       {/* Selector + edición de escenario activo */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Escenarios</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent>
           <div className="flex flex-wrap items-center gap-2">
             {bloque.escenarios.map((e) => {
               const isActivo = e.id === activoId;
@@ -179,7 +130,7 @@ export function OcupacionTab({ ocupacion, plazasTotales, onChange }: Props) {
                   key={e.id}
                   type="button"
                   onClick={() => seleccionarEscenario(e.id)}
-                  className={`group inline-flex items-center gap-2 rounded-full border px-3 h-8 text-sm transition-colors ${
+                  className={`inline-flex items-center gap-2 rounded-full border px-3 h-8 text-sm transition-colors ${
                     isActivo
                       ? "border-foreground/40 bg-foreground/5 font-medium"
                       : "border-muted-foreground/20 hover:bg-muted/40"
@@ -189,50 +140,13 @@ export function OcupacionTab({ ocupacion, plazasTotales, onChange }: Props) {
                     className="h-2.5 w-2.5 rounded-full inline-block"
                     style={{ backgroundColor: e.color }}
                   />
-                  <span>{e.nombre || "Sin nombre"}</span>
+                  <span>{e.nombre}</span>
                 </button>
               );
             })}
-            <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={addEscenario}>
-              <Plus className="h-3.5 w-3.5 mr-1" /> Añadir escenario
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-            <div className="md:col-span-5">
-              <Label className="text-muted-foreground text-xs">Nombre del escenario</Label>
-              <Input
-                value={activo.nombre}
-                onChange={(e) => updateActivo({ nombre: e.target.value })}
-                placeholder="Ej. Realista"
-                className="mt-1"
-              />
-            </div>
-            <div className="md:col-span-3">
-              <Label className="text-muted-foreground text-xs">Color</Label>
-              <div className="mt-1 flex items-center gap-2">
-                <input
-                  type="color"
-                  value={hslToHex(activo.color)}
-                  onChange={(e) => updateActivo({ color: e.target.value }, { flush: true })}
-                  className="h-9 w-12 rounded border cursor-pointer bg-transparent"
-                  aria-label="Color del escenario"
-                />
-                <span className="text-xs text-muted-foreground font-mono">{activo.color}</span>
-              </div>
-            </div>
-            <div className="md:col-span-4 flex flex-wrap gap-2 justify-end">
+            <div className="ml-auto flex flex-wrap gap-2">
               <Button size="sm" variant="outline" onClick={() => aplicarPreset("vacio")}>Vaciar</Button>
               <Button size="sm" variant="outline" onClick={() => aplicarPreset("tipico")}>Plantilla típica</Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                onClick={() => removeEscenario(activo.id)}
-                disabled={bloque.escenarios.length <= 1}
-              >
-                <Trash2 className="h-3.5 w-3.5 mr-1" /> Borrar
-              </Button>
             </div>
           </div>
         </CardContent>
@@ -249,7 +163,7 @@ export function OcupacionTab({ ocupacion, plazasTotales, onChange }: Props) {
         <Card>
           <CardContent className="p-4 text-center">
             <p className="text-2xl font-bold">{fmtNum(plazasTotales)}</p>
-            <p className="text-xs text-muted-foreground">Plazas totales</p>
+            <p className="text-xs text-muted-foreground">Comensales totales</p>
           </CardContent>
         </Card>
         <Card>
@@ -271,7 +185,7 @@ export function OcupacionTab({ ocupacion, plazasTotales, onChange }: Props) {
 
       {plazasTotales <= 0 && (
         <p className="text-xs text-muted-foreground italic">
-          * Para calcular personas esperadas, define las plazas (interior + terraza) en la pestaña <strong>Local</strong>.
+          * Para calcular personas esperadas, define los comensales (interior + terraza) en la pestaña <strong>Local</strong>.
         </p>
       )}
 
@@ -438,29 +352,3 @@ function FilaHeatmap({
   );
 }
 
-/* Convierte 'hsl(h s% l%)' → '#rrggbb' para el <input type="color">.
-   Si no es HSL parseable, devuelve un fallback razonable. */
-function hslToHex(input: string): string {
-  if (input.startsWith("#")) return input;
-  const m = input.match(/hsl\(\s*(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)%\s+(\d+(?:\.\d+)?)%\s*\)/i);
-  if (!m) return "#3b82f6";
-  const h = Number(m[1]);
-  const s = Number(m[2]) / 100;
-  const l = Number(m[3]) / 100;
-  const c = (1 - Math.abs(2 * l - 1)) * s;
-  const hp = h / 60;
-  const x = c * (1 - Math.abs((hp % 2) - 1));
-  let r = 0, g = 0, b = 0;
-  if      (0 <= hp && hp < 1) { r = c; g = x; b = 0; }
-  else if (1 <= hp && hp < 2) { r = x; g = c; b = 0; }
-  else if (2 <= hp && hp < 3) { r = 0; g = c; b = x; }
-  else if (3 <= hp && hp < 4) { r = 0; g = x; b = c; }
-  else if (4 <= hp && hp < 5) { r = x; g = 0; b = c; }
-  else if (5 <= hp && hp < 6) { r = c; g = 0; b = x; }
-  const mAdd = l - c / 2;
-  const toHex = (v: number) => {
-    const n = Math.round((v + mAdd) * 255);
-    return n.toString(16).padStart(2, "0");
-  };
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-}
