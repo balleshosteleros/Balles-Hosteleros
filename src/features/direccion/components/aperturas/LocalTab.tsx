@@ -1,0 +1,430 @@
+"use client";
+
+import { useState, useEffect, useRef } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ImagePlus, MapPin, Search, Loader2, Trash2 } from "lucide-react";
+import {
+  CATEGORIAS_FOTOS_LOCAL,
+  type BloqueLocal,
+  type CaracteristicasLocal,
+  type CategoriaFotoLocal,
+  type FotoEstudio,
+  type UbicacionLocal,
+} from "@/features/direccion/data/aperturas";
+import {
+  uploadFotoCategoria,
+  deleteFotoStorage,
+} from "@/features/direccion/actions/estudios-apertura-actions";
+import { prepararFotoParaSubida } from "@/features/direccion/lib/foto-upload";
+import { MapaUbicacionRadio } from "./MapaUbicacionRadio";
+
+type NominatimHit = {
+  display_name: string;
+  lat: string;
+  lon: string;
+  address?: { city?: string; town?: string; village?: string; postcode?: string; country?: string };
+};
+
+interface Props {
+  estudioId: string;
+  local: BloqueLocal;
+  onChange: (next: BloqueLocal, opts?: { flush?: boolean }) => void;
+}
+
+export function LocalTab({ estudioId, local, onChange }: Props) {
+  const setCar = (patch: Partial<CaracteristicasLocal>) => {
+    onChange({ ...local, caracteristicas: { ...local.caracteristicas, ...patch } });
+  };
+  const setUbi = (patch: Partial<UbicacionLocal>) => {
+    onChange({ ...local, ubicacion: { ...local.ubicacion, ...patch } });
+  };
+
+  /* ── Subida / borrado de fotos por categoría ── */
+  const handleUpload = async (cat: CategoriaFotoLocal, file: File) => {
+    try {
+      const prep = await prepararFotoParaSubida(file);
+      if (!prep.ok) {
+        window.alert(prep.error);
+        return;
+      }
+      const res = await uploadFotoCategoria({
+        estudioId,
+        categoria: cat,
+        fileBase64: prep.dataUrl,
+        fileType: prep.tipo,
+        fileSize: prep.tamano,
+      });
+      if (!res.ok) {
+        console.error("[LocalTab] upload:", res.error);
+        window.alert(`No se pudo subir la imagen: ${res.error}`);
+        return;
+      }
+      const finales = [...(local.fotos[cat] ?? []), res.foto];
+      onChange({ ...local, fotos: { ...local.fotos, [cat]: finales } }, { flush: true });
+    } catch (err) {
+      console.error("[LocalTab] upload threw:", err);
+      window.alert("No se pudo subir la imagen. Prueba con un archivo más pequeño.");
+    }
+  };
+
+  const handleRemove = async (cat: CategoriaFotoLocal, foto: FotoEstudio) => {
+    const fotosCat = (local.fotos[cat] ?? []).filter((f) => f.id !== foto.id);
+    onChange({ ...local, fotos: { ...local.fotos, [cat]: fotosCat } }, { flush: true });
+    if (foto.path) {
+      const res = await deleteFotoStorage({ estudioId, path: foto.path });
+      if (!res.ok) console.error("[LocalTab] delete:", res.error);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <CaracteristicasCard car={local.caracteristicas} onChange={setCar} />
+      <UbicacionCard ubicacion={local.ubicacion} onChange={setUbi} />
+      <FotosCard fotos={local.fotos} onUpload={handleUpload} onRemove={handleRemove} />
+    </div>
+  );
+}
+
+/* ── Características físicas ── */
+function CaracteristicasCard({
+  car,
+  onChange,
+}: { car: CaracteristicasLocal; onChange: (patch: Partial<CaracteristicasLocal>) => void }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Características del local</CardTitle>
+        <p className="text-xs text-muted-foreground mt-1">
+          Datos físicos, contractuales y técnicos del local objetivo.
+        </p>
+      </CardHeader>
+      <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+        <Field label="Tipo de establecimiento">
+          <Input value={car.tipoEstablecimiento} onChange={(e) => onChange({ tipoEstablecimiento: e.target.value })} placeholder="Bajo comercial, esquina…" />
+        </Field>
+        <Field label="m² útiles">
+          <Input type="number" value={car.metrosUtiles || ""} onChange={(e) => onChange({ metrosUtiles: Number(e.target.value) })} />
+        </Field>
+        <Field label="m² terraza">
+          <Input type="number" value={car.metrosTerraza || ""} onChange={(e) => onChange({ metrosTerraza: Number(e.target.value) })} />
+        </Field>
+        <Field label="Comensales interior">
+          <Input type="number" value={car.plazasInterior || ""} onChange={(e) => onChange({ plazasInterior: Number(e.target.value) })} />
+        </Field>
+        <Field label="Comensales terraza">
+          <Input type="number" value={car.plazasTerraza || ""} onChange={(e) => onChange({ plazasTerraza: Number(e.target.value) })} />
+        </Field>
+        <Field label="Plantas">
+          <Input type="number" value={car.plantasLocal || ""} onChange={(e) => onChange({ plantasLocal: Number(e.target.value) })} />
+        </Field>
+        <Field label="Baños">
+          <Input type="number" value={car.banos || ""} onChange={(e) => onChange({ banos: Number(e.target.value) })} />
+        </Field>
+        <Field label="Estado del local">
+          <Input value={car.estadoLocal} onChange={(e) => onChange({ estadoLocal: e.target.value })} placeholder="A reformar, llave en mano…" />
+        </Field>
+        <Field label="Licencia de actividad">
+          <Input value={car.licenciaActividad} onChange={(e) => onChange({ licenciaActividad: e.target.value })} placeholder="Bar-restaurante cat. 2…" />
+        </Field>
+        <Field label="Salida de humos">
+          <Input value={car.salidaHumos} onChange={(e) => onChange({ salidaHumos: e.target.value })} placeholder="Sí / No / hasta cubierta" />
+        </Field>
+        <Field label="Alquiler mensual (€)">
+          <Input type="number" value={car.alquilerMensual || ""} onChange={(e) => onChange({ alquilerMensual: Number(e.target.value) })} />
+        </Field>
+        <Field label="Traspaso (€)">
+          <Input type="number" value={car.traspaso || ""} onChange={(e) => onChange({ traspaso: Number(e.target.value) })} />
+        </Field>
+        <Field label="Duración del contrato">
+          <Input value={car.duracionContrato} onChange={(e) => onChange({ duracionContrato: e.target.value })} placeholder="5 años + 5 años" />
+        </Field>
+        <Field label="Punto de acceso">
+          <Input value={car.acceso} onChange={(e) => onChange({ acceso: e.target.value })} placeholder="Planta calle, sin escalones…" />
+        </Field>
+        <div className="col-span-2 md:col-span-3">
+          <Field label="Observaciones">
+            <Textarea value={car.observaciones} onChange={(e) => onChange({ observaciones: e.target.value })} rows={3} />
+          </Field>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ── Ubicación: input + búsqueda Nominatim + iframe OSM ── */
+function UbicacionCard({
+  ubicacion,
+  onChange,
+}: { ubicacion: UbicacionLocal; onChange: (patch: Partial<UbicacionLocal>) => void }) {
+  const [query, setQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [results, setResults] = useState<NominatimHit[]>([]);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Si la dirección guardada cambia desde fuera, sincroniza el input
+  useEffect(() => {
+    setQuery(ubicacion.direccion);
+  }, [ubicacion.direccion]);
+
+  const buscar = async (q: string) => {
+    if (!q.trim() || q.trim().length < 3) {
+      setResults([]);
+      return;
+    }
+    setSearching(true);
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&q=${encodeURIComponent(q)}`;
+      const res = await fetch(url, { headers: { "Accept-Language": "es" } });
+      if (!res.ok) throw new Error("Búsqueda fallida");
+      const data = (await res.json()) as NominatimHit[];
+      setResults(data);
+    } catch (err) {
+      console.error("[UbicacionCard] nominatim:", err);
+      setResults([]);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const onQueryChange = (val: string) => {
+    setQuery(val);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => buscar(val), 400);
+  };
+
+  const seleccionar = (hit: NominatimHit) => {
+    const lat = parseFloat(hit.lat);
+    const lng = parseFloat(hit.lon);
+    onChange({
+      direccion: hit.display_name,
+      ciudad: hit.address?.city || hit.address?.town || hit.address?.village || ubicacion.ciudad,
+      codigoPostal: hit.address?.postcode || ubicacion.codigoPostal,
+      pais: hit.address?.country || ubicacion.pais,
+      lat,
+      lng,
+    });
+    setQuery(hit.display_name);
+    setResults([]);
+  };
+
+  const tieneCoords = ubicacion.lat != null && ubicacion.lng != null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <MapPin className="h-4 w-4" />
+          Ubicación del local
+        </CardTitle>
+        <p className="text-xs text-muted-foreground mt-1">
+          Busca la dirección o zona aproximada. El plano sitúa el marcador donde quieres abrir.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+          <div className="md:col-span-4 relative">
+            <Label className="text-muted-foreground text-xs">Buscar dirección</Label>
+            <div className="relative mt-1">
+              <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(e) => onQueryChange(e.target.value)}
+                placeholder="Calle, plaza o zona aproximada"
+                className="pl-9"
+              />
+              {searching && <Loader2 className="h-4 w-4 absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" />}
+            </div>
+            {results.length > 0 && (
+              <ul className="absolute z-10 mt-1 w-full rounded-md border bg-popover shadow-md max-h-64 overflow-y-auto">
+                {results.map((r, i) => (
+                  <li
+                    key={`${r.lat}-${r.lon}-${i}`}
+                    className="px-3 py-2 text-sm hover:bg-muted cursor-pointer"
+                    onClick={() => seleccionar(r)}
+                  >
+                    {r.display_name}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <Field label="Ciudad">
+            <Input value={ubicacion.ciudad} onChange={(e) => onChange({ ciudad: e.target.value })} />
+          </Field>
+          <Field label="Código postal">
+            <Input value={ubicacion.codigoPostal} onChange={(e) => onChange({ codigoPostal: e.target.value })} />
+          </Field>
+          <Field label="País">
+            <Input value={ubicacion.pais} onChange={(e) => onChange({ pais: e.target.value })} />
+          </Field>
+          <Field label="Radio a la redonda">
+            <select
+              value={ubicacion.radioKm}
+              onChange={(e) => onChange({ radioKm: Number(e.target.value) })}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            >
+              <option value={0.5}>0,5 km</option>
+              <option value={1}>1 km</option>
+              <option value={2}>2 km</option>
+              <option value={5}>5 km</option>
+              <option value={10}>10 km</option>
+              <option value={20}>20 km</option>
+              <option value={50}>50 km</option>
+            </select>
+          </Field>
+        </div>
+
+        <div className="rounded-md overflow-hidden border bg-muted/20">
+          {tieneCoords ? (
+            <MapaUbicacionRadio
+              lat={ubicacion.lat as number}
+              lng={ubicacion.lng as number}
+              radioKm={ubicacion.radioKm}
+              className="w-full h-[360px]"
+            />
+          ) : (
+            <div className="h-[360px] flex flex-col items-center justify-center text-sm text-muted-foreground gap-2">
+              <MapPin className="h-8 w-8" strokeWidth={1.5} />
+              <span>Busca una dirección o introduce coordenadas para ver el plano.</span>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ── Galerías de fotos por categoría (compacto, en pestañas) ── */
+function FotosCard({
+  fotos,
+  onUpload,
+  onRemove,
+}: {
+  fotos: BloqueLocal["fotos"];
+  onUpload: (cat: CategoriaFotoLocal, file: File) => void;
+  onRemove: (cat: CategoriaFotoLocal, foto: FotoEstudio) => void;
+}) {
+  const totalFotos = CATEGORIAS_FOTOS_LOCAL.reduce(
+    (acc, c) => acc + (fotos[c.key]?.length ?? 0),
+    0,
+  );
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="text-base">Galería del local</CardTitle>
+          <span className="text-xs text-muted-foreground">
+            {totalFotos} {totalFotos === 1 ? "foto" : "fotos"}
+          </span>
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">
+          Sube fotos por zona. Las verán los inversores en la presentación.
+        </p>
+      </CardHeader>
+      <CardContent className="pt-0">
+        <Tabs defaultValue={CATEGORIAS_FOTOS_LOCAL[0].key}>
+          <TabsList className="flex flex-wrap h-auto gap-1 bg-muted/60 p-1">
+            {CATEGORIAS_FOTOS_LOCAL.map((cat) => {
+              const n = fotos[cat.key]?.length ?? 0;
+              return (
+                <TabsTrigger
+                  key={cat.key}
+                  value={cat.key}
+                  className="text-xs px-2.5 py-1 h-auto"
+                >
+                  {cat.label}
+                  {n > 0 && (
+                    <span className="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-foreground/10 text-[10px] font-semibold px-1">
+                      {n}
+                    </span>
+                  )}
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
+          {CATEGORIAS_FOTOS_LOCAL.map((cat) => (
+            <TabsContent key={cat.key} value={cat.key} className="mt-3">
+              <Galeria
+                label={cat.label}
+                categoria={cat.key}
+                fotos={fotos[cat.key] ?? []}
+                onUpload={onUpload}
+                onRemove={onRemove}
+              />
+            </TabsContent>
+          ))}
+        </Tabs>
+      </CardContent>
+    </Card>
+  );
+}
+
+function Galeria({
+  label,
+  categoria,
+  fotos,
+  onUpload,
+  onRemove,
+}: {
+  label: string;
+  categoria: CategoriaFotoLocal;
+  fotos: FotoEstudio[];
+  onUpload: (cat: CategoriaFotoLocal, file: File) => void;
+  onRemove: (cat: CategoriaFotoLocal, foto: FotoEstudio) => void;
+}) {
+  return (
+    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
+      {fotos.map((f) => (
+        <div
+          key={f.id}
+          className="relative group aspect-square rounded-md overflow-hidden border bg-muted"
+        >
+          {f.url ? (
+            <img src={f.url} alt={label} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground">
+              Sin previsualización
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => onRemove(categoria, f)}
+            className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-black/80"
+            title="Quitar foto"
+            aria-label="Quitar foto"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        </div>
+      ))}
+      <label className="aspect-square flex flex-col items-center justify-center gap-0.5 rounded-md border border-dashed border-muted-foreground/30 text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors cursor-pointer text-[11px]">
+        <ImagePlus className="h-4 w-4" strokeWidth={1.75} />
+        <span>Añadir</span>
+        <input
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(ev) => {
+            const file = ev.target.files?.[0];
+            if (file) onUpload(categoria, file);
+            ev.target.value = "";
+          }}
+        />
+      </label>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <Label className="text-muted-foreground text-xs">{label}</Label>
+      <div className="mt-1">{children}</div>
+    </div>
+  );
+}

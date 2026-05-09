@@ -5,13 +5,20 @@ import {
   ReactFlow,
   Background,
   Controls,
+  ConnectionMode,
   useNodesState,
   useEdgesState,
+  useReactFlow,
   addEdge,
+  BaseEdge,
+  EdgeLabelRenderer,
+  getSmoothStepPath,
   type Node,
   type Edge,
   type Connection,
   type NodeTypes,
+  type EdgeTypes,
+  type EdgeProps,
   Handle,
   Position,
   type NodeProps,
@@ -22,6 +29,7 @@ import { toast } from "sonner";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
   orgChartsPorEmpresa,
+  defaultOrgChart,
   getDeptPalette,
   normalizeArea,
   DEPT_COLOR_SWATCHES,
@@ -61,6 +69,29 @@ const AREA_LABELS: Record<string, string> = {
   operativa: "Área Operativa",
 };
 
+const FIXED_ZONE_IDS = new Set(["zone-admin", "zone-oper"]);
+
+const FIXED_ZONE_DEFAULTS: Record<string, AreaZone> = {
+  "zone-admin": {
+    id: "zone-admin",
+    label: "Área Administrativa",
+    area: "administrativa",
+    x: -10,
+    y: -90,
+    width: 1250,
+    height: 370,
+  },
+  "zone-oper": {
+    id: "zone-oper",
+    label: "Área Operativa",
+    area: "operativa",
+    x: 30,
+    y: 340,
+    width: 1280,
+    height: 370,
+  },
+};
+
 /* ── Zone node (resizable, draggable) ── */
 function AreaZoneNode({ data, selected }: NodeProps) {
   const palette = ZONE_COLORS[normalizeArea(data.area)];
@@ -91,44 +122,123 @@ function AreaZoneNode({ data, selected }: NodeProps) {
   );
 }
 
-/* ── Org block node (vívido, estilo botón "fichar") ── */
+/* ── Org block node (vívido, redimensionable, conectable por 4 lados) ── */
 function OrgChartNode({ id, data, selected }: NodeProps) {
   const area = normalizeArea(data.area);
   const customColor = (data as { color?: string }).color;
   const palette = getDeptPalette(id, area, customColor);
   const hasDescripcion = typeof data.descripcion === "string" && (data.descripcion as string).trim().length > 0;
+  const handleStyle: React.CSSProperties = {
+    background: "#ffffff",
+    border: `2px solid ${palette.ring}`,
+    width: 12,
+    height: 12,
+    opacity: selected ? 1 : 0.85,
+  };
   return (
-    <div
-      className="relative rounded-xl px-5 py-3 text-center transition-all"
-      style={{
-        background: palette.bg,
-        color: "#ffffff",
-        minWidth: 130,
-        fontSize: 13,
-        fontWeight: 700,
-        letterSpacing: "0.04em",
-        boxShadow: selected
-          ? `0 0 0 3px ${palette.ring}, 0 10px 20px ${palette.shadow}`
-          : `0 6px 14px ${palette.shadow}, inset 0 1px 0 rgba(255,255,255,0.18)`,
-        border: `1px solid ${palette.ring}`,
-        textShadow: "0 1px 1px rgba(0,0,0,0.18)",
-      }}
-    >
-      <Handle type="target" position={Position.Top} className="!bg-white/60 !w-2 !h-2 !border-white" />
-      {data.label as string}
-      {hasDescripcion && (
-        <Info
-          className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-white p-0.5 shadow"
-          style={{ color: palette.bg }}
-          aria-label="Tiene descripción"
-        />
-      )}
-      <Handle type="source" position={Position.Bottom} className="!bg-white/60 !w-2 !h-2 !border-white" />
-    </div>
+    <>
+      <NodeResizer
+        isVisible={selected}
+        minWidth={110}
+        minHeight={44}
+        lineClassName="!border-primary/40"
+        handleClassName="!w-2 !h-2 !bg-primary/60 !border-primary"
+      />
+      <div
+        className="relative rounded-xl px-5 py-3 text-center transition-all w-full h-full flex items-center justify-center"
+        style={{
+          background: palette.bg,
+          color: "#ffffff",
+          minWidth: 130,
+          minHeight: 44,
+          fontSize: 13,
+          fontWeight: 700,
+          letterSpacing: "0.04em",
+          boxShadow: selected
+            ? `0 0 0 3px ${palette.ring}, 0 10px 20px ${palette.shadow}`
+            : `0 6px 14px ${palette.shadow}, inset 0 1px 0 rgba(255,255,255,0.18)`,
+          border: `1px solid ${palette.ring}`,
+          textShadow: "0 1px 1px rgba(0,0,0,0.18)",
+        }}
+      >
+        {/* Handles en los 4 lados — con ConnectionMode.Loose se pueden enlazar de cualquiera a cualquiera */}
+        <Handle id="t" type="source" position={Position.Top} style={handleStyle} />
+        <Handle id="b" type="source" position={Position.Bottom} style={handleStyle} />
+        <Handle id="l" type="source" position={Position.Left} style={handleStyle} />
+        <Handle id="r" type="source" position={Position.Right} style={handleStyle} />
+        <span className="leading-tight">{data.label as string}</span>
+        {hasDescripcion && (
+          <Info
+            className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-white p-0.5 shadow"
+            style={{ color: palette.bg }}
+            aria-label="Tiene descripción"
+          />
+        )}
+      </div>
+    </>
   );
 }
 
 const nodeTypes: NodeTypes = { orgNode: OrgChartNode, areaZone: AreaZoneNode };
+
+/* ── Edge con botón de papelera al seleccionarlo ── */
+function DeletableEdge({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  selected,
+  style,
+  markerEnd,
+}: EdgeProps) {
+  const [edgePath, labelX, labelY] = getSmoothStepPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetX,
+    targetY,
+    targetPosition,
+  });
+  const { setEdges } = useReactFlow();
+  const stroke = selected
+    ? "hsl(var(--destructive))"
+    : ((style?.stroke as string) ?? "hsl(var(--border))");
+  const strokeWidth = selected ? 2.5 : ((style?.strokeWidth as number) ?? 1.5);
+  return (
+    <>
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        style={{ ...style, stroke, strokeWidth }}
+        markerEnd={markerEnd}
+      />
+      {selected && (
+        <EdgeLabelRenderer>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setEdges((eds) => eds.filter((ed) => ed.id !== id));
+            }}
+            className="nodrag nopan absolute flex items-center justify-center h-7 w-7 rounded-full bg-destructive text-destructive-foreground shadow-md hover:scale-110 transition-transform border-2 border-background"
+            style={{
+              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+              pointerEvents: "all",
+            }}
+            aria-label="Eliminar conexión"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </EdgeLabelRenderer>
+      )}
+    </>
+  );
+}
+
+const edgeTypes: EdgeTypes = { deletable: DeletableEdge };
 
 /* ── Convert data to ReactFlow nodes/edges ── */
 function dataToFlow(chart: {
@@ -136,16 +246,26 @@ function dataToFlow(chart: {
   edges: { id: string; source: string; target: string }[];
   zones: AreaZone[];
 }): { nodes: Node[]; edges: Edge[] } {
-  const zoneNodes: Node[] = chart.zones.map((z) => ({
-    id: z.id,
-    type: "areaZone",
-    position: { x: z.x, y: z.y },
-    data: { label: z.label, area: normalizeArea(z.area), w: z.width, h: z.height },
-    style: { width: z.width, height: z.height },
-    draggable: true,
-    selectable: true,
-    zIndex: -1,
-  }));
+  const zoneNodes: Node[] = chart.zones.map((z) => {
+    const isFixed = FIXED_ZONE_IDS.has(z.id);
+    return {
+      id: z.id,
+      type: "areaZone",
+      position: { x: z.x, y: z.y },
+      data: {
+        label: z.label,
+        area: normalizeArea(z.area),
+        w: z.width,
+        h: z.height,
+        fixed: isFixed,
+      },
+      style: { width: z.width, height: z.height },
+      draggable: true,
+      selectable: true,
+      deletable: !isFixed,
+      zIndex: -1,
+    };
+  });
 
   const orgNodes: Node[] = chart.nodes.map((n) => ({
     id: n.id,
@@ -157,6 +277,9 @@ function dataToFlow(chart: {
       descripcion: n.descripcion ?? "",
       color: n.color,
     },
+    ...(typeof n.width === "number" && typeof n.height === "number"
+      ? { style: { width: n.width, height: n.height } }
+      : {}),
     draggable: true,
   }));
 
@@ -164,7 +287,7 @@ function dataToFlow(chart: {
     id: e.id,
     source: e.source,
     target: e.target,
-    type: "smoothstep",
+    type: "deletable",
     style: { stroke: "hsl(var(--border))", strokeWidth: 1.5 },
   }));
 
@@ -192,6 +315,10 @@ function flowToData(nodes: Node[], edges: Edge[]): OrgChart {
     } else {
       const descripcion = (n.data as { descripcion?: string }).descripcion;
       const color = (n.data as { color?: string }).color;
+      const styleW = (n.style as { width?: number } | undefined)?.width;
+      const styleH = (n.style as { height?: number } | undefined)?.height;
+      const w = typeof n.width === "number" ? n.width : (typeof styleW === "number" ? styleW : undefined);
+      const h = typeof n.height === "number" ? n.height : (typeof styleH === "number" ? styleH : undefined);
       orgNodes.push({
         id: n.id,
         label: (n.data.label as string) ?? "",
@@ -200,6 +327,8 @@ function flowToData(nodes: Node[], edges: Edge[]): OrgChart {
         y: n.position.y,
         ...(descripcion && descripcion.trim().length > 0 ? { descripcion } : {}),
         ...(color && color.trim().length > 0 ? { color } : {}),
+        ...(typeof w === "number" ? { width: w } : {}),
+        ...(typeof h === "number" ? { height: h } : {}),
       });
     }
   }
@@ -236,12 +365,30 @@ export function EstructuraView() {
     getOrganigrama(key)
       .then((remote) => {
         if (cancelled) return;
-        const seed = orgChartsPorEmpresa[key] || orgChartsPorEmpresa.habana;
-        const chart = remote && remote.nodes.length > 0 ? remote : seed;
+        const seed = orgChartsPorEmpresa[key] || defaultOrgChart;
+        const baseChart = remote && remote.nodes.length > 0 ? remote : seed;
+        const missingFixed = [...FIXED_ZONE_IDS].filter(
+          (id) => !baseChart.zones.some((z) => z.id === id),
+        );
+        const chart =
+          missingFixed.length > 0
+            ? {
+                ...baseChart,
+                zones: [
+                  ...baseChart.zones,
+                  ...missingFixed.map((id) => FIXED_ZONE_DEFAULTS[id]),
+                ],
+              }
+            : baseChart;
         const flow = dataToFlow(chart);
         setNodes(flow.nodes);
         setEdges(flow.edges);
-        setDirty(false);
+        const restoredFromRemote =
+          remote != null && remote.nodes.length > 0 && missingFixed.length > 0;
+        setDirty(restoredFromRemote);
+        if (restoredFromRemote) {
+          toast.info("Zona fija restaurada. Pulsa Guardar para conservarla.");
+        }
       })
       .finally(() => {
         if (!cancelled) {
@@ -267,7 +414,7 @@ export function EstructuraView() {
     (params: Connection) => {
       setEdges((eds) =>
         addEdge(
-          { ...params, type: "smoothstep", style: { stroke: "hsl(var(--border))", strokeWidth: 1.5 } },
+          { ...params, type: "deletable", style: { stroke: "hsl(var(--border))", strokeWidth: 1.5 } },
           eds
         )
       );
@@ -317,6 +464,10 @@ export function EstructuraView() {
 
   const handleDeleteNode = () => {
     if (!selectedNode) return;
+    if ((selectedNode.data as { fixed?: boolean }).fixed) {
+      toast.error("Esta zona es fija y no puede eliminarse.");
+      return;
+    }
     setNodes((nds) => nds.filter((n) => n.id !== selectedNode.id));
     setEdges((eds) => eds.filter((e) => e.source !== selectedNode.id && e.target !== selectedNode.id));
     setSelectedNode(null);
@@ -355,15 +506,17 @@ export function EstructuraView() {
   };
 
   const isZoneSelected = selectedNode?.type === "areaZone";
+  const isFixedSelected =
+    (selectedNode?.data as { fixed?: boolean } | undefined)?.fixed === true;
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)]">
       {/* Toolbar */}
       <div className="flex items-center gap-3 px-4 py-3 border-b bg-card shrink-0">
-        <Button size="sm" variant="outline" onClick={() => setShowAdd(true)} disabled={loading}>
-          <Plus className="h-4 w-4 mr-1" /> Añadir bloque
+        <Button variant="primary" size="sm" onClick={() => setShowAdd(true)} disabled={loading}>
+          <Plus className="h-4 w-4" />Nuevo
         </Button>
-        {selectedNode && (
+        {selectedNode && !isFixedSelected && (
           <>
             <Button size="sm" variant="destructive" onClick={handleDeleteNode}>
               <Trash2 className="h-4 w-4 mr-1" /> Eliminar
@@ -373,19 +526,6 @@ export function EstructuraView() {
             </Button>
           </>
         )}
-        <Button
-          size="sm"
-          onClick={handleSave}
-          disabled={!dirty || saving || loading}
-          className="ml-2"
-        >
-          {saving ? (
-            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-          ) : (
-            <Save className="h-4 w-4 mr-1" />
-          )}
-          {dirty ? "Guardar cambios" : "Guardado"}
-        </Button>
         <div className="ml-auto flex items-center gap-4">
           <div className="hidden md:flex items-center gap-4 text-xs text-muted-foreground">
             <span className="flex items-center gap-1.5">
@@ -403,6 +543,18 @@ export function EstructuraView() {
               Área Operativa
             </span>
           </div>
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={!dirty || saving || loading}
+          >
+            {saving ? (
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4 mr-1" />
+            )}
+            Guardar
+          </Button>
         </div>
       </div>
 
@@ -416,11 +568,13 @@ export function EstructuraView() {
           onConnect={onConnect}
           onNodeClick={onNodeClick}
           nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          connectionMode={ConnectionMode.Loose}
           fitView
           fitViewOptions={{ padding: 0.15 }}
           snapToGrid
           snapGrid={[20, 20]}
-          deleteKeyCode="Delete"
+          deleteKeyCode={["Delete", "Backspace"]}
           className="bg-background"
         >
           <Background gap={20} size={1} color="hsl(var(--border) / 0.3)" />
@@ -430,8 +584,8 @@ export function EstructuraView() {
           />
         </ReactFlow>
 
-        {/* Side panel for editing */}
-        {selectedNode && (() => {
+        {/* Side panel for editing (hidden for fixed zones — solo se permite mover/redimensionar) */}
+        {selectedNode && !isFixedSelected && (() => {
           const palette = !isZoneSelected
             ? getDeptPalette(
                 selectedNode.id,
@@ -553,12 +707,14 @@ export function EstructuraView() {
                 <Button size="sm" onClick={handleUpdateNode} className="flex-1">
                   <Save className="h-3 w-3 mr-1" /> Aplicar
                 </Button>
-                <Button size="sm" variant="destructive" onClick={handleDeleteNode}>
-                  <Trash2 className="h-3 w-3" />
-                </Button>
+                {!isFixedSelected && (
+                  <Button size="sm" variant="destructive" onClick={handleDeleteNode}>
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                )}
               </div>
               <p className="text-[11px] text-muted-foreground text-center pt-1 border-t">
-                Pulsa <span className="font-semibold">Guardar cambios</span> arriba para persistir.
+                Pulsa <span className="font-semibold">Guardar</span> arriba para persistir.
               </p>
             </div>
           );

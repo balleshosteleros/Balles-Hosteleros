@@ -5,6 +5,7 @@ import { getMiInformacionLaboral } from "@/features/rrhh/actions/empleados-actio
 import { parseISO, format } from "date-fns";
 import { es } from "date-fns/locale";
 import { fallbackCronogramas } from "@/features/direccion/data/cronogramasMockData";
+import { getModuloForCronograma } from "@/features/direccion/data/cronogramaAreas";
 
 export type TareaPrioridad = "alta" | "media" | "baja";
 export type TareaTipo = "manual" | "nueva_receta_fase" | "sistema" | "cronograma";
@@ -591,11 +592,11 @@ export async function getDepartamentosVisibles(): Promise<
       modulosVisibles = permisos
         .filter((p) => p.ver)
         .map((p) => p.modulo)
-        .filter(Boolean);
+        .filter(Boolean)
+        .map((m) => getModuloForCronograma(m));
     }
 
-    if (esDirectorGlobal && modulosVisibles.length === 0) {
-      // Bypass: si no hay permisos cargados, asume acceso a todos los módulos
+    if (esDirectorGlobal) {
       modulosVisibles = [
         "Dirección", "Gerencia", "RRHH", "Logística", "Cocina",
         "Sala", "Calidad", "Contabilidad", "Gestoría", "Jurídico", "Marketing",
