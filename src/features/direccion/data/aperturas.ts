@@ -226,6 +226,8 @@ export interface EstudioApertura {
   imagenMarca: ImagenMarcaEstudio;
   propuesta: PropuestaGastronomica;
   ocupacion: BloqueOcupacion;
+  shareSlug?: string | null;
+  shareActive?: boolean;
 }
 
 /* ── Ocupación estimada (heatmap día × franja por escenario) ───────── */
@@ -353,13 +355,17 @@ export function matrizOcupacionVacia(): MatrizOcupacion {
   ) as MatrizOcupacion;
 }
 
+/* Escenarios fijos del estudio de ocupación. El usuario NO puede añadir,
+   borrar ni renombrar; solo edita la matriz de cada uno. */
+export const ESCENARIOS_FIJOS: { id: string; nombre: string; color: string }[] = [
+  { id: "esc-conservador", nombre: "Conservador", color: "hsl(220 70% 55%)" },
+  { id: "esc-realista",    nombre: "Realista",    color: "hsl(150 60% 45%)" },
+  { id: "esc-optimista",   nombre: "Optimista",   color: "hsl(40 90% 55%)"  },
+];
+
 export function bloqueOcupacionInicial(): BloqueOcupacion {
   return {
-    escenarios: [
-      { id: "esc-conservador", nombre: "Conservador", color: "hsl(220 70% 55%)", matriz: matrizOcupacionVacia() },
-      { id: "esc-realista",    nombre: "Realista",    color: "hsl(150 60% 45%)", matriz: matrizOcupacionVacia() },
-      { id: "esc-optimista",   nombre: "Optimista",   color: "hsl(40 90% 55%)",  matriz: matrizOcupacionVacia() },
-    ],
+    escenarios: ESCENARIOS_FIJOS.map((e) => ({ ...e, matriz: matrizOcupacionVacia() })),
     escenarioActivoId: "esc-realista",
   };
 }
@@ -381,25 +387,33 @@ export function normalizeMatrizOcupacion(input: unknown): MatrizOcupacion {
 }
 
 export function normalizeBloqueOcupacion(input: unknown): BloqueOcupacion {
-  if (!input || typeof input !== "object") return bloqueOcupacionInicial();
-  const raw = input as { escenarios?: unknown; escenarioActivoId?: unknown };
-  const escenarios = Array.isArray(raw.escenarios) ? raw.escenarios : [];
-  if (escenarios.length === 0) return bloqueOcupacionInicial();
-  const norm: EscenarioOcupacion[] = escenarios
-    .map((e) => {
-      if (!e || typeof e !== "object") return null;
-      const r = e as Partial<EscenarioOcupacion>;
-      return {
-        id: typeof r.id === "string" && r.id ? r.id : `esc-${Math.random().toString(36).slice(2, 8)}`,
-        nombre: typeof r.nombre === "string" ? r.nombre : "Escenario",
-        color: typeof r.color === "string" && r.color ? r.color : "hsl(220 70% 55%)",
-        matriz: normalizeMatrizOcupacion(r.matriz),
-      } satisfies EscenarioOcupacion;
-    })
-    .filter((x): x is EscenarioOcupacion => x !== null);
-  if (norm.length === 0) return bloqueOcupacionInicial();
-  const activo = typeof raw.escenarioActivoId === "string" ? raw.escenarioActivoId : undefined;
-  return { escenarios: norm, escenarioActivoId: activo && norm.some((e) => e.id === activo) ? activo : norm[0].id };
+  const raw = (input && typeof input === "object" ? input : {}) as {
+    escenarios?: unknown;
+    escenarioActivoId?: unknown;
+  };
+  const previas = Array.isArray(raw.escenarios) ? raw.escenarios : [];
+  // Indexa las matrices guardadas por id y, como respaldo, por nombre.
+  const porId = new Map<string, unknown>();
+  const porNombre = new Map<string, unknown>();
+  for (const e of previas) {
+    if (!e || typeof e !== "object") continue;
+    const r = e as Partial<EscenarioOcupacion>;
+    if (typeof r.id === "string" && r.id) porId.set(r.id, r.matriz);
+    if (typeof r.nombre === "string" && r.nombre) porNombre.set(r.nombre.toLowerCase(), r.matriz);
+  }
+  const escenarios: EscenarioOcupacion[] = ESCENARIOS_FIJOS.map((fijo) => ({
+    id: fijo.id,
+    nombre: fijo.nombre,
+    color: fijo.color,
+    matriz: normalizeMatrizOcupacion(
+      porId.get(fijo.id) ?? porNombre.get(fijo.nombre.toLowerCase()),
+    ),
+  }));
+  const activoRaw = typeof raw.escenarioActivoId === "string" ? raw.escenarioActivoId : undefined;
+  return {
+    escenarios,
+    escenarioActivoId: activoRaw && escenarios.some((e) => e.id === activoRaw) ? activoRaw : "esc-realista",
+  };
 }
 
 /* Promedio (0..100) de toda la matriz — útil para KPI resumido. */

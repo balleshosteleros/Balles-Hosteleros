@@ -154,9 +154,6 @@ export function GastronomiaTab({ estudioId, propuesta, ventasMensuales, onChange
             <ChefHat className="h-4 w-4" />
             Propuesta gastronómica
           </CardTitle>
-          <p className="text-xs text-muted-foreground mt-1">
-            Define el concepto culinario y el estilo de servicio. Es la propuesta de valor para inversores.
-          </p>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
