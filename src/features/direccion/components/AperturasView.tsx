@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { TrendingUp, TrendingDown, FileText, Calculator, ArrowLeft, Landmark, Target, Clock, Settings, ImagePlus, X, ChevronDown, ChevronRight, Plus, Trash2, Receipt, Building2, Sparkles, ChefHat, Activity } from "lucide-react";
+import { TrendingUp, TrendingDown, FileText, Calculator, ArrowLeft, Landmark, Target, Clock, Settings, ImagePlus, X, ChevronDown, ChevronRight, Plus, Trash2, Receipt, Building2, Sparkles, ChefHat, Activity, Ticket, Layers } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -1069,12 +1069,6 @@ function DetalleEstudio({ estudio, onBack, onUpdate }: { estudio: EstudioApertur
               >
                 <ChefHat className="h-4 w-4" />Gastronomía
               </TabsTrigger>
-              <TabsTrigger
-                value="ocupacion"
-                className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none"
-              >
-                <Activity className="h-4 w-4" />Ocupación
-              </TabsTrigger>
             </TabsList>
             <TabsContent value="local" className="mt-4">
               <LocalTab
@@ -1098,21 +1092,34 @@ function DetalleEstudio({ estudio, onBack, onUpdate }: { estudio: EstudioApertur
                 onChange={(propuesta, opts) => onUpdate({ ...estudio, propuesta }, opts)}
               />
             </TabsContent>
-            <TabsContent value="ocupacion" className="mt-4">
-              <OcupacionTab
-                ocupacion={estudio.ocupacion}
-                plazasTotales={
-                  (estudio.local?.caracteristicas?.plazasInterior ?? 0) +
-                  (estudio.local?.caracteristicas?.plazasTerraza ?? 0)
-                }
-                onChange={(ocupacion, opts) => onUpdate({ ...estudio, ocupacion }, opts)}
-              />
-            </TabsContent>
           </Tabs>
         </TabsContent>
 
-        {/* ── FACTURACIÓN ── */}
-        <TabsContent value="facturacion" className="space-y-4">
+        {/* ── FACTURACIÓN (Facturación + Ocupación + Ticket) ── */}
+        <TabsContent value="facturacion">
+          <Tabs defaultValue="facturacion">
+            <TabsList className="h-auto w-full justify-start gap-6 rounded-none border-b bg-transparent p-0">
+              <TabsTrigger
+                value="facturacion"
+                className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none"
+              >
+                <Layers className="h-4 w-4" />Pilares
+              </TabsTrigger>
+              <TabsTrigger
+                value="ocupacion"
+                className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none"
+              >
+                <Activity className="h-4 w-4" />Ocupación
+              </TabsTrigger>
+              <TabsTrigger
+                value="ticket"
+                className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none"
+              >
+                <Ticket className="h-4 w-4" />Ticket medio
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="facturacion" className="mt-4 space-y-4">
           <div className="flex justify-end">
             <Select value={facturacionPeriodo} onValueChange={(v) => setFacturacionPeriodo(v as Periodo)}>
               <SelectTrigger className="w-40 h-9">
@@ -1129,12 +1136,6 @@ function DetalleEstudio({ estudio, onBack, onUpdate }: { estudio: EstudioApertur
             const factFactor = PERIODO_FACTOR[facturacionPeriodo];
             return (
           <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold">{fmt(ventas * factFactor)}€</p><p className="text-xs text-muted-foreground">Facturación</p></CardContent></Card>
-            <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold">{fmt(clientesMes * factFactor)}</p><p className="text-xs text-muted-foreground">Clientes</p></CardContent></Card>
-            <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold">{ticketPond.toFixed(2)}€</p><p className="text-xs text-muted-foreground">Ticket medio ponderado</p></CardContent></Card>
-          </div>
-
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Estructura de facturación por pilares</CardTitle>
@@ -1241,7 +1242,20 @@ function DetalleEstudio({ estudio, onBack, onUpdate }: { estudio: EstudioApertur
           </>
             );
           })()}
+            </TabsContent>
 
+            <TabsContent value="ocupacion" className="mt-4">
+              <OcupacionTab
+                ocupacion={estudio.ocupacion}
+                plazasTotales={
+                  (estudio.local?.caracteristicas?.plazasInterior ?? 0) +
+                  (estudio.local?.caracteristicas?.plazasTerraza ?? 0)
+                }
+                onChange={(ocupacion, opts) => onUpdate({ ...estudio, ocupacion }, opts)}
+              />
+            </TabsContent>
+
+            <TabsContent value="ticket" className="mt-4">
           {/* ── TICKET MEDIO (justificación desde la propuesta gastronómica) ── */}
           {(() => {
             const platos = estudio.propuesta.platos ?? [];
@@ -1301,12 +1315,8 @@ function DetalleEstudio({ estudio, onBack, onUpdate }: { estudio: EstudioApertur
               : 0;
 
             return (
-            <section className="space-y-4 pt-8 mt-4 border-t">
+            <section className="space-y-4">
               <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <Receipt className="h-5 w-5 text-blue-600" />
-                  <h2 className="text-lg font-semibold tracking-tight">Ticket medio</h2>
-                </div>
                 <p className="text-xs text-muted-foreground">
                   Justificación del ticket medio esperado a partir de la propuesta gastronómica:
                   precios de los platos destacados, mix de categorías y comparación entre pilares.
@@ -1522,10 +1532,29 @@ function DetalleEstudio({ estudio, onBack, onUpdate }: { estudio: EstudioApertur
             </section>
             );
           })()}
+            </TabsContent>
+          </Tabs>
         </TabsContent>
 
         {/* ── COSTES ── */}
-        <TabsContent value="costes" className="space-y-4">
+        <TabsContent value="costes">
+          <Tabs defaultValue="pilares">
+            <TabsList className="h-auto w-full justify-start gap-6 rounded-none border-b bg-transparent p-0">
+              <TabsTrigger
+                value="pilares"
+                className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none"
+              >
+                <Layers className="h-4 w-4" />Pilares
+              </TabsTrigger>
+              <TabsTrigger
+                value="equilibrio"
+                className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none"
+              >
+                <Target className="h-4 w-4" />Punto de equilibrio
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="pilares" className="mt-4 space-y-4">
           <div className="flex justify-end">
             <Select value={costesPeriodo} onValueChange={(v) => setCostesPeriodo(v as Periodo)}>
               <SelectTrigger className="w-40 h-9">
@@ -1644,14 +1673,199 @@ function DetalleEstudio({ estudio, onBack, onUpdate }: { estudio: EstudioApertur
           </>
             );
           })()}
+            </TabsContent>
+
+            <TabsContent value="equilibrio" className="mt-4 space-y-4">
+              {(() => {
+                const tieneCostes = fijoTotal > 0 || variablePctTotal > 0;
+                const peValido = variablePctTotal < 100 && tieneCostes;
+                const clientesEquilibrioMes = peValido && ticketPond > 0 ? peMensual / ticketPond : 0;
+                const margenSeguridadPct = peValido && ventas > 0 ? ((ventas - peMensual) / ventas) * 100 : 0;
+                const sobreEquilibrio = ventas > peMensual;
+                const ventaMax = Math.max(ventas, peMensual, 1) * 1.5;
+                const breakEvenData = peValido
+                  ? Array.from({ length: 21 }, (_, i) => {
+                      const f = (ventaMax / 20) * i;
+                      return {
+                        facturacion: parseFloat(f.toFixed(0)),
+                        Facturación: parseFloat(f.toFixed(0)),
+                        "Coste total": parseFloat((fijoTotal + (f * variablePctTotal) / 100).toFixed(0)),
+                      };
+                    })
+                  : [];
+
+                return (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <Card>
+                        <CardContent className="p-4 text-center">
+                          <p className="text-2xl font-bold">{peValido ? `${fmt(peMensual)}€` : "—"}</p>
+                          <p className="text-xs text-muted-foreground">Facturación equilibrio /mes</p>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent className="p-4 text-center">
+                          <p className="text-2xl font-bold">{peValido ? `${fmt(peAnual)}€` : "—"}</p>
+                          <p className="text-xs text-muted-foreground">Facturación equilibrio /año</p>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent className="p-4 text-center">
+                          <p className="text-2xl font-bold">
+                            {clientesEquilibrioMes > 0 ? fmt(clientesEquilibrioMes) : "—"}
+                          </p>
+                          <p className="text-xs text-muted-foreground">Clientes equilibrio /mes</p>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent className="p-4 text-center">
+                          <p
+                            className={`text-2xl font-bold ${
+                              peValido && ventas > 0
+                                ? sobreEquilibrio
+                                  ? "text-green-600"
+                                  : "text-red-600"
+                                : ""
+                            }`}
+                          >
+                            {peValido && ventas > 0 ? `${margenSeguridadPct.toFixed(1)}%` : "—"}
+                          </p>
+                          <p className="text-xs text-muted-foreground">Margen de seguridad</p>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-sm">Facturación vs coste total</CardTitle>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          El punto de equilibrio es el cruce entre la línea de facturación y la de coste total.
+                        </p>
+                      </CardHeader>
+                      <CardContent>
+                        {peValido ? (
+                          <ResponsiveContainer width="100%" height={320}>
+                            <LineChart data={breakEvenData}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis
+                                dataKey="facturacion"
+                                tick={{ fontSize: 11 }}
+                                tickFormatter={(v) => `${fmt(v)}€`}
+                              />
+                              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${fmt(v)}€`} />
+                              <Tooltip
+                                formatter={(v: number) => `${fmt(v)}€`}
+                                labelFormatter={(v) => `Facturación: ${fmt(v as number)}€`}
+                              />
+                              <Legend />
+                              <Line
+                                type="monotone"
+                                dataKey="Facturación"
+                                stroke="hsl(210 70% 55%)"
+                                strokeWidth={2}
+                                dot={false}
+                              />
+                              <Line
+                                type="monotone"
+                                dataKey="Coste total"
+                                stroke="hsl(0 70% 55%)"
+                                strokeWidth={2}
+                                dot={false}
+                              />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="h-[320px] flex items-center justify-center text-sm text-muted-foreground">
+                            {variablePctTotal >= 100
+                              ? "El % variable supera el 100%: no existe punto de equilibrio"
+                              : "Añade costes a los pilares para calcular el punto de equilibrio"}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-sm">Lectura del punto de equilibrio</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2 text-sm">
+                        {peValido ? (
+                          <>
+                            <p className="text-muted-foreground">
+                              Para cubrir todos los costes el local necesita facturar al menos{" "}
+                              <strong className="text-foreground">{fmt(peMensual)}€/mes</strong>{" "}
+                              ({fmt(peAnual)}€/año)
+                              {ticketPond > 0 && (
+                                <>
+                                  , lo que equivale a{" "}
+                                  <strong className="text-foreground">
+                                    {fmt(clientesEquilibrioMes)} clientes/mes
+                                  </strong>{" "}
+                                  con el ticket medio actual de {ticketPond.toFixed(2)}€
+                                </>
+                              )}
+                              .
+                            </p>
+                            {ventas > 0 &&
+                              (sobreEquilibrio ? (
+                                <p className="text-muted-foreground">
+                                  Con la facturación estimada de{" "}
+                                  <strong className="text-foreground">{fmt(ventas)}€/mes</strong>, el
+                                  local opera{" "}
+                                  <span className="text-green-600">
+                                    {margenSeguridadPct.toFixed(1)}% por encima
+                                  </span>{" "}
+                                  del punto de equilibrio.
+                                </p>
+                              ) : (
+                                <p className="text-muted-foreground">
+                                  Con la facturación estimada de{" "}
+                                  <strong className="text-foreground">{fmt(ventas)}€/mes</strong>, el
+                                  local opera{" "}
+                                  <span className="text-red-600">
+                                    {Math.abs(margenSeguridadPct).toFixed(1)}% por debajo
+                                  </span>{" "}
+                                  del punto de equilibrio: revisa costes o ventas.
+                                </p>
+                              ))}
+                          </>
+                        ) : (
+                          <p className="text-muted-foreground">
+                            {variablePctTotal >= 100
+                              ? "El % de costes variables supera el 100% de la facturación: cada euro vendido genera pérdida. Revisa los pilares variables."
+                              : "Añade partidas con coste fijo o variable a los pilares para calcular el punto de equilibrio."}
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </>
+                );
+              })()}
+            </TabsContent>
+          </Tabs>
         </TabsContent>
         {/* ── INVERSIÓN (Procedencia + Destino + Amortización) ── */}
         <TabsContent value="inversion">
           <Tabs defaultValue="procedencia">
-            <TabsList>
-              <TabsTrigger value="procedencia"><Landmark className="h-4 w-4 mr-1" />Procedencia</TabsTrigger>
-              <TabsTrigger value="destino"><Target className="h-4 w-4 mr-1" />Destino</TabsTrigger>
-              <TabsTrigger value="amortizacion"><Clock className="h-4 w-4 mr-1" />Amortización</TabsTrigger>
+            <TabsList className="h-auto w-full justify-start gap-6 rounded-none border-b bg-transparent p-0">
+              <TabsTrigger
+                value="procedencia"
+                className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none"
+              >
+                <Landmark className="h-4 w-4" />Procedencia
+              </TabsTrigger>
+              <TabsTrigger
+                value="destino"
+                className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none"
+              >
+                <Target className="h-4 w-4" />Destino
+              </TabsTrigger>
+              <TabsTrigger
+                value="amortizacion"
+                className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none"
+              >
+                <Clock className="h-4 w-4" />Amortización
+              </TabsTrigger>
             </TabsList>
             <TabsContent value="procedencia" className="mt-4">
               <ProcedenciaTab
