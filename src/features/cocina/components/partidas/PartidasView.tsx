@@ -1,11 +1,9 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { Partida, ProductoPartida, MisePlaceItem, ESTADO_PARTIDA_LABELS, EstadoPartida, type ConfigPartidas } from "@/features/cocina/data/partidas";
+import { Partida, ProductoPartida, MisePlaceItem, ESTADO_PARTIDA_LABELS, EstadoPartida, type ConfigPartidas, type AreaPrincipal, getPartidasByEmpresa } from "@/features/cocina/data/partidas";
 import { getEmpleadosPorEmpresa } from "@/features/rrhh/data/rrhh";
-import { listPartidas, createPartida, updatePartida } from "@/features/cocina/actions/partidas-actions";
-import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,9 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
-import { Search, Plus, List, LayoutGrid, ArrowLeft, Pencil, Trash2, ChefHat, Settings2 } from "lucide-react";
-import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { Plus, List, LayoutGrid, ArrowLeft, Pencil, Trash2, ChefHat, Settings2 } from "lucide-react";
+import { SubmoduleToolbar } from "@/shared/components/SubmoduleToolbar";
 
 // ─── Config list editor (reused pattern) ────────────────────────
 function ConfigListEditor({ title, items, onAdd, onRemove }: { title: string; items: string[]; onAdd: (v: string) => void; onRemove: (i: number) => void }) {
@@ -229,23 +226,9 @@ function PartidaDetail({ partida, onBack, empleados, config }: {
   );
 }
 
-// --- Helper: map DB row → Partida ---
-function mapDbToPartida(row: Record<string, unknown>): Partida {
-  return {
-    id: row.id as string,
-    nombre: (row.nombre as string) ?? "",
-    area: ((row.area as string) ?? "COCINA") as "COCINA" | "BARRA",
-    estado: ((row.estado as string) ?? "activa") as EstadoPartida,
-    creador: (row.responsable as string) ?? (row.created_by as string) ?? "",
-    fechaActualizacion: ((row.updated_at as string) ?? (row.created_at as string))?.slice(0, 10) ?? "",
-    productos: Array.isArray(row.productos) ? row.productos : [],
-    misEnPlace: Array.isArray(row.mis_en_place) ? row.mis_en_place : [],
-  };
-}
-
 const defaultConfig: ConfigPartidas = {
   areas: ["COCINA", "BARRA"],
-  partidas: ["FRÍO + POSTRES", "FUEGOS + HORNOS", "FREIDORA + PLANCHA"],
+  partidas: ["FRIO + POSTRES", "FUEGOS + HORNO", "PLANCHA + FREIDORA"],
   categorias: [
     "PARA EMPEZAR", "ARROCES", "PRA VEGANOS", "DE LA MAR",
     "DE LA TIERRA", "MOMENTOS DULCES", "PARA NIÑOS",
@@ -254,41 +237,99 @@ const defaultConfig: ConfigPartidas = {
   estados: ["activa", "inactiva", "en_revision"],
 };
 
+const SEED_PARTIDAS: { nombre: string; area: AreaPrincipal }[] = [
+  { nombre: "FRIO + POSTRES", area: "COCINA" },
+  { nombre: "FUEGOS + HORNO", area: "COCINA" },
+  { nombre: "PLANCHA + FREIDORA", area: "COCINA" },
+];
+
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function buildSeedPartidas(): Partida[] {
+  return SEED_PARTIDAS.map((s, idx) => ({
+    id: `seed-${idx}-${Date.now()}`,
+    nombre: s.nombre,
+    area: s.area,
+    estado: "activa",
+    creador: "",
+    fechaActualizacion: todayISO(),
+    productos: [],
+    misEnPlace: [],
+  }));
+}
+
 // ─── Main page ──────────────────────────────────────────────────
 export function PartidasView() {
   const { empresaActual } = useEmpresa();
   const empresaId = empresaActual?.id || "habana";
   const empleados = getEmpleadosPorEmpresa(empresaId);
-  const [partidasData, setPartidasData] = useState<Partida[]>([]);
-  const [loading, setLoading] = useState(true);
   const config = defaultConfig;
 
-  const loadPartidas = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await listPartidas();
-      if (res.ok) {
-        setPartidasData((res.data as Record<string, unknown>[]).map(mapDbToPartida));
-      } else {
-        toast.error("Error al cargar partidas");
-      }
-    } catch {
-      toast.error("Error de conexión al cargar partidas");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const [partidas, setPartidas] = useState<Partida[]>([]);
 
   useEffect(() => {
-    loadPartidas();
-  }, [loadPartidas]);
-
-  const partidas = partidasData;
+    const existentes = getPartidasByEmpresa(empresaId);
+    setPartidas(existentes.length > 0 ? existentes : buildSeedPartidas());
+  }, [empresaId]);
 
   const [mainTab, setMainTab] = useState<"lista" | "pipeline" | "config">("lista");
   const [search, setSearch] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("todos");
   const [selectedPartida, setSelectedPartida] = useState<Partida | null>(null);
+
+  // Crear/editar partida
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<{ nombre: string; area: AreaPrincipal; estado: EstadoPartida }>({
+    nombre: "",
+    area: "COCINA",
+    estado: "activa",
+  });
+
+  const abrirNuevo = () => {
+    setEditingId(null);
+    setForm({ nombre: "", area: "COCINA", estado: "activa" });
+    setEditorOpen(true);
+  };
+
+  const abrirEditar = (p: Partida) => {
+    setEditingId(p.id);
+    setForm({ nombre: p.nombre, area: p.area, estado: p.estado });
+    setEditorOpen(true);
+  };
+
+  const guardar = () => {
+    const nombre = form.nombre.trim();
+    if (!nombre) return;
+    if (editingId) {
+      setPartidas(prev => prev.map(p =>
+        p.id === editingId
+          ? { ...p, nombre, area: form.area, estado: form.estado, fechaActualizacion: todayISO() }
+          : p,
+      ));
+    } else {
+      setPartidas(prev => [
+        ...prev,
+        {
+          id: `new-${Date.now()}`,
+          nombre,
+          area: form.area,
+          estado: form.estado,
+          creador: "",
+          fechaActualizacion: todayISO(),
+          productos: [],
+          misEnPlace: [],
+        },
+      ]);
+    }
+    setEditorOpen(false);
+  };
+
+  const eliminar = (id: string) => {
+    setPartidas(prev => prev.filter(p => p.id !== id));
+  };
 
   // Config state
   const [cfgAreas, setCfgAreas] = useState(config.areas);
@@ -301,10 +342,6 @@ export function PartidasView() {
     const matchEstado = filtroEstado === "todos" || p.estado === filtroEstado;
     return matchSearch && matchEstado;
   });
-
-  if (loading) {
-    return <LoadingSpinner className="p-6 min-h-[300px]" size="lg" />;
-  }
 
   if (selectedPartida) {
     return <PartidaDetail partida={selectedPartida} onBack={() => setSelectedPartida(null)} empleados={empleados} config={config} />;
@@ -320,6 +357,31 @@ export function PartidasView() {
         <Card><CardContent className="pt-4 pb-3 text-center"><p className="text-2xl font-bold">{partidas.reduce((s, p) => s + p.misEnPlace.length, 0)}</p><p className="text-xs text-muted-foreground">Mise en Place</p></CardContent></Card>
       </div>
 
+      {/* Toolbar estándar (BARRA HORIZONTAL 1) */}
+      {mainTab !== "config" && (
+        <div className="space-y-3">
+          <SubmoduleToolbar
+            busqueda={search}
+            onBusquedaChange={setSearch}
+            placeholderBusqueda="Buscar"
+            textoNuevo="Nueva partida"
+            onNuevo={abrirNuevo}
+          />
+          {/* Filtro de estado (fuera de la toolbar) */}
+          <div className="flex justify-end">
+            <Select value={filtroEstado} onValueChange={setFiltroEstado}>
+              <SelectTrigger className="h-9 w-36"><SelectValue placeholder="Estado" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="activa">Activa</SelectItem>
+                <SelectItem value="inactiva">Inactiva</SelectItem>
+                <SelectItem value="en_revision">En revisión</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
+
       {/* Tabs */}
       <Tabs value={mainTab} onValueChange={v => setMainTab(v as any)}>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -328,23 +390,6 @@ export function PartidasView() {
             <TabsTrigger value="pipeline"><LayoutGrid className="h-4 w-4 mr-1" />Pipeline</TabsTrigger>
             <TabsTrigger value="config" aria-label="Configuración" className="ml-auto"><Settings2 className="h-4 w-4" strokeWidth={1.75} /></TabsTrigger>
           </TabsList>
-          {mainTab !== "config" && (
-            <div className="flex gap-2 items-center">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Buscar partida..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 w-56" />
-              </div>
-              <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-                <SelectTrigger className="w-36"><SelectValue placeholder="Estado" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos</SelectItem>
-                  <SelectItem value="activa">Activa</SelectItem>
-                  <SelectItem value="inactiva">Inactiva</SelectItem>
-                  <SelectItem value="en_revision">En revisión</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
         </div>
 
         {/* LIST VIEW */}
@@ -375,7 +420,12 @@ export function PartidasView() {
                       <TableCell className="text-center">{p.misEnPlace.length}</TableCell>
                       <TableCell className="text-sm">{emp ? `${emp.nombre} ${emp.apellidos}` : "—"}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{p.fechaActualizacion}</TableCell>
-                      <TableCell><Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); setSelectedPartida(p); }}><Pencil className="h-4 w-4" /></Button></TableCell>
+                      <TableCell onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => abrirEditar(p)} aria-label="Editar"><Pencil className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" onClick={() => eliminar(p.id)} aria-label="Eliminar"><Trash2 className="h-4 w-4" /></Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   );
                 })}
@@ -445,6 +495,51 @@ export function PartidasView() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Crear / editar partida */}
+      <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingId ? "Editar partida" : "Nueva partida"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Nombre</Label>
+              <Input
+                value={form.nombre}
+                onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))}
+                placeholder="Ej. FRIO + POSTRES"
+              />
+            </div>
+            <div>
+              <Label>Área</Label>
+              <Select value={form.area} onValueChange={v => setForm(f => ({ ...f, area: v as AreaPrincipal }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {config.areas.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Estado</Label>
+              <Select value={form.estado} onValueChange={v => setForm(f => ({ ...f, estado: v as EstadoPartida }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {(["activa", "inactiva", "en_revision"] as EstadoPartida[]).map(e => (
+                    <SelectItem key={e} value={e}>{ESTADO_PARTIDA_LABELS[e]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditorOpen(false)}>Cancelar</Button>
+            <Button onClick={guardar} disabled={!form.nombre.trim()}>
+              {editingId ? "Guardar" : "Crear"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -30,18 +30,18 @@ function construirPlantilla(receta: RecetaConExtras, diaEntrada: string): { titu
       })
     : "próximamente";
 
-  const linkFicha = receta.ficha_tecnica_id
-    ? `/cocina/fichas-tecnicas?id=${receta.ficha_tecnica_id}`
+  const linkEscandallo = receta.escandallo_id
+    ? `/cocina/escandallos?id=${receta.escandallo_id}`
     : null;
 
   const titulo = `Nueva receta en carta: ${receta.nombre}`;
   const contenido =
     `¡Nueva receta disponible en carta!\n\n` +
     `Plato: ${receta.nombre}\n` +
-    (receta.ft_descripcion ? `Descripción: ${receta.ft_descripcion}\n` : "") +
-    (receta.ft_pvp_propuesto ? `Precio: ${receta.ft_pvp_propuesto.toFixed(2)} €\n` : "") +
+    (receta.esc_descripcion ? `Descripción: ${receta.esc_descripcion}\n` : "") +
+    (receta.esc_pvp_propuesto ? `Precio: ${receta.esc_pvp_propuesto.toFixed(2)} €\n` : "") +
     `Entra en carta oficial: ${fechaLegible}\n\n` +
-    (linkFicha ? `Ver ficha técnica completa: ${linkFicha}\n\n` : "") +
+    (linkEscandallo ? `Ver escandallo completo: ${linkEscandallo}\n\n` : "") +
     `Recordad revisar alérgenos y preparación antes del servicio.\n\n` +
     `— El equipo de cocina`;
 
@@ -162,7 +162,7 @@ export function ComunicadoRecetaDialog({ open, onOpenChange, receta }: Props) {
               className="min-h-[220px] text-sm font-mono"
             />
             <p className="text-[10px] text-muted-foreground mt-1">
-              Fórmulas ya rellenadas: título, PVP, día entrada en carta, link ficha técnica.
+              Fórmulas ya rellenadas: título, PVP, día entrada en carta, link escandallo.
             </p>
           </div>
         </div>

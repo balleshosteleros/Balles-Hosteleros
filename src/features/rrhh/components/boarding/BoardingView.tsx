@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { getEmpleadosPorEmpresa } from "@/features/rrhh/data/rrhh";
 import {
@@ -27,15 +27,19 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Plus, MoreHorizontal, Eye, Pencil, Copy, CheckCircle2, Archive, ArrowLeft, ClipboardList, Trash2,
+  Plus, MoreHorizontal, Eye, Pencil, Copy, CheckCircle2, Archive, ArrowLeft, ClipboardList, Trash2, Settings,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
   aplicarOrdenToolbar,
+  colVisible,
+  ordenarColumnas,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+  type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
 import { IOActions } from "@/shared/io";
 import { boardingIO } from "@/features/rrhh/io/boarding.io";
@@ -110,8 +114,11 @@ export function BoardingView() {
   const [buscar, setBuscar] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
 
   const [showNew, setShowNew] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
   const [newEmpleadoId, setNewEmpleadoId] = useState("");
   const [newTipo, setNewTipo] = useState<TipoBoarding>("onboarding");
   const [newPlantillaId, setNewPlantillaId] = useState("");
@@ -448,51 +455,111 @@ export function BoardingView() {
   // ─── LISTADO view (default) ─────────────────────────────────
   const plantillasParaTipo = plantillas.filter((p) => p.tipo === newTipo);
 
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "empleado", label: "Empleado" },
+    { campo: "tipo", label: "Tipo" },
+    { campo: "inicio", label: "Inicio" },
+    { campo: "tareasCompletadas", label: "Tareas completadas" },
+    { campo: "estado", label: "Estado" },
+  ];
+
+  const columnDefs: Record<string, { th: ReactNode; td: (proc: ProcesoBoarding) => ReactNode }> = {
+    empleado: {
+      th: <TableHead key="empleado">Empleado</TableHead>,
+      td: (proc) => {
+        const emp = empleados.find((e) => e.id === proc.empleadoId);
+        return (
+          <TableCell key="empleado">
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
+                {emp ? iniciales(emp.nombre, emp.apellidos) : "??"}
+              </div>
+              <div>
+                <p className="font-medium text-sm">{emp ? `${emp.nombre} ${emp.apellidos}` : "—"}</p>
+                <p className="text-xs text-muted-foreground">{emp?.departamento}</p>
+              </div>
+            </div>
+          </TableCell>
+        );
+      },
+    },
+    tipo: {
+      th: <TableHead key="tipo">Tipo</TableHead>,
+      td: (proc) => (
+        <TableCell key="tipo">{tipoBadge(proc.tipo)}</TableCell>
+      ),
+    },
+    inicio: {
+      th: <TableHead key="inicio">Inicio</TableHead>,
+      td: (proc) => (
+        <TableCell key="inicio" className="text-sm">{proc.fechaInicio}</TableCell>
+      ),
+    },
+    tareasCompletadas: {
+      th: <TableHead key="tareasCompletadas">Tareas completadas</TableHead>,
+      td: (proc) => {
+        const pct = progreso(proc.tareas);
+        const completadas = proc.tareas.filter((t) => t.completada).length;
+        return (
+          <TableCell key="tareasCompletadas">
+            <div className="space-y-1 min-w-[180px]">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">{proc.plantillaNombre}</span>
+                <span className="font-medium">{completadas}/{proc.tareas.length}</span>
+              </div>
+              <Progress value={pct} className="h-1.5" />
+            </div>
+          </TableCell>
+        );
+      },
+    },
+    estado: {
+      th: <TableHead key="estado">Estado</TableHead>,
+      td: (proc) => (
+        <TableCell key="estado">{estadoBadge(proc.estado)}</TableCell>
+      ),
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
   return (
     <div className="p-4 md:p-6 space-y-4">
       <SubmoduleToolbar
         busqueda={buscar}
         onBusquedaChange={setBuscar}
-        placeholderBusqueda="Buscar empleado o plantilla..."
+        placeholderBusqueda="Buscar"
         onNuevo={() => setShowNew(true)}
-        campos={[
-          {
-            campo: "estado",
-            label: "Estado",
-            tipo: "lista",
-            opciones: ["Activo", "Finalizado", "Archivado"],
-          },
-          {
-            campo: "tipo",
-            label: "Tipo",
-            tipo: "lista",
-            opciones: ["Onboarding", "Offboarding"],
-          },
-          {
-            campo: "plantilla",
-            label: "Plantilla",
-            tipo: "lista",
-            opciones: [...new Set(procesos.map((p) => p.plantillaNombre))],
-          },
-          { campo: "fechaInicio", label: "Fecha inicio", tipo: "fecha" },
-        ]}
         filtros={filtros}
         onFiltrosChange={setFiltros}
-        ordenOpciones={[
-          { campo: "empleado", label: "Empleado" },
-          { campo: "fechaInicio", label: "Fecha inicio" },
-          { campo: "estado", label: "Estado" },
-          { campo: "plantilla", label: "Plantilla" },
-        ]}
         orden={orden}
         onOrdenChange={setOrden}
+        columnas={columnasDef}
+        columnasVisibles={columnasVisibles}
+        onColumnasVisiblesChange={setColumnasVisibles}
+        columnasOrden={columnasOrden}
+        onColumnasOrdenChange={setColumnasOrden}
         extraIzquierda={
           <Button variant="outline" size="sm" onClick={() => setVista("plantillas")}>
             <ClipboardList className="h-4 w-4 mr-1" /> Plantillas
           </Button>
         }
         extraDerecha={
-          <IOActions config={boardingIO} context={{ empresaId: empresaActual.id }} onSuccess={() => window.location.reload()} />
+          <>
+            <IOActions config={boardingIO} context={{ empresaId: empresaActual.id }} onSuccess={() => window.location.reload()} />
+            <Button
+              size="icon"
+              variant={showConfig ? "default" : "outline"}
+              className="h-9 w-9"
+              onClick={() => setShowConfig((v) => !v)}
+              title="Configuración"
+              aria-label="Configuración"
+            >
+              <Settings className="h-4 w-4" strokeWidth={1.75} />
+            </Button>
+          </>
         }
       />
 
@@ -501,11 +568,7 @@ export function BoardingView() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Empleado</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Inicio</TableHead>
-                <TableHead>Tareas completadas</TableHead>
-                <TableHead>Estado</TableHead>
+                {columnasRender.map((c) => columnDefs[c.campo]?.th)}
                 <TableHead className="w-12"></TableHead>
               </TableRow>
             </TableHeader>
@@ -517,63 +580,36 @@ export function BoardingView() {
                   </TableCell>
                 </TableRow>
               )}
-              {filtered.map((proc) => {
-                const emp = empleados.find((e) => e.id === proc.empleadoId);
-                const pct = progreso(proc.tareas);
-                const completadas = proc.tareas.filter((t) => t.completada).length;
-                return (
-                  <TableRow key={proc.id} className="cursor-pointer hover:bg-muted/50" onClick={() => { setProcesoActivo(proc); setVista("detalle"); }}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
-                          {emp ? iniciales(emp.nombre, emp.apellidos) : "??"}
-                        </div>
-                        <div>
-                          <p className="font-medium text-sm">{emp ? `${emp.nombre} ${emp.apellidos}` : "—"}</p>
-                          <p className="text-xs text-muted-foreground">{emp?.departamento}</p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>{tipoBadge(proc.tipo)}</TableCell>
-                    <TableCell className="text-sm">{proc.fechaInicio}</TableCell>
-                    <TableCell>
-                      <div className="space-y-1 min-w-[180px]">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-muted-foreground">{proc.plantillaNombre}</span>
-                          <span className="font-medium">{completadas}/{proc.tareas.length}</span>
-                        </div>
-                        <Progress value={pct} className="h-1.5" />
-                      </div>
-                    </TableCell>
-                    <TableCell>{estadoBadge(proc.estado)}</TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => { setProcesoActivo(proc); setVista("detalle"); }}>
-                            <Eye className="h-4 w-4 mr-2" /> Ver checklist
+              {filtered.map((proc) => (
+                <TableRow key={proc.id} className="cursor-pointer hover:bg-muted/50" onClick={() => { setProcesoActivo(proc); setVista("detalle"); }}>
+                  {columnasRender.map((c) => columnDefs[c.campo]?.td(proc))}
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => { setProcesoActivo(proc); setVista("detalle"); }}>
+                          <Eye className="h-4 w-4 mr-2" /> Ver checklist
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => duplicarProceso(proc)}>
+                          <Copy className="h-4 w-4 mr-2" /> Duplicar
+                        </DropdownMenuItem>
+                        {proc.estado === "activo" && (
+                          <DropdownMenuItem onClick={() => finalizarProceso(proc.id)}>
+                            <CheckCircle2 className="h-4 w-4 mr-2" /> Finalizar
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => duplicarProceso(proc)}>
-                            <Copy className="h-4 w-4 mr-2" /> Duplicar
-                          </DropdownMenuItem>
-                          {proc.estado === "activo" && (
-                            <DropdownMenuItem onClick={() => finalizarProceso(proc.id)}>
-                              <CheckCircle2 className="h-4 w-4 mr-2" /> Finalizar
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuItem onClick={() => archivarProceso(proc.id)}>
-                            <Archive className="h-4 w-4 mr-2" /> Archivar
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+                        )}
+                        <DropdownMenuItem onClick={() => archivarProceso(proc.id)}>
+                          <Archive className="h-4 w-4 mr-2" /> Archivar
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </CardContent>

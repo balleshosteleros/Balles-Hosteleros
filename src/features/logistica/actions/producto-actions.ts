@@ -9,24 +9,38 @@ import type {
   Producto,
   TipoProducto,
   EstadoProducto,
+  Conservacion,
 } from "@/features/logistica/data/productos";
 
-const ESTADOS = ["Activo", "Inactivo", "En revisión"] as const;
+const ESTADOS = ["Activo", "Inactivo"] as const;
 const TIPOS = ["compra", "venta", "elaboracion"] as const;
+const CONSERVACIONES = ["Frigorífico", "Congelador", "Seco"] as const;
+const PREPARACIONES = ["Barra", "Cocina"] as const;
 
 const productoInputSchema = z.object({
   nombre: z.string().min(1, "El nombre es obligatorio").transform(capitalizeText),
   tipo: z.enum(TIPOS),
   categoria: z.string().min(1, "La categoría es obligatoria").transform(capitalizeText),
-  familia: z.string().nullable().optional().transform((v) => v ? capitalizeText(v) : v),
   estado: z.enum(ESTADOS).default("Activo"),
-  proveedor: z.string().nullable().optional().transform((v) => v ? capitalizeText(v) : v),
+  // El nombre del proveedor se almacena SIEMPRE en MAYÚSCULAS (regla de
+  // negocio compartida con la tabla `proveedores.nombre_comercial`).
+  proveedor: z.string().nullable().optional().transform((v) => v ? v.trim().toUpperCase() : v),
   precioCompra: z.string().nullable().optional(),
   precioVenta: z.string().nullable().optional(),
   coste: z.string().nullable().optional(),
   iva: z.string().nullable().optional(),
   unidad: z.string().default("ud"),
+  formato: z.string().nullable().optional(),
   observaciones: z.string().nullable().optional(),
+  conservacion: z.enum(CONSERVACIONES).nullable().optional(),
+  preparacion: z.enum(PREPARACIONES).nullable().optional(),
+  partida: z.string().nullable().optional(),
+  estiloColor: z.string().nullable().optional(),
+  estiloImagenUrl: z.string().nullable().optional(),
+  textoTicket: z.string().nullable().optional(),
+  textoComanda: z.string().nullable().optional(),
+  cartaNombre: z.string().nullable().optional(),
+  cartaTexto: z.string().nullable().optional(),
 });
 
 export type ProductoInput = z.infer<typeof productoInputSchema>;
@@ -35,36 +49,56 @@ export type ProductoInput = z.infer<typeof productoInputSchema>;
 type ProductoRow = {
   id: string;
   empresa_id: string | null;
+  numero_secuencial: number | null;
   nombre: string;
   tipo: TipoProducto;
   categoria: string;
-  familia: string | null;
   estado: EstadoProducto;
   proveedor: string | null;
   precio_compra: string | null;
   precio_venta: string | null;
   coste: string | null;
-  iva: string | null;
   unidad: string;
+  formato: string | null;
   observaciones: string | null;
+  conservacion: Conservacion | null;
+  preparacion: "Barra" | "Cocina" | null;
+  partida: string | null;
+  estilo_color: string | null;
+  estilo_imagen_url: string | null;
+  texto_ticket: string | null;
+  texto_comanda: string | null;
+  carta_nombre: string | null;
+  carta_texto: string | null;
+  created_at: string;
   updated_at: string;
 };
 
 function rowToProducto(r: ProductoRow): Producto {
   return {
     id: r.id,
+    numeroSecuencial: r.numero_secuencial ?? undefined,
     nombre: r.nombre,
     tipo: r.tipo,
     categoria: r.categoria,
-    familia: r.familia ?? "",
     estado: r.estado,
     proveedor: r.proveedor ?? undefined,
     precioCompra: r.precio_compra ?? undefined,
     precioVenta: r.precio_venta ?? undefined,
     coste: r.coste ?? undefined,
-    iva: r.iva ?? undefined,
     unidad: r.unidad,
+    formato: r.formato ?? undefined,
     observaciones: r.observaciones ?? undefined,
+    conservacion: r.conservacion ?? null,
+    preparacion: r.preparacion ?? null,
+    partida: r.partida ?? null,
+    estiloColor: r.estilo_color ?? null,
+    estiloImagenUrl: r.estilo_imagen_url ?? null,
+    textoTicket: r.texto_ticket ?? undefined,
+    textoComanda: r.texto_comanda ?? undefined,
+    cartaNombre: r.carta_nombre ?? null,
+    cartaTexto: r.carta_texto ?? null,
+    createdAt: r.created_at ?? undefined,
     ultimaActualizacion: r.updated_at?.slice(0, 10) ?? "",
   };
 }
@@ -124,7 +158,39 @@ export async function listProductos(tipo?: TipoProducto): Promise<Producto[]> {
       return [];
     }
 
-    return ((data ?? []) as ProductoRow[]).map(rowToProducto);
+    const productos = ((data ?? []) as ProductoRow[]).map(rowToProducto);
+
+    // Hidrata el IVA vigente para productos de compra desde producto_precios_compra.
+    // El IVA ya no vive en `productos`; se guarda en el histórico de precios.
+    const compraIds = productos.filter((p) => p.tipo === "compra").map((p) => p.id);
+    if (compraIds.length > 0) {
+      const today = new Date().toISOString().slice(0, 10);
+      const { data: precios } = await supabase
+        .from("producto_precios_compra")
+        .select("producto_id, iva, fecha_inicio, created_at")
+        .in("producto_id", compraIds)
+        .lte("fecha_inicio", today)
+        .order("fecha_inicio", { ascending: false })
+        .order("created_at", { ascending: false });
+
+      const ivaPorProducto = new Map<string, string>();
+      for (const row of (precios ?? []) as Array<{
+        producto_id: string;
+        iva: string | null;
+      }>) {
+        if (!ivaPorProducto.has(row.producto_id) && row.iva) {
+          ivaPorProducto.set(row.producto_id, row.iva);
+        }
+      }
+      for (const p of productos) {
+        if (p.tipo === "compra") {
+          const iva = ivaPorProducto.get(p.id);
+          if (iva) p.iva = iva;
+        }
+      }
+    }
+
+    return productos;
   } catch (err) {
     console.error("listProductos failed:", err);
     return [];
@@ -133,7 +199,7 @@ export async function listProductos(tipo?: TipoProducto): Promise<Producto[]> {
 
 export async function createProducto(
   input: ProductoInput
-): Promise<{ error?: string; success?: boolean }> {
+): Promise<{ error?: string; producto?: Producto }> {
   try {
     const user = await requireManagement();
     const parsed = productoInputSchema.safeParse(input);
@@ -146,27 +212,64 @@ export async function createProducto(
     if (!empresaId) return { error: "No tienes empresa asignada" };
 
     const { supabase } = await getLogisticaContext();
-    const { error } = await supabase.from("productos").insert({
-      empresa_id: empresaId,
-      nombre: parsed.data.nombre,
-      tipo: parsed.data.tipo,
-      categoria: parsed.data.categoria,
-      familia: parsed.data.familia,
-      estado: parsed.data.estado,
-      proveedor: parsed.data.proveedor,
-      precio_compra: parsed.data.precioCompra,
-      precio_venta: parsed.data.precioVenta,
-      coste: parsed.data.coste,
-      iva: parsed.data.iva,
-      unidad: parsed.data.unidad,
-      observaciones: parsed.data.observaciones,
-      created_by: user.id,
-    });
+    const { data: inserted, error } = await supabase
+      .from("productos")
+      .insert({
+        empresa_id: empresaId,
+        nombre: parsed.data.nombre,
+        tipo: parsed.data.tipo,
+        categoria: parsed.data.categoria,
+        estado: parsed.data.estado,
+        proveedor: parsed.data.proveedor,
+        precio_compra: parsed.data.precioCompra,
+        precio_venta: parsed.data.precioVenta,
+        coste: parsed.data.coste,
+        unidad: parsed.data.unidad,
+        formato: parsed.data.formato ?? null,
+        observaciones: parsed.data.observaciones,
+        conservacion: parsed.data.conservacion ?? null,
+        preparacion: parsed.data.preparacion ?? null,
+        partida: parsed.data.partida ?? null,
+        estilo_color: parsed.data.estiloColor ?? null,
+        estilo_imagen_url: parsed.data.estiloImagenUrl ?? null,
+        texto_ticket: parsed.data.textoTicket ?? null,
+        texto_comanda: parsed.data.textoComanda ?? null,
+        carta_nombre: parsed.data.cartaNombre ?? null,
+        carta_texto: parsed.data.cartaTexto ?? null,
+        created_by: user.id,
+      })
+      .select("*")
+      .single();
 
     if (error) return { error: error.message };
 
+    // Productos de compra: si vinieron precio + iva en el alta, abrimos la primera
+    // entrada del histórico para que sean la fuente de verdad desde el día 1.
+    if (
+      parsed.data.tipo === "compra" &&
+      inserted?.id &&
+      parsed.data.precioCompra
+    ) {
+      const precioNum = parseFloat(
+        String(parsed.data.precioCompra).replace(/[^0-9,\.]/g, "").replace(",", ".")
+      );
+      if (Number.isFinite(precioNum) && precioNum >= 0) {
+        await supabase.from("producto_precios_compra").insert({
+          producto_id: inserted.id,
+          precio: precioNum,
+          iva: parsed.data.iva ?? null,
+          fecha_inicio: new Date().toISOString().slice(0, 10),
+          created_by: user.id,
+        });
+      }
+    }
+
     revalidatePath("/logistica/productos");
-    return { success: true };
+    const producto = rowToProducto(inserted as ProductoRow);
+    if (parsed.data.iva && parsed.data.tipo === "compra") {
+      producto.iva = parsed.data.iva;
+    }
+    return { producto };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Error desconocido" };
   }
@@ -218,15 +321,23 @@ export async function bulkImportProductos(
       nombre: p.nombre,
       tipo: p.tipo,
       categoria: p.categoria,
-      familia: p.familia ?? null,
       estado: p.estado,
       proveedor: p.proveedor ?? null,
       precio_compra: p.precioCompra ?? null,
       precio_venta: p.precioVenta ?? null,
       coste: p.coste ?? null,
-      iva: p.iva ?? null,
       unidad: p.unidad,
+      formato: p.formato ?? null,
       observaciones: p.observaciones ?? null,
+      conservacion: p.conservacion ?? null,
+      preparacion: p.preparacion ?? null,
+      partida: p.partida ?? null,
+      estilo_color: p.estiloColor ?? null,
+      estilo_imagen_url: p.estiloImagenUrl ?? null,
+      texto_ticket: p.textoTicket ?? null,
+      texto_comanda: p.textoComanda ?? null,
+      carta_nombre: p.cartaNombre ?? null,
+      carta_texto: p.cartaTexto ?? null,
       created_by: user.id,
     }));
 
@@ -269,15 +380,23 @@ export async function updateProducto(
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (input.nombre !== undefined) updates.nombre = input.nombre ? capitalizeText(input.nombre) : input.nombre;
     if (input.categoria !== undefined) updates.categoria = input.categoria ? capitalizeText(input.categoria) : input.categoria;
-    if (input.familia !== undefined) updates.familia = input.familia ? capitalizeText(input.familia) : input.familia;
     if (input.estado !== undefined) updates.estado = input.estado;
-    if (input.proveedor !== undefined) updates.proveedor = input.proveedor ? capitalizeText(input.proveedor) : input.proveedor;
+    if (input.proveedor !== undefined) updates.proveedor = input.proveedor ? input.proveedor.trim().toUpperCase() : input.proveedor;
     if (input.precioCompra !== undefined) updates.precio_compra = input.precioCompra;
     if (input.precioVenta !== undefined) updates.precio_venta = input.precioVenta;
     if (input.coste !== undefined) updates.coste = input.coste;
-    if (input.iva !== undefined) updates.iva = input.iva;
     if (input.unidad !== undefined) updates.unidad = input.unidad;
+    if (input.formato !== undefined) updates.formato = input.formato;
     if (input.observaciones !== undefined) updates.observaciones = input.observaciones;
+    if (input.conservacion !== undefined) updates.conservacion = input.conservacion;
+    if (input.preparacion !== undefined) updates.preparacion = input.preparacion;
+    if (input.partida !== undefined) updates.partida = input.partida;
+    if (input.estiloColor !== undefined) updates.estilo_color = input.estiloColor;
+    if (input.estiloImagenUrl !== undefined) updates.estilo_imagen_url = input.estiloImagenUrl;
+    if (input.textoTicket !== undefined) updates.texto_ticket = input.textoTicket;
+    if (input.textoComanda !== undefined) updates.texto_comanda = input.textoComanda;
+    if (input.cartaNombre !== undefined) updates.carta_nombre = input.cartaNombre;
+    if (input.cartaTexto !== undefined) updates.carta_texto = input.cartaTexto;
 
     const { error } = await supabase.from("productos").update(updates).eq("id", id);
     if (error) return { error: error.message };

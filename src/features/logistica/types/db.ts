@@ -9,7 +9,7 @@
 // ─── ENUMS ────────────────────────────────────────────────
 
 export type ProductoTipo = "compra" | "venta" | "elaboracion";
-export type ProductoEstado = "Activo" | "Inactivo" | "Descatalogado" | "En revisión";
+export type ProductoEstado = "Activo" | "Inactivo";
 export type ProveedorEstado = "Activo" | "Inactivo" | "Archivado";
 export type AlbaranEstado = "Pendiente" | "Confirmado" | "Recibido" | "Facturado" | "Archivado";
 
@@ -21,7 +21,6 @@ export interface ProductoRow {
   tipo: ProductoTipo;
   nombre: string;
   categoria: string;
-  familia: string | null;
   estado: ProductoEstado;
   proveedor: string | null;
   precio_compra: string | null;
@@ -69,9 +68,11 @@ export interface ProveedorRow {
   persona_contacto: string | null;
   telefono_principal: string | null;
   telefono_secundario: string | null;
+  telefono_comercial: string | null;
   email_principal: string | null;
+  email_comercial: string | null;
   email_pedidos: string | null;
-  email_incidencias: string | null;
+  email_contabilidad: string | null;
   web: string | null;
   direccion: string | null;
   ciudad: string | null;
@@ -79,9 +80,18 @@ export interface ProveedorRow {
   pais: string | null;
   codigo_postal: string | null;
   dias_reparto: string[];
+  horario_reparto: Record<string, string> | null;
+  dias_reparto_negociados: string[];
+  horario_reparto_negociado: Record<string, string> | null;
+  dia_reparto_negociado: string | null;
+  via_pago: string | null;
+  via_pago_negociada: string | null;
+  plazo_pago: string | null;
+  plazo_pago_negociado: string | null;
   condiciones_pago: string | null;
   plazo_entrega: string | null;
   observaciones: string | null;
+  observaciones_logisticas: string | null;
   comentarios_internos: string | null;
   created_by: string | null;
   created_at: string;

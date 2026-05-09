@@ -28,7 +28,7 @@ function Field({ label, value, onChange, type = "text", placeholder = "" }: {
 }
 
 export function ConfiguracionTab() {
-  const { ajustes, setAjustes, empresaActual, getLogoUrl, setLogoUrl } = useEmpresa();
+  const { ajustes, setAjustes, empresaActual, getLogoUrl, setLogoUrl, updateEmpresa } = useEmpresa();
   const d = ajustes.datosGenerales;
   const c = ajustes.configOperativa;
   const fileRef = useRef<HTMLInputElement>(null);
@@ -95,6 +95,10 @@ export function ConfiguracionTab() {
         configOperativa: c,
       });
       if (!res.ok) throw new Error(res.error ?? "Error al guardar");
+      const nombreComercial = d.nombreComercial?.trim();
+      if (nombreComercial && nombreComercial !== empresaActual.nombre) {
+        updateEmpresa(empresaActual.id, { nombre: nombreComercial });
+      }
       toast.success("Configuración guardada correctamente");
     } catch (e: unknown) {
       console.error("[ConfiguracionTab] save:", e);

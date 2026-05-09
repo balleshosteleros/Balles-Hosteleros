@@ -34,6 +34,7 @@ import { aprobarCanje, rechazarCanje, marcarCanjeDisfrutado } from "@/features/t
 import type { Canje } from "@/features/toques/types/toques.types";
 import { CANJE_ESTADO_COLOR, CANJE_ESTADO_LABEL } from "@/features/toques/types/toques.types";
 import { OtorgarToqueDialog } from "./OtorgarToqueDialog";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 
 type Row = Record<string, unknown>;
 function s(r: Row, k: string): string {
@@ -94,6 +95,8 @@ function formatFechaHora(s: string | null): string {
 }
 
 export function CanjesAdminView() {
+  const { empresaActual } = useEmpresa();
+  const empresaActualDbId = empresaActual.dbId ?? null;
   const [canjes, setCanjes] = useState<Canje[]>([]);
   const [loading, setLoading] = useState(true);
   const [empresaId, setEmpresaId] = useState<string | null>(null);
@@ -117,12 +120,7 @@ export function CanjesAdminView() {
         setLoading(false);
         return;
       }
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("empresa_id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      const eId = (profile?.empresa_id as string) ?? null;
+      const eId = empresaActualDbId;
       setEmpresaId(eId);
       if (!eId) {
         setError("No estás asignado a una empresa");
@@ -146,7 +144,7 @@ export function CanjesAdminView() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [empresaActualDbId]);
 
   useEffect(() => {
     void cargar();

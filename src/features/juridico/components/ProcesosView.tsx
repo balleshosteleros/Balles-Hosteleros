@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
@@ -22,10 +22,14 @@ import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
   aplicarOrdenToolbar,
+  colVisible,
+  ordenarColumnas,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
+  type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
+import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 
 const ALL = "__ALL__";
 
@@ -76,6 +80,7 @@ export function ProcesosView() {
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [estadoExpediente, setEstadoExpediente] = useState<"abiertos" | "cerrados" | "todos">("abiertos");
   const [showConfig, setShowConfig] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -242,42 +247,92 @@ export function ProcesosView() {
   const openEdit = (item: ProcesoJuridico) => { setEditItem(item); setModalOpen(true); };
   const openNew = () => { setEditItem(null); setModalOpen(true); };
 
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "titulo", label: "Expediente", bloqueada: true },
+    { campo: "tipo", label: "Tipo" },
+    { campo: "juridico", label: "Responsable" },
+    { campo: "fecha", label: "Fecha" },
+    { campo: "estado", label: "Estado" },
+    { campo: "gravedad", label: "Gravedad" },
+  ];
+
+  const columnDefs: Record<string, { th: ReactNode; td: (item: ProcesoJuridico) => ReactNode }> = {
+    titulo: {
+      th: <TableColumnHeader key="titulo" label="EXPEDIENTE" />,
+      td: (item) => (
+        <td key="titulo" className="px-3 py-2.5 max-w-[280px]">
+          <span className="font-medium text-foreground line-clamp-2">{item.titulo}</span>
+          <span className="text-[11px] text-muted-foreground block">{item.empresa}</span>
+        </td>
+      ),
+    },
+    tipo: {
+      th: <TableColumnHeader key="tipo" label="TIPO" />,
+      td: (item) => (
+        <td key="tipo" className="px-3 py-2.5 text-xs whitespace-nowrap">{item.tipo}</td>
+      ),
+    },
+    juridico: {
+      th: <TableColumnHeader key="juridico" label="RESPONSABLE" />,
+      td: (item) => (
+        <td key="juridico" className="px-3 py-2.5 text-xs whitespace-nowrap">{item.juridico}</td>
+      ),
+    },
+    fecha: {
+      th: <TableColumnHeader key="fecha" label="FECHA" />,
+      td: (item) => (
+        <td key="fecha" className="px-3 py-2.5 whitespace-nowrap text-xs">{item.fecha}</td>
+      ),
+    },
+    estado: {
+      th: <TableColumnHeader key="estado" label="ESTADO" />,
+      td: (item) => (
+        <td key="estado" className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+          <Select value={item.estado} onValueChange={(v) => updateField(item.id, "estado", v)}>
+            <SelectTrigger className="h-8 text-xs w-[130px] border-0 p-0">
+              <EstadoProcesoBadge value={item.estado} />
+            </SelectTrigger>
+            <SelectContent>{ESTADOS_PROCESO.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
+          </Select>
+        </td>
+      ),
+    },
+    gravedad: {
+      th: <TableColumnHeader key="gravedad" label="GRAVEDAD" />,
+      td: (item) => (
+        <td key="gravedad" className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+          <Select value={item.gravedad} onValueChange={(v) => updateField(item.id, "gravedad", v)}>
+            <SelectTrigger className="h-8 text-xs w-[120px] border-0 p-0">
+              <GravedadProcesoBadge value={item.gravedad} />
+            </SelectTrigger>
+            <SelectContent>{GRAVEDADES_PROCESO.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
+          </Select>
+        </td>
+      ),
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
   return (
     <div className="p-4 md:p-6 space-y-5">
       <div className="space-y-4">
         <SubmoduleToolbar
           busqueda={search}
           onBusquedaChange={setSearch}
-          placeholderBusqueda="Buscar expedientes…"
+          placeholderBusqueda="Buscar"
           onNuevo={openNew}
-          textoNuevo="Nuevo"
-          campos={[
-            { campo: "estado", label: "Estado", tipo: "lista", opciones: [...ESTADOS_PROCESO] },
-            { campo: "gravedad", label: "Gravedad", tipo: "lista", opciones: [...GRAVEDADES_PROCESO] },
-            { campo: "tipo", label: "Tipo", tipo: "lista", opciones: [...TIPOS_PROCESO] },
-            { campo: "juridico", label: "Responsable", tipo: "lista", opciones: [...JURIDICOS] },
-            { campo: "fecha", label: "Fecha inicio", tipo: "fecha" },
-          ]}
           filtros={filtros}
           onFiltrosChange={setFiltros}
-          ordenOpciones={[
-            { campo: "titulo", label: "Nombre" },
-            { campo: "fecha", label: "Fecha inicio" },
-            { campo: "estado", label: "Estado" },
-            { campo: "juridico", label: "Abogado" },
-          ]}
           orden={orden}
           onOrdenChange={setOrden}
-          columnas={[
-            { campo: "titulo", label: "Expediente" },
-            { campo: "tipo", label: "Tipo" },
-            { campo: "juridico", label: "Responsable" },
-            { campo: "fecha", label: "Fecha" },
-            { campo: "estado", label: "Estado" },
-            { campo: "gravedad", label: "Gravedad" },
-          ]}
+          columnas={columnasDef}
           columnasVisibles={columnasVisibles}
           onColumnasVisiblesChange={setColumnasVisibles}
+          columnasOrden={columnasOrden}
+          onColumnasOrdenChange={setColumnasOrden}
           extraIzquierda={
             <Select value={estadoExpediente} onValueChange={(v) => setEstadoExpediente(v as typeof estadoExpediente)}>
               <SelectTrigger className="h-9 w-[170px]"><SelectValue /></SelectTrigger>
@@ -291,7 +346,7 @@ export function ProcesosView() {
           extraDerecha={
             <Button
               size="icon"
-              variant={showConfig ? "default" : "ghost"}
+              variant={showConfig ? "default" : "outline"}
               className="h-9 w-9"
               onClick={() => setShowConfig((v) => !v)}
               title="Configuración"
@@ -347,37 +402,15 @@ export function ProcesosView() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted/50">
-                    {["EXPEDIENTE", "TIPO", "RESPONSABLE", "FECHA", "ESTADO", "GRAVEDAD", "PDF", ""].map((h) => (
-                      <th key={h || "actions"} className="text-left px-3 py-3 text-xs font-bold text-muted-foreground tracking-wide whitespace-nowrap">{h}</th>
-                    ))}
+                    {columnasRender.map((c) => columnDefs[c.campo]?.th)}
+                    <th key="pdf" className="text-left px-3 py-3 text-xs font-bold text-muted-foreground tracking-wide whitespace-nowrap">PDF</th>
+                    <th key="actions" className="text-left px-3 py-3 text-xs font-bold text-muted-foreground tracking-wide whitespace-nowrap"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((item) => (
                     <tr key={item.id} className="border-b hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => openEdit(item)}>
-                      <td className="px-3 py-2.5 max-w-[280px]">
-                        <span className="font-medium text-foreground line-clamp-2">{item.titulo}</span>
-                        <span className="text-[11px] text-muted-foreground block">{item.empresa}</span>
-                      </td>
-                      <td className="px-3 py-2.5 text-xs whitespace-nowrap">{item.tipo}</td>
-                      <td className="px-3 py-2.5 text-xs whitespace-nowrap">{item.juridico}</td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-xs">{item.fecha}</td>
-                      <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                        <Select value={item.estado} onValueChange={(v) => updateField(item.id, "estado", v)}>
-                          <SelectTrigger className="h-8 text-xs w-[130px] border-0 p-0">
-                            <EstadoProcesoBadge value={item.estado} />
-                          </SelectTrigger>
-                          <SelectContent>{ESTADOS_PROCESO.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
-                        </Select>
-                      </td>
-                      <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                        <Select value={item.gravedad} onValueChange={(v) => updateField(item.id, "gravedad", v)}>
-                          <SelectTrigger className="h-8 text-xs w-[120px] border-0 p-0">
-                            <GravedadProcesoBadge value={item.gravedad} />
-                          </SelectTrigger>
-                          <SelectContent>{GRAVEDADES_PROCESO.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
-                        </Select>
-                      </td>
+                      {columnasRender.map((c) => columnDefs[c.campo]?.td(item))}
                       <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                         {item.documentos.length > 0 ? (
                           <Badge variant="outline" className="gap-1 text-[10px]"><FileText className="h-3 w-3" /> {item.documentos.length}</Badge>

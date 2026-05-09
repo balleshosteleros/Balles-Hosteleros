@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { TrendingUp, TrendingDown, BarChart3, FileText, Calculator, ArrowLeft, Landmark, Target, Clock } from "lucide-react";
+import { TrendingUp, TrendingDown, BarChart3, FileText, Calculator, ArrowLeft, Landmark, Target, Clock, Settings } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -18,6 +18,7 @@ import {
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
+  type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line } from "recharts";
 import {
@@ -46,6 +47,8 @@ export function AperturasView() {
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
+  const [showConfig, setShowConfig] = useState(false);
 
   const acceso = (e: EstudioApertura, campo: string): unknown => {
     if (campo === "nombre") return e.datos.nombre;
@@ -56,8 +59,6 @@ export function AperturasView() {
     if (campo === "creado") return e.creado;
     return (e as unknown as Record<string, unknown>)[campo];
   };
-
-  const ciudades = useMemo(() => [...new Set(estudios.map((e) => e.datos.ciudad).filter(Boolean))], [estudios]);
 
   const estudiosFiltrados = useMemo(() => {
     let lista = estudios.filter((e) => {
@@ -74,40 +75,43 @@ export function AperturasView() {
     return <DetalleEstudio estudio={selected} onBack={() => setSelected(null)} onUpdate={(e) => { setEstudios(prev => prev.map(x => x.id === e.id ? e : x)); setSelected(e); }} />;
   }
 
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "nombre", label: "Nombre" },
+    { campo: "ciudad", label: "Ciudad" },
+    { campo: "zona", label: "Zona" },
+    { campo: "ventas", label: "Ventas" },
+    { campo: "plazas", label: "Plazas" },
+    { campo: "creado", label: "Creado" },
+  ];
+
   return (
     <div className="p-6 space-y-6">
       <SubmoduleToolbar
         busqueda={busqueda}
         onBusquedaChange={setBusqueda}
-        placeholderBusqueda="Buscar estudio..."
+        placeholderBusqueda="Buscar"
         onNuevo={() => setShowNew(true)}
-        textoNuevo="Nuevo"
-        campos={[
-          { campo: "ciudad", label: "Ciudad", tipo: "lista", opciones: ciudades },
-          { campo: "ventas", label: "Ventas estimadas", tipo: "numero" },
-          { campo: "plazas", label: "Plazas", tipo: "numero" },
-          { campo: "creado", label: "Creado", tipo: "fecha" },
-        ]}
         filtros={filtros}
         onFiltrosChange={setFiltros}
-        ordenOpciones={[
-          { campo: "nombre", label: "Nombre" },
-          { campo: "ciudad", label: "Ciudad" },
-          { campo: "ventas", label: "Ventas" },
-          { campo: "creado", label: "Fecha" },
-        ]}
         orden={orden}
         onOrdenChange={setOrden}
-        columnas={[
-          { campo: "nombre", label: "Nombre" },
-          { campo: "ciudad", label: "Ciudad" },
-          { campo: "zona", label: "Zona" },
-          { campo: "ventas", label: "Ventas" },
-          { campo: "plazas", label: "Plazas" },
-          { campo: "creado", label: "Creado" },
-        ]}
+        columnas={columnasDef}
         columnasVisibles={columnasVisibles}
         onColumnasVisiblesChange={setColumnasVisibles}
+        columnasOrden={columnasOrden}
+        onColumnasOrdenChange={setColumnasOrden}
+        extraDerecha={
+          <Button
+            size="icon"
+            variant={showConfig ? "default" : "outline"}
+            className="h-9 w-9"
+            onClick={() => setShowConfig((v) => !v)}
+            title="Configuración"
+            aria-label="Configuración"
+          >
+            <Settings className="h-4 w-4" strokeWidth={1.75} />
+          </Button>
+        }
       />
 
       <Dialog open={showNew} onOpenChange={setShowNew}>

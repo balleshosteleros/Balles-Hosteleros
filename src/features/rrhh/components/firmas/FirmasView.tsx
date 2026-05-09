@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -41,13 +41,18 @@ import {
   ShieldCheck,
   Upload,
   AlertTriangle,
+  Settings,
 } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
   aplicarOrdenToolbar,
+  colVisible,
+  ordenarColumnas,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+  type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
 import { toast } from "sonner";
 import {
@@ -95,10 +100,13 @@ export function FirmasView() {
     campo: "enviadoEn",
     direccion: "desc",
   });
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
 
   const [verDoc, setVerDoc] = useState<DocumentoFirma | null>(null);
   const [nuevoOpen, setNuevoOpen] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
 
   const [titulo, setTitulo] = useState("");
   const [tipo, setTipo] = useState<TipoDocumento>("contrato");
@@ -210,6 +218,97 @@ export function FirmasView() {
     toast.success(`Documento enviado a ${empleado.nombre}`);
   }
 
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "documento", label: "Documento" },
+    { campo: "empleado", label: "Empleado" },
+    { campo: "tipo", label: "Tipo" },
+    { campo: "modalidad", label: "Modalidad" },
+    { campo: "validez", label: "Validez" },
+    { campo: "enviado", label: "Enviado" },
+    { campo: "firmado", label: "Firmado" },
+    { campo: "estado", label: "Estado" },
+  ];
+
+  const columnDefs: Record<string, { th: ReactNode; td: (d: DocumentoFirma) => ReactNode }> = {
+    documento: {
+      th: <TableHead key="documento">Documento</TableHead>,
+      td: (d) => (
+        <TableCell key="documento" className="font-medium max-w-[260px]">
+          <div className="line-clamp-1">{d.titulo}</div>
+          <div className="text-xs text-muted-foreground">
+            Enviado por {d.enviadoPor}
+          </div>
+        </TableCell>
+      ),
+    },
+    empleado: {
+      th: <TableHead key="empleado">Empleado</TableHead>,
+      td: (d) => (
+        <TableCell key="empleado">
+          <div className="font-medium text-sm">{d.empleadoNombre}</div>
+          <div className="text-xs text-muted-foreground">
+            {d.departamento}
+          </div>
+        </TableCell>
+      ),
+    },
+    tipo: {
+      th: <TableHead key="tipo">Tipo</TableHead>,
+      td: (d) => (
+        <TableCell key="tipo" className="text-sm">{TIPO_LABEL[d.tipo]}</TableCell>
+      ),
+    },
+    modalidad: {
+      th: <TableHead key="modalidad">Modalidad</TableHead>,
+      td: (d) => (
+        <TableCell key="modalidad" className="text-sm">
+          {MODALIDAD_LABEL[d.modalidad]}
+        </TableCell>
+      ),
+    },
+    validez: {
+      th: <TableHead key="validez">Validez</TableHead>,
+      td: (d) => (
+        <TableCell key="validez">
+          <Badge variant="outline" className="gap-1">
+            <ShieldCheck className="h-3 w-3" />
+            {VALIDEZ_LABEL[d.validez]}
+          </Badge>
+        </TableCell>
+      ),
+    },
+    enviado: {
+      th: <TableHead key="enviado">Enviado</TableHead>,
+      td: (d) => (
+        <TableCell key="enviado" className="text-xs text-muted-foreground">
+          {formatFechaHora(d.enviadoEn)}
+        </TableCell>
+      ),
+    },
+    firmado: {
+      th: <TableHead key="firmado">Firmado</TableHead>,
+      td: (d) => (
+        <TableCell key="firmado" className="text-xs text-muted-foreground">
+          {formatFechaHora(d.firmadoEn)}
+        </TableCell>
+      ),
+    },
+    estado: {
+      th: <TableHead key="estado">Estado</TableHead>,
+      td: (d) => (
+        <TableCell key="estado">
+          <Badge variant="outline" className={ESTADO_COLOR[d.estado]}>
+            {ESTADO_LABEL[d.estado]}
+          </Badge>
+        </TableCell>
+      ),
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-5">
       {/* Cabecera */}
@@ -288,56 +387,29 @@ export function FirmasView() {
       <SubmoduleToolbar
         busqueda={busqueda}
         onBusquedaChange={setBusqueda}
-        placeholderBusqueda="Buscar por título, empleado, departamento, tipo..."
+        placeholderBusqueda="Buscar"
         onNuevo={abrirNuevo}
-        textoNuevo="Nuevo documento"
-        campos={[
-          {
-            campo: "tipo",
-            label: "Tipo de documento",
-            tipo: "lista",
-            opciones: TIPOS_DOCUMENTO.map((t) => TIPO_LABEL[t]),
-          },
-          {
-            campo: "modalidad",
-            label: "Modalidad de firma",
-            tipo: "lista",
-            opciones: MODALIDADES_FIRMA.map((m) => MODALIDAD_LABEL[m]),
-          },
-          {
-            campo: "validez",
-            label: "Validez legal",
-            tipo: "lista",
-            opciones: VALIDECES_LEGAL.map((v) => VALIDEZ_LABEL[v]),
-          },
-          {
-            campo: "estado",
-            label: "Estado",
-            tipo: "lista",
-            opciones: (Object.keys(ESTADO_LABEL) as EstadoFirma[]).map(
-              (e) => ESTADO_LABEL[e],
-            ),
-          },
-          {
-            campo: "departamento",
-            label: "Departamento",
-            tipo: "lista",
-            opciones: [...new Set(items.map((d) => d.departamento))],
-          },
-          { campo: "enviadoEn", label: "Fecha envío", tipo: "fecha" },
-          { campo: "firmadoEn", label: "Fecha firma", tipo: "fecha" },
-        ]}
         filtros={filtros}
         onFiltrosChange={setFiltros}
-        ordenOpciones={[
-          { campo: "enviadoEn", label: "Fecha envío" },
-          { campo: "firmadoEn", label: "Fecha firma" },
-          { campo: "empleado", label: "Empleado" },
-          { campo: "estado", label: "Estado" },
-          { campo: "tipo", label: "Tipo" },
-        ]}
         orden={orden}
         onOrdenChange={setOrden}
+        columnas={columnasDef}
+        columnasVisibles={columnasVisibles}
+        onColumnasVisiblesChange={setColumnasVisibles}
+        columnasOrden={columnasOrden}
+        onColumnasOrdenChange={setColumnasOrden}
+        extraDerecha={
+          <Button
+            size="icon"
+            variant={showConfig ? "default" : "outline"}
+            className="h-9 w-9"
+            onClick={() => setShowConfig((v) => !v)}
+            title="Configuración"
+            aria-label="Configuración"
+          >
+            <Settings className="h-4 w-4" strokeWidth={1.75} />
+          </Button>
+        }
       />
 
       {/* Tabla */}
@@ -351,53 +423,14 @@ export function FirmasView() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Documento</TableHead>
-                <TableHead>Empleado</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Modalidad</TableHead>
-                <TableHead>Validez</TableHead>
-                <TableHead>Enviado</TableHead>
-                <TableHead>Firmado</TableHead>
-                <TableHead>Estado</TableHead>
+                {columnasRender.map((c) => columnDefs[c.campo]?.th)}
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtrados.map((d) => (
                 <TableRow key={d.id}>
-                  <TableCell className="font-medium max-w-[260px]">
-                    <div className="line-clamp-1">{d.titulo}</div>
-                    <div className="text-xs text-muted-foreground">
-                      Enviado por {d.enviadoPor}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-medium text-sm">{d.empleadoNombre}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {d.departamento}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-sm">{TIPO_LABEL[d.tipo]}</TableCell>
-                  <TableCell className="text-sm">
-                    {MODALIDAD_LABEL[d.modalidad]}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="gap-1">
-                      <ShieldCheck className="h-3 w-3" />
-                      {VALIDEZ_LABEL[d.validez]}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {formatFechaHora(d.enviadoEn)}
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {formatFechaHora(d.firmadoEn)}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={ESTADO_COLOR[d.estado]}>
-                      {ESTADO_LABEL[d.estado]}
-                    </Badge>
-                  </TableCell>
+                  {columnasRender.map((c) => columnDefs[c.campo]?.td(d))}
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
                       <Button

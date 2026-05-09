@@ -118,21 +118,21 @@ export interface Receta {
   destino: "cocina" | "sala" | "ambos";
   fase_id: string | null;
   sub_estado_id: string | null;
-  ficha_tecnica_id: string | null;
+  escandallo_id: string | null;
   estado_general: EstadoGeneral;
   fecha_fase_inicio: string | null;
   favorita: boolean;
   motivo_archivado: string | null;
-  // Borrador ficha técnica
-  ft_descripcion: string | null;
-  ft_elaboracion: string | null;
-  ft_alergenos: string[];
-  ft_partida: string | null;
-  ft_tiempo_preparacion: number | null;
-  ft_porciones: number | null;
-  ft_pvp_propuesto: number | null;
-  ft_coste_estimado: number | null;
-  ft_etiquetas_finales: string[];
+  // Borrador escandallo
+  esc_descripcion: string | null;
+  esc_elaboracion: string | null;
+  esc_alergenos: string[];
+  esc_partida: string | null;
+  esc_tiempo_preparacion: number | null;
+  esc_porciones: number | null;
+  esc_pvp_propuesto: number | null;
+  esc_coste_estimado: number | null;
+  esc_etiquetas_finales: string[];
   propuesto_por: string | null;
   propuesto_por_nombre: string | null;
   created_at: string;
@@ -162,13 +162,13 @@ export interface CrearRecetaInput {
   nombre: string;
   descripcion?: string;
   destino: "cocina" | "sala" | "ambos";
-  ft_descripcion?: string;
-  ft_elaboracion?: string;
-  ft_alergenos?: string[];
-  ft_partida?: string;
-  ft_tiempo_preparacion?: number;
-  ft_porciones?: number;
-  ft_pvp_propuesto?: number;
+  esc_descripcion?: string;
+  esc_elaboracion?: string;
+  esc_alergenos?: string[];
+  esc_partida?: string;
+  esc_tiempo_preparacion?: number;
+  esc_porciones?: number;
+  esc_pvp_propuesto?: number;
   ingredientes?: Array<{
     producto_id?: string | null;
     nombre_libre?: string | null;

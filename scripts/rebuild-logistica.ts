@@ -38,8 +38,8 @@ async function main() {
     .from("productos").select("id").eq("empresa_id", empresaId);
   if (prods && prods.length > 0) {
     const ids = prods.map((p) => p.id);
-    await supabase.from("escandallos").delete().in("producto_venta_id", ids);
-    await supabase.from("escandallos").delete().in("ingrediente_id", ids);
+    await supabase.from("producto_composicion").delete().in("producto_venta_id", ids);
+    await supabase.from("producto_composicion").delete().in("ingrediente_id", ids);
     await supabase.from("productos").delete().in("id", ids);
     console.log(`  ✓ Borrados ${ids.length} productos y sus escandallos`);
   }
@@ -74,20 +74,20 @@ async function main() {
 
   for (const m of toMerge) {
     const { data: dup } = await supabase
-      .from("escandallos").select("producto_venta_id").eq("ingrediente_id", m.compraId);
+      .from("producto_composicion").select("producto_venta_id").eq("ingrediente_id", m.compraId);
     if (dup && dup.length > 0) {
       for (const d of dup) {
         const { data: ex } = await supabase
-          .from("escandallos").select("id")
+          .from("producto_composicion").select("id")
           .eq("ingrediente_id", m.elabId)
           .eq("producto_venta_id", d.producto_venta_id)
           .maybeSingle();
         if (ex) {
-          await supabase.from("escandallos").delete()
+          await supabase.from("producto_composicion").delete()
             .eq("ingrediente_id", m.compraId)
             .eq("producto_venta_id", d.producto_venta_id);
         } else {
-          await supabase.from("escandallos").update({ ingrediente_id: m.elabId })
+          await supabase.from("producto_composicion").update({ ingrediente_id: m.elabId })
             .eq("ingrediente_id", m.compraId)
             .eq("producto_venta_id", d.producto_venta_id);
         }
@@ -104,7 +104,7 @@ async function main() {
   const { count: cVenta } = await supabase
     .from("productos").select("id", { count: "exact", head: true }).eq("tipo", "venta");
   const { count: cEsc } = await supabase
-    .from("escandallos").select("id", { count: "exact", head: true });
+    .from("producto_composicion").select("id", { count: "exact", head: true });
 
   console.log(`\n━━━ ESTADO FINAL ━━━`);
   console.log(`  Productos compra:       ${cCompra}`);

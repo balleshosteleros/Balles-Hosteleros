@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 
 async function getContext() {
   const supabase = await createClient();
@@ -8,12 +9,8 @@ async function getContext() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { supabase, user: null, empresaId: null };
-  const { data } = await supabase
-    .from("profiles")
-    .select("empresa_id")
-    .eq("user_id", user.id)
-    .single();
-  return { supabase, user, empresaId: data?.empresa_id ?? null };
+  const empresaId = await getEmpresaActivaForUser(supabase, user.id);
+  return { supabase, user, empresaId };
 }
 
 export async function listVencimientos() {

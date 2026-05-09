@@ -5,14 +5,16 @@ import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  ArrowLeft, CheckCircle2, Clock, TrendingUp, TrendingDown, Users, AlertTriangle,
+  ArrowLeft, CalendarIcon, CheckCircle2, Clock, TrendingUp, TrendingDown, Users, AlertTriangle, CalendarClock,
 } from "lucide-react";
+import type { DateRange } from "react-day-picker";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   LineChart, Line,
@@ -24,7 +26,17 @@ import {
 import { cn } from "@/lib/utils";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
-type RangoPreset = "7d" | "30d" | "90d" | "mes" | "custom";
+type RangoPreset =
+  | "7d"
+  | "30d"
+  | "90d"
+  | "mes"
+  | "mes_pasado"
+  | "trimestre"
+  | "trimestre_pasado"
+  | "ano"
+  | "ano_pasado"
+  | "custom";
 
 function toISODate(d: Date): string {
   const y = d.getFullYear();
@@ -33,8 +45,46 @@ function toISODate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+function fromISODate(iso: string): Date {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function formatRangoLabel(desde: string, hasta: string): string {
+  const fmt = (iso: string) => {
+    const [y, m, d] = iso.split("-");
+    return `${d}/${m}/${y}`;
+  };
+  return `${fmt(desde)} – ${fmt(hasta)}`;
+}
+
 function presetToRange(preset: RangoPreset): { desde: string; hasta: string } {
   const hoy = new Date();
+  if (preset === "mes_pasado") {
+    const desde = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
+    const hasta = new Date(hoy.getFullYear(), hoy.getMonth(), 0);
+    return { desde: toISODate(desde), hasta: toISODate(hasta) };
+  }
+  if (preset === "trimestre") {
+    const q = Math.floor(hoy.getMonth() / 3);
+    const desde = new Date(hoy.getFullYear(), q * 3, 1);
+    return { desde: toISODate(desde), hasta: toISODate(hoy) };
+  }
+  if (preset === "trimestre_pasado") {
+    const q = Math.floor(hoy.getMonth() / 3);
+    const desde = new Date(hoy.getFullYear(), (q - 1) * 3, 1);
+    const hasta = new Date(hoy.getFullYear(), q * 3, 0);
+    return { desde: toISODate(desde), hasta: toISODate(hasta) };
+  }
+  if (preset === "ano") {
+    const desde = new Date(hoy.getFullYear(), 0, 1);
+    return { desde: toISODate(desde), hasta: toISODate(hoy) };
+  }
+  if (preset === "ano_pasado") {
+    const desde = new Date(hoy.getFullYear() - 1, 0, 1);
+    const hasta = new Date(hoy.getFullYear() - 1, 11, 31);
+    return { desde: toISODate(desde), hasta: toISODate(hasta) };
+  }
   const hasta = toISODate(hoy);
   const desde = new Date(hoy);
   if (preset === "7d") desde.setDate(hoy.getDate() - 6);
@@ -98,8 +148,10 @@ export function DashboardProductividad() {
     const total = rows.reduce((acc, r) => acc + r.total, 0);
     const hechas = rows.reduce((acc, r) => acc + r.hechas, 0);
     const pendientes = rows.reduce((acc, r) => acc + r.pendientes, 0);
+    const pospuestas = rows.reduce((acc, r) => acc + (r.pospuestas ?? 0), 0);
+    const pospuestasTotales = rows.reduce((acc, r) => acc + (r.pospuestas_totales ?? 0), 0);
     const pct = total > 0 ? Math.round((hechas / total) * 100) : 0;
-    return { total, hechas, pendientes, pct };
+    return { total, hechas, pendientes, pospuestas, pospuestasTotales, pct };
   }, [rows]);
 
   const porDepto = useMemo(() => {
@@ -140,11 +192,13 @@ export function DashboardProductividad() {
   }, [rows]);
 
   const rankingEmpleados = useMemo(() => {
-    const m = new Map<string, { user_id: string; hechas: number; total: number }>();
+    const m = new Map<string, { user_id: string; hechas: number; total: number; pospuestas: number; pospuestasTotales: number }>();
     for (const r of rows) {
-      const v = m.get(r.user_id) ?? { user_id: r.user_id, hechas: 0, total: 0 };
+      const v = m.get(r.user_id) ?? { user_id: r.user_id, hechas: 0, total: 0, pospuestas: 0, pospuestasTotales: 0 };
       v.hechas += r.hechas;
       v.total += r.total;
+      v.pospuestas += r.pospuestas ?? 0;
+      v.pospuestasTotales += r.pospuestas_totales ?? 0;
       m.set(r.user_id, v);
     }
     const empMap = new Map(empleados.map((e) => [e.user_id, e]));
@@ -166,82 +220,98 @@ export function DashboardProductividad() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-muted/20">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b bg-card">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => router.push("/direccion/cronogramas")}>
-            <ArrowLeft className="h-4 w-4 mr-1.5" />
-            Cronogramas
+      {/* Filtros */}
+      <div className="px-6 pt-3 pb-3 border-b bg-card space-y-2">
+        <div className="flex flex-wrap items-end gap-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push("/direccion/cronogramas")}
+            className="h-9 w-9 p-0"
+            aria-label="Volver a Cronogramas"
+          >
+            <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <h1 className="text-xl font-bold tracking-tight">Productividad</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Cumplimiento de cronogramas por departamento y empleado.
-            </p>
+            <Label className="text-[10px] uppercase text-muted-foreground">Período</Label>
+            <Select value={preset} onValueChange={(v) => handlePreset(v as RangoPreset)}>
+              <SelectTrigger className="w-[160px] h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7d">Últimos 7 días</SelectItem>
+                <SelectItem value="30d">Últimos 30 días</SelectItem>
+                <SelectItem value="90d">Últimos 90 días</SelectItem>
+                <SelectItem value="mes">Este mes</SelectItem>
+                <SelectItem value="mes_pasado">Mes pasado</SelectItem>
+                <SelectItem value="trimestre">Este trimestre</SelectItem>
+                <SelectItem value="trimestre_pasado">Trimestre pasado</SelectItem>
+                <SelectItem value="ano">Este año</SelectItem>
+                <SelectItem value="ano_pasado">Año pasado</SelectItem>
+                <SelectItem value="custom">Personalizado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {preset === "custom" && (
+            <div>
+              <Label className="text-[10px] uppercase text-muted-foreground">Rango de fechas</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-[260px] h-9 justify-start font-normal text-left"
+                  >
+                    <CalendarIcon className="h-4 w-4 mr-2 shrink-0" />
+                    <span className="tabular-nums">{formatRangoLabel(desde, hasta)}</span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-auto p-0">
+                  <Calendar
+                    mode="range"
+                    numberOfMonths={2}
+                    defaultMonth={fromISODate(desde)}
+                    selected={{ from: fromISODate(desde), to: fromISODate(hasta) }}
+                    onSelect={(range: DateRange | undefined) => {
+                      if (range?.from) {
+                        setDesde(toISODate(range.from));
+                        setHasta(toISODate(range.to ?? range.from));
+                        setPreset("custom");
+                      }
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+          )}
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <Label className="text-[10px] uppercase text-muted-foreground">Departamento</Label>
+            <Select value={filtroDepto} onValueChange={setFiltroDepto}>
+              <SelectTrigger className="w-[180px] h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_all">Todos</SelectItem>
+                {departamentos.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-[10px] uppercase text-muted-foreground">Empleado</Label>
+            <Select value={filtroUser} onValueChange={setFiltroUser}>
+              <SelectTrigger className="w-[220px] h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_all">Todos</SelectItem>
+                {empleados.map((e) => (
+                  <SelectItem key={e.user_id} value={e.user_id}>
+                    {e.nombre} <span className="text-muted-foreground text-xs">({e.rol})</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </div>
 
-      {/* Filtros */}
-      <div className="px-6 py-3 border-b bg-card flex flex-wrap items-end gap-3">
-        <div className="flex items-center gap-1">
-          {(["7d", "30d", "90d", "mes"] as RangoPreset[]).map((p) => (
-            <Button
-              key={p}
-              size="sm"
-              variant={preset === p ? "default" : "outline"}
-              onClick={() => handlePreset(p)}
-            >
-              {p === "7d" ? "7 días" : p === "30d" ? "30 días" : p === "90d" ? "90 días" : "Este mes"}
-            </Button>
-          ))}
-        </div>
-        <div>
-          <Label className="text-[10px] uppercase text-muted-foreground">Desde</Label>
-          <Input
-            type="date"
-            value={desde}
-            onChange={(e) => { setDesde(e.target.value); setPreset("custom"); }}
-            className="w-[160px] h-9"
-          />
-        </div>
-        <div>
-          <Label className="text-[10px] uppercase text-muted-foreground">Hasta</Label>
-          <Input
-            type="date"
-            value={hasta}
-            onChange={(e) => { setHasta(e.target.value); setPreset("custom"); }}
-            className="w-[160px] h-9"
-          />
-        </div>
-        <div>
-          <Label className="text-[10px] uppercase text-muted-foreground">Departamento</Label>
-          <Select value={filtroDepto} onValueChange={setFiltroDepto}>
-            <SelectTrigger className="w-[180px] h-9"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="_all">Todos</SelectItem>
-              {departamentos.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label className="text-[10px] uppercase text-muted-foreground">Empleado</Label>
-          <Select value={filtroUser} onValueChange={setFiltroUser}>
-            <SelectTrigger className="w-[220px] h-9"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="_all">Todos</SelectItem>
-              {empleados.map((e) => (
-                <SelectItem key={e.user_id} value={e.user_id}>
-                  {e.nombre} <span className="text-muted-foreground text-xs">({e.rol})</span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
       {/* Contenido */}
-      <div className="flex-1 overflow-auto p-6 space-y-6">
+      <div className="flex-1 overflow-auto px-6 py-4 space-y-6">
         {error ? (
           <Card className="p-6 bg-amber-50 border-amber-200 flex items-start gap-3">
             <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
@@ -256,7 +326,7 @@ export function DashboardProductividad() {
         ) : (
           <>
             {/* KPIs */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <KpiCard
                 label="% Cumplimiento"
                 value={`${kpis.pct}%`}
@@ -265,6 +335,13 @@ export function DashboardProductividad() {
               />
               <KpiCard label="Tareas hechas" value={kpis.hechas.toLocaleString()} icon={CheckCircle2} tone="ok" />
               <KpiCard label="Pendientes" value={kpis.pendientes.toLocaleString()} icon={Clock} tone="warn" />
+              <KpiCard
+                label="Pospuestas"
+                value={kpis.pospuestasTotales.toLocaleString()}
+                sublabel={kpis.pospuestas > 0 ? `${kpis.pospuestas} tareas afectadas` : undefined}
+                icon={CalendarClock}
+                tone={kpis.pospuestasTotales > 0 ? "warn" : "neutral"}
+              />
               <KpiCard label="Total programadas" value={kpis.total.toLocaleString()} icon={Users} tone="neutral" />
             </div>
 
@@ -360,6 +437,20 @@ export function DashboardProductividad() {
                           {e.hechas} / {e.total} tareas
                         </div>
                       </div>
+                      <div
+                        className={cn(
+                          "flex items-center gap-1 text-xs tabular-nums w-24 justify-end",
+                          e.pospuestasTotales >= 3
+                            ? "text-red-600 font-semibold"
+                            : e.pospuestasTotales > 0
+                              ? "text-amber-600"
+                              : "text-muted-foreground/40",
+                        )}
+                        title={`${e.pospuestasTotales} pospuestas en ${e.pospuestas} tareas`}
+                      >
+                        <CalendarClock className="h-3.5 w-3.5" />
+                        {e.pospuestasTotales}
+                      </div>
                       <div className="w-32">
                         <div className="h-2 rounded-full bg-muted overflow-hidden">
                           <div
@@ -385,10 +476,11 @@ export function DashboardProductividad() {
 }
 
 function KpiCard({
-  label, value, icon: Icon, tone,
+  label, value, sublabel, icon: Icon, tone,
 }: {
   label: string;
   value: string;
+  sublabel?: string;
   icon: React.ElementType;
   tone: "ok" | "warn" | "bad" | "neutral";
 }) {
@@ -405,6 +497,7 @@ function KpiCard({
         <span className="text-[10px] uppercase tracking-wider font-semibold">{label}</span>
       </div>
       <div className="text-3xl font-bold tabular-nums mt-1.5">{value}</div>
+      {sublabel && <div className="text-[10px] mt-0.5 opacity-70">{sublabel}</div>}
     </Card>
   );
 }

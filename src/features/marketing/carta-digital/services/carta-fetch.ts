@@ -180,7 +180,30 @@ export async function fetchCartaPorSlug(slug: string): Promise<CartaPublica | nu
     const categoriasRows = (categoriasRes.data ?? []) as CategoriaRow[];
     const itemsRows = (itemsRes.data ?? []) as ItemRow[];
 
-    const items = itemsRows.map(rowToItem);
+    // Override de nombre/descripción desde productos.carta_nombre / carta_texto cuando aplique.
+    const productoIds = Array.from(
+      new Set(itemsRows.map((i) => i.producto_id).filter((v): v is string => !!v)),
+    );
+    const productosOverride = new Map<string, { carta_nombre: string | null; carta_texto: string | null }>();
+    if (productoIds.length > 0) {
+      const { data: prodRows } = await supabase
+        .from("productos")
+        .select("id, carta_nombre, carta_texto")
+        .in("id", productoIds);
+      for (const p of (prodRows ?? []) as { id: string; carta_nombre: string | null; carta_texto: string | null }[]) {
+        productosOverride.set(p.id, { carta_nombre: p.carta_nombre, carta_texto: p.carta_texto });
+      }
+    }
+
+    const items = itemsRows.map((row) => {
+      const item = rowToItem(row);
+      if (row.producto_id) {
+        const ov = productosOverride.get(row.producto_id);
+        if (ov?.carta_nombre && ov.carta_nombre.trim()) item.nombre = ov.carta_nombre;
+        if (ov?.carta_texto && ov.carta_texto.trim()) item.descripcion = ov.carta_texto;
+      }
+      return item;
+    });
     const categorias = categoriasRows.map(rowToCategoria).map((c) => ({
       ...c,
       items: items.filter((i) => i.categoria_id === c.id),

@@ -32,11 +32,11 @@ export function MarketingTab({ receta, onChanged }: Props) {
   const [publishing, setPublishing] = useState(false);
   const [showComunicado, setShowComunicado] = useState(false);
 
-  const publicada = Boolean(receta.ficha_tecnica_id);
+  const publicada = Boolean(receta.escandallo_id);
 
   async function publicar() {
     if (publicada) {
-      if (!confirm("Esta receta ya está publicada. ¿Actualizar la ficha técnica oficial y productos de compra?")) {
+      if (!confirm("Esta receta ya está publicada. ¿Actualizar la escandallo oficial y productos de compra?")) {
         return;
       }
     }
@@ -100,12 +100,12 @@ export function MarketingTab({ receta, onChanged }: Props) {
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
               {publicada
-                ? "Ya existe en Fichas Técnicas. Las ediciones aquí sobrescriben la ficha oficial."
-                : "Al publicar se creará en Fichas Técnicas + productos de compra en Logística."}
+                ? "Ya existe en Escandallos. Las ediciones aquí sobrescriben el escandallo oficial."
+                : "Al publicar se creará en Escandallos + productos de compra en Logística."}
             </p>
-            {publicada && receta.ficha_tecnica_id && (
+            {publicada && receta.escandallo_id && (
               <Badge variant="outline" className="text-[10px] mt-1">
-                Ficha #{receta.ficha_tecnica_id.slice(0, 8)}
+                Ficha #{receta.escandallo_id.slice(0, 8)}
               </Badge>
             )}
           </div>
@@ -119,8 +119,8 @@ export function MarketingTab({ receta, onChanged }: Props) {
           {publishing
             ? "Publicando..."
             : publicada
-              ? "Actualizar ficha técnica oficial"
-              : "Publicar oficial (crea ficha técnica + productos)"}
+              ? "Actualizar escandallo oficial"
+              : "Publicar oficial (crea escandallo + productos)"}
         </Button>
 
         <Button

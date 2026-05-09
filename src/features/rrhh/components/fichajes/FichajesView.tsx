@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { ESTADO_FICHAJE_LABEL, ESTADO_FICHAJE_COLOR, TIPOS_INCIDENCIA_LABEL } from "@/features/rrhh/data/fichajes";
 import type { EstadoFichaje, Fichaje, ConfigFichajes } from "@/features/rrhh/data/fichajes";
@@ -15,14 +15,17 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Clock, AlertTriangle, CheckCircle2, Settings2, ClipboardList, History } from "lucide-react";
+import { Clock, AlertTriangle, CheckCircle2, Settings, Settings2, ClipboardList, History } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
   aplicarOrdenToolbar,
+  colVisible,
+  ordenarColumnas,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
+  type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
 import { IOActions } from "@/shared/io";
 import { fichajesIO } from "@/features/rrhh/io/fichajes.io";
@@ -62,7 +65,9 @@ export function FichajesView() {
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [fichajeModal, setFichajeModal] = useState<Fichaje | null>(null);
+  const [showConfig, setShowConfig] = useState(false);
 
   const loadFichajes = useCallback(async () => {
     setLoading(true);
@@ -127,6 +132,77 @@ export function FichajesView() {
 
   const incidenciasPendientes = incidencias.filter(i => !i.resuelta);
 
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "empleado", label: "Empleado" },
+    { campo: "fecha", label: "Fecha" },
+    { campo: "entrada", label: "Entrada" },
+    { campo: "salida", label: "Salida" },
+    { campo: "pausa", label: "Pausa" },
+    { campo: "horas", label: "Horas" },
+    { campo: "estado", label: "Estado" },
+    { campo: "validador", label: "Validado por" },
+  ];
+
+  const columnDefs: Record<string, { th: ReactNode; td: (f: Fichaje) => ReactNode }> = {
+    empleado: {
+      th: <TableHead key="empleado">Empleado</TableHead>,
+      td: (f) => (
+        <TableCell key="empleado"><div><p className="font-medium text-sm">{f.empleadoNombre}</p><p className="text-xs text-muted-foreground">{f.departamento}</p></div></TableCell>
+      ),
+    },
+    fecha: {
+      th: <TableHead key="fecha">Fecha</TableHead>,
+      td: (f) => (
+        <TableCell key="fecha" className="text-sm">{f.fecha}</TableCell>
+      ),
+    },
+    entrada: {
+      th: <TableHead key="entrada">Entrada</TableHead>,
+      td: (f) => (
+        <TableCell key="entrada" className="text-sm font-mono">{f.horaEntrada ?? "—"}</TableCell>
+      ),
+    },
+    salida: {
+      th: <TableHead key="salida">Salida</TableHead>,
+      td: (f) => (
+        <TableCell key="salida" className="text-sm font-mono">{f.horaSalida ?? "—"}</TableCell>
+      ),
+    },
+    pausa: {
+      th: <TableHead key="pausa">Pausa</TableHead>,
+      td: (f) => (
+        <TableCell key="pausa" className="text-sm font-mono">{f.pausaInicio && f.pausaFin ? `${f.pausaInicio}-${f.pausaFin}` : "—"}</TableCell>
+      ),
+    },
+    horas: {
+      th: <TableHead key="horas" className="text-right">Horas</TableHead>,
+      td: (f) => (
+        <TableCell key="horas" className="text-sm text-right font-semibold">{f.horaSalida ? formatHorasDecimal(f.horasTotales) : "—"}</TableCell>
+      ),
+    },
+    estado: {
+      th: <TableHead key="estado">Estado</TableHead>,
+      td: (f) => (
+        <TableCell key="estado">
+          <Badge variant="outline" className="gap-1 text-xs">
+            <span className={`h-2 w-2 rounded-full ${ESTADO_FICHAJE_COLOR[f.estado]}`} />
+            {ESTADO_FICHAJE_LABEL[f.estado]}
+          </Badge>
+        </TableCell>
+      ),
+    },
+    validador: {
+      th: <TableHead key="validador">Validado por</TableHead>,
+      td: (f) => (
+        <TableCell key="validador" className="text-sm text-muted-foreground">{f.validadoPor ?? "—"}</TableCell>
+      ),
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
   return (
     <div className="p-6 space-y-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -148,75 +224,48 @@ export function FichajesView() {
           <SubmoduleToolbar
             busqueda={busqueda}
             onBusquedaChange={setBusqueda}
-            placeholderBusqueda="Buscar empleado..."
-            textoNuevo="Fichar entrada"
+            placeholderBusqueda="Buscar"
             onNuevo={async () => {
               const res = await ficharEntrada();
               if (res.ok) { toast.success("Entrada registrada"); loadFichajes(); }
               else toast.error(res.error ?? "Error al fichar entrada");
             }}
-            campos={[
-              {
-                campo: "estado",
-                label: "Estado",
-                tipo: "lista",
-                opciones: (Object.keys(ESTADO_FICHAJE_LABEL) as EstadoFichaje[]).map(e => ESTADO_FICHAJE_LABEL[e]),
-              },
-              { campo: "departamento", label: "Departamento", tipo: "lista", opciones: dptos },
-              { campo: "horasTotales", label: "Horas totales", tipo: "numero" },
-              { campo: "fecha", label: "Fecha", tipo: "fecha" },
-            ]}
             filtros={filtros}
             onFiltrosChange={setFiltros}
-            ordenOpciones={[
-              { campo: "empleado", label: "Empleado" },
-              { campo: "fecha", label: "Fecha" },
-              { campo: "horasTotales", label: "Horas" },
-              { campo: "departamento", label: "Departamento" },
-            ]}
             orden={orden}
             onOrdenChange={setOrden}
-            columnas={[
-              { campo: "empleado", label: "Empleado" },
-              { campo: "fecha", label: "Fecha" },
-              { campo: "entrada", label: "Entrada" },
-              { campo: "salida", label: "Salida" },
-              { campo: "pausa", label: "Pausa" },
-              { campo: "horas", label: "Horas" },
-              { campo: "estado", label: "Estado" },
-              { campo: "validador", label: "Validado por" },
-            ]}
+            columnas={columnasDef}
             columnasVisibles={columnasVisibles}
             onColumnasVisiblesChange={setColumnasVisibles}
+            columnasOrden={columnasOrden}
+            onColumnasOrdenChange={setColumnasOrden}
             extraDerecha={
-              <IOActions config={fichajesIO} context={{ empresaId: empresaActual.id }} onSuccess={() => window.location.reload()} />
+              <>
+                <IOActions config={fichajesIO} context={{ empresaId: empresaActual.id }} onSuccess={() => window.location.reload()} />
+                <Button
+                  size="icon"
+                  variant={showConfig ? "default" : "outline"}
+                  className="h-9 w-9"
+                  onClick={() => setShowConfig((v) => !v)}
+                  title="Configuración"
+                  aria-label="Configuración"
+                >
+                  <Settings className="h-4 w-4" strokeWidth={1.75} />
+                </Button>
+              </>
             }
           />
           <Card>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Empleado</TableHead><TableHead>Fecha</TableHead><TableHead>Entrada</TableHead>
-                  <TableHead>Salida</TableHead><TableHead>Pausa</TableHead><TableHead className="text-right">Horas</TableHead>
-                  <TableHead>Estado</TableHead><TableHead>Validado por</TableHead>
+                  {columnasRender.map((c) => columnDefs[c.campo]?.th)}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {fichajesFiltrados.map(f => (
                   <TableRow key={f.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setFichajeModal(f)}>
-                    <TableCell><div><p className="font-medium text-sm">{f.empleadoNombre}</p><p className="text-xs text-muted-foreground">{f.departamento}</p></div></TableCell>
-                    <TableCell className="text-sm">{f.fecha}</TableCell>
-                    <TableCell className="text-sm font-mono">{f.horaEntrada ?? "—"}</TableCell>
-                    <TableCell className="text-sm font-mono">{f.horaSalida ?? "—"}</TableCell>
-                    <TableCell className="text-sm font-mono">{f.pausaInicio && f.pausaFin ? `${f.pausaInicio}-${f.pausaFin}` : "—"}</TableCell>
-                    <TableCell className="text-sm text-right font-semibold">{f.horaSalida ? formatHorasDecimal(f.horasTotales) : "—"}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="gap-1 text-xs">
-                        <span className={`h-2 w-2 rounded-full ${ESTADO_FICHAJE_COLOR[f.estado]}`} />
-                        {ESTADO_FICHAJE_LABEL[f.estado]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{f.validadoPor ?? "—"}</TableCell>
+                    {columnasRender.map((c) => columnDefs[c.campo]?.td(f))}
                   </TableRow>
                 ))}
                 {fichajesFiltrados.length === 0 && (

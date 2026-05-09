@@ -37,7 +37,7 @@ const TODOS_MODULOS: Modulo[] = [
   {
     href: "/cocina",
     titulo: "Cocina",
-    descripcion: "Fichas técnicas, partidas y elaboraciones.",
+    descripcion: "Escandallos, partidas y elaboraciones.",
     roles: ["cocina", "gerencia", "director", "admin"],
   },
   {
@@ -102,7 +102,7 @@ const MATERIAL_POR_PUESTO: MaterialPuesto[] = [
       "Uniforme de cocina (chaquetilla, pantalón, gorro y zapato antideslizante)",
       "Cuchillos básicos y funda",
       "Termómetro y guantes anticorte",
-      "Acceso a fichas técnicas y planning de partidas",
+      "Acceso a escandallos y planning de partidas",
     ],
   },
   {

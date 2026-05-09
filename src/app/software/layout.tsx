@@ -9,7 +9,6 @@ export const metadata: Metadata = {
     "gestión restaurantes",
     "ERP hostelería",
     "escandallos",
-    "fichas técnicas",
     "nóminas hostelería",
     "APPCC",
     "Balles Hosteleros",

@@ -27,7 +27,7 @@ async function main() {
 
   // 2) Calcular siguiente orden
   const { data: ultimo } = await supa
-    .from("fichas_config_items")
+    .from("escandallos_config_items")
     .select("orden")
     .eq("empresa_id", emp.id)
     .eq("grupo_codigo", "categorias")
@@ -41,7 +41,7 @@ async function main() {
   // 3) Insert
   const nombreTest = `TEST_DEBUG_${Date.now()}`;
   const { data, error } = await supa
-    .from("fichas_config_items")
+    .from("escandallos_config_items")
     .insert({
       empresa_id: emp.id,
       grupo_codigo: "categorias",
@@ -57,7 +57,7 @@ async function main() {
 
   // 4) Cleanup
   if (data) {
-    await supa.from("fichas_config_items").delete().eq("id", data.id);
+    await supa.from("escandallos_config_items").delete().eq("id", data.id);
     console.log("Limpiado.");
   }
 }

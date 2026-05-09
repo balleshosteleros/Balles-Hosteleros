@@ -3,7 +3,11 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { listCandidatos } from "@/features/rrhh/actions/reclutamiento-actions";
+import { listVacantesConCandidatos, seedVacantesDesdeOrganigrama } from "@/features/rrhh/actions/reclutamiento-actions";
+import {
+  publicarVacante, cerrarVacante, deleteVacante, toggleVisibilidadVacante,
+} from "@/features/rrhh/actions/vacantes-actions";
+import { moverCandidatoFase } from "@/features/rrhh/actions/candidatos-actions";
 import { toast } from "sonner";
 import {
   contarCandidatosPorFase,
@@ -18,6 +22,8 @@ import {
   type Vacante,
   type Candidato,
   type FaseReclutamiento,
+  type FasePrincipal,
+  type EstadoReclutamiento,
 } from "@/features/rrhh/data/reclutamiento";
 import {
   getVacantesDesdeRoles,
@@ -32,11 +38,13 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Switch } from "@/components/ui/switch";
 import {
   Search, Star, MoreHorizontal, MapPin, Clock, CalendarDays,
   FileText, Users, Send, ArrowLeft, User, Phone, Mail, Tag, Kanban, List,
-  Briefcase,
+  Pencil, Share2, EyeOff, Trash2, Utensils, Building2, Settings,
 } from "lucide-react";
+import { DialogSnippetEmbed } from "@/features/empleo-publico/components/DialogSnippetEmbed";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -47,8 +55,8 @@ import {
 import { IOActions } from "@/shared/io";
 import { reclutamientoIO } from "@/features/rrhh/io/reclutamiento.io";
 import { ReclutamientoConfigView } from "@/features/rrhh/components/reclutamiento/config/ReclutamientoConfigView";
-import { OfertasPublicasTab } from "@/features/rrhh/components/reclutamiento/OfertasPublicasTab";
 import { CandidatosRealesTab } from "@/features/rrhh/components/reclutamiento/CandidatosRealesTab";
+import { OfertaFormDialog } from "@/features/rrhh/components/reclutamiento/OfertaFormDialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -57,9 +65,25 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 // ─── Vacancy Card ────────────────────────────────────────────────
-function VacanteCard({ vacante, onSelectFase }: { vacante: Vacante; onSelectFase: (v: Vacante, f: FaseReclutamiento | null) => void }) {
+interface VacanteCardProps {
+  vacante: Vacante & { visiblePublicamente?: boolean };
+  onSelectFase: (v: Vacante, f: FaseReclutamiento | null) => void;
+  onPublicar?: (id: string) => void;
+  onCerrar?: (id: string) => void;
+  onEliminar?: (id: string) => void;
+  onToggleVisible?: (id: string, visible: boolean) => void;
+  onCompartir?: (v: Vacante) => void;
+  onEditar?: (v: Vacante) => void;
+}
+
+function VacanteCard({
+  vacante, onSelectFase,
+  onPublicar, onCerrar, onEliminar, onToggleVisible, onCompartir, onEditar,
+}: VacanteCardProps) {
   const counts = contarCandidatosPorFase(vacante.candidatos);
   const total = vacante.candidatos.length;
+  const visiblePublicamente = !!vacante.visiblePublicamente;
+  const estaPublicada = vacante.estadoPublicacion === "publicada";
   const estadoColor: Record<string, string> = {
     publicada: "bg-emerald-100 text-emerald-700",
     borrador: "bg-amber-100 text-amber-700",
@@ -80,30 +104,68 @@ function VacanteCard({ vacante, onSelectFase }: { vacante: Vacante; onSelectFase
           >
             {vacante.puesto}
           </h3>
-          <Badge variant="outline" className="text-[10px] gap-1 border-primary/30 text-primary">
-            <Briefcase className="h-3 w-3" /> Rol vinculado
-          </Badge>
           <Badge variant="secondary" className="text-xs font-normal">{total} candidatos</Badge>
           <Badge className={`text-[11px] font-medium border-0 ${estadoColor[vacante.estadoPublicacion] || ""}`}>
             {ESTADO_PUBLICACION_LABELS[vacante.estadoPublicacion]}
           </Badge>
+          {visiblePublicamente && estaPublicada && (
+            <Badge variant="outline" className="text-[10px] border-emerald-300 bg-emerald-50 text-emerald-700">
+              🌐 Pública
+            </Badge>
+          )}
         </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant={vacante.estadoPublicacion === "publicada" ? "secondary" : "default"} className="text-xs h-8 gap-1.5">
-            <Send className="h-3.5 w-3.5" />
-            {vacante.estadoPublicacion === "publicada" ? "Publicada" : "Publicar"}
-          </Button>
+          {!estaPublicada ? (
+            <Button
+              size="sm"
+              variant="default"
+              className="text-xs h-8 gap-1.5"
+              onClick={() => onPublicar?.(vacante.id)}
+              disabled={!onPublicar}
+            >
+              <Send className="h-3.5 w-3.5" /> Publicar
+            </Button>
+          ) : (
+            <div className="flex items-center gap-2 px-2 py-1 rounded-md border border-border bg-muted/30">
+              <span className="text-[11px] text-muted-foreground">Pública</span>
+              <Switch
+                checked={visiblePublicamente}
+                onCheckedChange={(n) => onToggleVisible?.(vacante.id, n)}
+                disabled={!onToggleVisible}
+                aria-label="Visible en el portal público"
+              />
+            </div>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-8 w-8">
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem>Duplicar</DropdownMenuItem>
-              <DropdownMenuItem>Ver candidatos</DropdownMenuItem>
-              <DropdownMenuItem>Archivar</DropdownMenuItem>
-              <DropdownMenuItem className="text-destructive">Cerrar</DropdownMenuItem>
+            <DropdownMenuContent align="end" className="w-52">
+              {onEditar && (
+                <DropdownMenuItem onClick={() => onEditar(vacante)}>
+                  <Pencil className="h-4 w-4 mr-2" /> Editar
+                </DropdownMenuItem>
+              )}
+              {onCompartir && (
+                <DropdownMenuItem onClick={() => onCompartir(vacante)}>
+                  <Share2 className="h-4 w-4 mr-2" /> Compartir / embed
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onClick={() => onSelectFase(vacante, null)}>
+                <Users className="h-4 w-4 mr-2" /> Ver candidatos
+              </DropdownMenuItem>
+              {estaPublicada && onCerrar && (
+                <DropdownMenuItem onClick={() => onCerrar(vacante.id)}>
+                  <EyeOff className="h-4 w-4 mr-2" /> Cerrar
+                </DropdownMenuItem>
+              )}
+              {onEliminar && (
+                <DropdownMenuItem onClick={() => onEliminar(vacante.id)} className="text-destructive">
+                  <Trash2 className="h-4 w-4 mr-2" /> Eliminar
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -347,20 +409,66 @@ function AllCandidatosView({ vacantes }: { vacantes: Vacante[] }) {
 export function ReclutamientoView() {
   const { empresaActual } = useEmpresa();
   const router = useRouter();
-  const vacantes = useMemo(() => getVacantesDesdeRoles(empresaActual.id), [empresaActual.id]);
+  const [vacantes, setVacantes] = useState<Vacante[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
+  const recargar = useCallback(() => setReloadKey((k) => k + 1), []);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      try {
-        await listCandidatos(); // warm up server; vacantes come from roles-empresa mock
-      } catch { /* mock data is fallback */ }
-      if (!cancelled) setLoading(false);
+      // Asegura que cada nodo del organigrama tenga su vacante (idempotente),
+      // siempre para la empresa seleccionada en el contexto del cliente.
+      await seedVacantesDesdeOrganigrama(empresaActual.id);
+      const res = await listVacantesConCandidatos(empresaActual.id);
+      if (!cancelled) {
+        setVacantes((res.data ?? []) as unknown as Vacante[]);
+        setLoading(false);
+      }
     })();
     return () => { cancelled = true; };
-  }, [empresaActual.id]);
+  }, [empresaActual.id, reloadKey]);
+
+  // Acciones reales sobre vacantes
+  const handlePublicar = useCallback(async (id: string) => {
+    const res = await publicarVacante(id);
+    if (res.ok) {
+      toast.success("Oferta publicada");
+      recargar();
+    } else toast.error("No se pudo publicar");
+  }, [recargar]);
+
+  const handleCerrar = useCallback(async (id: string) => {
+    const res = await cerrarVacante(id);
+    if (res.ok) {
+      toast.success("Oferta cerrada");
+      recargar();
+    } else toast.error("No se pudo cerrar");
+  }, [recargar]);
+
+  const handleEliminar = useCallback(async (id: string) => {
+    const v = vacantes.find((x) => x.id === id);
+    const titulo = v?.puesto ?? "esta vacante";
+    if (!window.confirm(`¿Eliminar definitivamente la vacante "${titulo}"? Esta acción no se puede deshacer.`)) {
+      return;
+    }
+    const res = await deleteVacante(id);
+    if (res.ok) {
+      toast.success("Vacante eliminada");
+      recargar();
+    } else {
+      toast.error(("error" in res && res.error) || "No se pudo eliminar");
+    }
+  }, [recargar, vacantes]);
+
+  const handleToggleVisible = useCallback(async (id: string, visible: boolean) => {
+    const res = await toggleVisibilidadVacante(id, visible);
+    if (res.ok) {
+      toast.success(visible ? "Visible públicamente" : "Oculta del portal");
+      recargar();
+    } else toast.error("No se pudo cambiar la visibilidad");
+  }, [recargar]);
 
   const [search, setSearch] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
@@ -369,6 +477,16 @@ export function ReclutamientoView() {
   const [selectedVacante, setSelectedVacante] = useState<Vacante | null>(null);
   const [selectedFase, setSelectedFase] = useState<FaseReclutamiento | null>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "tabla">("kanban");
+
+  // Dialogs (creación/edición + share)
+  const [nuevaOfertaOpen, setNuevaOfertaOpen] = useState(false);
+  const [ofertaEditando, setOfertaEditando] = useState<Vacante | null>(null);
+  const [snippetVacante, setSnippetVacante] = useState<Vacante | null>(null);
+  const [snippetGlobalOpen, setSnippetGlobalOpen] = useState(false);
+
+  // Selector de área (vacantes operativas vs. administrativas)
+  const [areaFiltro, setAreaFiltro] = useState<"operativa" | "administrativa">("operativa");
+  const [showConfig, setShowConfig] = useState(false);
 
   const categorias = useMemo(() => [...new Set(vacantes.map((v) => v.categoria))], [vacantes]);
 
@@ -383,7 +501,9 @@ export function ReclutamientoView() {
   };
 
   const filtered = useMemo(() => {
-    let list = vacantes;
+    let list = vacantes.filter(
+      (v) => ((v as Vacante & { area?: string }).area ?? "administrativa") === areaFiltro,
+    );
     if (search) {
       const s = search.toLowerCase();
       list = list.filter((v) => v.puesto.toLowerCase().includes(s) || v.ubicacion.toLowerCase().includes(s));
@@ -391,7 +511,18 @@ export function ReclutamientoView() {
     list = aplicarFiltrosToolbar(list, filtros, acceso);
     list = aplicarOrdenToolbar(list, orden, acceso);
     return list;
-  }, [vacantes, search, filtros, orden]);
+  }, [vacantes, search, filtros, orden, areaFiltro]);
+
+  const conteoArea = useMemo(() => {
+    let admin = 0;
+    let oper = 0;
+    for (const v of vacantes) {
+      const a = (v as Vacante & { area?: string }).area ?? "administrativa";
+      if (a === "operativa") oper++;
+      else admin++;
+    }
+    return { administrativa: admin, operativa: oper };
+  }, [vacantes]);
 
   const handleSelectFase = (v: Vacante, f: FaseReclutamiento | null) => {
     setSelectedVacante(v);
@@ -419,8 +550,29 @@ export function ReclutamientoView() {
             <KanbanPipeline
               vacante={selectedVacante}
               onBack={() => setSelectedVacante(null)}
-              onUpdateCandidatos={(updated) => {
+              onUpdateCandidatos={async (updated) => {
+                // Detecta candidatos cuyo `fase` (= estado real) cambió y persiste a Supabase.
+                const previos = selectedVacante.candidatos;
+                const cambios = updated.filter((c) => {
+                  const prev = previos.find((p) => p.id === c.id);
+                  return prev && prev.fase !== c.fase;
+                });
                 setSelectedVacante({ ...selectedVacante, candidatos: updated });
+                for (const c of cambios) {
+                  const fase = (Object.entries(FASES_PRINCIPALES) as Array<[FasePrincipal, { estados: EstadoReclutamiento[] }]>)
+                    .find(([, cfg]) => cfg.estados.includes(c.fase as EstadoReclutamiento))?.[0];
+                  if (!fase) continue;
+                  const res = await moverCandidatoFase(c.id, fase, c.fase);
+                  if (!res.ok && "error" in res && res.error === "OFFBOARDING_REQUIRED") {
+                    toast.error("Este candidato ya es empleado. Inicia el offboarding desde la pestaña Candidatos.");
+                  } else if (!res.ok) {
+                    toast.error(("error" in res && res.error) || "Error al mover candidato");
+                  } else if (res.empleadoYaContratado) {
+                    toast.info("Candidato ya promovido — el movimiento es solo organizativo.");
+                  }
+                }
+                // Sincroniza la lista global tras los cambios
+                if (cambios.length > 0) recargar();
               }}
             />
           </div>
@@ -439,78 +591,97 @@ export function ReclutamientoView() {
   const vacantesAbiertas = vacantes.filter((v) => v.estadoPublicacion === "publicada").length;
 
   return (
-    <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-4">
+    <div className="px-4 md:px-6 pt-2 pb-6 max-w-[1400px] mx-auto space-y-2">
       <Tabs defaultValue="vacantes">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-2">
           <div className="flex items-center gap-2">
             <TabsList className="h-9">
               <TabsTrigger value="vacantes" className="text-xs">Vacantes</TabsTrigger>
               <TabsTrigger value="candidatos" className="text-xs">Candidatos</TabsTrigger>
-              <TabsTrigger value="ofertas-publicas" className="text-xs">Ofertas públicas</TabsTrigger>
-              <TabsTrigger value="pipeline-real" className="text-xs">Pipeline real</TabsTrigger>
               <TabsTrigger value="config" className="text-xs">Configuración</TabsTrigger>
             </TabsList>
           </div>
         </div>
 
+        <TabsContent value="vacantes" className="space-y-3 mt-2">
+          {/* Selector de área (mismo estilo que COMPRA/VENTA/ELABORACIONES) */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant={areaFiltro === "operativa" ? "default" : "outline"}
+              className="gap-2"
+              onClick={() => setAreaFiltro("operativa")}
+            >
+              <Utensils className="h-4 w-4" />
+              ÁREA OPERATIVA
+              <Badge variant="secondary" className="text-[10px] ml-1">{conteoArea.operativa}</Badge>
+            </Button>
+            <Button
+              variant={areaFiltro === "administrativa" ? "default" : "outline"}
+              className="gap-2"
+              onClick={() => setAreaFiltro("administrativa")}
+            >
+              <Building2 className="h-4 w-4" />
+              ÁREA ADMINISTRATIVA
+              <Badge variant="secondary" className="text-[10px] ml-1">{conteoArea.administrativa}</Badge>
+            </Button>
+          </div>
 
-        <TabsContent value="vacantes" className="space-y-4 mt-4">
           <SubmoduleToolbar
             busqueda={search}
             onBusquedaChange={setSearch}
-            placeholderBusqueda="Buscar vacante..."
-            textoNuevo="Nueva vacante"
-            onNuevo={() => { /* TODO: crear vacante */ }}
-            campos={[
-              {
-                campo: "estadoPublicacion",
-                label: "Estado",
-                tipo: "lista",
-                opciones: Object.values(ESTADO_PUBLICACION_LABELS),
-              },
-              { campo: "categoria", label: "Categoría", tipo: "lista", opciones: categorias },
-              {
-                campo: "tipoJornada",
-                label: "Jornada",
-                tipo: "lista",
-                opciones: [...new Set(vacantes.map((v) => TIPO_JORNADA_LABELS[v.tipoJornada]))],
-              },
-              { campo: "favorita", label: "Favorita", tipo: "booleano" },
-            ]}
+            placeholderBusqueda="Buscar"
+            onNuevo={() => setNuevaOfertaOpen(true)}
             filtros={filtros}
             onFiltrosChange={setFiltros}
-            ordenOpciones={[
-              { campo: "puesto", label: "Puesto" },
-              { campo: "ubicacion", label: "Ubicación" },
-              { campo: "estadoPublicacion", label: "Estado" },
-              { campo: "categoria", label: "Categoría" },
-            ]}
             orden={orden}
             onOrdenChange={setOrden}
             extraDerecha={
-              <IOActions config={reclutamientoIO} context={{ empresaId: empresaActual.id }} onSuccess={() => window.location.reload()} />
+              <>
+                {empresaActual.id ? (
+                  <Button variant="outline" size="sm" onClick={() => setSnippetGlobalOpen(true)} className="gap-1.5">
+                    <Share2 className="h-3.5 w-3.5" /> Compartir portal
+                  </Button>
+                ) : null}
+                <Button
+                  size="icon"
+                  variant={showConfig ? "default" : "outline"}
+                  className="h-9 w-9"
+                  onClick={() => setShowConfig((v) => !v)}
+                  title="Configuración"
+                  aria-label="Configuración"
+                >
+                  <Settings className="h-4 w-4" strokeWidth={1.75} />
+                </Button>
+              </>
             }
           />
 
           <div className="space-y-4">
-            {filtered.length === 0 && (
-              <Card><CardContent className="py-16 text-center text-muted-foreground">No se encontraron vacantes con los filtros seleccionados</CardContent></Card>
+            {loading && (
+              <Card><CardContent className="py-16 text-center text-muted-foreground">Cargando vacantes…</CardContent></Card>
             )}
-            {filtered.map((v) => (
-              <VacanteCard key={v.id} vacante={v} onSelectFase={handleSelectFase} />
+            {!loading && filtered.length === 0 && (
+              <Card><CardContent className="py-16 text-center text-muted-foreground">
+                No hay vacantes en esta área.
+              </CardContent></Card>
+            )}
+            {!loading && filtered.map((v) => (
+              <VacanteCard
+                key={v.id}
+                vacante={v as Vacante & { visiblePublicamente?: boolean }}
+                onSelectFase={handleSelectFase}
+                onPublicar={handlePublicar}
+                onCerrar={handleCerrar}
+                onEliminar={handleEliminar}
+                onToggleVisible={handleToggleVisible}
+                onCompartir={(vc) => setSnippetVacante(vc)}
+                onEditar={(vc) => { setOfertaEditando(vc); setNuevaOfertaOpen(true); }}
+              />
             ))}
           </div>
         </TabsContent>
 
         <TabsContent value="candidatos" className="mt-4">
-          <AllCandidatosView vacantes={vacantes} />
-        </TabsContent>
-
-        <TabsContent value="ofertas-publicas" className="mt-4">
-          <OfertasPublicasTab empresaSlug={empresaActual.id} />
-        </TabsContent>
-
-        <TabsContent value="pipeline-real" className="mt-4">
           <CandidatosRealesTab />
         </TabsContent>
 
@@ -518,6 +689,39 @@ export function ReclutamientoView() {
           <ReclutamientoConfigView />
         </TabsContent>
       </Tabs>
+
+      {/* ── Dialog crear/editar oferta ───────────────── */}
+      <OfertaFormDialog
+        open={nuevaOfertaOpen}
+        onOpenChange={(o) => {
+          setNuevaOfertaOpen(o);
+          if (!o) setOfertaEditando(null);
+        }}
+        vacanteId={ofertaEditando?.id ?? null}
+        onSaved={recargar}
+      />
+
+      {/* ── Snippet de share por oferta ────────────── */}
+      {empresaActual.id && snippetVacante && (
+        <DialogSnippetEmbed
+          open={!!snippetVacante}
+          onOpenChange={(o) => !o && setSnippetVacante(null)}
+          empresaSlug={empresaActual.id}
+          empresaNombre={empresaActual.nombre}
+          ofertaId={snippetVacante.id}
+          ofertaTitulo={snippetVacante.puesto}
+        />
+      )}
+
+      {/* ── Snippet de share del portal completo ────── */}
+      {empresaActual.id && (
+        <DialogSnippetEmbed
+          open={snippetGlobalOpen}
+          onOpenChange={setSnippetGlobalOpen}
+          empresaSlug={empresaActual.id}
+          empresaNombre={empresaActual.nombre}
+        />
+      )}
     </div>
   );
 }

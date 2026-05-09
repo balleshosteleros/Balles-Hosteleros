@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import {
   Filter,
   ArrowUp,
@@ -25,6 +25,7 @@ import {
   PopoverTrigger,
 } from "@/shared/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { useResizableColumn } from "@/shared/components/ResizableColumns";
 import type {
   ToolbarFiltroActivo,
   ToolbarFiltroTipo,
@@ -72,6 +73,30 @@ export function TableColumnHeader({
   const tieneOrden = ordenable && !!campo && !!onOrdenChange;
   const ordenActivo = !!campo && orden?.campo === campo;
 
+  const colKey = campo ?? label;
+  const resize = useResizableColumn(colKey);
+  const thRef = useRef<HTMLTableCellElement | null>(null);
+  const thStyle =
+    resize.enabled && resize.width
+      ? { width: resize.width, minWidth: resize.width }
+      : undefined;
+
+  function onResizeMouseDown(e: React.MouseEvent) {
+    const current = thRef.current?.getBoundingClientRect().width ?? 100;
+    resize.startResize(e, current);
+  }
+
+  const resizeHandle = resize.enabled && colKey ? (
+    <span
+      onMouseDown={onResizeMouseDown}
+      onClick={(e) => e.stopPropagation()}
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Redimensionar columna"
+      className="absolute top-0 right-0 z-10 h-full w-1.5 cursor-col-resize select-none bg-transparent opacity-0 transition-opacity hover:bg-primary/50 hover:opacity-100"
+    />
+  ) : null;
+
   const justify =
     align === "right"
       ? "justify-end"
@@ -88,21 +113,26 @@ export function TableColumnHeader({
   if (!tieneFiltro && !tieneOrden) {
     return (
       <th
+        ref={thRef}
+        style={thStyle}
         className={cn(
-          "px-3 py-1.5 text-xs font-bold text-muted-foreground whitespace-nowrap",
+          "relative px-3 py-1.5 text-xs font-bold text-muted-foreground whitespace-nowrap",
           textAlign,
           className,
         )}
       >
         {label}
+        {resizeHandle}
       </th>
     );
   }
 
   return (
     <th
+      ref={thRef}
+      style={thStyle}
       className={cn(
-        "px-3 py-1.5 text-xs font-bold text-muted-foreground whitespace-nowrap",
+        "relative px-3 py-1.5 text-xs font-bold text-muted-foreground whitespace-nowrap",
         textAlign,
         className,
       )}
@@ -215,6 +245,7 @@ export function TableColumnHeader({
           )}
         </PopoverContent>
       </Popover>
+      {resizeHandle}
     </th>
   );
 }

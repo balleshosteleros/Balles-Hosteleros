@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { CATEGORIAS_APP, DEPARTAMENTOS, type AccesoApp, type EstadoApp } from "@/features/rrhh/data/accesos-apps";
 import { listAccesosApps } from "@/features/rrhh/actions/accesos-apps-actions";
@@ -10,15 +10,18 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ExternalLink, Eye, EyeOff, Copy, Settings2, LayoutGrid, List, Globe, KeyRound } from "lucide-react";
+import { ExternalLink, Eye, EyeOff, Copy, Settings, Settings2, LayoutGrid, List, Globe, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
   aplicarOrdenToolbar,
+  colVisible,
+  ordenarColumnas,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
+  type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
 import { IOActions } from "@/shared/io";
 import { accesosIO } from "@/features/rrhh/io/accesos.io";
@@ -109,9 +112,11 @@ export function AccesosView() {
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [vista, setVista] = useState<"tabla" | "tarjetas">("tarjetas");
   const [detalle, setDetalle] = useState<AccesoApp | null>(null);
   const [tab, setTab] = useState("apps");
+  const [showConfig, setShowConfig] = useState(false);
 
   const categoriasUsadas = [...new Set(apps.map((a) => a.categoria))];
   const depsUsados = [...new Set(apps.flatMap((a) => a.departamentos))];
@@ -143,6 +148,73 @@ export function AccesosView() {
     return lista;
   })();
 
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "aplicacion", label: "Aplicación" },
+    { campo: "categoria", label: "Categoría" },
+    { campo: "departamentos", label: "Departamentos" },
+    { campo: "usuario", label: "Usuario" },
+    { campo: "contrasena", label: "Contraseña" },
+    { campo: "estado", label: "Estado" },
+    { campo: "tipo", label: "Tipo" },
+  ];
+
+  const columnDefs: Record<string, { th: ReactNode; td: (app: AccesoApp) => ReactNode }> = {
+    aplicacion: {
+      th: <TableHead key="aplicacion">Aplicación</TableHead>,
+      td: (app) => (
+        <TableCell key="aplicacion">
+          <div className="font-medium text-sm">{app.nombre}</div>
+          <div className="text-xs text-muted-foreground truncate max-w-[200px]">{app.descripcion}</div>
+        </TableCell>
+      ),
+    },
+    categoria: {
+      th: <TableHead key="categoria">Categoría</TableHead>,
+      td: (app) => (
+        <TableCell key="categoria" className="text-xs">{app.categoria}</TableCell>
+      ),
+    },
+    departamentos: {
+      th: <TableHead key="departamentos">Departamentos</TableHead>,
+      td: (app) => (
+        <TableCell key="departamentos">
+          <div className="flex flex-wrap gap-1">
+            {app.departamentos.slice(0, 2).map((d) => <Badge key={d} variant="outline" className="text-[10px] px-1.5 py-0">{d}</Badge>)}
+            {app.departamentos.length > 2 && <Badge variant="outline" className="text-[10px] px-1.5 py-0">+{app.departamentos.length - 2}</Badge>}
+          </div>
+        </TableCell>
+      ),
+    },
+    usuario: {
+      th: <TableHead key="usuario">Usuario</TableHead>,
+      td: (app) => (
+        <TableCell key="usuario" className="font-mono text-xs">{app.usuario || <span className="text-muted-foreground">—</span>}</TableCell>
+      ),
+    },
+    contrasena: {
+      th: <TableHead key="contrasena">Contraseña</TableHead>,
+      td: (app) => (
+        <TableCell key="contrasena" onClick={(e) => e.stopPropagation()}><PasswordCell value={app.contrasena} canView={true} /></TableCell>
+      ),
+    },
+    estado: {
+      th: <TableHead key="estado">Estado</TableHead>,
+      td: (app) => (
+        <TableCell key="estado"><Badge className={`${estadoBadge[app.estado]} text-[10px]`}>{app.estado}</Badge></TableCell>
+      ),
+    },
+    tipo: {
+      th: <TableHead key="tipo">Tipo</TableHead>,
+      td: (app) => (
+        <TableCell key="tipo"><Badge variant="outline" className={`${tipoBadge[app.tipoIntegracion]} text-[10px]`}>{app.tipoIntegracion.toUpperCase()}</Badge></TableCell>
+      ),
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
   return (
     <div className="p-4 md:p-6 space-y-6 w-full">
       <Tabs value={tab} onValueChange={setTab}>
@@ -157,26 +229,30 @@ export function AccesosView() {
               <SubmoduleToolbar
                 busqueda={buscar}
                 onBusquedaChange={setBuscar}
-                placeholderBusqueda="Buscar app…"
-                campos={[
-                  { campo: "categoria", label: "Categoría", tipo: "lista", opciones: categoriasUsadas },
-                  { campo: "departamento", label: "Departamento", tipo: "lista", opciones: depsUsados.filter((d) => d !== "Todos") },
-                  { campo: "estado", label: "Estado", tipo: "lista", opciones: ["Activo", "Inactivo", "Archivado"] },
-                  { campo: "tipoIntegracion", label: "Tipo", tipo: "lista", opciones: ["ENLACE", "SSO", "OAUTH", "EMBEBIDO"] },
-                ]}
+                placeholderBusqueda="Buscar"
                 filtros={filtros}
                 onFiltrosChange={setFiltros}
-                ordenOpciones={[
-                  { campo: "nombre", label: "Nombre" },
-                  { campo: "categoria", label: "Categoría" },
-                  { campo: "estado", label: "Estado" },
-                ]}
                 orden={orden}
                 onOrdenChange={setOrden}
+                columnas={columnasDef}
                 columnasVisibles={columnasVisibles}
                 onColumnasVisiblesChange={setColumnasVisibles}
+                columnasOrden={columnasOrden}
+                onColumnasOrdenChange={setColumnasOrden}
                 extraDerecha={
-                  <IOActions config={accesosIO} context={{ empresaId: empresaActual.id }} onSuccess={() => window.location.reload()} />
+                  <>
+                    <IOActions config={accesosIO} context={{ empresaId: empresaActual.id }} onSuccess={() => window.location.reload()} />
+                    <Button
+                      size="icon"
+                      variant={showConfig ? "default" : "outline"}
+                      className="h-9 w-9"
+                      onClick={() => setShowConfig((v) => !v)}
+                      title="Configuración"
+                      aria-label="Configuración"
+                    >
+                      <Settings className="h-4 w-4" strokeWidth={1.75} />
+                    </Button>
+                  </>
                 }
               />
             </div>
@@ -193,13 +269,7 @@ export function AccesosView() {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-12"></TableHead>
-                      <TableHead>Aplicación</TableHead>
-                      <TableHead>Categoría</TableHead>
-                      <TableHead>Departamentos</TableHead>
-                      <TableHead>Usuario</TableHead>
-                      <TableHead>Contraseña</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead>Tipo</TableHead>
+                      {columnasRender.map((c) => columnDefs[c.campo]?.th)}
                       <TableHead className="text-right">Abrir</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -212,21 +282,7 @@ export function AccesosView() {
                         <TableCell>
                           <AppLogo nombre={app.nombre} logoUrl={app.logoUrl} icono={app.icono} size="sm" />
                         </TableCell>
-                        <TableCell>
-                          <div className="font-medium text-sm">{app.nombre}</div>
-                          <div className="text-xs text-muted-foreground truncate max-w-[200px]">{app.descripcion}</div>
-                        </TableCell>
-                        <TableCell className="text-xs">{app.categoria}</TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1">
-                            {app.departamentos.slice(0, 2).map((d) => <Badge key={d} variant="outline" className="text-[10px] px-1.5 py-0">{d}</Badge>)}
-                            {app.departamentos.length > 2 && <Badge variant="outline" className="text-[10px] px-1.5 py-0">+{app.departamentos.length - 2}</Badge>}
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-mono text-xs">{app.usuario || <span className="text-muted-foreground">—</span>}</TableCell>
-                        <TableCell onClick={(e) => e.stopPropagation()}><PasswordCell value={app.contrasena} canView={true} /></TableCell>
-                        <TableCell><Badge className={`${estadoBadge[app.estado]} text-[10px]`}>{app.estado}</Badge></TableCell>
-                        <TableCell><Badge variant="outline" className={`${tipoBadge[app.tipoIntegracion]} text-[10px]`}>{app.tipoIntegracion.toUpperCase()}</Badge></TableCell>
+                        {columnasRender.map((c) => columnDefs[c.campo]?.td(app))}
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                           <Button variant="ghost" size="icon" asChild><a href={app.url} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-4 w-4" /></a></Button>
                         </TableCell>

@@ -37,11 +37,6 @@ const TIPO_INTEGRACION_LABELS: Record<TipoIntegracion, string> = {
   embebido: "Verlo dentro de la app",
 };
 
-const EMPRESAS = [
-  { id: "habana", nombre: "La Habana" },
-  { id: "bacanal", nombre: "Bacanal" },
-];
-
 const emptyApp: Omit<AccesoApp, "id" | "ultimaActualizacion"> = {
   nombre: "",
   descripcion: "",
@@ -101,7 +96,7 @@ function PasswordAdmin({ value }: { value: string }) {
 }
 
 export function AccesosAdminTab() {
-  const { empresaActual } = useEmpresa();
+  const { empresaActual, empresas: EMPRESAS } = useEmpresa();
   const empresaDbId = empresaActual.dbId;
   const [apps, setApps] = useState<AccesoApp[]>([]);
   const [loading, setLoading] = useState(true);

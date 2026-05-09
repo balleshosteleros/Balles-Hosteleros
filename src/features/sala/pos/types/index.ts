@@ -116,9 +116,10 @@ export interface ProductoPOS {
   id: string;
   nombre: string;
   categoria: string;
-  familia: string | null;
   precioVenta: number;
   ivaPct: number;
   imagenUrl: string | null;
+  /** Color de fondo personalizado (hex) — ignorado si hay imagenUrl. */
+  colorBg: string | null;
   destino: LineaDestino;
 }

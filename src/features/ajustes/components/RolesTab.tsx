@@ -63,13 +63,14 @@ export function RolesTab() {
   const [usuariosSupabase, setUsuariosSupabase] = useState<UsuarioRol[]>([]);
 
   // Cargar roles desde Supabase al montar y al cambiar de empresa.
+  // Si la BD no devuelve nada (auth aún cargando, error transitorio, etc.) NO
+  // tocamos el state — escribir [] dispararía el fallback a defaults en
+  // mergeWithDefaults y mostraríamos permisos en cero falsos.
   useEffect(() => {
     (async () => {
       const rolesRemote = await loadRolesFromSupabase(empresaDbId);
       if (rolesRemote && rolesRemote.length > 0) {
         setAjustes((prev) => ({ ...prev, roles: rolesRemote }));
-      } else {
-        setAjustes((prev) => ({ ...prev, roles: [] }));
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -118,8 +119,9 @@ export function RolesTab() {
   };
 
   const toggleAcceso = (rolId: string, modulo: string) => {
+    let nextRoles: Rol[] = [];
     setAjustes((prev) => {
-      const nextRoles = prev.roles.map((r) => {
+      nextRoles = prev.roles.map((r) => {
         if (r.id !== rolId) return r;
         const existing = r.permisos.find((p) => p.modulo === modulo);
         const nuevoAcceso = !(existing?.ver ?? false);
@@ -128,9 +130,24 @@ export function RolesTab() {
           : [...r.permisos, { modulo, ver: nuevoAcceso, editar: nuevoAcceso }];
         return { ...r, permisos: newPermisos };
       });
-      persistRoles(nextRoles);
       return { ...prev, roles: nextRoles };
     });
+    persistRoles(nextRoles);
+  };
+
+  // Activa o desactiva de golpe los 11 departamentos de navegación (sin tocar AJUSTES).
+  const toggleTodosDepartamentos = (rolId: string, valor: boolean) => {
+    let nextRoles: Rol[] = [];
+    setAjustes((prev) => {
+      nextRoles = prev.roles.map((r) => {
+        if (r.id !== rolId) return r;
+        const restantes = r.permisos.filter((p) => !MODULOS_NAV.includes(p.modulo));
+        const navPermisos = MODULOS_NAV.map((m) => ({ modulo: m, ver: valor, editar: valor }));
+        return { ...r, permisos: [...navPermisos, ...restantes] };
+      });
+      return { ...prev, roles: nextRoles };
+    });
+    persistRoles(nextRoles);
   };
 
   const renameRol = (rolId: string, nombre: string) => {
@@ -284,24 +301,42 @@ export function RolesTab() {
 
             {isOpen && (
               <CardContent className="pt-0 px-4 pb-4 space-y-1">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-2 text-xs font-bold text-muted-foreground">DEPARTAMENTO</th>
-                      <th className="text-center py-2 text-xs font-bold text-muted-foreground w-24">ACCESO</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {permisosNav.map((p) => (
-                      <tr key={p.modulo} className="border-b last:border-0">
-                        <td className="py-2 font-medium">{p.modulo}</td>
-                        <td className="py-2 text-center">
-                          <Switch checked={p.ver} onCheckedChange={() => toggleAcceso(rol.id, p.modulo)} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                {(() => {
+                  const todosActivos = permisosNav.every((p) => p.ver);
+                  return (
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left py-2 text-xs font-bold text-muted-foreground">DEPARTAMENTO</th>
+                          <th className="text-right py-2 text-xs font-bold text-muted-foreground w-24">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => toggleTodosDepartamentos(rol.id, !todosActivos)}
+                                className="text-[10px] font-medium text-muted-foreground/80 underline-offset-2 hover:text-foreground hover:underline transition-colors"
+                              >
+                                {todosActivos ? "Desactivar todos" : "Activar todos"}
+                              </button>
+                              <span>ACCESO</span>
+                            </div>
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {permisosNav.map((p) => (
+                          <tr key={p.modulo} className="border-b last:border-0">
+                            <td className="py-2 font-medium">{p.modulo}</td>
+                            <td className="py-2 text-right">
+                              <div className="flex justify-end pr-1">
+                                <Switch checked={p.ver} onCheckedChange={() => toggleAcceso(rol.id, p.modulo)} />
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  );
+                })()}
 
                 {/* AJUSTES — siempre al final, visualmente diferenciado */}
                 <div className="mt-3 rounded-md border-2 border-dashed border-muted-foreground/20 bg-muted/30 px-3 py-2">

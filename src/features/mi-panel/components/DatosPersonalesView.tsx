@@ -32,11 +32,12 @@ export function DatosPersonalesView({ initial }: Props) {
       <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-6">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
-            Datos personales
+            Perfil
           </h1>
           <p className="text-sm text-muted-foreground">
             Tu ficha personal completa. Estos datos los usa RRHH para contratos,
-            nóminas y emergencias.
+            nóminas y emergencias. Para modificarlos, contacta con tu responsable
+            de RRHH.
           </p>
         </div>
 
@@ -66,7 +67,7 @@ export function DatosPersonalesView({ initial }: Props) {
           </div>
         </section>
 
-        <DatosPersonalesForm initial={initial} />
+        <DatosPersonalesForm initial={initial} readOnly />
       </div>
 
       <AvatarPickerDialog

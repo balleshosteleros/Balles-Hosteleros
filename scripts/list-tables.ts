@@ -21,7 +21,7 @@ const sb = createClient(
     "empleados", "empleados_rrhh", "rrhh_empleados",
     "contratos", "nominas",
     "proveedores", "productos",
-    "mermas", "fichas_tecnicas", "recetas",
+    "mermas", "escandallos", "recetas",
     "pos_sesiones_caja", "pos_tickets", "pos_ticket_lineas", "pos_pagos",
     "aperturas", "campanas_marketing",
     "ingredientes_proveedor", "ingredientes",

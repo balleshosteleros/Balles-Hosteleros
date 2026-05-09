@@ -337,7 +337,7 @@ const HABANA_DRAFTS: DraftCurso[] = [
     ],
   },
   {
-    titulo: "Cocinero — partidas y fichas técnicas",
+    titulo: "Cocinero — partidas y escandallos",
     descripcion:
       "Cómo trabajar tu partida en Habana y mantener la consistencia de la carta.",
     cover:
@@ -364,8 +364,8 @@ const HABANA_DRAFTS: DraftCurso[] = [
         titulo: "Durante el servicio",
         lecciones: [
           {
-            titulo: "Fichas técnicas y emplatado",
-            descripcion: "Seguir la ficha y mantener consistencia.",
+            titulo: "Escandallos y emplatado",
+            descripcion: "Seguir el escandallo y mantener consistencia.",
             duracionMin: 8,
             fechaSubida: "2026-04-18",
           },

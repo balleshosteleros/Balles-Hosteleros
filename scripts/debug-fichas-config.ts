@@ -1,5 +1,5 @@
 /**
- * Diagnóstico rápido de fichas_config_items y empresas.
+ * Diagnóstico rápido de escandallos_config_items y empresas.
  * Usa SUPABASE_SERVICE_ROLE_KEY (bypassa RLS).
  */
 import { createClient } from "@supabase/supabase-js";
@@ -25,14 +25,14 @@ async function main() {
   if (e1) console.error("empresas err:", e1.message);
   else console.table(emps);
 
-  console.log("\n== fichas_config_grupos ==");
-  const { data: grupos, error: e2 } = await supa.from("fichas_config_grupos").select("*");
+  console.log("\n== escandallos_config_grupos ==");
+  const { data: grupos, error: e2 } = await supa.from("escandallos_config_grupos").select("*");
   if (e2) console.error("grupos err:", e2.message);
   else console.table(grupos);
 
-  console.log("\n== fichas_config_items count por (empresa_id, grupo_codigo) ==");
+  console.log("\n== escandallos_config_items count por (empresa_id, grupo_codigo) ==");
   const { data: items, error: e3 } = await supa
-    .from("fichas_config_items")
+    .from("escandallos_config_items")
     .select("empresa_id, grupo_codigo")
     .limit(2000);
   if (e3) console.error("items err:", e3.message);

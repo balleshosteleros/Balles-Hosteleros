@@ -1,0 +1,33 @@
+# Backup and old node_modules
+node_modules_old_0802/
+BACKUP_modificaciones_despues_del_deploy_2026-05-01/
+.next/
+
+# Claude metadata
+.claude/
+
+# Reports and tests
+.qa-reports/
+test-results/
+tests/
+playwright.config.ts
+
+# Documentation and notes
+docs/
+scratch/
+002_finalizacion_logistica_y_entrega.md
+002_finalizacion_logistica_y_entrega.txt
+BD proyecto balles hosteler.txt
+BUSINESS_LOGIC.md
+CHANGELOG_2026-05-01.md
+CLAUDE.md
+CONTINUA_CONTEXTO.md
+README.md
+ROADMAP.md
+
+# Misc
+Capturas/
+tsconfig.tsbuildinfo
+.env.local.example
+proxy.ts
+test_exec_sql.ts

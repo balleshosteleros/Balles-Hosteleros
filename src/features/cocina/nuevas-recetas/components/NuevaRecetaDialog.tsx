@@ -47,9 +47,9 @@ export function NuevaRecetaDialog({ open, onOpenChange, onCreated }: Props) {
         nombre: nombre.trim(),
         descripcion: descripcion.trim() || undefined,
         destino,
-        ft_elaboracion: elaboracion.trim() || undefined,
-        ft_tiempo_preparacion: tiempo ? parseInt(tiempo, 10) : undefined,
-        ft_pvp_propuesto: pvp ? parseFloat(pvp) : undefined,
+        esc_elaboracion: elaboracion.trim() || undefined,
+        esc_tiempo_preparacion: tiempo ? parseInt(tiempo, 10) : undefined,
+        esc_pvp_propuesto: pvp ? parseFloat(pvp) : undefined,
         ingredientes: ingredientes
           .filter((i) => i.producto_id || (i.nombre_libre ?? "").trim())
           .map((i) => ({
@@ -81,7 +81,7 @@ export function NuevaRecetaDialog({ open, onOpenChange, onCreated }: Props) {
         <DialogHeader>
           <DialogTitle>Proponer nueva receta</DialogTitle>
           <p className="text-xs text-muted-foreground">
-            Los datos son los mismos que los de una ficha técnica. Al aprobarse se publicarán oficialmente.
+            Los datos son los mismos que los de un escandallo. Al aprobarse se publicarán oficialmente.
           </p>
         </DialogHeader>
 
