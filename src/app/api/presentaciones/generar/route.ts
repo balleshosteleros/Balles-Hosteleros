@@ -60,6 +60,7 @@ export async function POST(request: Request) {
       .insert({
         empresa_id: empresaId,
         titulo: ia.data.titulo,
+        nombre: ia.data.titulo, // Compatibilidad con migración 010
         prompt_original: input.prompt,
         audiencia: input.audiencia ?? null,
         tono: input.tono,

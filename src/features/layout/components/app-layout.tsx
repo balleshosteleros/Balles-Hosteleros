@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/features/layout/components/app-sidebar";
-import { useAuth } from "@/features/auth/contexts/auth-context";
+import { useAuth, AuthContext } from "@/features/auth/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -94,7 +94,7 @@ import {
   Rocket,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useContext } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -118,6 +118,9 @@ import {
   useDailyCounts,
 } from "@/features/google-workspace/components";
 import { AgendaDrawer } from "@/features/agenda/components/AgendaDrawer";
+import { RecordingTrigger } from "@/features/recorder/components/RecordingTrigger";
+import { RecordingDrawer } from "@/features/recorder/components/RecordingDrawer";
+import { RecordingOverlay } from "@/features/recorder/components/RecordingOverlay";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import type { AccesoApp } from "@/features/rrhh/data/accesos-apps";
 import { listAccesosApps } from "@/features/rrhh/actions/accesos-apps-actions";
@@ -139,6 +142,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/mi-panel/formacion/curso": "CURSO",
   "/mi-panel/points": "POINTS",
   "/mi-panel/datos-personales": "DATOS PERSONALES",
+  "/mi-panel/grabaciones": "MIS GRABACIONES",
   "/mis-departamentos": "MIS DEPARTAMENTOS",
   "/gerencia": "GERENCIA",
   "/direccion/estructura": "ORGANIGRAMA",
@@ -429,7 +433,17 @@ function NavBadge({ count, color = "blue" }: { count: number; color?: string }) 
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { user, profile, roles, signOut } = useAuth();
+  const auth = useContext(AuthContext);
+  
+  // Si no hay contexto (ej: SSR o fuera de AuthProvider), usamos valores por defecto
+  const user = auth?.user;
+  const profile = auth?.profile;
+  const roles = auth?.roles ?? [];
+  const signOut = auth?.signOut ?? (() => {});
+  const permisosLoaded = auth?.permisosLoaded ?? false;
+  const puedeVer = auth?.puedeVer ?? (() => false);
+  const hasRole = auth?.hasRole ?? (() => false);
+
   const devBypass = process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true";
   const [isDemoHost, setIsDemoHost] = useState(false);
   useEffect(() => {
@@ -555,6 +569,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       </Button>
                     </MeetDrawer>
 
+                    {/* ReelForge Recorder */}
+                    <RecordingTrigger />
+
                     {/* Separador visual */}
                     <span className="w-px h-5 bg-border mx-0.5" />
 
@@ -604,7 +621,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         <Notebook className="!h-[18px] !w-[18px] text-yellow-500" />
                       </Button>
                     </AgendaDrawer>
-
                     {/* Separador visual */}
                     <span className="w-px h-5 bg-border mx-0.5" />
 
@@ -903,6 +919,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
         {showUi && <FloatingSoporteButton />}
       </div>
+      <RecordingDrawer />
+      <RecordingOverlay />
     </SidebarProvider>
   );
 }
