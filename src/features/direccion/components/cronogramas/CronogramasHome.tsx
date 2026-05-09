@@ -270,7 +270,7 @@ export function CronogramasHome({ data, onSelect, onCrearCronograma, onIrProduct
                   )}
                 >
                   <div className="flex items-start justify-between mb-3">
-                    <div className={cn("p-2.5 rounded-lg bg-background/70", color)}>
+                    <div className={cn("p-2.5 rounded-lg bg-white", color)}>
                       <Icon className="h-6 w-6" />
                     </div>
                     <div className="flex items-center gap-1">
