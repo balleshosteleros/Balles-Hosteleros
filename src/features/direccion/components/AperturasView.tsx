@@ -1,16 +1,23 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { TrendingUp, TrendingDown, BarChart3, FileText, Calculator, ArrowLeft, Landmark, Target, Clock, Settings } from "lucide-react";
+import { TrendingUp, TrendingDown, FileText, Calculator, ArrowLeft, Landmark, Target, Clock, Settings, ImagePlus, X, ChevronDown, ChevronRight, Plus, Trash2, Receipt, Building2, Sparkles, ChefHat, Activity } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -20,28 +27,166 @@ import {
   type ToolbarColumnaVisible,
   type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line, Sector } from "recharts";
 import {
-  SAMPLE_ESTUDIOS, ESCENARIOS, EstudioApertura, DatosProyecto, EstructuraCostes,
-  calcularEscenario, calcularPilar, CostePilar,
+  ESCENARIOS, EstudioApertura, DatosProyecto, EstructuraCostes,
+  EstructuraFacturacion, PartidaFacturacion, FacturacionPilar, FactPilarKey,
+  FACT_PILAR_KEYS, FACT_PILAR_NAMES,
+  calcularEscenario, calcularPilar, CostePilar, PartidaCoste, PilarKey,
+  pilarFijo, pilarVariablePct, nuevaPartida, crearCostesIniciales,
+  totalFacturacion, totalClientes, ticketMedioPonderado,
+  pilarFactClientes, pilarFactTotal, pilarFactTicketPonderado,
+  lineasPlanas,
+  nuevaPartidaFacturacion, crearFacturacionInicial,
+  EstadoViabilidad, EstadoActividad,
+  bloqueLocalInicial, imagenMarcaInicial, propuestaGastronomicaInicial,
+  bloqueOcupacionInicial,
 } from "@/features/direccion/data/aperturas";
 import { ProcedenciaTab } from "@/features/direccion/components/aperturas/ProcedenciaTab";
 import { DestinoTab } from "@/features/direccion/components/aperturas/DestinoTab";
 import { AmortizacionTab } from "@/features/direccion/components/aperturas/AmortizacionTab";
+import { LocalTab } from "@/features/direccion/components/aperturas/LocalTab";
+import { MarcaTab } from "@/features/direccion/components/aperturas/MarcaTab";
+import { GastronomiaTab } from "@/features/direccion/components/aperturas/GastronomiaTab";
+import { OcupacionTab } from "@/features/direccion/components/aperturas/OcupacionTab";
+import {
+  listEstudiosApertura,
+  createEstudioApertura,
+  updateEstudioApertura,
+  uploadFotoEstudio,
+  deleteFotoEstudio,
+  type EstudioRow,
+} from "@/features/direccion/actions/estudios-apertura-actions";
+import { prepararFotoParaSubida } from "@/features/direccion/lib/foto-upload";
+
+function rowToEstudio(row: EstudioRow): EstudioApertura {
+  return {
+    id: row.id,
+    datos: row.datos,
+    facturacion: row.facturacion,
+    costes: row.costes,
+    procedencia: row.procedencia,
+    destinos: row.destinos,
+    amortizacion: row.amortizacion,
+    creado: row.creado,
+    imagen: row.foto_url ?? undefined,
+    viabilidad: row.viabilidad,
+    actividad: row.actividad,
+    local: row.local ?? bloqueLocalInicial(),
+    imagenMarca: row.imagen_marca ?? imagenMarcaInicial(),
+    propuesta: row.propuesta_gastronomica ?? propuestaGastronomicaInicial(),
+    ocupacion: row.ocupacion ?? bloqueOcupacionInicial(),
+  };
+}
 
 const COLORS = ["hsl(var(--primary))", "hsl(210 70% 50%)", "hsl(150 60% 45%)", "hsl(40 90% 55%)", "hsl(340 70% 50%)"];
 const PILAR_COLORS = ["hsl(210 70% 55%)", "hsl(340 65% 55%)", "hsl(150 60% 45%)", "hsl(40 90% 55%)"];
 const PILAR_NAMES = ["Generales", "Personal", "Producto", "Marketing"];
+const FACT_PILAR_COLORS: Record<FactPilarKey, string> = {
+  franjas:  "hsl(210 70% 55%)",
+  acuerdos: "hsl(40 90% 55%)",
+  eventos:  "hsl(340 65% 55%)",
+  tienda:   "hsl(150 60% 45%)",
+};
 
 function fmt(n: number) {
   return n.toLocaleString("es-ES", { maximumFractionDigits: 0 });
 }
 
+function formatRecuperacion(mesesTotal: number): string {
+  const meses = Math.max(0, Math.ceil(mesesTotal));
+  const anos = Math.floor(meses / 12);
+  const mesesRest = meses % 12;
+  if (anos === 0) return `${mesesRest} ${mesesRest === 1 ? "mes" : "meses"}`;
+  if (mesesRest === 0) return `${anos} ${anos === 1 ? "año" : "años"}`;
+  return `${anos} ${anos === 1 ? "año" : "años"} ${mesesRest} ${mesesRest === 1 ? "mes" : "meses"}`;
+}
+
 export function AperturasView() {
   const { empresaActual } = useEmpresa();
-  const [estudios, setEstudios] = useState<EstudioApertura[]>(SAMPLE_ESTUDIOS);
+  const [estudios, setEstudios] = useState<EstudioApertura[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selected, setSelected] = useState<EstudioApertura | null>(null);
   const [showNew, setShowNew] = useState(false);
+  const saveTimeoutsRef = useRef<
+    Map<string, { timer: ReturnType<typeof setTimeout>; est: EstudioApertura }>
+  >(new Map());
+
+  // Carga inicial desde Supabase (re-carga al cambiar empresa)
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setLoadError(null);
+    listEstudiosApertura()
+      .then((res) => {
+        if (cancelled) return;
+        if (res.ok) {
+          setEstudios(res.data.map(rowToEstudio));
+          setLoadError(null);
+        } else {
+          console.error("[aperturas] list failed:", res.error);
+          setLoadError(res.error ?? "No se pudieron cargar los estudios");
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error("[aperturas] list threw:", err);
+        setLoadError(err instanceof Error ? err.message : "Error de red");
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [empresaActual?.id]);
+
+  // Persiste el estudio inmediatamente (sin debounce)
+  const persistEstudio = useCallback(async (est: EstudioApertura) => {
+    const res = await updateEstudioApertura(est.id, {
+      datos: est.datos,
+      facturacion: est.facturacion,
+      costes: est.costes,
+      procedencia: est.procedencia,
+      destinos: est.destinos,
+      amortizacion: est.amortizacion,
+      local: est.local,
+      imagen_marca: est.imagenMarca,
+      propuesta_gastronomica: est.propuesta,
+      ocupacion: est.ocupacion,
+    });
+    if (!res.ok) console.error("[aperturas] save:", res.error);
+  }, []);
+
+  // Persiste cambios del detalle con debounce de 500ms
+  const scheduleSave = useCallback((est: EstudioApertura) => {
+    const map = saveTimeoutsRef.current;
+    const existing = map.get(est.id);
+    if (existing) clearTimeout(existing.timer);
+    const timer = setTimeout(() => {
+      map.delete(est.id);
+      void persistEstudio(est);
+    }, 500);
+    map.set(est.id, { timer, est });
+  }, [persistEstudio]);
+
+  // Persiste ya, cancelando cualquier debounce pendiente para ese estudio
+  const saveNow = useCallback((est: EstudioApertura) => {
+    const map = saveTimeoutsRef.current;
+    const existing = map.get(est.id);
+    if (existing) clearTimeout(existing.timer);
+    map.delete(est.id);
+    return persistEstudio(est);
+  }, [persistEstudio]);
+
+  // Al desmontar, dispara los debounces pendientes (no los cancela)
+  useEffect(() => {
+    const timers = saveTimeoutsRef.current;
+    return () => {
+      timers.forEach(({ timer, est }) => {
+        clearTimeout(timer);
+        void persistEstudio(est);
+      });
+      timers.clear();
+    };
+  }, [persistEstudio]);
 
   const [busqueda, setBusqueda] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
@@ -55,7 +200,6 @@ export function AperturasView() {
     if (campo === "ciudad") return e.datos.ciudad;
     if (campo === "zona") return e.datos.zona;
     if (campo === "ventas") return e.datos.ventasEstimadas;
-    if (campo === "plazas") return e.datos.plazas;
     if (campo === "creado") return e.creado;
     return (e as unknown as Record<string, unknown>)[campo];
   };
@@ -72,15 +216,72 @@ export function AperturasView() {
   }, [estudios, busqueda, filtros, orden]);
 
   if (selected) {
-    return <DetalleEstudio estudio={selected} onBack={() => setSelected(null)} onUpdate={(e) => { setEstudios(prev => prev.map(x => x.id === e.id ? e : x)); setSelected(e); }} />;
+    return (
+      <DetalleEstudio
+        estudio={selected}
+        onBack={() => setSelected(null)}
+        onUpdate={(e, opts) => {
+          setEstudios(prev => prev.map(x => x.id === e.id ? e : x));
+          setSelected(e);
+          if (opts?.flush) void saveNow(e);
+          else scheduleSave(e);
+        }}
+      />
+    );
   }
+
+  const removeImagen = async (id: string) => {
+    setEstudios(prev => prev.map(x => x.id === id ? { ...x, imagen: undefined } : x));
+    const res = await deleteFotoEstudio(id);
+    if (!res.ok) console.error("[aperturas] deleteFoto:", res.error);
+  };
+
+  const setViabilidad = async (id: string, viabilidad: EstadoViabilidad) => {
+    setEstudios(prev => prev.map(x => x.id === id ? { ...x, viabilidad } : x));
+    const res = await updateEstudioApertura(id, { viabilidad });
+    if (!res.ok) console.error("[aperturas] updateViabilidad:", res.error);
+  };
+
+  const setActividad = async (id: string, actividad: EstadoActividad) => {
+    setEstudios(prev => prev.map(x => x.id === id ? { ...x, actividad } : x));
+    const res = await updateEstudioApertura(id, { actividad });
+    if (!res.ok) console.error("[aperturas] updateActividad:", res.error);
+  };
+
+  const onUploadImagen = async (id: string, file: File) => {
+    const previo = estudios.find(x => x.id === id)?.imagen;
+    try {
+      const prep = await prepararFotoParaSubida(file);
+      if (!prep.ok) {
+        window.alert(prep.error);
+        return;
+      }
+      setEstudios(prev => prev.map(x => x.id === id ? { ...x, imagen: prep.dataUrl } : x));
+      const res = await uploadFotoEstudio({
+        estudioId: id,
+        fileBase64: prep.dataUrl,
+        fileType: prep.tipo,
+        fileSize: prep.tamano,
+      });
+      if (!res.ok) {
+        console.error("[aperturas] uploadFoto:", res.error);
+        window.alert(`No se pudo subir la imagen: ${res.error}`);
+        setEstudios(prev => prev.map(x => x.id === id ? { ...x, imagen: previo } : x));
+        return;
+      }
+      setEstudios(prev => prev.map(x => x.id === id ? { ...x, imagen: res.foto_url } : x));
+    } catch (err) {
+      console.error("[aperturas] uploadFoto threw:", err);
+      window.alert("No se pudo subir la imagen. Prueba con un archivo más pequeño.");
+      setEstudios(prev => prev.map(x => x.id === id ? { ...x, imagen: previo } : x));
+    }
+  };
 
   const columnasDef: ToolbarColumna[] = [
     { campo: "nombre", label: "Nombre" },
     { campo: "ciudad", label: "Ciudad" },
     { campo: "zona", label: "Zona" },
     { campo: "ventas", label: "Ventas" },
-    { campo: "plazas", label: "Plazas" },
     { campo: "creado", label: "Creado" },
   ];
 
@@ -117,32 +318,177 @@ export function AperturasView() {
       <Dialog open={showNew} onOpenChange={setShowNew}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Nuevo estudio de apertura</DialogTitle></DialogHeader>
-          <NuevoEstudioForm onSave={(e) => { setEstudios(prev => [...prev, e]); setShowNew(false); }} onClose={() => setShowNew(false)} />
+          <NuevoEstudioForm
+            onSave={async (e, fotoFile) => {
+              const res = await createEstudioApertura({
+                datos: e.datos,
+                facturacion: e.facturacion,
+                costes: e.costes,
+                procedencia: e.procedencia,
+                destinos: e.destinos,
+                amortizacion: e.amortizacion,
+              });
+              if (!res.ok) {
+                console.error("[aperturas] create:", res.error);
+                return;
+              }
+              const nuevoEstudio = rowToEstudio(res.data);
+              setEstudios(prev => [nuevoEstudio, ...prev]);
+              setShowNew(false);
+
+              if (fotoFile) {
+                try {
+                  const prep = await prepararFotoParaSubida(fotoFile);
+                  if (!prep.ok) {
+                    window.alert(prep.error);
+                    return;
+                  }
+                  setEstudios(prev => prev.map(x => x.id === nuevoEstudio.id ? { ...x, imagen: prep.dataUrl } : x));
+                  const up = await uploadFotoEstudio({
+                    estudioId: nuevoEstudio.id,
+                    fileBase64: prep.dataUrl,
+                    fileType: prep.tipo,
+                    fileSize: prep.tamano,
+                  });
+                  if (!up.ok) {
+                    console.error("[aperturas] uploadFoto:", up.error);
+                    window.alert(`No se pudo subir la imagen: ${up.error}`);
+                    setEstudios(prev => prev.map(x => x.id === nuevoEstudio.id ? { ...x, imagen: undefined } : x));
+                    return;
+                  }
+                  setEstudios(prev => prev.map(x => x.id === nuevoEstudio.id ? { ...x, imagen: up.foto_url } : x));
+                } catch (err) {
+                  console.error("[aperturas] uploadFoto threw:", err);
+                  window.alert("No se pudo subir la imagen. Prueba con un archivo más pequeño.");
+                  setEstudios(prev => prev.map(x => x.id === nuevoEstudio.id ? { ...x, imagen: undefined } : x));
+                }
+              }
+            }}
+            onClose={() => setShowNew(false)}
+          />
         </DialogContent>
       </Dialog>
 
+      {loading && (
+        <p className="text-sm text-muted-foreground">Cargando estudios…</p>
+      )}
+      {!loading && loadError && (
+        <p className="text-sm text-red-600">Error: {loadError}</p>
+      )}
+      {!loading && !loadError && estudiosFiltrados.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          {estudios.length === 0
+            ? 'Aún no hay estudios. Crea el primero con "+ Nuevo".'
+            : "Ningún estudio coincide con los filtros."}
+        </p>
+      )}
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {estudiosFiltrados.map(e => {
-          const esc = calcularEscenario(e.datos.ventasEstimadas, 1, e.costes);
-          const viable = esc.beneficio > 0;
+          const ventasEstudio = totalFacturacion(e.facturacion);
+          const esc = calcularEscenario(ventasEstudio, 1, e.costes);
+          const inversionTotal = e.procedencia.reduce((s, l) => s + (l.total || 0), 0);
+          const facturacionMensual = ventasEstudio;
+          const facturacionAnual = facturacionMensual * 12;
+          const beneficioMensual = esc.beneficio;
+          const beneficioAnual = beneficioMensual * 12;
+          const tieneInversion = inversionTotal > 0;
+          const recuperaInversion = tieneInversion && beneficioMensual > 0;
+          const roiAnualPct = tieneInversion ? (beneficioAnual / inversionTotal) * 100 : 0;
           return (
-            <Card key={e.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelected(e)}>
+            <Card key={e.id} className="cursor-pointer hover:shadow-md transition-shadow overflow-hidden flex flex-col" onClick={() => setSelected(e)}>
               <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
+                <div className="flex items-start justify-between gap-2">
                   <CardTitle className="text-base">{e.datos.nombre}</CardTitle>
-                  <Badge variant={viable ? "default" : "destructive"}>{viable ? "Viable" : "No viable"}</Badge>
+                  <div className="flex items-center gap-1.5 shrink-0" onClick={(ev) => ev.stopPropagation()}>
+                    <EstadoBadgeMenu
+                      value={e.viabilidad}
+                      options={[
+                        { value: "viable", label: "Viable", className: "bg-green-500 text-white hover:bg-green-600" },
+                        { value: "no_viable", label: "No viable", className: "bg-red-500 text-white hover:bg-red-600" },
+                      ]}
+                      onChange={(v) => setViabilidad(e.id, v as EstadoViabilidad)}
+                    />
+                    <EstadoBadgeMenu
+                      value={e.actividad}
+                      options={[
+                        { value: "activo", label: "Activo", className: "bg-blue-500 text-white hover:bg-blue-600" },
+                        { value: "no_activo", label: "No activo", className: "bg-gray-400 text-white hover:bg-gray-500" },
+                      ]}
+                      onChange={(v) => setActividad(e.id, v as EstadoActividad)}
+                    />
+                  </div>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm">
+              <CardContent className="space-y-2.5 text-sm">
                 <p className="text-muted-foreground">{e.datos.ciudad} — {e.datos.zona}</p>
-                <div className="grid grid-cols-2 gap-1 text-xs">
-                  <span>Facturación est.: <strong>{fmt(e.datos.ventasEstimadas)}€</strong></span>
-                  <span>Beneficio est.: <strong className={viable ? "text-green-600" : "text-red-600"}>{fmt(esc.beneficio)}€</strong></span>
-                  <span>Plazas: {e.datos.plazas}</span>
-                  <span>Margen: {esc.margen.toFixed(1)}%</span>
+                <div className="flex items-center justify-between rounded-md bg-muted/40 px-2.5 py-1.5">
+                  <span className="text-xs text-muted-foreground">Inversión total</span>
+                  <strong className="text-sm">{tieneInversion ? `${fmt(inversionTotal)}€` : "—"}</strong>
+                </div>
+                <div className="space-y-1 text-xs px-1">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Facturación / mes</span>
+                    <span className="font-medium">{fmt(facturacionMensual)}€</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Facturación / año</span>
+                    <span className="font-medium">{fmt(facturacionAnual)}€</span>
+                  </div>
+                  <div className="flex justify-between border-t pt-1">
+                    <span className="text-muted-foreground">Beneficio / año</span>
+                    <span className={`font-semibold ${beneficioAnual >= 0 ? "text-green-600" : "text-red-600"}`}>{fmt(beneficioAnual)}€</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">ROI anual</span>
+                    <span className={`font-semibold ${tieneInversion && roiAnualPct >= 0 ? "text-green-600" : tieneInversion ? "text-red-600" : ""}`}>
+                      {tieneInversion ? `${roiAnualPct.toFixed(1)}%` : "—"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Recuperación</span>
+                    <span className="font-medium">
+                      {recuperaInversion ? formatRecuperacion(inversionTotal / beneficioMensual) : "—"}
+                    </span>
+                  </div>
                 </div>
                 <p className="text-[11px] text-muted-foreground">Creado: {e.creado}</p>
               </CardContent>
+              <div className="mt-auto px-4 pb-4" onClick={(ev) => ev.stopPropagation()}>
+                {e.imagen ? (
+                  <div className="relative group">
+                    <img
+                      src={e.imagen}
+                      alt={e.datos.nombre}
+                      className="w-full h-32 object-cover rounded-md border"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeImagen(e.id)}
+                      className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-black/80"
+                      title="Quitar imagen"
+                      aria-label="Quitar imagen"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center gap-1 h-32 w-full rounded-md border border-dashed border-muted-foreground/30 text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors cursor-pointer text-xs">
+                    <ImagePlus className="h-5 w-5" strokeWidth={1.75} />
+                    <span>Añadir foto del proyecto</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(ev) => {
+                        const file = ev.target.files?.[0];
+                        if (file) onUploadImagen(e.id, file);
+                        ev.target.value = "";
+                      }}
+                    />
+                  </label>
+                )}
+              </div>
             </Card>
           );
         })}
@@ -151,15 +497,120 @@ export function AperturasView() {
   );
 }
 
-/* ── Detalle completo del estudio ── */
-function DetalleEstudio({ estudio, onBack, onUpdate }: { estudio: EstudioApertura; onBack: () => void; onUpdate: (e: EstudioApertura) => void }) {
-  const [costes, setCostes] = useState<EstructuraCostes>(estudio.costes);
-  const ventas = estudio.datos.ventasEstimadas;
+/* ── Selector de estado tipo badge con dropdown ── */
+type EstadoBadgeOption = { value: string; label: string; className: string };
 
-  const updatePilar = (key: keyof EstructuraCostes, field: keyof CostePilar, val: number) => {
-    const next = { ...costes, [key]: { ...costes[key], [field]: val } };
+function EstadoBadgeMenu({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: EstadoBadgeOption[];
+  onChange: (next: string) => void;
+}) {
+  const current = options.find((o) => o.value === value) ?? options[0];
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+            current.className,
+          )}
+        >
+          {current.label}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[8rem]">
+        {options.map((o) => (
+          <DropdownMenuItem
+            key={o.value}
+            onSelect={(ev) => {
+              ev.preventDefault();
+              onChange(o.value);
+            }}
+          >
+            <span className={cn("mr-2 h-2.5 w-2.5 rounded-full", o.className)} />
+            {o.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/* ── Detalle completo del estudio ── */
+type Periodo = "mensual" | "trimestral" | "anual";
+const PERIODO_FACTOR: Record<Periodo, number> = { mensual: 1, trimestral: 3, anual: 12 };
+const PERIODO_SUFIJO: Record<Periodo, string> = { mensual: "/mes", trimestral: "/trim.", anual: "/año" };
+
+type KpiKey = "facturacion" | "costeTotal" | "beneficio" | "margen";
+
+function DetalleEstudio({ estudio, onBack, onUpdate }: { estudio: EstudioApertura; onBack: () => void; onUpdate: (e: EstudioApertura, opts?: { flush?: boolean }) => void }) {
+  const [costes, setCostes] = useState<EstructuraCostes>(estudio.costes);
+  const [facturacion, setFacturacion] = useState<EstructuraFacturacion>(estudio.facturacion);
+  const [periodo, setPeriodo] = useState<Periodo>("mensual");
+  const [hoveredKpi, setHoveredKpi] = useState<KpiKey | null>(null);
+  const [facturacionPeriodo, setFacturacionPeriodo] = useState<Periodo>("mensual");
+  const [costesPeriodo, setCostesPeriodo] = useState<Periodo>("mensual");
+  const [expandEscFact, setExpandEscFact] = useState(false);
+  const [expandEscCostes, setExpandEscCostes] = useState(false);
+  const factor = PERIODO_FACTOR[periodo];
+  const sufijo = PERIODO_SUFIJO[periodo];
+  const inversionTotal = estudio.procedencia.reduce((s, l) => s + (l.total || 0), 0);
+  const ventas = totalFacturacion(facturacion);
+  const clientesMes = totalClientes(facturacion);
+  const ticketPond = ticketMedioPonderado(facturacion);
+
+  const setPilar = (key: PilarKey, pilar: CostePilar) => {
+    const next = { ...costes, [key]: pilar };
     setCostes(next);
     onUpdate({ ...estudio, costes: next });
+  };
+
+  const setPilarFact = (key: FactPilarKey, pilar: FacturacionPilar) => {
+    const next: EstructuraFacturacion = { ...facturacion, [key]: pilar };
+    setFacturacion(next);
+    onUpdate({ ...estudio, facturacion: next });
+  };
+
+  const updatePartidaFact = (
+    key: FactPilarKey,
+    partidaId: string,
+    field: keyof Omit<PartidaFacturacion, "id">,
+    val: string | number,
+  ) => {
+    const pilar = facturacion[key];
+    const partidas = pilar.partidas.map((p) => (p.id === partidaId ? { ...p, [field]: val } : p));
+    setPilarFact(key, { ...pilar, partidas });
+  };
+
+  const addPartidaFact = (key: FactPilarKey) => {
+    const pilar = facturacion[key];
+    setPilarFact(key, { ...pilar, partidas: [...pilar.partidas, nuevaPartidaFacturacion()] });
+  };
+
+  const removePartidaFact = (key: FactPilarKey, partidaId: string) => {
+    const pilar = facturacion[key];
+    setPilarFact(key, { ...pilar, partidas: pilar.partidas.filter((p) => p.id !== partidaId) });
+  };
+
+  const updatePartida = (key: PilarKey, partidaId: string, field: keyof Omit<PartidaCoste, "id">, val: string | number) => {
+    const pilar = costes[key];
+    const partidas = pilar.partidas.map((p) => (p.id === partidaId ? { ...p, [field]: val } : p));
+    setPilar(key, { ...pilar, partidas });
+  };
+
+  const addPartida = (key: PilarKey) => {
+    const pilar = costes[key];
+    setPilar(key, { ...pilar, partidas: [...pilar.partidas, nuevaPartida()] });
+  };
+
+  const removePartida = (key: PilarKey, partidaId: string) => {
+    const pilar = costes[key];
+    setPilar(key, { ...pilar, partidas: pilar.partidas.filter((p) => p.id !== partidaId) });
   };
 
   const escenarios = ESCENARIOS.map(e => {
@@ -168,7 +619,8 @@ function DetalleEstudio({ estudio, onBack, onUpdate }: { estudio: EstudioApertur
   });
 
   const medio = escenarios[2];
-  const fijoTotal = costes.generales.fijo + costes.personal.fijo + costes.producto.fijo + costes.marketing.fijo;
+  const fijoTotal = pilarFijo(costes.generales) + pilarFijo(costes.personal) + pilarFijo(costes.producto) + pilarFijo(costes.marketing);
+  const variablePctTotal = pilarVariablePct(costes.generales) + pilarVariablePct(costes.personal) + pilarVariablePct(costes.producto) + pilarVariablePct(costes.marketing);
 
   const pieData = [
     { name: "Generales", value: calcularPilar(ventas, costes.generales) },
@@ -183,6 +635,28 @@ function DetalleEstudio({ estudio, onBack, onUpdate }: { estudio: EstudioApertur
     return { facturacion: fmt(r.facturacion), beneficio: r.beneficio, margen: parseFloat(r.margen.toFixed(1)) };
   });
 
+  const peMensual = variablePctTotal < 100 ? fijoTotal / (1 - variablePctTotal / 100) : Infinity;
+  const peAnual = peMensual * 12;
+
+  const donutBase: { name: string; value: number; group: "costes" | "beneficio"; color: string }[] = [
+    { name: "Generales", value: pieData[0].value, group: "costes", color: PILAR_COLORS[0] },
+    { name: "Personal", value: pieData[1].value, group: "costes", color: PILAR_COLORS[1] },
+    { name: "Producto", value: pieData[2].value, group: "costes", color: PILAR_COLORS[2] },
+    { name: "Marketing", value: pieData[3].value, group: "costes", color: PILAR_COLORS[3] },
+  ];
+  if (medio.beneficio > 0) {
+    donutBase.push({ name: "Beneficio", value: medio.beneficio, group: "beneficio", color: "hsl(142 80% 42%)" });
+  }
+  const donutData = donutBase.map((d) => ({ ...d, value: d.value * factor }));
+  const beneficioIndex = donutData.findIndex((d) => d.group === "beneficio");
+
+  const isDonutActive = (group: "costes" | "beneficio") => {
+    if (!hoveredKpi) return true;
+    if (hoveredKpi === "facturacion") return true;
+    if (hoveredKpi === "costeTotal") return group === "costes";
+    return group === "beneficio";
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center gap-3">
@@ -193,269 +667,1380 @@ function DetalleEstudio({ estudio, onBack, onUpdate }: { estudio: EstudioApertur
         </div>
       </div>
 
-      <Tabs defaultValue="resumen">
-        <TabsList className="flex-wrap">
-          <TabsTrigger value="resumen"><BarChart3 className="h-4 w-4 mr-1" />Resumen</TabsTrigger>
-          <TabsTrigger value="datos"><FileText className="h-4 w-4 mr-1" />Datos</TabsTrigger>
-          <TabsTrigger value="costes"><Calculator className="h-4 w-4 mr-1" />Costes</TabsTrigger>
-          <TabsTrigger value="escenarios"><TrendingUp className="h-4 w-4 mr-1" />Escenarios</TabsTrigger>
-          <TabsTrigger value="procedencia"><Landmark className="h-4 w-4 mr-1" />Procedencia</TabsTrigger>
-          <TabsTrigger value="destino"><Target className="h-4 w-4 mr-1" />Destino</TabsTrigger>
-          <TabsTrigger value="amortizacion"><Clock className="h-4 w-4 mr-1" />Amortización</TabsTrigger>
-          <TabsTrigger value="graficas"><BarChart3 className="h-4 w-4 mr-1" />Gráficas</TabsTrigger>
+      <Tabs defaultValue="escenarios">
+        <TabsList className="h-11 gap-1 rounded-xl border bg-muted/50 p-1 shadow-sm">
+          <TabsTrigger
+            value="datos"
+            className="h-9 gap-1.5 rounded-lg px-4 font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md"
+          >
+            <FileText className="h-4 w-4" />Datos
+          </TabsTrigger>
+          <TabsTrigger
+            value="concepto"
+            className="h-9 gap-1.5 rounded-lg px-4 font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md"
+          >
+            <Sparkles className="h-4 w-4" />Concepto
+          </TabsTrigger>
+          <TabsTrigger
+            value="facturacion"
+            className="h-9 gap-1.5 rounded-lg px-4 font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md"
+          >
+            <Receipt className="h-4 w-4" />Facturación
+          </TabsTrigger>
+          <TabsTrigger
+            value="costes"
+            className="h-9 gap-1.5 rounded-lg px-4 font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md"
+          >
+            <Calculator className="h-4 w-4" />Costes
+          </TabsTrigger>
+          <TabsTrigger
+            value="escenarios"
+            className="h-9 gap-1.5 rounded-lg px-4 font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md"
+          >
+            <TrendingUp className="h-4 w-4" />Escenarios
+          </TabsTrigger>
+          <TabsTrigger
+            value="inversion"
+            className="h-9 gap-1.5 rounded-lg px-4 font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md"
+          >
+            <Landmark className="h-4 w-4" />Inversión
+          </TabsTrigger>
         </TabsList>
 
-        {/* ── RESUMEN EJECUTIVO ── */}
-        <TabsContent value="resumen" className="space-y-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold">{fmt(medio.facturacion)}€</p><p className="text-xs text-muted-foreground">Facturación estimada</p></CardContent></Card>
-            <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold">{fmt(medio.costeTotal)}€</p><p className="text-xs text-muted-foreground">Coste total</p></CardContent></Card>
-            <Card><CardContent className="p-4 text-center"><p className={`text-2xl font-bold ${medio.beneficio >= 0 ? "text-green-600" : "text-red-600"}`}>{fmt(medio.beneficio)}€</p><p className="text-xs text-muted-foreground">Beneficio estimado</p></CardContent></Card>
-            <Card><CardContent className="p-4 text-center"><p className={`text-2xl font-bold ${medio.margen >= 0 ? "text-green-600" : "text-red-600"}`}>{medio.margen.toFixed(1)}%</p><p className="text-xs text-muted-foreground">Margen</p></CardContent></Card>
+        {/* ── ESCENARIOS (Resumen ejecutivo + Tabla + Gráficas) ── */}
+        <TabsContent value="escenarios" className="space-y-8">
+          <div className="flex justify-end">
+            <Select value={periodo} onValueChange={(v) => setPeriodo(v as Periodo)}>
+              <SelectTrigger className="w-40 h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="mensual">Mensual</SelectItem>
+                <SelectItem value="trimestral">Trimestral</SelectItem>
+                <SelectItem value="anual">Anual</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-          <Card>
-            <CardHeader><CardTitle className="text-base">Lectura de viabilidad</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center gap-3">
-                {medio.beneficio >= 0 ? <TrendingUp className="h-6 w-6 text-green-600" /> : <TrendingDown className="h-6 w-6 text-red-600" />}
-                <div>
-                  <p className="font-semibold text-lg">{medio.beneficio >= 0 ? "Proyecto viable en escenario medio" : "Proyecto no viable en escenario medio"}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {escenarios.filter(e => e.beneficio > 0).length} de 5 escenarios son rentables.
-                    {" "}Punto de equilibrio: {fmt(fijoTotal / (1 - (costes.generales.variablePct + costes.personal.variablePct + costes.producto.variablePct + costes.marketing.variablePct) / 100))}€/mes
-                  </p>
-                </div>
-              </div>
-              <div className="grid grid-cols-4 gap-3 pt-2">
-                {pieData.map((p, i) => (
-                  <div key={p.name} className="text-center">
-                    <p className="text-lg font-bold">{fmt(p.value)}€</p>
-                    <p className="text-xs text-muted-foreground">{p.name} ({((p.value / medio.costeTotal) * 100).toFixed(0)}%)</p>
+          {/* ── 1. Resumen ejecutivo ── */}
+          <section className="space-y-4">
+            <h2 className="text-lg font-semibold tracking-tight">Resumen ejecutivo</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card
+              className={`cursor-default transition-all ${hoveredKpi === "facturacion" ? "ring-2 ring-primary shadow-md" : ""}`}
+              onMouseEnter={() => setHoveredKpi("facturacion")}
+              onMouseLeave={() => setHoveredKpi(null)}
+            >
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-bold">{fmt(medio.facturacion * factor)}€</p>
+                <p className="text-xs text-muted-foreground">Facturación estimada</p>
+              </CardContent>
+            </Card>
+            <Card
+              className={`cursor-default transition-all ${hoveredKpi === "costeTotal" ? "ring-2 ring-primary shadow-md" : ""}`}
+              onMouseEnter={() => setHoveredKpi("costeTotal")}
+              onMouseLeave={() => setHoveredKpi(null)}
+            >
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-bold">{fmt(medio.costeTotal * factor)}€</p>
+                <p className="text-xs text-muted-foreground">Coste total</p>
+              </CardContent>
+            </Card>
+            <Card
+              className={`cursor-default transition-all ${hoveredKpi === "beneficio" ? "ring-2 ring-primary shadow-md" : ""}`}
+              onMouseEnter={() => setHoveredKpi("beneficio")}
+              onMouseLeave={() => setHoveredKpi(null)}
+            >
+              <CardContent className="p-4 text-center">
+                <p className={`text-2xl font-bold ${medio.beneficio >= 0 ? "text-green-600" : "text-red-600"}`}>{fmt(medio.beneficio * factor)}€</p>
+                <p className="text-xs text-muted-foreground">Beneficio estimado</p>
+              </CardContent>
+            </Card>
+            <Card
+              className={`cursor-default transition-all ${hoveredKpi === "margen" ? "ring-2 ring-primary shadow-md" : ""}`}
+              onMouseEnter={() => setHoveredKpi("margen")}
+              onMouseLeave={() => setHoveredKpi(null)}
+            >
+              <CardContent className="p-4 text-center">
+                <p className={`text-2xl font-bold ${medio.margen >= 0 ? "text-green-600" : "text-red-600"}`}>{medio.margen.toFixed(1)}%</p>
+                <p className="text-xs text-muted-foreground">Margen</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card className={`transition-all ${hoveredKpi ? "ring-1 ring-primary/40" : ""}`}>
+              <CardHeader>
+                <CardTitle className="text-base">Estructura {sufijo}</CardTitle>
+                <p className="text-xs text-muted-foreground">Pasa el cursor por los KPI de arriba para resaltar segmentos.</p>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={280}>
+                  <PieChart>
+                    <Pie
+                      data={donutData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={100}
+                      paddingAngle={2}
+                      isAnimationActive={false}
+                      activeIndex={beneficioIndex >= 0 ? beneficioIndex : undefined}
+                      activeShape={(props: any) => {
+                        const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, fillOpacity } = props;
+                        return (
+                          <g style={{ filter: "drop-shadow(0 0 10px rgba(34,197,94,0.55)) drop-shadow(0 0 4px rgba(34,197,94,0.45))" }}>
+                            <Sector
+                              cx={cx}
+                              cy={cy}
+                              innerRadius={innerRadius}
+                              outerRadius={outerRadius + 10}
+                              startAngle={startAngle}
+                              endAngle={endAngle}
+                              fill={fill}
+                              fillOpacity={fillOpacity ?? 1}
+                              stroke="hsl(var(--background))"
+                              strokeWidth={2}
+                            />
+                          </g>
+                        );
+                      }}
+                    >
+                      {donutData.map((d, i) => {
+                        const active = isDonutActive(d.group);
+                        return (
+                          <Cell
+                            key={i}
+                            fill={d.color}
+                            fillOpacity={active ? 1 : 0.2}
+                            stroke={hoveredKpi && active ? "hsl(var(--background))" : "transparent"}
+                            strokeWidth={2}
+                          />
+                        );
+                      })}
+                    </Pie>
+                    <Tooltip formatter={(v: number) => `${fmt(v)}€`} />
+                    <Legend verticalAlign="bottom" height={36} iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle className="text-base">Lectura de viabilidad</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-3">
+                  {medio.beneficio >= 0 ? <TrendingUp className="h-6 w-6 text-green-600" /> : <TrendingDown className="h-6 w-6 text-red-600" />}
+                  <div>
+                    <p className="font-semibold">{medio.beneficio >= 0 ? "Proyecto viable en escenario estimado" : "Proyecto no viable en escenario estimado"}</p>
+                    <p className="text-sm text-muted-foreground">{escenarios.filter(e => e.beneficio > 0).length} de 5 escenarios son rentables.</p>
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                </div>
+
+                <div className="space-y-2 pt-3 border-t">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Punto de equilibrio</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-md bg-muted/40 p-3">
+                      <p className="text-xs text-muted-foreground">Mensual</p>
+                      <p className="text-lg font-semibold">{Number.isFinite(peMensual) ? `${fmt(peMensual)}€` : "—"}</p>
+                    </div>
+                    <div className="rounded-md bg-muted/40 p-3">
+                      <p className="text-xs text-muted-foreground">Anual</p>
+                      <p className="text-lg font-semibold">{Number.isFinite(peAnual) ? `${fmt(peAnual)}€` : "—"}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-5 gap-2 pt-3 border-t">
+                  {pieData.map((p) => (
+                    <div key={p.name} className="text-center">
+                      <p className="text-sm font-bold">{fmt(p.value * factor)}€</p>
+                      <p className="text-[10px] text-muted-foreground">{p.name}</p>
+                      <p className="text-[10px] text-muted-foreground">({medio.facturacion > 0 ? ((p.value / medio.facturacion) * 100).toFixed(0) : 0}%)</p>
+                    </div>
+                  ))}
+                  <div className="text-center">
+                    <p className={`text-sm font-bold ${medio.beneficio >= 0 ? "text-green-600" : "text-red-600"}`}>{fmt(medio.beneficio * factor)}€</p>
+                    <p className="text-[10px] text-muted-foreground">Beneficio</p>
+                    <p className="text-[10px] text-muted-foreground">({medio.margen.toFixed(0)}%)</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          </section>
+
+          {/* ── 2. Tabla de escenarios ── */}
+          <section className="space-y-4">
+            <h2 className="text-lg font-semibold tracking-tight">Tabla de escenarios</h2>
+            <Card>
+              <CardContent className="p-0 overflow-x-auto">
+                {(() => {
+                  const tieneInversion = inversionTotal > 0;
+                  return (
+                <table className="w-full text-sm">
+                  <thead><tr className="border-b bg-muted/40">
+                    <th className="text-left p-3 font-medium">Escenario</th>
+                    {expandEscFact && lineasPlanas(facturacion).map((l) => (
+                      <th key={l.id} className="text-right p-3 font-medium text-muted-foreground whitespace-nowrap">{l.nombre}</th>
+                    ))}
+                    <th className="text-right p-3 font-medium whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => setExpandEscFact((v) => !v)}
+                        className="inline-flex items-center gap-1 hover:text-foreground"
+                        aria-label={expandEscFact ? "Ocultar líneas de facturación" : "Ver líneas de facturación"}
+                      >
+                        Facturación
+                        {expandEscFact ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                      </button>
+                    </th>
+                    {expandEscCostes && (
+                      <>
+                        <th className="text-right p-3 font-medium text-muted-foreground whitespace-nowrap">Costes fijos</th>
+                        <th className="text-right p-3 font-medium text-muted-foreground whitespace-nowrap">Costes variables</th>
+                      </>
+                    )}
+                    <th className="text-right p-3 font-medium whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => setExpandEscCostes((v) => !v)}
+                        className="inline-flex items-center gap-1 hover:text-foreground"
+                        aria-label={expandEscCostes ? "Ocultar desglose de costes" : "Ver desglose de costes"}
+                      >
+                        Coste total
+                        {expandEscCostes ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                      </button>
+                    </th>
+                    <th className="text-right p-3 font-medium">Beneficio</th>
+                    <th className="text-right p-3 font-medium">Margen</th>
+                    <th className="text-right p-3 font-medium whitespace-nowrap">ROI</th>
+                    <th className="text-right p-3 font-medium whitespace-nowrap">Recuperación</th>
+                  </tr></thead>
+                  <tbody>
+                    {escenarios.map((e) => {
+                      const factPeriodo = e.facturacion * factor;
+                      const fijoPeriodo = e.fijoTotal * factor;
+                      const varPeriodo = e.varTotal * factor;
+                      const costePeriodo = e.costeTotal * factor;
+                      const beneficioPeriodo = e.beneficio * factor;
+                      const roiPeriodoPct = tieneInversion ? (beneficioPeriodo / inversionTotal) * 100 : 0;
+                      const recuperaInversion = tieneInversion && e.beneficio > 0;
+                      return (
+                        <tr key={e.nombre} className={`border-b ${e.nombre === "Estimado" ? "bg-primary/5" : ""}`}>
+                          <td className="p-3 font-medium">{e.nombre}</td>
+                          {expandEscFact && lineasPlanas(facturacion).map((l) => {
+                            const lineaMensual = (l.clientesEsperados || 0) * (l.ticketMedio || 0);
+                            const lineaPeriodo = lineaMensual * e.factor * factor;
+                            return (
+                              <td key={l.id} className="p-3 text-right text-muted-foreground">{fmt(lineaPeriodo)}€</td>
+                            );
+                          })}
+                          <td className="p-3 text-right">{fmt(factPeriodo)}€</td>
+                          {expandEscCostes && (
+                            <>
+                              <td className="p-3 text-right text-muted-foreground">{fmt(fijoPeriodo)}€</td>
+                              <td className="p-3 text-right text-muted-foreground">{fmt(varPeriodo)}€</td>
+                            </>
+                          )}
+                          <td className="p-3 text-right">{fmt(costePeriodo)}€</td>
+                          <td className={`p-3 text-right font-semibold ${e.beneficio >= 0 ? "text-green-600" : "text-red-600"}`}>{fmt(beneficioPeriodo)}€</td>
+                          <td className={`p-3 text-right ${e.margen >= 0 ? "text-green-600" : "text-red-600"}`}>{e.margen.toFixed(1)}%</td>
+                          <td className={`p-3 text-right ${tieneInversion ? (roiPeriodoPct >= 0 ? "text-green-600" : "text-red-600") : "text-muted-foreground"}`}>
+                            {tieneInversion ? `${roiPeriodoPct.toFixed(1)}%` : "—"}
+                          </td>
+                          <td className="p-3 text-right whitespace-nowrap">
+                            {recuperaInversion ? formatRecuperacion(inversionTotal / e.beneficio) : "—"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                  );
+                })()}
+              </CardContent>
+            </Card>
+          </section>
+
+          {/* ── 3. Gráficas ── */}
+          <section className="space-y-4">
+            <h2 className="text-lg font-semibold tracking-tight">Gráficas</h2>
+            <div className="grid md:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader><CardTitle className="text-sm">Facturación y beneficio por escenario</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={escenarios.map(e => ({ name: e.nombre, Facturación: e.facturacion, Beneficio: e.beneficio }))}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} />
+                      <Tooltip formatter={(v: number) => `${fmt(v)}€`} />
+                      <Legend />
+                      <Bar dataKey="Facturación" fill="hsl(210 70% 55%)" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="Beneficio" fill="hsl(150 60% 45%)" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle className="text-sm">Peso de cada pilar de coste</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <PieChart>
+                      <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                        {pieData.map((_, i) => <Cell key={i} fill={PILAR_COLORS[i]} />)}
+                      </Pie>
+                      <Tooltip formatter={(v: number) => `${fmt(v)}€`} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle className="text-sm">Margen estimado por escenario</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={escenarios.map(e => ({ name: e.nombre, Margen: parseFloat(e.margen.toFixed(1)) }))}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} unit="%" />
+                      <Tooltip formatter={(v: number) => `${v}%`} />
+                      <Bar dataKey="Margen" radius={[4, 4, 0, 0]}>
+                        {escenarios.map((e, i) => <Cell key={i} fill={e.margen >= 0 ? "hsl(150 60% 45%)" : "hsl(0 70% 55%)"} />)}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle className="text-sm">Sensibilidad — beneficio vs facturación</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <LineChart data={sensibilidadData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="facturacion" tick={{ fontSize: 10 }} />
+                      <YAxis tick={{ fontSize: 11 }} />
+                      <Tooltip formatter={(v: number) => `${fmt(v)}€`} />
+                      <Line type="monotone" dataKey="beneficio" stroke="hsl(150 60% 45%)" strokeWidth={2} dot={{ r: 3 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </div>
+          </section>
         </TabsContent>
 
         {/* ── DATOS DEL PROYECTO ── */}
         <TabsContent value="datos">
           <Card>
             <CardContent className="p-6">
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                {([
-                  ["Nombre", estudio.datos.nombre], ["Ciudad", estudio.datos.ciudad], ["Zona", estudio.datos.zona],
-                  ["Población", fmt(estudio.datos.poblacion)], ["Afluencia", estudio.datos.afluencia], ["Tipo de local", estudio.datos.tipoLocal],
-                  ["m²", estudio.datos.metrosCuadrados], ["Plazas", estudio.datos.plazas], ["Ventas estimadas", `${fmt(estudio.datos.ventasEstimadas)}€/mes`],
-                  ["Ticket medio", `${estudio.datos.ticketMedio}€`], ["Clientes estimados", `${fmt(estudio.datos.clientesEstimados)}/mes`],
-                  ["Estacionalidad", estudio.datos.estacionalidad], ["Competencia", estudio.datos.competencia],
-                ] as [string, string | number][]).map(([label, val]) => (
-                  <div key={label}><Label className="text-muted-foreground text-xs">{label}</Label><p className="font-medium">{val}</p></div>
-                ))}
-              </div>
-              {estudio.datos.observaciones && <div className="mt-4"><Label className="text-muted-foreground text-xs">Observaciones</Label><p className="text-sm">{estudio.datos.observaciones}</p></div>}
+              <DatosEditor
+                datos={estudio.datos}
+                onChange={(datos) => onUpdate({ ...estudio, datos })}
+              />
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* ── COSTES ── */}
-        <TabsContent value="costes">
+        {/* ── CONCEPTO (Local + Imagen de marca + Gastronomía) ── */}
+        <TabsContent value="concepto">
+          <Tabs defaultValue="local">
+            <TabsList className="h-auto w-full justify-start gap-6 rounded-none border-b bg-transparent p-0">
+              <TabsTrigger
+                value="local"
+                className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none"
+              >
+                <Building2 className="h-4 w-4" />Local
+              </TabsTrigger>
+              <TabsTrigger
+                value="marca"
+                className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none"
+              >
+                <Sparkles className="h-4 w-4" />Imagen de marca
+              </TabsTrigger>
+              <TabsTrigger
+                value="gastronomia"
+                className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none"
+              >
+                <ChefHat className="h-4 w-4" />Gastronomía
+              </TabsTrigger>
+              <TabsTrigger
+                value="ocupacion"
+                className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none"
+              >
+                <Activity className="h-4 w-4" />Ocupación
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="local" className="mt-4">
+              <LocalTab
+                estudioId={estudio.id}
+                local={estudio.local}
+                onChange={(local, opts) => onUpdate({ ...estudio, local }, opts)}
+              />
+            </TabsContent>
+            <TabsContent value="marca" className="mt-4">
+              <MarcaTab
+                estudioId={estudio.id}
+                marca={estudio.imagenMarca}
+                onChange={(imagenMarca, opts) => onUpdate({ ...estudio, imagenMarca }, opts)}
+              />
+            </TabsContent>
+            <TabsContent value="gastronomia" className="mt-4">
+              <GastronomiaTab
+                estudioId={estudio.id}
+                propuesta={estudio.propuesta}
+                ventasMensuales={ventas}
+                onChange={(propuesta, opts) => onUpdate({ ...estudio, propuesta }, opts)}
+              />
+            </TabsContent>
+            <TabsContent value="ocupacion" className="mt-4">
+              <OcupacionTab
+                ocupacion={estudio.ocupacion}
+                plazasTotales={
+                  (estudio.local?.caracteristicas?.plazasInterior ?? 0) +
+                  (estudio.local?.caracteristicas?.plazasTerraza ?? 0)
+                }
+                onChange={(ocupacion, opts) => onUpdate({ ...estudio, ocupacion }, opts)}
+              />
+            </TabsContent>
+          </Tabs>
+        </TabsContent>
+
+        {/* ── FACTURACIÓN ── */}
+        <TabsContent value="facturacion" className="space-y-4">
+          <div className="flex justify-end">
+            <Select value={facturacionPeriodo} onValueChange={(v) => setFacturacionPeriodo(v as Periodo)}>
+              <SelectTrigger className="w-40 h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="mensual">Mensual</SelectItem>
+                <SelectItem value="trimestral">Trimestral</SelectItem>
+                <SelectItem value="anual">Anual</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {(() => {
+            const factFactor = PERIODO_FACTOR[facturacionPeriodo];
+            return (
+          <>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold">{fmt(ventas * factFactor)}€</p><p className="text-xs text-muted-foreground">Facturación</p></CardContent></Card>
+            <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold">{fmt(clientesMes * factFactor)}</p><p className="text-xs text-muted-foreground">Clientes</p></CardContent></Card>
+            <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold">{ticketPond.toFixed(2)}€</p><p className="text-xs text-muted-foreground">Ticket medio ponderado</p></CardContent></Card>
+          </div>
+
           <Card>
-            <CardHeader><CardTitle className="text-base">Estructura de costes por pilares</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle className="text-base">Estructura de facturación por pilares</CardTitle>
+              <p className="text-xs text-muted-foreground mt-1">
+                Despliega cada pilar para editar sus partidas. Los totales del pilar se calculan automáticamente y no son editables.
+              </p>
+            </CardHeader>
             <CardContent>
               <table className="w-full text-sm">
                 <thead><tr className="border-b bg-muted/40">
-                  <th className="text-left p-3 font-medium">Pilar</th>
-                  <th className="text-left p-3 font-medium">Coste fijo (€/mes)</th>
-                  <th className="text-left p-3 font-medium">Variable (%)</th>
-                  <th className="text-left p-3 font-medium">Coste variable (esc. medio)</th>
-                  <th className="text-left p-3 font-medium">Total pilar</th>
+                  <th className="text-left p-3 font-medium w-[28%]">Pilar / Partida</th>
+                  <th className="text-left p-3 font-medium">Clientes esperados</th>
+                  <th className="text-left p-3 font-medium">Ticket medio (€)</th>
+                  <th className="text-right p-3 font-medium">Total (€)</th>
+                  <th className="text-right p-3 font-medium">% del total</th>
+                  <th className="w-10"></th>
                 </tr></thead>
                 <tbody>
-                  {(["generales", "personal", "producto", "marketing"] as (keyof EstructuraCostes)[]).map((key, i) => {
-                    const pilar = costes[key];
-                    const total = calcularPilar(ventas, pilar);
-                    return (
-                      <tr key={key} className="border-b">
-                        <td className="p-3 font-medium capitalize">{PILAR_NAMES[i]}</td>
-                        <td className="p-3"><Input type="number" className="w-28" value={pilar.fijo} onChange={e => updatePilar(key, "fijo", Number(e.target.value))} /></td>
-                        <td className="p-3"><Input type="number" className="w-20" step={0.5} value={pilar.variablePct} onChange={e => updatePilar(key, "variablePct", Number(e.target.value))} /></td>
-                        <td className="p-3">{fmt(ventas * pilar.variablePct / 100)}€</td>
-                        <td className="p-3 font-semibold">{fmt(total)}€</td>
-                      </tr>
-                    );
-                  })}
+                  {FACT_PILAR_KEYS.map((key) => (
+                    <PilarFactBloque
+                      key={key}
+                      pilarKey={key}
+                      label={FACT_PILAR_NAMES[key]}
+                      pilar={facturacion[key]}
+                      ventasTotal={ventas}
+                      factor={factFactor}
+                      onUpdatePartida={(partidaId, field, val) => updatePartidaFact(key, partidaId, field, val)}
+                      onAddPartida={() => addPartidaFact(key)}
+                      onRemovePartida={(partidaId) => removePartidaFact(key, partidaId)}
+                    />
+                  ))}
                   <tr className="bg-muted/30 font-semibold">
                     <td className="p-3">TOTAL</td>
-                    <td className="p-3">{fmt(fijoTotal)}€</td>
-                    <td className="p-3">{(costes.generales.variablePct + costes.personal.variablePct + costes.producto.variablePct + costes.marketing.variablePct).toFixed(1)}%</td>
-                    <td className="p-3">{fmt(medio.varTotal)}€</td>
-                    <td className="p-3">{fmt(medio.costeTotal)}€</td>
+                    <td className="p-3">{fmt(clientesMes * factFactor)}</td>
+                    <td className="p-3">{ticketPond.toFixed(2)}€</td>
+                    <td className="p-3 text-right">{fmt(ventas * factFactor)}€</td>
+                    <td className="p-3 text-right">100%</td>
+                    <td></td>
                   </tr>
                 </tbody>
               </table>
             </CardContent>
           </Card>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader><CardTitle className="text-sm">Distribución de ingresos por pilar</CardTitle></CardHeader>
+              <CardContent>
+                {ventas > 0 ? (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <PieChart>
+                      <Pie
+                        data={FACT_PILAR_KEYS
+                          .map((k) => ({ name: FACT_PILAR_NAMES[k], value: pilarFactTotal(facturacion[k]), key: k }))
+                          .filter((d) => d.value > 0)}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={100}
+                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      >
+                        {FACT_PILAR_KEYS
+                          .filter((k) => pilarFactTotal(facturacion[k]) > 0)
+                          .map((k) => (
+                            <Cell key={k} fill={FACT_PILAR_COLORS[k]} />
+                          ))}
+                      </Pie>
+                      <Tooltip formatter={(v: number) => `${fmt(v)}€`} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-[280px] flex items-center justify-center text-sm text-muted-foreground">
+                    Añade clientes y ticket medio a las partidas para ver la gráfica
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle className="text-sm">Clientes vs ticket medio por partida</CardTitle></CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart
+                    data={lineasPlanas(facturacion).map((l) => ({
+                      name: l.nombre,
+                      Clientes: l.clientesEsperados || 0,
+                      Ticket: l.ticketMedio || 0,
+                    }))}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                    <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
+                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} unit="€" />
+                    <Tooltip />
+                    <Legend />
+                    <Bar yAxisId="left" dataKey="Clientes" fill="hsl(210 70% 55%)" radius={[4, 4, 0, 0]} />
+                    <Bar yAxisId="right" dataKey="Ticket" fill="hsl(40 90% 55%)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
+          </>
+            );
+          })()}
+
+          {/* ── TICKET MEDIO (justificación desde la propuesta gastronómica) ── */}
+          {(() => {
+            const platos = estudio.propuesta.platos ?? [];
+            const platosConPrecio = platos.filter((p) => (p.precio || 0) > 0);
+            const precioMedioPlatos = platosConPrecio.length > 0
+              ? platosConPrecio.reduce((s, p) => s + p.precio, 0) / platosConPrecio.length
+              : 0;
+            const precioMin = platosConPrecio.length > 0 ? Math.min(...platosConPrecio.map((p) => p.precio)) : 0;
+            const precioMax = platosConPrecio.length > 0 ? Math.max(...platosConPrecio.map((p) => p.precio)) : 0;
+
+            const rangos = [
+              { rango: "0-10€", min: 0, max: 10 },
+              { rango: "10-20€", min: 10, max: 20 },
+              { rango: "20-30€", min: 20, max: 30 },
+              { rango: "30-50€", min: 30, max: 50 },
+              { rango: "50€+", min: 50, max: Infinity },
+            ];
+            const distribucionPrecios = rangos.map((r) => ({
+              rango: r.rango,
+              platos: platosConPrecio.filter((p) => p.precio >= r.min && p.precio < r.max).length,
+            }));
+
+            const groupCat = new Map<string, { suma: number; count: number }>();
+            platosConPrecio.forEach((p) => {
+              const cat = (p.categoria || "").trim() || "Sin categoría";
+              const cur = groupCat.get(cat) ?? { suma: 0, count: 0 };
+              groupCat.set(cat, { suma: cur.suma + p.precio, count: cur.count + 1 });
+            });
+            const precioMedioPorCategoria = Array.from(groupCat.entries())
+              .map(([categoria, d]) => ({
+                categoria,
+                precioMedio: parseFloat((d.suma / d.count).toFixed(2)),
+                numPlatos: d.count,
+              }))
+              .sort((a, b) => b.precioMedio - a.precioMedio);
+
+            const ticketPorPilar = FACT_PILAR_KEYS
+              .map((k) => ({
+                pilar: FACT_PILAR_NAMES[k],
+                ticket: parseFloat(pilarFactTicketPonderado(facturacion[k]).toFixed(2)),
+                clientes: pilarFactClientes(facturacion[k]),
+                key: k,
+              }))
+              .filter((d) => d.clientes > 0);
+
+            const cats = estudio.propuesta.categoriasVenta ?? [];
+            const composicionTicket = cats
+              .filter((c) => (c.porcentaje || 0) > 0)
+              .map((c) => ({
+                categoria: c.nombre || "Sin nombre",
+                aporteTicket: parseFloat((ticketPond * (c.porcentaje || 0) / 100).toFixed(2)),
+                porcentaje: c.porcentaje || 0,
+              }));
+
+            const coherencia = precioMedioPlatos > 0 && ticketPond > 0
+              ? Math.abs(ticketPond - precioMedioPlatos) / precioMedioPlatos * 100
+              : 0;
+
+            return (
+            <section className="space-y-4 pt-8 mt-4 border-t">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <Receipt className="h-5 w-5 text-blue-600" />
+                  <h2 className="text-lg font-semibold tracking-tight">Ticket medio</h2>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Justificación del ticket medio esperado a partir de la propuesta gastronómica:
+                  precios de los platos destacados, mix de categorías y comparación entre pilares.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <p className="text-2xl font-bold">{ticketPond.toFixed(2)}€</p>
+                    <p className="text-xs text-muted-foreground">Ticket medio ponderado</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <p className="text-2xl font-bold">{precioMedioPlatos.toFixed(2)}€</p>
+                    <p className="text-xs text-muted-foreground">Precio medio platos destacados</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <p className="text-2xl font-bold">
+                      {platosConPrecio.length > 0 ? `${precioMin.toFixed(0)}-${precioMax.toFixed(0)}€` : "—"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Rango de precios platos</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <p className="text-2xl font-bold">{estudio.propuesta.rangoPrecioMedio || "—"}</p>
+                    <p className="text-xs text-muted-foreground">Rango medio declarado</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Distribución de precios por rangos</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Cuántos platos destacados caen en cada rango de precio.
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    {platosConPrecio.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={260}>
+                        <BarChart data={distribucionPrecios}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="rango" tick={{ fontSize: 11 }} />
+                          <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                          <Tooltip />
+                          <Bar dataKey="platos" fill="hsl(210 70% 55%)" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-[260px] flex items-center justify-center text-sm text-muted-foreground">
+                        Añade platos destacados con precio en la propuesta gastronómica
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Precio medio por categoría de plato</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Detecta qué categorías tiran del ticket hacia arriba.
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    {precioMedioPorCategoria.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={260}>
+                        <BarChart data={precioMedioPorCategoria} layout="vertical" margin={{ left: 10, right: 20 }}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis type="number" tick={{ fontSize: 11 }} unit="€" />
+                          <YAxis dataKey="categoria" type="category" width={100} tick={{ fontSize: 11 }} />
+                          <Tooltip formatter={(v: number) => `${v}€`} />
+                          <Bar dataKey="precioMedio" fill="hsl(40 90% 55%)" radius={[0, 4, 4, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-[260px] flex items-center justify-center text-sm text-muted-foreground">
+                        Añade platos con categoría para ver el precio medio
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Composición del ticket por categoría</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Aporte de cada categoría al ticket medio según el mix de ventas declarado.
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    {composicionTicket.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={260}>
+                        <BarChart data={composicionTicket}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="categoria" tick={{ fontSize: 10 }} />
+                          <YAxis tick={{ fontSize: 11 }} unit="€" />
+                          <Tooltip
+                            formatter={(v: number, _n, props) => [
+                              `${v}€ (${(props as { payload?: { porcentaje?: number } })?.payload?.porcentaje}%)`,
+                              "Aporte al ticket",
+                            ]}
+                          />
+                          <Bar dataKey="aporteTicket" radius={[4, 4, 0, 0]}>
+                            {composicionTicket.map((_, i) => (
+                              <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-[260px] flex items-center justify-center text-sm text-muted-foreground">
+                        Define el mix de ventas en la propuesta gastronómica
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Ticket medio por pilar de facturación</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Compara el ticket esperado entre franjas, acuerdos, eventos y tienda.
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    {ticketPorPilar.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={260}>
+                        <BarChart data={ticketPorPilar}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="pilar" tick={{ fontSize: 10 }} />
+                          <YAxis tick={{ fontSize: 11 }} unit="€" />
+                          <Tooltip formatter={(v: number) => `${v}€`} />
+                          <Bar dataKey="ticket" radius={[4, 4, 0, 0]}>
+                            {ticketPorPilar.map((d) => (
+                              <Cell key={d.key} fill={FACT_PILAR_COLORS[d.key]} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-[260px] flex items-center justify-center text-sm text-muted-foreground">
+                        Añade clientes y ticket medio en las partidas de facturación
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader><CardTitle className="text-sm">Lectura del ticket medio</CardTitle></CardHeader>
+                <CardContent className="space-y-2 text-sm">
+                  {ticketPond > 0 && precioMedioPlatos > 0 ? (
+                    <>
+                      <p className="text-muted-foreground">
+                        El ticket medio ponderado de la facturación es{" "}
+                        <strong className="text-foreground">{ticketPond.toFixed(2)}€</strong>{" "}
+                        y el precio medio de los platos destacados es{" "}
+                        <strong className="text-foreground">{precioMedioPlatos.toFixed(2)}€</strong>.
+                        {coherencia < 25 ? (
+                          <span className="text-green-600">
+                            {" "}Hay coherencia entre carta y ticket esperado ({coherencia.toFixed(0)}% de desviación).
+                          </span>
+                        ) : (
+                          <span className="text-yellow-600">
+                            {" "}Existe una desviación del {coherencia.toFixed(0)}% entre el precio medio de la carta y el ticket esperado: revisa si el mix de ventas o los precios reflejan la realidad.
+                          </span>
+                        )}
+                      </p>
+                      {composicionTicket.length > 0 && (
+                        <p className="text-muted-foreground">
+                          Las categorías que más aportan al ticket son:
+                          {composicionTicket
+                            .slice()
+                            .sort((a, b) => b.aporteTicket - a.aporteTicket)
+                            .slice(0, 3)
+                            .map((c, i) => (
+                              <span key={c.categoria}>
+                                {i === 0 ? " " : ", "}
+                                <strong className="text-foreground">{c.categoria}</strong>
+                                {" "}({c.aporteTicket.toFixed(2)}€)
+                              </span>
+                            ))}.
+                        </p>
+                      )}
+                      {ticketPorPilar.length > 1 && (() => {
+                        const max = ticketPorPilar.reduce((a, b) => (a.ticket > b.ticket ? a : b));
+                        const min = ticketPorPilar.reduce((a, b) => (a.ticket < b.ticket ? a : b));
+                        return (
+                          <p className="text-muted-foreground">
+                            Por pilar, el ticket más alto está en{" "}
+                            <strong className="text-foreground">{max.pilar}</strong> ({max.ticket.toFixed(2)}€)
+                            y el más bajo en{" "}
+                            <strong className="text-foreground">{min.pilar}</strong> ({min.ticket.toFixed(2)}€).
+                          </p>
+                        );
+                      })()}
+                    </>
+                  ) : (
+                    <p className="text-muted-foreground">
+                      Para ver la justificación, añade ticket medio y clientes a las partidas de facturación, y precios a los platos destacados de la propuesta gastronómica.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </section>
+            );
+          })()}
         </TabsContent>
 
-        {/* ── ESCENARIOS ── */}
-        <TabsContent value="escenarios">
+        {/* ── COSTES ── */}
+        <TabsContent value="costes" className="space-y-4">
+          <div className="flex justify-end">
+            <Select value={costesPeriodo} onValueChange={(v) => setCostesPeriodo(v as Periodo)}>
+              <SelectTrigger className="w-40 h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="mensual">Mensual</SelectItem>
+                <SelectItem value="trimestral">Trimestral</SelectItem>
+                <SelectItem value="anual">Anual</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {(() => {
+            const cosFactor = PERIODO_FACTOR[costesPeriodo];
+            return (
+          <>
           <Card>
-            <CardHeader><CardTitle className="text-base">5 escenarios de facturación</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle className="text-base">Estructura de costes por pilares</CardTitle>
+              <p className="text-xs text-muted-foreground mt-1">
+                Despliega cada pilar para editar sus partidas. Los totales del pilar se calculan automáticamente y no son editables.
+              </p>
+            </CardHeader>
             <CardContent>
               <table className="w-full text-sm">
                 <thead><tr className="border-b bg-muted/40">
-                  <th className="text-left p-3 font-medium">Escenario</th>
-                  <th className="text-right p-3 font-medium">Facturación</th>
-                  <th className="text-right p-3 font-medium">Costes fijos</th>
-                  <th className="text-right p-3 font-medium">Costes variables</th>
-                  <th className="text-right p-3 font-medium">Coste total</th>
-                  <th className="text-right p-3 font-medium">Beneficio</th>
-                  <th className="text-right p-3 font-medium">Margen</th>
+                  <th className="text-left p-3 font-medium w-[28%]">Pilar / Partida</th>
+                  <th className="text-left p-3 font-medium">Coste fijo (€)</th>
+                  <th className="text-left p-3 font-medium">Variable (%)</th>
+                  <th className="text-left p-3 font-medium">Coste variable (estimado)</th>
+                  <th className="text-left p-3 font-medium">Total</th>
+                  <th className="w-10"></th>
                 </tr></thead>
                 <tbody>
-                  {escenarios.map((e, i) => (
-                    <tr key={e.nombre} className={`border-b ${e.nombre === "Medio" ? "bg-primary/5" : ""}`}>
-                      <td className="p-3 font-medium">{e.nombre}</td>
-                      <td className="p-3 text-right">{fmt(e.facturacion)}€</td>
-                      <td className="p-3 text-right">{fmt(e.fijoTotal)}€</td>
-                      <td className="p-3 text-right">{fmt(e.varTotal)}€</td>
-                      <td className="p-3 text-right">{fmt(e.costeTotal)}€</td>
-                      <td className={`p-3 text-right font-semibold ${e.beneficio >= 0 ? "text-green-600" : "text-red-600"}`}>{fmt(e.beneficio)}€</td>
-                      <td className={`p-3 text-right ${e.margen >= 0 ? "text-green-600" : "text-red-600"}`}>{e.margen.toFixed(1)}%</td>
-                    </tr>
+                  {(["generales", "personal", "producto", "marketing"] as PilarKey[]).map((key, i) => (
+                    <PilarBloque
+                      key={key}
+                      pilarKey={key}
+                      label={PILAR_NAMES[i]}
+                      pilar={costes[key]}
+                      ventas={ventas}
+                      factor={cosFactor}
+                      onUpdatePartida={(partidaId, field, val) => updatePartida(key, partidaId, field, val)}
+                      onAddPartida={() => addPartida(key)}
+                      onRemovePartida={(partidaId) => removePartida(key, partidaId)}
+                    />
                   ))}
+                  <tr className="bg-muted/30 font-semibold">
+                    <td className="p-3">TOTAL</td>
+                    <td className="p-3">{fmt(fijoTotal * cosFactor)}€</td>
+                    <td className="p-3">{variablePctTotal.toFixed(1)}%</td>
+                    <td className="p-3">{fmt(medio.varTotal * cosFactor)}€</td>
+                    <td className="p-3">{fmt(medio.costeTotal * cosFactor)}€</td>
+                    <td></td>
+                  </tr>
                 </tbody>
               </table>
             </CardContent>
           </Card>
-        </TabsContent>
 
-        {/* ── GRÁFICAS ── */}
-        <TabsContent value="graficas" className="space-y-6">
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Facturación y beneficio por escenario */}
+          <div className="grid md:grid-cols-2 gap-4">
             <Card>
-              <CardHeader><CardTitle className="text-sm">Facturación y beneficio por escenario</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-sm">Peso de cada pilar de coste</CardTitle></CardHeader>
+              <CardContent>
+                {medio.costeTotal > 0 ? (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <PieChart>
+                      <Pie
+                        data={pieData.filter((d) => d.value > 0)}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={100}
+                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      >
+                        {pieData.filter((d) => d.value > 0).map((d, i) => {
+                          const idx = PILAR_NAMES.indexOf(d.name);
+                          return <Cell key={i} fill={PILAR_COLORS[idx >= 0 ? idx : i]} />;
+                        })}
+                      </Pie>
+                      <Tooltip formatter={(v: number) => `${fmt(v)}€`} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-[280px] flex items-center justify-center text-sm text-muted-foreground">
+                    Añade partidas a los pilares para ver la gráfica
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle className="text-sm">Coste fijo vs variable por pilar</CardTitle></CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={escenarios.map(e => ({ name: e.nombre, Facturación: e.facturacion, Beneficio: e.beneficio }))}>
+                  <BarChart
+                    data={(["generales", "personal", "producto", "marketing"] as PilarKey[]).map((key, i) => ({
+                      name: PILAR_NAMES[i],
+                      Fijo: pilarFijo(costes[key]),
+                      Variable: ventas * pilarVariablePct(costes[key]) / 100,
+                    }))}
+                  >
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} />
                     <Tooltip formatter={(v: number) => `${fmt(v)}€`} />
                     <Legend />
-                    <Bar dataKey="Facturación" fill="hsl(210 70% 55%)" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="Beneficio" fill="hsl(150 60% 45%)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="Fijo" stackId="a" fill="hsl(210 70% 55%)" />
+                    <Bar dataKey="Variable" stackId="a" fill="hsl(40 90% 55%)" />
                   </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-
-            {/* Peso de cada pilar */}
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Peso de cada pilar de coste</CardTitle></CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={280}>
-                  <PieChart>
-                    <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                      {pieData.map((_, i) => <Cell key={i} fill={PILAR_COLORS[i]} />)}
-                    </Pie>
-                    <Tooltip formatter={(v: number) => `${fmt(v)}€`} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-
-            {/* Margen por escenario */}
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Margen estimado por escenario</CardTitle></CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={escenarios.map(e => ({ name: e.nombre, Margen: parseFloat(e.margen.toFixed(1)) }))}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} unit="%" />
-                    <Tooltip formatter={(v: number) => `${v}%`} />
-                    <Bar dataKey="Margen" radius={[4, 4, 0, 0]}>
-                      {escenarios.map((e, i) => <Cell key={i} fill={e.margen >= 0 ? "hsl(150 60% 45%)" : "hsl(0 70% 55%)"} />)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-
-            {/* Sensibilidad */}
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Sensibilidad — beneficio vs facturación</CardTitle></CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={280}>
-                  <LineChart data={sensibilidadData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="facturacion" tick={{ fontSize: 10 }} />
-                    <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip formatter={(v: number) => `${fmt(v)}€`} />
-                    <Line type="monotone" dataKey="beneficio" stroke="hsl(150 60% 45%)" strokeWidth={2} dot={{ r: 3 }} />
-                  </LineChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
           </div>
+          </>
+            );
+          })()}
         </TabsContent>
-        {/* ── PROCEDENCIA ── */}
-        <TabsContent value="procedencia">
-          <ProcedenciaTab
-            lineas={estudio.procedencia}
-            onChange={(p) => onUpdate({ ...estudio, procedencia: p })}
-          />
-        </TabsContent>
-
-        {/* ── DESTINO ── */}
-        <TabsContent value="destino">
-          <DestinoTab
-            lineas={estudio.destinos}
-            onChange={(d) => onUpdate({ ...estudio, destinos: d })}
-            totalCapital={estudio.procedencia.reduce((s, l) => s + l.total, 0)}
-          />
-        </TabsContent>
-
-        {/* ── AMORTIZACIÓN ── */}
-        <TabsContent value="amortizacion">
-          <AmortizacionTab
-            lineas={estudio.amortizacion}
-            onChange={(a) => onUpdate({ ...estudio, amortizacion: a })}
-          />
+        {/* ── INVERSIÓN (Procedencia + Destino + Amortización) ── */}
+        <TabsContent value="inversion">
+          <Tabs defaultValue="procedencia">
+            <TabsList>
+              <TabsTrigger value="procedencia"><Landmark className="h-4 w-4 mr-1" />Procedencia</TabsTrigger>
+              <TabsTrigger value="destino"><Target className="h-4 w-4 mr-1" />Destino</TabsTrigger>
+              <TabsTrigger value="amortizacion"><Clock className="h-4 w-4 mr-1" />Amortización</TabsTrigger>
+            </TabsList>
+            <TabsContent value="procedencia" className="mt-4">
+              <ProcedenciaTab
+                lineas={estudio.procedencia}
+                onChange={(p) => onUpdate({ ...estudio, procedencia: p })}
+              />
+            </TabsContent>
+            <TabsContent value="destino" className="mt-4">
+              <DestinoTab
+                lineas={estudio.destinos}
+                onChange={(d) => onUpdate({ ...estudio, destinos: d })}
+                totalCapital={estudio.procedencia.reduce((s, l) => s + l.total, 0)}
+              />
+            </TabsContent>
+            <TabsContent value="amortizacion" className="mt-4">
+              <AmortizacionTab
+                lineas={estudio.amortizacion}
+                onChange={(a) => onUpdate({ ...estudio, amortizacion: a })}
+              />
+            </TabsContent>
+          </Tabs>
         </TabsContent>
       </Tabs>
     </div>
   );
 }
 
+/* ── Bloque desplegable de pilar con sus partidas ── */
+function PilarBloque({
+  pilarKey,
+  label,
+  pilar,
+  ventas,
+  factor = 1,
+  onUpdatePartida,
+  onAddPartida,
+  onRemovePartida,
+}: {
+  pilarKey: PilarKey;
+  label: string;
+  pilar: CostePilar;
+  ventas: number;
+  factor?: number;
+  onUpdatePartida: (partidaId: string, field: keyof Omit<PartidaCoste, "id">, val: string | number) => void;
+  onAddPartida: () => void;
+  onRemovePartida: (partidaId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const fijo = pilarFijo(pilar);
+  const variablePct = pilarVariablePct(pilar);
+  const total = calcularPilar(ventas, pilar);
+
+  return (
+    <>
+      <tr
+        className="border-b cursor-pointer hover:bg-muted/30"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <td className="p-3 font-medium">
+          <div className="flex items-center gap-2">
+            {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            <span>{label}</span>
+            <span className="text-xs text-muted-foreground font-normal">
+              ({pilar.partidas.length} {pilar.partidas.length === 1 ? "partida" : "partidas"})
+            </span>
+          </div>
+        </td>
+        <td className="p-3 text-muted-foreground">{fmt(fijo * factor)}€</td>
+        <td className="p-3 text-muted-foreground">{variablePct.toFixed(1)}%</td>
+        <td className="p-3 text-muted-foreground">{fmt((ventas * variablePct / 100) * factor)}€</td>
+        <td className="p-3 font-semibold">{fmt(total * factor)}€</td>
+        <td className="p-3"></td>
+      </tr>
+      {open && (
+        <>
+          {pilar.partidas.map((p) => (
+            <tr key={p.id} className="border-b bg-muted/10">
+              <td className="p-2 pl-10">
+                <Input
+                  className="h-8 text-sm"
+                  value={p.nombre}
+                  onChange={(e) => onUpdatePartida(p.id, "nombre", e.target.value)}
+                />
+              </td>
+              <td className="p-2">
+                <Input
+                  type="number"
+                  className="h-8 w-28 text-sm"
+                  value={p.fijo}
+                  onChange={(e) => onUpdatePartida(p.id, "fijo", Number(e.target.value))}
+                />
+              </td>
+              <td className="p-2">
+                <Input
+                  type="number"
+                  step={0.5}
+                  className="h-8 w-20 text-sm"
+                  value={p.variablePct}
+                  onChange={(e) => onUpdatePartida(p.id, "variablePct", Number(e.target.value))}
+                />
+              </td>
+              <td className="p-2 text-muted-foreground">{fmt((ventas * p.variablePct / 100) * factor)}€</td>
+              <td className="p-2">{fmt((p.fijo + ventas * p.variablePct / 100) * factor)}€</td>
+              <td className="p-2">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 text-muted-foreground hover:text-red-600"
+                  onClick={() => onRemovePartida(p.id)}
+                  title="Eliminar partida"
+                  aria-label="Eliminar partida"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </td>
+            </tr>
+          ))}
+          <tr className="border-b bg-muted/10">
+            <td colSpan={6} className="p-2 pl-10">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 text-xs text-muted-foreground hover:text-foreground"
+                onClick={onAddPartida}
+              >
+                <Plus className="h-3.5 w-3.5 mr-1" />
+                Añadir partida a {label}
+              </Button>
+            </td>
+          </tr>
+        </>
+      )}
+    </>
+  );
+}
+
+/* ── Pilar de facturación: cabecera colapsable + partidas ── */
+function PilarFactBloque({
+  pilarKey: _pilarKey,
+  label,
+  pilar,
+  ventasTotal,
+  factor = 1,
+  onUpdatePartida,
+  onAddPartida,
+  onRemovePartida,
+}: {
+  pilarKey: FactPilarKey;
+  label: string;
+  pilar: FacturacionPilar;
+  ventasTotal: number;
+  factor?: number;
+  onUpdatePartida: (partidaId: string, field: keyof Omit<PartidaFacturacion, "id">, val: string | number) => void;
+  onAddPartida: () => void;
+  onRemovePartida: (partidaId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const clientesPilar = pilarFactClientes(pilar);
+  const totalPilar = pilarFactTotal(pilar);
+  const ticketPilar = pilarFactTicketPonderado(pilar);
+  const pctPilar = ventasTotal > 0 ? (totalPilar / ventasTotal) * 100 : 0;
+
+  return (
+    <>
+      <tr
+        className="border-b cursor-pointer hover:bg-muted/30"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <td className="p-3 font-medium">
+          <div className="flex items-center gap-2">
+            {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            <span>{label}</span>
+            <span className="text-xs text-muted-foreground font-normal">
+              ({pilar.partidas.length} {pilar.partidas.length === 1 ? "partida" : "partidas"})
+            </span>
+          </div>
+        </td>
+        <td className="p-3 text-muted-foreground">{fmt(clientesPilar * factor)}</td>
+        <td className="p-3 text-muted-foreground">{ticketPilar.toFixed(2)}€</td>
+        <td className="p-3 text-right font-semibold">{fmt(totalPilar * factor)}€</td>
+        <td className="p-3 text-right text-muted-foreground">{pctPilar.toFixed(1)}%</td>
+        <td className="p-3"></td>
+      </tr>
+      {open && (
+        <>
+          {pilar.partidas.map((p) => {
+            const total = (p.clientesEsperados || 0) * (p.ticketMedio || 0);
+            const pct = ventasTotal > 0 ? (total / ventasTotal) * 100 : 0;
+            return (
+              <tr key={p.id} className="border-b bg-muted/10">
+                <td className="p-2 pl-10">
+                  <Input
+                    className="h-8 text-sm"
+                    value={p.nombre}
+                    onChange={(e) => onUpdatePartida(p.id, "nombre", e.target.value)}
+                  />
+                </td>
+                <td className="p-2">
+                  <Input
+                    type="number"
+                    className="h-8 w-32 text-sm"
+                    value={p.clientesEsperados || ""}
+                    onChange={(e) => onUpdatePartida(p.id, "clientesEsperados", Number(e.target.value))}
+                  />
+                </td>
+                <td className="p-2">
+                  <Input
+                    type="number"
+                    step={0.5}
+                    className="h-8 w-28 text-sm"
+                    value={p.ticketMedio || ""}
+                    onChange={(e) => onUpdatePartida(p.id, "ticketMedio", Number(e.target.value))}
+                  />
+                </td>
+                <td className="p-2 text-right font-medium">{fmt(total * factor)}€</td>
+                <td className="p-2 text-right text-muted-foreground">{pct.toFixed(1)}%</td>
+                <td className="p-2">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 text-muted-foreground hover:text-red-600"
+                    onClick={() => onRemovePartida(p.id)}
+                    title="Eliminar partida"
+                    aria-label="Eliminar partida"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </td>
+              </tr>
+            );
+          })}
+          <tr className="border-b bg-muted/10">
+            <td colSpan={6} className="p-2 pl-10">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 text-xs text-muted-foreground hover:text-foreground"
+                onClick={onAddPartida}
+              >
+                <Plus className="h-3.5 w-3.5 mr-1" />
+                Añadir partida a {label}
+              </Button>
+            </td>
+          </tr>
+        </>
+      )}
+    </>
+  );
+}
+
+/* ── Editor inline de datos del proyecto ── */
+function DatosEditor({ datos, onChange }: { datos: DatosProyecto; onChange: (d: DatosProyecto) => void }) {
+  const set = (key: keyof DatosProyecto, val: string | number) => onChange({ ...datos, [key]: val });
+
+  const textFields: { key: keyof DatosProyecto; label: string }[] = [
+    { key: "nombre", label: "Nombre" },
+    { key: "ciudad", label: "Ciudad" },
+    { key: "zona", label: "Zona" },
+    { key: "afluencia", label: "Afluencia" },
+    { key: "tipoLocal", label: "Tipo de local" },
+    { key: "estacionalidad", label: "Estacionalidad" },
+  ];
+
+  const numberFields: { key: keyof DatosProyecto; label: string; suffix?: string }[] = [
+    { key: "poblacion", label: "Población" },
+    { key: "metrosCuadrados", label: "m²" },
+    { key: "ventasEstimadas", label: "Ventas estimadas", suffix: "€/mes" },
+    { key: "ticketMedio", label: "Ticket medio", suffix: "€" },
+    { key: "clientesEstimados", label: "Clientes estimados", suffix: "/mes" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+        {textFields.map((f) => (
+          <div key={f.key}>
+            <Label className="text-muted-foreground text-xs">{f.label}</Label>
+            <Input
+              value={(datos[f.key] as string) ?? ""}
+              onChange={(e) => set(f.key, e.target.value)}
+            />
+          </div>
+        ))}
+        {numberFields.map((f) => (
+          <div key={f.key}>
+            <Label className="text-muted-foreground text-xs">
+              {f.label}{f.suffix ? ` (${f.suffix})` : ""}
+            </Label>
+            <Input
+              type="number"
+              value={(datos[f.key] as number) || ""}
+              onChange={(e) => set(f.key, Number(e.target.value))}
+            />
+          </div>
+        ))}
+      </div>
+      <div>
+        <Label className="text-muted-foreground text-xs">Competencia</Label>
+        <Input value={datos.competencia} onChange={(e) => set("competencia", e.target.value)} />
+      </div>
+      <div>
+        <Label className="text-muted-foreground text-xs">Observaciones</Label>
+        <Textarea
+          value={datos.observaciones ?? ""}
+          onChange={(e) => set("observaciones", e.target.value)}
+          rows={3}
+        />
+      </div>
+    </div>
+  );
+}
+
 /* ── Formulario nuevo estudio ── */
-function NuevoEstudioForm({ onSave, onClose }: { onSave: (e: EstudioApertura) => void; onClose: () => void }) {
+function NuevoEstudioForm({ onSave, onClose }: { onSave: (e: EstudioApertura, fotoFile?: File) => void | Promise<void>; onClose: () => void }) {
   const [datos, setDatos] = useState<DatosProyecto>({
     nombre: "", ciudad: "", zona: "", poblacion: 0, afluencia: "", tipoLocal: "",
-    metrosCuadrados: 0, plazas: 0, ventasEstimadas: 0, ticketMedio: 0, clientesEstimados: 0,
+    metrosCuadrados: 0, ventasEstimadas: 0, ticketMedio: 0, clientesEstimados: 0,
     estacionalidad: "", competencia: "", observaciones: "",
   });
+  const [fotoFile, setFotoFile] = useState<File | null>(null);
+  const [fotoPreview, setFotoPreview] = useState<string | null>(null);
   const d = (key: keyof DatosProyecto, val: string | number) => setDatos(p => ({ ...p, [key]: val }));
+
+  const handlePickFoto = (file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    setFotoFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => setFotoPreview(reader.result as string);
+    reader.readAsDataURL(file);
+  };
 
   const handleSave = () => {
     if (!datos.nombre) return;
     onSave({
       id: `ap-${Date.now()}`,
       datos,
-      costes: { generales: { fijo: 0, variablePct: 0 }, personal: { fijo: 0, variablePct: 0 }, producto: { fijo: 0, variablePct: 0 }, marketing: { fijo: 0, variablePct: 0 } },
+      facturacion: crearFacturacionInicial(),
+      costes: crearCostesIniciales(),
       procedencia: [],
       destinos: [],
       amortizacion: [],
       creado: new Date().toISOString().split("T")[0],
-    });
+      viabilidad: "viable",
+      actividad: "no_activo",
+      local: bloqueLocalInicial(),
+      imagenMarca: imagenMarcaInicial(),
+      propuesta: propuestaGastronomicaInicial(),
+      ocupacion: bloqueOcupacionInicial(),
+    }, fotoFile ?? undefined);
   };
 
   return (
     <div className="space-y-3">
+      <div>
+        <Label className="text-muted-foreground text-xs">Foto del proyecto</Label>
+        {fotoPreview ? (
+          <div className="relative group mt-1">
+            <img
+              src={fotoPreview}
+              alt="Vista previa"
+              className="w-full h-32 object-cover rounded-md border"
+            />
+            <button
+              type="button"
+              onClick={() => { setFotoFile(null); setFotoPreview(null); }}
+              className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-black/80"
+              title="Quitar imagen"
+              aria-label="Quitar imagen"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : (
+          <label className="mt-1 flex flex-col items-center justify-center gap-1 h-24 w-full rounded-md border border-dashed border-muted-foreground/30 text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors cursor-pointer text-xs">
+            <ImagePlus className="h-5 w-5" strokeWidth={1.75} />
+            <span>Añadir foto del proyecto</span>
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(ev) => {
+                const file = ev.target.files?.[0];
+                if (file) handlePickFoto(file);
+                ev.target.value = "";
+              }}
+            />
+          </label>
+        )}
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <div><Label>Nombre del proyecto *</Label><Input value={datos.nombre} onChange={e => d("nombre", e.target.value)} /></div>
         <div><Label>Ciudad</Label><Input value={datos.ciudad} onChange={e => d("ciudad", e.target.value)} /></div>
@@ -463,10 +2048,6 @@ function NuevoEstudioForm({ onSave, onClose }: { onSave: (e: EstudioApertura) =>
         <div><Label>Población</Label><Input type="number" value={datos.poblacion || ""} onChange={e => d("poblacion", Number(e.target.value))} /></div>
         <div><Label>Tipo de local</Label><Input value={datos.tipoLocal} onChange={e => d("tipoLocal", e.target.value)} /></div>
         <div><Label>m²</Label><Input type="number" value={datos.metrosCuadrados || ""} onChange={e => d("metrosCuadrados", Number(e.target.value))} /></div>
-        <div><Label>Plazas</Label><Input type="number" value={datos.plazas || ""} onChange={e => d("plazas", Number(e.target.value))} /></div>
-        <div><Label>Ventas estimadas (€/mes)</Label><Input type="number" value={datos.ventasEstimadas || ""} onChange={e => d("ventasEstimadas", Number(e.target.value))} /></div>
-        <div><Label>Ticket medio (€)</Label><Input type="number" value={datos.ticketMedio || ""} onChange={e => d("ticketMedio", Number(e.target.value))} /></div>
-        <div><Label>Clientes estimados/mes</Label><Input type="number" value={datos.clientesEstimados || ""} onChange={e => d("clientesEstimados", Number(e.target.value))} /></div>
         <div><Label>Afluencia</Label><Input value={datos.afluencia} onChange={e => d("afluencia", e.target.value)} /></div>
         <div><Label>Estacionalidad</Label><Input value={datos.estacionalidad} onChange={e => d("estacionalidad", e.target.value)} /></div>
       </div>

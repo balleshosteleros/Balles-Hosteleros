@@ -98,6 +98,8 @@ export interface OrgNode {
   y: number;
   descripcion?: string;
   color?: string;
+  width?: number;
+  height?: number;
 }
 
 export interface OrgEdge {
@@ -180,39 +182,11 @@ const habanaChart: OrgChart = {
   ],
 };
 
-const bacanalChart: OrgChart = {
-  nodes: [
-    { id: 'socios', label: 'SOCIOS', area: 'administrativa', x: 460, y: -60 },
-    { id: 'direccion', label: 'DIRECCIÓN', area: 'administrativa', x: 460, y: 80 },
-    { id: 'contabilidad', label: 'CONTABILIDAD', area: 'administrativa', x: 180, y: 200 },
-    { id: 'marketing', label: 'MARKETING', area: 'administrativa', x: 360, y: 200 },
-    { id: 'rrhh', label: 'RR.HH', area: 'administrativa', x: 540, y: 200 },
-    { id: 'gerencia', label: 'GERENCIA', area: 'administrativa', x: 720, y: 200 },
-    { id: 'jefe-sala', label: 'JEFE DE SALA', area: 'operativa', x: 400, y: 400 },
-    { id: 'jefe-cocina', label: 'JEFE DE COCINA', area: 'operativa', x: 700, y: 400 },
-    { id: 'camareros', label: 'CAMAREROS', area: 'operativa', x: 320, y: 520 },
-    { id: 'hostess', label: 'HOSTESS', area: 'operativa', x: 500, y: 520 },
-    { id: 'cocineros', label: 'COCINEROS', area: 'operativa', x: 700, y: 520 },
-  ],
-  edges: [
-    { id: 'e1', source: 'socios', target: 'direccion' },
-    { id: 'e2', source: 'direccion', target: 'contabilidad' },
-    { id: 'e3', source: 'direccion', target: 'marketing' },
-    { id: 'e4', source: 'direccion', target: 'rrhh' },
-    { id: 'e5', source: 'direccion', target: 'gerencia' },
-    { id: 'e6', source: 'gerencia', target: 'jefe-sala' },
-    { id: 'e7', source: 'gerencia', target: 'jefe-cocina' },
-    { id: 'e8', source: 'jefe-sala', target: 'camareros' },
-    { id: 'e9', source: 'jefe-sala', target: 'hostess' },
-    { id: 'e10', source: 'jefe-cocina', target: 'cocineros' },
-  ],
-  zones: [
-    { id: 'zone-admin', label: 'Área Administrativa', area: 'administrativa', x: 110, y: -90, width: 700, height: 370 },
-    { id: 'zone-oper', label: 'Área Operativa', area: 'operativa', x: 250, y: 340, width: 530, height: 260 },
-  ],
-};
+// Plantilla por defecto para cualquier empresa: organigrama completo de hostelería.
+// Se carga "tal cual" como punto de partida; cada empresa puede editarlo y guardarlo.
+export const defaultOrgChart: OrgChart = habanaChart;
 
 export const orgChartsPorEmpresa: Record<string, OrgChart> = {
   habana: habanaChart,
-  bacanal: bacanalChart,
+  bacanal: habanaChart,
 };

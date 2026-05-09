@@ -127,7 +127,7 @@ export async function generarPresentacion(input: GenerarInput): Promise<{
   let meta: { tokensInput: number | null; tokensOutput: number | null; modelo: string } = {
     tokensInput: null,
     tokensOutput: null,
-    modelo: "gemini-2.0-flash",
+    modelo: process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash",
   };
   try {
     const r = await geminiJSON<unknown>(prompt, {

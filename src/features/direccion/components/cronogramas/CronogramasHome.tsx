@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { SubmoduleToolbar } from "@/shared/components/SubmoduleToolbar";
+import { Settings } from "lucide-react";
 import {
   Briefcase, Crown, User, Camera, Package, CheckCircle2,
   Calculator, FileText, Scale, ChevronRight, Plus, Video, BarChart3,
@@ -113,10 +115,10 @@ function FrecuenciaBar({
   );
 }
 
-type FiltroArea = "TODAS" | AreaCronograma;
-
 export function CronogramasHome({ data, onSelect, onCrearCronograma, onIrProductividad, isLoading, isRolAccesible }: Props) {
-  const [filtroArea, setFiltroArea] = useState<FiltroArea>("TODAS");
+  const [filtroArea, setFiltroArea] = useState<AreaCronograma>("OPERATIVA");
+  const [busqueda, setBusqueda] = useState("");
+  const [showConfig, setShowConfig] = useState(false);
 
   const grupos = useMemo(() => {
     const byRol = new Map<string, CronogramaOperativo[]>();
@@ -163,64 +165,71 @@ export function CronogramasHome({ data, onSelect, onCrearCronograma, onIrProduct
       });
   }, [data, isRolAccesible]);
 
-  const gruposFiltrados = useMemo(
-    () => (filtroArea === "TODAS" ? grupos : grupos.filter((g) => g.area === filtroArea)),
-    [grupos, filtroArea],
-  );
+  const gruposFiltrados = useMemo(() => {
+    const porArea = grupos.filter((g) => g.area === filtroArea);
+    const q = busqueda.trim().toLowerCase();
+    if (!q) return porArea;
+    return porArea.filter((g) => g.rol.toLowerCase().includes(q));
+  }, [grupos, filtroArea, busqueda]);
 
   const counts = useMemo(() => ({
-    TODAS: grupos.length,
     OPERATIVA: grupos.filter((g) => g.area === "OPERATIVA").length,
     ADMINISTRATIVA: grupos.filter((g) => g.area === "ADMINISTRATIVA").length,
   }), [grupos]);
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-muted/20">
-      {/* Filtro por área + acciones */}
-      <div className="flex items-center justify-between gap-2 px-6 py-3 border-b bg-card">
-        <div className="flex items-center gap-2">
-          <span className="text-xs uppercase tracking-wider text-muted-foreground mr-1">
-            Área
-          </span>
-          {(["TODAS", "OPERATIVA", "ADMINISTRATIVA"] as const).map((opt) => {
-            const active = filtroArea === opt;
-            const label = opt === "TODAS" ? "Todas" : AREA_LABEL[opt];
-            // Ocultamos áreas vacías para el usuario actual: si tras filtrar
-            // por sus permisos no le queda ningún puesto en esa área, no
-            // tiene sentido mostrar el botón de filtro. "Todas" siempre se ve.
-            if (opt !== "TODAS" && counts[opt] === 0) return null;
-            return (
-              <Button
-                key={opt}
-                type="button"
-                variant={active ? "primary" : "outline"}
-                size="sm"
-                onClick={() => setFiltroArea(opt)}
-                className="gap-2"
-              >
-                {label}
-                <span
-                  className={cn(
-                    "text-[10px] font-mono px-1.5 py-0.5 rounded",
-                    active ? "bg-background/30" : "bg-muted",
-                  )}
-                >
-                  {counts[opt]}
-                </span>
-              </Button>
-            );
-          })}
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={onIrProductividad}>
-            <BarChart3 className="h-4 w-4 mr-2" />
-            Productividad
-          </Button>
-          <Button variant="primary" size="sm" onClick={onCrearCronograma}>
-            <Plus className="h-4 w-4 mr-2" />
-            Nuevo
-          </Button>
-        </div>
+      {/* Selector de áreas — mutuamente excluyente */}
+      <div className="flex items-center gap-2 px-6 pt-3 flex-wrap">
+        {(["OPERATIVA", "ADMINISTRATIVA"] as const).map((opt) => {
+          const active = filtroArea === opt;
+          if (counts[opt] === 0) return null;
+          const Icon = opt === "OPERATIVA" ? UtensilsCrossed : Briefcase;
+          return (
+            <Button
+              key={opt}
+              type="button"
+              variant={active ? "default" : "outline"}
+              className="gap-2"
+              onClick={() => setFiltroArea(opt)}
+            >
+              <Icon className="h-4 w-4" />
+              {AREA_LABEL[opt]}
+              <Badge variant="secondary" className="text-[10px] ml-1">
+                {counts[opt]}
+              </Badge>
+            </Button>
+          );
+        })}
+      </div>
+
+      {/* BARRA HORIZONTAL 1 */}
+      <div className="px-6 pt-3 pb-3 border-b bg-card">
+        <SubmoduleToolbar
+          busqueda={busqueda}
+          onBusquedaChange={setBusqueda}
+          placeholderBusqueda="Buscar"
+          onNuevo={onCrearCronograma}
+          textoNuevo="Nuevo"
+          extraIzquierda={
+            <Button variant="outline" size="sm" onClick={onIrProductividad}>
+              <BarChart3 className="h-4 w-4 mr-2" />
+              Productividad
+            </Button>
+          }
+          extraDerecha={
+            <Button
+              size="icon"
+              variant={showConfig ? "default" : "outline"}
+              className="h-9 w-9"
+              onClick={() => setShowConfig((s) => !s)}
+              title="Configuración"
+              aria-label="Configuración"
+            >
+              <Settings className="h-4 w-4" strokeWidth={1.75} />
+            </Button>
+          }
+        />
       </div>
 
       {/* Grid de cards */}

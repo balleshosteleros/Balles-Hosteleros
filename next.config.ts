@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   experimental: {
     mcpServer: true,
     serverActions: {
-      bodySizeLimit: '5mb',
+      bodySizeLimit: '14mb',
     },
   },
   images: {

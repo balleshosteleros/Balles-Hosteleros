@@ -83,6 +83,15 @@ export async function POST(request: Request) {
       }
       const msg = err instanceof Error ? err.message : "Error IA";
       console.error("[api/regenerar-slide]", msg);
+      if (/quota|rate.?limit|429/i.test(msg)) {
+        return NextResponse.json(
+          {
+            error:
+              "Has alcanzado el uso máximo de la herramienta de IA por hoy. Vuelve a intentarlo mañana.",
+          },
+          { status: 429 },
+        );
+      }
       return NextResponse.json({ error: msg }, { status: 502 });
     }
   } catch (err) {

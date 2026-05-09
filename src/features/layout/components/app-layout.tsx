@@ -66,6 +66,7 @@ import {
   Files,
   TrendingUp,
   Presentation,
+  MonitorDot,
   Utensils,
   Thermometer,
   FlaskConical,
@@ -572,6 +573,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         <NavBadge count={counts.meetings} color="emerald" />
                       </Button>
                     </MeetDrawer>
+
+                    {/* Captura y grabación de pantalla (placeholder, sin lógica) */}
+                    <Button
+                      variant="ghost" size="icon"
+                      className="relative h-8 w-8"
+                      title="Captura y grabación de pantalla"
+                      aria-label="Captura y grabación de pantalla"
+                    >
+                      <MonitorDot className="!h-[18px] !w-[18px] text-orange-500" />
+                    </Button>
 
                     {/* Separador visual */}
                     <span className="w-px h-5 bg-border mx-0.5" />

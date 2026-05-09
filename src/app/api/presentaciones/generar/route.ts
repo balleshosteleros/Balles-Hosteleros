@@ -27,6 +27,63 @@ export async function POST(request: Request) {
     const empresaId = await getEmpresaActivaForUser(supabase, user.id);
     if (!empresaId) return NextResponse.json({ error: "Sin empresa" }, { status: 403 });
 
+    // Protección de cuota Gemini — 3 capas configurables por env
+    const maxDia = Number(process.env.PRESENTACIONES_MAX_POR_DIA ?? "50");
+    const maxUserDia = Number(process.env.PRESENTACIONES_MAX_POR_USUARIO_DIA ?? "5");
+    const cooldownSeg = Number(process.env.PRESENTACIONES_COOLDOWN_SEG ?? "30");
+
+    const inicioDia = new Date();
+    inicioDia.setUTCHours(0, 0, 0, 0);
+    const inicioDiaIso = inicioDia.toISOString();
+
+    const { count: usadasHoyGlobal } = await supabase
+      .from("presentaciones")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", inicioDiaIso);
+    if ((usadasHoyGlobal ?? 0) >= maxDia) {
+      return NextResponse.json(
+        {
+          error:
+            "Has alcanzado el uso máximo de la herramienta de IA por hoy. Vuelve a intentarlo mañana.",
+        },
+        { status: 429 },
+      );
+    }
+
+    const { count: usadasHoyUser } = await supabase
+      .from("presentaciones")
+      .select("id", { count: "exact", head: true })
+      .eq("created_by", user.id)
+      .gte("created_at", inicioDiaIso);
+    if ((usadasHoyUser ?? 0) >= maxUserDia) {
+      return NextResponse.json(
+        {
+          error: `Has alcanzado el uso máximo de la herramienta de IA por hoy (${maxUserDia} presentaciones). Vuelve a intentarlo mañana.`,
+        },
+        { status: 429 },
+      );
+    }
+
+    const { data: ultima } = await supabase
+      .from("presentaciones")
+      .select("created_at")
+      .eq("created_by", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (ultima?.created_at) {
+      const segDesdeUltima = (Date.now() - new Date(ultima.created_at).getTime()) / 1000;
+      if (segDesdeUltima < cooldownSeg) {
+        const espera = Math.ceil(cooldownSeg - segDesdeUltima);
+        return NextResponse.json(
+          {
+            error: `Espera ${espera}s antes de generar otra presentación con IA.`,
+          },
+          { status: 429 },
+        );
+      }
+    }
+
     // Branding snapshot
     const { data: branding } = await supabase
       .from("empresa_branding")
@@ -47,6 +104,15 @@ export async function POST(request: Request) {
       }
       const msg = err instanceof Error ? err.message : "Error IA";
       console.error("[api/generar] Gemini:", msg);
+      if (/quota|rate.?limit|429/i.test(msg)) {
+        return NextResponse.json(
+          {
+            error:
+              "Has alcanzado el uso máximo de la herramienta de IA por hoy. Vuelve a intentarlo mañana.",
+          },
+          { status: 429 },
+        );
+      }
       return NextResponse.json({ error: `IA falló: ${msg}` }, { status: 502 });
     }
 
