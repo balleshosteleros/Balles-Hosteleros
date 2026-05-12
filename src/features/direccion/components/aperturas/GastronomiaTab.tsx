@@ -25,6 +25,7 @@ interface Props {
   propuesta: PropuestaGastronomica;
   ventasMensuales: number;
   onChange: (next: PropuestaGastronomica, opts?: { flush?: boolean }) => void;
+  readOnly?: boolean;
 }
 
 const CAT_COLORS = [
@@ -44,8 +45,11 @@ function fmtEur(n: number) {
 
 const uid = () => `p-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
-export function GastronomiaTab({ estudioId, propuesta, ventasMensuales, onChange }: Props) {
-  const set = (patch: Partial<PropuestaGastronomica>) => onChange({ ...propuesta, ...patch });
+export function GastronomiaTab({ estudioId, propuesta, ventasMensuales, onChange, readOnly = false }: Props) {
+  const set = (patch: Partial<PropuestaGastronomica>) => {
+    if (readOnly) return;
+    onChange({ ...propuesta, ...patch });
+  };
 
   const updatePlatoFlush = (id: string, patch: Partial<PlatoDestacado>) =>
     onChange(
@@ -159,6 +163,7 @@ export function GastronomiaTab({ estudioId, propuesta, ventasMensuales, onChange
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             <Field label="Concepto culinario">
               <Input
+                disabled={readOnly}
                 value={propuesta.concepto}
                 onChange={(e) => set({ concepto: e.target.value })}
                 placeholder="Ej. Cocina mediterránea de mercado"
@@ -166,6 +171,7 @@ export function GastronomiaTab({ estudioId, propuesta, ventasMensuales, onChange
             </Field>
             <Field label="Estilo de servicio">
               <Input
+                disabled={readOnly}
                 value={propuesta.estiloServicio}
                 onChange={(e) => set({ estiloServicio: e.target.value })}
                 placeholder="Ej. A la carta + menú degustación"
@@ -173,6 +179,7 @@ export function GastronomiaTab({ estudioId, propuesta, ventasMensuales, onChange
             </Field>
             <Field label="Rango precio medio">
               <Input
+                disabled={readOnly}
                 value={propuesta.rangoPrecioMedio}
                 onChange={(e) => set({ rangoPrecioMedio: e.target.value })}
                 placeholder="Ej. 30-45€"
@@ -180,6 +187,7 @@ export function GastronomiaTab({ estudioId, propuesta, ventasMensuales, onChange
             </Field>
             <Field label="Nº platos en carta">
               <Input
+                disabled={readOnly}
                 type="number"
                 value={propuesta.numeroPlatosCarta || ""}
                 onChange={(e) => set({ numeroPlatosCarta: Number(e.target.value) })}
@@ -189,6 +197,7 @@ export function GastronomiaTab({ estudioId, propuesta, ventasMensuales, onChange
 
           <Field label="Descripción de la propuesta">
             <Textarea
+              disabled={readOnly}
               value={propuesta.descripcion}
               onChange={(e) => set({ descripcion: e.target.value })}
               rows={4}
@@ -199,6 +208,7 @@ export function GastronomiaTab({ estudioId, propuesta, ventasMensuales, onChange
           <Field label="Enlace a carta (PDF / web)">
             <div className="flex items-center gap-2">
               <Input
+                disabled={readOnly}
                 value={propuesta.cartaUrl}
                 onChange={(e) => set({ cartaUrl: e.target.value })}
                 placeholder="https://…"
@@ -255,6 +265,7 @@ export function GastronomiaTab({ estudioId, propuesta, ventasMensuales, onChange
                         <tr key={c.id} className="border-b hover:bg-muted/20">
                           <td className="p-2">
                             <Input
+                              disabled={readOnly}
                               value={c.nombre}
                               onChange={(e) => updateCategoria(c.id, { nombre: e.target.value })}
                               placeholder="Ej. Bebidas, Entrantes, Postres…"
@@ -264,6 +275,7 @@ export function GastronomiaTab({ estudioId, propuesta, ventasMensuales, onChange
                           <td className="p-2">
                             <div className="relative">
                               <Input
+                                disabled={readOnly}
                                 type="number"
                                 min={0}
                                 max={100}
@@ -277,35 +289,39 @@ export function GastronomiaTab({ estudioId, propuesta, ventasMensuales, onChange
                           </td>
                           <td className="p-2 text-right font-medium">{fmtEur(factCat)}€</td>
                           <td className="p-2">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-7 w-7 text-muted-foreground hover:text-red-600"
-                              onClick={() => removeCategoria(c.id)}
-                              title="Eliminar categoría"
-                              aria-label="Eliminar categoría"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {!readOnly && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7 text-muted-foreground hover:text-red-600"
+                                onClick={() => removeCategoria(c.id)}
+                                title="Eliminar categoría"
+                                aria-label="Eliminar categoría"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </td>
                         </tr>
                       );
                     })
                   )}
-                  <tr>
-                    <td colSpan={4} className="p-2">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 text-xs text-muted-foreground hover:text-foreground"
-                        onClick={addCategoria}
-                        disabled={restante <= 0}
-                      >
-                        <Plus className="h-3.5 w-3.5 mr-1" />
-                        Añadir categoría
-                      </Button>
-                    </td>
-                  </tr>
+                  {!readOnly && (
+                    <tr>
+                      <td colSpan={4} className="p-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 text-xs text-muted-foreground hover:text-foreground"
+                          onClick={addCategoria}
+                          disabled={restante <= 0}
+                        >
+                          <Plus className="h-3.5 w-3.5 mr-1" />
+                          Añadir categoría
+                        </Button>
+                      </td>
+                    </tr>
+                  )}
                   <tr className="bg-muted/30 font-semibold">
                     <td className="p-2">TOTAL</td>
                     <td className="p-2">
@@ -374,9 +390,11 @@ export function GastronomiaTab({ estudioId, propuesta, ventasMensuales, onChange
                 Selecciona los platos que mejor representan la propuesta. Cada uno con foto, descripción y precio.
               </p>
             </div>
-            <Button size="sm" onClick={addPlato}>
-              <Plus className="h-3.5 w-3.5 mr-1" /> Añadir plato
-            </Button>
+            {!readOnly && (
+              <Button size="sm" onClick={addPlato}>
+                <Plus className="h-3.5 w-3.5 mr-1" /> Añadir plato
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent>
@@ -394,6 +412,7 @@ export function GastronomiaTab({ estudioId, propuesta, ventasMensuales, onChange
                   onRemove={() => removePlato(plato.id)}
                   onUploadFoto={(file) => handleFotoPlato(plato.id, file)}
                   onRemoveFoto={() => removeFotoPlato(plato.id)}
+                  readOnly={readOnly}
                 />
               ))}
             </div>
@@ -410,12 +429,14 @@ function PlatoCard({
   onRemove,
   onUploadFoto,
   onRemoveFoto,
+  readOnly = false,
 }: {
   plato: PlatoDestacado;
   onUpdate: (patch: Partial<PlatoDestacado>) => void;
   onRemove: () => void;
   onUploadFoto: (file: File) => void;
   onRemoveFoto: () => void;
+  readOnly?: boolean;
 }) {
   return (
     <div className="rounded-lg border overflow-hidden flex flex-col">
@@ -423,16 +444,22 @@ function PlatoCard({
         {plato.foto?.url ? (
           <>
             <img src={plato.foto.url} alt={plato.nombre} className="w-full h-full object-cover" />
-            <button
-              type="button"
-              onClick={onRemoveFoto}
-              className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80"
-              title="Quitar foto"
-              aria-label="Quitar foto"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={onRemoveFoto}
+                className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80"
+                title="Quitar foto"
+                aria-label="Quitar foto"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
           </>
+        ) : readOnly ? (
+          <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">
+            Sin foto
+          </div>
         ) : (
           <label className="w-full h-full flex flex-col items-center justify-center gap-1 text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors cursor-pointer text-xs">
             <ImagePlus className="h-6 w-6" strokeWidth={1.5} />
@@ -453,24 +480,28 @@ function PlatoCard({
       <div className="p-3 space-y-2">
         <div className="flex items-start gap-2">
           <Input
+            disabled={readOnly}
             value={plato.nombre}
             onChange={(e) => onUpdate({ nombre: e.target.value })}
             placeholder="Nombre del plato"
             className="h-8 text-sm font-medium"
           />
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-8 w-8 text-muted-foreground hover:text-red-600 shrink-0"
-            onClick={onRemove}
-            title="Eliminar plato"
-            aria-label="Eliminar plato"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          {!readOnly && (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8 text-muted-foreground hover:text-red-600 shrink-0"
+              onClick={onRemove}
+              title="Eliminar plato"
+              aria-label="Eliminar plato"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
         </div>
         <div className="grid grid-cols-2 gap-2">
           <Input
+            disabled={readOnly}
             value={plato.categoria}
             onChange={(e) => onUpdate({ categoria: e.target.value })}
             placeholder="Categoría"
@@ -478,6 +509,7 @@ function PlatoCard({
           />
           <div className="relative">
             <Input
+              disabled={readOnly}
               type="number"
               step={0.5}
               value={plato.precio || ""}
@@ -489,6 +521,7 @@ function PlatoCard({
           </div>
         </div>
         <Textarea
+          disabled={readOnly}
           value={plato.descripcion}
           onChange={(e) => onUpdate({ descripcion: e.target.value })}
           rows={2}

@@ -25,7 +25,7 @@ export async function generateMetadata({
   const data = await fetchEstudioPorSlug(slug);
   if (!data) return { title: "Estudio no disponible" };
   return {
-    title: `${data.estudio.datos.nombre} · ${data.empresaNombre}`,
+    title: data.estudio.datos.nombre,
     description: `Estudio de viabilidad para ${data.estudio.datos.nombre} en ${data.estudio.datos.ciudad}.`,
     robots: { index: false, follow: false },
   };

@@ -79,7 +79,10 @@ export async function GET(request: Request) {
     `https://gmail.googleapis.com/gmail/v1/users/me/threads?labelIds=${encodeURIComponent(label)}&maxResults=30`,
   );
   if (listRes.needsReauth) {
-    return NextResponse.json({ connected: false, mensajes: [] });
+    return NextResponse.json(
+      { connected: false, needsReauth: true, mensajes: [] },
+      { status: 401 },
+    );
   }
   const list = listRes.data;
   if (!list || !list.threads) {

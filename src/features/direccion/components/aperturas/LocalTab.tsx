@@ -33,13 +33,16 @@ interface Props {
   estudioId: string;
   local: BloqueLocal;
   onChange: (next: BloqueLocal, opts?: { flush?: boolean }) => void;
+  readOnly?: boolean;
 }
 
-export function LocalTab({ estudioId, local, onChange }: Props) {
+export function LocalTab({ estudioId, local, onChange, readOnly = false }: Props) {
   const setCar = (patch: Partial<CaracteristicasLocal>) => {
+    if (readOnly) return;
     onChange({ ...local, caracteristicas: { ...local.caracteristicas, ...patch } });
   };
   const setUbi = (patch: Partial<UbicacionLocal>) => {
+    if (readOnly) return;
     onChange({ ...local, ubicacion: { ...local.ubicacion, ...patch } });
   };
 
@@ -82,9 +85,9 @@ export function LocalTab({ estudioId, local, onChange }: Props) {
 
   return (
     <div className="space-y-4">
-      <CaracteristicasCard car={local.caracteristicas} onChange={setCar} />
-      <UbicacionCard ubicacion={local.ubicacion} onChange={setUbi} />
-      <FotosCard fotos={local.fotos} onUpload={handleUpload} onRemove={handleRemove} />
+      <CaracteristicasCard car={local.caracteristicas} onChange={setCar} readOnly={readOnly} />
+      <UbicacionCard ubicacion={local.ubicacion} onChange={setUbi} readOnly={readOnly} />
+      <FotosCard fotos={local.fotos} onUpload={handleUpload} onRemove={handleRemove} readOnly={readOnly} />
     </div>
   );
 }
@@ -93,7 +96,8 @@ export function LocalTab({ estudioId, local, onChange }: Props) {
 function CaracteristicasCard({
   car,
   onChange,
-}: { car: CaracteristicasLocal; onChange: (patch: Partial<CaracteristicasLocal>) => void }) {
+  readOnly = false,
+}: { car: CaracteristicasLocal; onChange: (patch: Partial<CaracteristicasLocal>) => void; readOnly?: boolean }) {
   return (
     <Card>
       <CardHeader>
@@ -104,50 +108,50 @@ function CaracteristicasCard({
       </CardHeader>
       <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
         <Field label="Tipo de establecimiento">
-          <Input value={car.tipoEstablecimiento} onChange={(e) => onChange({ tipoEstablecimiento: e.target.value })} placeholder="Bajo comercial, esquina…" />
+          <Input disabled={readOnly} value={car.tipoEstablecimiento} onChange={(e) => onChange({ tipoEstablecimiento: e.target.value })} placeholder="Bajo comercial, esquina…" />
         </Field>
         <Field label="m² útiles">
-          <Input type="number" value={car.metrosUtiles || ""} onChange={(e) => onChange({ metrosUtiles: Number(e.target.value) })} />
+          <Input disabled={readOnly} type="number" value={car.metrosUtiles || ""} onChange={(e) => onChange({ metrosUtiles: Number(e.target.value) })} />
         </Field>
         <Field label="m² terraza">
-          <Input type="number" value={car.metrosTerraza || ""} onChange={(e) => onChange({ metrosTerraza: Number(e.target.value) })} />
+          <Input disabled={readOnly} type="number" value={car.metrosTerraza || ""} onChange={(e) => onChange({ metrosTerraza: Number(e.target.value) })} />
         </Field>
         <Field label="Comensales interior">
-          <Input type="number" value={car.plazasInterior || ""} onChange={(e) => onChange({ plazasInterior: Number(e.target.value) })} />
+          <Input disabled={readOnly} type="number" value={car.plazasInterior || ""} onChange={(e) => onChange({ plazasInterior: Number(e.target.value) })} />
         </Field>
         <Field label="Comensales terraza">
-          <Input type="number" value={car.plazasTerraza || ""} onChange={(e) => onChange({ plazasTerraza: Number(e.target.value) })} />
+          <Input disabled={readOnly} type="number" value={car.plazasTerraza || ""} onChange={(e) => onChange({ plazasTerraza: Number(e.target.value) })} />
         </Field>
         <Field label="Plantas">
-          <Input type="number" value={car.plantasLocal || ""} onChange={(e) => onChange({ plantasLocal: Number(e.target.value) })} />
+          <Input disabled={readOnly} type="number" value={car.plantasLocal || ""} onChange={(e) => onChange({ plantasLocal: Number(e.target.value) })} />
         </Field>
         <Field label="Baños">
-          <Input type="number" value={car.banos || ""} onChange={(e) => onChange({ banos: Number(e.target.value) })} />
+          <Input disabled={readOnly} type="number" value={car.banos || ""} onChange={(e) => onChange({ banos: Number(e.target.value) })} />
         </Field>
         <Field label="Estado del local">
-          <Input value={car.estadoLocal} onChange={(e) => onChange({ estadoLocal: e.target.value })} placeholder="A reformar, llave en mano…" />
+          <Input disabled={readOnly} value={car.estadoLocal} onChange={(e) => onChange({ estadoLocal: e.target.value })} placeholder="A reformar, llave en mano…" />
         </Field>
         <Field label="Licencia de actividad">
-          <Input value={car.licenciaActividad} onChange={(e) => onChange({ licenciaActividad: e.target.value })} placeholder="Bar-restaurante cat. 2…" />
+          <Input disabled={readOnly} value={car.licenciaActividad} onChange={(e) => onChange({ licenciaActividad: e.target.value })} placeholder="Bar-restaurante cat. 2…" />
         </Field>
         <Field label="Salida de humos">
-          <Input value={car.salidaHumos} onChange={(e) => onChange({ salidaHumos: e.target.value })} placeholder="Sí / No / hasta cubierta" />
+          <Input disabled={readOnly} value={car.salidaHumos} onChange={(e) => onChange({ salidaHumos: e.target.value })} placeholder="Sí / No / hasta cubierta" />
         </Field>
         <Field label="Alquiler mensual (€)">
-          <Input type="number" value={car.alquilerMensual || ""} onChange={(e) => onChange({ alquilerMensual: Number(e.target.value) })} />
+          <Input disabled={readOnly} type="number" value={car.alquilerMensual || ""} onChange={(e) => onChange({ alquilerMensual: Number(e.target.value) })} />
         </Field>
         <Field label="Traspaso (€)">
-          <Input type="number" value={car.traspaso || ""} onChange={(e) => onChange({ traspaso: Number(e.target.value) })} />
+          <Input disabled={readOnly} type="number" value={car.traspaso || ""} onChange={(e) => onChange({ traspaso: Number(e.target.value) })} />
         </Field>
         <Field label="Duración del contrato">
-          <Input value={car.duracionContrato} onChange={(e) => onChange({ duracionContrato: e.target.value })} placeholder="5 años + 5 años" />
+          <Input disabled={readOnly} value={car.duracionContrato} onChange={(e) => onChange({ duracionContrato: e.target.value })} placeholder="5 años + 5 años" />
         </Field>
         <Field label="Punto de acceso">
-          <Input value={car.acceso} onChange={(e) => onChange({ acceso: e.target.value })} placeholder="Planta calle, sin escalones…" />
+          <Input disabled={readOnly} value={car.acceso} onChange={(e) => onChange({ acceso: e.target.value })} placeholder="Planta calle, sin escalones…" />
         </Field>
         <div className="col-span-2 md:col-span-3">
           <Field label="Observaciones">
-            <Textarea value={car.observaciones} onChange={(e) => onChange({ observaciones: e.target.value })} rows={3} />
+            <Textarea disabled={readOnly} value={car.observaciones} onChange={(e) => onChange({ observaciones: e.target.value })} rows={3} />
           </Field>
         </div>
       </CardContent>
@@ -159,7 +163,8 @@ function CaracteristicasCard({
 function UbicacionCard({
   ubicacion,
   onChange,
-}: { ubicacion: UbicacionLocal; onChange: (patch: Partial<UbicacionLocal>) => void }) {
+  readOnly = false,
+}: { ubicacion: UbicacionLocal; onChange: (patch: Partial<UbicacionLocal>) => void; readOnly?: boolean }) {
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<NominatimHit[]>([]);
@@ -226,46 +231,55 @@ function UbicacionCard({
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
-          <div className="md:col-span-4 relative">
-            <Label className="text-muted-foreground text-xs">Buscar dirección</Label>
-            <div className="relative mt-1">
-              <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(e) => onQueryChange(e.target.value)}
-                placeholder="Calle, plaza o zona aproximada"
-                className="pl-9"
-              />
-              {searching && <Loader2 className="h-4 w-4 absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" />}
+          {!readOnly && (
+            <div className="md:col-span-4 relative">
+              <Label className="text-muted-foreground text-xs">Buscar dirección</Label>
+              <div className="relative mt-1">
+                <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={query}
+                  onChange={(e) => onQueryChange(e.target.value)}
+                  placeholder="Calle, plaza o zona aproximada"
+                  className="pl-9"
+                />
+                {searching && <Loader2 className="h-4 w-4 absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" />}
+              </div>
+              {results.length > 0 && (
+                <ul className="absolute z-10 mt-1 w-full rounded-md border bg-popover shadow-md max-h-64 overflow-y-auto">
+                  {results.map((r, i) => (
+                    <li
+                      key={`${r.lat}-${r.lon}-${i}`}
+                      className="px-3 py-2 text-sm hover:bg-muted cursor-pointer"
+                      onClick={() => seleccionar(r)}
+                    >
+                      {r.display_name}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
-            {results.length > 0 && (
-              <ul className="absolute z-10 mt-1 w-full rounded-md border bg-popover shadow-md max-h-64 overflow-y-auto">
-                {results.map((r, i) => (
-                  <li
-                    key={`${r.lat}-${r.lon}-${i}`}
-                    className="px-3 py-2 text-sm hover:bg-muted cursor-pointer"
-                    onClick={() => seleccionar(r)}
-                  >
-                    {r.display_name}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          )}
+          {readOnly && (
+            <div className="md:col-span-4">
+              <Label className="text-muted-foreground text-xs">Dirección</Label>
+              <Input disabled value={ubicacion.direccion} className="mt-1" />
+            </div>
+          )}
           <Field label="Ciudad">
-            <Input value={ubicacion.ciudad} onChange={(e) => onChange({ ciudad: e.target.value })} />
+            <Input disabled={readOnly} value={ubicacion.ciudad} onChange={(e) => onChange({ ciudad: e.target.value })} />
           </Field>
           <Field label="Código postal">
-            <Input value={ubicacion.codigoPostal} onChange={(e) => onChange({ codigoPostal: e.target.value })} />
+            <Input disabled={readOnly} value={ubicacion.codigoPostal} onChange={(e) => onChange({ codigoPostal: e.target.value })} />
           </Field>
           <Field label="País">
-            <Input value={ubicacion.pais} onChange={(e) => onChange({ pais: e.target.value })} />
+            <Input disabled={readOnly} value={ubicacion.pais} onChange={(e) => onChange({ pais: e.target.value })} />
           </Field>
           <Field label="Radio a la redonda">
             <select
+              disabled={readOnly}
               value={ubicacion.radioKm}
               onChange={(e) => onChange({ radioKm: Number(e.target.value) })}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
             >
               <option value={0.5}>0,5 km</option>
               <option value={1}>1 km</option>
@@ -303,10 +317,12 @@ function FotosCard({
   fotos,
   onUpload,
   onRemove,
+  readOnly = false,
 }: {
   fotos: BloqueLocal["fotos"];
   onUpload: (cat: CategoriaFotoLocal, file: File) => void;
   onRemove: (cat: CategoriaFotoLocal, foto: FotoEstudio) => void;
+  readOnly?: boolean;
 }) {
   const totalFotos = CATEGORIAS_FOTOS_LOCAL.reduce(
     (acc, c) => acc + (fotos[c.key]?.length ?? 0),
@@ -355,6 +371,7 @@ function FotosCard({
                 fotos={fotos[cat.key] ?? []}
                 onUpload={onUpload}
                 onRemove={onRemove}
+                readOnly={readOnly}
               />
             </TabsContent>
           ))}
@@ -370,12 +387,14 @@ function Galeria({
   fotos,
   onUpload,
   onRemove,
+  readOnly = false,
 }: {
   label: string;
   categoria: CategoriaFotoLocal;
   fotos: FotoEstudio[];
   onUpload: (cat: CategoriaFotoLocal, file: File) => void;
   onRemove: (cat: CategoriaFotoLocal, foto: FotoEstudio) => void;
+  readOnly?: boolean;
 }) {
   return (
     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
@@ -391,31 +410,40 @@ function Galeria({
               Sin previsualización
             </div>
           )}
-          <button
-            type="button"
-            onClick={() => onRemove(categoria, f)}
-            className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-black/80"
-            title="Quitar foto"
-            aria-label="Quitar foto"
-          >
-            <Trash2 className="h-3 w-3" />
-          </button>
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={() => onRemove(categoria, f)}
+              className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-black/80"
+              title="Quitar foto"
+              aria-label="Quitar foto"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          )}
         </div>
       ))}
-      <label className="aspect-square flex flex-col items-center justify-center gap-0.5 rounded-md border border-dashed border-muted-foreground/30 text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors cursor-pointer text-[11px]">
-        <ImagePlus className="h-4 w-4" strokeWidth={1.75} />
-        <span>Añadir</span>
-        <input
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(ev) => {
-            const file = ev.target.files?.[0];
-            if (file) onUpload(categoria, file);
-            ev.target.value = "";
-          }}
-        />
-      </label>
+      {!readOnly && (
+        <label className="aspect-square flex flex-col items-center justify-center gap-0.5 rounded-md border border-dashed border-muted-foreground/30 text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors cursor-pointer text-[11px]">
+          <ImagePlus className="h-4 w-4" strokeWidth={1.75} />
+          <span>Añadir</span>
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(ev) => {
+              const file = ev.target.files?.[0];
+              if (file) onUpload(categoria, file);
+              ev.target.value = "";
+            }}
+          />
+        </label>
+      )}
+      {readOnly && fotos.length === 0 && (
+        <div className="col-span-full text-center text-xs text-muted-foreground py-4">
+          Sin fotos para esta zona.
+        </div>
+      )}
     </div>
   );
 }

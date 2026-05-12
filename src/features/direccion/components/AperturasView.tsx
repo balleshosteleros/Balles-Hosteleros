@@ -442,28 +442,16 @@ export function AperturasView() {
           const tieneInversion = inversionTotal > 0;
           const recuperaInversion = tieneInversion && beneficioMensual > 0;
           const roiAnualPct = tieneInversion ? (beneficioAnual / inversionTotal) * 100 : 0;
+          const margenAnualPct = facturacionAnual > 0 ? (beneficioAnual / facturacionAnual) * 100 : 0;
           return (
             <Card key={e.id} className="cursor-pointer hover:shadow-md transition-shadow overflow-hidden flex flex-col" onClick={() => setSelected(e)}>
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between gap-2">
-                  <CardTitle className="text-base">{e.datos.nombre}</CardTitle>
-                  <div className="flex items-center gap-1.5 shrink-0" onClick={(ev) => ev.stopPropagation()}>
-                    <EstadoBadgeMenu
-                      value={e.viabilidad}
-                      options={[
-                        { value: "viable", label: "Viable", className: "bg-green-500 text-white hover:bg-green-600" },
-                        { value: "no_viable", label: "No viable", className: "bg-red-500 text-white hover:bg-red-600" },
-                      ]}
-                      onChange={(v) => setViabilidad(e.id, v as EstadoViabilidad)}
-                    />
-                    <EstadoBadgeMenu
-                      value={e.actividad}
-                      options={[
-                        { value: "activo", label: "Activo", className: "bg-blue-500 text-white hover:bg-blue-600" },
-                        { value: "no_activo", label: "No activo", className: "bg-gray-400 text-white hover:bg-gray-500" },
-                      ]}
-                      onChange={(v) => setActividad(e.id, v as EstadoActividad)}
-                    />
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base">{e.datos.nombre}</CardTitle>
+                    <p className="text-sm text-muted-foreground mt-1">{e.datos.ciudad} — {e.datos.zona}</p>
+                  </div>
+                  <div className="flex items-start gap-1.5 shrink-0" onClick={(ev) => ev.stopPropagation()}>
                     <ShareMenu
                       slug={e.shareSlug ?? null}
                       active={Boolean(e.shareActive)}
@@ -471,11 +459,28 @@ export function AperturasView() {
                       onDisable={() => handleDisableShare(e.id)}
                       onRegenerate={() => handleRegenerateShare(e.id)}
                     />
+                    <div className="flex flex-col items-end gap-1.5">
+                      <EstadoBadgeMenu
+                        value={e.viabilidad}
+                        options={[
+                          { value: "viable", label: "Viable", className: "bg-green-500 text-white hover:bg-green-600" },
+                          { value: "no_viable", label: "No viable", className: "bg-red-500 text-white hover:bg-red-600" },
+                        ]}
+                        onChange={(v) => setViabilidad(e.id, v as EstadoViabilidad)}
+                      />
+                      <EstadoBadgeMenu
+                        value={e.actividad}
+                        options={[
+                          { value: "activo", label: "Activo", className: "bg-blue-500 text-white hover:bg-blue-600" },
+                          { value: "no_activo", label: "No activo", className: "bg-gray-400 text-white hover:bg-gray-500" },
+                        ]}
+                        onChange={(v) => setActividad(e.id, v as EstadoActividad)}
+                      />
+                    </div>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-2.5 text-sm">
-                <p className="text-muted-foreground">{e.datos.ciudad} — {e.datos.zona}</p>
                 <div className="flex items-center justify-between rounded-md bg-muted/40 px-2.5 py-1.5">
                   <span className="text-xs text-muted-foreground">Inversión total</span>
                   <strong className="text-sm">{tieneInversion ? `${fmt(inversionTotal)}€` : "—"}</strong>
@@ -492,6 +497,12 @@ export function AperturasView() {
                   <div className="flex justify-between border-t pt-1">
                     <span className="text-muted-foreground">Beneficio / año</span>
                     <span className={`font-semibold ${beneficioAnual >= 0 ? "text-green-600" : "text-red-600"}`}>{fmt(beneficioAnual)}€</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">% Beneficio / año</span>
+                    <span className={`font-semibold ${facturacionAnual > 0 && margenAnualPct >= 0 ? "text-green-600" : facturacionAnual > 0 ? "text-red-600" : ""}`}>
+                      {facturacionAnual > 0 ? `${margenAnualPct.toFixed(1)}%` : "—"}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">ROI anual</span>
@@ -634,15 +645,13 @@ function ShareMenu({
         <button
           type="button"
           title={isOn ? "Enlace público activo" : "Compartir"}
+          aria-label={isOn ? "Enlace público activo" : "Compartir"}
           className={cn(
-            "inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
-            isOn
-              ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
-              : "bg-slate-100 text-slate-600 hover:bg-slate-200",
+            "inline-flex items-center justify-center rounded-full p-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+            "text-muted-foreground hover:bg-muted hover:text-foreground",
           )}
         >
           {isOn ? <Link2 className="h-3.5 w-3.5" /> : <Share2 className="h-3.5 w-3.5" />}
-          <span className="hidden sm:inline">{isOn ? "Compartido" : "Compartir"}</span>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72">
@@ -718,6 +727,9 @@ function DetalleEstudio({
   const [hoveredKpi, setHoveredKpi] = useState<KpiKey | null>(null);
   const [facturacionPeriodo, setFacturacionPeriodo] = useState<Periodo>("mensual");
   const [costesPeriodo, setCostesPeriodo] = useState<Periodo>("mensual");
+  const [facturacionTab, setFacturacionTab] = useState<"facturacion" | "ocupacion" | "ticket">("facturacion");
+  const [costesTab, setCostesTab] = useState<"pilares" | "equilibrio">("pilares");
+  const [mainTab, setMainTab] = useState<"datos" | "concepto" | "facturacion" | "costes" | "escenarios" | "inversion">("escenarios");
   const [expandEscFact, setExpandEscFact] = useState(false);
   const [expandEscCostes, setExpandEscCostes] = useState(false);
   const factor = PERIODO_FACTOR[periodo];
@@ -855,49 +867,47 @@ function DetalleEstudio({
         </div>
       </div>
 
-      <Tabs defaultValue="escenarios">
-        <TabsList className="h-11 gap-1 rounded-xl border bg-muted/50 p-1 shadow-sm">
-          <TabsTrigger
-            value="datos"
-            className="h-9 gap-1.5 rounded-lg px-4 font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md"
-          >
-            <FileText className="h-4 w-4" />Datos
-          </TabsTrigger>
-          <TabsTrigger
-            value="concepto"
-            className="h-9 gap-1.5 rounded-lg px-4 font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md"
-          >
-            <Sparkles className="h-4 w-4" />Concepto
-          </TabsTrigger>
-          <TabsTrigger
-            value="facturacion"
-            className="h-9 gap-1.5 rounded-lg px-4 font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md"
-          >
-            <Receipt className="h-4 w-4" />Facturación
-          </TabsTrigger>
-          <TabsTrigger
-            value="costes"
-            className="h-9 gap-1.5 rounded-lg px-4 font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md"
-          >
-            <Calculator className="h-4 w-4" />Costes
-          </TabsTrigger>
-          <TabsTrigger
-            value="escenarios"
-            className="h-9 gap-1.5 rounded-lg px-4 font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md"
-          >
-            <TrendingUp className="h-4 w-4" />Escenarios
-          </TabsTrigger>
-          <TabsTrigger
-            value="inversion"
-            className="h-9 gap-1.5 rounded-lg px-4 font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md"
-          >
-            <Landmark className="h-4 w-4" />Inversión
-          </TabsTrigger>
-        </TabsList>
-
-        {/* ── ESCENARIOS (Resumen ejecutivo + Tabla + Gráficas) ── */}
-        <TabsContent value="escenarios" className="space-y-8">
-          <div className="flex justify-end">
+      <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as typeof mainTab)}>
+        <div className="flex items-center justify-between gap-3">
+          <TabsList className="h-11 gap-1 rounded-xl border bg-muted/50 p-1 shadow-sm">
+            <TabsTrigger
+              value="datos"
+              className="h-9 gap-1.5 rounded-lg px-4 font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md"
+            >
+              <FileText className="h-4 w-4" />Datos
+            </TabsTrigger>
+            <TabsTrigger
+              value="concepto"
+              className="h-9 gap-1.5 rounded-lg px-4 font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md"
+            >
+              <Sparkles className="h-4 w-4" />Concepto
+            </TabsTrigger>
+            <TabsTrigger
+              value="facturacion"
+              className="h-9 gap-1.5 rounded-lg px-4 font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md"
+            >
+              <Receipt className="h-4 w-4" />Facturación
+            </TabsTrigger>
+            <TabsTrigger
+              value="costes"
+              className="h-9 gap-1.5 rounded-lg px-4 font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md"
+            >
+              <Calculator className="h-4 w-4" />Costes
+            </TabsTrigger>
+            <TabsTrigger
+              value="escenarios"
+              className="h-9 gap-1.5 rounded-lg px-4 font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md"
+            >
+              <TrendingUp className="h-4 w-4" />Escenarios
+            </TabsTrigger>
+            <TabsTrigger
+              value="inversion"
+              className="h-9 gap-1.5 rounded-lg px-4 font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md"
+            >
+              <Landmark className="h-4 w-4" />Inversión
+            </TabsTrigger>
+          </TabsList>
+          {mainTab === "escenarios" && (
             <Select value={periodo} onValueChange={(v) => setPeriodo(v as Periodo)}>
               <SelectTrigger className="w-40 h-9">
                 <SelectValue />
@@ -908,7 +918,11 @@ function DetalleEstudio({
                 <SelectItem value="anual">Anual</SelectItem>
               </SelectContent>
             </Select>
-          </div>
+          )}
+        </div>
+
+        {/* ── ESCENARIOS (Resumen ejecutivo + Tabla + Gráficas) ── */}
+        <TabsContent value="escenarios" className="space-y-8">
 
           {/* ── 1. Resumen ejecutivo ── */}
           <section className="space-y-4">
@@ -1285,41 +1299,45 @@ function DetalleEstudio({
 
         {/* ── FACTURACIÓN (Facturación + Ocupación + Ticket) ── */}
         <TabsContent value="facturacion">
-          <Tabs defaultValue="facturacion">
-            <TabsList className="h-auto w-full justify-start gap-6 rounded-none border-b bg-transparent p-0">
-              <TabsTrigger
-                value="facturacion"
-                className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none"
-              >
-                <Layers className="h-4 w-4" />Pilares
-              </TabsTrigger>
-              <TabsTrigger
-                value="ocupacion"
-                className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none"
-              >
-                <Activity className="h-4 w-4" />Ocupación
-              </TabsTrigger>
-              <TabsTrigger
-                value="ticket"
-                className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none"
-              >
-                <Ticket className="h-4 w-4" />Ticket medio
-              </TabsTrigger>
-            </TabsList>
+          <Tabs value={facturacionTab} onValueChange={(v) => setFacturacionTab(v as typeof facturacionTab)}>
+            <div className="flex items-end justify-between border-b">
+              <TabsList className="h-auto justify-start gap-6 rounded-none bg-transparent p-0">
+                <TabsTrigger
+                  value="facturacion"
+                  className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none"
+                >
+                  <Layers className="h-4 w-4" />Pilares
+                </TabsTrigger>
+                <TabsTrigger
+                  value="ocupacion"
+                  className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none"
+                >
+                  <Activity className="h-4 w-4" />Ocupación
+                </TabsTrigger>
+                <TabsTrigger
+                  value="ticket"
+                  className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none"
+                >
+                  <Ticket className="h-4 w-4" />Ticket medio
+                </TabsTrigger>
+              </TabsList>
+              {facturacionTab === "facturacion" && (
+                <div className="pb-2">
+                  <Select value={facturacionPeriodo} onValueChange={(v) => setFacturacionPeriodo(v as Periodo)}>
+                    <SelectTrigger className="w-40 h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="mensual">Mensual</SelectItem>
+                      <SelectItem value="trimestral">Trimestral</SelectItem>
+                      <SelectItem value="anual">Anual</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
 
             <TabsContent value="facturacion" className="mt-4 space-y-4">
-          <div className="flex justify-end">
-            <Select value={facturacionPeriodo} onValueChange={(v) => setFacturacionPeriodo(v as Periodo)}>
-              <SelectTrigger className="w-40 h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="mensual">Mensual</SelectItem>
-                <SelectItem value="trimestral">Trimestral</SelectItem>
-                <SelectItem value="anual">Anual</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
           {(() => {
             const factFactor = PERIODO_FACTOR[facturacionPeriodo];
             return (
@@ -1726,35 +1744,39 @@ function DetalleEstudio({
 
         {/* ── COSTES ── */}
         <TabsContent value="costes">
-          <Tabs defaultValue="pilares">
-            <TabsList className="h-auto w-full justify-start gap-6 rounded-none border-b bg-transparent p-0">
-              <TabsTrigger
-                value="pilares"
-                className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none"
-              >
-                <Layers className="h-4 w-4" />Pilares
-              </TabsTrigger>
-              <TabsTrigger
-                value="equilibrio"
-                className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none"
-              >
-                <Target className="h-4 w-4" />Punto de equilibrio
-              </TabsTrigger>
-            </TabsList>
+          <Tabs value={costesTab} onValueChange={(v) => setCostesTab(v as typeof costesTab)}>
+            <div className="flex items-end justify-between border-b">
+              <TabsList className="h-auto justify-start gap-6 rounded-none bg-transparent p-0">
+                <TabsTrigger
+                  value="pilares"
+                  className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none"
+                >
+                  <Layers className="h-4 w-4" />Pilares
+                </TabsTrigger>
+                <TabsTrigger
+                  value="equilibrio"
+                  className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none"
+                >
+                  <Target className="h-4 w-4" />Punto de equilibrio
+                </TabsTrigger>
+              </TabsList>
+              {costesTab === "pilares" && (
+                <div className="pb-2">
+                  <Select value={costesPeriodo} onValueChange={(v) => setCostesPeriodo(v as Periodo)}>
+                    <SelectTrigger className="w-40 h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="mensual">Mensual</SelectItem>
+                      <SelectItem value="trimestral">Trimestral</SelectItem>
+                      <SelectItem value="anual">Anual</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
 
             <TabsContent value="pilares" className="mt-4 space-y-4">
-          <div className="flex justify-end">
-            <Select value={costesPeriodo} onValueChange={(v) => setCostesPeriodo(v as Periodo)}>
-              <SelectTrigger className="w-40 h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="mensual">Mensual</SelectItem>
-                <SelectItem value="trimestral">Trimestral</SelectItem>
-                <SelectItem value="anual">Anual</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
           {(() => {
             const cosFactor = PERIODO_FACTOR[costesPeriodo];
             return (
