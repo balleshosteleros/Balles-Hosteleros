@@ -1,0 +1,46 @@
+# Dependencies
+/node_modules
+
+# Next.js
+/.next/
+/out/
+
+# Production build
+/build
+
+# Env files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Captures - keep folder structure but not actual files
+captures/recordings/*
+captures/generated/*
+captures/videos/*
+captures/thumbnails/*
+captures/html/*
+captures/screenshots/*
+!captures/recordings/.gitkeep
+!captures/generated/.gitkeep
+!captures/videos/.gitkeep
+!captures/thumbnails/.gitkeep
+!captures/html/.gitkeep
+!captures/screenshots/.gitkeep
+!captures/README.md
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+.vercel
