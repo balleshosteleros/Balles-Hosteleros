@@ -40,7 +40,7 @@ function normalizarModulo(m: string): string {
   return m.normalize("NFD").replace(COMBINING_MARKS, "").toUpperCase().trim();
 }
 
-const AuthContext = createContext<AuthContextValue | null>(null);
+export const AuthContext = createContext<AuthContextValue | null>(null);
 
 const ROLE_MODULES: Record<AppRole, string[]> = {
   admin: ["*"],

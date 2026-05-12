@@ -35,9 +35,9 @@ function Avatar({ email, size = "sm" }: { email: string; size?: "sm" | "md" }) {
 
 export function GoogleAccountHub() {
   const pathname = usePathname();
-  const { connected, email, knownAccounts, disconnect } = useGoogleConnection();
+  const { connected, email, accounts, disconnect } = useGoogleConnection();
 
-  const otherAccounts = knownAccounts.filter((a) => a !== email);
+  const otherAccounts = accounts.filter((a) => a.email !== email);
   const connectUrl = (hint?: string) => {
     const base = `/api/google/connect?switch=1&next=${encodeURIComponent(pathname || "/dashboard")}`;
     return hint ? `${base}&login_hint=${encodeURIComponent(hint)}` : base;
@@ -88,10 +88,10 @@ export function GoogleAccountHub() {
               Otras cuentas
             </p>
             {otherAccounts.map((acc) => (
-              <DropdownMenuItem key={acc} asChild>
-                <a href={connectUrl(acc)} className="flex items-center gap-2.5 cursor-pointer">
-                  <Avatar email={acc} size="sm" />
-                  <span className="flex-1 truncate text-xs">{acc}</span>
+              <DropdownMenuItem key={acc.email} asChild>
+                <a href={connectUrl(acc.email)} className="flex items-center gap-2.5 cursor-pointer">
+                  <Avatar email={acc.email} size="sm" />
+                  <span className="flex-1 truncate text-xs">{acc.email}</span>
                 </a>
               </DropdownMenuItem>
             ))}

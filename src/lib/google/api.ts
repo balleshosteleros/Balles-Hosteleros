@@ -147,6 +147,18 @@ export async function googleFetchAuto<T>(
     }
     try {
       c.set("g_access_token", newToken, COOKIE_OPTS);
+      // Re-extiende cookies que comparten ciclo de 60 días para que la
+      // sesión se renueve mientras el usuario sigue activo en la app.
+      c.set("g_refresh_token", refreshToken, COOKIE_OPTS);
+      const publicOpts = { ...COOKIE_OPTS, httpOnly: false };
+      const emailCookie = c.get("g_email")?.value;
+      if (emailCookie) c.set("g_email", emailCookie, publicOpts);
+      const pictureCookie = c.get("g_picture")?.value;
+      if (pictureCookie) c.set("g_picture", pictureCookie, publicOpts);
+      const nameCookie = c.get("g_name")?.value;
+      if (nameCookie) c.set("g_name", nameCookie, publicOpts);
+      const rosterCookie = c.get("g_accounts_meta")?.value;
+      if (rosterCookie) c.set("g_accounts_meta", rosterCookie, publicOpts);
     } catch {
       // En contextos sin permiso de escritura de cookies (componentes server),
       // ignoramos: la API caller volverá a leer la cookie en la siguiente request

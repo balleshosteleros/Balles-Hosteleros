@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { GoogleConnectBanner } from "./GoogleConnectBanner";
+import { GoogleReauthBanner } from "./GoogleReauthBanner";
 import { GoogleAccountButton } from "./GoogleAccountButton";
 import { useGoogleConnection } from "./useGoogleConnection";
 
@@ -155,24 +156,28 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
   return (
     <Sheet>
       <SheetTrigger asChild>{children}</SheetTrigger>
-      <SheetContent side="right" className="flex flex-col gap-0 p-0 [&>button]:hidden">
+      <SheetContent side="right" className="flex flex-col gap-0 p-0 bg-[#f6f8fc] [&>button]:hidden">
         <SheetTitle className="sr-only">Google Meet — Reuniones</SheetTitle>
-        <SheetHeader className="border-b px-3 py-2">
-          <div className="flex items-center gap-1">
-            <Video className="h-5 w-5 text-emerald-600" />
+        <SheetHeader className="bg-[#f6f8fc] px-2 py-2 border-b border-transparent">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 pl-2 pr-3">
+              <MeetLogo className="h-9 w-auto" />
+            </div>
             <div className="ml-auto flex items-center gap-1">
-              <Button
-                variant="ghost" size="icon" className="h-8 w-8"
-                onClick={load} disabled={loading}
+              <button
+                type="button"
+                onClick={load}
+                disabled={loading}
+                className="rounded-full p-3 hover:bg-black/5 transition-colors disabled:opacity-50"
                 title="Actualizar"
               >
-                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-              </Button>
+                <RefreshCw className={`h-5 w-5 text-[#5f6368] ${loading ? "animate-spin" : ""}`} />
+              </button>
               <GoogleAccountButton />
               <SheetClose asChild>
                 <button
                   type="button"
-                  className="ml-1 rounded-full p-2 hover:bg-black/5 transition-colors"
+                  className="ml-1 rounded-full p-3 hover:bg-black/5 transition-colors"
                   title="Cerrar"
                 >
                   <X className="h-5 w-5 text-[#5f6368]" />
@@ -189,24 +194,7 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
         )}
 
         {connected && needsReauth && (
-          <div className="border-b bg-amber-50/60 px-5 py-3">
-            <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-              <div>
-                <p className="text-xs font-semibold text-foreground">
-                  La sesión con Google ha caducado
-                </p>
-                <p className="text-[11px] text-muted-foreground">
-                  Reconecta tu cuenta para volver a cargar las reuniones.
-                </p>
-              </div>
-              <a
-                href={`/api/google/connect?next=${encodeURIComponent(typeof window !== "undefined" ? window.location.pathname : "/")}`}
-                className="inline-flex h-8 shrink-0 items-center justify-center rounded-md bg-amber-600 px-4 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-amber-700"
-              >
-                Reconectar
-              </a>
-            </div>
-          </div>
+          <GoogleReauthBanner servicio="las reuniones" />
         )}
 
         <div className="flex border-b bg-muted/20 shrink-0">
@@ -312,5 +300,42 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function MeetLogo({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 240 72" className={className} aria-hidden="true">
+      <path
+        fill="#00832d"
+        d="M49.5 36l8.53 9.75 11.47 7.33 2-17.02-2-16.64-11.69 6.44z"
+      />
+      <path
+        fill="#0066da"
+        d="M0 51.5V66c0 3.315 2.685 6 6 6h14.5l3-10.96-3-9.54-9.95-3z"
+      />
+      <path
+        fill="#e94235"
+        d="M20.5 0L0 20.5l10.55 3 9.95-3 2.95-9.41z"
+      />
+      <path fill="#2684fc" d="M20.5 20.5H0v31h20.5z" />
+      <path
+        fill="#00ac47"
+        d="M82.6 8.68L69.5 19.42v33.66l13.16 10.79c1.97 1.54 4.85.135 4.85-2.37V11c0-2.535-2.945-3.925-4.91-2.32zM49.5 36v15.5h-29V72h43c3.315 0 6-2.685 6-6V53.08z"
+      />
+      <path
+        fill="#ffba00"
+        d="M63.5 0h-43v20.5h29V36l20-16.57V6c0-3.315-2.685-6-6-6z"
+      />
+      <text
+        x="100"
+        y="50"
+        fontFamily="'Product Sans', 'Google Sans', Arial, sans-serif"
+        fontSize="40"
+        fill="#5f6368"
+      >
+        Meet
+      </text>
+    </svg>
   );
 }

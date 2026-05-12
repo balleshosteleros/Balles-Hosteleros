@@ -404,16 +404,16 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
         <div className="px-5 py-3 bg-violet-50/50 border-b flex flex-col gap-2 shrink-0">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] font-bold text-violet-400 tracking-wider uppercase">
-              Filtrar por departamento
+              Filtrar por puesto
             </span>
           </div>
           <Select value={selectedRol} onValueChange={setSelectedRol}>
-            <SelectTrigger className={`h-9 text-xs font-bold border-violet-200 bg-white shadow-sm transition-all ${selectedRol !== "default" ? "ring-2 ring-violet-500/20 border-violet-500" : ""}`}>
-              <SelectValue placeholder="Elije un departamento" />
+            <SelectTrigger className={`h-9 text-xs font-bold uppercase border-violet-200 bg-white shadow-sm transition-all ${selectedRol !== "default" ? "ring-2 ring-violet-500/20 border-violet-500" : ""}`}>
+              <SelectValue placeholder="Elije un puesto" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="default" className="text-xs font-bold text-violet-700">
-                {moduloPropio ?? (rolUsuario ? getModuloForCronograma(rolUsuario) : "Cargando…")}
+              <SelectItem value="default" className="text-xs font-bold uppercase text-violet-700">
+                {rolUsuario ?? "Cargando…"}
               </SelectItem>
               {(() => {
                 const visibles = modulosVisibles ?? [];
@@ -423,20 +423,20 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
                 if (availableRoles.length === 0) {
                   return (
                     <SelectItem value="_loading" disabled className="text-xs italic text-muted-foreground">
-                      Cargando departamentos...
+                      Cargando puestos...
                     </SelectItem>
                   );
                 }
                 if (items.length === 0) {
                   return (
                     <SelectItem value="_empty" disabled className="text-xs italic text-muted-foreground">
-                      Sin departamentos accesibles
+                      Sin puestos accesibles
                     </SelectItem>
                   );
                 }
                 return items.map((r) => (
                   <SelectItem key={r} value={r} className="text-xs font-medium uppercase">
-                    {getModuloForCronograma(r)}
+                    {r}
                   </SelectItem>
                 ));
               })()}

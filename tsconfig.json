@@ -43,6 +43,7 @@
     "Balles Hosteleros SAAS",
     "tests",
     "playwright.config.ts",
-    "scripts"
+    "scripts",
+    "reelforge-recorder"
   ]
 }

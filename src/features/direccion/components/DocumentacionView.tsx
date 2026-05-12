@@ -1,549 +1,528 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
-import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { useState, useMemo, useEffect, useCallback, useRef, type ReactNode } from "react";
+import { createClient } from "@/lib/supabase/client";
 import {
-  Documento, CATEGORIAS_DOCUMENTALES, NIVELES_ACCESO,
-  ESTADOS_DOCUMENTO, CARPETAS, NivelAcceso, EstadoDocumento, TipoArchivo,
-} from "@/features/direccion/data/documentacion";
-import { listDocumentos } from "@/features/direccion/actions/documentacion-actions";
+  listCarpetas,
+  createCarpeta as createCarpetaAction,
+  listDocumentosByCarpeta,
+  prepareUpload,
+  confirmDocumento,
+  deleteDocumento,
+  getUsoEmpresa,
+  type Carpeta,
+  type DocumentoRow,
+  type UsoEmpresa,
+} from "@/features/direccion/actions/documentacion-actions";
+import {
+  ACCEPT_FILE_EXTS,
+  MAX_FILE_BYTES,
+  formatBytes,
+  isAllowedMime,
+} from "@/features/direccion/lib/documentos-config";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import {
   SubmoduleToolbar,
-  aplicarFiltrosToolbar,
-  aplicarOrdenToolbar,
-  ordenarColumnas,
-  colVisible,
   type ToolbarFiltroActivo,
-  type ToolbarOrdenActivo,
-  type ToolbarColumnaVisible,
-  type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
 import {
-  Upload, List, LayoutGrid, FileText, FileSpreadsheet,
-  FileImage, File, Download, Eye, Pencil, Archive, FolderOpen, Shield,
-  Tag, HardDrive, Settings, Link2,
-  Lock, Users, Building2,
+  FileText, FileSpreadsheet, FileImage, File, Download, Trash2,
+  FolderOpen, Folder, Settings, ChevronLeft, Upload, FolderPlus,
 } from "lucide-react";
 
-/* ── helpers ── */
-const tipoIcono = (t: TipoArchivo) => {
-  switch (t) {
-    case "pdf": return <FileText className="h-5 w-5 text-red-500" />;
-    case "docx": return <FileText className="h-5 w-5 text-blue-500" />;
-    case "xlsx": return <FileSpreadsheet className="h-5 w-5 text-green-600" />;
-    case "pptx": return <FileText className="h-5 w-5 text-orange-500" />;
-    case "jpg": case "png": return <FileImage className="h-5 w-5 text-purple-500" />;
-    default: return <File className="h-5 w-5 text-muted-foreground" />;
-  }
-};
+const BUCKET = "documentacion";
 
-const estadoBadge = (e: EstadoDocumento) => {
-  const map: Record<EstadoDocumento, string> = {
-    vigente: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
-    borrador: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
-    archivado: "bg-muted text-muted-foreground",
-    caducado: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
-    en_revision: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
-  };
-  const label = ESTADOS_DOCUMENTO.find((x) => x.value === e)?.label ?? e;
-  return <Badge variant="outline" className={map[e]}>{label}</Badge>;
-};
-
-const accesoIcon = (n: NivelAcceso) => {
-  if (n === "privado" || n === "solo_direccion") return <Lock className="h-3.5 w-3.5" />;
-  if (n === "solo_gerencia") return <Building2 className="h-3.5 w-3.5" />;
-  return <Users className="h-3.5 w-3.5" />;
-};
-
-const accesoLabel = (n: NivelAcceso) => NIVELES_ACCESO.find((x) => x.value === n)?.label ?? n;
-
-function mapDbToDocumento(row: Record<string, unknown>): Documento {
-  return {
-    id: row.id as string,
-    nombre: (row.titulo as string) ?? "",
-    descripcion: (row.descripcion as string) ?? "",
-    categoria: (row.categoria as string) ?? "",
-    etiquetas: Array.isArray(row.etiquetas) ? row.etiquetas as string[] : [],
-    empresa: (row.empresa_id as string) ?? "",
-    creador: (row.created_by as string) ?? "",
-    fechaSubida: (row.created_at as string) ?? "",
-    ultimaActualizacion: (row.updated_at as string) ?? (row.created_at as string) ?? "",
-    tipoArchivo: ((row.tipo_archivo as string) ?? "pdf") as TipoArchivo,
-    tamano: (row.tamano as string) ?? "",
-    estado: ((row.estado as string) ?? "vigente") as EstadoDocumento,
-    nivelAcceso: ((row.nivel_acceso as string) ?? "lectura") as NivelAcceso,
-    permisos: Array.isArray(row.permisos) ? row.permisos as { rol: string; accion: string }[] : [],
-    driveFileId: (row.drive_file_id as string) ?? undefined,
-    driveUrl: (row.drive_url as string) ?? undefined,
-    carpeta: (row.carpeta as string) ?? "General",
-  };
+function iconForMime(mime: string | null): ReactNode {
+  if (!mime) return <File className="h-5 w-5 text-muted-foreground" />;
+  if (mime === "application/pdf") return <FileText className="h-5 w-5 text-red-500" />;
+  if (mime.includes("word") || mime.includes("opendocument.text"))
+    return <FileText className="h-5 w-5 text-blue-500" />;
+  if (mime.includes("excel") || mime.includes("spreadsheet"))
+    return <FileSpreadsheet className="h-5 w-5 text-green-600" />;
+  if (mime.includes("powerpoint") || mime.includes("presentation"))
+    return <FileText className="h-5 w-5 text-orange-500" />;
+  if (mime.startsWith("image/")) return <FileImage className="h-5 w-5 text-purple-500" />;
+  return <File className="h-5 w-5 text-muted-foreground" />;
 }
 
-/* ── component ── */
 export function DocumentacionView() {
-  const { empresaActual } = useEmpresa();
-  const [docs, setDocs] = useState<Documento[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Navegación: path [] = raíz, [a] = nivel 1, [a, b] = nivel 2
+  const [path, setPath] = useState<Carpeta[]>([]);
+  const nivel = path.length; // 0 | 1 | 2
+  const carpetaActual = path[path.length - 1] ?? null;
 
-  const loadDocumentos = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await listDocumentos();
-      if (res.ok) {
-        setDocs(res.data.map(mapDbToDocumento));
-      } else {
-        toast.error("Error al cargar documentos");
-      }
-    } catch {
-      toast.error("Error de conexion al cargar documentos");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadDocumentos();
-  }, [loadDocumentos]);
+  const [carpetas, setCarpetas] = useState<Carpeta[]>([]);    // carpetas en el nivel actual
+  const [documentos, setDocumentos] = useState<DocumentoRow[]>([]);
+  const [loadingCarpetas, setLoadingCarpetas] = useState(false);
+  const [loadingDocs, setLoadingDocs] = useState(false);
+  const [uso, setUso] = useState<UsoEmpresa | null>(null);
 
   const [search, setSearch] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
-  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
-  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
-  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
-  const [vista, setVista] = useState<"lista" | "tarjetas">("lista");
-  const [selected, setSelected] = useState<Documento | null>(null);
-  const [mainTab, setMainTab] = useState("biblioteca");
-  const [showConfig, setShowConfig] = useState(false);
 
-  const acceso = (d: Documento, campo: string): unknown => {
-    if (campo === "estado") return ESTADOS_DOCUMENTO.find((x) => x.value === d.estado)?.label ?? d.estado;
-    if (campo === "categoria") return d.categoria;
-    if (campo === "carpeta") return d.carpeta;
-    if (campo === "fecha") return d.ultimaActualizacion;
-    if (campo === "version") return d.tamano;
-    if (campo === "nombre") return d.nombre;
-    return (d as unknown as Record<string, unknown>)[campo];
-  };
+  const [showNuevaCarpeta, setShowNuevaCarpeta] = useState(false);
+  const [nuevoNombreCarpeta, setNuevoNombreCarpeta] = useState("");
+  const [creandoCarpeta, setCreandoCarpeta] = useState(false);
 
-  const filtered = useMemo(() => {
-    let r = docs;
-    if (search) {
-      const s = search.toLowerCase();
-      r = r.filter((d) => d.nombre.toLowerCase().includes(s) || d.descripcion.toLowerCase().includes(s) || d.etiquetas.some((t) => t.toLowerCase().includes(s)));
+  const [showElegirNivel1, setShowElegirNivel1] = useState(false);
+
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  /* ── data loaders ─────────────────────────────────────── */
+  const loadCarpetas = useCallback(async (parentId: string | null) => {
+    setLoadingCarpetas(true);
+    try {
+      const res = await listCarpetas(parentId);
+      if (res.ok) setCarpetas(res.data);
+      else if (res.error) toast.error(res.error);
+    } finally {
+      setLoadingCarpetas(false);
     }
-    r = aplicarFiltrosToolbar(r, filtros, acceso);
-    r = aplicarOrdenToolbar(r, orden, acceso);
-    return r;
-  }, [docs, search, filtros, orden]);
+  }, []);
 
-  const columnasDef: ToolbarColumna[] = [
-    { campo: "nombre", label: "Nombre" },
-    { campo: "categoria", label: "Categoría" },
-    { campo: "carpeta", label: "Carpeta" },
-    { campo: "estado", label: "Estado" },
-    { campo: "acceso", label: "Acceso" },
-    { campo: "fecha", label: "Fecha" },
-    { campo: "tamano", label: "Tamaño" },
-  ];
+  const loadDocumentos = useCallback(async (carpetaId: string) => {
+    setLoadingDocs(true);
+    try {
+      const res = await listDocumentosByCarpeta(carpetaId);
+      if (res.ok) setDocumentos(res.data);
+      else if (res.error) toast.error(res.error);
+    } finally {
+      setLoadingDocs(false);
+    }
+  }, []);
 
-  const columnDefs: Record<string, { th: ReactNode; td: (d: Documento) => ReactNode }> = {
-    nombre: {
-      th: <TableHead key="nombre">Nombre</TableHead>,
-      td: (d) => (
-        <TableCell key="nombre" className="font-medium max-w-[260px] truncate">{d.nombre}</TableCell>
-      ),
-    },
-    categoria: {
-      th: <TableHead key="categoria">Categoría</TableHead>,
-      td: (d) => (
-        <TableCell key="categoria" className="text-sm text-muted-foreground">{d.categoria}</TableCell>
-      ),
-    },
-    carpeta: {
-      th: <TableHead key="carpeta">Carpeta</TableHead>,
-      td: (d) => (
-        <TableCell key="carpeta" className="text-sm text-muted-foreground">{d.carpeta}</TableCell>
-      ),
-    },
-    estado: {
-      th: <TableHead key="estado">Estado</TableHead>,
-      td: (d) => (
-        <TableCell key="estado">{estadoBadge(d.estado)}</TableCell>
-      ),
-    },
-    acceso: {
-      th: <TableHead key="acceso">Acceso</TableHead>,
-      td: (d) => (
-        <TableCell key="acceso">
-          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">{accesoIcon(d.nivelAcceso)} {accesoLabel(d.nivelAcceso)}</span>
-        </TableCell>
-      ),
-    },
-    fecha: {
-      th: <TableHead key="fecha">Fecha</TableHead>,
-      td: (d) => (
-        <TableCell key="fecha" className="text-sm text-muted-foreground whitespace-nowrap">{d.ultimaActualizacion}</TableCell>
-      ),
-    },
-    tamano: {
-      th: <TableHead key="tamano">Tamaño</TableHead>,
-      td: (d) => (
-        <TableCell key="tamano" className="text-sm text-muted-foreground">{d.tamano}</TableCell>
-      ),
-    },
+  const loadUso = useCallback(async () => {
+    const res = await getUsoEmpresa();
+    if (res.ok && res.data) setUso(res.data);
+  }, []);
+
+  // Recargar al cambiar de nivel
+  useEffect(() => {
+    if (nivel === 0) {
+      loadCarpetas(null);
+      setDocumentos([]);
+    } else if (nivel === 1 && carpetaActual) {
+      loadCarpetas(carpetaActual.id);   // subcarpetas
+      loadDocumentos(carpetaActual.id); // y documentos directos
+    } else if (nivel === 2 && carpetaActual) {
+      setCarpetas([]);                  // nivel 2 no tiene carpetas
+      loadDocumentos(carpetaActual.id);
+    }
+  }, [nivel, carpetaActual, loadCarpetas, loadDocumentos]);
+
+  useEffect(() => {
+    loadUso();
+  }, [loadUso]);
+
+  /* ── derived ──────────────────────────────────────────── */
+  const carpetasVisibles = useMemo(() => {
+    if (!search) return carpetas;
+    const s = search.toLowerCase();
+    return carpetas.filter((c) => c.nombre.toLowerCase().includes(s));
+  }, [carpetas, search]);
+
+  const documentosVisibles = useMemo(() => {
+    if (!search) return documentos;
+    const s = search.toLowerCase();
+    return documentos.filter(
+      (d) =>
+        d.nombre.toLowerCase().includes(s) ||
+        (d.descripcion ?? "").toLowerCase().includes(s),
+    );
+  }, [documentos, search]);
+
+  /* ── acciones ─────────────────────────────────────────── */
+  const abrirCrearCarpeta = () => {
+    setNuevoNombreCarpeta("");
+    setShowNuevaCarpeta(true);
   };
 
-  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
-    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
-  );
+  const abrirSubirDocumento = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleNuevo = () => {
+    if (nivel === 0) {
+      // Raíz → crea carpeta raíz
+      abrirCrearCarpeta();
+    } else if (nivel === 1) {
+      // Dentro de raíz → preguntar: subcarpeta o documento
+      setShowElegirNivel1(true);
+    } else {
+      // Nivel 2 → solo documentos
+      abrirSubirDocumento();
+    }
+  };
+
+  const crearCarpeta = async () => {
+    const nombre = nuevoNombreCarpeta.trim();
+    if (!nombre) {
+      toast.error("El nombre no puede estar vacío");
+      return;
+    }
+    setCreandoCarpeta(true);
+    try {
+      // En nivel 0 → raíz; en nivel 1 → subcarpeta de carpetaActual.
+      // Nivel 2 nunca llega aquí (showNuevaCarpeta no se abre).
+      const parentId = nivel === 1 && carpetaActual ? carpetaActual.id : null;
+      const res = await createCarpetaAction(nombre, parentId);
+      if (!res.ok) {
+        toast.error(res.error ?? "Error al crear la carpeta");
+        return;
+      }
+      if (res.data) {
+        setCarpetas((prev) =>
+          [...prev, res.data!].sort((a, b) => a.nombre.localeCompare(b.nombre, "es")),
+        );
+      }
+      setNuevoNombreCarpeta("");
+      setShowNuevaCarpeta(false);
+      toast.success(`Carpeta "${nombre}" creada`);
+    } finally {
+      setCreandoCarpeta(false);
+    }
+  };
+
+  const onFileSelected = async (file: File) => {
+    if (!carpetaActual) return;
+    if (file.size <= 0) return toast.error("Archivo vacío");
+    if (file.size > MAX_FILE_BYTES) {
+      return toast.error(`Máximo ${formatBytes(MAX_FILE_BYTES)} por archivo`);
+    }
+    if (!isAllowedMime(file.type)) {
+      return toast.error("Tipo de archivo no permitido");
+    }
+
+    setUploading(true);
+    try {
+      const prep = await prepareUpload({
+        carpetaId: carpetaActual.id,
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+      });
+      if (!prep.ok) {
+        toast.error(prep.error);
+        return;
+      }
+
+      const supabase = createClient();
+      const { error: upErr } = await supabase.storage
+        .from(BUCKET)
+        .upload(prep.storagePath, file, {
+          upsert: false,
+          contentType: file.type,
+        });
+      if (upErr) {
+        toast.error(`No se pudo subir: ${upErr.message}`);
+        return;
+      }
+
+      const conf = await confirmDocumento({
+        carpetaId: carpetaActual.id,
+        storagePath: prep.storagePath,
+        nombre: prep.nombre,
+        tipoMime: file.type,
+        tamanoBytes: file.size,
+      });
+      if (!conf.ok) {
+        toast.error(conf.error);
+        return;
+      }
+
+      setDocumentos((prev) => [conf.data, ...prev]);
+      loadUso();
+      toast.success(`"${prep.nombre}" subido`);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const onBorrarDocumento = async (doc: DocumentoRow) => {
+    if (!confirm(`¿Eliminar "${doc.nombre}"?`)) return;
+    const res = await deleteDocumento(doc.id);
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudo eliminar");
+      return;
+    }
+    setDocumentos((prev) => prev.filter((d) => d.id !== doc.id));
+    loadUso();
+    toast.success("Documento eliminado");
+  };
+
+  const onClickCarpeta = (c: Carpeta) => {
+    if (nivel >= 2) return; // no más niveles
+    setPath((prev) => [...prev, c]);
+    setSearch("");
+  };
+
+  const navegarA = (idx: number) => {
+    // idx = -1 → raíz; idx = 0 → primera carpeta del path; etc.
+    setPath((prev) => prev.slice(0, idx + 1));
+    setSearch("");
+  };
+
+  /* ── render helpers ───────────────────────────────────── */
+  const usoPct = uso ? Math.min(100, Math.round((uso.bytes_total / uso.max_bytes) * 100)) : 0;
+  const usoColor = usoPct >= 90 ? "bg-red-500" : usoPct >= 70 ? "bg-amber-500" : "bg-emerald-500";
+
+  const totalActual = nivel === 0
+    ? carpetasVisibles.length
+    : carpetasVisibles.length + documentosVisibles.length;
 
   return (
-    <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
-      {/* Main Tabs */}
-      <Tabs value={mainTab} onValueChange={setMainTab}>
-        <TabsList>
-          <TabsTrigger value="biblioteca"><FolderOpen className="h-4 w-4 mr-1.5" />Biblioteca</TabsTrigger>
-          <TabsTrigger value="permisos"><Shield className="h-4 w-4 mr-1.5" />Permisos</TabsTrigger>
-          <TabsTrigger value="drive"><HardDrive className="h-4 w-4 mr-1.5" />Conexión Drive</TabsTrigger>
-          <TabsTrigger value="config" aria-label="Configuración" className="ml-auto"><Settings className="h-4 w-4" strokeWidth={1.75} /></TabsTrigger>
-        </TabsList>
-
-        {/* ─── BIBLIOTECA ─── */}
-        <TabsContent value="biblioteca" className="space-y-4 mt-4">
-          <SubmoduleToolbar
-            busqueda={search}
-            onBusquedaChange={setSearch}
-            placeholderBusqueda="Buscar"
-            onNuevo={() => { /* abrir uploader */ }}
-            filtros={filtros}
-            onFiltrosChange={setFiltros}
-            orden={orden}
-            onOrdenChange={setOrden}
-            columnas={columnasDef}
-            columnasVisibles={columnasVisibles}
-            onColumnasVisiblesChange={setColumnasVisibles}
-            columnasOrden={columnasOrden}
-            onColumnasOrdenChange={setColumnasOrden}
-            extraDerecha={
-              <>
-                <div className="flex gap-1">
-                  <Button variant={vista === "lista" ? "secondary" : "ghost"} size="icon" onClick={() => setVista("lista")}><List className="h-4 w-4" /></Button>
-                  <Button variant={vista === "tarjetas" ? "secondary" : "ghost"} size="icon" onClick={() => setVista("tarjetas")}><LayoutGrid className="h-4 w-4" /></Button>
-                </div>
+    <div className="p-6 space-y-4 max-w-[1400px] mx-auto">
+      {/* Breadcrumb */}
+      {nivel > 0 && (
+        <div className="flex items-center gap-1 text-sm flex-wrap">
+          <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => navegarA(-1)}>
+            <ChevronLeft className="h-4 w-4 mr-1" />Carpetas
+          </Button>
+          {path.map((c, i) => (
+            <span key={c.id} className="inline-flex items-center gap-1">
+              <span className="text-muted-foreground">/</span>
+              {i < path.length - 1 ? (
                 <Button
-                  size="icon"
-                  variant={showConfig ? "default" : "outline"}
-                  className="h-9 w-9"
-                  onClick={() => setShowConfig((v) => !v)}
-                  title="Configuración"
-                  aria-label="Configuración"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2 font-medium"
+                  onClick={() => navegarA(i)}
                 >
-                  <Settings className="h-4 w-4" strokeWidth={1.75} />
+                  <FolderOpen className="h-4 w-4 mr-1.5 text-blue-500" />
+                  {c.nombre}
                 </Button>
-              </>
-            }
-          />
+              ) : (
+                <span className="font-medium inline-flex items-center gap-1.5 ml-1">
+                  <FolderOpen className="h-4 w-4 text-blue-500" />
+                  {c.nombre}
+                </span>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
 
-          {/* Counter */}
-          <p className="text-xs text-muted-foreground">{filtered.length} documento{filtered.length !== 1 ? "s" : ""}</p>
+      <SubmoduleToolbar
+        busqueda={search}
+        onBusquedaChange={setSearch}
+        placeholderBusqueda="Buscar"
+        onNuevo={handleNuevo}
+        textoNuevo="Nuevo"
+        filtros={filtros}
+        onFiltrosChange={setFiltros}
+        extraDerecha={
+          <Button
+            size="icon"
+            variant="outline"
+            className="h-9 w-9"
+            title="Configuración"
+            aria-label="Configuración"
+          >
+            <Settings className="h-4 w-4" strokeWidth={1.75} />
+          </Button>
+        }
+      />
 
-          {/* List view */}
-          {vista === "lista" && (
-            <Card>
-              <ScrollArea className="max-h-[600px]">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-10"></TableHead>
-                      {columnasRender.map((c) => columnDefs[c.campo]?.th)}
-                      <TableHead className="text-right">Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filtered.map((d) => (
-                      <TableRow key={d.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelected(d)}>
-                        <TableCell>{tipoIcono(d.tipoArchivo)}</TableCell>
-                        {columnasRender.map((c) => columnDefs[c.campo]?.td(d))}
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setSelected(d); }}><Eye className="h-3.5 w-3.5" /></Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7"><Download className="h-3.5 w-3.5" /></Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {filtered.length === 0 && (
-                      <TableRow><TableCell colSpan={9} className="text-center py-12 text-muted-foreground">No se encontraron documentos</TableCell></TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </ScrollArea>
-            </Card>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={ACCEPT_FILE_EXTS}
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) onFileSelected(f);
+        }}
+      />
+
+      {/* Rejilla de carpetas (raíz o subcarpetas en nivel 1) */}
+      {(nivel === 0 || (nivel === 1 && carpetasVisibles.length > 0)) && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+          {loadingCarpetas && carpetas.length === 0 && (
+            <p className="col-span-full text-center py-8 text-muted-foreground text-sm">Cargando…</p>
           )}
+          {carpetasVisibles.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => onClickCarpeta(c)}
+              className="group flex flex-col items-center gap-2 p-4 rounded-xl border border-transparent hover:border-border hover:bg-muted/40 transition-colors text-center"
+            >
+              <Folder
+                className="h-16 w-16 text-blue-500 group-hover:text-blue-600 transition-colors"
+                strokeWidth={1.5}
+                fill="currentColor"
+                fillOpacity={0.15}
+              />
+              <div className="min-w-0 w-full">
+                <p className="text-sm font-medium truncate">{c.nombre}</p>
+              </div>
+            </button>
+          ))}
+          {nivel === 0 && !loadingCarpetas && carpetasVisibles.length === 0 && (
+            <p className="col-span-full text-center py-16 text-muted-foreground text-sm">
+              No hay carpetas todavía. Crea una con &quot;+ Nueva carpeta&quot;.
+            </p>
+          )}
+        </div>
+      )}
 
-          {/* Grid view */}
-          {vista === "tarjetas" && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filtered.map((d) => (
-                <Card key={d.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelected(d)}>
-                  <CardContent className="p-4 space-y-3">
-                    <div className="flex items-start gap-3">
-                      <div className="p-2 rounded-lg bg-muted">{tipoIcono(d.tipoArchivo)}</div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate">{d.nombre}</p>
-                        <p className="text-xs text-muted-foreground">{d.categoria}</p>
-                      </div>
-                    </div>
-                    <p className="text-xs text-muted-foreground line-clamp-2">{d.descripcion}</p>
-                    <div className="flex items-center justify-between">
-                      {estadoBadge(d.estado)}
-                      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">{accesoIcon(d.nivelAcceso)}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>{d.tamano}</span>
-                      <span>{d.ultimaActualizacion}</span>
-                    </div>
-                    {d.driveFileId && <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground"><HardDrive className="h-3 w-3" />En Drive</span>}
-                  </CardContent>
-                </Card>
-              ))}
-              {filtered.length === 0 && <p className="col-span-full text-center py-12 text-muted-foreground">No se encontraron documentos</p>}
+      {/* Rejilla de documentos (nivel 1 con docs, o nivel 2) */}
+      {nivel >= 1 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {loadingDocs && documentos.length === 0 && (
+            <p className="col-span-full text-center py-8 text-muted-foreground text-sm">Cargando…</p>
+          )}
+          {!loadingDocs && documentosVisibles.map((d) => (
+            <Card key={d.id} className="hover:shadow-md transition-shadow">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-lg bg-muted">{iconForMime(d.tipo_mime)}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate" title={d.nombre}>{d.nombre}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {d.tamano_bytes ? formatBytes(d.tamano_bytes) : "—"}
+                      {" · "}{d.created_at?.slice(0, 10)}
+                    </p>
+                  </div>
+                </div>
+                {d.descripcion && (
+                  <p className="text-xs text-muted-foreground line-clamp-2">{d.descripcion}</p>
+                )}
+                <div className="flex items-center gap-2 pt-1">
+                  <Button variant="outline" size="sm" className="h-7 px-2" asChild>
+                    <a href={d.url} target="_blank" rel="noopener noreferrer">
+                      <Download className="h-3.5 w-3.5 mr-1" />Abrir
+                    </a>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 ml-auto text-muted-foreground hover:text-red-600"
+                    onClick={() => onBorrarDocumento(d)}
+                    title="Eliminar"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+          {!loadingDocs && documentosVisibles.length === 0 && carpetasVisibles.length === 0 && (
+            <div className="col-span-full text-center py-12 space-y-3">
+              <p className="text-muted-foreground text-sm">
+                {nivel === 1 ? "Carpeta vacía. Crea una subcarpeta o sube un documento." : "No hay documentos."}
+              </p>
+              <div className="flex justify-center gap-2">
+                {nivel === 1 && (
+                  <Button onClick={abrirCrearCarpeta} variant="outline" size="sm">
+                    <FolderPlus className="h-4 w-4 mr-2" />Nueva subcarpeta
+                  </Button>
+                )}
+                <Button onClick={abrirSubirDocumento} variant="outline" size="sm" disabled={uploading}>
+                  <Upload className="h-4 w-4 mr-2" />
+                  {uploading ? "Subiendo…" : "Subir documento"}
+                </Button>
+              </div>
             </div>
           )}
-        </TabsContent>
+        </div>
+      )}
 
-        {/* ─── PERMISOS ─── */}
-        <TabsContent value="permisos" className="mt-4">
-          <Card>
-            <CardHeader><CardTitle className="text-lg">Permisos y visibilidad</CardTitle></CardHeader>
-            <CardContent className="space-y-6">
-              <p className="text-sm text-muted-foreground">Configura quién puede ver, descargar, editar, mover o eliminar cada documento. Los permisos se aplican por empresa, rol o usuario individual.</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {NIVELES_ACCESO.map((n) => (
-                  <Card key={n.value} className="border">
-                    <CardContent className="p-4 flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-muted">{accesoIcon(n.value)}</div>
-                      <div>
-                        <p className="font-medium text-sm">{n.label}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {n.value === "solo_direccion" && "Solo usuarios con rol Dirección pueden acceder"}
-                          {n.value === "solo_gerencia" && "Accesible para Gerencia y Dirección"}
-                          {n.value === "lectura" && "Todos los usuarios autorizados pueden leer"}
-                          {n.value === "edicion" && "Permite lectura y modificación del documento"}
-                          {n.value === "privado" && "Solo el creador y directores"}
-                          {n.value === "compartido_interno" && "Visible para todos los empleados de la empresa"}
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-              <Separator />
-              <div>
-                <h3 className="text-sm font-semibold mb-2">Resumen de acceso por documento</h3>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Documento</TableHead>
-                      <TableHead>Nivel</TableHead>
-                      <TableHead>Roles con acceso</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {docs.slice(0, 6).map((d) => (
-                      <TableRow key={d.id}>
-                        <TableCell className="font-medium text-sm">{d.nombre}</TableCell>
-                        <TableCell><span className="inline-flex items-center gap-1 text-xs">{accesoIcon(d.nivelAcceso)} {accesoLabel(d.nivelAcceso)}</span></TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{d.permisos.map((p) => p.rol).join(", ")}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* ─── DRIVE ─── */}
-        <TabsContent value="drive" className="mt-4">
-          <Card>
-            <CardHeader><CardTitle className="text-lg flex items-center gap-2"><HardDrive className="h-5 w-5" />Conexión con Google Drive</CardTitle></CardHeader>
-            <CardContent className="space-y-6">
-              <p className="text-sm text-muted-foreground">Los documentos se almacenan en Google Drive pero se gestionan visualmente desde el SaaS. Conecta tu cuenta de Drive para habilitar la sincronización.</p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card className="border-dashed border-2">
-                  <CardContent className="p-5 text-center space-y-3">
-                    <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center"><Link2 className="h-6 w-6 text-muted-foreground" /></div>
-                    <p className="font-medium text-sm">Estado de conexión</p>
-                    <Badge variant="outline" className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">Pendiente de conexión</Badge>
-                    <Button variant="outline" size="sm" className="w-full">Conectar Google Drive</Button>
-                  </CardContent>
-                </Card>
-                <Card className="border">
-                  <CardContent className="p-5 space-y-2">
-                    <p className="font-medium text-sm">Archivos sincronizados</p>
-                    <p className="text-3xl font-bold text-foreground">{docs.filter((d) => d.driveFileId).length}</p>
-                    <p className="text-xs text-muted-foreground">de {docs.length} documentos totales</p>
-                  </CardContent>
-                </Card>
-                <Card className="border">
-                  <CardContent className="p-5 space-y-2">
-                    <p className="font-medium text-sm">Carpeta Drive</p>
-                    <p className="text-sm text-muted-foreground">BALLES / {empresaActual?.nombre} / Documentación</p>
-                    <Button variant="ghost" size="sm" className="px-0 text-primary">Configurar carpeta</Button>
-                  </CardContent>
-                </Card>
-              </div>
-              <Separator />
-              <div>
-                <h3 className="text-sm font-semibold mb-3">Documentos en Drive</h3>
-                <div className="space-y-2">
-                  {docs.filter((d) => d.driveFileId).map((d) => (
-                    <div key={d.id} className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-muted/30 transition-colors">
-                      {tipoIcono(d.tipoArchivo)}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{d.nombre}</p>
-                        <p className="text-xs text-muted-foreground">ID: {d.driveFileId}</p>
-                      </div>
-                      <Badge variant="outline" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 text-[10px]">Sincronizado</Badge>
-                    </div>
-                  ))}
-                  {docs.filter((d) => d.driveFileId).length === 0 && <p className="text-sm text-muted-foreground text-center py-6">No hay documentos sincronizados con Drive</p>}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* ─── CONFIGURACIÓN ─── */}
-        <TabsContent value="config" className="mt-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader><CardTitle className="text-base">Categorías documentales</CardTitle></CardHeader>
-              <CardContent className="space-y-2">
-                {CATEGORIAS_DOCUMENTALES.map((c) => (
-                  <div key={c} className="flex items-center justify-between p-2.5 rounded-lg border bg-card">
-                    <span className="text-sm">{c}</span>
-                    <Button variant="ghost" size="icon" className="h-7 w-7"><Pencil className="h-3.5 w-3.5" /></Button>
-                  </div>
-                ))}
-                <Button variant="outline" size="sm" className="w-full mt-2">+ Añadir categoría</Button>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-base">Carpetas lógicas</CardTitle></CardHeader>
-              <CardContent className="space-y-2">
-                {CARPETAS.map((c) => (
-                  <div key={c} className="flex items-center justify-between p-2.5 rounded-lg border bg-card">
-                    <span className="text-sm flex items-center gap-2"><FolderOpen className="h-4 w-4 text-muted-foreground" />{c}</span>
-                    <Button variant="ghost" size="icon" className="h-7 w-7"><Pencil className="h-3.5 w-3.5" /></Button>
-                  </div>
-                ))}
-                <Button variant="outline" size="sm" className="w-full mt-2">+ Añadir carpeta</Button>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-base">Estados de documento</CardTitle></CardHeader>
-              <CardContent className="space-y-2">
-                {ESTADOS_DOCUMENTO.map((e) => (
-                  <div key={e.value} className="flex items-center justify-between p-2.5 rounded-lg border bg-card">
-                    <span className="text-sm">{e.label}</span>
-                    {estadoBadge(e.value)}
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-base">Niveles de acceso</CardTitle></CardHeader>
-              <CardContent className="space-y-2">
-                {NIVELES_ACCESO.map((n) => (
-                  <div key={n.value} className="flex items-center justify-between p-2.5 rounded-lg border bg-card">
-                    <span className="text-sm flex items-center gap-2">{accesoIcon(n.value)} {n.label}</span>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
+      {/* Footer */}
+      <div className="flex items-center justify-between gap-4 pt-2">
+        <div className="text-xs text-muted-foreground">
+          {nivel === 0 && `${carpetasVisibles.length} carpeta${carpetasVisibles.length !== 1 ? "s" : ""}`}
+          {nivel === 1 && `${carpetasVisibles.length} subcarpeta${carpetasVisibles.length !== 1 ? "s" : ""} · ${documentosVisibles.length} documento${documentosVisibles.length !== 1 ? "s" : ""}`}
+          {nivel === 2 && `${documentosVisibles.length} documento${documentosVisibles.length !== 1 ? "s" : ""}`}
+        </div>
+        {uso && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>
+              {formatBytes(uso.bytes_total)} / {formatBytes(uso.max_bytes)}
+              {" · "}{uso.docs_total}/{uso.max_docs} docs
+            </span>
+            <div className="w-24 h-1.5 rounded-full bg-muted overflow-hidden">
+              <div className={`h-full ${usoColor}`} style={{ width: `${usoPct}%` }} />
+            </div>
           </div>
-        </TabsContent>
-      </Tabs>
+        )}
+      </div>
 
-      {/* ─── DETALLE MODAL ─── */}
-      <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
-        <DialogContent className="max-w-2xl">
-          {selected && (
-            <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-3">{tipoIcono(selected.tipoArchivo)}{selected.nombre}</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-5 mt-2">
-                {/* Metadata */}
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div><span className="text-muted-foreground">Categoría</span><p className="font-medium">{selected.categoria}</p></div>
-                  <div><span className="text-muted-foreground">Carpeta</span><p className="font-medium">{selected.carpeta}</p></div>
-                  <div><span className="text-muted-foreground">Estado</span><div className="mt-0.5">{estadoBadge(selected.estado)}</div></div>
-                  <div><span className="text-muted-foreground">Acceso</span><p className="font-medium flex items-center gap-1">{accesoIcon(selected.nivelAcceso)} {accesoLabel(selected.nivelAcceso)}</p></div>
-                  <div><span className="text-muted-foreground">Creador</span><p className="font-medium">{selected.creador}</p></div>
-                  <div><span className="text-muted-foreground">Tamaño</span><p className="font-medium">{selected.tamano}</p></div>
-                  <div><span className="text-muted-foreground">Subido</span><p className="font-medium">{selected.fechaSubida}</p></div>
-                  <div><span className="text-muted-foreground">Última actualización</span><p className="font-medium">{selected.ultimaActualizacion}</p></div>
-                </div>
-
-                {/* Description */}
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Descripción</p>
-                  <p className="text-sm">{selected.descripcion}</p>
-                </div>
-
-                {/* Tags */}
-                {selected.etiquetas.length > 0 && (
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">Etiquetas</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {selected.etiquetas.map((t) => <Badge key={t} variant="secondary" className="text-xs"><Tag className="h-3 w-3 mr-1" />{t}</Badge>)}
-                    </div>
-                  </div>
-                )}
-
-                {/* Drive info */}
-                {selected.driveFileId && (
-                  <div className="p-3 rounded-lg border bg-muted/30">
-                    <p className="text-xs font-semibold mb-1 flex items-center gap-1"><HardDrive className="h-3.5 w-3.5" />Google Drive</p>
-                    <p className="text-xs text-muted-foreground">ID: {selected.driveFileId}</p>
-                  </div>
-                )}
-
-                {/* Preview placeholder */}
-                <div className="rounded-lg border-2 border-dashed bg-muted/20 flex flex-col items-center justify-center py-10 gap-2">
-                  <Eye className="h-8 w-8 text-muted-foreground/50" />
-                  <p className="text-sm text-muted-foreground">Vista previa del documento</p>
-                  <p className="text-xs text-muted-foreground">Disponible con conexión a Google Drive</p>
-                </div>
-
-                <Separator />
-
-                {/* Actions */}
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm"><Eye className="h-4 w-4 mr-1.5" />Ver</Button>
-                  <Button variant="outline" size="sm"><Download className="h-4 w-4 mr-1.5" />Descargar</Button>
-                  <Button variant="outline" size="sm"><Pencil className="h-4 w-4 mr-1.5" />Editar metadatos</Button>
-                  <Button variant="outline" size="sm"><FolderOpen className="h-4 w-4 mr-1.5" />Mover</Button>
-                  <Button variant="outline" size="sm"><Archive className="h-4 w-4 mr-1.5" />Archivar</Button>
-                </div>
-              </div>
-            </>
-          )}
+      {/* Dialog: nueva carpeta / subcarpeta */}
+      <Dialog open={showNuevaCarpeta} onOpenChange={setShowNuevaCarpeta}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {nivel === 0 ? "Nueva carpeta" : `Nueva subcarpeta en "${carpetaActual?.nombre}"`}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 mt-2">
+            <label className="text-xs font-medium text-muted-foreground">Nombre</label>
+            <Input
+              autoFocus
+              value={nuevoNombreCarpeta}
+              onChange={(e) => setNuevoNombreCarpeta(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") crearCarpeta(); }}
+              placeholder="Ej. Empleados"
+              maxLength={80}
+            />
+          </div>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setShowNuevaCarpeta(false)} disabled={creandoCarpeta}>
+              Cancelar
+            </Button>
+            <Button onClick={crearCarpeta} disabled={creandoCarpeta}>
+              {creandoCarpeta ? "Creando…" : "Crear"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog: elegir qué crear en nivel 1 */}
+      <Dialog open={showElegirNivel1} onOpenChange={setShowElegirNivel1}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>¿Qué quieres añadir?</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-3 mt-2">
+            <button
+              onClick={() => { setShowElegirNivel1(false); abrirCrearCarpeta(); }}
+              className="flex flex-col items-center gap-2 p-4 rounded-lg border hover:bg-muted/50 transition-colors"
+            >
+              <FolderPlus className="h-8 w-8 text-blue-500" />
+              <span className="text-sm font-medium">Subcarpeta</span>
+            </button>
+            <button
+              onClick={() => { setShowElegirNivel1(false); abrirSubirDocumento(); }}
+              className="flex flex-col items-center gap-2 p-4 rounded-lg border hover:bg-muted/50 transition-colors"
+            >
+              <Upload className="h-8 w-8 text-emerald-500" />
+              <span className="text-sm font-medium">Documento</span>
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Overlay subiendo */}
+      {uploading && (
+        <Dialog open onOpenChange={() => {}}>
+          <DialogContent className="max-w-xs">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Upload className="h-4 w-4 animate-pulse" />Subiendo…
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">No cierres la ventana hasta que termine.</p>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

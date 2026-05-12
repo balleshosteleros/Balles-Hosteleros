@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ModuleIO, RowSchema } from "@/shared/io";
-import { listDocumentos } from "@/features/direccion/actions/documentacion-actions";
+import { listAllDocumentos } from "@/features/direccion/actions/documentacion-actions";
 
 interface DocumentoExport {
   id: string;
@@ -44,22 +44,17 @@ export const documentacionIO: ModuleIO<DocumentoExport> = {
     { key: "descripcion", label: "Descripción" },
   ],
   fetchAll: async () => {
-    const result = await listDocumentos();
-    const ok = (result as { ok?: boolean }).ok;
-    const data = (result as { data?: unknown }).data;
-    if (!ok || !Array.isArray(data)) return [];
-    return data.map<DocumentoExport>((d) => {
-      const r = d as Record<string, unknown>;
-      return {
-        id: String(r.id ?? ""),
-        nombre: String(r.nombre ?? ""),
-        categoria: String(r.categoria ?? ""),
-        descripcion: String(r.descripcion ?? ""),
-        estado: String(r.estado ?? ""),
-        nivelAcceso: String(r.nivelAcceso ?? r.nivel_acceso ?? ""),
-        fechaSubida: String(r.fechaSubida ?? r.fecha_subida ?? ""),
-        tamano: String(r.tamano ?? ""),
-      };
-    });
+    const result = await listAllDocumentos();
+    if (!result.ok || !Array.isArray(result.data)) return [];
+    return result.data.map<DocumentoExport>((r) => ({
+      id: r.id,
+      nombre: r.nombre,
+      categoria: "", // ya no es columna; mantener compat con schema export
+      descripcion: r.descripcion ?? "",
+      estado: r.estado,
+      nivelAcceso: r.nivel_acceso,
+      fechaSubida: (r.created_at ?? "").slice(0, 10),
+      tamano: r.tamano_bytes != null ? `${(r.tamano_bytes / 1024).toFixed(0)} KB` : "",
+    }));
   },
 };

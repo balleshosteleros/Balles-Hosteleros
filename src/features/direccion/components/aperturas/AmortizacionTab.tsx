@@ -19,9 +19,10 @@ function emptyLinea(): LineaAmortizacion {
 interface Props {
   lineas: LineaAmortizacion[];
   onChange: (l: LineaAmortizacion[]) => void;
+  readOnly?: boolean;
 }
 
-export function AmortizacionTab({ lineas, onChange }: Props) {
+export function AmortizacionTab({ lineas, onChange, readOnly = false }: Props) {
   const [editing, setEditing] = useState<LineaAmortizacion | null>(null);
   const [isNew, setIsNew] = useState(false);
 
@@ -82,7 +83,9 @@ export function AmortizacionTab({ lineas, onChange }: Props) {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Amortización y seguimiento financiero</CardTitle>
-          <Button variant="primary" size="sm" onClick={openNew}><Plus className="h-4 w-4" />Nuevo</Button>
+          {!readOnly && (
+            <Button variant="primary" size="sm" onClick={openNew}><Plus className="h-4 w-4" />Nuevo</Button>
+          )}
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -112,8 +115,12 @@ export function AmortizacionTab({ lineas, onChange }: Props) {
                     <td className="p-2 text-right">{l.intereses ? `${fmt(l.intereses)}€` : "—"}</td>
                     <td className="p-2 text-right font-semibold">{fmt(l.total)}€</td>
                     <td className="p-2 flex gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(l)}><Pencil className="h-3.5 w-3.5" /></Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => remove(l.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                      {!readOnly && (
+                        <>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(l)}><Pencil className="h-3.5 w-3.5" /></Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => remove(l.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))}
