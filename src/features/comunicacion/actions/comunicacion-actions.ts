@@ -59,13 +59,14 @@ function matchDepartamento(canalNombre: string, candidatos: string[]): boolean {
   return candNorm.some((c) => grupoNorm.includes(c));
 }
 
-export async function listCanales(empresaSlug: string) {
+export async function listCanales(_empresaSlug: string) {
   try {
     const { supabase, user, empresaId } = await getContext();
+    if (!empresaId) return { ok: true, data: [] };
     const { data, error } = await supabase
       .from("canales")
       .select("*")
-      .eq("empresa_id", empresaSlug)
+      .eq("empresa_id", empresaId)
       .order("nombre");
     if (error) throw error;
     const rows = data ?? [];
@@ -133,17 +134,17 @@ export async function createCanal(
   nombre: string,
   tipo: string = "grupo",
   miembrosUserIds: string[] = [],
-  empresaSlug: string = "",
+  _empresaSlug: string = "",
 ) {
   try {
-    const { supabase } = await getContext();
-    if (!empresaSlug) return { ok: false, error: "Falta empresa" };
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "Falta empresa" };
     const { data, error } = await supabase
       .from("canales")
       .insert({
         nombre,
         tipo,
-        empresa_id: empresaSlug,
+        empresa_id: empresaId,
         miembros_user_ids: miembrosUserIds,
       })
       .select()
@@ -345,16 +346,16 @@ export async function updateCanalNombre(canalId: string, nombre: string) {
  */
 export async function purgeCanalesObsoletos(
   nombresPermitidos: string[],
-  empresaSlug: string,
+  _empresaSlug: string,
 ) {
   try {
-    const { supabase } = await getContext();
-    if (!empresaSlug) return { ok: false, error: "Falta empresa", borrados: 0 };
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "Falta empresa", borrados: 0 };
     const allowed = new Set(nombresPermitidos.map((n) => n.trim().toUpperCase()));
     const { data, error } = await supabase
       .from("canales")
       .select("id, nombre, tipo")
-      .eq("empresa_id", empresaSlug);
+      .eq("empresa_id", empresaId);
     if (error) throw error;
     const aBorrar = (data ?? [])
       .filter((c: Record<string, unknown>) => {

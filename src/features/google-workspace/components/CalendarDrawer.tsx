@@ -2,7 +2,6 @@
 
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import {
-  Calendar as CalendarIcon,
   ChevronLeft,
   ChevronRight,
   Plus,
@@ -14,6 +13,7 @@ import {
   Pencil,
   X,
   Check,
+  Menu as MenuIcon,
 } from "lucide-react";
 import {
   Sheet,
@@ -31,6 +31,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { GoogleConnectBanner } from "./GoogleConnectBanner";
+import { GoogleReauthBanner } from "./GoogleReauthBanner";
 import { GoogleAccountButton } from "./GoogleAccountButton";
 import { useGoogleConnection } from "./useGoogleConnection";
 
@@ -160,18 +161,27 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
   const [eventoSel, setEventoSel] = useState<Evento | null>(null);
   const [form, setForm] = useState<Form | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [needsReauth, setNeedsReauth] = useState(false);
+  const [sidebarAbierto, setSidebarAbierto] = useState(true);
 
   // 1) Lista de calendarios al conectar
   useEffect(() => {
     if (!connected) {
       setCalendarios([]);
       setEventos(MOCK_EVENTOS);
+      setNeedsReauth(false);
       return;
     }
     fetch("/api/google/calendar/list")
       .then((r) => r.json())
       .then((data) => {
+        if (data.needsReauth || data.connected === false) {
+          setNeedsReauth(true);
+          setCalendarios([]);
+          return;
+        }
         if (data.connected && Array.isArray(data.calendarios)) {
+          setNeedsReauth(false);
           setCalendarios(data.calendarios);
           const initial = new Set<string>(
             data.calendarios
@@ -200,7 +210,12 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
     fetch(`/api/google/calendar/events?${params}`)
       .then((r) => r.json())
       .then((data) => {
+        if (data.needsReauth || data.connected === false) {
+          setNeedsReauth(true);
+          return;
+        }
         if (data.connected && Array.isArray(data.eventos)) {
+          setNeedsReauth(false);
           setEventos(data.eventos as Evento[]);
         }
       })
@@ -397,19 +412,31 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
       <SheetTrigger asChild>{children}</SheetTrigger>
       <SheetContent
         side="right"
-        className="flex flex-col gap-0 p-0 [&>button]:hidden"
+        className="flex flex-col gap-0 p-0 bg-[#f6f8fc] [&>button]:hidden"
       >
         <SheetTitle className="sr-only">Calendario · Google Calendar</SheetTitle>
-        <SheetHeader className="border-b px-3 py-2">
+        <SheetHeader className="bg-[#f6f8fc] px-2 py-2 border-b border-transparent">
           <div className="flex items-center gap-2">
-            <CalendarIcon className="h-6 w-6 text-blue-600" />
-            {cargando && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+            <button
+              type="button"
+              onClick={() => setSidebarAbierto((v) => !v)}
+              className="rounded-full p-3 hover:bg-black/5 transition-colors"
+              title="Menú principal"
+            >
+              <MenuIcon className="h-5 w-5 text-[#5f6368]" />
+            </button>
+            <div className="flex items-center gap-1 pl-1 pr-3">
+              <CalendarLogo className="h-9 w-auto" />
+            </div>
+            {cargando && (
+              <Loader2 className="h-4 w-4 animate-spin text-[#5f6368]" />
+            )}
             <div className="ml-auto flex items-center gap-1">
               <GoogleAccountButton />
               <SheetClose asChild>
                 <button
                   type="button"
-                  className="ml-1 rounded-full p-2 hover:bg-black/5 transition-colors"
+                  className="ml-1 rounded-full p-3 hover:bg-black/5 transition-colors"
                   title="Cerrar"
                 >
                   <X className="h-5 w-5 text-[#5f6368]" />
@@ -423,6 +450,10 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
           <div className="border-b bg-muted/30 px-5 py-3">
             <GoogleConnectBanner servicio="Google Calendar" />
           </div>
+        )}
+
+        {connected && needsReauth && (
+          <GoogleReauthBanner servicio="el calendario" />
         )}
 
         {/* Toolbar */}
@@ -458,6 +489,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
         {/* Cuerpo */}
         <div className="flex flex-1 min-h-0">
           {/* Sidebar de calendarios */}
+          {sidebarAbierto && (
           <aside className="w-56 shrink-0 overflow-y-auto border-r bg-muted/20 p-3">
             <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               Mis calendarios
@@ -509,6 +541,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
               })}
             </ul>
           </aside>
+          )}
 
           {/* VISTA WEEK */}
           {vista === "week" && (
@@ -938,6 +971,60 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
         )}
       </SheetContent>
     </Sheet>
+  );
+}
+
+function CalendarLogo({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 760 200" className={className} aria-hidden="true">
+      <g transform="translate(3.75 3.75)">
+        <path
+          fill="#FFFFFF"
+          d="M148.882,43.618l-47.368-5.263l-57.895,5.263L38.355,96.25l5.263,52.632l52.632,6.579l52.632-6.579l5.263-53.947L148.882,43.618z"
+        />
+        <path
+          fill="#1A73E8"
+          d="M65.211,125.276c-3.934-2.658-6.658-6.539-8.145-11.671l9.132-3.763c0.829,3.158,2.276,5.605,4.342,7.342c2.053,1.737,4.553,2.592,7.474,2.592c2.987,0,5.553-0.908,7.697-2.724s3.224-4.132,3.224-6.934c0-2.868-1.132-5.211-3.395-7.026s-5.105-2.724-8.5-2.724h-5.276v-9.039H76.5c2.921,0,5.382-0.789,7.382-2.368c2-1.579,3-3.737,3-6.487c0-2.447-0.895-4.395-2.684-5.855s-4.053-2.197-6.803-2.197c-2.684,0-4.816,0.711-6.395,2.145s-2.724,3.197-3.447,5.276l-9.039-3.763c1.197-3.395,3.395-6.395,6.618-8.987c3.224-2.592,7.342-3.895,12.342-3.895c3.697,0,7.026,0.711,9.974,2.145c2.947,1.434,5.263,3.421,6.934,5.947c1.671,2.539,2.5,5.382,2.5,8.539c0,3.224-0.776,5.947-2.329,8.184c-1.553,2.237-3.461,3.947-5.724,5.145v0.539c2.987,1.25,5.421,3.158,7.342,5.724c1.908,2.566,2.868,5.632,2.868,9.211s-0.908,6.776-2.724,9.579c-1.816,2.803-4.329,5.013-7.513,6.618c-3.197,1.605-6.789,2.421-10.776,2.421C73.408,129.263,69.145,127.934,65.211,125.276z"
+        />
+        <path
+          fill="#1A73E8"
+          d="M121.25,79.961l-9.974,7.25l-5.013-7.605l17.987-12.974h6.895v61.197h-9.895L121.25,79.961z"
+        />
+        <path
+          fill="#EA4335"
+          d="M148.882,196.25l47.368-47.368l-23.684-10.526l-23.684,10.526l-10.526,23.684L148.882,196.25z"
+        />
+        <path
+          fill="#34A853"
+          d="M33.092,172.566l10.526,23.684h105.263v-47.368H43.618L33.092,172.566z"
+        />
+        <path
+          fill="#4285F4"
+          d="M12.039-3.75C3.316-3.75-3.75,3.316-3.75,12.039v136.842l23.684,10.526l23.684-10.526V43.618h105.263l10.526-23.684L148.882-3.75H12.039z"
+        />
+        <path
+          fill="#188038"
+          d="M-3.75,148.882v31.579c0,8.724,7.066,15.789,15.789,15.789h31.579v-47.368H-3.75z"
+        />
+        <path
+          fill="#FBBC04"
+          d="M148.882,43.618v105.263h47.368V43.618l-23.684-10.526L148.882,43.618z"
+        />
+        <path
+          fill="#1967D2"
+          d="M196.25,43.618V12.039c0-8.724-7.066-15.789-15.789-15.789h-31.579v47.368H196.25z"
+        />
+      </g>
+      <text
+        x="225"
+        y="142"
+        fontFamily="'Product Sans', 'Google Sans', Arial, sans-serif"
+        fontSize="110"
+        fill="#5f6368"
+      >
+        Calendar
+      </text>
+    </svg>
   );
 }
 

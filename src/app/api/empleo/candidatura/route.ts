@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { z } from "zod";
 import crypto from "node:crypto";
 
 export const dynamic = "force-dynamic";
@@ -8,6 +9,17 @@ export const runtime = "nodejs";
 const MAX_CV_BYTES = 5 * 1024 * 1024;
 const RATE_LIMIT_WINDOW_MIN = 15;
 const RATE_LIMIT_MAX = 5;
+
+const CandidaturaSchema = z.object({
+  empresa_slug: z.string().min(1).max(80),
+  empresa_id: z.string().uuid(),
+  oferta_id: z.string().uuid(),
+  nombre: z.string().min(1).max(80),
+  apellidos: z.string().min(1).max(120),
+  email: z.string().email().max(180),
+  telefono: z.string().min(5).max(30),
+  carta_presentacion: z.string().max(5000).optional().default(""),
+});
 
 function service() {
   return createServiceClient(
@@ -85,26 +97,29 @@ async function verifyTurnstile(token: string | null): Promise<boolean> {
 export async function POST(req: Request) {
   try {
     const fd = await req.formData();
-    const empresaSlug = String(fd.get("empresa_slug") ?? "").trim();
-    const empresaId = String(fd.get("empresa_id") ?? "").trim();
-    const ofertaId = String(fd.get("oferta_id") ?? "").trim();
-    const nombre = String(fd.get("nombre") ?? "").trim();
-    const apellidos = String(fd.get("apellidos") ?? "").trim();
-    const email = String(fd.get("email") ?? "").trim().toLowerCase();
-    const telefono = String(fd.get("telefono") ?? "").trim();
-    const cartaPresentacion = String(fd.get("carta_presentacion") ?? "").trim();
     const captchaToken = (fd.get("captcha_token") as string | null) ?? null;
     const cv = fd.get("cv") as File | null;
 
-    if (!empresaSlug || !empresaId || !ofertaId) {
-      return NextResponse.json({ ok: false, error: "Datos de oferta incompletos" }, { status: 400 });
+    const parsed = CandidaturaSchema.safeParse({
+      empresa_slug: String(fd.get("empresa_slug") ?? "").trim(),
+      empresa_id: String(fd.get("empresa_id") ?? "").trim(),
+      oferta_id: String(fd.get("oferta_id") ?? "").trim(),
+      nombre: String(fd.get("nombre") ?? "").trim(),
+      apellidos: String(fd.get("apellidos") ?? "").trim(),
+      email: String(fd.get("email") ?? "").trim().toLowerCase(),
+      telefono: String(fd.get("telefono") ?? "").trim(),
+      carta_presentacion: String(fd.get("carta_presentacion") ?? "").trim(),
+    });
+    if (!parsed.success) {
+      const firstIssue = parsed.error.issues[0];
+      return NextResponse.json(
+        { ok: false, error: `Datos inválidos: ${firstIssue.path.join(".")} — ${firstIssue.message}` },
+        { status: 400 },
+      );
     }
-    if (!nombre || !apellidos || !email || !telefono) {
-      return NextResponse.json({ ok: false, error: "Faltan campos obligatorios" }, { status: 400 });
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return NextResponse.json({ ok: false, error: "Email no válido" }, { status: 400 });
-    }
+    const { empresa_slug: empresaSlug, empresa_id: empresaId, oferta_id: ofertaId,
+            nombre, apellidos, email, telefono, carta_presentacion: cartaPresentacion } = parsed.data;
+
     if (cv && cv.size > MAX_CV_BYTES) {
       return NextResponse.json({ ok: false, error: "El CV supera el tamaño máximo de 5MB" }, { status: 400 });
     }

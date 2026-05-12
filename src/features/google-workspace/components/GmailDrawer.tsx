@@ -54,6 +54,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { GoogleConnectBanner } from "./GoogleConnectBanner";
+import { GoogleReauthBanner } from "./GoogleReauthBanner";
 import { GoogleAccountButton } from "./GoogleAccountButton";
 import { useGoogleConnection } from "./useGoogleConnection";
 
@@ -186,6 +187,7 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
   const [gruposAbiertos, setGruposAbiertos] = useState<Record<string, boolean>>({});
   const [sidebarAbierto, setSidebarAbierto] = useState(true);
   const [fotosContactos, setFotosContactos] = useState<Record<string, string>>({});
+  const [needsReauth, setNeedsReauth] = useState(false);
 
   const arbolCarpetas = useMemo(
     () => construirArbolCarpetas(carpetasUsuario),
@@ -227,7 +229,13 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
     fetch(url)
       .then((r) => r.json())
       .then((data) => {
+        if (data.needsReauth || data.connected === false) {
+          setNeedsReauth(true);
+          setMensajesReales([]);
+          return;
+        }
         if (data.connected && Array.isArray(data.mensajes)) {
+          setNeedsReauth(false);
           const lista: Mensaje[] = data.mensajes.map(
             (m: Omit<Mensaje, "cuerpo">) => ({ ...m, cuerpo: "" }),
           );
@@ -264,11 +272,17 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
     if (!connected) {
       setCarpetasUsuario([]);
       setFirmaHtml("");
+      setNeedsReauth(false);
       return;
     }
     fetch("/api/google/gmail/labels")
       .then((r) => r.json())
       .then((data) => {
+        if (data.needsReauth) {
+          setNeedsReauth(true);
+          setCarpetasUsuario([]);
+          return;
+        }
         if (Array.isArray(data.carpetas)) setCarpetasUsuario(data.carpetas);
       })
       .catch(() => setCarpetasUsuario([]));
@@ -621,6 +635,10 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
           <div className="border-b bg-white px-5 py-3">
             <GoogleConnectBanner servicio="Gmail" />
           </div>
+        )}
+
+        {connected && needsReauth && (
+          <GoogleReauthBanner servicio="el correo" />
         )}
 
         <div className="flex flex-1 min-h-0 bg-[#f6f8fc]">
@@ -1629,13 +1647,33 @@ function acortarLabel(nombre: string): string {
 
 function GmailLogo({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 109 40" className={className} aria-hidden="true">
-      <path d="M8.207 36.273V21.46L1.756 15.804v18.654c0 1.001.811 1.815 1.811 1.815h4.64z" fill="#4285f4" />
-      <path d="M27.12 36.273h4.64a1.81 1.81 0 0 0 1.81-1.815V15.804L27.12 21.46" fill="#34a853" />
-      <path d="M27.12 7.354v14.107l6.45-5.657V8.262c0-2.985-3.404-4.687-5.793-2.901" fill="#fbbc04" />
-      <path d="M8.207 21.46V7.354L17.664 14.5l9.456-7.146V21.46l-9.456 7.146" fill="#ea4335" />
-      <path d="M1.756 8.262v7.542l6.45 5.657V7.354L5.55 5.36C3.16 3.575-.244 5.277 1.756 8.262" fill="#c5221f" />
-      <text x="44" y="28" fontFamily="Product Sans, Arial, sans-serif" fontSize="22" fill="#5f6368">Gmail</text>
+    <svg viewBox="52 42 230 66" className={className} aria-hidden="true">
+      <path
+        fill="#4285f4"
+        d="M58 108h14V74L52 59v43c0 3.32 2.69 6 6 6"
+      />
+      <path
+        fill="#34a853"
+        d="M120 108h14c3.32 0 6-2.69 6-6V59l-20 15"
+      />
+      <path
+        fill="#fbbc04"
+        d="M120 48v26l20-15v-8c0-7.42-8.47-11.65-14.4-7.2"
+      />
+      <path fill="#ea4335" d="M72 74V48l24 18 24-18v26L96 92" />
+      <path
+        fill="#c5221f"
+        d="M52 51v8l20 15V48l-5.6-4.2c-5.94-4.45-14.4-.22-14.4 7.2"
+      />
+      <text
+        x="150"
+        y="93"
+        fontFamily="'Product Sans', 'Google Sans', Arial, sans-serif"
+        fontSize="40"
+        fill="#5f6368"
+      >
+        Gmail
+      </text>
     </svg>
   );
 }

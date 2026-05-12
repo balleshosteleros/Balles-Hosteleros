@@ -5,6 +5,7 @@ import { getMiInformacionLaboral } from "@/features/rrhh/actions/empleados-actio
 import { parseISO, format } from "date-fns";
 import { es } from "date-fns/locale";
 import { fallbackCronogramas } from "@/features/direccion/data/cronogramasMockData";
+import { getModuloForCronograma } from "@/features/direccion/data/cronogramaAreas";
 
 export type TareaPrioridad = "alta" | "media" | "baja";
 export type TareaTipo = "manual" | "nueva_receta_fase" | "sistema" | "cronograma";
@@ -152,7 +153,7 @@ export async function marcarTarea(id: string, hecha: boolean): Promise<Result> {
       .update({ hecha, updated_at: new Date().toISOString() })
       .eq("id", id);
     if (error) throw error;
-    return { ok: true };
+    return { ok: true, data: undefined };
   } catch (err) {
     return { ok: false, error: "No se pudo actualizar la tarea" };
   }
@@ -183,7 +184,7 @@ export async function deleteTarea(id: string): Promise<Result> {
     }
     const { error } = await supabase.from("tareas").delete().eq("id", id);
     if (error) throw error;
-    return { ok: true };
+    return { ok: true, data: undefined };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Error al eliminar" };
   }
@@ -368,7 +369,7 @@ interface CronogramaTareaRow {
   resumen: string | null;
   frecuencia: string | null;
   tiempo_requerido: string | null;
-  dia_semana: number[] | null;
+  dia_semana: number[] | string | number | null;
   dia_mes: number | null;
   fecha_anual: string | null;
   meses_trimestrales: number[] | null;
@@ -591,11 +592,11 @@ export async function getDepartamentosVisibles(): Promise<
       modulosVisibles = permisos
         .filter((p) => p.ver)
         .map((p) => p.modulo)
-        .filter(Boolean);
+        .filter(Boolean)
+        .map((m) => getModuloForCronograma(m));
     }
 
-    if (esDirectorGlobal && modulosVisibles.length === 0) {
-      // Bypass: si no hay permisos cargados, asume acceso a todos los módulos
+    if (esDirectorGlobal) {
       modulosVisibles = [
         "Dirección", "Gerencia", "RRHH", "Logística", "Cocina",
         "Sala", "Calidad", "Contabilidad", "Gestoría", "Jurídico", "Marketing",
