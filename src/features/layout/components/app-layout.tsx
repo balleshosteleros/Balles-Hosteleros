@@ -1,9 +1,9 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/features/layout/components/app-sidebar";
-import { useAuth } from "@/features/auth/contexts/auth-context";
+import { useAuth, AuthContext } from "@/features/auth/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -92,10 +92,9 @@ import {
   Trophy,
   Building2,
   Rocket,
-  LayoutGrid,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useContext } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -119,6 +118,9 @@ import {
   useDailyCounts,
 } from "@/features/google-workspace/components";
 import { AgendaDrawer } from "@/features/agenda/components/AgendaDrawer";
+import { RecordingTrigger } from "@/features/recorder/components/RecordingTrigger";
+import { RecordingDrawer } from "@/features/recorder/components/RecordingDrawer";
+import { RecordingOverlay } from "@/features/recorder/components/RecordingOverlay";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import type { AccesoApp } from "@/features/rrhh/data/accesos-apps";
 import { listAccesosApps } from "@/features/rrhh/actions/accesos-apps-actions";
@@ -139,7 +141,8 @@ const ROUTE_TITLES: Record<string, string> = {
   "/mi-panel/formacion": "FORMACIÓN",
   "/mi-panel/formacion/curso": "CURSO",
   "/mi-panel/points": "POINTS",
-  "/mi-panel/datos-personales": "PERFIL",
+  "/mi-panel/datos-personales": "DATOS PERSONALES",
+  "/mi-panel/grabaciones": "MIS GRABACIONES",
   "/mis-departamentos": "MIS DEPARTAMENTOS",
   "/gerencia": "GERENCIA",
   "/direccion/estructura": "ORGANIGRAMA",
@@ -160,7 +163,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/rrhh/reclutamiento": "RECLUTAMIENTO",
   "/rrhh/comunicados": "COMUNICADOS",
   "/logistica": "LOGÍSTICA",
-  "/logistica/escandallos": "ESCANDALLOS",
+  "/logistica/fichas-tecnicas": "FICHAS TÉCNICAS",
   "/logistica/partidas": "PARTIDAS",
   "/logistica/productos": "PRODUCTOS",
   "/marketing": "MARKETING",
@@ -174,6 +177,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/marketing/campanas/email": "CAMPAÑAS — EMAIL",
   "/marketing/campanas/meta": "CAMPAÑAS — META",
   "/marketing/campanas/whatsapp": "CAMPAÑAS — WHATSAPP",
+  "/logistica/incidencias": "INCIDENCIAS",
   "/ajustes": "AJUSTES",
   "/ayuda": "AYUDA",
   "/accesos": "ACCESOS",
@@ -185,7 +189,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/cocina": "COCINA",
   "/cocina/comandas": "COMANDAS",
   "/cocina/nuevas-recetas": "NUEVAS RECETAS",
-  "/cocina/escandallos": "ESCANDALLOS",
+  "/cocina/fichas-tecnicas": "FICHAS TÉCNICAS",
   "/cocina/elaboraciones": "ELABORACIONES",
   "/cocina/partidas": "PARTIDAS",
   "/cocina/temperaturas": "TEMPERATURAS",
@@ -230,7 +234,6 @@ const ROUTE_TITLES: Record<string, string> = {
   "/contabilidad/reglas": "REGLAS AUTOMÁTICAS",
   "/gestoria/presentaciones": "PRESENTACIONES",
   "/gestoria/modelos": "MODELOS",
-  "/gestoria/contrataciones": "CONTRATACIONES",
   "/juridico/procesos": "PROCESOS",
 };
 
@@ -279,15 +282,6 @@ function getDynamicTitle(pathname: string): string {
   return "";
 }
 
-const AJUSTES_TAB_TITLES: Record<string, string> = {
-  empresas: "EMPRESAS",
-  "imagen-marca": "IMAGEN DE MARCA",
-  usuarios: "USUARIOS",
-  roles: "ROLES",
-  departamentos: "DEPARTAMENTOS",
-  aplicaciones: "APLICACIONES",
-};
-
 const ROUTE_ICONS: Record<string, LucideIcon> = {
   "/": LayoutDashboard,
   "/mi-panel": UserCircle,
@@ -324,9 +318,9 @@ const ROUTE_ICONS: Record<string, LucideIcon> = {
   "/cocina": ChefHat,
   "/cocina/comandas": Timer,
   "/cocina/nuevas-recetas": Sparkles,
-  "/cocina/escandallos": Utensils,
+  "/cocina/fichas-tecnicas": Utensils,
   "/cocina/elaboraciones": FlaskConical,
-  "/cocina/partidas": LayoutGrid,
+  "/cocina/partidas": ChefHat,
   "/cocina/temperaturas": Thermometer,
 
   // GERENCIA
@@ -382,6 +376,7 @@ const ROUTE_ICONS: Record<string, LucideIcon> = {
   "/logistica/pedidos": ShoppingCart,
   "/logistica/stock": Warehouse,
   "/logistica/inventarios": ClipboardList,
+  "/logistica/incidencias": AlertTriangle,
 
   // CONTABILIDAD
   "/contabilidad": Calculator,
@@ -401,7 +396,6 @@ const ROUTE_ICONS: Record<string, LucideIcon> = {
   "/gestoria": FileText,
   "/gestoria/modelos": FileSearch,
   "/gestoria/presentaciones": FileUp,
-  "/gestoria/contrataciones": UserPlus,
 
   // JURÍDICO
   "/juridico": Scale,
@@ -439,8 +433,17 @@ function NavBadge({ count, color = "blue" }: { count: number; color?: string }) 
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const { user, profile, roles, signOut } = useAuth();
+  const auth = useContext(AuthContext);
+  
+  // Si no hay contexto (ej: SSR o fuera de AuthProvider), usamos valores por defecto
+  const user = auth?.user;
+  const profile = auth?.profile;
+  const roles = auth?.roles ?? [];
+  const signOut = auth?.signOut ?? (() => {});
+  const permisosLoaded = auth?.permisosLoaded ?? false;
+  const puedeVer = auth?.puedeVer ?? (() => false);
+  const hasRole = auth?.hasRole ?? (() => false);
+
   const devBypass = process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true";
   const [isDemoHost, setIsDemoHost] = useState(false);
   useEffect(() => {
@@ -457,17 +460,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const moduleShort = MODULE_LABELS[modulePath] ?? ROUTE_TITLES[modulePath] ?? "";
   let submoduleTitle = ROUTE_TITLES[pathname] ?? "";
   if (!submoduleTitle) submoduleTitle = getDynamicTitle(pathname);
-  if (pathname === "/ajustes") {
-    const tab = searchParams.get("tab") ?? "empresas";
-    if (AJUSTES_TAB_TITLES[tab]) submoduleTitle = AJUSTES_TAB_TITLES[tab];
-  }
   const headerLabel = submoduleTitle || moduleShort;
 
-  // Preferimos profiles.rol_label (ej. "JEFE DE COCINA") sobre el rol RBAC
-  // del sistema (empleado/admin/director), que es genérico y no descriptivo.
-  const rolLabel = profile?.rol_label
-    ? profile.rol_label
-    : roles.length > 0
+  const rolLabel =
+    roles.length > 0
       ? roles[0].charAt(0).toUpperCase() + roles[0].slice(1)
       : "—";
 
@@ -573,6 +569,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       </Button>
                     </MeetDrawer>
 
+                    {/* ReelForge Recorder */}
+                    <RecordingTrigger />
+
                     {/* Separador visual */}
                     <span className="w-px h-5 bg-border mx-0.5" />
 
@@ -622,7 +621,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         <Notebook className="!h-[18px] !w-[18px] text-yellow-500" />
                       </Button>
                     </AgendaDrawer>
-
                     {/* Separador visual */}
                     <span className="w-px h-5 bg-border mx-0.5" />
 
@@ -921,6 +919,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
         {showUi && <FloatingSoporteButton />}
       </div>
+      <RecordingDrawer />
+      <RecordingOverlay />
     </SidebarProvider>
   );
 }
