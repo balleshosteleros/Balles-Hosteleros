@@ -1,32 +1,45 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-const r2Client = new S3Client({
-  region: "auto",
-  endpoint: process.env.R2_ENDPOINT,
-  credentials: {
-    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-  },
-});
+let _supabase: SupabaseClient | null = null;
+function getSupabase(): SupabaseClient {
+  if (_supabase) return _supabase;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) {
+    throw new Error("Faltan NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  }
+  _supabase = createClient(url, key);
+  return _supabase;
+}
 
-const BUCKET_NAME = process.env.R2_BUCKET_NAME!;
-const PUBLIC_URL = process.env.R2_PUBLIC_URL!;
-
-console.log("R2 Configuration Initialized:", {
-  endpoint: process.env.R2_ENDPOINT,
-  bucket: BUCKET_NAME,
-  hasAccessKey: !!process.env.R2_ACCESS_KEY_ID,
-  hasSecretKey: !!process.env.R2_SECRET_ACCESS_KEY
-});
+let _r2: S3Client | null = null;
+function getR2(): { client: S3Client; bucket: string; publicUrl: string } {
+  const bucket = process.env.R2_BUCKET_NAME;
+  const publicUrl = process.env.R2_PUBLIC_URL;
+  const endpoint = process.env.R2_ENDPOINT;
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+  if (!bucket || !publicUrl || !endpoint || !accessKeyId || !secretAccessKey) {
+    throw new Error("Faltan variables R2_* para configurar Cloudflare R2");
+  }
+  if (!_r2) {
+    _r2 = new S3Client({
+      region: "auto",
+      endpoint,
+      credentials: { accessKeyId, secretAccessKey },
+    });
+  }
+  return { client: _r2, bucket, publicUrl };
+}
 
 export async function GET() {
   try {
+    const supabase = getSupabase();
     const { data, error } = await supabase
       .from("recordings")
       .select("*")
@@ -39,12 +52,15 @@ export async function GET() {
     return NextResponse.json(data);
   } catch (err: any) {
     console.error("Error fetching recordings:", err);
-    return NextResponse.json({ error: "Error al listar grabaciones" }, { status: 500 });
+    return NextResponse.json({ error: err?.message || "Error al listar grabaciones" }, { status: 500 });
   }
 }
 
 export async function POST(req: Request) {
   try {
+    const supabase = getSupabase();
+    const { client: r2Client, bucket: BUCKET_NAME, publicUrl: PUBLIC_URL } = getR2();
+
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
     const title = (formData.get("title") as string) || "Grabación sin título";
@@ -60,9 +76,6 @@ export async function POST(req: Request) {
     const fileName = `${fileId}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    console.log(">>> [R2] Iniciando subida de:", fileName, "al bucket:", BUCKET_NAME);
-    
-    // 1. Subir a Cloudflare R2
     try {
       await r2Client.send(
         new PutObjectCommand({
@@ -72,16 +85,13 @@ export async function POST(req: Request) {
           ContentType: mimeType,
         })
       );
-      console.log(">>> [R2] ¡ÉXITO! Archivo subido correctamente.");
     } catch (r2Error: any) {
-      console.error(">>> [R2] ERROR al subir:", r2Error.message || r2Error);
-      throw new Error(`Fallo en R2: ${r2Error.message}`);
+      console.error("[R2] Error al subir:", r2Error?.message || r2Error);
+      throw new Error(`Fallo en R2: ${r2Error?.message}`);
     }
 
     const videoUrl = `${PUBLIC_URL}/${fileName}`;
 
-    console.log(">>> [Supabase] Registrando metadatos...");
-    // 2. Guardar en Supabase
     const { data, error } = await supabase
       .from("recordings")
       .insert({
@@ -95,36 +105,36 @@ export async function POST(req: Request) {
       .single();
 
     if (error) {
-      console.error(">>> [Supabase] ERROR al insertar:", error.message);
-      // Nota: El archivo ya está en R2, pero el registro falló.
-      return NextResponse.json({ 
+      console.error("[Supabase] Error al insertar:", error.message);
+      return NextResponse.json({
         message: "Video subido a R2, pero falló el registro en DB",
         url: videoUrl,
-        db_error: error.message 
-      }, { status: 207 }); // 207 Multi-Status para indicar éxito parcial
+        db_error: error.message,
+      }, { status: 207 });
     }
 
-    console.log(">>> [DONE] Todo guardado correctamente.");
     return NextResponse.json(data, { status: 201 });
   } catch (err: any) {
-    console.error(">>> [CRITICAL] Error en POST:", err.message);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error("[recordings POST] Error:", err?.message);
+    return NextResponse.json({ error: err?.message || "Error" }, { status: 500 });
   }
 }
 
 export async function DELETE(req: Request) {
   try {
+    const supabase = getSupabase();
     const { id } = await req.json();
     const { data: rec } = await supabase.from("recordings").select("url").eq("id", id).single();
-    
+
     if (rec) {
-      const fileName = rec.url.split("/").pop();
-      if (fileName) {
-        try {
+      try {
+        const { client: r2Client, bucket: BUCKET_NAME } = getR2();
+        const fileName = rec.url.split("/").pop();
+        if (fileName) {
           await r2Client.send(new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: fileName }));
-        } catch (e) {
-          console.warn("Could not delete from R2", e);
         }
+      } catch (e) {
+        console.warn("Could not delete from R2", e);
       }
     }
 
@@ -132,18 +142,19 @@ export async function DELETE(req: Request) {
     if (error) throw error;
 
     return NextResponse.json({ success: true });
-  } catch (err) {
-    return NextResponse.json({ error: "Error al borrar" }, { status: 500 });
+  } catch (err: any) {
+    return NextResponse.json({ error: err?.message || "Error al borrar" }, { status: 500 });
   }
 }
 
 export async function PATCH(req: Request) {
   try {
+    const supabase = getSupabase();
     const { id, title } = await req.json();
     const { data, error } = await supabase.from("recordings").update({ title }).eq("id", id).select().single();
     if (error) throw error;
     return NextResponse.json(data);
-  } catch (err) {
-    return NextResponse.json({ error: "Error al actualizar" }, { status: 500 });
+  } catch (err: any) {
+    return NextResponse.json({ error: err?.message || "Error al actualizar" }, { status: 500 });
   }
 }
