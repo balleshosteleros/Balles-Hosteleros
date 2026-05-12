@@ -21,12 +21,16 @@ interface Props {
   estudioId: string;
   marca: ImagenMarcaEstudio;
   onChange: (next: ImagenMarcaEstudio, opts?: { flush?: boolean }) => void;
+  readOnly?: boolean;
 }
 
 const uid = () => `c-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
-export function MarcaTab({ estudioId, marca, onChange }: Props) {
-  const set = (patch: Partial<ImagenMarcaEstudio>) => onChange({ ...marca, ...patch });
+export function MarcaTab({ estudioId, marca, onChange, readOnly = false }: Props) {
+  const set = (patch: Partial<ImagenMarcaEstudio>) => {
+    if (readOnly) return;
+    onChange({ ...marca, ...patch });
+  };
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
   const addValor = () => set({ valores: [...(marca.valores ?? []), ""] });
@@ -99,14 +103,15 @@ export function MarcaTab({ estudioId, marca, onChange }: Props) {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             <Field label="Claim / tagline">
-              <Input value={marca.claim} onChange={(e) => set({ claim: e.target.value })} placeholder="Ej. La cocina mediterránea de mercado" />
+              <Input disabled={readOnly} value={marca.claim} onChange={(e) => set({ claim: e.target.value })} placeholder="Ej. La cocina mediterránea de mercado" />
             </Field>
             <Field label="Público objetivo">
-              <Input value={marca.publicoObjetivo} onChange={(e) => set({ publicoObjetivo: e.target.value })} placeholder="Ej. Profesionales 30-45, parejas, foodies" />
+              <Input disabled={readOnly} value={marca.publicoObjetivo} onChange={(e) => set({ publicoObjetivo: e.target.value })} placeholder="Ej. Profesionales 30-45, parejas, foodies" />
             </Field>
           </div>
           <Field label="Descripción del concepto">
             <Textarea
+              disabled={readOnly}
               value={marca.descripcion}
               onChange={(e) => set({ descripcion: e.target.value })}
               rows={4}
@@ -128,21 +133,25 @@ export function MarcaTab({ estudioId, marca, onChange }: Props) {
                 alt="Logo"
                 className="h-32 w-auto max-w-xs rounded-md border bg-white object-contain p-3"
               />
-              <button
-                type="button"
-                onClick={removeLogo}
-                className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-black/80"
-                title="Quitar logo"
-                aria-label="Quitar logo"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={removeLogo}
+                  className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-black/80"
+                  title="Quitar logo"
+                  aria-label="Quitar logo"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
           ) : uploadingLogo ? (
             <div className="inline-flex flex-col items-center justify-center gap-1 h-32 w-64 rounded-md border border-dashed border-muted-foreground/30 text-muted-foreground text-xs">
               <Loader2 className="h-5 w-5 animate-spin" />
               <span>Subiendo logo…</span>
             </div>
+          ) : readOnly ? (
+            <p className="text-xs text-muted-foreground">Sin logo cargado.</p>
           ) : (
             <label className="inline-flex flex-col items-center justify-center gap-1 h-32 w-64 rounded-md border border-dashed border-muted-foreground/30 text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors cursor-pointer text-xs">
               <ImagePlus className="h-5 w-5" strokeWidth={1.75} />
@@ -179,12 +188,14 @@ export function MarcaTab({ estudioId, marca, onChange }: Props) {
                 />
                 <div className="flex items-center gap-2">
                   <input
+                    disabled={readOnly}
                     type="color"
                     value={c.hex}
                     onChange={(e) => updateColor(c.id, { hex: e.target.value })}
-                    className="h-8 w-10 rounded border cursor-pointer"
+                    className="h-8 w-10 rounded border cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                   />
                   <Input
+                    disabled={readOnly}
                     value={c.hex}
                     onChange={(e) => updateColor(c.id, { hex: e.target.value })}
                     className="h-8 text-xs font-mono"
@@ -192,32 +203,40 @@ export function MarcaTab({ estudioId, marca, onChange }: Props) {
                 </div>
                 <div className="flex items-center gap-1">
                   <Input
+                    disabled={readOnly}
                     value={c.nombre}
                     onChange={(e) => updateColor(c.id, { nombre: e.target.value })}
                     className="h-8 text-xs"
                     placeholder="Nombre"
                   />
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8 text-muted-foreground hover:text-red-600"
-                    onClick={() => removeColor(c.id)}
-                    title="Quitar color"
-                    aria-label="Quitar color"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  {!readOnly && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-muted-foreground hover:text-red-600"
+                      onClick={() => removeColor(c.id)}
+                      title="Quitar color"
+                      aria-label="Quitar color"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}
-            <button
-              type="button"
-              onClick={addColor}
-              className="rounded-md border border-dashed border-muted-foreground/30 text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors flex flex-col items-center justify-center gap-1 min-h-[140px] text-xs"
-            >
-              <Plus className="h-5 w-5" />
-              <span>Añadir color</span>
-            </button>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={addColor}
+                className="rounded-md border border-dashed border-muted-foreground/30 text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors flex flex-col items-center justify-center gap-1 min-h-[140px] text-xs"
+              >
+                <Plus className="h-5 w-5" />
+                <span>Añadir color</span>
+              </button>
+            )}
+            {readOnly && (marca.paleta ?? []).length === 0 && (
+              <p className="col-span-full text-xs text-muted-foreground">Sin paleta definida.</p>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -229,39 +248,44 @@ export function MarcaTab({ estudioId, marca, onChange }: Props) {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             <Field label="Tipografía titulares">
-              <Input value={marca.tipografiaTitulares} onChange={(e) => set({ tipografiaTitulares: e.target.value })} placeholder="Ej. Playfair Display" />
+              <Input disabled={readOnly} value={marca.tipografiaTitulares} onChange={(e) => set({ tipografiaTitulares: e.target.value })} placeholder="Ej. Playfair Display" />
             </Field>
             <Field label="Tipografía cuerpo">
-              <Input value={marca.tipografiaCuerpo} onChange={(e) => set({ tipografiaCuerpo: e.target.value })} placeholder="Ej. Inter" />
+              <Input disabled={readOnly} value={marca.tipografiaCuerpo} onChange={(e) => set({ tipografiaCuerpo: e.target.value })} placeholder="Ej. Inter" />
             </Field>
           </div>
 
           <div>
             <div className="flex items-center justify-between mb-2">
               <Label className="text-muted-foreground text-xs">Valores de marca</Label>
-              <Button size="sm" variant="ghost" onClick={addValor} className="h-7 text-xs">
-                <Plus className="h-3.5 w-3.5 mr-1" /> Añadir valor
-              </Button>
+              {!readOnly && (
+                <Button size="sm" variant="ghost" onClick={addValor} className="h-7 text-xs">
+                  <Plus className="h-3.5 w-3.5 mr-1" /> Añadir valor
+                </Button>
+              )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {(marca.valores ?? []).map((v, i) => (
                 <div key={i} className="flex items-center gap-2">
                   <Input
+                    disabled={readOnly}
                     value={v}
                     onChange={(e) => updateValor(i, e.target.value)}
                     placeholder="Ej. Cercanía, sostenibilidad…"
                     className="h-8 text-sm"
                   />
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8 text-muted-foreground hover:text-red-600"
-                    onClick={() => removeValor(i)}
-                    title="Quitar valor"
-                    aria-label="Quitar valor"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  {!readOnly && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-muted-foreground hover:text-red-600"
+                      onClick={() => removeValor(i)}
+                      title="Quitar valor"
+                      aria-label="Quitar valor"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               ))}
               {(marca.valores ?? []).length === 0 && (

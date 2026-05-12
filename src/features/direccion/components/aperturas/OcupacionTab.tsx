@@ -22,6 +22,7 @@ interface Props {
   ocupacion: BloqueOcupacion;
   plazasTotales: number;
   onChange: (next: BloqueOcupacion, opts?: { flush?: boolean }) => void;
+  readOnly?: boolean;
 }
 
 function clamp01_100(n: number): number {
@@ -33,7 +34,7 @@ function fmtNum(n: number): string {
   return n.toLocaleString("es-ES", { maximumFractionDigits: 0 });
 }
 
-export function OcupacionTab({ ocupacion, plazasTotales, onChange }: Props) {
+export function OcupacionTab({ ocupacion, plazasTotales, onChange, readOnly = false }: Props) {
   const bloque = ocupacion.escenarios.length > 0 ? ocupacion : bloqueOcupacionInicial();
 
   const [activoId, setActivoId] = useState<string>(
@@ -44,7 +45,8 @@ export function OcupacionTab({ ocupacion, plazasTotales, onChange }: Props) {
 
   const activo = bloque.escenarios.find((e) => e.id === activoId) ?? bloque.escenarios[0];
 
-  const setEscenarios = (next: EscenarioOcupacion[], opts?: { flush?: boolean }, nextActivoId?: string) =>
+  const setEscenarios = (next: EscenarioOcupacion[], opts?: { flush?: boolean }, nextActivoId?: string) => {
+    if (readOnly) return;
     onChange(
       {
         escenarios: next,
@@ -52,8 +54,10 @@ export function OcupacionTab({ ocupacion, plazasTotales, onChange }: Props) {
       },
       opts,
     );
+  };
 
   const updateActivo = (patch: Partial<EscenarioOcupacion>, opts?: { flush?: boolean }) => {
+    if (readOnly) return;
     setEscenarios(
       bloque.escenarios.map((e) => (e.id === activo.id ? { ...e, ...patch } : e)),
       opts,
@@ -61,6 +65,7 @@ export function OcupacionTab({ ocupacion, plazasTotales, onChange }: Props) {
   };
 
   const updateCelda = (dia: DiaSemana, franja: FranjaHoraria, raw: number) => {
+    if (readOnly) return;
     const matriz: MatrizOcupacion = {
       ...activo.matriz,
       [dia]: { ...activo.matriz[dia], [franja]: clamp01_100(raw) },
@@ -70,6 +75,7 @@ export function OcupacionTab({ ocupacion, plazasTotales, onChange }: Props) {
 
   const seleccionarEscenario = (id: string) => {
     setActivoId(id);
+    if (readOnly) return;
     onChange({ ...bloque, escenarioActivoId: id }, { flush: true });
   };
 
@@ -144,10 +150,12 @@ export function OcupacionTab({ ocupacion, plazasTotales, onChange }: Props) {
                 </button>
               );
             })}
-            <div className="ml-auto flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={() => aplicarPreset("vacio")}>Vaciar</Button>
-              <Button size="sm" variant="outline" onClick={() => aplicarPreset("tipico")}>Plantilla típica</Button>
-            </div>
+            {!readOnly && (
+              <div className="ml-auto flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" onClick={() => aplicarPreset("vacio")}>Vaciar</Button>
+                <Button size="sm" variant="outline" onClick={() => aplicarPreset("tipico")}>Plantilla típica</Button>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -221,6 +229,7 @@ export function OcupacionTab({ ocupacion, plazasTotales, onChange }: Props) {
                         <td key={f.key} className="p-1">
                           <div className="relative">
                             <Input
+                              disabled={readOnly}
                               type="number"
                               min={0}
                               max={100}

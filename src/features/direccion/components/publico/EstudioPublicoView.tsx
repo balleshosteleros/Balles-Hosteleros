@@ -1,386 +1,1206 @@
-/**
- * Vista pública (solo lectura) de un estudio de apertura.
- * Server component — no requiere JS de cliente.
- *
- * Muestra todas las secciones del estudio en formato presentable
- * para socio / inversor: datos, marca, local, gastronomía, inversión,
- * costes y escenario financiero estimado.
- */
+"use client";
+
+import { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  TrendingUp, TrendingDown, FileText, Calculator, Landmark, Target, Clock,
+  Receipt, Building2, Sparkles, ChefHat, Activity, Ticket, Layers, ChevronDown, ChevronRight,
+} from "lucide-react";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend, LineChart, Line, Sector,
+} from "recharts";
 import {
   ESCENARIOS,
-  calcularEscenario,
-  calcularPilar,
-  pilarFijo,
-  pilarVariablePct,
-  totalFacturacion,
+  calcularEscenario, calcularPilar, type CostePilar, type PilarKey,
+  pilarFijo, pilarVariablePct, type FacturacionPilar, type FactPilarKey,
+  FACT_PILAR_KEYS, FACT_PILAR_NAMES,
+  totalFacturacion, totalClientes, ticketMedioPonderado,
+  pilarFactClientes, pilarFactTotal, pilarFactTicketPonderado,
+  lineasPlanas,
+  type DatosProyecto,
 } from "@/features/direccion/data/aperturas";
+import { LocalTab } from "@/features/direccion/components/aperturas/LocalTab";
+import { MarcaTab } from "@/features/direccion/components/aperturas/MarcaTab";
+import { GastronomiaTab } from "@/features/direccion/components/aperturas/GastronomiaTab";
+import { OcupacionTab } from "@/features/direccion/components/aperturas/OcupacionTab";
+import { ProcedenciaTab } from "@/features/direccion/components/aperturas/ProcedenciaTab";
+import { DestinoTab } from "@/features/direccion/components/aperturas/DestinoTab";
+import { AmortizacionTab } from "@/features/direccion/components/aperturas/AmortizacionTab";
 import type { EstudioPublico } from "@/features/direccion/services/estudio-publico-fetch";
 
-function fmt(n: number): string {
+const COLORS = ["hsl(var(--primary))", "hsl(210 70% 50%)", "hsl(150 60% 45%)", "hsl(40 90% 55%)", "hsl(340 70% 50%)"];
+const PILAR_COLORS = ["hsl(210 70% 55%)", "hsl(340 65% 55%)", "hsl(150 60% 45%)", "hsl(40 90% 55%)"];
+const PILAR_NAMES = ["Generales", "Personal", "Producto", "Marketing"];
+const FACT_PILAR_COLORS: Record<FactPilarKey, string> = {
+  franjas:  "hsl(210 70% 55%)",
+  acuerdos: "hsl(40 90% 55%)",
+  eventos:  "hsl(340 65% 55%)",
+  tienda:   "hsl(150 60% 45%)",
+};
+
+function fmt(n: number) {
   return Number.isFinite(n) ? n.toLocaleString("es-ES", { maximumFractionDigits: 0 }) : "—";
 }
 
-function eur(n: number): string {
-  return `${fmt(n)} €`;
+function formatRecuperacion(mesesTotal: number): string {
+  const meses = Math.max(0, Math.ceil(mesesTotal));
+  const anos = Math.floor(meses / 12);
+  const mesesRest = meses % 12;
+  if (anos === 0) return `${mesesRest} ${mesesRest === 1 ? "mes" : "meses"}`;
+  if (mesesRest === 0) return `${anos} ${anos === 1 ? "año" : "años"}`;
+  return `${anos} ${anos === 1 ? "año" : "años"} ${mesesRest} ${mesesRest === 1 ? "mes" : "meses"}`;
 }
 
-function recuperacion(meses: number): string {
-  if (!Number.isFinite(meses) || meses <= 0) return "—";
-  const m = Math.ceil(meses);
-  const anos = Math.floor(m / 12);
-  const rest = m % 12;
-  if (anos === 0) return `${rest} ${rest === 1 ? "mes" : "meses"}`;
-  if (rest === 0) return `${anos} ${anos === 1 ? "año" : "años"}`;
-  return `${anos} ${anos === 1 ? "año" : "años"} ${rest} ${rest === 1 ? "mes" : "meses"}`;
-}
+type Periodo = "mensual" | "trimestral" | "anual";
+const PERIODO_FACTOR: Record<Periodo, number> = { mensual: 1, trimestral: 3, anual: 12 };
+const PERIODO_SUFIJO: Record<Periodo, string> = { mensual: "/mes", trimestral: "/trim.", anual: "/año" };
+
+type KpiKey = "facturacion" | "costeTotal" | "beneficio" | "margen";
 
 export function EstudioPublicoView({ data }: { data: EstudioPublico }) {
-  const { estudio, empresaNombre, empresaLogoUrl } = data;
-  const { datos, local, imagenMarca, propuesta, procedencia, destinos, costes } = estudio;
+  const { estudio } = data;
+  const { datos, facturacion, costes, procedencia, destinos, amortizacion, local, imagenMarca, propuesta, ocupacion } = estudio;
 
-  const ventasMensuales = totalFacturacion(estudio.facturacion) || datos.ventasEstimadas || 0;
-  const escenarios = ESCENARIOS.map(e => ({ ...e, ...calcularEscenario(ventasMensuales, e.factor, costes) }));
-  const medio = escenarios[2];
+  const [periodo, setPeriodo] = useState<Periodo>("mensual");
+  const [hoveredKpi, setHoveredKpi] = useState<KpiKey | null>(null);
+  const [facturacionPeriodo, setFacturacionPeriodo] = useState<Periodo>("mensual");
+  const [costesPeriodo, setCostesPeriodo] = useState<Periodo>("mensual");
+  const [facturacionTab, setFacturacionTab] = useState<"facturacion" | "ocupacion" | "ticket">("facturacion");
+  const [costesTab, setCostesTab] = useState<"pilares" | "equilibrio">("pilares");
+  const [mainTab, setMainTab] = useState<"datos" | "concepto" | "facturacion" | "costes" | "escenarios" | "inversion">("escenarios");
+  const [expandEscFact, setExpandEscFact] = useState(false);
+  const [expandEscCostes, setExpandEscCostes] = useState(false);
+
+  const factor = PERIODO_FACTOR[periodo];
+  const sufijo = PERIODO_SUFIJO[periodo];
   const inversionTotal = procedencia.reduce((s, l) => s + (l.total || 0), 0);
-  const beneficioMensual = medio.beneficio;
-  const beneficioAnual = beneficioMensual * 12;
-  const facturacionAnual = medio.facturacion * 12;
-  const tieneInversion = inversionTotal > 0;
-  const roiAnualPct = tieneInversion ? (beneficioAnual / inversionTotal) * 100 : 0;
-  const recupera = tieneInversion && beneficioMensual > 0 ? inversionTotal / beneficioMensual : Infinity;
+  const ventas = totalFacturacion(facturacion);
+  const clientesMes = totalClientes(facturacion);
+  const ticketPond = ticketMedioPonderado(facturacion);
 
-  const fotosFachada = local.fotos?.fachada ?? [];
-  const fotosInterior = local.fotos?.interior ?? [];
-  const galeria = [...fotosFachada, ...fotosInterior, ...(local.fotos?.terraza ?? []), ...(local.fotos?.cocina ?? [])]
-    .filter(f => f.url)
-    .slice(0, 8);
+  const escenarios = ESCENARIOS.map(e => {
+    const r = calcularEscenario(ventas, e.factor, costes);
+    return { ...e, ...r };
+  });
+
+  const medio = escenarios[2];
+  const fijoTotal = pilarFijo(costes.generales) + pilarFijo(costes.personal) + pilarFijo(costes.producto) + pilarFijo(costes.marketing);
+  const variablePctTotal = pilarVariablePct(costes.generales) + pilarVariablePct(costes.personal) + pilarVariablePct(costes.producto) + pilarVariablePct(costes.marketing);
+
+  const pieData = [
+    { name: "Generales", value: calcularPilar(ventas, costes.generales) },
+    { name: "Personal", value: calcularPilar(ventas, costes.personal) },
+    { name: "Producto", value: calcularPilar(ventas, costes.producto) },
+    { name: "Marketing", value: calcularPilar(ventas, costes.marketing) },
+  ];
+
+  const sensibilidadData = Array.from({ length: 9 }, (_, i) => {
+    const f = 0.6 + i * 0.1;
+    const r = calcularEscenario(ventas, f, costes);
+    return { facturacion: fmt(r.facturacion), beneficio: r.beneficio, margen: parseFloat(r.margen.toFixed(1)) };
+  });
+
+  const peMensual = variablePctTotal < 100 ? fijoTotal / (1 - variablePctTotal / 100) : Infinity;
+  const peAnual = peMensual * 12;
+
+  const donutBase: { name: string; value: number; group: "costes" | "beneficio"; color: string }[] = [
+    { name: "Generales", value: pieData[0].value, group: "costes", color: PILAR_COLORS[0] },
+    { name: "Personal", value: pieData[1].value, group: "costes", color: PILAR_COLORS[1] },
+    { name: "Producto", value: pieData[2].value, group: "costes", color: PILAR_COLORS[2] },
+    { name: "Marketing", value: pieData[3].value, group: "costes", color: PILAR_COLORS[3] },
+  ];
+  if (medio.beneficio > 0) {
+    donutBase.push({ name: "Beneficio", value: medio.beneficio, group: "beneficio", color: "hsl(142 80% 42%)" });
+  }
+  const donutData = donutBase.map((d) => ({ ...d, value: d.value * factor }));
+  const beneficioIndex = donutData.findIndex((d) => d.group === "beneficio");
+
+  const isDonutActive = (group: "costes" | "beneficio") => {
+    if (!hoveredKpi) return true;
+    if (hoveredKpi === "facturacion") return true;
+    if (hoveredKpi === "costeTotal") return group === "costes";
+    return group === "beneficio";
+  };
+
+  const noop = () => { /* read-only */ };
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900">
-      {/* ── Cabecera empresa ── */}
-      <header className="bg-white border-b">
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-3">
-          {empresaLogoUrl ? (
-            <img src={empresaLogoUrl} alt={empresaNombre} className="h-9 w-auto" />
-          ) : null}
-          <div className="text-sm font-medium text-slate-600">{empresaNombre}</div>
-          <div className="ml-auto text-xs text-slate-400">Estudio de viabilidad · solo lectura</div>
-        </div>
-      </header>
-
-      {/* ── Hero ── */}
-      <section className="max-w-5xl mx-auto px-6 pt-10 pb-6">
-        <div className="flex flex-col md:flex-row gap-6 items-start">
-          <div className="flex-1 space-y-3">
-            <div className="flex items-center gap-2">
-              <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${estudio.viabilidad === "viable" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-                {estudio.viabilidad === "viable" ? "Viable" : "No viable"}
-              </span>
-              <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${estudio.actividad === "activo" ? "bg-blue-100 text-blue-700" : "bg-slate-200 text-slate-600"}`}>
-                {estudio.actividad === "activo" ? "Activo" : "No activo"}
-              </span>
-            </div>
-            <h1 className="text-4xl font-bold tracking-tight">{datos.nombre}</h1>
-            <p className="text-slate-600 text-lg">
-              {datos.ciudad}{datos.zona ? ` · ${datos.zona}` : ""}
-            </p>
-            {imagenMarca.claim ? (
-              <p className="text-xl italic text-slate-700">"{imagenMarca.claim}"</p>
-            ) : null}
-          </div>
-          {estudio.imagen ? (
-            <img
-              src={estudio.imagen}
-              alt={datos.nombre}
-              className="w-full md:w-80 h-56 object-cover rounded-xl border shadow-sm"
-            />
-          ) : null}
-        </div>
-      </section>
-
-      {/* ── KPIs principales ── */}
-      <section className="max-w-5xl mx-auto px-6 py-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Kpi label="Inversión total" value={tieneInversion ? eur(inversionTotal) : "—"} />
-          <Kpi label="Facturación / año" value={eur(facturacionAnual)} hint="Escenario estimado" />
-          <Kpi label="Beneficio / año" value={eur(beneficioAnual)} positive={beneficioAnual >= 0} />
-          <Kpi label="ROI anual" value={tieneInversion ? `${roiAnualPct.toFixed(1)}%` : "—"} positive={tieneInversion && roiAnualPct >= 0} />
-        </div>
-        {tieneInversion ? (
-          <p className="text-sm text-slate-500 mt-3">
-            Recuperación de la inversión: <strong>{recuperacion(recupera)}</strong> en escenario estimado.
+    <div className="p-6 space-y-6 min-h-screen bg-slate-50">
+      {/* Cabecera con nombre, foto + estados */}
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-2xl font-bold tracking-tight truncate">{datos.nombre}</h1>
+          <p className="text-muted-foreground text-sm truncate">
+            {datos.ciudad}{datos.zona ? ` — ${datos.zona}` : ""}
           </p>
-        ) : null}
-      </section>
+        </div>
+        <div className="ml-auto flex items-center gap-1.5 shrink-0">
+          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${estudio.viabilidad === "viable" ? "bg-green-500 text-white" : "bg-red-500 text-white"}`}>
+            {estudio.viabilidad === "viable" ? "Viable" : "No viable"}
+          </span>
+          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${estudio.actividad === "activo" ? "bg-blue-500 text-white" : "bg-gray-400 text-white"}`}>
+            {estudio.actividad === "activo" ? "Activo" : "No activo"}
+          </span>
+        </div>
+      </div>
 
-      {/* ── Datos del proyecto ── */}
-      <Section title="Datos del proyecto">
-        <Grid>
-          <Row label="Población" value={fmt(datos.poblacion)} />
-          <Row label="Afluencia" value={datos.afluencia || "—"} />
-          <Row label="Tipo de local" value={datos.tipoLocal || "—"} />
-          <Row label="Metros cuadrados" value={`${fmt(datos.metrosCuadrados)} m²`} />
-          <Row label="Ticket medio" value={eur(datos.ticketMedio)} />
-          <Row label="Clientes estimados" value={fmt(datos.clientesEstimados)} />
-          <Row label="Estacionalidad" value={datos.estacionalidad || "—"} />
-          <Row label="Competencia" value={datos.competencia || "—"} />
-        </Grid>
-        {datos.observaciones ? (
-          <p className="mt-4 text-sm text-slate-600 whitespace-pre-line">{datos.observaciones}</p>
-        ) : null}
-      </Section>
+      {estudio.imagen ? (
+        <div className="rounded-xl overflow-hidden border shadow-sm">
+          <img src={estudio.imagen} alt={datos.nombre} className="w-full h-56 md:h-72 object-cover" />
+        </div>
+      ) : null}
 
-      {/* ── Imagen de marca ── */}
-      {(imagenMarca.descripcion || imagenMarca.logoUrl || imagenMarca.paleta?.length) ? (
-        <Section title="Imagen de marca">
-          <div className="flex flex-col md:flex-row gap-6">
-            {imagenMarca.logoUrl ? (
-              <img src={imagenMarca.logoUrl} alt="Logo" className="h-32 w-32 object-contain rounded-lg bg-white border p-3" />
-            ) : null}
-            <div className="flex-1 space-y-3">
-              {imagenMarca.descripcion ? (
-                <p className="text-slate-700 whitespace-pre-line">{imagenMarca.descripcion}</p>
-              ) : null}
-              {imagenMarca.publicoObjetivo ? (
-                <Row label="Público objetivo" value={imagenMarca.publicoObjetivo} />
-              ) : null}
-              {imagenMarca.valores?.length ? (
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {imagenMarca.valores.map((v, i) => (
-                    <span key={i} className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">{v}</span>
-                  ))}
-                </div>
-              ) : null}
-              {imagenMarca.paleta?.length ? (
-                <div className="flex flex-wrap gap-3 pt-2">
-                  {imagenMarca.paleta.map(c => (
-                    <div key={c.id} className="flex items-center gap-2">
-                      <span className="h-8 w-8 rounded-md border" style={{ backgroundColor: c.hex }} />
-                      <div className="text-xs">
-                        <div className="font-medium">{c.nombre}</div>
-                        <div className="text-slate-500">{c.hex}</div>
+      <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as typeof mainTab)}>
+        <div className="flex items-center justify-between gap-3">
+          <TabsList className="h-11 gap-1 rounded-xl border bg-muted/50 p-1 shadow-sm flex flex-wrap">
+            <TabsTrigger value="datos" className="h-9 gap-1.5 rounded-lg px-4 font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md">
+              <FileText className="h-4 w-4" />Datos
+            </TabsTrigger>
+            <TabsTrigger value="concepto" className="h-9 gap-1.5 rounded-lg px-4 font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md">
+              <Sparkles className="h-4 w-4" />Concepto
+            </TabsTrigger>
+            <TabsTrigger value="facturacion" className="h-9 gap-1.5 rounded-lg px-4 font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md">
+              <Receipt className="h-4 w-4" />Facturación
+            </TabsTrigger>
+            <TabsTrigger value="costes" className="h-9 gap-1.5 rounded-lg px-4 font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md">
+              <Calculator className="h-4 w-4" />Costes
+            </TabsTrigger>
+            <TabsTrigger value="escenarios" className="h-9 gap-1.5 rounded-lg px-4 font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md">
+              <TrendingUp className="h-4 w-4" />Escenarios
+            </TabsTrigger>
+            <TabsTrigger value="inversion" className="h-9 gap-1.5 rounded-lg px-4 font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md">
+              <Landmark className="h-4 w-4" />Inversión
+            </TabsTrigger>
+          </TabsList>
+          {mainTab === "escenarios" && (
+            <Select value={periodo} onValueChange={(v) => setPeriodo(v as Periodo)}>
+              <SelectTrigger className="w-40 h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="mensual">Mensual</SelectItem>
+                <SelectItem value="trimestral">Trimestral</SelectItem>
+                <SelectItem value="anual">Anual</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+
+        {/* ── ESCENARIOS ── */}
+        <TabsContent value="escenarios" className="space-y-8">
+          <section className="space-y-4">
+            <h2 className="text-lg font-semibold tracking-tight">Resumen ejecutivo</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <Card
+                className={`cursor-default transition-all ${hoveredKpi === "facturacion" ? "ring-2 ring-primary shadow-md" : ""}`}
+                onMouseEnter={() => setHoveredKpi("facturacion")}
+                onMouseLeave={() => setHoveredKpi(null)}
+              >
+                <CardContent className="p-4 text-center">
+                  <p className="text-2xl font-bold">{fmt(medio.facturacion * factor)}€</p>
+                  <p className="text-xs text-muted-foreground">Facturación estimada</p>
+                </CardContent>
+              </Card>
+              <Card
+                className={`cursor-default transition-all ${hoveredKpi === "costeTotal" ? "ring-2 ring-primary shadow-md" : ""}`}
+                onMouseEnter={() => setHoveredKpi("costeTotal")}
+                onMouseLeave={() => setHoveredKpi(null)}
+              >
+                <CardContent className="p-4 text-center">
+                  <p className="text-2xl font-bold">{fmt(medio.costeTotal * factor)}€</p>
+                  <p className="text-xs text-muted-foreground">Coste total</p>
+                </CardContent>
+              </Card>
+              <Card
+                className={`cursor-default transition-all ${hoveredKpi === "beneficio" ? "ring-2 ring-primary shadow-md" : ""}`}
+                onMouseEnter={() => setHoveredKpi("beneficio")}
+                onMouseLeave={() => setHoveredKpi(null)}
+              >
+                <CardContent className="p-4 text-center">
+                  <p className={`text-2xl font-bold ${medio.beneficio >= 0 ? "text-green-600" : "text-red-600"}`}>{fmt(medio.beneficio * factor)}€</p>
+                  <p className="text-xs text-muted-foreground">Beneficio estimado</p>
+                </CardContent>
+              </Card>
+              <Card
+                className={`cursor-default transition-all ${hoveredKpi === "margen" ? "ring-2 ring-primary shadow-md" : ""}`}
+                onMouseEnter={() => setHoveredKpi("margen")}
+                onMouseLeave={() => setHoveredKpi(null)}
+              >
+                <CardContent className="p-4 text-center">
+                  <p className={`text-2xl font-bold ${medio.margen >= 0 ? "text-green-600" : "text-red-600"}`}>{medio.margen.toFixed(1)}%</p>
+                  <p className="text-xs text-muted-foreground">Margen</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <Card className={`transition-all ${hoveredKpi ? "ring-1 ring-primary/40" : ""}`}>
+                <CardHeader>
+                  <CardTitle className="text-base">Estructura {sufijo}</CardTitle>
+                  <p className="text-xs text-muted-foreground">Pasa el cursor por los KPI de arriba para resaltar segmentos.</p>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <PieChart>
+                      <Pie
+                        data={donutData}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={100}
+                        paddingAngle={2}
+                        isAnimationActive={false}
+                        activeIndex={beneficioIndex >= 0 ? beneficioIndex : undefined}
+                        activeShape={(props: any) => {
+                          const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, fillOpacity } = props;
+                          return (
+                            <g style={{ filter: "drop-shadow(0 0 10px rgba(34,197,94,0.55)) drop-shadow(0 0 4px rgba(34,197,94,0.45))" }}>
+                              <Sector
+                                cx={cx} cy={cy}
+                                innerRadius={innerRadius}
+                                outerRadius={outerRadius + 10}
+                                startAngle={startAngle} endAngle={endAngle}
+                                fill={fill} fillOpacity={fillOpacity ?? 1}
+                                stroke="hsl(var(--background))" strokeWidth={2}
+                              />
+                            </g>
+                          );
+                        }}
+                      >
+                        {donutData.map((d, i) => {
+                          const active = isDonutActive(d.group);
+                          return (
+                            <Cell key={i} fill={d.color} fillOpacity={active ? 1 : 0.2}
+                              stroke={hoveredKpi && active ? "hsl(var(--background))" : "transparent"} strokeWidth={2} />
+                          );
+                        })}
+                      </Pie>
+                      <Tooltip formatter={(v: number) => `${fmt(v)}€`} />
+                      <Legend verticalAlign="bottom" height={36} iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle className="text-base">Lectura de viabilidad</CardTitle></CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    {medio.beneficio >= 0 ? <TrendingUp className="h-6 w-6 text-green-600" /> : <TrendingDown className="h-6 w-6 text-red-600" />}
+                    <div>
+                      <p className="font-semibold">{medio.beneficio >= 0 ? "Proyecto viable en escenario estimado" : "Proyecto no viable en escenario estimado"}</p>
+                      <p className="text-sm text-muted-foreground">{escenarios.filter(e => e.beneficio > 0).length} de 5 escenarios son rentables.</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2 pt-3 border-t">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Punto de equilibrio</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-md bg-muted/40 p-3">
+                        <p className="text-xs text-muted-foreground">Mensual</p>
+                        <p className="text-lg font-semibold">{Number.isFinite(peMensual) ? `${fmt(peMensual)}€` : "—"}</p>
+                      </div>
+                      <div className="rounded-md bg-muted/40 p-3">
+                        <p className="text-xs text-muted-foreground">Anual</p>
+                        <p className="text-lg font-semibold">{Number.isFinite(peAnual) ? `${fmt(peAnual)}€` : "—"}</p>
                       </div>
                     </div>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </Section>
-      ) : null}
-
-      {/* ── Local ── */}
-      <Section title="El local">
-        <Grid>
-          <Row label="Tipo" value={local.caracteristicas?.tipoEstablecimiento || "—"} />
-          <Row label="Metros útiles" value={local.caracteristicas?.metrosUtiles ? `${fmt(local.caracteristicas.metrosUtiles)} m²` : "—"} />
-          <Row label="Metros terraza" value={local.caracteristicas?.metrosTerraza ? `${fmt(local.caracteristicas.metrosTerraza)} m²` : "—"} />
-          <Row label="Plazas interior" value={fmt(local.caracteristicas?.plazasInterior ?? 0)} />
-          <Row label="Plazas terraza" value={fmt(local.caracteristicas?.plazasTerraza ?? 0)} />
-          <Row label="Aseos" value={fmt(local.caracteristicas?.banos ?? 0)} />
-          <Row label="Estado" value={local.caracteristicas?.estadoLocal || "—"} />
-          <Row label="Licencia" value={local.caracteristicas?.licenciaActividad || "—"} />
-          <Row label="Salida humos" value={local.caracteristicas?.salidaHumos || "—"} />
-          <Row label="Alquiler mensual" value={local.caracteristicas?.alquilerMensual ? eur(local.caracteristicas.alquilerMensual) : "—"} />
-          <Row label="Traspaso" value={local.caracteristicas?.traspaso ? eur(local.caracteristicas.traspaso) : "—"} />
-          <Row label="Duración contrato" value={local.caracteristicas?.duracionContrato || "—"} />
-        </Grid>
-        {local.ubicacion?.direccion ? (
-          <p className="mt-4 text-sm text-slate-600">
-            <strong className="text-slate-700">Dirección:</strong>{" "}
-            {local.ubicacion.direccion}
-            {local.ubicacion.codigoPostal ? `, ${local.ubicacion.codigoPostal}` : ""}
-            {local.ubicacion.ciudad ? `, ${local.ubicacion.ciudad}` : ""}
-          </p>
-        ) : null}
-        {galeria.length > 0 ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
-            {galeria.map(f => (
-              <img key={f.id} src={f.url} alt="" className="w-full h-32 object-cover rounded-lg border" />
-            ))}
-          </div>
-        ) : null}
-      </Section>
-
-      {/* ── Gastronomía ── */}
-      {(propuesta.concepto || propuesta.descripcion || propuesta.platos?.length) ? (
-        <Section title="Propuesta gastronómica">
-          <Grid>
-            <Row label="Concepto" value={propuesta.concepto || "—"} />
-            <Row label="Estilo de servicio" value={propuesta.estiloServicio || "—"} />
-            <Row label="Rango de precio" value={propuesta.rangoPrecioMedio || "—"} />
-            <Row label="Platos en carta" value={propuesta.numeroPlatosCarta ? fmt(propuesta.numeroPlatosCarta) : "—"} />
-          </Grid>
-          {propuesta.descripcion ? (
-            <p className="mt-4 text-slate-700 whitespace-pre-line">{propuesta.descripcion}</p>
-          ) : null}
-          {propuesta.platos?.length ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-5">
-              {propuesta.platos.map(p => (
-                <div key={p.id} className="rounded-lg border bg-white overflow-hidden">
-                  {p.foto?.url ? (
-                    <img src={p.foto.url} alt={p.nombre} className="w-full h-40 object-cover" />
-                  ) : null}
-                  <div className="p-3 space-y-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <strong className="text-sm">{p.nombre}</strong>
-                      <span className="text-sm font-semibold text-slate-700">{eur(p.precio)}</span>
-                    </div>
-                    {p.categoria ? <div className="text-xs text-slate-500">{p.categoria}</div> : null}
-                    {p.descripcion ? <p className="text-xs text-slate-600">{p.descripcion}</p> : null}
                   </div>
-                </div>
-              ))}
+                  <div className="grid grid-cols-5 gap-2 pt-3 border-t">
+                    {pieData.map((p) => (
+                      <div key={p.name} className="text-center">
+                        <p className="text-sm font-bold">{fmt(p.value * factor)}€</p>
+                        <p className="text-[10px] text-muted-foreground">{p.name}</p>
+                        <p className="text-[10px] text-muted-foreground">({medio.facturacion > 0 ? ((p.value / medio.facturacion) * 100).toFixed(0) : 0}%)</p>
+                      </div>
+                    ))}
+                    <div className="text-center">
+                      <p className={`text-sm font-bold ${medio.beneficio >= 0 ? "text-green-600" : "text-red-600"}`}>{fmt(medio.beneficio * factor)}€</p>
+                      <p className="text-[10px] text-muted-foreground">Beneficio</p>
+                      <p className="text-[10px] text-muted-foreground">({medio.margen.toFixed(0)}%)</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
-          ) : null}
-        </Section>
-      ) : null}
+          </section>
 
-      {/* ── Inversión ── */}
-      {procedencia.length > 0 ? (
-        <Section title="Procedencia del capital">
-          <Tabla
-            cabeceras={["Origen", "Entidad", "Destino", "Total"]}
-            filas={procedencia.map(l => [l.origen || "—", l.entidad || "—", l.destino || "—", eur(l.total || 0)])}
-            totales={["", "", "Total", eur(inversionTotal)]}
-          />
-        </Section>
-      ) : null}
+          <section className="space-y-4">
+            <h2 className="text-lg font-semibold tracking-tight">Tabla de escenarios</h2>
+            <Card>
+              <CardContent className="p-0 overflow-x-auto">
+                {(() => {
+                  const tieneInversion = inversionTotal > 0;
+                  return (
+                    <table className="w-full text-sm">
+                      <thead><tr className="border-b bg-muted/40">
+                        <th className="text-left p-3 font-medium">Escenario</th>
+                        {expandEscFact && lineasPlanas(facturacion).map((l) => (
+                          <th key={l.id} className="text-right p-3 font-medium text-muted-foreground whitespace-nowrap">{l.nombre}</th>
+                        ))}
+                        <th className="text-right p-3 font-medium whitespace-nowrap">
+                          <button type="button" onClick={() => setExpandEscFact((v) => !v)} className="inline-flex items-center gap-1 hover:text-foreground">
+                            Facturación
+                            {expandEscFact ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                          </button>
+                        </th>
+                        {expandEscCostes && (
+                          <>
+                            <th className="text-right p-3 font-medium text-muted-foreground whitespace-nowrap">Costes fijos</th>
+                            <th className="text-right p-3 font-medium text-muted-foreground whitespace-nowrap">Costes variables</th>
+                          </>
+                        )}
+                        <th className="text-right p-3 font-medium whitespace-nowrap">
+                          <button type="button" onClick={() => setExpandEscCostes((v) => !v)} className="inline-flex items-center gap-1 hover:text-foreground">
+                            Coste total
+                            {expandEscCostes ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                          </button>
+                        </th>
+                        <th className="text-right p-3 font-medium">Beneficio</th>
+                        <th className="text-right p-3 font-medium">Margen</th>
+                        <th className="text-right p-3 font-medium whitespace-nowrap">ROI</th>
+                        <th className="text-right p-3 font-medium whitespace-nowrap">Recuperación</th>
+                      </tr></thead>
+                      <tbody>
+                        {escenarios.map((e) => {
+                          const factPeriodo = e.facturacion * factor;
+                          const fijoPeriodo = e.fijoTotal * factor;
+                          const varPeriodo = e.varTotal * factor;
+                          const costePeriodo = e.costeTotal * factor;
+                          const beneficioPeriodo = e.beneficio * factor;
+                          const roiPeriodoPct = tieneInversion ? (beneficioPeriodo / inversionTotal) * 100 : 0;
+                          const recuperaInversion = tieneInversion && e.beneficio > 0;
+                          return (
+                            <tr key={e.nombre} className={`border-b ${e.nombre === "Estimado" ? "bg-primary/5" : ""}`}>
+                              <td className="p-3 font-medium">{e.nombre}</td>
+                              {expandEscFact && lineasPlanas(facturacion).map((l) => {
+                                const lineaMensual = (l.clientesEsperados || 0) * (l.ticketMedio || 0);
+                                const lineaPeriodo = lineaMensual * e.factor * factor;
+                                return <td key={l.id} className="p-3 text-right text-muted-foreground">{fmt(lineaPeriodo)}€</td>;
+                              })}
+                              <td className="p-3 text-right">{fmt(factPeriodo)}€</td>
+                              {expandEscCostes && (
+                                <>
+                                  <td className="p-3 text-right text-muted-foreground">{fmt(fijoPeriodo)}€</td>
+                                  <td className="p-3 text-right text-muted-foreground">{fmt(varPeriodo)}€</td>
+                                </>
+                              )}
+                              <td className="p-3 text-right">{fmt(costePeriodo)}€</td>
+                              <td className={`p-3 text-right font-semibold ${e.beneficio >= 0 ? "text-green-600" : "text-red-600"}`}>{fmt(beneficioPeriodo)}€</td>
+                              <td className={`p-3 text-right ${e.margen >= 0 ? "text-green-600" : "text-red-600"}`}>{e.margen.toFixed(1)}%</td>
+                              <td className={`p-3 text-right ${tieneInversion ? (roiPeriodoPct >= 0 ? "text-green-600" : "text-red-600") : "text-muted-foreground"}`}>
+                                {tieneInversion ? `${roiPeriodoPct.toFixed(1)}%` : "—"}
+                              </td>
+                              <td className="p-3 text-right whitespace-nowrap">
+                                {recuperaInversion ? formatRecuperacion(inversionTotal / e.beneficio) : "—"}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  );
+                })()}
+              </CardContent>
+            </Card>
+          </section>
 
-      {destinos.length > 0 ? (
-        <Section title="Destino de la inversión">
-          <Tabla
-            cabeceras={["Categoría", "Concepto", "Destino", "Total"]}
-            filas={destinos.map(l => [l.tipo || "—", l.concepto || "—", l.destino || "—", eur(l.total || 0)])}
-          />
-        </Section>
-      ) : null}
+          <section className="space-y-4">
+            <h2 className="text-lg font-semibold tracking-tight">Gráficas</h2>
+            <div className="grid md:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader><CardTitle className="text-sm">Facturación y beneficio por escenario</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={escenarios.map(e => ({ name: e.nombre, Facturación: e.facturacion, Beneficio: e.beneficio }))}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} />
+                      <Tooltip formatter={(v: number) => `${fmt(v)}€`} />
+                      <Legend />
+                      <Bar dataKey="Facturación" fill="hsl(210 70% 55%)" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="Beneficio" fill="hsl(150 60% 45%)" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
 
-      {/* ── Costes ── */}
-      <Section title="Estructura de costes (escenario estimado)">
-        <Grid>
-          {(["generales", "personal", "producto", "marketing"] as const).map(k => {
-            const total = calcularPilar(medio.facturacion, costes[k]);
-            return (
-              <div key={k} className="rounded-lg border bg-white p-4 space-y-1">
-                <div className="text-xs uppercase tracking-wide text-slate-500">{k}</div>
-                <div className="text-xl font-bold">{eur(total)}</div>
-                <div className="text-xs text-slate-500">
-                  Fijo {eur(pilarFijo(costes[k]))} · Variable {pilarVariablePct(costes[k]).toFixed(1)}%
+              <Card>
+                <CardHeader><CardTitle className="text-sm">Peso de cada pilar de coste</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <PieChart>
+                      <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                        {pieData.map((_, i) => <Cell key={i} fill={PILAR_COLORS[i]} />)}
+                      </Pie>
+                      <Tooltip formatter={(v: number) => `${fmt(v)}€`} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle className="text-sm">Margen estimado por escenario</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={escenarios.map(e => ({ name: e.nombre, Margen: parseFloat(e.margen.toFixed(1)) }))}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} unit="%" />
+                      <Tooltip formatter={(v: number) => `${v}%`} />
+                      <Bar dataKey="Margen" radius={[4, 4, 0, 0]}>
+                        {escenarios.map((e, i) => <Cell key={i} fill={e.margen >= 0 ? "hsl(150 60% 45%)" : "hsl(0 70% 55%)"} />)}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle className="text-sm">Sensibilidad — beneficio vs facturación</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <LineChart data={sensibilidadData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="facturacion" tick={{ fontSize: 10 }} />
+                      <YAxis tick={{ fontSize: 11 }} />
+                      <Tooltip formatter={(v: number) => `${fmt(v)}€`} />
+                      <Line type="monotone" dataKey="beneficio" stroke="hsl(150 60% 45%)" strokeWidth={2} dot={{ r: 3 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </div>
+          </section>
+        </TabsContent>
+
+        {/* ── DATOS ── */}
+        <TabsContent value="datos">
+          <Card>
+            <CardContent className="p-6">
+              <DatosEditorReadOnly datos={datos} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── CONCEPTO ── */}
+        <TabsContent value="concepto">
+          <Tabs defaultValue="local">
+            <TabsList className="h-auto w-full justify-start gap-6 rounded-none border-b bg-transparent p-0">
+              <TabsTrigger value="local" className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none">
+                <Building2 className="h-4 w-4" />Local
+              </TabsTrigger>
+              <TabsTrigger value="marca" className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none">
+                <Sparkles className="h-4 w-4" />Imagen de marca
+              </TabsTrigger>
+              <TabsTrigger value="gastronomia" className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none">
+                <ChefHat className="h-4 w-4" />Gastronomía
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="local" className="mt-4">
+              <LocalTab estudioId={estudio.id} local={local} onChange={noop} readOnly />
+            </TabsContent>
+            <TabsContent value="marca" className="mt-4">
+              <MarcaTab estudioId={estudio.id} marca={imagenMarca} onChange={noop} readOnly />
+            </TabsContent>
+            <TabsContent value="gastronomia" className="mt-4">
+              <GastronomiaTab estudioId={estudio.id} propuesta={propuesta} ventasMensuales={ventas} onChange={noop} readOnly />
+            </TabsContent>
+          </Tabs>
+        </TabsContent>
+
+        {/* ── FACTURACIÓN ── */}
+        <TabsContent value="facturacion">
+          <Tabs value={facturacionTab} onValueChange={(v) => setFacturacionTab(v as typeof facturacionTab)}>
+            <div className="flex items-end justify-between border-b">
+              <TabsList className="h-auto justify-start gap-6 rounded-none bg-transparent p-0">
+                <TabsTrigger value="facturacion" className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none">
+                  <Layers className="h-4 w-4" />Pilares
+                </TabsTrigger>
+                <TabsTrigger value="ocupacion" className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none">
+                  <Activity className="h-4 w-4" />Ocupación
+                </TabsTrigger>
+                <TabsTrigger value="ticket" className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none">
+                  <Ticket className="h-4 w-4" />Ticket medio
+                </TabsTrigger>
+              </TabsList>
+              {facturacionTab === "facturacion" && (
+                <div className="pb-2">
+                  <Select value={facturacionPeriodo} onValueChange={(v) => setFacturacionPeriodo(v as Periodo)}>
+                    <SelectTrigger className="w-40 h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="mensual">Mensual</SelectItem>
+                      <SelectItem value="trimestral">Trimestral</SelectItem>
+                      <SelectItem value="anual">Anual</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-              </div>
-            );
-          })}
-        </Grid>
-      </Section>
+              )}
+            </div>
 
-      {/* ── Escenarios ── */}
-      <Section title="Escenarios financieros">
-        <div className="overflow-x-auto rounded-lg border bg-white">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-600 text-xs uppercase">
-              <tr>
-                <th className="text-left px-3 py-2">Escenario</th>
-                <th className="text-right px-3 py-2">Facturación</th>
-                <th className="text-right px-3 py-2">Coste total</th>
-                <th className="text-right px-3 py-2">Beneficio</th>
-                <th className="text-right px-3 py-2">Margen</th>
-              </tr>
-            </thead>
-            <tbody>
-              {escenarios.map((e, i) => (
-                <tr key={i} className={`border-t ${i === 2 ? "bg-blue-50/50" : ""}`}>
-                  <td className="px-3 py-2 font-medium">{e.nombre}</td>
-                  <td className="px-3 py-2 text-right">{eur(e.facturacion)}</td>
-                  <td className="px-3 py-2 text-right">{eur(e.costeTotal)}</td>
-                  <td className={`px-3 py-2 text-right font-semibold ${e.beneficio >= 0 ? "text-green-600" : "text-red-600"}`}>{eur(e.beneficio)}</td>
-                  <td className={`px-3 py-2 text-right ${e.margen >= 0 ? "text-green-600" : "text-red-600"}`}>{e.margen.toFixed(1)}%</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <p className="text-xs text-slate-500 mt-2">Cifras mensuales. El escenario "Estimado" es el caso base.</p>
-      </Section>
+            <TabsContent value="facturacion" className="mt-4 space-y-4">
+              {(() => {
+                const factFactor = PERIODO_FACTOR[facturacionPeriodo];
+                return (
+                  <>
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-base">Estructura de facturación por pilares</CardTitle>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Despliega cada pilar para ver sus partidas. Los totales del pilar se calculan automáticamente.
+                        </p>
+                      </CardHeader>
+                      <CardContent>
+                        <table className="w-full text-sm">
+                          <thead><tr className="border-b bg-muted/40">
+                            <th className="text-left p-3 font-medium w-[28%]">Pilar / Partida</th>
+                            <th className="text-left p-3 font-medium">Clientes esperados</th>
+                            <th className="text-left p-3 font-medium">Ticket medio (€)</th>
+                            <th className="text-right p-3 font-medium">Total (€)</th>
+                            <th className="text-right p-3 font-medium">% del total</th>
+                            <th className="w-10"></th>
+                          </tr></thead>
+                          <tbody>
+                            {FACT_PILAR_KEYS.map((key) => (
+                              <PilarFactBloqueReadOnly
+                                key={key}
+                                label={FACT_PILAR_NAMES[key]}
+                                pilar={facturacion[key]}
+                                ventasTotal={ventas}
+                                factor={factFactor}
+                              />
+                            ))}
+                            <tr className="bg-muted/30 font-semibold">
+                              <td className="p-3">TOTAL</td>
+                              <td className="p-3">{fmt(clientesMes * factFactor)}</td>
+                              <td className="p-3">{ticketPond.toFixed(2)}€</td>
+                              <td className="p-3 text-right">{fmt(ventas * factFactor)}€</td>
+                              <td className="p-3 text-right">100%</td>
+                              <td></td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </CardContent>
+                    </Card>
 
-      {/* ── Footer ── */}
-      <footer className="max-w-5xl mx-auto px-6 py-10 text-center text-xs text-slate-400">
-        Documento confidencial · {empresaNombre}
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <Card>
+                        <CardHeader><CardTitle className="text-sm">Distribución de ingresos por pilar</CardTitle></CardHeader>
+                        <CardContent>
+                          {ventas > 0 ? (
+                            <ResponsiveContainer width="100%" height={280}>
+                              <PieChart>
+                                <Pie
+                                  data={FACT_PILAR_KEYS
+                                    .map((k) => ({ name: FACT_PILAR_NAMES[k], value: pilarFactTotal(facturacion[k]), key: k }))
+                                    .filter((d) => d.value > 0)}
+                                  dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100}
+                                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                                >
+                                  {FACT_PILAR_KEYS
+                                    .filter((k) => pilarFactTotal(facturacion[k]) > 0)
+                                    .map((k) => <Cell key={k} fill={FACT_PILAR_COLORS[k]} />)}
+                                </Pie>
+                                <Tooltip formatter={(v: number) => `${fmt(v)}€`} />
+                              </PieChart>
+                            </ResponsiveContainer>
+                          ) : (
+                            <div className="h-[280px] flex items-center justify-center text-sm text-muted-foreground">
+                              Sin datos suficientes para la gráfica
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader><CardTitle className="text-sm">Clientes vs ticket medio por partida</CardTitle></CardHeader>
+                        <CardContent>
+                          <ResponsiveContainer width="100%" height={280}>
+                            <BarChart data={lineasPlanas(facturacion).map((l) => ({
+                              name: l.nombre, Clientes: l.clientesEsperados || 0, Ticket: l.ticketMedio || 0,
+                            }))}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                              <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
+                              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} unit="€" />
+                              <Tooltip />
+                              <Legend />
+                              <Bar yAxisId="left" dataKey="Clientes" fill="hsl(210 70% 55%)" radius={[4, 4, 0, 0]} />
+                              <Bar yAxisId="right" dataKey="Ticket" fill="hsl(40 90% 55%)" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </>
+                );
+              })()}
+            </TabsContent>
+
+            <TabsContent value="ocupacion" className="mt-4">
+              <OcupacionTab
+                ocupacion={ocupacion}
+                plazasTotales={(local?.caracteristicas?.plazasInterior ?? 0) + (local?.caracteristicas?.plazasTerraza ?? 0)}
+                onChange={noop}
+                readOnly
+              />
+            </TabsContent>
+
+            <TabsContent value="ticket" className="mt-4">
+              {(() => {
+                const platos = propuesta.platos ?? [];
+                const platosConPrecio = platos.filter((p) => (p.precio || 0) > 0);
+                const precioMedioPlatos = platosConPrecio.length > 0
+                  ? platosConPrecio.reduce((s, p) => s + p.precio, 0) / platosConPrecio.length
+                  : 0;
+                const precioMin = platosConPrecio.length > 0 ? Math.min(...platosConPrecio.map((p) => p.precio)) : 0;
+                const precioMax = platosConPrecio.length > 0 ? Math.max(...platosConPrecio.map((p) => p.precio)) : 0;
+
+                const rangos = [
+                  { rango: "0-10€", min: 0, max: 10 },
+                  { rango: "10-20€", min: 10, max: 20 },
+                  { rango: "20-30€", min: 20, max: 30 },
+                  { rango: "30-50€", min: 30, max: 50 },
+                  { rango: "50€+", min: 50, max: Infinity },
+                ];
+                const distribucionPrecios = rangos.map((r) => ({
+                  rango: r.rango,
+                  platos: platosConPrecio.filter((p) => p.precio >= r.min && p.precio < r.max).length,
+                }));
+
+                const groupCat = new Map<string, { suma: number; count: number }>();
+                platosConPrecio.forEach((p) => {
+                  const cat = (p.categoria || "").trim() || "Sin categoría";
+                  const cur = groupCat.get(cat) ?? { suma: 0, count: 0 };
+                  groupCat.set(cat, { suma: cur.suma + p.precio, count: cur.count + 1 });
+                });
+                const precioMedioPorCategoria = Array.from(groupCat.entries())
+                  .map(([categoria, d]) => ({
+                    categoria, precioMedio: parseFloat((d.suma / d.count).toFixed(2)), numPlatos: d.count,
+                  }))
+                  .sort((a, b) => b.precioMedio - a.precioMedio);
+
+                const ticketPorPilar = FACT_PILAR_KEYS
+                  .map((k) => ({
+                    pilar: FACT_PILAR_NAMES[k],
+                    ticket: parseFloat(pilarFactTicketPonderado(facturacion[k]).toFixed(2)),
+                    clientes: pilarFactClientes(facturacion[k]),
+                    key: k,
+                  }))
+                  .filter((d) => d.clientes > 0);
+
+                const cats = propuesta.categoriasVenta ?? [];
+                const composicionTicket = cats
+                  .filter((c) => (c.porcentaje || 0) > 0)
+                  .map((c) => ({
+                    categoria: c.nombre || "Sin nombre",
+                    aporteTicket: parseFloat((ticketPond * (c.porcentaje || 0) / 100).toFixed(2)),
+                    porcentaje: c.porcentaje || 0,
+                  }));
+
+                const coherencia = precioMedioPlatos > 0 && ticketPond > 0
+                  ? Math.abs(ticketPond - precioMedioPlatos) / precioMedioPlatos * 100 : 0;
+
+                return (
+                  <section className="space-y-4">
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Justificación del ticket medio esperado a partir de la propuesta gastronómica.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold">{ticketPond.toFixed(2)}€</p><p className="text-xs text-muted-foreground">Ticket medio ponderado</p></CardContent></Card>
+                      <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold">{precioMedioPlatos.toFixed(2)}€</p><p className="text-xs text-muted-foreground">Precio medio platos destacados</p></CardContent></Card>
+                      <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold">{platosConPrecio.length > 0 ? `${precioMin.toFixed(0)}-${precioMax.toFixed(0)}€` : "—"}</p><p className="text-xs text-muted-foreground">Rango de precios platos</p></CardContent></Card>
+                      <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold">{propuesta.rangoPrecioMedio || "—"}</p><p className="text-xs text-muted-foreground">Rango medio declarado</p></CardContent></Card>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <Card>
+                        <CardHeader><CardTitle className="text-sm">Distribución de precios por rangos</CardTitle></CardHeader>
+                        <CardContent>
+                          {platosConPrecio.length > 0 ? (
+                            <ResponsiveContainer width="100%" height={260}>
+                              <BarChart data={distribucionPrecios}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="rango" tick={{ fontSize: 11 }} />
+                                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                                <Tooltip />
+                                <Bar dataKey="platos" fill="hsl(210 70% 55%)" radius={[4, 4, 0, 0]} />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          ) : (
+                            <div className="h-[260px] flex items-center justify-center text-sm text-muted-foreground">Sin platos con precio</div>
+                          )}
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader><CardTitle className="text-sm">Precio medio por categoría de plato</CardTitle></CardHeader>
+                        <CardContent>
+                          {precioMedioPorCategoria.length > 0 ? (
+                            <ResponsiveContainer width="100%" height={260}>
+                              <BarChart data={precioMedioPorCategoria} layout="vertical" margin={{ left: 10, right: 20 }}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis type="number" tick={{ fontSize: 11 }} unit="€" />
+                                <YAxis dataKey="categoria" type="category" width={100} tick={{ fontSize: 11 }} />
+                                <Tooltip formatter={(v: number) => `${v}€`} />
+                                <Bar dataKey="precioMedio" fill="hsl(40 90% 55%)" radius={[0, 4, 4, 0]} />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          ) : (
+                            <div className="h-[260px] flex items-center justify-center text-sm text-muted-foreground">Sin categorías</div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <Card>
+                        <CardHeader><CardTitle className="text-sm">Composición del ticket por categoría</CardTitle></CardHeader>
+                        <CardContent>
+                          {composicionTicket.length > 0 ? (
+                            <ResponsiveContainer width="100%" height={260}>
+                              <BarChart data={composicionTicket}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="categoria" tick={{ fontSize: 10 }} />
+                                <YAxis tick={{ fontSize: 11 }} unit="€" />
+                                <Tooltip formatter={(v: number, _n, props) => [`${v}€ (${(props as { payload?: { porcentaje?: number } })?.payload?.porcentaje}%)`, "Aporte al ticket"]} />
+                                <Bar dataKey="aporteTicket" radius={[4, 4, 0, 0]}>
+                                  {composicionTicket.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                                </Bar>
+                              </BarChart>
+                            </ResponsiveContainer>
+                          ) : (
+                            <div className="h-[260px] flex items-center justify-center text-sm text-muted-foreground">Sin mix definido</div>
+                          )}
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader><CardTitle className="text-sm">Ticket medio por pilar de facturación</CardTitle></CardHeader>
+                        <CardContent>
+                          {ticketPorPilar.length > 0 ? (
+                            <ResponsiveContainer width="100%" height={260}>
+                              <BarChart data={ticketPorPilar}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="pilar" tick={{ fontSize: 10 }} />
+                                <YAxis tick={{ fontSize: 11 }} unit="€" />
+                                <Tooltip formatter={(v: number) => `${v}€`} />
+                                <Bar dataKey="ticket" radius={[4, 4, 0, 0]}>
+                                  {ticketPorPilar.map((d) => <Cell key={d.key} fill={FACT_PILAR_COLORS[d.key]} />)}
+                                </Bar>
+                              </BarChart>
+                            </ResponsiveContainer>
+                          ) : (
+                            <div className="h-[260px] flex items-center justify-center text-sm text-muted-foreground">Sin datos por pilar</div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    <Card>
+                      <CardHeader><CardTitle className="text-sm">Lectura del ticket medio</CardTitle></CardHeader>
+                      <CardContent className="space-y-2 text-sm">
+                        {ticketPond > 0 && precioMedioPlatos > 0 ? (
+                          <p className="text-muted-foreground">
+                            El ticket medio ponderado de la facturación es <strong className="text-foreground">{ticketPond.toFixed(2)}€</strong> y el precio medio de los platos destacados es <strong className="text-foreground">{precioMedioPlatos.toFixed(2)}€</strong>.
+                            {coherencia < 25 ? (
+                              <span className="text-green-600"> Hay coherencia entre carta y ticket esperado ({coherencia.toFixed(0)}% de desviación).</span>
+                            ) : (
+                              <span className="text-yellow-600"> Existe una desviación del {coherencia.toFixed(0)}% entre el precio medio de la carta y el ticket esperado.</span>
+                            )}
+                          </p>
+                        ) : (
+                          <p className="text-muted-foreground">Sin datos suficientes para la lectura.</p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </section>
+                );
+              })()}
+            </TabsContent>
+          </Tabs>
+        </TabsContent>
+
+        {/* ── COSTES ── */}
+        <TabsContent value="costes">
+          <Tabs value={costesTab} onValueChange={(v) => setCostesTab(v as typeof costesTab)}>
+            <div className="flex items-end justify-between border-b">
+              <TabsList className="h-auto justify-start gap-6 rounded-none bg-transparent p-0">
+                <TabsTrigger value="pilares" className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none">
+                  <Layers className="h-4 w-4" />Pilares
+                </TabsTrigger>
+                <TabsTrigger value="equilibrio" className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none">
+                  <Target className="h-4 w-4" />Punto de equilibrio
+                </TabsTrigger>
+              </TabsList>
+              {costesTab === "pilares" && (
+                <div className="pb-2">
+                  <Select value={costesPeriodo} onValueChange={(v) => setCostesPeriodo(v as Periodo)}>
+                    <SelectTrigger className="w-40 h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="mensual">Mensual</SelectItem>
+                      <SelectItem value="trimestral">Trimestral</SelectItem>
+                      <SelectItem value="anual">Anual</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+
+            <TabsContent value="pilares" className="mt-4 space-y-4">
+              {(() => {
+                const cosFactor = PERIODO_FACTOR[costesPeriodo];
+                return (
+                  <>
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-base">Estructura de costes por pilares</CardTitle>
+                        <p className="text-xs text-muted-foreground mt-1">Despliega cada pilar para ver sus partidas.</p>
+                      </CardHeader>
+                      <CardContent>
+                        <table className="w-full text-sm">
+                          <thead><tr className="border-b bg-muted/40">
+                            <th className="text-left p-3 font-medium w-[28%]">Pilar / Partida</th>
+                            <th className="text-left p-3 font-medium">Coste fijo (€)</th>
+                            <th className="text-left p-3 font-medium">Variable (%)</th>
+                            <th className="text-left p-3 font-medium">Coste variable (estimado)</th>
+                            <th className="text-left p-3 font-medium">Total</th>
+                            <th className="w-10"></th>
+                          </tr></thead>
+                          <tbody>
+                            {(["generales", "personal", "producto", "marketing"] as PilarKey[]).map((key, i) => (
+                              <PilarBloqueReadOnly
+                                key={key}
+                                label={PILAR_NAMES[i]}
+                                pilar={costes[key]}
+                                ventas={ventas}
+                                factor={cosFactor}
+                              />
+                            ))}
+                            <tr className="bg-muted/30 font-semibold">
+                              <td className="p-3">TOTAL</td>
+                              <td className="p-3">{fmt(fijoTotal * cosFactor)}€</td>
+                              <td className="p-3">{variablePctTotal.toFixed(1)}%</td>
+                              <td className="p-3">{fmt(medio.varTotal * cosFactor)}€</td>
+                              <td className="p-3">{fmt(medio.costeTotal * cosFactor)}€</td>
+                              <td></td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </CardContent>
+                    </Card>
+
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <Card>
+                        <CardHeader><CardTitle className="text-sm">Peso de cada pilar de coste</CardTitle></CardHeader>
+                        <CardContent>
+                          {medio.costeTotal > 0 ? (
+                            <ResponsiveContainer width="100%" height={280}>
+                              <PieChart>
+                                <Pie
+                                  data={pieData.filter((d) => d.value > 0)}
+                                  dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100}
+                                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                                >
+                                  {pieData.filter((d) => d.value > 0).map((d, i) => {
+                                    const idx = PILAR_NAMES.indexOf(d.name);
+                                    return <Cell key={i} fill={PILAR_COLORS[idx >= 0 ? idx : i]} />;
+                                  })}
+                                </Pie>
+                                <Tooltip formatter={(v: number) => `${fmt(v)}€`} />
+                              </PieChart>
+                            </ResponsiveContainer>
+                          ) : (
+                            <div className="h-[280px] flex items-center justify-center text-sm text-muted-foreground">Sin costes definidos</div>
+                          )}
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader><CardTitle className="text-sm">Coste fijo vs variable por pilar</CardTitle></CardHeader>
+                        <CardContent>
+                          <ResponsiveContainer width="100%" height={280}>
+                            <BarChart data={(["generales", "personal", "producto", "marketing"] as PilarKey[]).map((key, i) => ({
+                              name: PILAR_NAMES[i],
+                              Fijo: pilarFijo(costes[key]),
+                              Variable: ventas * pilarVariablePct(costes[key]) / 100,
+                            }))}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                              <YAxis tick={{ fontSize: 11 }} />
+                              <Tooltip formatter={(v: number) => `${fmt(v)}€`} />
+                              <Legend />
+                              <Bar dataKey="Fijo" stackId="a" fill="hsl(210 70% 55%)" />
+                              <Bar dataKey="Variable" stackId="a" fill="hsl(40 90% 55%)" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </>
+                );
+              })()}
+            </TabsContent>
+
+            <TabsContent value="equilibrio" className="mt-4 space-y-4">
+              {(() => {
+                const tieneCostes = fijoTotal > 0 || variablePctTotal > 0;
+                const peValido = variablePctTotal < 100 && tieneCostes;
+                const clientesEquilibrioMes = peValido && ticketPond > 0 ? peMensual / ticketPond : 0;
+                const margenSeguridadPct = peValido && ventas > 0 ? ((ventas - peMensual) / ventas) * 100 : 0;
+                const sobreEquilibrio = ventas > peMensual;
+                const ventaMax = Math.max(ventas, peMensual, 1) * 1.5;
+                const breakEvenData = peValido
+                  ? Array.from({ length: 21 }, (_, i) => {
+                      const f = (ventaMax / 20) * i;
+                      return {
+                        facturacion: parseFloat(f.toFixed(0)),
+                        Facturación: parseFloat(f.toFixed(0)),
+                        "Coste total": parseFloat((fijoTotal + (f * variablePctTotal) / 100).toFixed(0)),
+                      };
+                    })
+                  : [];
+
+                return (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold">{peValido ? `${fmt(peMensual)}€` : "—"}</p><p className="text-xs text-muted-foreground">Facturación equilibrio /mes</p></CardContent></Card>
+                      <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold">{peValido ? `${fmt(peAnual)}€` : "—"}</p><p className="text-xs text-muted-foreground">Facturación equilibrio /año</p></CardContent></Card>
+                      <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold">{clientesEquilibrioMes > 0 ? fmt(clientesEquilibrioMes) : "—"}</p><p className="text-xs text-muted-foreground">Clientes equilibrio /mes</p></CardContent></Card>
+                      <Card><CardContent className="p-4 text-center"><p className={`text-2xl font-bold ${peValido && ventas > 0 ? (sobreEquilibrio ? "text-green-600" : "text-red-600") : ""}`}>{peValido && ventas > 0 ? `${margenSeguridadPct.toFixed(1)}%` : "—"}</p><p className="text-xs text-muted-foreground">Margen de seguridad</p></CardContent></Card>
+                    </div>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-sm">Facturación vs coste total</CardTitle>
+                        <p className="text-xs text-muted-foreground mt-1">El punto de equilibrio es el cruce entre las líneas.</p>
+                      </CardHeader>
+                      <CardContent>
+                        {peValido ? (
+                          <ResponsiveContainer width="100%" height={320}>
+                            <LineChart data={breakEvenData}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis dataKey="facturacion" tick={{ fontSize: 11 }} tickFormatter={(v) => `${fmt(v)}€`} />
+                              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${fmt(v)}€`} />
+                              <Tooltip formatter={(v: number) => `${fmt(v)}€`} labelFormatter={(v) => `Facturación: ${fmt(v as number)}€`} />
+                              <Legend />
+                              <Line type="monotone" dataKey="Facturación" stroke="hsl(210 70% 55%)" strokeWidth={2} dot={false} />
+                              <Line type="monotone" dataKey="Coste total" stroke="hsl(0 70% 55%)" strokeWidth={2} dot={false} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="h-[320px] flex items-center justify-center text-sm text-muted-foreground">
+                            {variablePctTotal >= 100 ? "El % variable supera el 100%" : "Sin costes definidos"}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader><CardTitle className="text-sm">Lectura del punto de equilibrio</CardTitle></CardHeader>
+                      <CardContent className="space-y-2 text-sm">
+                        {peValido ? (
+                          <>
+                            <p className="text-muted-foreground">
+                              Para cubrir todos los costes el local necesita facturar al menos <strong className="text-foreground">{fmt(peMensual)}€/mes</strong> ({fmt(peAnual)}€/año)
+                              {ticketPond > 0 && (
+                                <>, lo que equivale a <strong className="text-foreground">{fmt(clientesEquilibrioMes)} clientes/mes</strong> con el ticket medio actual de {ticketPond.toFixed(2)}€</>
+                              )}.
+                            </p>
+                            {ventas > 0 && (sobreEquilibrio ? (
+                              <p className="text-muted-foreground">Con la facturación estimada de <strong className="text-foreground">{fmt(ventas)}€/mes</strong>, opera <span className="text-green-600">{margenSeguridadPct.toFixed(1)}% por encima</span> del punto de equilibrio.</p>
+                            ) : (
+                              <p className="text-muted-foreground">Con la facturación estimada de <strong className="text-foreground">{fmt(ventas)}€/mes</strong>, opera <span className="text-red-600">{Math.abs(margenSeguridadPct).toFixed(1)}% por debajo</span> del punto de equilibrio.</p>
+                            ))}
+                          </>
+                        ) : (
+                          <p className="text-muted-foreground">Sin datos suficientes.</p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </>
+                );
+              })()}
+            </TabsContent>
+          </Tabs>
+        </TabsContent>
+
+        {/* ── INVERSIÓN ── */}
+        <TabsContent value="inversion">
+          <Tabs defaultValue="procedencia">
+            <TabsList className="h-auto w-full justify-start gap-6 rounded-none border-b bg-transparent p-0">
+              <TabsTrigger value="procedencia" className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none">
+                <Landmark className="h-4 w-4" />Procedencia
+              </TabsTrigger>
+              <TabsTrigger value="destino" className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none">
+                <Target className="h-4 w-4" />Destino
+              </TabsTrigger>
+              <TabsTrigger value="amortizacion" className="h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 font-medium text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none">
+                <Clock className="h-4 w-4" />Amortización
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="procedencia" className="mt-4">
+              <ProcedenciaTab lineas={procedencia} onChange={noop} readOnly />
+            </TabsContent>
+            <TabsContent value="destino" className="mt-4">
+              <DestinoTab lineas={destinos} onChange={noop} totalCapital={inversionTotal} readOnly />
+            </TabsContent>
+            <TabsContent value="amortizacion" className="mt-4">
+              <AmortizacionTab lineas={amortizacion} onChange={noop} readOnly />
+            </TabsContent>
+          </Tabs>
+        </TabsContent>
+      </Tabs>
+
+      <footer className="text-center text-xs text-muted-foreground pt-4">
+        Documento confidencial · solo lectura
       </footer>
-    </main>
-  );
-}
-
-/* ── Subcomponentes presentacionales ── */
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="max-w-5xl mx-auto px-6 py-8">
-      <h2 className="text-xl font-bold mb-4">{title}</h2>
-      {children}
-    </section>
-  );
-}
-
-function Grid({ children }: { children: React.ReactNode }) {
-  return <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">{children}</div>;
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md bg-white border px-3 py-2">
-      <div className="text-[11px] uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="text-sm font-medium text-slate-800">{value}</div>
     </div>
   );
 }
 
-function Kpi({ label, value, hint, positive }: { label: string; value: string; hint?: string; positive?: boolean }) {
+/* ── Editor de datos del proyecto (read-only) ── */
+function DatosEditorReadOnly({ datos }: { datos: DatosProyecto }) {
+  const textFields: { key: keyof DatosProyecto; label: string }[] = [
+    { key: "nombre", label: "Nombre" },
+    { key: "ciudad", label: "Ciudad" },
+    { key: "zona", label: "Zona" },
+    { key: "afluencia", label: "Afluencia" },
+    { key: "tipoLocal", label: "Tipo de local" },
+    { key: "estacionalidad", label: "Estacionalidad" },
+  ];
+  const numberFields: { key: keyof DatosProyecto; label: string; suffix?: string }[] = [
+    { key: "poblacion", label: "Población" },
+    { key: "metrosCuadrados", label: "m²" },
+    { key: "ventasEstimadas", label: "Ventas estimadas", suffix: "€/mes" },
+    { key: "ticketMedio", label: "Ticket medio", suffix: "€" },
+    { key: "clientesEstimados", label: "Clientes estimados", suffix: "/mes" },
+  ];
   return (
-    <div className="rounded-xl bg-white border p-4 shadow-sm">
-      <div className="text-xs uppercase tracking-wide text-slate-500">{label}</div>
-      <div className={`text-2xl font-bold ${positive === undefined ? "" : positive ? "text-green-600" : "text-red-600"}`}>{value}</div>
-      {hint ? <div className="text-[11px] text-slate-400 mt-0.5">{hint}</div> : null}
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+        {textFields.map((f) => (
+          <div key={f.key}>
+            <Label className="text-muted-foreground text-xs">{f.label}</Label>
+            <Input disabled value={(datos[f.key] as string) ?? ""} />
+          </div>
+        ))}
+        {numberFields.map((f) => (
+          <div key={f.key}>
+            <Label className="text-muted-foreground text-xs">
+              {f.label}{f.suffix ? ` (${f.suffix})` : ""}
+            </Label>
+            <Input disabled type="number" value={(datos[f.key] as number) || ""} />
+          </div>
+        ))}
+      </div>
+      <div>
+        <Label className="text-muted-foreground text-xs">Competencia</Label>
+        <Input disabled value={datos.competencia} />
+      </div>
+      <div>
+        <Label className="text-muted-foreground text-xs">Observaciones</Label>
+        <Textarea disabled value={datos.observaciones ?? ""} rows={3} />
+      </div>
     </div>
   );
 }
 
-function Tabla({
-  cabeceras,
-  filas,
-  totales,
-}: {
-  cabeceras: string[];
-  filas: string[][];
-  totales?: string[];
-}) {
+/* ── Bloque de pilar de costes (read-only) ── */
+function PilarBloqueReadOnly({
+  label, pilar, ventas, factor = 1,
+}: { label: string; pilar: CostePilar; ventas: number; factor?: number }) {
+  const [open, setOpen] = useState(false);
+  const fijo = pilarFijo(pilar);
+  const variablePct = pilarVariablePct(pilar);
+  const total = calcularPilar(ventas, pilar);
+
   return (
-    <div className="overflow-x-auto rounded-lg border bg-white">
-      <table className="w-full text-sm">
-        <thead className="bg-slate-50 text-slate-600 text-xs uppercase">
-          <tr>
-            {cabeceras.map((c, i) => (
-              <th key={i} className={`px-3 py-2 ${i === cabeceras.length - 1 ? "text-right" : "text-left"}`}>{c}</th>
-            ))}
+    <>
+      <tr className="border-b cursor-pointer hover:bg-muted/30" onClick={() => setOpen((v) => !v)}>
+        <td className="p-3 font-medium">
+          <div className="flex items-center gap-2">
+            {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            <span>{label}</span>
+            <span className="text-xs text-muted-foreground font-normal">
+              ({pilar.partidas.length} {pilar.partidas.length === 1 ? "partida" : "partidas"})
+            </span>
+          </div>
+        </td>
+        <td className="p-3 text-muted-foreground">{fmt(fijo * factor)}€</td>
+        <td className="p-3 text-muted-foreground">{variablePct.toFixed(1)}%</td>
+        <td className="p-3 text-muted-foreground">{fmt((ventas * variablePct / 100) * factor)}€</td>
+        <td className="p-3 font-semibold">{fmt(total * factor)}€</td>
+        <td className="p-3"></td>
+      </tr>
+      {open && pilar.partidas.map((p) => (
+        <tr key={p.id} className="border-b bg-muted/10">
+          <td className="p-2 pl-10">
+            <Input disabled className="h-8 text-sm" value={p.nombre} />
+          </td>
+          <td className="p-2"><Input disabled type="number" className="h-8 w-28 text-sm" value={p.fijo} /></td>
+          <td className="p-2"><Input disabled type="number" className="h-8 w-20 text-sm" value={p.variablePct} /></td>
+          <td className="p-2 text-muted-foreground">{fmt((ventas * p.variablePct / 100) * factor)}€</td>
+          <td className="p-2">{fmt((p.fijo + ventas * p.variablePct / 100) * factor)}€</td>
+          <td className="p-2"></td>
+        </tr>
+      ))}
+    </>
+  );
+}
+
+/* ── Bloque de pilar de facturación (read-only) ── */
+function PilarFactBloqueReadOnly({
+  label, pilar, ventasTotal, factor = 1,
+}: { label: string; pilar: FacturacionPilar; ventasTotal: number; factor?: number }) {
+  const [open, setOpen] = useState(false);
+  const clientesPilar = pilarFactClientes(pilar);
+  const totalPilar = pilarFactTotal(pilar);
+  const ticketPilar = pilarFactTicketPonderado(pilar);
+  const pctPilar = ventasTotal > 0 ? (totalPilar / ventasTotal) * 100 : 0;
+
+  return (
+    <>
+      <tr className="border-b cursor-pointer hover:bg-muted/30" onClick={() => setOpen((v) => !v)}>
+        <td className="p-3 font-medium">
+          <div className="flex items-center gap-2">
+            {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            <span>{label}</span>
+            <span className="text-xs text-muted-foreground font-normal">
+              ({pilar.partidas.length} {pilar.partidas.length === 1 ? "partida" : "partidas"})
+            </span>
+          </div>
+        </td>
+        <td className="p-3 text-muted-foreground">{fmt(clientesPilar * factor)}</td>
+        <td className="p-3 text-muted-foreground">{ticketPilar.toFixed(2)}€</td>
+        <td className="p-3 text-right font-semibold">{fmt(totalPilar * factor)}€</td>
+        <td className="p-3 text-right text-muted-foreground">{pctPilar.toFixed(1)}%</td>
+        <td className="p-3"></td>
+      </tr>
+      {open && pilar.partidas.map((p) => {
+        const total = (p.clientesEsperados || 0) * (p.ticketMedio || 0);
+        const pct = ventasTotal > 0 ? (total / ventasTotal) * 100 : 0;
+        return (
+          <tr key={p.id} className="border-b bg-muted/10">
+            <td className="p-2 pl-10"><Input disabled className="h-8 text-sm" value={p.nombre} /></td>
+            <td className="p-2"><Input disabled type="number" className="h-8 w-32 text-sm" value={p.clientesEsperados || ""} /></td>
+            <td className="p-2"><Input disabled type="number" className="h-8 w-28 text-sm" value={p.ticketMedio || ""} /></td>
+            <td className="p-2 text-right font-medium">{fmt(total * factor)}€</td>
+            <td className="p-2 text-right text-muted-foreground">{pct.toFixed(1)}%</td>
+            <td className="p-2"></td>
           </tr>
-        </thead>
-        <tbody>
-          {filas.map((fila, r) => (
-            <tr key={r} className="border-t">
-              {fila.map((celda, c) => (
-                <td key={c} className={`px-3 py-2 ${c === fila.length - 1 ? "text-right font-medium" : ""}`}>{celda}</td>
-              ))}
-            </tr>
-          ))}
-          {totales ? (
-            <tr className="border-t bg-slate-50 font-semibold">
-              {totales.map((t, i) => (
-                <td key={i} className={`px-3 py-2 ${i === totales.length - 1 ? "text-right" : ""}`}>{t}</td>
-              ))}
-            </tr>
-          ) : null}
-        </tbody>
-      </table>
-    </div>
+        );
+      })}
+    </>
   );
 }

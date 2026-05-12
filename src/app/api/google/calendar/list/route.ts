@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getGoogleTokens, googleFetch } from "@/lib/google/api";
+import { googleFetchAuto } from "@/lib/google/api";
 
 type CalendarListResponse = {
   items?: GoogleCalendar[];
@@ -17,21 +17,22 @@ type GoogleCalendar = {
 };
 
 export async function GET() {
-  const { accessToken } = await getGoogleTokens();
-  if (!accessToken) {
-    return NextResponse.json({ connected: false, calendarios: [] });
-  }
-
-  const data = await googleFetch<CalendarListResponse>(
+  const r = await googleFetchAuto<CalendarListResponse>(
     "https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader",
-    accessToken,
   );
 
-  if (!data || !data.items) {
+  if (r.needsReauth) {
+    return NextResponse.json(
+      { connected: false, needsReauth: true, calendarios: [] },
+      { status: 401 },
+    );
+  }
+
+  if (!r.data || !r.data.items) {
     return NextResponse.json({ connected: true, calendarios: [] });
   }
 
-  const calendarios = data.items.map((c) => ({
+  const calendarios = r.data.items.map((c) => ({
     id: c.id,
     nombre: c.summary,
     descripcion: c.description,

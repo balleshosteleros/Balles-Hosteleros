@@ -23,9 +23,10 @@ interface Props {
   lineas: LineaDestino[];
   onChange: (l: LineaDestino[]) => void;
   totalCapital: number;
+  readOnly?: boolean;
 }
 
-export function DestinoTab({ lineas, onChange, totalCapital }: Props) {
+export function DestinoTab({ lineas, onChange, totalCapital, readOnly = false }: Props) {
   const [editing, setEditing] = useState<LineaDestino | null>(null);
   const [isNew, setIsNew] = useState(false);
 
@@ -95,7 +96,9 @@ export function DestinoTab({ lineas, onChange, totalCapital }: Props) {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Destino de la inversión</CardTitle>
-          <Button variant="primary" size="sm" onClick={openNew}><Plus className="h-4 w-4" />Nuevo</Button>
+          {!readOnly && (
+            <Button variant="primary" size="sm" onClick={openNew}><Plus className="h-4 w-4" />Nuevo</Button>
+          )}
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -129,8 +132,12 @@ export function DestinoTab({ lineas, onChange, totalCapital }: Props) {
                     <td className="p-2 text-right">{l.ivaPct}%</td>
                     <td className="p-2 text-right font-semibold">{fmt(l.total)}€</td>
                     <td className="p-2 flex gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(l)}><Pencil className="h-3.5 w-3.5" /></Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => remove(l.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                      {!readOnly && (
+                        <>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(l)}><Pencil className="h-3.5 w-3.5" /></Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => remove(l.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))}
