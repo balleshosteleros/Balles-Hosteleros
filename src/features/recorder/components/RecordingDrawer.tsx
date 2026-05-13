@@ -20,9 +20,10 @@ import {
   Copy,
   Check,
   X,
-  Library,
+  FileVideo,
+  ExternalLink,
+  Trash2,
 } from "lucide-react";
-import Link from "next/link";
 import {
   Sheet,
   SheetContent,
@@ -37,16 +38,24 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useRecordingStore } from "../store/recording-store";
-import { useScreenRecorder, formatDuration, type RecordOptions } from "../hooks/useScreenRecorder";
+import { useRecorder, formatDuration } from "../contexts/recorder-context";
 
 export function RecordingDrawer() {
   const { isDrawerOpen, setDrawerOpen, state } = useRecordingStore();
-  
+  const { reset } = useRecorder();
+
+  function handleOpenChange(open: boolean) {
+    if (!open && (state === "done" || state === "error")) {
+      reset();
+    }
+    setDrawerOpen(open);
+  }
+
   return (
-    <Sheet open={isDrawerOpen} onOpenChange={setDrawerOpen}>
-      <SheetContent side="right" className="flex flex-col gap-0 p-0 sm:max-w-md [&>button]:hidden">
+    <Sheet open={isDrawerOpen} onOpenChange={handleOpenChange}>
+      <SheetContent side="right" className="flex flex-col gap-0 p-0 [&>button]:hidden">
         <SheetTitle className="sr-only">Grabadora de Pantalla</SheetTitle>
-        
+
         <SheetHeader className="border-b px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -61,11 +70,10 @@ export function RecordingDrawer() {
                 )} />
               </div>
               <div>
-                <h3 className="font-semibold text-sm">ReelForge Recorder</h3>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Grabación de pantalla</p>
+                <h3 className="font-semibold text-sm">Grabación de pantalla</h3>
               </div>
             </div>
-            
+
             <SheetClose asChild>
               <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
                 <X className="h-4 w-4" />
@@ -83,19 +91,14 @@ export function RecordingDrawer() {
 }
 
 function RecordingContent() {
+  const { state } = useRecordingStore();
   const [title, setTitle] = useState("");
-  const [options, setOptions] = useState<RecordOptions>({
-    includeSystemAudio: true,
-    includeMic: true,
-    includeCamera: false,
-    quality: "1080p",
-  });
   const [copied, setCopied] = useState(false);
   const videoPreviewRef = useRef<HTMLVideoElement>(null);
 
   const {
-    state,
-    elapsed,
+    options,
+    toggleOption,
     error,
     result,
     previewUrl,
@@ -104,7 +107,9 @@ function RecordingContent() {
     resumeRecording,
     stopRecording,
     reset,
-  } = useScreenRecorder(options);
+  } = useRecorder();
+
+  const { elapsed } = useRecordingStore();
 
   useEffect(() => {
     if (previewUrl && videoPreviewRef.current) {
@@ -112,14 +117,10 @@ function RecordingContent() {
     }
   }, [previewUrl]);
 
-  function toggleOption(key: keyof RecordOptions) {
-    setOptions((prev) => ({ ...prev, [key]: !prev[key] }));
-  }
-
   async function handleCopyLink() {
     if (!result) return;
-    const shareUrl = result.url.startsWith("blob:") 
-      ? result.url 
+    const shareUrl = result.url.startsWith("blob:")
+      ? result.url
       : `${window.location.origin}${result.url}`;
     await navigator.clipboard.writeText(shareUrl);
     setCopied(true);
@@ -150,7 +151,7 @@ function RecordingContent() {
             <OptionToggle
               icon={Volume2}
               iconOff={VolumeX}
-              label="Audio del sistema"
+              label="Sonido"
               description="Captura el sonido de tu PC"
               enabled={options.includeSystemAudio}
               onToggle={() => toggleOption("includeSystemAudio")}
@@ -166,8 +167,8 @@ function RecordingContent() {
             <OptionToggle
               icon={Camera}
               iconOff={CameraOff}
-              label="Cámara web"
-              description="Burbuja de cámara (PiP)"
+              label="Cámara"
+              description="Burbuja de cámara"
               enabled={options.includeCamera}
               onToggle={() => toggleOption("includeCamera")}
             />
@@ -181,6 +182,8 @@ function RecordingContent() {
           <Circle className="h-5 w-5 fill-white animate-pulse text-white" />
           Iniciar Grabación
         </Button>
+
+        <RecordingsList />
       </div>
     );
   }
@@ -317,21 +320,32 @@ function RecordingContent() {
           </Button>
         </div>
 
-        <div className="pt-2 border-t space-y-3">
-          <SheetClose asChild>
-            <Link href="/mi-panel/grabaciones" className="block">
-              <Button variant="ghost" className="w-full gap-2 text-primary hover:text-primary hover:bg-primary/5 font-semibold">
-                <Library className="h-4 w-4" />
-                Ver todas las grabaciones
-              </Button>
-            </Link>
-          </SheetClose>
-
+        <div className="pt-2 border-t">
           <Button variant="ghost" className="w-full gap-2 text-muted-foreground" onClick={reset}>
             <RotateCcw className="h-4 w-4" />
             Grabar otro video
           </Button>
         </div>
+
+        <RecordingsList />
+      </div>
+    );
+  }
+
+  if (state === "done" && !result) {
+    return (
+      <div className="space-y-6">
+        <div className="py-8 text-center space-y-3">
+          <h3 className="text-lg font-bold">Grabación anterior cerrada</h3>
+          <p className="text-sm text-muted-foreground">
+            Sigue disponible abajo en tus grabaciones guardadas.
+          </p>
+          <Button variant="outline" onClick={reset} className="gap-2">
+            <RotateCcw className="h-4 w-4" />
+            Nueva grabación
+          </Button>
+        </div>
+        <RecordingsList />
       </div>
     );
   }
@@ -357,7 +371,14 @@ function OptionToggle({
   description,
   enabled,
   onToggle,
-}: any) {
+}: {
+  icon: typeof Camera;
+  iconOff: typeof CameraOff;
+  label: string;
+  description: string;
+  enabled: boolean;
+  onToggle: () => void;
+}) {
   return (
     <button
       type="button"
@@ -380,5 +401,119 @@ function OptionToggle({
         <p className="text-xs text-muted-foreground">{description}</p>
       </div>
     </button>
+  );
+}
+
+interface SavedRecording {
+  id: string;
+  title: string;
+  url: string;
+  duration: number;
+  file_size: number;
+  created_at: string;
+}
+
+function RecordingsList() {
+  const [recordings, setRecordings] = useState<SavedRecording[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/recordings")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (alive && Array.isArray(data)) setRecordings(data);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  async function handleDelete(id: string) {
+    if (!confirm("¿Eliminar esta grabación?")) return;
+    const res = await fetch("/api/recordings", {
+      method: "DELETE",
+      body: JSON.stringify({ id }),
+    });
+    if (res.ok) setRecordings((prev) => prev.filter((r) => r.id !== id));
+  }
+
+  return (
+    <div className="space-y-3 pt-4 border-t">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold">Mis grabaciones</p>
+        <span className="text-[11px] text-muted-foreground">{recordings.length}</span>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-6 text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+        </div>
+      ) : recordings.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-6 text-center">
+          <FileVideo className="h-6 w-6 text-muted-foreground/40 mb-1" />
+          <p className="text-xs text-muted-foreground">Aún no hay grabaciones</p>
+        </div>
+      ) : (
+        <div className="space-y-1.5 max-h-[40vh] overflow-y-auto pr-1">
+          {recordings.map((rec) => (
+            <div
+              key={rec.id}
+              className="flex items-center gap-2 p-2 rounded-md border border-border/60 hover:bg-muted/40 transition-colors"
+            >
+              <div className="w-8 h-8 rounded bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+                <FileVideo className="h-4 w-4" />
+              </div>
+              <a
+                href={rec.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 min-w-0 group"
+                title={rec.title}
+              >
+                <p className="text-xs font-medium truncate group-hover:text-primary transition-colors">
+                  {rec.title}
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  {new Date(rec.created_at).toLocaleDateString("es-ES")} · {formatDuration(rec.duration)}
+                </p>
+              </a>
+              <a
+                href={rec.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary"
+                title="Abrir"
+                aria-label="Abrir"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+              <a
+                href={rec.url}
+                download={`${rec.title}.webm`}
+                className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary"
+                title="Descargar"
+                aria-label="Descargar"
+              >
+                <Download className="h-3.5 w-3.5" />
+              </a>
+              <button
+                type="button"
+                onClick={() => handleDelete(rec.id)}
+                className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                title="Eliminar"
+                aria-label="Eliminar"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

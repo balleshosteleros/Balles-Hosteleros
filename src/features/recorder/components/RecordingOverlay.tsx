@@ -19,7 +19,7 @@ export function RecordingOverlay() {
           <span className="text-[10px] font-bold tracking-[0.2em] uppercase">Recording</span>
         </div>
         <div className="w-px h-3 bg-white/20" />
-        <span className="text-[10px] font-medium text-white/70">ReelForge Recorder</span>
+        <span className="text-[10px] font-medium text-white/70">Grabación de pantalla</span>
       </div>
     </div>
   );
