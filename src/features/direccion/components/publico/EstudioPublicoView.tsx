@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createAnonClient } from "@/lib/supabase/anon";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,6 +68,28 @@ type KpiKey = "facturacion" | "costeTotal" | "beneficio" | "margen";
 export function EstudioPublicoView({ data }: { data: EstudioPublico }) {
   const { estudio } = data;
   const { datos, facturacion, costes, procedencia, destinos, amortizacion, local, imagenMarca, propuesta, ocupacion } = estudio;
+  const router = useRouter();
+
+  // Realtime: refresca el server component cuando el dueño edita el estudio.
+  useEffect(() => {
+    const sb = createAnonClient();
+    const channel = sb
+      .channel(`estudio-publico-${estudio.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "estudios_apertura",
+          filter: `id=eq.${estudio.id}`,
+        },
+        () => router.refresh(),
+      )
+      .subscribe();
+    return () => {
+      void sb.removeChannel(channel);
+    };
+  }, [estudio.id, router]);
 
   const [periodo, setPeriodo] = useState<Periodo>("mensual");
   const [hoveredKpi, setHoveredKpi] = useState<KpiKey | null>(null);
@@ -132,33 +156,36 @@ export function EstudioPublicoView({ data }: { data: EstudioPublico }) {
 
   return (
     <div className="p-6 space-y-6 min-h-screen bg-slate-50">
-      {/* Cabecera con nombre, foto + estados */}
-      <div className="flex items-center gap-3">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold tracking-tight truncate">{datos.nombre}</h1>
-          <p className="text-muted-foreground text-sm truncate">
-            {datos.ciudad}{datos.zona ? ` — ${datos.zona}` : ""}
-          </p>
+      {/* Cabecera: título + estados a la izquierda, foto reducida a la derecha */}
+      <div className="flex flex-col md:flex-row md:items-start gap-4">
+        <div className="min-w-0 flex-1 space-y-3">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold tracking-tight truncate">{datos.nombre}</h1>
+            <p className="text-muted-foreground text-sm truncate">
+              {datos.ciudad}{datos.zona ? ` — ${datos.zona}` : ""}
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${estudio.viabilidad === "viable" ? "bg-green-500 text-white" : "bg-red-500 text-white"}`}>
+              {estudio.viabilidad === "viable" ? "Viable" : "No viable"}
+            </span>
+            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${estudio.actividad === "activo" ? "bg-blue-500 text-white" : "bg-gray-400 text-white"}`}>
+              {estudio.actividad === "activo" ? "Activo" : "No activo"}
+            </span>
+          </div>
         </div>
-        <div className="ml-auto flex items-center gap-1.5 shrink-0">
-          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${estudio.viabilidad === "viable" ? "bg-green-500 text-white" : "bg-red-500 text-white"}`}>
-            {estudio.viabilidad === "viable" ? "Viable" : "No viable"}
-          </span>
-          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${estudio.actividad === "activo" ? "bg-blue-500 text-white" : "bg-gray-400 text-white"}`}>
-            {estudio.actividad === "activo" ? "Activo" : "No activo"}
-          </span>
-        </div>
+
+        {estudio.imagen ? (
+          <div className="shrink-0 w-full md:w-96 lg:w-[28rem] rounded-xl overflow-hidden border shadow-sm md:ml-auto">
+            <img src={estudio.imagen} alt={datos.nombre} className="w-full h-32 md:h-36 lg:h-40 object-cover" />
+          </div>
+        ) : null}
       </div>
 
-      {estudio.imagen ? (
-        <div className="rounded-xl overflow-hidden border shadow-sm">
-          <img src={estudio.imagen} alt={datos.nombre} className="w-full h-56 md:h-72 object-cover" />
-        </div>
-      ) : null}
-
       <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as typeof mainTab)}>
-        <div className="flex items-center justify-between gap-3">
-          <TabsList className="h-11 gap-1 rounded-xl border bg-muted/50 p-1 shadow-sm flex flex-wrap">
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+          <div />
+          <TabsList className="h-11 gap-1 rounded-xl border bg-muted/50 p-1 shadow-sm flex flex-wrap justify-self-center">
             <TabsTrigger value="datos" className="h-9 gap-1.5 rounded-lg px-4 font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md">
               <FileText className="h-4 w-4" />Datos
             </TabsTrigger>
@@ -178,18 +205,20 @@ export function EstudioPublicoView({ data }: { data: EstudioPublico }) {
               <Landmark className="h-4 w-4" />Inversión
             </TabsTrigger>
           </TabsList>
-          {mainTab === "escenarios" && (
-            <Select value={periodo} onValueChange={(v) => setPeriodo(v as Periodo)}>
-              <SelectTrigger className="w-40 h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="mensual">Mensual</SelectItem>
-                <SelectItem value="trimestral">Trimestral</SelectItem>
-                <SelectItem value="anual">Anual</SelectItem>
-              </SelectContent>
-            </Select>
-          )}
+          <div className="justify-self-end">
+            {mainTab === "escenarios" && (
+              <Select value={periodo} onValueChange={(v) => setPeriodo(v as Periodo)}>
+                <SelectTrigger className="w-40 h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="mensual">Mensual</SelectItem>
+                  <SelectItem value="trimestral">Trimestral</SelectItem>
+                  <SelectItem value="anual">Anual</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          </div>
         </div>
 
         {/* ── ESCENARIOS ── */}
