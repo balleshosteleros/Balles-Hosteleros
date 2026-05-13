@@ -84,3 +84,7 @@ scratch/
 CHANGELOG_*.md
 CONTINUA_CONTEXTO.md
 middleware.ts
+
+# Descargas a medias del navegador
+*.crdownload
+Sin confirmar*
