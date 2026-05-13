@@ -121,6 +121,8 @@ import { AgendaDrawer } from "@/features/agenda/components/AgendaDrawer";
 import { RecordingTrigger } from "@/features/recorder/components/RecordingTrigger";
 import { RecordingDrawer } from "@/features/recorder/components/RecordingDrawer";
 import { RecordingOverlay } from "@/features/recorder/components/RecordingOverlay";
+import { WebcamPip } from "@/features/recorder/components/WebcamPip";
+import { RecorderProvider } from "@/features/recorder/contexts/recorder-context";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import type { AccesoApp } from "@/features/rrhh/data/accesos-apps";
 import { listAccesosApps } from "@/features/rrhh/actions/accesos-apps-actions";
@@ -142,7 +144,6 @@ const ROUTE_TITLES: Record<string, string> = {
   "/mi-panel/formacion/curso": "CURSO",
   "/mi-panel/points": "POINTS",
   "/mi-panel/datos-personales": "DATOS PERSONALES",
-  "/mi-panel/grabaciones": "MIS GRABACIONES",
   "/mis-departamentos": "MIS DEPARTAMENTOS",
   "/gerencia": "GERENCIA",
   "/direccion/estructura": "ORGANIGRAMA",
@@ -513,6 +514,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
+    <RecorderProvider>
     <SidebarProvider>
       <div className="h-screen flex w-full overflow-hidden">
         <AppSidebar />
@@ -569,7 +571,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       </Button>
                     </MeetDrawer>
 
-                    {/* ReelForge Recorder */}
+                    {/* Grabación de pantalla */}
                     <RecordingTrigger />
 
                     {/* Separador visual */}
@@ -921,6 +923,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
       <RecordingDrawer />
       <RecordingOverlay />
+      <WebcamPip />
     </SidebarProvider>
+    </RecorderProvider>
   );
 }
