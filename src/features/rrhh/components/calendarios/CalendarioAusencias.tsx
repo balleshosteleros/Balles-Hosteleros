@@ -5,10 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Search, Plus, CalendarDays, List, ChevronLeft, ChevronRight, AlertCircle, Info } from "lucide-react";
+import { Search, Plus, CalendarDays, List, AlertCircle, Info } from "lucide-react";
 import { ConfigButton } from "@/shared/components/config-button";
 import { CalendarioConfig } from "./CalendarioConfig";
 import { getFestivoEnFecha } from "@/features/rrhh/data/calendarios";
+import { CalendarRangeToggle, CalendarRangeNav } from "@/shared/components/calendar/CalendarRangeToggle";
+import { useCalendarRange, type CalendarRangeMode } from "@/shared/components/calendar/calendar-range";
+import { cn } from "@/lib/utils";
 
 interface AusenciaItem {
   id: string;
@@ -49,6 +52,10 @@ const TIPO_FESTIVO_LABEL: Record<string, string> = {
   local: "Local",
 };
 
+const DIAS_SHORT = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+const DIAS_INI = ["L", "M", "X", "J", "V", "S", "D"];
+const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
 interface Props {
   modalidad: string;
   titulo: string;
@@ -66,59 +73,57 @@ function getDaysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate();
 }
 
-function getFirstDayOfMonth(year: number, month: number) {
-  return new Date(year, month, 1).getDay();
+function getFirstDayMon(year: number, month: number) {
+  const day = new Date(year, month, 1).getDay();
+  return day === 0 ? 6 : day - 1;
+}
+
+function rangeMonths(mode: CalendarRangeMode, anchor: Date): { year: number; month: number }[] {
+  if (mode === "TRIMESTRAL") {
+    const q = Math.floor(anchor.getMonth() / 3) * 3;
+    return Array.from({ length: 3 }, (_, i) => ({ year: anchor.getFullYear(), month: q + i }));
+  }
+  if (mode === "SEMESTRAL") {
+    const s = anchor.getMonth() < 6 ? 0 : 6;
+    return Array.from({ length: 6 }, (_, i) => ({ year: anchor.getFullYear(), month: s + i }));
+  }
+  if (mode === "ANUAL") {
+    return Array.from({ length: 12 }, (_, i) => ({ year: anchor.getFullYear(), month: i }));
+  }
+  return [{ year: anchor.getFullYear(), month: anchor.getMonth() }];
 }
 
 export function CalendarioAusencias({ modalidad, titulo, items, botonNuevo, columnaExtra, empresaId }: Props) {
   const [busqueda, setBusqueda] = useState("");
   const [vista, setVista] = useState<"calendario" | "lista">("calendario");
   const [showConfig, setShowConfig] = useState(false);
-  const [mesActual, setMesActual] = useState(() => {
-    const now = new Date();
-    return { year: 2026, month: now.getMonth() <= 3 ? 3 : now.getMonth() };
-  });
+  const rango = useCalendarRange("MENSUAL");
 
   const filtradas = useMemo(() =>
     items.filter(v => !busqueda || v.empleadoNombre.toLowerCase().includes(busqueda.toLowerCase())),
     [items, busqueda]
   );
 
-  const cambiarMes = (dir: number) => {
-    setMesActual(prev => {
-      let m = prev.month + dir;
-      let y = prev.year;
-      if (m < 0) { m = 11; y--; }
-      if (m > 11) { m = 0; y++; }
-      return { year: y, month: m };
-    });
-  };
-
-  const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-
-  const daysInMonth = getDaysInMonth(mesActual.year, mesActual.month);
-  const firstDay = getFirstDayOfMonth(mesActual.year, mesActual.month);
-  const adjustedFirstDay = firstDay === 0 ? 6 : firstDay - 1;
-
-  const diasConEvento = useMemo(() => {
-    const map = new Map<number, AusenciaItem[]>();
+  const eventosPorFecha = useMemo(() => {
+    const map = new Map<string, AusenciaItem[]>();
     filtradas.forEach(item => {
       const start = new Date(item.fechaInicio);
       const end = item.fechaFin ? new Date(item.fechaFin) : new Date(item.fechaInicio);
       const d = new Date(start);
       while (d <= end) {
-        if (d.getFullYear() === mesActual.year && d.getMonth() === mesActual.month) {
-          const day = d.getDate();
-          if (!map.has(day)) map.set(day, []);
-          map.get(day)!.push(item);
-        }
+        const key = toISO(d.getFullYear(), d.getMonth(), d.getDate());
+        if (!map.has(key)) map.set(key, []);
+        map.get(key)!.push(item);
         d.setDate(d.getDate() + 1);
       }
     });
     return map;
-  }, [filtradas, mesActual]);
+  }, [filtradas]);
 
   if (showConfig) return <CalendarioConfig modalidad={modalidad} onBack={() => setShowConfig(false)} />;
+
+  const meses = rangeMonths(rango.mode, rango.anchor);
+  const esMultiMes = rango.mode === "TRIMESTRAL" || rango.mode === "SEMESTRAL" || rango.mode === "ANUAL";
 
   return (
     <div className="space-y-4">
@@ -141,84 +146,62 @@ export function CalendarioAusencias({ modalidad, titulo, items, botonNuevo, colu
 
       {vista === "calendario" ? (
         <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center justify-between mb-4">
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => cambiarMes(-1)}><ChevronLeft className="h-4 w-4" /></Button>
-              <span className="text-sm font-semibold">{meses[mesActual.month]} {mesActual.year}</span>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => cambiarMes(1)}><ChevronRight className="h-4 w-4" /></Button>
+          <CardContent className="pt-4 space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <CalendarRangeToggle mode={rango.mode} onChange={rango.setMode} />
+              <CalendarRangeNav
+                label={rango.label}
+                onPrev={rango.prev}
+                onNext={rango.next}
+                onToday={rango.goToToday}
+                isToday={rango.isToday}
+                minWidth={180}
+              />
             </div>
-            <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden">
-              {["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map(d => (
-                <div key={d} className="bg-muted px-2 py-2 text-center text-[11px] font-semibold text-muted-foreground">{d}</div>
-              ))}
-              {Array.from({ length: adjustedFirstDay }).map((_, i) => (
-                <div key={`empty-${i}`} className="bg-card min-h-[80px]" />
-              ))}
-              {Array.from({ length: daysInMonth }).map((_, i) => {
-                const day = i + 1;
-                const eventos = diasConEvento.get(day) || [];
-                const isToday = mesActual.year === 2026 && mesActual.month === 3 && day === 6;
-                const fechaISO = toISO(mesActual.year, mesActual.month, day);
-                const festivoInfo = empresaId ? getFestivoEnFecha(empresaId, fechaISO) : null;
-                return (
-                  <div key={day} className={`relative bg-card min-h-[80px] p-1.5 ${isToday ? "ring-2 ring-primary ring-inset" : ""} ${festivoInfo?.tipo === "festivo" ? "bg-rose-50/40" : festivoInfo?.tipo === "vispera" ? "bg-sky-50/30" : ""}`}>
-                    <span className={`text-[11px] font-medium ${isToday ? "text-primary font-bold" : "text-foreground"}`}>{day}</span>
-                    {festivoInfo && (
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <button
-                            type="button"
-                            className={`absolute top-1 right-1 h-4 w-4 rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform ${
-                              festivoInfo.tipo === "festivo"
-                                ? "bg-rose-500 text-white"
-                                : "bg-sky-500 text-white"
-                            }`}
-                            aria-label={festivoInfo.tipo === "festivo" ? "Festivo" : "Víspera de festivo"}
-                          >
-                            {festivoInfo.tipo === "festivo"
-                              ? <AlertCircle className="h-3 w-3" />
-                              : <Info className="h-3 w-3" />}
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent side="top" className="w-64 p-3 text-xs">
-                          <div className="flex items-center gap-2 font-semibold">
-                            {festivoInfo.tipo === "festivo"
-                              ? <><AlertCircle className="h-3.5 w-3.5 text-rose-500" /> Festivo</>
-                              : <><Info className="h-3.5 w-3.5 text-sky-500" /> Víspera de festivo</>}
-                          </div>
-                          <div className="mt-2 space-y-1">
-                            <div className="text-foreground font-medium">{festivoInfo.festivo.nombre}</div>
-                            <div className="text-muted-foreground">{festivoInfo.festivo.fecha}</div>
-                            <div className="flex items-center gap-1.5 pt-1">
-                              <Badge variant="outline" className={`text-[10px] ${ESTADO_COLORES[festivoInfo.festivo.tipo] ?? ""}`}>
-                                {TIPO_FESTIVO_LABEL[festivoInfo.festivo.tipo] ?? festivoInfo.festivo.tipo}
-                              </Badge>
-                              {festivoInfo.festivo.region && (
-                                <Badge variant="outline" className="text-[10px]">{festivoInfo.festivo.region}</Badge>
-                              )}
-                            </div>
-                            <p className="pt-1 text-muted-foreground italic">
-                              {festivoInfo.tipo === "festivo"
-                                ? "Día no laborable. Revisa cuadrante y nóminas."
-                                : "Día anterior a festivo. Posible recargo o cierre anticipado."}
-                            </p>
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-                    )}
-                    <div className="mt-1 space-y-0.5">
-                      {eventos.slice(0, 2).map((ev, idx) => (
-                        <div key={idx} className={`flex items-center gap-1 rounded px-1 py-0.5 ${ESTADO_COLORES[ev.estado] || "bg-muted"}`}>
-                          <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${DOT_COLORES[ev.estado] || "bg-muted-foreground"}`} />
-                          <span className="text-[9px] truncate">{ev.empleadoNombre.split(" ")[0]}</span>
-                        </div>
-                      ))}
-                      {eventos.length > 2 && <span className="text-[9px] text-muted-foreground pl-1">+{eventos.length - 2} más</span>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+
+            {rango.mode === "DIARIO" && (
+              <VistaDiaria
+                anchor={rango.anchor}
+                eventosPorFecha={eventosPorFecha}
+                empresaId={empresaId}
+              />
+            )}
+
+            {rango.mode === "SEMANAL" && (
+              <VistaSemanal
+                anchor={rango.anchor}
+                eventosPorFecha={eventosPorFecha}
+                empresaId={empresaId}
+              />
+            )}
+
+            {rango.mode === "MENSUAL" && (
+              <MesGrande
+                year={meses[0].year}
+                month={meses[0].month}
+                eventosPorFecha={eventosPorFecha}
+                empresaId={empresaId}
+              />
+            )}
+
+            {esMultiMes && (
+              <div className={cn(
+                "grid gap-3",
+                rango.mode === "TRIMESTRAL" && "grid-cols-1 md:grid-cols-3",
+                rango.mode === "SEMESTRAL" && "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
+                rango.mode === "ANUAL" && "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4",
+              )}>
+                {meses.map(({ year, month }) => (
+                  <MesMini
+                    key={`${year}-${month}`}
+                    year={year}
+                    month={month}
+                    eventosPorFecha={eventosPorFecha}
+                    empresaId={empresaId}
+                  />
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -256,6 +239,248 @@ export function CalendarioAusencias({ modalidad, titulo, items, botonNuevo, colu
           </Table>
         </Card>
       )}
+    </div>
+  );
+}
+
+function FestivoMarker({ empresaId, fechaISO, compact }: { empresaId?: string; fechaISO: string; compact?: boolean }) {
+  if (!empresaId) return null;
+  const festivoInfo = getFestivoEnFecha(empresaId, fechaISO);
+  if (!festivoInfo) return null;
+  if (compact) {
+    return (
+      <span
+        className={cn(
+          "absolute top-0.5 left-0.5 h-1.5 w-1.5 rounded-full",
+          festivoInfo.tipo === "festivo" ? "bg-rose-500" : "bg-sky-500",
+        )}
+        title={festivoInfo.festivo.nombre}
+      />
+    );
+  }
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "absolute top-1 right-1 h-4 w-4 rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform",
+            festivoInfo.tipo === "festivo" ? "bg-rose-500 text-white" : "bg-sky-500 text-white",
+          )}
+          aria-label={festivoInfo.tipo === "festivo" ? "Festivo" : "Víspera de festivo"}
+        >
+          {festivoInfo.tipo === "festivo" ? <AlertCircle className="h-3 w-3" /> : <Info className="h-3 w-3" />}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent side="top" className="w-64 p-3 text-xs">
+        <div className="flex items-center gap-2 font-semibold">
+          {festivoInfo.tipo === "festivo"
+            ? <><AlertCircle className="h-3.5 w-3.5 text-rose-500" /> Festivo</>
+            : <><Info className="h-3.5 w-3.5 text-sky-500" /> Víspera de festivo</>}
+        </div>
+        <div className="mt-2 space-y-1">
+          <div className="text-foreground font-medium">{festivoInfo.festivo.nombre}</div>
+          <div className="text-muted-foreground">{festivoInfo.festivo.fecha}</div>
+          <div className="flex items-center gap-1.5 pt-1">
+            <Badge variant="outline" className={`text-[10px] ${ESTADO_COLORES[festivoInfo.festivo.tipo] ?? ""}`}>
+              {TIPO_FESTIVO_LABEL[festivoInfo.festivo.tipo] ?? festivoInfo.festivo.tipo}
+            </Badge>
+            {festivoInfo.festivo.region && (
+              <Badge variant="outline" className="text-[10px]">{festivoInfo.festivo.region}</Badge>
+            )}
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function VistaDiaria({
+  anchor,
+  eventosPorFecha,
+  empresaId,
+}: {
+  anchor: Date;
+  eventosPorFecha: Map<string, AusenciaItem[]>;
+  empresaId?: string;
+}) {
+  const fechaISO = toISO(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
+  const eventos = eventosPorFecha.get(fechaISO) ?? [];
+  return (
+    <div className="rounded-lg border bg-card">
+      <div className="px-4 py-3 border-b">
+        <div className="text-sm font-semibold capitalize">
+          {anchor.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+        </div>
+      </div>
+      <div className="p-4 space-y-2">
+        {eventos.length === 0 ? (
+          <div className="text-sm text-muted-foreground text-center py-8">Sin registros para este día.</div>
+        ) : eventos.map((ev) => (
+          <div key={ev.id} className={cn("flex items-center gap-2 rounded-md border px-3 py-2", ESTADO_COLORES[ev.estado])}>
+            <div className={cn("h-2 w-2 rounded-full", DOT_COLORES[ev.estado])} />
+            <div className="text-sm font-medium">{ev.empleadoNombre}</div>
+            <div className="text-xs text-muted-foreground ml-auto">{ev.departamento}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function VistaSemanal({
+  anchor,
+  eventosPorFecha,
+  empresaId,
+}: {
+  anchor: Date;
+  eventosPorFecha: Map<string, AusenciaItem[]>;
+  empresaId?: string;
+}) {
+  const iso = (anchor.getDay() + 6) % 7;
+  const start = new Date(anchor);
+  start.setDate(anchor.getDate() - iso);
+  const dias = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    return d;
+  });
+  const hoy = new Date();
+
+  return (
+    <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden">
+      {DIAS_SHORT.map(d => (
+        <div key={d} className="bg-muted px-2 py-2 text-center text-[11px] font-semibold text-muted-foreground">{d}</div>
+      ))}
+      {dias.map((d, idx) => {
+        const fechaISO = toISO(d.getFullYear(), d.getMonth(), d.getDate());
+        const eventos = eventosPorFecha.get(fechaISO) ?? [];
+        const isToday = d.toDateString() === hoy.toDateString();
+        return (
+          <div key={idx} className={cn("relative bg-card min-h-[140px] p-1.5", isToday && "ring-2 ring-primary ring-inset")}>
+            <span className={cn("text-[11px] font-medium", isToday ? "text-primary font-bold" : "text-foreground")}>
+              {d.getDate()} {DIAS_INI[idx]}
+            </span>
+            <FestivoMarker empresaId={empresaId} fechaISO={fechaISO} />
+            <div className="mt-1 space-y-0.5">
+              {eventos.slice(0, 4).map((ev, i) => (
+                <div key={i} className={cn("flex items-center gap-1 rounded px-1 py-0.5", ESTADO_COLORES[ev.estado] || "bg-muted")}>
+                  <div className={cn("h-1.5 w-1.5 rounded-full shrink-0", DOT_COLORES[ev.estado] || "bg-muted-foreground")} />
+                  <span className="text-[10px] truncate">{ev.empleadoNombre.split(" ")[0]}</span>
+                </div>
+              ))}
+              {eventos.length > 4 && <span className="text-[9px] text-muted-foreground pl-1">+{eventos.length - 4} más</span>}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MesGrande({
+  year,
+  month,
+  eventosPorFecha,
+  empresaId,
+}: {
+  year: number;
+  month: number;
+  eventosPorFecha: Map<string, AusenciaItem[]>;
+  empresaId?: string;
+}) {
+  const daysInMonth = getDaysInMonth(year, month);
+  const firstDay = getFirstDayMon(year, month);
+  const hoy = new Date();
+
+  return (
+    <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden">
+      {DIAS_SHORT.map(d => (
+        <div key={d} className="bg-muted px-2 py-2 text-center text-[11px] font-semibold text-muted-foreground">{d}</div>
+      ))}
+      {Array.from({ length: firstDay }).map((_, i) => (
+        <div key={`empty-${i}`} className="bg-card min-h-[80px]" />
+      ))}
+      {Array.from({ length: daysInMonth }).map((_, i) => {
+        const day = i + 1;
+        const fechaISO = toISO(year, month, day);
+        const eventos = eventosPorFecha.get(fechaISO) ?? [];
+        const isToday = hoy.getFullYear() === year && hoy.getMonth() === month && hoy.getDate() === day;
+        return (
+          <div key={day} className={cn("relative bg-card min-h-[80px] p-1.5", isToday && "ring-2 ring-primary ring-inset")}>
+            <span className={cn("text-[11px] font-medium", isToday ? "text-primary font-bold" : "text-foreground")}>{day}</span>
+            <FestivoMarker empresaId={empresaId} fechaISO={fechaISO} />
+            <div className="mt-1 space-y-0.5">
+              {eventos.slice(0, 2).map((ev, idx) => (
+                <div key={idx} className={cn("flex items-center gap-1 rounded px-1 py-0.5", ESTADO_COLORES[ev.estado] || "bg-muted")}>
+                  <div className={cn("h-1.5 w-1.5 rounded-full shrink-0", DOT_COLORES[ev.estado] || "bg-muted-foreground")} />
+                  <span className="text-[9px] truncate">{ev.empleadoNombre.split(" ")[0]}</span>
+                </div>
+              ))}
+              {eventos.length > 2 && <span className="text-[9px] text-muted-foreground pl-1">+{eventos.length - 2} más</span>}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MesMini({
+  year,
+  month,
+  eventosPorFecha,
+  empresaId,
+}: {
+  year: number;
+  month: number;
+  eventosPorFecha: Map<string, AusenciaItem[]>;
+  empresaId?: string;
+}) {
+  const daysInMonth = getDaysInMonth(year, month);
+  const firstDay = getFirstDayMon(year, month);
+  const hoy = new Date();
+
+  return (
+    <div className="rounded-lg border bg-card overflow-hidden">
+      <div className="px-2.5 py-1.5 bg-muted/30 border-b text-center text-[11px] font-semibold uppercase tracking-wider">
+        {MESES[month]} <span className="text-muted-foreground">{year}</span>
+      </div>
+      <div className="grid grid-cols-7 text-[9px] text-muted-foreground bg-muted/10">
+        {DIAS_INI.map((d, i) => (
+          <div key={i} className="px-1 py-0.5 text-center font-semibold">{d}</div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-0.5 p-1">
+        {Array.from({ length: firstDay }).map((_, i) => (
+          <div key={`e-${i}`} className="aspect-square" />
+        ))}
+        {Array.from({ length: daysInMonth }).map((_, i) => {
+          const day = i + 1;
+          const fechaISO = toISO(year, month, day);
+          const eventos = eventosPorFecha.get(fechaISO) ?? [];
+          const count = eventos.length;
+          const isToday = hoy.getFullYear() === year && hoy.getMonth() === month && hoy.getDate() === day;
+          const dominante = eventos[0]?.estado;
+          return (
+            <div
+              key={day}
+              title={count > 0 ? `${count} registro${count === 1 ? "" : "s"}` : undefined}
+              className={cn(
+                "relative aspect-square flex items-center justify-center text-[9px] rounded",
+                isToday && "bg-primary/10 text-primary font-bold",
+                !isToday && "text-foreground/70",
+              )}
+            >
+              {day}
+              <FestivoMarker empresaId={empresaId} fechaISO={fechaISO} compact />
+              {count > 0 && dominante && (
+                <span className={cn("absolute bottom-0.5 h-1 w-1 rounded-full", DOT_COLORES[dominante] || "bg-muted-foreground")} />
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

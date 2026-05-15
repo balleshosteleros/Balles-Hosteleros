@@ -2,7 +2,22 @@
 
 import { getAppContext } from "@/lib/supabase/get-context";
 
+async function resolveEmpresaUuid(
+  supabase: Awaited<ReturnType<typeof getAppContext>>["supabase"],
+  idOrSlug: string,
+): Promise<string | null> {
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(idOrSlug)) return idOrSlug;
+  const { data } = await supabase
+    .from("empresas")
+    .select("id")
+    .eq("slug", idOrSlug)
+    .maybeSingle();
+  return (data?.id as string | undefined) ?? null;
+}
+
 // ─── Types ─────────────────────────────────────────────────────────────
+export type ConteoDias = "naturales" | "laborables";
+
 export type TipoAusenciaRow = {
   id: string;
   empresa_id: string;
@@ -14,6 +29,9 @@ export type TipoAusenciaRow = {
   requiere_justificante: boolean;
   descuenta_jornada: boolean;
   refleja_calendario: boolean;
+  limite_dias: number | null;
+  conteo_dias: ConteoDias;
+  remunerada: boolean;
   orden: number;
   activo: boolean;
   created_at: string;
@@ -42,6 +60,9 @@ export type TipoAusenciaInput = {
   requiere_justificante?: boolean;
   descuenta_jornada?: boolean;
   refleja_calendario?: boolean;
+  limite_dias?: number | null;
+  conteo_dias?: ConteoDias;
+  remunerada?: boolean;
   activo?: boolean;
 };
 
@@ -67,10 +88,12 @@ async function nextOrden(table: "tipos_ausencia" | "tipos_fichaje", empresaId: s
 }
 
 // ─── TIPOS AUSENCIA ────────────────────────────────────────────────────
-export async function listTiposAusencia() {
+export async function listTiposAusencia(empresaIdOrSlug?: string) {
   try {
-    const { supabase, empresaId } = await getAppContext();
-    if (!empresaId) return { ok: false, data: [] as TipoAusenciaRow[], error: "No autenticado" };
+    const { supabase, empresaId: empresaIdProfile } = await getAppContext();
+    let empresaId = empresaIdProfile;
+    if (empresaIdOrSlug) empresaId = await resolveEmpresaUuid(supabase, empresaIdOrSlug);
+    if (!empresaId) return { ok: false, data: [] as TipoAusenciaRow[], error: "Empresa no encontrada" };
 
     const { data, error } = await supabase
       .from("tipos_ausencia")
@@ -86,16 +109,47 @@ export async function listTiposAusencia() {
   }
 }
 
-export async function createTipoAusencia(input: TipoAusenciaInput) {
+// Crea el tipo en una o varias empresas (replicación). Si replicarEn es vacío
+// o undefined usa la empresa del profile. Devuelve la fila creada en la
+// PRIMERA empresa pedida (para que el hook pueda añadirla al state local).
+export async function createTipoAusencia(
+  input: TipoAusenciaInput,
+  replicarEn?: string[],
+) {
   try {
-    const { supabase, empresaId, userId } = await getAppContext();
-    if (!empresaId) return { ok: false, error: "No autenticado" };
+    const { supabase, empresaId: empresaIdProfile, userId } = await getAppContext();
+    const targetSlugs =
+      replicarEn && replicarEn.length > 0 ? replicarEn : [empresaIdProfile ?? ""];
+    if (targetSlugs.length === 0 || !targetSlugs[0])
+      return { ok: false, error: "No autenticado" };
 
+    let primera: TipoAusenciaRow | null = null;
+    for (const idOrSlug of targetSlugs) {
+      const empresaId = await resolveEmpresaUuid(supabase, idOrSlug);
+      if (!empresaId) continue;
+      const row = await insertTipoAusencia(supabase, empresaId, userId, input);
+      if (row && !primera) primera = row;
+    }
+    if (!primera) return { ok: false, error: "No se pudo crear" };
+    return { ok: true, data: primera };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[horarios-config] createTipoAusencia:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+async function insertTipoAusencia(
+  supabase: Awaited<ReturnType<typeof getAppContext>>["supabase"],
+  empresaId: string,
+  userId: string | null,
+  input: TipoAusenciaInput,
+): Promise<TipoAusenciaRow | null> {
+  try {
     const nombre = input.nombre.trim();
-    if (!nombre) return { ok: false, error: "El nombre es obligatorio" };
+    if (!nombre) return null;
 
     const orden = await nextOrden("tipos_ausencia", empresaId);
-
     const { data, error } = await supabase
       .from("tipos_ausencia")
       .insert({
@@ -108,22 +162,24 @@ export async function createTipoAusencia(input: TipoAusenciaInput) {
         requiere_justificante: input.requiere_justificante ?? false,
         descuenta_jornada: input.descuenta_jornada ?? true,
         refleja_calendario: input.refleja_calendario ?? true,
+        limite_dias: input.limite_dias ?? null,
+        conteo_dias: input.conteo_dias ?? "naturales",
+        remunerada: input.remunerada ?? false,
         activo: input.activo ?? true,
         orden,
         created_by: userId,
       })
       .select()
       .single();
-
     if (error) {
-      if (error.code === "23505") return { ok: false, error: "Ya existe un tipo con ese nombre" };
-      throw error;
+      console.error("[horarios-config] insertTipoAusencia:", error.message);
+      return null;
     }
-    return { ok: true, data: data as TipoAusenciaRow };
+    return data as TipoAusenciaRow;
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[horarios-config] createTipoAusencia:", msg);
-    return { ok: false, error: msg };
+    console.error("[horarios-config] insertTipoAusencia:", msg);
+    return null;
   }
 }
 
@@ -139,6 +195,9 @@ export async function updateTipoAusencia(id: string, input: Partial<TipoAusencia
     if (input.requiere_justificante !== undefined) payload.requiere_justificante = input.requiere_justificante;
     if (input.descuenta_jornada !== undefined) payload.descuenta_jornada = input.descuenta_jornada;
     if (input.refleja_calendario !== undefined) payload.refleja_calendario = input.refleja_calendario;
+    if (input.limite_dias !== undefined) payload.limite_dias = input.limite_dias;
+    if (input.conteo_dias !== undefined) payload.conteo_dias = input.conteo_dias;
+    if (input.remunerada !== undefined) payload.remunerada = input.remunerada;
     if (input.activo !== undefined) payload.activo = input.activo;
     if (input.orden !== undefined) payload.orden = input.orden;
 
@@ -174,10 +233,12 @@ export async function deleteTipoAusencia(id: string) {
 }
 
 // ─── TIPOS FICHAJE ─────────────────────────────────────────────────────
-export async function listTiposFichaje() {
+export async function listTiposFichaje(empresaIdOrSlug?: string) {
   try {
-    const { supabase, empresaId } = await getAppContext();
-    if (!empresaId) return { ok: false, data: [] as TipoFichajeRow[], error: "No autenticado" };
+    const { supabase, empresaId: empresaIdProfile } = await getAppContext();
+    let empresaId = empresaIdProfile;
+    if (empresaIdOrSlug) empresaId = await resolveEmpresaUuid(supabase, empresaIdOrSlug);
+    if (!empresaId) return { ok: false, data: [] as TipoFichajeRow[], error: "Empresa no encontrada" };
 
     const { data, error } = await supabase
       .from("tipos_fichaje")
@@ -193,18 +254,45 @@ export async function listTiposFichaje() {
   }
 }
 
-export async function createTipoFichaje(input: TipoFichajeInput) {
+export async function createTipoFichaje(
+  input: TipoFichajeInput,
+  replicarEn?: string[],
+) {
   try {
-    const { supabase, empresaId, userId } = await getAppContext();
-    if (!empresaId) return { ok: false, error: "No autenticado" };
+    const { supabase, empresaId: empresaIdProfile, userId } = await getAppContext();
+    const targetSlugs =
+      replicarEn && replicarEn.length > 0 ? replicarEn : [empresaIdProfile ?? ""];
+    if (targetSlugs.length === 0 || !targetSlugs[0])
+      return { ok: false, error: "No autenticado" };
 
+    let primera: TipoFichajeRow | null = null;
+    for (const idOrSlug of targetSlugs) {
+      const empresaId = await resolveEmpresaUuid(supabase, idOrSlug);
+      if (!empresaId) continue;
+      const row = await insertTipoFichaje(supabase, empresaId, userId, input);
+      if (row && !primera) primera = row;
+    }
+    if (!primera) return { ok: false, error: "No se pudo crear" };
+    return { ok: true, data: primera };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[horarios-config] createTipoFichaje:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+async function insertTipoFichaje(
+  supabase: Awaited<ReturnType<typeof getAppContext>>["supabase"],
+  empresaId: string,
+  userId: string | null,
+  input: TipoFichajeInput,
+): Promise<TipoFichajeRow | null> {
+  try {
     const nombre = input.nombre.trim();
     const codigo = input.codigo.trim().toUpperCase();
-    if (!nombre) return { ok: false, error: "El nombre es obligatorio" };
-    if (!codigo) return { ok: false, error: "El código es obligatorio" };
+    if (!nombre || !codigo) return null;
 
     const orden = await nextOrden("tipos_fichaje", empresaId);
-
     const { data, error } = await supabase
       .from("tipos_fichaje")
       .insert({
@@ -219,16 +307,15 @@ export async function createTipoFichaje(input: TipoFichajeInput) {
       })
       .select()
       .single();
-
     if (error) {
-      if (error.code === "23505") return { ok: false, error: "Ya existe un tipo con ese código" };
-      throw error;
+      console.error("[horarios-config] insertTipoFichaje:", error.message);
+      return null;
     }
-    return { ok: true, data: data as TipoFichajeRow };
+    return data as TipoFichajeRow;
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[horarios-config] createTipoFichaje:", msg);
-    return { ok: false, error: msg };
+    console.error("[horarios-config] insertTipoFichaje:", msg);
+    return null;
   }
 }
 

@@ -4,6 +4,7 @@ import { getAppContext } from "@/lib/supabase/get-context";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 import type { DatosPersonalesInput, DatosPersonalesCompletos } from "@/features/mi-panel/actions/datos-personales-actions";
 
 const ROLES_ADMIN = ["admin", "director"] as const;
@@ -22,14 +23,57 @@ export async function listEmpleados() {
     const { supabase, empresaId } = await getAppContext();
     if (!empresaId) return { ok: false, data: [] };
 
+    // Un empleado aparece en una empresa si:
+    //   1) su empresa_id es esa empresa (empresa principal), o
+    //   2) su user_id tiene acceso a esa empresa vía user_empresas (acceso secundario).
+    // Devolvemos todos esos empleados con un flag `es_principal` para la UI.
+
+    const { data: accesosUE } = await supabase
+      .from("user_empresas")
+      .select("user_id")
+      .eq("empresa_id", empresaId);
+    const userIdsConAcceso = (accesosUE ?? []).map((r) => r.user_id as string);
+
+    const filtro = userIdsConAcceso.length > 0
+      ? `empresa_id.eq.${empresaId},user_id.in.(${userIdsConAcceso.join(",")})`
+      : `empresa_id.eq.${empresaId}`;
+
     const { data, error } = await supabase
       .from("empleados")
       .select(`*, departamentos(nombre)`)
-      .eq("empresa_id", empresaId)
+      .or(filtro)
       .order("nombre", { ascending: true });
 
     if (error) throw error;
-    return { ok: true, data: data ?? [] };
+
+    // Cargar todas las empresas a las que cada empleado tiene acceso para enriquecer.
+    const userIds = Array.from(new Set((data ?? []).map((e) => e.user_id as string).filter(Boolean)));
+    let empresasPorUser: Record<string, Array<{ id: string; nombre: string }>> = {};
+    if (userIds.length > 0) {
+      const { data: rels } = await supabase
+        .from("user_empresas")
+        .select("user_id, empresas:empresa_id(id, nombre)")
+        .in("user_id", userIds);
+      empresasPorUser = (rels ?? []).reduce<Record<string, Array<{ id: string; nombre: string }>>>(
+        (acc, r) => {
+          const uid = r.user_id as string;
+          const emp = r.empresas as { id: string; nombre: string } | null;
+          if (!emp) return acc;
+          if (!acc[uid]) acc[uid] = [];
+          acc[uid].push(emp);
+          return acc;
+        },
+        {}
+      );
+    }
+
+    const enriched = (data ?? []).map((e) => ({
+      ...e,
+      es_principal: e.empresa_id === empresaId,
+      empresas_acceso: empresasPorUser[e.user_id as string] ?? [],
+    }));
+
+    return { ok: true, data: enriched };
   } catch (err) {
     console.error("[rrhh] listEmpleados:", err);
     return { ok: false, data: [] };
@@ -40,22 +84,44 @@ export async function listEmpleados() {
 // el auth.user + profile + user_role + empleado en cascada. Devuelve la
 // contraseña temporal para que el admin la entregue al empleado en su primer
 // acceso (el form la muestra en pantalla y permite copiarla).
+//
+// Emails: emailPersonal es obligatorio; emailEmpresa solo si tiene cuenta
+// corporativa real. El login se deriva como emailEmpresa ?? emailPersonal y
+// queda fijo en auth.users — no se recalcula al editar emails desde la ficha
+// del empleado, solo se cambia desde Ajustes → Usuarios.
 export async function createEmpleado(input: {
   nombre: string;
   apellidos?: string;
   departamentoId?: string;
   puesto?: string;
-  emailEmpresa: string;
-  emailPersonal?: string;
+  emailEmpresa?: string;
+  emailPersonal: string;
   telefono?: string;
+  // Empresas a las que el empleado tendrá acceso. La primera es la "principal"
+  // (queda como empleados.empresa_id y profiles.empresa_id). Si va vacío,
+  // se usa la empresa activa del admin (compatibilidad con el flujo antiguo).
+  empresaIds?: string[];
+  // Local asignado por empresa. Solo se aplica al de la empresa principal en
+  // empleados.local_id; el resto se registra solo como acceso vía user_empresas
+  // y se podrá editar después desde la ficha del empleado.
+  localPorEmpresa?: Record<string, string | null>;
 }) {
   try {
     await requireAdminUser();
-    const { empresaId } = await getAppContext();
-    if (!empresaId) return { ok: false, error: "No autenticado" };
+    const { empresaId: empresaActivaId } = await getAppContext();
 
-    const email = (input.emailEmpresa ?? "").trim().toLowerCase();
-    if (!email) return { ok: false, error: "El email de empresa es obligatorio (será el login del empleado)." };
+    const empresasSeleccionadas = (input.empresaIds ?? []).filter(Boolean);
+    const empresaPrincipalId = empresasSeleccionadas[0] ?? empresaActivaId;
+    if (!empresaPrincipalId) return { ok: false, error: "Selecciona al menos una empresa." };
+    // Si no se pasó ninguna explícitamente, usamos la activa como única.
+    const empresasAcceso = empresasSeleccionadas.length > 0
+      ? Array.from(new Set(empresasSeleccionadas))
+      : [empresaPrincipalId];
+
+    const emailEmpresa = (input.emailEmpresa ?? "").trim().toLowerCase() || null;
+    const emailPersonal = (input.emailPersonal ?? "").trim().toLowerCase();
+    if (!emailPersonal) return { ok: false, error: "El email personal es obligatorio." };
+    const email = emailEmpresa ?? emailPersonal;
 
     let admin;
     try { admin = createAdminClient(); }
@@ -72,13 +138,13 @@ export async function createEmpleado(input: {
       user_metadata: { full_name: fullName },
     });
     if (createErr || !created?.user) {
-      return { ok: false, error: createErr?.message ?? "No se pudo crear el usuario" };
+      return { ok: false, error: createErr ? friendlyError(createErr) : "No se pudo crear el usuario" };
     }
     const newUserId = created.user.id;
 
     // 2. Completar profile (el trigger handle_new_user crea la fila base)
     await admin.from("profiles").update({
-      empresa_id: empresaId,
+      empresa_id: empresaPrincipalId,
       full_name: fullName,
       nombre: input.nombre,
       apellidos: input.apellidos ?? null,
@@ -89,38 +155,51 @@ export async function createEmpleado(input: {
     // 3. Asignar rol RBAC base
     await admin.from("user_roles").insert({ user_id: newUserId, role: "empleado" });
 
-    // 4. Crear empleado vinculado
+    // 4. Acceso multi-empresa: insertar en user_empresas para cada empresa marcada.
+    const accesosRows = empresasAcceso.map((eid) => ({
+      user_id: newUserId,
+      empresa_id: eid,
+    }));
+    const { error: accesoErr } = await admin
+      .from("user_empresas")
+      .upsert(accesosRows, { onConflict: "user_id,empresa_id" });
+    if (accesoErr) {
+      await admin.auth.admin.deleteUser(newUserId);
+      return { ok: false, error: `Error asignando acceso a empresas: ${friendlyError(accesoErr)}` };
+    }
+
+    // 5. Crear empleado vinculado (en la empresa principal).
     const isRealId = (id?: string) => !!id && !id.startsWith("mock-");
+    const localPrincipal =
+      input.localPorEmpresa?.[empresaPrincipalId] ?? null;
     const { error: empErr } = await admin.from("empleados").insert({
-      empresa_id: empresaId,
+      empresa_id: empresaPrincipalId,
       user_id: newUserId,
       nombre: input.nombre,
       apellidos: input.apellidos ?? null,
       departamento_id: isRealId(input.departamentoId) ? input.departamentoId : null,
       puesto: input.puesto ?? null,
-      email_empresa: email,
-      email_personal: input.emailPersonal ?? null,
+      email_empresa: emailEmpresa,
+      email_personal: emailPersonal,
       telefono: input.telefono ?? null,
       fecha_alta: new Date().toISOString().slice(0, 10),
       estado: "Activo",
       tipo_jornada: "Completa",
       perfil_completado: false,
+      local_id: localPrincipal,
     });
 
     if (empErr) {
-      // Rollback manual: el auth.user ya existe pero el empleado falló.
-      // Como CASCADE en empleados.user_id_fkey borra el empleado al borrar
-      // el profile, eliminamos el auth.user para limpiar todo.
+      // Rollback: borrar el auth.user (CASCADE limpia profile, user_empresas, user_roles).
       await admin.auth.admin.deleteUser(newUserId);
-      return { ok: false, error: empErr.message };
+      return { ok: false, error: friendlyError(empErr) };
     }
 
     revalidatePath("/rrhh/empleados");
     return { ok: true, tempPassword, email };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[rrhh] createEmpleado:", msg);
-    return { ok: false, error: msg };
+    console.error("[rrhh] createEmpleado:", err);
+    return { ok: false, error: friendlyError(err) };
   }
 }
 
@@ -315,7 +394,25 @@ export async function getEmpleadoConPerfil(empleadoId: string) {
       talla_pantalon: (perfil?.talla_pantalon as string | null) ?? null,
     };
 
-    return { ok: true, empleado: emp, datosPersonales };
+    // Empresas a las que tiene acceso (user_empresas) + cuál es la principal.
+    let empresasAcceso: Array<{ id: string; nombre: string; esPrincipal: boolean }> = [];
+    if (emp.user_id) {
+      const { data: rels } = await supabase
+        .from("user_empresas")
+        .select("empresas:empresa_id(id, nombre)")
+        .eq("user_id", emp.user_id);
+      empresasAcceso = (rels ?? [])
+        .map((r) => r.empresas as { id: string; nombre: string } | null)
+        .filter((e): e is { id: string; nombre: string } => e !== null)
+        .map((e) => ({ ...e, esPrincipal: e.id === emp.empresa_id }))
+        .sort((a, b) => {
+          if (a.esPrincipal && !b.esPrincipal) return -1;
+          if (!a.esPrincipal && b.esPrincipal) return 1;
+          return a.nombre.localeCompare(b.nombre);
+        });
+    }
+
+    return { ok: true, empleado: emp, datosPersonales, empresasAcceso };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error cargando empleado";
     console.error("[rrhh] getEmpleadoConPerfil:", msg);
@@ -351,7 +448,7 @@ export async function guardarPerfilEmpleado(
       .select("id, user_id, empresa_id")
       .eq("id", empleadoId)
       .maybeSingle();
-    if (empErr) return { ok: false, error: empErr.message };
+    if (empErr) return { ok: false, error: friendlyError(empErr) };
     if (!emp) return { ok: false, error: "Empleado no encontrado" };
 
     const trim = (v: string | null | undefined) => {
@@ -397,7 +494,7 @@ export async function guardarPerfilEmpleado(
       .from("profiles")
       .update(payload)
       .eq("id", emp.user_id);
-    if (updErr) return { ok: false, error: updErr.message };
+    if (updErr) return { ok: false, error: friendlyError(updErr) };
 
     // También sincronizamos nombre/apellidos en empleados para que la lista
     // de RRHH muestre los cambios sin tener que mirar el join. Sólo actualizamos

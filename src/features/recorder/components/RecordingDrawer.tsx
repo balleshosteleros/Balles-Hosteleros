@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import {
   Monitor,
   Mic,
@@ -23,6 +23,8 @@ import {
   FileVideo,
   ExternalLink,
   Trash2,
+  UploadCloud,
+  AlertCircle,
 } from "lucide-react";
 import {
   Sheet,
@@ -202,6 +204,10 @@ function RecordingContent() {
     );
   }
 
+  if (state === "countdown") {
+    return <CountdownView />;
+  }
+
   if (state === "recording" || state === "paused") {
     return (
       <div className="space-y-6 animate-in fade-in duration-300">
@@ -364,6 +370,21 @@ function RecordingContent() {
   return null;
 }
 
+function CountdownView() {
+  const { countdownValue } = useRecordingStore();
+  return (
+    <div className="py-20 text-center space-y-4 animate-in fade-in duration-200">
+      <div className="w-20 h-20 bg-red-600 text-white rounded-3xl flex items-center justify-center mx-auto shadow-lg shadow-red-200">
+        <span className="text-4xl font-bold tabular-nums">{countdownValue}</span>
+      </div>
+      <h3 className="text-xl font-bold">Empezando en {countdownValue}…</h3>
+      <p className="text-sm text-muted-foreground px-4">
+        Prepárate. La grabación arranca en {countdownValue} segundo{countdownValue !== 1 ? "s" : ""}.
+      </p>
+    </div>
+  );
+}
+
 function OptionToggle({
   icon: Icon,
   iconOff: IconOff,
@@ -416,6 +437,7 @@ interface SavedRecording {
 function RecordingsList() {
   const [recordings, setRecordings] = useState<SavedRecording[]>([]);
   const [loading, setLoading] = useState(true);
+  const { pendingCount } = useRecorder();
 
   useEffect(() => {
     let alive = true;
@@ -431,7 +453,8 @@ function RecordingsList() {
     return () => {
       alive = false;
     };
-  }, []);
+    // Recargar cuando cambia el número de pendientes (algún reintento tuvo éxito)
+  }, [pendingCount]);
 
   async function handleDelete(id: string) {
     if (!confirm("¿Eliminar esta grabación?")) return;
@@ -444,6 +467,8 @@ function RecordingsList() {
 
   return (
     <div className="space-y-3 pt-4 border-t">
+      <PendingUploadsList />
+
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold">Mis grabaciones</p>
         <span className="text-[11px] text-muted-foreground">{recordings.length}</span>
@@ -514,6 +539,158 @@ function RecordingsList() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function PendingUploadsList() {
+  const { refreshPending, retryPending, retryAllPending, deletePending, pendingCount } =
+    useRecorder();
+  const [pending, setPending] = useState<
+    Array<{
+      id: string;
+      title: string;
+      blob: Blob;
+      duration: number;
+      fileSize: number;
+      createdAt: number;
+      retryCount: number;
+      lastError?: string;
+    }>
+  >([]);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [retryingAll, setRetryingAll] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    refreshPending().then((list) => {
+      if (alive) setPending(list);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [refreshPending, pendingCount]);
+
+  // Memo de blob URLs con cleanup para no fugar memoria entre renders
+  const blobUrls = useMemo(() => {
+    const map = new Map<string, string>();
+    pending.forEach((p) => map.set(p.id, URL.createObjectURL(p.blob)));
+    return map;
+  }, [pending]);
+
+  useEffect(() => {
+    return () => {
+      blobUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [blobUrls]);
+
+  if (pending.length === 0) return null;
+
+  async function handleRetry(id: string) {
+    setBusyId(id);
+    await retryPending(id);
+    setBusyId(null);
+  }
+
+  async function handleRetryAll() {
+    setRetryingAll(true);
+    await retryAllPending();
+    setRetryingAll(false);
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("¿Eliminar esta grabación local? No se podrá recuperar.")) return;
+    await deletePending(id);
+  }
+
+  return (
+    <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+          <p className="text-xs font-semibold text-amber-800 truncate">
+            Pendientes de subida · {pending.length}
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 px-2 text-[11px] gap-1 border-amber-300 bg-white hover:bg-amber-100"
+          onClick={handleRetryAll}
+          disabled={retryingAll}
+        >
+          {retryingAll ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <UploadCloud className="h-3 w-3" />
+          )}
+          Subir todo
+        </Button>
+      </div>
+
+      <p className="text-[10px] text-amber-700/80 leading-snug">
+        Estas grabaciones están guardadas en tu navegador. Se subirán automáticamente cuando vuelva
+        la conexión, o puedes reintentarlo ahora.
+      </p>
+
+      <div className="space-y-1.5 max-h-[30vh] overflow-y-auto pr-1">
+        {pending.map((rec) => {
+          const localUrl = blobUrls.get(rec.id) ?? "";
+          const isBusy = busyId === rec.id || retryingAll;
+          return (
+            <div
+              key={rec.id}
+              className="flex items-center gap-2 p-2 rounded-md border border-amber-200/80 bg-white"
+            >
+              <div className="w-8 h-8 rounded bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                <FileVideo className="h-4 w-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium truncate" title={rec.title}>
+                  {rec.title}
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  {formatDuration(rec.duration)} ·{" "}
+                  {(rec.fileSize / (1024 * 1024)).toFixed(1)} MB
+                  {rec.retryCount > 0 ? ` · ${rec.retryCount} intentos` : ""}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleRetry(rec.id)}
+                disabled={isBusy}
+                className="p-1.5 rounded hover:bg-amber-100 text-amber-700 disabled:opacity-50"
+                title="Reintentar subida"
+                aria-label="Reintentar subida"
+              >
+                {isBusy ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <UploadCloud className="h-3.5 w-3.5" />
+                )}
+              </button>
+              <a
+                href={localUrl}
+                download={`${rec.title}.webm`}
+                className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary"
+                title="Descargar"
+                aria-label="Descargar"
+              >
+                <Download className="h-3.5 w-3.5" />
+              </a>
+              <button
+                type="button"
+                onClick={() => handleDelete(rec.id)}
+                className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                title="Eliminar local"
+                aria-label="Eliminar local"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

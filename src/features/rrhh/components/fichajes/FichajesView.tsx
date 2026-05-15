@@ -2,10 +2,32 @@
 
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { ESTADO_FICHAJE_LABEL, ESTADO_FICHAJE_COLOR, TIPOS_INCIDENCIA_LABEL } from "@/features/rrhh/data/fichajes";
-import type { EstadoFichaje, Fichaje, ConfigFichajes } from "@/features/rrhh/data/fichajes";
-import { listFichajes, ficharEntrada, ficharSalida, updateFichaje } from "@/features/rrhh/actions/fichajes-actions";
+import { ESTADO_FICHAJE_LABEL, ESTADO_FICHAJE_COLOR, TIPOS_INCIDENCIA_LABEL, TIPO_FICHAJE_LABEL, TIPO_FICHAJE_BADGE } from "@/features/rrhh/data/fichajes";
+import type { EstadoFichaje, Fichaje, ConfigFichajes, TipoFichajeCodigo } from "@/features/rrhh/data/fichajes";
+import { listFichajes, ficharSalida, updateFichaje, crearFichajeManual } from "@/features/rrhh/actions/fichajes-actions";
+import { listEmpleados } from "@/features/rrhh/actions/empleados-actions";
+import { obtenerPosicionActual } from "@/features/rrhh/utils/geo";
 import { toast } from "sonner";
+
+async function intentarGeo() {
+  try {
+    return await obtenerPosicionActual();
+  } catch {
+    return null;
+  }
+}
+
+type EmpleadoOpcion = { id: string; nombre: string };
+
+const initialManualForm = () => ({
+  empleadoId: "",
+  fecha: new Date().toISOString().split("T")[0],
+  horaEntrada: "",
+  horaSalida: "",
+  pausaInicio: "",
+  pausaFin: "",
+  observaciones: "",
+});
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +37,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Clock, AlertTriangle, CheckCircle2, Settings, Settings2, ClipboardList, History } from "lucide-react";
+import { AlertTriangle, Settings, Settings2, ClipboardList, History } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -48,6 +70,7 @@ function mapDbToFichaje(row: Record<string, unknown>): Fichaje {
     observaciones: (row.observaciones as string | null) ?? null,
     departamento: (row.departamento as string) ?? "",
     centro: (row.centro as string) ?? "",
+    tipo: ((row.tipo as TipoFichajeCodigo) ?? "ENT") as TipoFichajeCodigo,
   };
 }
 
@@ -68,6 +91,10 @@ export function FichajesView() {
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [fichajeModal, setFichajeModal] = useState<Fichaje | null>(null);
   const [showConfig, setShowConfig] = useState(false);
+  const [showNuevo, setShowNuevo] = useState(false);
+  const [empleadosOpts, setEmpleadosOpts] = useState<EmpleadoOpcion[]>([]);
+  const [manualForm, setManualForm] = useState(initialManualForm());
+  const [savingManual, setSavingManual] = useState(false);
 
   const loadFichajes = useCallback(async () => {
     setLoading(true);
@@ -89,6 +116,52 @@ export function FichajesView() {
   useEffect(() => {
     loadFichajes();
   }, [loadFichajes]);
+
+  const openNuevoDialog = useCallback(async () => {
+    setManualForm(initialManualForm());
+    setShowNuevo(true);
+    const res = await listEmpleados();
+    if (res.ok) {
+      const opciones: EmpleadoOpcion[] = (res.data as Array<Record<string, unknown>>)
+        .filter((e) => (e.estado as string) === "Activo")
+        .map((e) => ({
+          id: e.id as string,
+          nombre: `${(e.nombre as string) ?? ""} ${(e.apellidos as string) ?? ""}`.trim(),
+        }));
+      setEmpleadosOpts(opciones);
+    } else {
+      toast.error("No se pudo cargar la lista de empleados");
+    }
+  }, []);
+
+  const submitFichajeManual = useCallback(async () => {
+    if (!manualForm.empleadoId) {
+      toast.error("Selecciona un empleado");
+      return;
+    }
+    if (!manualForm.horaEntrada) {
+      toast.error("La hora de entrada es obligatoria");
+      return;
+    }
+    setSavingManual(true);
+    const res = await crearFichajeManual({
+      empleadoId: manualForm.empleadoId,
+      fecha: manualForm.fecha,
+      horaEntrada: manualForm.horaEntrada,
+      horaSalida: manualForm.horaSalida || null,
+      pausaInicio: manualForm.pausaInicio || null,
+      pausaFin: manualForm.pausaFin || null,
+      observaciones: manualForm.observaciones || null,
+    });
+    setSavingManual(false);
+    if (res.ok) {
+      toast.success("Fichaje creado");
+      setShowNuevo(false);
+      loadFichajes();
+    } else {
+      toast.error(res.error ?? "Error al crear el fichaje");
+    }
+  }, [manualForm, loadFichajes]);
 
   const incidencias = useMemo(() => fichajes.filter(f => f.estado === "incidencia").map(f => ({
     id: f.id,
@@ -122,14 +195,6 @@ export function FichajesView() {
     return lista;
   }, [fichajes, busqueda, filtros, orden]);
 
-  const kpis = useMemo(() => {
-    const total = fichajes.length;
-    const completos = fichajes.filter(f => f.estado === "completo" || f.estado === "validado").length;
-    const conIncidencia = fichajes.filter(f => f.estado === "incidencia").length;
-    const horasTotales = fichajes.reduce((s, f) => s + f.horasTotales, 0);
-    return { total, completos, conIncidencia, horasTotales };
-  }, [fichajes]);
-
   const incidenciasPendientes = incidencias.filter(i => !i.resuelta);
 
   const columnasDef: ToolbarColumna[] = [
@@ -137,11 +202,18 @@ export function FichajesView() {
     { campo: "fecha", label: "Fecha" },
     { campo: "entrada", label: "Entrada" },
     { campo: "salida", label: "Salida" },
-    { campo: "pausa", label: "Pausa" },
+    { campo: "pausa", label: "Descanso" },
     { campo: "horas", label: "Horas" },
-    { campo: "estado", label: "Estado" },
-    { campo: "validador", label: "Validado por" },
+    { campo: "tipo", label: "Tipo" },
   ];
+
+  function formatHora(s: string | null): string {
+    if (!s) return "—";
+    if (s.includes("T")) {
+      return new Date(s).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+    }
+    return s.slice(0, 5);
+  }
 
   const columnDefs: Record<string, { th: ReactNode; td: (f: Fichaje) => ReactNode }> = {
     empleado: {
@@ -159,43 +231,39 @@ export function FichajesView() {
     entrada: {
       th: <TableHead key="entrada">Entrada</TableHead>,
       td: (f) => (
-        <TableCell key="entrada" className="text-sm font-mono">{f.horaEntrada ?? "—"}</TableCell>
+        <TableCell key="entrada" className="text-sm">{formatHora(f.horaEntrada)}</TableCell>
       ),
     },
     salida: {
       th: <TableHead key="salida">Salida</TableHead>,
       td: (f) => (
-        <TableCell key="salida" className="text-sm font-mono">{f.horaSalida ?? "—"}</TableCell>
+        <TableCell key="salida" className="text-sm">{formatHora(f.horaSalida)}</TableCell>
       ),
     },
     pausa: {
-      th: <TableHead key="pausa">Pausa</TableHead>,
+      th: <TableHead key="pausa">Descanso</TableHead>,
       td: (f) => (
-        <TableCell key="pausa" className="text-sm font-mono">{f.pausaInicio && f.pausaFin ? `${f.pausaInicio}-${f.pausaFin}` : "—"}</TableCell>
+        <TableCell key="pausa" className="text-sm">{f.pausaInicio && f.pausaFin ? `${f.pausaInicio.slice(0,5)}–${f.pausaFin.slice(0,5)}` : "—"}</TableCell>
       ),
     },
     horas: {
       th: <TableHead key="horas" className="text-right">Horas</TableHead>,
       td: (f) => (
-        <TableCell key="horas" className="text-sm text-right font-semibold">{f.horaSalida ? formatHorasDecimal(f.horasTotales) : "—"}</TableCell>
+        <TableCell key="horas" className="text-sm text-right font-medium">{f.horaSalida ? formatHorasDecimal(f.horasTotales) : "—"}</TableCell>
       ),
     },
-    estado: {
-      th: <TableHead key="estado">Estado</TableHead>,
-      td: (f) => (
-        <TableCell key="estado">
-          <Badge variant="outline" className="gap-1 text-xs">
-            <span className={`h-2 w-2 rounded-full ${ESTADO_FICHAJE_COLOR[f.estado]}`} />
-            {ESTADO_FICHAJE_LABEL[f.estado]}
-          </Badge>
-        </TableCell>
-      ),
-    },
-    validador: {
-      th: <TableHead key="validador">Validado por</TableHead>,
-      td: (f) => (
-        <TableCell key="validador" className="text-sm text-muted-foreground">{f.validadoPor ?? "—"}</TableCell>
-      ),
+    tipo: {
+      th: <TableHead key="tipo">Tipo</TableHead>,
+      td: (f) => {
+        const codigo = (f.tipo ?? "ENT") as TipoFichajeCodigo;
+        return (
+          <TableCell key="tipo">
+            <Badge variant="outline" className={`text-xs ${TIPO_FICHAJE_BADGE[codigo]}`}>
+              {TIPO_FICHAJE_LABEL[codigo]}
+            </Badge>
+          </TableCell>
+        );
+      },
     },
   };
 
@@ -205,13 +273,6 @@ export function FichajesView() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card><CardContent className="pt-4 pb-4 text-center"><Clock className="mx-auto h-5 w-5 text-muted-foreground mb-1" /><p className="text-2xl font-bold">{kpis.total}</p><p className="text-xs text-muted-foreground">Fichajes registrados</p></CardContent></Card>
-        <Card><CardContent className="pt-4 pb-4 text-center"><CheckCircle2 className="mx-auto h-5 w-5 text-emerald-500 mb-1" /><p className="text-2xl font-bold">{kpis.completos}</p><p className="text-xs text-muted-foreground">Completos / Validados</p></CardContent></Card>
-        <Card><CardContent className="pt-4 pb-4 text-center"><AlertTriangle className="mx-auto h-5 w-5 text-destructive mb-1" /><p className="text-2xl font-bold">{kpis.conIncidencia}</p><p className="text-xs text-muted-foreground">Con incidencias</p></CardContent></Card>
-        <Card><CardContent className="pt-4 pb-4 text-center"><Clock className="mx-auto h-5 w-5 text-sky-500 mb-1" /><p className="text-2xl font-bold">{formatHorasDecimal(kpis.horasTotales)}</p><p className="text-xs text-muted-foreground">Horas totales</p></CardContent></Card>
-      </div>
-
       <Tabs defaultValue="fichajes" className="space-y-4">
         <TabsList>
           <TabsTrigger value="fichajes" className="gap-1"><ClipboardList className="h-4 w-4" />Fichajes</TabsTrigger>
@@ -225,11 +286,7 @@ export function FichajesView() {
             busqueda={busqueda}
             onBusquedaChange={setBusqueda}
             placeholderBusqueda="Buscar"
-            onNuevo={async () => {
-              const res = await ficharEntrada();
-              if (res.ok) { toast.success("Entrada registrada"); loadFichajes(); }
-              else toast.error(res.error ?? "Error al fichar entrada");
-            }}
+            onNuevo={openNuevoDialog}
             filtros={filtros}
             onFiltrosChange={setFiltros}
             orden={orden}
@@ -284,21 +341,24 @@ export function FichajesView() {
                 <TableRow>
                   <TableHead>Empleado</TableHead><TableHead>Fecha</TableHead><TableHead>Entrada</TableHead>
                   <TableHead>Salida</TableHead><TableHead className="text-right">Horas</TableHead>
-                  <TableHead>Incidencia</TableHead><TableHead>Validación</TableHead>
+                  <TableHead>Tipo</TableHead><TableHead>Incidencia</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {[...fichajes].sort((a, b) => b.fecha.localeCompare(a.fecha)).map(f => (
-                  <TableRow key={f.id}>
-                    <TableCell className="font-medium text-sm">{f.empleadoNombre}</TableCell>
-                    <TableCell className="text-sm">{f.fecha}</TableCell>
-                    <TableCell className="text-sm font-mono">{f.horaEntrada ?? "—"}</TableCell>
-                    <TableCell className="text-sm font-mono">{f.horaSalida ?? "—"}</TableCell>
-                    <TableCell className="text-sm text-right">{f.horaSalida ? formatHorasDecimal(f.horasTotales) : "—"}</TableCell>
-                    <TableCell className="text-sm">{f.incidencia ?? <span className="text-muted-foreground">—</span>}</TableCell>
-                    <TableCell className="text-sm">{f.validadoPor ?? <span className="text-muted-foreground">Pendiente</span>}</TableCell>
-                  </TableRow>
-                ))}
+                {[...fichajes].sort((a, b) => b.fecha.localeCompare(a.fecha)).map(f => {
+                  const codigo = (f.tipo ?? "ENT") as TipoFichajeCodigo;
+                  return (
+                    <TableRow key={f.id}>
+                      <TableCell className="font-medium text-sm">{f.empleadoNombre}</TableCell>
+                      <TableCell className="text-sm">{f.fecha}</TableCell>
+                      <TableCell className="text-sm">{formatHora(f.horaEntrada)}</TableCell>
+                      <TableCell className="text-sm">{formatHora(f.horaSalida)}</TableCell>
+                      <TableCell className="text-sm text-right">{f.horaSalida ? formatHorasDecimal(f.horasTotales) : "—"}</TableCell>
+                      <TableCell><Badge variant="outline" className={`text-xs ${TIPO_FICHAJE_BADGE[codigo]}`}>{TIPO_FICHAJE_LABEL[codigo]}</Badge></TableCell>
+                      <TableCell className="text-sm">{f.incidencia ?? <span className="text-muted-foreground">—</span>}</TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </Card>
@@ -348,7 +408,7 @@ export function FichajesView() {
                 <Switch checked={config.requiereValidacion} onCheckedChange={v => setConfig(c => ({ ...c, requiereValidacion: v }))} />
               </div>
               <div className="flex items-center justify-between">
-                <div><Label className="font-medium">Pausas activas</Label><p className="text-xs text-muted-foreground">Permitir registrar pausas dentro del fichaje</p></div>
+                <div><Label className="font-medium">Descansos activos</Label><p className="text-xs text-muted-foreground">Permitir registrar descansos dentro del fichaje</p></div>
                 <Switch checked={config.pausasActivas} onCheckedChange={v => setConfig(c => ({ ...c, pausasActivas: v }))} />
               </div>
               <div className="flex items-center justify-between">
@@ -369,31 +429,124 @@ export function FichajesView() {
                 <div><span className="text-muted-foreground">Empleado:</span><p className="font-medium">{fichajeModal.empleadoNombre}</p></div>
                 <div><span className="text-muted-foreground">Departamento:</span><p className="font-medium">{fichajeModal.departamento}</p></div>
                 <div><span className="text-muted-foreground">Fecha:</span><p className="font-medium">{fichajeModal.fecha}</p></div>
-                <div><span className="text-muted-foreground">Estado:</span>
-                  <Badge variant="outline" className="gap-1 mt-1">
-                    <span className={`h-2 w-2 rounded-full ${ESTADO_FICHAJE_COLOR[fichajeModal.estado]}`} />
-                    {ESTADO_FICHAJE_LABEL[fichajeModal.estado]}
-                  </Badge>
+                <div><span className="text-muted-foreground">Tipo:</span>
+                  {(() => {
+                    const c = (fichajeModal.tipo ?? "ENT") as TipoFichajeCodigo;
+                    return (
+                      <Badge variant="outline" className={`mt-1 text-xs ${TIPO_FICHAJE_BADGE[c]}`}>
+                        {TIPO_FICHAJE_LABEL[c]}
+                      </Badge>
+                    );
+                  })()}
                 </div>
-                <div><span className="text-muted-foreground">Entrada:</span><p className="font-mono font-medium">{fichajeModal.horaEntrada ?? "—"}</p></div>
-                <div><span className="text-muted-foreground">Salida:</span><p className="font-mono font-medium">{fichajeModal.horaSalida ?? "—"}</p></div>
-                <div><span className="text-muted-foreground">Pausa:</span><p className="font-mono font-medium">{fichajeModal.pausaInicio && fichajeModal.pausaFin ? `${fichajeModal.pausaInicio} - ${fichajeModal.pausaFin}` : "—"}</p></div>
+                <div><span className="text-muted-foreground">Entrada:</span><p className="font-medium">{formatHora(fichajeModal.horaEntrada)}</p></div>
+                <div><span className="text-muted-foreground">Salida:</span><p className="font-medium">{formatHora(fichajeModal.horaSalida)}</p></div>
+                <div><span className="text-muted-foreground">Descanso:</span><p className="font-medium">{fichajeModal.pausaInicio && fichajeModal.pausaFin ? `${fichajeModal.pausaInicio.slice(0,5)} – ${fichajeModal.pausaFin.slice(0,5)}` : "—"}</p></div>
                 <div><span className="text-muted-foreground">Horas totales:</span><p className="font-semibold">{fichajeModal.horaSalida ? formatHorasDecimal(fichajeModal.horasTotales) : "—"}</p></div>
               </div>
               {fichajeModal.incidencia && <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3"><p className="text-sm font-medium text-destructive">{fichajeModal.incidencia}</p></div>}
               {fichajeModal.observaciones && <div><span className="text-muted-foreground">Observaciones:</span><p>{fichajeModal.observaciones}</p></div>}
-              {fichajeModal.validadoPor && <div><span className="text-muted-foreground">Validado por:</span><p className="font-medium">{fichajeModal.validadoPor}</p></div>}
             </div>
           )}
           <DialogFooter>
             {fichajeModal && !fichajeModal.horaSalida && fichajeModal.horaEntrada && (
               <Button onClick={async () => {
-                const res = await ficharSalida(fichajeModal.id);
+                const geo = await intentarGeo();
+                const res = await ficharSalida(fichajeModal.id, geo);
                 if (res.ok) { toast.success("Salida registrada"); setFichajeModal(null); loadFichajes(); }
                 else toast.error(res.error ?? "Error al fichar salida");
               }}>Fichar salida</Button>
             )}
             <Button variant="outline" onClick={() => setFichajeModal(null)}>Cerrar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showNuevo} onOpenChange={(v) => !savingManual && setShowNuevo(v)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Nuevo fichaje manual</DialogTitle>
+            <CardDescription className="text-xs">
+              Crea un fichaje a un empleado sin pasar por el botón &quot;Fichar&quot; de Mi Panel. Quedará marcado como validado por ti.
+            </CardDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 text-sm">
+            <div className="space-y-1">
+              <Label className="text-xs">Empleado</Label>
+              <select
+                className="w-full border rounded-md h-9 px-2 bg-background"
+                value={manualForm.empleadoId}
+                onChange={(e) => setManualForm((f) => ({ ...f, empleadoId: e.target.value }))}
+              >
+                <option value="">Selecciona un empleado…</option>
+                {empleadosOpts.map((emp) => (
+                  <option key={emp.id} value={emp.id}>{emp.nombre || "—"}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Fecha</Label>
+                <Input
+                  type="date"
+                  value={manualForm.fecha}
+                  onChange={(e) => setManualForm((f) => ({ ...f, fecha: e.target.value }))}
+                />
+              </div>
+              <div />
+              <div className="space-y-1">
+                <Label className="text-xs">Hora entrada</Label>
+                <Input
+                  type="time"
+                  value={manualForm.horaEntrada}
+                  onChange={(e) => setManualForm((f) => ({ ...f, horaEntrada: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Hora salida (opcional)</Label>
+                <Input
+                  type="time"
+                  value={manualForm.horaSalida}
+                  onChange={(e) => setManualForm((f) => ({ ...f, horaSalida: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Pausa inicio (opcional)</Label>
+                <Input
+                  type="time"
+                  value={manualForm.pausaInicio}
+                  onChange={(e) => setManualForm((f) => ({ ...f, pausaInicio: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Pausa fin (opcional)</Label>
+                <Input
+                  type="time"
+                  value={manualForm.pausaFin}
+                  onChange={(e) => setManualForm((f) => ({ ...f, pausaFin: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">Observaciones</Label>
+              <Input
+                placeholder="Motivo del registro manual"
+                value={manualForm.observaciones}
+                onChange={(e) => setManualForm((f) => ({ ...f, observaciones: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowNuevo(false)} disabled={savingManual}>
+              Cancelar
+            </Button>
+            <Button onClick={submitFichajeManual} disabled={savingManual}>
+              {savingManual ? "Guardando…" : "Crear fichaje"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

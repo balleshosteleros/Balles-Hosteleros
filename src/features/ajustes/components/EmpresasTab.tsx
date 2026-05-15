@@ -10,6 +10,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Building2, Plus, Trash2, Image, Info, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { ConfiguracionTab } from "@/features/ajustes/components/ConfiguracionTab";
+import { LocalesEmpresaTab } from "@/features/ajustes/components/locales/LocalesEmpresaTab";
 
 interface EmpresaFormData {
   nombre: string;
@@ -212,7 +213,12 @@ export function EmpresasTab() {
               Editar empresa — {editTarget?.nombre}
             </DialogTitle>
           </DialogHeader>
-          {editTarget && <ConfiguracionTab />}
+          {editTarget && (
+            <div className="space-y-4">
+              <ConfiguracionTab />
+              <LocalesEmpresaTab empresaId={editTarget.id} />
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
