@@ -15,6 +15,14 @@
     {
       "path": "/api/points/cron/snapshot-periodos",
       "schedule": "5 0 * * *"
+    },
+    {
+      "path": "/api/cron/psd2-sync",
+      "schedule": "30 6 * * *"
+    },
+    {
+      "path": "/api/cron/firmas-expirar",
+      "schedule": "0 3 * * *"
     }
   ]
 }

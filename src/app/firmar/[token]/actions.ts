@@ -1,0 +1,568 @@
+"use server";
+
+import { headers } from "next/headers";
+import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  compararOTP,
+  compararToken,
+  generarOTP,
+  hashOTP,
+  hashToken,
+  sha256,
+} from "@/features/rrhh/services/firmas/crypto";
+import { registrarEvento, listarEventos } from "@/features/rrhh/services/firmas/audit";
+import { enviarCodigoOTP, enviarCopiaFirmada } from "@/features/rrhh/services/firmas/email";
+import { generarActa, concatenarConActa, type DatosActa } from "@/features/rrhh/services/firmas/pdf";
+
+const BUCKET = "firmas";
+const OTP_TTL_MIN = 10;
+const OTP_MAX_INTENTOS = 3;
+const VISOR_TTL_SECONDS = 60 * 10;
+const COPIA_TTL_SECONDS = 60 * 60 * 24 * 7;
+
+async function getMeta() {
+  const h = await headers();
+  const ip =
+    h.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    h.get("x-real-ip") ||
+    null;
+  return { ip, userAgent: h.get("user-agent") || null };
+}
+
+async function resolverToken(token: string) {
+  const admin = createAdminClient();
+  const tokenHash = hashToken(token);
+  const { data, error } = await admin
+    .from("firmas_tokens")
+    .select("id, documento_id, expira_en, consumido_en, token_hash")
+    .eq("token_hash", tokenHash)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return { ok: false as const, reason: "not_found" as const };
+  if (!compararToken(token, data.token_hash as string)) {
+    return { ok: false as const, reason: "not_found" as const };
+  }
+  if (data.consumido_en) return { ok: false as const, reason: "consumed" as const };
+  if (new Date(data.expira_en as string).getTime() < Date.now()) {
+    return { ok: false as const, reason: "expired" as const };
+  }
+  return { ok: true as const, tokenRow: data };
+}
+
+export type AbrirDocumentoResult =
+  | {
+      ok: true;
+      documento: {
+        id: string;
+        titulo: string;
+        tipo: string;
+        modalidad: "click_to_sign" | "email_otp" | "manuscrita_digital";
+        validez: string;
+        estado: string;
+        expiraEn: string;
+        observaciones: string | null;
+        empleado: { nombre: string; emailEnmascarado: string | null };
+        empresa: { nombre: string };
+        enviadoPor: string;
+        enviadoEn: string;
+        pdfUrl: string;
+      };
+    }
+  | { ok: false; reason: "not_found" | "consumed" | "expired" | "estado_invalido"; message: string };
+
+function enmascararEmail(email: string | null | undefined): string | null {
+  if (!email) return null;
+  const [user, domain] = email.split("@");
+  if (!domain) return null;
+  if (user.length <= 2) return `${user[0] ?? "*"}***@${domain}`;
+  return `${user.slice(0, 2)}***${user.slice(-1)}@${domain}`;
+}
+
+export async function abrirDocumento(token: string): Promise<AbrirDocumentoResult> {
+  try {
+    const res = await resolverToken(token);
+    if (!res.ok) {
+      const message =
+        res.reason === "expired"
+          ? "El enlace ha caducado. Pide a RRHH que te lo reenvíe."
+          : res.reason === "consumed"
+            ? "Este enlace ya se usó. Si necesitas firmar de nuevo, contacta con RRHH."
+            : "Enlace no válido.";
+      return { ok: false, reason: res.reason, message };
+    }
+
+    const admin = createAdminClient();
+    const documentoId = res.tokenRow.documento_id as string;
+
+    const { data: doc } = await admin
+      .from("firmas_documentos")
+      .select(
+        "id, titulo, tipo, modalidad, validez, estado, expira_en, observaciones, empleado_id, empresa_id, enviado_por, enviado_en, pdf_original_path",
+      )
+      .eq("id", documentoId)
+      .maybeSingle();
+    if (!doc) return { ok: false, reason: "not_found", message: "Documento no encontrado" };
+    if (doc.estado !== "pendiente") {
+      return {
+        ok: false,
+        reason: "estado_invalido",
+        message: "Este documento ya no admite firma.",
+      };
+    }
+
+    const { data: emp } = await admin
+      .from("empleados")
+      .select("nombre, apellidos, email_empresa, email_personal")
+      .eq("id", doc.empleado_id)
+      .maybeSingle();
+    const { data: empresa } = await admin
+      .from("empresas")
+      .select("nombre")
+      .eq("id", doc.empresa_id)
+      .maybeSingle();
+    const { data: enviadoPorUser } = await admin
+      .from("profiles")
+      .select("full_name, email")
+      .eq("id", doc.enviado_por)
+      .maybeSingle();
+
+    const signed = await admin.storage
+      .from(BUCKET)
+      .createSignedUrl(doc.pdf_original_path as string, VISOR_TTL_SECONDS);
+    if (signed.error || !signed.data?.signedUrl) {
+      return { ok: false, reason: "not_found", message: "No se pudo abrir el PDF" };
+    }
+
+    const meta = await getMeta();
+    await registrarEvento({
+      documentoId,
+      tipo: "abierto",
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      metadata: {},
+    });
+
+    const empleadoNombre = `${emp?.nombre ?? ""} ${emp?.apellidos ?? ""}`.trim() || "Empleado";
+    const emailEmp = (emp?.email_empresa as string | null) || (emp?.email_personal as string | null);
+
+    return {
+      ok: true,
+      documento: {
+        id: doc.id as string,
+        titulo: doc.titulo as string,
+        tipo: doc.tipo as string,
+        modalidad: doc.modalidad as "click_to_sign" | "email_otp" | "manuscrita_digital",
+        validez: doc.validez as string,
+        estado: doc.estado as string,
+        expiraEn: doc.expira_en as string,
+        observaciones: (doc.observaciones as string | null) ?? null,
+        empleado: { nombre: empleadoNombre, emailEnmascarado: enmascararEmail(emailEmp) },
+        empresa: { nombre: (empresa?.nombre as string) ?? "Empresa" },
+        enviadoPor: (enviadoPorUser?.full_name as string) || (enviadoPorUser?.email as string) || "Administrador",
+        enviadoEn: doc.enviado_en as string,
+        pdfUrl: signed.data.signedUrl,
+      },
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error abriendo documento";
+    console.error("[firmar/abrir]", msg);
+    return { ok: false, reason: "not_found", message: msg };
+  }
+}
+
+export type SolicitarOtpResult =
+  | { ok: true; destinoEnmascarado: string; expiraMin: number }
+  | { ok: false; error: string };
+
+export async function solicitarOTP(token: string): Promise<SolicitarOtpResult> {
+  try {
+    const res = await resolverToken(token);
+    if (!res.ok) return { ok: false, error: "Enlace no válido o caducado" };
+
+    const admin = createAdminClient();
+    const documentoId = res.tokenRow.documento_id as string;
+
+    const { data: doc } = await admin
+      .from("firmas_documentos")
+      .select("titulo, empleado_id, empresa_id, estado")
+      .eq("id", documentoId)
+      .maybeSingle();
+    if (!doc) return { ok: false, error: "Documento no encontrado" };
+    if (doc.estado !== "pendiente") return { ok: false, error: "Documento ya cerrado" };
+
+    const { data: emp } = await admin
+      .from("empleados")
+      .select("nombre, apellidos, email_empresa, email_personal")
+      .eq("id", doc.empleado_id)
+      .maybeSingle();
+    const { data: empresa } = await admin
+      .from("empresas")
+      .select("nombre")
+      .eq("id", doc.empresa_id)
+      .maybeSingle();
+
+    const destino = (emp?.email_empresa as string | null) || (emp?.email_personal as string | null);
+    if (!destino) return { ok: false, error: "El empleado no tiene email; contacta con RRHH" };
+
+    const meta = await getMeta();
+
+    const { data: bloqueado } = await admin
+      .from("firmas_otps")
+      .select("bloqueado_hasta")
+      .eq("documento_id", documentoId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (bloqueado?.bloqueado_hasta) {
+      const hasta = new Date(bloqueado.bloqueado_hasta as string);
+      if (hasta.getTime() > Date.now()) {
+        return { ok: false, error: "Demasiados intentos. Vuelve a intentarlo en unos minutos." };
+      }
+    }
+
+    const codigo = generarOTP();
+    const codigoHash = hashOTP(codigo, documentoId);
+    const expiraEn = new Date(Date.now() + OTP_TTL_MIN * 60_000).toISOString();
+
+    const { error: insErr } = await admin.from("firmas_otps").insert({
+      documento_id: documentoId,
+      codigo_hash: codigoHash,
+      canal: "email",
+      destino,
+      expira_en: expiraEn,
+    });
+    if (insErr) return { ok: false, error: insErr.message };
+
+    const empleadoNombre = `${emp?.nombre ?? ""} ${emp?.apellidos ?? ""}`.trim() || "Empleado";
+    const send = await enviarCodigoOTP({
+      to: destino,
+      empresaId: doc.empresa_id as string,
+      empresaNombre: (empresa?.nombre as string) ?? "Empresa",
+      empleadoNombre,
+      tituloDocumento: doc.titulo as string,
+      codigo,
+      expiraMin: OTP_TTL_MIN,
+    });
+
+    await registrarEvento({
+      documentoId,
+      tipo: "otp_enviado",
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      metadata: { canal: "email", destinoEnmascarado: enmascararEmail(destino), emailOk: send.ok },
+    });
+
+    return {
+      ok: true,
+      destinoEnmascarado: enmascararEmail(destino) ?? destino,
+      expiraMin: OTP_TTL_MIN,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error enviando OTP";
+    console.error("[firmar/solicitarOTP]", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+export type ValidarOtpResult =
+  | { ok: true }
+  | { ok: false; error: string; bloqueado?: boolean };
+
+export async function validarOTP(token: string, codigo: string): Promise<ValidarOtpResult> {
+  try {
+    const limpio = (codigo ?? "").trim();
+    if (!/^\d{6}$/.test(limpio)) return { ok: false, error: "El código debe tener 6 dígitos" };
+
+    const res = await resolverToken(token);
+    if (!res.ok) return { ok: false, error: "Enlace no válido o caducado" };
+
+    const admin = createAdminClient();
+    const documentoId = res.tokenRow.documento_id as string;
+    const meta = await getMeta();
+
+    const { data: otp } = await admin
+      .from("firmas_otps")
+      .select("id, codigo_hash, expira_en, intentos, validado_en, bloqueado_hasta")
+      .eq("documento_id", documentoId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!otp) return { ok: false, error: "No hay OTP activo. Solicita un nuevo código." };
+    if (otp.validado_en) return { ok: false, error: "Este código ya se usó. Solicita uno nuevo." };
+    if (otp.bloqueado_hasta && new Date(otp.bloqueado_hasta as string).getTime() > Date.now()) {
+      return { ok: false, error: "Bloqueado por intentos. Espera unos minutos.", bloqueado: true };
+    }
+    if (new Date(otp.expira_en as string).getTime() < Date.now()) {
+      return { ok: false, error: "El código ha caducado. Solicita uno nuevo." };
+    }
+
+    if (!compararOTP(limpio, documentoId, otp.codigo_hash as string)) {
+      const nuevoIntentos = (otp.intentos as number) + 1;
+      const bloquear = nuevoIntentos >= OTP_MAX_INTENTOS;
+      await admin
+        .from("firmas_otps")
+        .update({
+          intentos: nuevoIntentos,
+          bloqueado_hasta: bloquear ? new Date(Date.now() + 30 * 60_000).toISOString() : null,
+        })
+        .eq("id", otp.id);
+      await registrarEvento({
+        documentoId,
+        tipo: bloquear ? "otp_bloqueado" : "otp_fallido",
+        ip: meta.ip,
+        userAgent: meta.userAgent,
+        metadata: { intentos: nuevoIntentos },
+      });
+      return {
+        ok: false,
+        error: bloquear ? "Demasiados intentos. Bloqueado 30 min." : "Código incorrecto",
+        bloqueado: bloquear,
+      };
+    }
+
+    await admin
+      .from("firmas_otps")
+      .update({ validado_en: new Date().toISOString() })
+      .eq("id", otp.id);
+
+    await registrarEvento({
+      documentoId,
+      tipo: "otp_validado",
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      metadata: {},
+    });
+
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error validando OTP";
+    console.error("[firmar/validarOTP]", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+export type FirmarDocumentoInput = {
+  token: string;
+  trazoFirmaBase64?: string | null;
+};
+
+export type FirmarResult =
+  | { ok: true; descargaUrl: string }
+  | { ok: false; error: string };
+
+export async function firmarDocumento(input: FirmarDocumentoInput): Promise<FirmarResult> {
+  try {
+    const res = await resolverToken(input.token);
+    if (!res.ok) return { ok: false, error: "Enlace no válido o caducado" };
+
+    const admin = createAdminClient();
+    const documentoId = res.tokenRow.documento_id as string;
+    const meta = await getMeta();
+
+    const { data: otpRow } = await admin
+      .from("firmas_otps")
+      .select("validado_en")
+      .eq("documento_id", documentoId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!otpRow?.validado_en) {
+      return { ok: false, error: "Verifica el código OTP antes de firmar" };
+    }
+
+    const { data: doc } = await admin
+      .from("firmas_documentos")
+      .select(
+        "id, empresa_id, empleado_id, titulo, tipo, modalidad, validez, estado, sha256_original, pdf_original_path, enviado_por, enviado_en",
+      )
+      .eq("id", documentoId)
+      .maybeSingle();
+    if (!doc) return { ok: false, error: "Documento no encontrado" };
+    if (doc.estado !== "pendiente") return { ok: false, error: "Documento ya cerrado" };
+
+    const { data: emp } = await admin
+      .from("empleados")
+      .select("nombre, apellidos, dni_nie, email_empresa, email_personal, user_id")
+      .eq("id", doc.empleado_id)
+      .maybeSingle();
+    const { data: empresa } = await admin
+      .from("empresas")
+      .select("nombre")
+      .eq("id", doc.empresa_id)
+      .maybeSingle();
+    const { data: enviadoPorUser } = await admin
+      .from("profiles")
+      .select("full_name, email")
+      .eq("id", doc.enviado_por)
+      .maybeSingle();
+
+    let trazoPng: Uint8Array | null = null;
+    if (doc.modalidad === "manuscrita_digital") {
+      if (!input.trazoFirmaBase64) {
+        return { ok: false, error: "Falta el trazo de firma manuscrita" };
+      }
+      const b64 = input.trazoFirmaBase64.replace(/^data:image\/png;base64,/, "");
+      try {
+        trazoPng = Buffer.from(b64, "base64");
+      } catch {
+        return { ok: false, error: "Trazo de firma inválido" };
+      }
+      const trazoPath = `${doc.empresa_id}/${documentoId}/signature.png`;
+      await admin.storage.from(BUCKET).upload(trazoPath, trazoPng, {
+        upsert: true,
+        contentType: "image/png",
+      });
+    }
+
+    const firmadoEnIso = new Date().toISOString();
+    const firmadoEvento = await registrarEvento({
+      documentoId,
+      tipo: "firmado",
+      actorUserId: (emp?.user_id as string) ?? null,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      metadata: { modalidad: doc.modalidad, firmadoEn: firmadoEnIso },
+    });
+
+    const eventos = await listarEventos(documentoId);
+
+    const empleadoEmail =
+      (emp?.email_empresa as string | null) || (emp?.email_personal as string | null);
+    const datos: DatosActa = {
+      documentoId,
+      titulo: doc.titulo as string,
+      tipo: doc.tipo as string,
+      modalidad: doc.modalidad as string,
+      validez: doc.validez as string,
+      empresaNombre: (empresa?.nombre as string) ?? "—",
+      empleadoNombre: `${emp?.nombre ?? ""} ${emp?.apellidos ?? ""}`.trim() || "—",
+      empleadoDni: (emp?.dni_nie as string | null) ?? null,
+      empleadoEmail,
+      enviadoPor: (enviadoPorUser?.full_name as string) || (enviadoPorUser?.email as string) || "Administrador",
+      enviadoEn: doc.enviado_en as string,
+      firmadoEn: firmadoEnIso,
+      ipFirma: meta.ip,
+      userAgent: meta.userAgent,
+      sha256Original: doc.sha256_original as string,
+      trazoFirmaPng: trazoPng,
+    };
+
+    const actaBytes = await generarActa(datos, eventos);
+    const { data: originalDl, error: dlErr } = await admin.storage
+      .from(BUCKET)
+      .download(doc.pdf_original_path as string);
+    if (dlErr || !originalDl) {
+      return { ok: false, error: "No se pudo cargar el PDF original" };
+    }
+    const originalBytes = new Uint8Array(await originalDl.arrayBuffer());
+    const firmadoBytes = await concatenarConActa(originalBytes, actaBytes);
+    const sha256Acta = sha256(Buffer.from(firmadoBytes));
+
+    const firmadoPath = `${doc.empresa_id}/${documentoId}/firmado.pdf`;
+    const { error: upErr } = await admin.storage
+      .from(BUCKET)
+      .upload(firmadoPath, firmadoBytes, { upsert: true, contentType: "application/pdf" });
+    if (upErr) return { ok: false, error: `No se pudo guardar el PDF firmado: ${upErr.message}` };
+
+    await admin
+      .from("firmas_documentos")
+      .update({
+        estado: "firmado",
+        firmado_en: firmadoEnIso,
+        ip_firma: meta.ip,
+        user_agent: meta.userAgent,
+        metodo_firma: doc.modalidad,
+        pdf_firmado_path: firmadoPath,
+        sha256_acta: sha256Acta,
+      })
+      .eq("id", documentoId);
+
+    await admin
+      .from("firmas_tokens")
+      .update({ consumido_en: new Date().toISOString() })
+      .eq("id", res.tokenRow.id);
+
+    void firmadoEvento;
+
+    const signed = await admin.storage
+      .from(BUCKET)
+      .createSignedUrl(firmadoPath, COPIA_TTL_SECONDS);
+    const descargaUrl = signed.data?.signedUrl ?? "";
+
+    if (empleadoEmail && descargaUrl) {
+      await enviarCopiaFirmada({
+        to: empleadoEmail,
+        empresaId: doc.empresa_id as string,
+        empresaNombre: (empresa?.nombre as string) ?? "Empresa",
+        empleadoNombre: datos.empleadoNombre,
+        tituloDocumento: doc.titulo as string,
+        firmadoEn: new Date(firmadoEnIso),
+        signedUrl: descargaUrl,
+      });
+    }
+
+    return { ok: true, descargaUrl };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error firmando documento";
+    console.error("[firmar/firmar]", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+export async function rechazarDocumento(
+  token: string,
+  motivo?: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const res = await resolverToken(token);
+    if (!res.ok) return { ok: false, error: "Enlace no válido o caducado" };
+
+    const admin = createAdminClient();
+    const documentoId = res.tokenRow.documento_id as string;
+    const meta = await getMeta();
+
+    const { data: doc } = await admin
+      .from("firmas_documentos")
+      .select("estado, empleado_id")
+      .eq("id", documentoId)
+      .maybeSingle();
+    if (!doc) return { ok: false, error: "Documento no encontrado" };
+    if (doc.estado !== "pendiente") return { ok: false, error: "Documento ya cerrado" };
+
+    const { data: emp } = await admin
+      .from("empleados")
+      .select("user_id")
+      .eq("id", doc.empleado_id)
+      .maybeSingle();
+
+    await admin
+      .from("firmas_documentos")
+      .update({
+        estado: "rechazado",
+        motivo_rechazo: motivo?.trim() || null,
+        ip_firma: meta.ip,
+        user_agent: meta.userAgent,
+      })
+      .eq("id", documentoId);
+
+    await admin
+      .from("firmas_tokens")
+      .update({ consumido_en: new Date().toISOString() })
+      .eq("id", res.tokenRow.id);
+
+    await registrarEvento({
+      documentoId,
+      tipo: "rechazado",
+      actorUserId: (emp?.user_id as string) ?? null,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      metadata: { motivo: motivo?.trim() || null },
+    });
+
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error rechazando";
+    console.error("[firmar/rechazar]", msg);
+    return { ok: false, error: msg };
+  }
+}
