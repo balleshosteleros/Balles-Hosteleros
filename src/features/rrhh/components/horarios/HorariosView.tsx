@@ -29,8 +29,8 @@ export function HorariosView() {
       case "turnos": return <TurnosSection empresaId={empresaActual.id} />;
       case "descansos": return <DescansosSection empresaId={empresaActual.id} />;
       case "patrones": return <PatronesSection empresaId={empresaActual.id} />;
-      case "fichaje": return <TiposFichajeSection />;
-      case "ausencia": return <TiposAusenciaSection />;
+      case "fichaje": return <TiposFichajeSection empresaId={empresaActual.id} />;
+      case "ausencia": return <TiposAusenciaSection empresaId={empresaActual.id} />;
     }
   };
 

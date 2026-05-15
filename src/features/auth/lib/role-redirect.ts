@@ -1,8 +1,8 @@
 /**
- * Tras login, todo usuario aterriza en /mi-panel para fichar entrada.
- * El acceso a su módulo de rol queda en los accesos rápidos del propio panel.
+ * Tras login, todo usuario aterriza en /mis-departamentos (vista principal).
+ * El acceso a Mi Panel queda disponible desde el sidebar.
  */
-const LANDING = "/mi-panel";
+const LANDING = "/mis-departamentos";
 
 export const ROL_LANDING: Record<string, string> = {
   "Dirección": LANDING,

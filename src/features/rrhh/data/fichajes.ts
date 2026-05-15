@@ -1,5 +1,29 @@
 export type EstadoFichaje = "completo" | "incompleto" | "incidencia" | "pendiente" | "validado";
 
+export type TipoFichajeCodigo = "ENT" | "SAL" | "IPA" | "FPA" | "MAN" | "COR" | "VAL" | "NOR";
+
+export const TIPO_FICHAJE_LABEL: Record<TipoFichajeCodigo, string> = {
+  ENT: "Normal",
+  SAL: "Salida",
+  IPA: "En pausa",
+  FPA: "Fin pausa",
+  MAN: "Manual",
+  COR: "Corregido",
+  VAL: "Validado",
+  NOR: "Normal",
+};
+
+export const TIPO_FICHAJE_BADGE: Record<TipoFichajeCodigo, string> = {
+  ENT: "bg-sky-50 text-sky-700 border-sky-200",
+  SAL: "bg-sky-50 text-sky-700 border-sky-200",
+  IPA: "bg-amber-50 text-amber-700 border-amber-200",
+  FPA: "bg-amber-50 text-amber-700 border-amber-200",
+  MAN: "bg-violet-50 text-violet-700 border-violet-200",
+  COR: "bg-orange-50 text-orange-700 border-orange-200",
+  VAL: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  NOR: "bg-sky-50 text-sky-700 border-sky-200",
+};
+
 export interface Fichaje {
   id: string;
   empleadoId: string;
@@ -16,6 +40,7 @@ export interface Fichaje {
   observaciones: string | null;
   departamento: string;
   centro: string;
+  tipo?: TipoFichajeCodigo;
 }
 
 export interface IncidenciaFichaje {

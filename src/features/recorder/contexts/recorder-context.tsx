@@ -10,6 +10,13 @@ import {
   type ReactNode,
 } from "react";
 import { useRecordingStore } from "../store/recording-store";
+import {
+  addPending,
+  listPending,
+  markRetryFailure,
+  removePending,
+  type PendingRecording,
+} from "../lib/pending-storage";
 
 export interface RecordOptions {
   includeSystemAudio: boolean;
@@ -33,12 +40,20 @@ interface RecorderContextValue {
   result: RecordingResult | null;
   previewUrl: string | null;
   cameraStream: MediaStream | null;
+  displaySurface: string | null;
+  pendingCount: number;
   startRecording: (title: string) => Promise<void>;
   pauseRecording: () => void;
   resumeRecording: () => void;
   stopRecording: () => void;
   reset: () => void;
+  refreshPending: () => Promise<PendingRecording[]>;
+  retryPending: (id: string) => Promise<boolean>;
+  retryAllPending: () => Promise<void>;
+  deletePending: (id: string) => Promise<void>;
 }
+
+const COUNTDOWN_SECONDS = 3;
 
 const RecorderContext = createContext<RecorderContextValue | null>(null);
 
@@ -72,12 +87,14 @@ export function formatDuration(seconds: number): string {
 }
 
 export function RecorderProvider({ children }: { children: ReactNode }) {
-  const { setState, setElapsed } = useRecordingStore();
+  const { setState, setElapsed, setCountdownValue } = useRecordingStore();
   const [options, setOptions] = useState<RecordOptions>(DEFAULT_OPTIONS);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<RecordingResult | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [displaySurface, setDisplaySurface] = useState<string | null>(null);
+  const [pendingCount, setPendingCount] = useState<number>(0);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -89,6 +106,7 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
   const startTimeRef = useRef<number>(0);
   const elapsedRef = useRef<number>(0);
   const previewUrlRef = useRef<string | null>(null);
+  const countdownCancelRef = useRef<boolean>(false);
 
   useEffect(() => {
     previewUrlRef.current = previewUrl;
@@ -104,6 +122,7 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
     cameraStreamRef.current = null;
     audioContextRef.current = null;
     setCameraStream(null);
+    setDisplaySurface(null);
   }, []);
 
   useEffect(() => {
@@ -122,15 +141,67 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
     setOptions((prev) => ({ ...prev, quality }));
   }, []);
 
+  const refreshPending = useCallback(async (): Promise<PendingRecording[]> => {
+    try {
+      const list = await listPending();
+      setPendingCount(list.length);
+      return list;
+    } catch (err) {
+      console.error("[recorder] listPending failed:", err);
+      return [];
+    }
+  }, []);
+
+  const uploadBlob = useCallback(
+    async (
+      pendingId: string,
+      blob: Blob,
+      title: string,
+      duration: number,
+    ): Promise<{ id: string; url: string; duration: number; file_size: number } | null> => {
+      const formData = new FormData();
+      formData.append("file", blob, `${title}.webm`);
+      formData.append("title", title);
+      formData.append("duration", duration.toString());
+      formData.append("mimeType", blob.type);
+
+      try {
+        const res = await fetch("/api/recordings", { method: "POST", body: formData });
+        if (!res.ok) {
+          const text = await res.text().catch(() => "");
+          throw new Error(`HTTP ${res.status} ${text.slice(0, 200)}`);
+        }
+        const data = await res.json();
+        if (!data?.id) throw new Error("Respuesta sin id");
+        await removePending(pendingId).catch(() => {});
+        await refreshPending();
+        return data;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn("[recorder] upload failed, kept in IndexedDB:", msg);
+        await markRetryFailure(pendingId, msg).catch(() => {});
+        await refreshPending();
+        return null;
+      }
+    },
+    [refreshPending],
+  );
+
   const processRecording = useCallback(
     async (blob: Blob, title: string) => {
       try {
         const url = URL.createObjectURL(blob);
         setPreviewUrl(url);
 
-        const duration = elapsedRef.current || Math.floor((Date.now() - startTimeRef.current) / 1000);
+        const duration =
+          elapsedRef.current || Math.floor((Date.now() - startTimeRef.current) / 1000);
+        const pendingId =
+          (typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `local-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
+
         const localResult: RecordingResult = {
-          videoId: "local-" + Date.now(),
+          videoId: pendingId,
           url,
           duration,
           fileSize: blob.size,
@@ -138,37 +209,44 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
         setResult(localResult);
         setState("done");
 
-        const formData = new FormData();
-        formData.append("file", blob, `${title}.webm`);
-        formData.append("title", title);
-        formData.append("duration", duration.toString());
-        formData.append("mimeType", blob.type);
-
-        fetch("/api/recordings", { method: "POST", body: formData })
-          .then((res) => res.json())
-          .then((data) => {
-            if (data?.id) {
-              setResult({
-                videoId: data.id,
-                url: data.url,
-                duration: data.duration,
-                fileSize: data.file_size,
-              });
-            }
-          })
-          .catch((err) => {
-            console.warn(
-              "No se pudo guardar en el servidor, el video solo estará disponible localmente esta sesión.",
-              err,
-            );
+        // Persistir en IndexedDB ANTES de intentar subir.
+        // Así, si el upload falla o el usuario cierra la pestaña,
+        // el video sigue disponible para reintentar más tarde.
+        try {
+          await addPending({
+            id: pendingId,
+            title,
+            blob,
+            mimeType: blob.type,
+            duration,
+            fileSize: blob.size,
+            createdAt: Date.now(),
+            retryCount: 0,
           });
+          await refreshPending();
+        } catch (err) {
+          // Si IndexedDB no está disponible (cuota llena, modo privado, etc.)
+          // seguimos adelante con el upload directo sin fallback local.
+          console.warn("[recorder] no se pudo guardar en IndexedDB:", err);
+        }
+
+        // Subida en segundo plano. Si tiene éxito, removePending lo borra.
+        const data = await uploadBlob(pendingId, blob, title, duration);
+        if (data) {
+          setResult({
+            videoId: data.id,
+            url: data.url,
+            duration: data.duration,
+            fileSize: data.file_size,
+          });
+        }
       } catch (err) {
         console.error("Error al procesar la grabación:", err);
         setState("error");
         setError("Error al procesar la grabación");
       }
     },
-    [setState],
+    [refreshPending, setState, uploadBlob],
   );
 
   const stopRecording = useCallback(() => {
@@ -201,9 +279,21 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
         });
         screenStreamRef.current = screenStream;
 
-        screenStream.getVideoTracks()[0].addEventListener("ended", () => {
+        const videoTrack = screenStream.getVideoTracks()[0];
+        const trackSettings = videoTrack.getSettings() as MediaTrackSettings & {
+          displaySurface?: string;
+        };
+        setDisplaySurface(trackSettings.displaySurface ?? null);
+
+        videoTrack.addEventListener("ended", () => {
           if (mediaRecorderRef.current?.state === "recording" || mediaRecorderRef.current?.state === "paused") {
             stopRecording();
+          } else {
+            // Usuario detuvo el share durante el countdown o antes de empezar a grabar
+            countdownCancelRef.current = true;
+            stopAllStreams();
+            setCountdownValue(0);
+            setState("idle");
           }
         });
 
@@ -272,6 +362,18 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
         };
 
         mediaRecorderRef.current = recorder;
+
+        // Countdown 3..2..1 antes de empezar a grabar realmente
+        countdownCancelRef.current = false;
+        setState("countdown");
+        for (let n = COUNTDOWN_SECONDS; n >= 1; n--) {
+          if (countdownCancelRef.current) return;
+          setCountdownValue(n);
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+        if (countdownCancelRef.current) return;
+        setCountdownValue(0);
+
         recorder.start(1000);
 
         startTimeRef.current = Date.now();
@@ -285,6 +387,8 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
 
         setState("recording");
       } catch (err) {
+        countdownCancelRef.current = true;
+        setCountdownValue(0);
         setState("error");
         if (err instanceof Error) {
           if (err.name === "NotAllowedError") {
@@ -296,7 +400,7 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
         stopAllStreams();
       }
     },
-    [options, processRecording, setElapsed, setState, stopAllStreams, stopRecording],
+    [options, processRecording, setCountdownValue, setElapsed, setState, stopAllStreams, stopRecording],
   );
 
   const pauseRecording = useCallback(() => {
@@ -323,16 +427,71 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
     }
   }, [setElapsed, setState]);
 
+  const retryPending = useCallback(
+    async (id: string): Promise<boolean> => {
+      const all = await listPending();
+      const rec = all.find((r) => r.id === id);
+      if (!rec) {
+        await refreshPending();
+        return false;
+      }
+      const data = await uploadBlob(rec.id, rec.blob, rec.title, rec.duration);
+      return !!data;
+    },
+    [refreshPending, uploadBlob],
+  );
+
+  const retryAllPending = useCallback(async () => {
+    const all = await listPending();
+    for (const rec of all) {
+      await uploadBlob(rec.id, rec.blob, rec.title, rec.duration);
+    }
+  }, [uploadBlob]);
+
+  const deletePending = useCallback(
+    async (id: string) => {
+      await removePending(id).catch(() => {});
+      await refreshPending();
+    },
+    [refreshPending],
+  );
+
+  // Al montar: contar pendientes y reintentar subidas si hay red.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const list = await refreshPending();
+      if (cancelled || list.length === 0) return;
+      if (typeof navigator === "undefined" || navigator.onLine) {
+        retryAllPending().catch(() => {});
+      }
+    })();
+
+    function handleOnline() {
+      retryAllPending().catch(() => {});
+    }
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", handleOnline);
+    }
+    return () => {
+      cancelled = true;
+      if (typeof window !== "undefined") {
+        window.removeEventListener("online", handleOnline);
+      }
+    };
+  }, [refreshPending, retryAllPending]);
+
   const reset = useCallback(() => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
     setResult(null);
     setElapsed(0);
     elapsedRef.current = 0;
+    setCountdownValue(0);
     setError(null);
     setState("idle");
     chunksRef.current = [];
-  }, [previewUrl, setElapsed, setState]);
+  }, [previewUrl, setCountdownValue, setElapsed, setState]);
 
   const value: RecorderContextValue = {
     options,
@@ -342,11 +501,17 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
     result,
     previewUrl,
     cameraStream,
+    displaySurface,
+    pendingCount,
     startRecording,
     pauseRecording,
     resumeRecording,
     stopRecording,
     reset,
+    refreshPending,
+    retryPending,
+    retryAllPending,
+    deletePending,
   };
 
   return <RecorderContext.Provider value={value}>{children}</RecorderContext.Provider>;

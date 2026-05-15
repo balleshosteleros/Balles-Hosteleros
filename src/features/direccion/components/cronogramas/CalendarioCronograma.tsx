@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { ReactNode } from "react";
-import { ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { CalendarRangeToggle, CalendarRangeNav } from "@/shared/components/calendar/CalendarRangeToggle";
+import { useCalendarRange } from "@/shared/components/calendar/calendar-range";
 import type { CronogramaOperativo } from "../../hooks/useCronogramasOperativos";
 
 const DIAS = [
@@ -32,8 +33,6 @@ interface Grupo {
   main: CronogramaOperativo;
   subs: CronogramaOperativo[];
 }
-
-type SubVista = "DIARIO" | "SEMANAL" | "MENSUAL";
 
 interface Props {
   grupos: Grupo[];
@@ -144,10 +143,7 @@ function tareasParaFecha(d: Date, ctx: CtxFecha): CronogramaOperativo[] {
 }
 
 export function CalendarioCronograma({ grupos, onTareaClick }: Props) {
-  const [subVista, setSubVista] = useState<SubVista>("SEMANAL");
-  const [diaOffset, setDiaOffset] = useState(0);
-  const [semanaOffset, setSemanaOffset] = useState(0);
-  const [mesOffset, setMesOffset] = useState(0);
+  const rango = useCalendarRange("SEMANAL");
 
   const subsPorParent = useMemo(() => {
     const map = new Map<string, CronogramaOperativo[]>();
@@ -176,166 +172,76 @@ export function CalendarioCronograma({ grupos, onTareaClick }: Props) {
     [grupos],
   );
 
-  const today = new Date();
-  const diaActual = addDays(today, diaOffset);
-  const inicioSemana = addDays(startOfWeekMon(today), semanaOffset * 7);
+  const ctxFecha: CtxFecha = { tareasSemanales, tareasMensuales, tareasTrimestrales, tareasAnuales };
 
   return (
     <div className="w-full max-w-7xl mx-auto flex flex-col gap-4">
-      {/* Sub-toggle período + navegación */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="inline-flex p-1 rounded-xl bg-muted/40 border self-start">
-          {(["DIARIO", "SEMANAL", "MENSUAL"] as SubVista[]).map((v) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => setSubVista(v)}
-              className={cn(
-                "px-4 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all",
-                subVista === v
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {v}
-            </button>
-          ))}
-        </div>
-
-        {subVista === "DIARIO" && (
-          <NavegadorDia diaOffset={diaOffset} setDiaOffset={setDiaOffset} fecha={diaActual} />
-        )}
-        {subVista === "SEMANAL" && (
-          <NavegadorSemana
-            semanaOffset={semanaOffset}
-            setSemanaOffset={setSemanaOffset}
-            inicioSemana={inicioSemana}
-          />
-        )}
-        {subVista === "MENSUAL" && (
-          <NavegadorMes mesOffset={mesOffset} setMesOffset={setMesOffset} />
-        )}
+        <CalendarRangeToggle mode={rango.mode} onChange={rango.setMode} className="self-start" />
+        <CalendarRangeNav
+          label={rango.label}
+          onPrev={rango.prev}
+          onNext={rango.next}
+          onToday={rango.goToToday}
+          isToday={rango.isToday}
+        />
       </div>
 
       <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
-        {subVista === "DIARIO" && (
+        {rango.mode === "DIARIO" && (
           <VistaDiaria
-            fecha={diaActual}
+            fecha={rango.anchor}
             tareasDiarias={tareasDiarias}
-            tareasSemanales={tareasSemanales}
-            tareasMensuales={tareasMensuales}
-            tareasTrimestrales={tareasTrimestrales}
-            tareasAnuales={tareasAnuales}
+            ctxFecha={ctxFecha}
             subsPorParent={subsPorParent}
             onTareaClick={onTareaClick}
           />
         )}
-        {subVista === "SEMANAL" && (
+        {rango.mode === "SEMANAL" && (
           <VistaSemanal
-            inicioSemana={inicioSemana}
+            inicioSemana={rango.range.start}
             tareasDiarias={tareasDiarias}
-            tareasSemanales={tareasSemanales}
-            tareasMensuales={tareasMensuales}
-            tareasTrimestrales={tareasTrimestrales}
-            tareasAnuales={tareasAnuales}
+            ctxFecha={ctxFecha}
             subsPorParent={subsPorParent}
             onTareaClick={onTareaClick}
           />
         )}
-        {subVista === "MENSUAL" && (
+        {rango.mode === "MENSUAL" && (
           <VistaMensual
-            grupos={grupos}
+            anchor={rango.anchor}
             tareasDiarias={tareasDiarias}
-            mesOffset={mesOffset}
+            ctxFecha={ctxFecha}
+            onTareaClick={onTareaClick}
+          />
+        )}
+        {rango.mode === "TRIMESTRAL" && (
+          <VistaMultiMes
+            anchor={rango.anchor}
+            mesesCount={3}
+            tareasDiarias={tareasDiarias}
+            ctxFecha={ctxFecha}
+            onTareaClick={onTareaClick}
+          />
+        )}
+        {rango.mode === "SEMESTRAL" && (
+          <VistaMultiMes
+            anchor={rango.anchor}
+            mesesCount={6}
+            tareasDiarias={tareasDiarias}
+            ctxFecha={ctxFecha}
+            onTareaClick={onTareaClick}
+          />
+        )}
+        {rango.mode === "ANUAL" && (
+          <VistaMultiMes
+            anchor={rango.anchor}
+            mesesCount={12}
+            tareasDiarias={tareasDiarias}
+            ctxFecha={ctxFecha}
             onTareaClick={onTareaClick}
           />
         )}
       </div>
-    </div>
-  );
-}
-
-/* ───────────── Navegadores ───────────── */
-
-function NavegadorDia({
-  diaOffset, setDiaOffset, fecha,
-}: {
-  diaOffset: number;
-  setDiaOffset: (n: number | ((p: number) => number)) => void;
-  fecha: Date;
-}) {
-  const dia = DIAS[isoOfDate(fecha) - 1];
-  const label = `${dia.largo}, ${fecha.getDate()} ${MESES[fecha.getMonth()].toLowerCase()} ${fecha.getFullYear()}`;
-  return (
-    <div className="flex items-center gap-1">
-      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDiaOffset((p: number) => p - 1)}>
-        <ChevronLeft className="h-4 w-4" />
-      </Button>
-      <div className="text-sm font-medium min-w-[220px] text-center">{label}</div>
-      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDiaOffset((p: number) => p + 1)}>
-        <ChevronRight className="h-4 w-4" />
-      </Button>
-      {diaOffset !== 0 && (
-        <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setDiaOffset(0)}>
-          Hoy
-        </Button>
-      )}
-    </div>
-  );
-}
-
-function NavegadorSemana({
-  semanaOffset, setSemanaOffset, inicioSemana,
-}: {
-  semanaOffset: number;
-  setSemanaOffset: (n: number | ((p: number) => number)) => void;
-  inicioSemana: Date;
-}) {
-  const fin = addDays(inicioSemana, 6);
-  const mismoMes = inicioSemana.getMonth() === fin.getMonth();
-  const mismoAnio = inicioSemana.getFullYear() === fin.getFullYear();
-  const label = mismoMes
-    ? `${inicioSemana.getDate()} – ${fin.getDate()} ${MESES[fin.getMonth()].toLowerCase()} ${fin.getFullYear()}`
-    : mismoAnio
-      ? `${inicioSemana.getDate()} ${MESES_CORTOS[inicioSemana.getMonth()].toLowerCase()} – ${fin.getDate()} ${MESES_CORTOS[fin.getMonth()].toLowerCase()} ${fin.getFullYear()}`
-      : `${inicioSemana.getDate()} ${MESES_CORTOS[inicioSemana.getMonth()].toLowerCase()} ${inicioSemana.getFullYear()} – ${fin.getDate()} ${MESES_CORTOS[fin.getMonth()].toLowerCase()} ${fin.getFullYear()}`;
-  return (
-    <div className="flex items-center gap-1">
-      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSemanaOffset((p: number) => p - 1)}>
-        <ChevronLeft className="h-4 w-4" />
-      </Button>
-      <div className="text-sm font-medium min-w-[220px] text-center">{label}</div>
-      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSemanaOffset((p: number) => p + 1)}>
-        <ChevronRight className="h-4 w-4" />
-      </Button>
-      {semanaOffset !== 0 && (
-        <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setSemanaOffset(0)}>
-          Hoy
-        </Button>
-      )}
-    </div>
-  );
-}
-
-function NavegadorMes({ mesOffset, setMesOffset }: { mesOffset: number; setMesOffset: (n: number | ((p: number) => number)) => void }) {
-  const fecha = new Date();
-  fecha.setDate(1);
-  fecha.setMonth(fecha.getMonth() + mesOffset);
-  const label = `${MESES[fecha.getMonth()]} ${fecha.getFullYear()}`;
-  return (
-    <div className="flex items-center gap-1">
-      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setMesOffset((p: number) => p - 1)}>
-        <ChevronLeft className="h-4 w-4" />
-      </Button>
-      <div className="text-sm font-medium min-w-[140px] text-center capitalize">{label}</div>
-      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setMesOffset((p: number) => p + 1)}>
-        <ChevronRight className="h-4 w-4" />
-      </Button>
-      {mesOffset !== 0 && (
-        <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setMesOffset(0)}>
-          Hoy
-        </Button>
-      )}
     </div>
   );
 }
@@ -343,18 +249,15 @@ function NavegadorMes({ mesOffset, setMesOffset }: { mesOffset: number; setMesOf
 /* ───────────── Vista DIARIA ───────────── */
 
 function VistaDiaria({
-  fecha, tareasDiarias, tareasSemanales, tareasMensuales, tareasTrimestrales, tareasAnuales, subsPorParent, onTareaClick,
+  fecha, tareasDiarias, ctxFecha, subsPorParent, onTareaClick,
 }: {
   fecha: Date;
   tareasDiarias: CronogramaOperativo[];
-  tareasSemanales: CronogramaOperativo[];
-  tareasMensuales: CronogramaOperativo[];
-  tareasTrimestrales: CronogramaOperativo[];
-  tareasAnuales: CronogramaOperativo[];
+  ctxFecha: CtxFecha;
   subsPorParent: Map<string, CronogramaOperativo[]>;
   onTareaClick: (t: CronogramaOperativo) => void;
 }) {
-  const otras = tareasParaFecha(fecha, { tareasSemanales, tareasMensuales, tareasTrimestrales, tareasAnuales });
+  const otras = tareasParaFecha(fecha, ctxFecha);
 
   if (tareasDiarias.length === 0 && otras.length === 0) {
     return <EmptyState texto="No hay tareas programadas para este día." />;
@@ -438,14 +341,11 @@ function SeccionTareas({
 /* ───────────── Vista SEMANAL ───────────── */
 
 function VistaSemanal({
-  inicioSemana, tareasDiarias, tareasSemanales, tareasMensuales, tareasTrimestrales, tareasAnuales, subsPorParent, onTareaClick,
+  inicioSemana, tareasDiarias, ctxFecha, subsPorParent, onTareaClick,
 }: {
   inicioSemana: Date;
   tareasDiarias: CronogramaOperativo[];
-  tareasSemanales: CronogramaOperativo[];
-  tareasMensuales: CronogramaOperativo[];
-  tareasTrimestrales: CronogramaOperativo[];
-  tareasAnuales: CronogramaOperativo[];
+  ctxFecha: CtxFecha;
   subsPorParent: Map<string, CronogramaOperativo[]>;
   onTareaClick: (t: CronogramaOperativo) => void;
 }) {
@@ -460,7 +360,7 @@ function VistaSemanal({
 
       <div className="grid grid-cols-7 divide-x divide-border/40 min-h-[400px]">
         {dias7.map((d, idx) => {
-          const tareas = tareasParaFecha(d, { tareasSemanales, tareasMensuales, tareasTrimestrales, tareasAnuales });
+          const tareas = tareasParaFecha(d, ctxFecha);
           const isToday = sameDay(d, hoy);
           return (
             <div key={idx} className="flex flex-col">
@@ -555,17 +455,15 @@ function ChipTarea({ tarea, subs, onClick }: { tarea: CronogramaOperativo; subs:
 /* ───────────── Vista MENSUAL ───────────── */
 
 function VistaMensual({
-  grupos, tareasDiarias, mesOffset, onTareaClick,
+  anchor, tareasDiarias, ctxFecha, onTareaClick,
 }: {
-  grupos: Grupo[];
+  anchor: Date;
   tareasDiarias: CronogramaOperativo[];
-  mesOffset: number;
+  ctxFecha: CtxFecha;
   onTareaClick: (t: CronogramaOperativo) => void;
 }) {
-  const ahora = new Date();
-  const refMes = new Date(ahora.getFullYear(), ahora.getMonth() + mesOffset, 1);
-  const year = refMes.getFullYear();
-  const month = refMes.getMonth();
+  const year = anchor.getFullYear();
+  const month = anchor.getMonth();
   const lastDay = new Date(year, month + 1, 0).getDate();
   const firstWeekday = isoOfDate(new Date(year, month, 1));
   const padStart = firstWeekday - 1;
@@ -586,47 +484,9 @@ function VistaMensual({
     cells.push({ date: next, inMonth: false });
   }
 
-  const tareasSemanales = grupos.filter((g) => g.main.frecuencia === "SEMANAL").map((g) => g.main);
-  const tareasMensuales = grupos.filter((g) => g.main.frecuencia === "MENSUAL").map((g) => g.main);
-  const tareasTrimestrales = grupos.filter((g) => g.main.frecuencia === "TRIMESTRAL").map((g) => g.main);
-  const tareasAnuales = grupos.filter((g) => g.main.frecuencia === "ANUAL").map((g) => g.main);
-
   const tareasDelDia = (d: Date): CronogramaOperativo[] => {
-    if (!d) return [];
-    const iso = isoOfDate(d);
-    const dom = d.getDate();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    const out: CronogramaOperativo[] = [];
-
-    for (const t of tareasSemanales) {
-      if (!(t.dia_semana ?? []).includes(iso)) continue;
-      if (!pasaIntervaloYTermina(t, d)) continue;
-      out.push(t);
-    }
-    for (const t of tareasMensuales) {
-      const target = t.dia_mes ?? 1;
-      const effective = Math.min(target, lastDay);
-      if (dom !== effective || d.getMonth() !== month) continue;
-      if (!pasaIntervaloYTermina(t, d)) continue;
-      out.push(t);
-    }
-    for (const t of tareasTrimestrales) {
-      const meses = t.meses_trimestrales ?? [1, 4, 7, 10];
-      if (!meses.includes(d.getMonth() + 1)) continue;
-      const target = t.dia_mes ?? 1;
-      const lastOfThis = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-      const effective = Math.min(target, lastOfThis);
-      if (dom !== effective) continue;
-      if (!pasaIntervaloYTermina(t, d)) continue;
-      out.push(t);
-    }
-    for (const t of tareasAnuales) {
-      if (t.fecha_anual !== `${mm}-${dd}`) continue;
-      if (!pasaIntervaloYTermina(t, d)) continue;
-      out.push(t);
-    }
-    return out;
+    if (d.getMonth() !== month) return [];
+    return tareasParaFecha(d, ctxFecha);
   };
 
   const hoy = new Date();
@@ -718,6 +578,142 @@ function LeyendaPunto({ color, texto }: { color: string; texto: string }) {
     <div className="flex items-center gap-1.5">
       <span className={cn("h-2 w-2 rounded-full", color)} />
       <span>{texto}</span>
+    </div>
+  );
+}
+
+/* ───────────── Vista MULTI-MES (Trimestral / Semestral / Anual) ───────────── */
+
+function VistaMultiMes({
+  anchor, mesesCount, tareasDiarias, ctxFecha, onTareaClick,
+}: {
+  anchor: Date;
+  mesesCount: 3 | 6 | 12;
+  tareasDiarias: CronogramaOperativo[];
+  ctxFecha: CtxFecha;
+  onTareaClick: (t: CronogramaOperativo) => void;
+}) {
+  let mesInicio: number;
+  let yearInicio = anchor.getFullYear();
+  if (mesesCount === 3) {
+    mesInicio = Math.floor(anchor.getMonth() / 3) * 3;
+  } else if (mesesCount === 6) {
+    mesInicio = anchor.getMonth() < 6 ? 0 : 6;
+  } else {
+    mesInicio = 0;
+  }
+
+  const meses = Array.from({ length: mesesCount }, (_, i) => {
+    const m = mesInicio + i;
+    return { year: yearInicio + Math.floor(m / 12), month: ((m % 12) + 12) % 12 };
+  });
+
+  const cols = mesesCount === 3 ? "grid-cols-1 md:grid-cols-3"
+    : mesesCount === 6 ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3"
+    : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4";
+
+  return (
+    <div className="flex flex-col">
+      {tareasDiarias.length > 0 && (
+        <BandaDiaria tareas={tareasDiarias} onTareaClick={onTareaClick} />
+      )}
+      <div className={cn("grid gap-3 p-3", cols)}>
+        {meses.map(({ year, month }) => (
+          <MiniMes
+            key={`${year}-${month}`}
+            year={year}
+            month={month}
+            ctxFecha={ctxFecha}
+            onTareaClick={onTareaClick}
+          />
+        ))}
+      </div>
+      <div className="px-4 py-3 border-t bg-muted/10 flex flex-wrap gap-3 text-[10px] text-muted-foreground">
+        <LeyendaPunto color="bg-emerald-400" texto="Semanal" />
+        <LeyendaPunto color="bg-blue-400" texto="Mensual" />
+        <LeyendaPunto color="bg-violet-400" texto="Trimestral" />
+        <LeyendaPunto color="bg-orange-400" texto="Anual" />
+      </div>
+    </div>
+  );
+}
+
+function MiniMes({
+  year, month, ctxFecha, onTareaClick,
+}: {
+  year: number;
+  month: number;
+  ctxFecha: CtxFecha;
+  onTareaClick: (t: CronogramaOperativo) => void;
+}) {
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const firstWeekday = isoOfDate(new Date(year, month, 1));
+  const padStart = firstWeekday - 1;
+  const cells: { date: Date; inMonth: boolean }[] = [];
+  for (let i = 0; i < padStart; i++) {
+    cells.push({ date: new Date(year, month, i - padStart + 1), inMonth: false });
+  }
+  for (let i = 1; i <= lastDay; i++) {
+    cells.push({ date: new Date(year, month, i), inMonth: true });
+  }
+  while (cells.length % 7 !== 0) {
+    const last = cells[cells.length - 1].date;
+    cells.push({ date: new Date(last.getFullYear(), last.getMonth(), last.getDate() + 1), inMonth: false });
+  }
+  const hoy = new Date();
+
+  return (
+    <div className="rounded-lg border bg-card overflow-hidden">
+      <div className="px-2.5 py-1.5 bg-muted/30 border-b text-center">
+        <div className="text-[11px] font-semibold uppercase tracking-wider">
+          {MESES[month]} <span className="text-muted-foreground">{year}</span>
+        </div>
+      </div>
+      <div className="grid grid-cols-7 text-[9px] text-muted-foreground bg-muted/10">
+        {DIAS.map((d) => (
+          <div key={d.iso} className="px-1 py-0.5 text-center font-semibold">{d.short.slice(0, 1)}</div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7">
+        {cells.map((c, i) => {
+          if (!c.inMonth) {
+            return <div key={i} className="aspect-square" />;
+          }
+          const tareas = tareasParaFecha(c.date, ctxFecha);
+          const count = tareas.length;
+          const isToday = sameDay(c.date, hoy);
+          const dominant = tareas[0]?.frecuencia;
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => count > 0 && onTareaClick(tareas[0])}
+              disabled={count === 0}
+              title={count > 0 ? `${count} tarea${count === 1 ? "" : "s"}` : undefined}
+              className={cn(
+                "aspect-square flex flex-col items-center justify-center text-[9px] transition-colors relative",
+                count > 0 && "hover:bg-muted/40 cursor-pointer",
+                count === 0 && "cursor-default",
+                isToday && "bg-primary/10 font-bold text-primary",
+              )}
+            >
+              <span className={cn(!isToday && c.inMonth && "text-foreground/70")}>{c.date.getDate()}</span>
+              {count > 0 && (
+                <span className={cn(
+                  "h-1 w-1 rounded-full mt-0.5",
+                  dominant === "SEMANAL" && "bg-emerald-500",
+                  dominant === "MENSUAL" && "bg-blue-500",
+                  dominant === "TRIMESTRAL" && "bg-violet-500",
+                  dominant === "ANUAL" && "bg-orange-500",
+                )} />
+              )}
+              {count > 1 && (
+                <span className="absolute top-0.5 right-0.5 text-[8px] text-muted-foreground font-mono">{count}</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

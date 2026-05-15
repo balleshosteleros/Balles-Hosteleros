@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  CalendarPlus, ChevronLeft, ChevronRight, Pencil, Trash2, MoveRight, Star,
+  CalendarPlus, Pencil, Trash2, MoveRight, Star,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,9 @@ import {
   type CambioCartaConSemanas, type CambioCartaSemana, type FaseColor,
 } from "../types";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { CalendarRangeToggle, CalendarRangeNav } from "@/shared/components/calendar/CalendarRangeToggle";
+import { useCalendarRange, type CalendarRangeMode } from "@/shared/components/calendar/calendar-range";
+import { cn } from "@/lib/utils";
 
 const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -51,8 +54,23 @@ interface CeldaInfo {
   esFin: boolean;
 }
 
+function mesesARenderizar(mode: CalendarRangeMode, anchor: Date): { anio: number; mes: number }[] {
+  if (mode === "TRIMESTRAL") {
+    const q = Math.floor(anchor.getMonth() / 3) * 3;
+    return Array.from({ length: 3 }, (_, i) => ({ anio: anchor.getFullYear(), mes: q + i }));
+  }
+  if (mode === "SEMESTRAL") {
+    const s = anchor.getMonth() < 6 ? 0 : 6;
+    return Array.from({ length: 6 }, (_, i) => ({ anio: anchor.getFullYear(), mes: s + i }));
+  }
+  if (mode === "ANUAL") {
+    return Array.from({ length: 12 }, (_, i) => ({ anio: anchor.getFullYear(), mes: i }));
+  }
+  return [{ anio: anchor.getFullYear(), mes: anchor.getMonth() }];
+}
+
 export function CambiosCartaCalendario() {
-  const [anio, setAnio] = useState<number>(new Date().getFullYear());
+  const rango = useCalendarRange("ANUAL");
   const [cambios, setCambios] = useState<CambioCartaConSemanas[]>([]);
   const [cargando, setCargando] = useState(true);
 
@@ -60,7 +78,7 @@ export function CambiosCartaCalendario() {
   const [fechaNueva, setFechaNueva] = useState<string>(() => {
     const d = new Date();
     const day = d.getDay();
-    const diff = day === 0 ? -6 : 1 - day; // próximo lunes (o el actual si lo es)
+    const diff = day === 0 ? -6 : 1 - day;
     d.setDate(d.getDate() + diff + 7);
     return fmtIso(d);
   });
@@ -69,24 +87,41 @@ export function CambiosCartaCalendario() {
 
   const [detalle, setDetalle] = useState<CambioCartaConSemanas | null>(null);
 
+  const yearsKey = useMemo(() => {
+    const ys = new Set<number>();
+    ys.add(rango.range.start.getFullYear());
+    ys.add(rango.range.end.getFullYear());
+    return [...ys].sort().join("|");
+  }, [rango.range.start, rango.range.end]);
+
   const cargar = useCallback(async () => {
     setCargando(true);
     try {
-      const res = await listCambiosCarta(anio);
-      if (res.ok) setCambios(res.data);
-      else toast.error(res.error);
+      const years = yearsKey.split("|").map(Number);
+      const results = await Promise.all(years.map((y) => listCambiosCarta(y)));
+      const all: CambioCartaConSemanas[] = [];
+      for (const res of results) {
+        if (res.ok) all.push(...res.data);
+        else toast.error(res.error);
+      }
+      const seen = new Set<string>();
+      const dedup = all.filter((c) => {
+        if (seen.has(c.id)) return false;
+        seen.add(c.id);
+        return true;
+      });
+      setCambios(dedup);
     } catch {
       toast.error("Error cargando cambios de carta");
     } finally {
       setCargando(false);
     }
-  }, [anio]);
+  }, [yearsKey]);
 
   useEffect(() => {
     cargar();
   }, [cargar]);
 
-  // Indexa todas las semanas por fecha (YYYY-MM-DD) para pintar el grid
   const semanasPorDia = useMemo(() => {
     const map = new Map<string, CeldaInfo[]>();
     for (const c of cambios) {
@@ -130,54 +165,38 @@ export function CambiosCartaCalendario() {
     }
   }
 
+  const meses = mesesARenderizar(rango.mode, rango.anchor);
+  const gridCols = rango.mode === "MENSUAL"
+    ? "grid-cols-1"
+    : rango.mode === "TRIMESTRAL"
+      ? "grid-cols-1 md:grid-cols-3"
+      : rango.mode === "SEMESTRAL"
+        ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+        : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
+
   return (
     <div className="p-6 space-y-4">
-      {/* Toolbar año */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <CalendarRangeToggle mode={rango.mode} onChange={rango.setMode} />
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-9"
-            onClick={() => setAnio((a) => a - 1)}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <div className="text-2xl font-semibold tabular-nums w-24 text-center">
-            {anio}
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-9"
-            onClick={() => setAnio((a) => a + 1)}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-9 text-xs"
-            onClick={() => setAnio(new Date().getFullYear())}
-          >
-            Hoy
+          <CalendarRangeNav
+            label={rango.label}
+            onPrev={rango.prev}
+            onNext={rango.next}
+            onToday={rango.goToToday}
+            isToday={rango.isToday}
+            minWidth={180}
+          />
+          <Button size="sm" className="h-9" onClick={() => setShowNuevo(true)}>
+            <CalendarPlus className="h-4 w-4 mr-1.5" />
+            Nuevo cambio
           </Button>
         </div>
-
-        <Button
-          size="sm"
-          className="h-9"
-          onClick={() => setShowNuevo(true)}
-        >
-          <CalendarPlus className="h-4 w-4 mr-1.5" />
-          Nuevo cambio de carta
-        </Button>
       </div>
 
-      {/* Leyenda + total */}
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>
-          {cambios.length} cambio{cambios.length !== 1 ? "s" : ""} de carta en {anio}
+          {cambios.length} cambio{cambios.length !== 1 ? "s" : ""} de carta cargados
         </span>
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1">
@@ -187,17 +206,28 @@ export function CambiosCartaCalendario() {
         </div>
       </div>
 
-      {/* Grid 12 meses */}
       {cargando ? (
         <LoadingSpinner className="py-12" />
+      ) : rango.mode === "DIARIO" ? (
+        <VistaDiaria
+          anchor={rango.anchor}
+          semanasPorDia={semanasPorDia}
+          onCeldaClick={(c) => setDetalle(c)}
+        />
+      ) : rango.mode === "SEMANAL" ? (
+        <VistaSemanal
+          inicio={rango.range.start}
+          semanasPorDia={semanasPorDia}
+          onCeldaClick={(c) => setDetalle(c)}
+        />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {MESES.map((nombre, mesIdx) => (
+        <div className={cn("grid gap-4", gridCols)}>
+          {meses.map(({ anio, mes }) => (
             <MesGrid
-              key={mesIdx}
+              key={`${anio}-${mes}`}
               anio={anio}
-              mes={mesIdx}
-              nombre={nombre}
+              mes={mes}
+              nombre={MESES[mes]}
               semanasPorDia={semanasPorDia}
               onCeldaClick={(c) => setDetalle(c)}
             />
@@ -205,7 +235,6 @@ export function CambiosCartaCalendario() {
         </div>
       )}
 
-      {/* Diálogo nuevo */}
       <Dialog open={showNuevo} onOpenChange={setShowNuevo}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -262,18 +291,18 @@ export function CambiosCartaCalendario() {
         </DialogContent>
       </Dialog>
 
-      {/* Detalle / edición */}
       <DetalleCambioDialog
         cambio={detalle}
         onClose={() => setDetalle(null)}
         onChanged={async () => {
           await cargar();
           if (detalle) {
-            const res = await listCambiosCarta(anio);
-            if (res.ok) {
-              const updated = res.data.find((c) => c.id === detalle.id);
-              setDetalle(updated ?? null);
-            }
+            const years = yearsKey.split("|").map(Number);
+            const results = await Promise.all(years.map((y) => listCambiosCarta(y)));
+            const merged: CambioCartaConSemanas[] = [];
+            for (const r of results) if (r.ok) merged.push(...r.data);
+            const updated = merged.find((c) => c.id === detalle.id);
+            setDetalle(updated ?? null);
           }
         }}
       />
@@ -281,9 +310,115 @@ export function CambiosCartaCalendario() {
   );
 }
 
-// ──────────────────────────────────────────────────────────────
-// Grid de un mes
-// ──────────────────────────────────────────────────────────────
+function VistaDiaria({
+  anchor,
+  semanasPorDia,
+  onCeldaClick,
+}: {
+  anchor: Date;
+  semanasPorDia: Map<string, CeldaInfo[]>;
+  onCeldaClick: (cambio: CambioCartaConSemanas) => void;
+}) {
+  const iso = fmtIso(anchor);
+  const eventos = semanasPorDia.get(iso) ?? [];
+  return (
+    <div className="rounded-lg border bg-card p-4">
+      <div className="text-sm font-semibold capitalize mb-3">
+        {anchor.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+      </div>
+      {eventos.length === 0 ? (
+        <div className="text-sm text-muted-foreground text-center py-6">Sin cambios de carta este día.</div>
+      ) : (
+        <div className="space-y-2">
+          {eventos.map((e, i) => {
+            const color = COLOR_PALETTE[e.semana.color as FaseColor];
+            return (
+              <button
+                key={i}
+                type="button"
+                onClick={() => onCeldaClick(e.cambio)}
+                className="w-full text-left rounded-md border overflow-hidden flex items-stretch hover:bg-muted/40 transition-colors"
+              >
+                <div className="w-2 shrink-0" style={{ background: `linear-gradient(180deg, ${color.from}, ${color.to})` }} />
+                <div className="flex-1 p-3 flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-medium flex items-center gap-1.5">
+                      {e.cambio.nombre}
+                      {e.semana.es_oficial && <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" />}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Semana {e.semana.orden} — {e.semana.fase_nombre}
+                    </div>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function VistaSemanal({
+  inicio,
+  semanasPorDia,
+  onCeldaClick,
+}: {
+  inicio: Date;
+  semanasPorDia: Map<string, CeldaInfo[]>;
+  onCeldaClick: (cambio: CambioCartaConSemanas) => void;
+}) {
+  const dias = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(inicio);
+    d.setDate(inicio.getDate() + i);
+    return d;
+  });
+  const hoyIso = fmtIso(new Date());
+
+  return (
+    <div className="rounded-lg border bg-card overflow-hidden">
+      <div className="grid grid-cols-7 divide-x">
+        {dias.map((d, idx) => {
+          const iso = fmtIso(d);
+          const eventos = semanasPorDia.get(iso) ?? [];
+          const esHoy = iso === hoyIso;
+          return (
+            <div key={idx} className={cn("flex flex-col min-h-[200px]", esHoy && "bg-primary/[0.04]")}>
+              <div className="px-2 py-2 text-center border-b bg-muted/20">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{DIAS_LETRA[idx]}</div>
+                <div className={cn("text-sm font-bold mt-0.5", esHoy && "text-primary")}>{d.getDate()}</div>
+              </div>
+              <div className="flex-1 p-1.5 space-y-1">
+                {eventos.length === 0 ? (
+                  <div className="text-[10px] text-muted-foreground/40 text-center py-3">—</div>
+                ) : (
+                  eventos.map((e, i) => {
+                    const color = COLOR_PALETTE[e.semana.color as FaseColor];
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => onCeldaClick(e.cambio)}
+                        className="w-full text-left rounded text-[10px] text-white p-1 flex items-center gap-1 hover:opacity-90"
+                        style={{ background: `linear-gradient(135deg, ${color.from}, ${color.to})` }}
+                        title={`${e.semana.fase_nombre} — ${e.cambio.nombre}`}
+                      >
+                        {e.semana.es_oficial && <Star className="h-2.5 w-2.5 fill-amber-300 text-amber-300 shrink-0" />}
+                        <span className="truncate font-medium">{e.semana.fase_nombre}</span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function MesGrid({
   anio, mes, nombre, semanasPorDia, onCeldaClick,
 }: {
@@ -295,7 +430,7 @@ function MesGrid({
 }) {
   const primerDia = new Date(anio, mes, 1);
   const ultimoDia = new Date(anio, mes + 1, 0).getDate();
-  const offsetIni = (primerDia.getDay() + 6) % 7; // lunes = 0
+  const offsetIni = (primerDia.getDay() + 6) % 7;
   const cells: Array<Date | null> = [];
   for (let i = 0; i < offsetIni; i++) cells.push(null);
   for (let d = 1; d <= ultimoDia; d++) cells.push(new Date(anio, mes, d));
@@ -307,7 +442,7 @@ function MesGrid({
   return (
     <div className="rounded-lg border bg-card p-3 shadow-sm">
       <div className={`flex items-baseline justify-between mb-2 ${esMesActual ? "text-foreground" : "text-muted-foreground"}`}>
-        <h3 className="text-sm font-semibold uppercase tracking-wide">{nombre}</h3>
+        <h3 className="text-sm font-semibold uppercase tracking-wide">{nombre} <span className="text-xs text-muted-foreground">{anio}</span></h3>
       </div>
 
       <div className="grid grid-cols-7 gap-px text-[10px] text-muted-foreground mb-1">
@@ -362,9 +497,6 @@ function MesGrid({
   );
 }
 
-// ──────────────────────────────────────────────────────────────
-// Diálogo detalle/edición de un cambio de carta
-// ──────────────────────────────────────────────────────────────
 function DetalleCambioDialog({
   cambio, onClose, onChanged,
 }: {
@@ -433,7 +565,6 @@ function DetalleCambioDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {/* Mover bloque */}
         <div className="rounded-md border p-3 flex items-center gap-2 bg-muted/30">
           <MoveRight className="h-4 w-4 text-muted-foreground" />
           <Label htmlFor="mov-bloque" className="text-xs font-medium whitespace-nowrap">
@@ -451,7 +582,6 @@ function DetalleCambioDialog({
           </Button>
         </div>
 
-        {/* Lista de semanas */}
         <div className="space-y-2 max-h-[55vh] overflow-y-auto">
           {cambio.semanas.map((s) => {
             const color = COLOR_PALETTE[s.color as FaseColor];

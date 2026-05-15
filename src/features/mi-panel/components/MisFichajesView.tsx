@@ -93,7 +93,7 @@ export function MisFichajesView() {
                 <tr className="text-left text-xs text-muted-foreground border-b">
                   <th className="py-2 pr-3 font-medium">Fecha</th>
                   <th className="py-2 px-3 font-medium">Entrada</th>
-                  <th className="py-2 px-3 font-medium">Pausa</th>
+                  <th className="py-2 px-3 font-medium">Descanso</th>
                   <th className="py-2 px-3 font-medium">Salida</th>
                   <th className="py-2 px-3 font-medium text-right">Horas</th>
                   <th className="py-2 pl-3 font-medium">Estado</th>
