@@ -16,31 +16,38 @@ Template production-ready para crear aplicaciones SaaS con desarrollo asistido p
 
 ## Quick Start
 
-### 1. Instalar
+> **Instalación reproducible.** El repo versiona `package-lock.json`, `.nvmrc` y `.npmrc`. Usa `npm ci` (no `npm install`) para respetar el lockfile.
+
+### 1. Node
 
 ```bash
-npm install
+nvm use          # lee .nvmrc → Node 20.20.2
 ```
 
-### 2. Variables de Entorno
+### 2. Instalar
+
+```bash
+npm ci           # instala exactamente lo que dice package-lock.json
+```
+
+### 3. Variables de Entorno
 
 ```bash
 cp .env.example .env.local
-# Editar con credenciales de Supabase
+# Editar con credenciales reales (Supabase, R2, Resend, etc.)
 ```
 
-### 3. MCPs (Opcional)
+### 4. MCPs (Opcional)
 
 ```bash
 cp .claude/example.mcp.json .mcp.json
 # Editar con project ref de Supabase
 ```
 
-### 4. Desarrollar
+### 5. Desarrollar
 
 ```bash
 npm run dev
-# Auto-detecta puerto disponible (3000-3006)
 ```
 
 ## Tech Stack
