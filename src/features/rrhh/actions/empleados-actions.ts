@@ -57,7 +57,7 @@ export async function listEmpleados() {
       empresasPorUser = (rels ?? []).reduce<Record<string, Array<{ id: string; nombre: string }>>>(
         (acc, r) => {
           const uid = r.user_id as string;
-          const emp = r.empresas as { id: string; nombre: string } | null;
+          const emp = r.empresas as unknown as { id: string; nombre: string } | null;
           if (!emp) return acc;
           if (!acc[uid]) acc[uid] = [];
           acc[uid].push(emp);
@@ -402,7 +402,7 @@ export async function getEmpleadoConPerfil(empleadoId: string) {
         .select("empresas:empresa_id(id, nombre)")
         .eq("user_id", emp.user_id);
       empresasAcceso = (rels ?? [])
-        .map((r) => r.empresas as { id: string; nombre: string } | null)
+        .map((r) => r.empresas as unknown as { id: string; nombre: string } | null)
         .filter((e): e is { id: string; nombre: string } => e !== null)
         .map((e) => ({ ...e, esPrincipal: e.id === emp.empresa_id }))
         .sort((a, b) => {
