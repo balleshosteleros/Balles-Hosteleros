@@ -508,6 +508,23 @@ export async function deleteEmployee(userId: string) {
     return { error: 'Supabase admin no configurado. Configura SUPABASE_SERVICE_ROLE_KEY.' }
   }
 
+  // Limpiamos manualmente las filas dependientes en public.* antes de borrar
+  // el usuario en auth.users. Si dejamos que la cascada del FK lo haga, corre
+  // como `supabase_auth_admin`, que NO tiene DELETE sobre estas tablas y el
+  // borrado falla con "permission denied for table empleados".
+  const cleanups: { table: 'empleados' | 'user_empresas' | 'user_roles'; column: string }[] = [
+    { table: 'empleados', column: 'user_id' },
+    { table: 'user_empresas', column: 'user_id' },
+    { table: 'user_roles', column: 'user_id' },
+  ]
+  for (const { table, column } of cleanups) {
+    const { error: cleanErr } = await admin.from(table).delete().eq(column, userId)
+    if (cleanErr) return { error: friendlyError(cleanErr) }
+  }
+  // profiles.id == auth.user.id en este proyecto (mismo UUID); cubrimos también user_id por legacy.
+  await admin.from('profiles').delete().eq('id', userId)
+  await admin.from('profiles').delete().eq('user_id', userId)
+
   const { error } = await admin.auth.admin.deleteUser(userId)
 
   if (error) return { error: friendlyError(error) }
