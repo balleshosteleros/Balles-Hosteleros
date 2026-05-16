@@ -4,7 +4,6 @@
 /.pnp
 .pnp.js
 yarn.lock
-package-lock.json
 pnpm-lock.yaml
 
 # Testing
@@ -84,3 +83,13 @@ scratch/
 CHANGELOG_*.md
 CONTINUA_CONTEXTO.md
 middleware.ts
+
+# Descargas a medias del navegador
+*.crdownload
+Sin confirmar*
+
+# Videos de referencia (Banktrack, demos, etc.)
+Bancktrack/
+*.webm
+*.mp4
+*.mov

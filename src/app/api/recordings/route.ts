@@ -1,21 +1,10 @@
 import { NextResponse } from "next/server";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { createClient as createServerClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-let _supabase: SupabaseClient | null = null;
-function getSupabase(): SupabaseClient {
-  if (_supabase) return _supabase;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) {
-    throw new Error("Faltan NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY");
-  }
-  _supabase = createClient(url, key);
-  return _supabase;
-}
 
 let _r2: S3Client | null = null;
 function getR2(): { client: S3Client; bucket: string; publicUrl: string } {
@@ -39,7 +28,7 @@ function getR2(): { client: S3Client; bucket: string; publicUrl: string } {
 
 export async function GET() {
   try {
-    const supabase = getSupabase();
+    const supabase = await createServerClient();
     const { data, error } = await supabase
       .from("recordings")
       .select("*")
@@ -58,8 +47,21 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const supabase = getSupabase();
-    const { client: r2Client, bucket: BUCKET_NAME, publicUrl: PUBLIC_URL } = getR2();
+    const supabase = await createServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("empresa_id")
+      .eq("user_id", user.id)
+      .single();
+
+    if (!profile?.empresa_id) {
+      return NextResponse.json({ error: "Usuario sin empresa asignada" }, { status: 403 });
+    }
 
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
@@ -71,16 +73,39 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Archivo requerido" }, { status: 400 });
     }
 
+    // Cuota global: leer con admin (la vista tiene SUM de todas las empresas).
+    const admin = createAdminClient();
+    const { data: usage } = await admin
+      .from("storage_usage_global")
+      .select("bytes_used, bytes_limit")
+      .single();
+
+    const bytesUsed = Number(usage?.bytes_used ?? 0);
+    const bytesLimit = Number(usage?.bytes_limit ?? 9.5 * 1024 ** 3);
+
+    if (bytesUsed + file.size > bytesLimit) {
+      const usedGb = (bytesUsed / 1024 ** 3).toFixed(2);
+      const limitGb = (bytesLimit / 1024 ** 3).toFixed(1);
+      return NextResponse.json(
+        {
+          error: "Límite de almacenamiento de fase beta alcanzado",
+          detail: `Uso actual ${usedGb} GB / ${limitGb} GB. Borra grabaciones antiguas o contacta soporte para ampliar.`,
+        },
+        { status: 413 }
+      );
+    }
+
+    const { client: r2Client, bucket: BUCKET_NAME, publicUrl: PUBLIC_URL } = getR2();
     const fileId = crypto.randomUUID();
     const ext = mimeType.includes("mp4") ? "mp4" : "webm";
-    const fileName = `${fileId}.${ext}`;
+    const r2Key = `empresa_${profile.empresa_id}/grabaciones/${fileId}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
 
     try {
       await r2Client.send(
         new PutObjectCommand({
           Bucket: BUCKET_NAME,
-          Key: fileName,
+          Key: r2Key,
           Body: buffer,
           ContentType: mimeType,
         })
@@ -90,7 +115,7 @@ export async function POST(req: Request) {
       throw new Error(`Fallo en R2: ${r2Error?.message}`);
     }
 
-    const videoUrl = `${PUBLIC_URL}/${fileName}`;
+    const videoUrl = `${PUBLIC_URL}/${r2Key}`;
 
     const { data, error } = await supabase
       .from("recordings")
@@ -98,19 +123,26 @@ export async function POST(req: Request) {
         id: fileId,
         title,
         url: videoUrl,
+        r2_key: r2Key,
         duration,
         file_size: buffer.length,
+        empresa_id: profile.empresa_id,
+        owner_user_id: user.id,
+        type: "grabacion",
       })
       .select()
       .single();
 
     if (error) {
+      // Rollback: si falló el insert, borramos el objeto recién subido a R2.
+      try {
+        await r2Client.send(new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: r2Key }));
+      } catch {}
       console.error("[Supabase] Error al insertar:", error.message);
-      return NextResponse.json({
-        message: "Video subido a R2, pero falló el registro en DB",
-        url: videoUrl,
-        db_error: error.message,
-      }, { status: 207 });
+      return NextResponse.json(
+        { error: "No se pudo registrar la grabación", db_error: error.message },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json(data, { status: 201 });
@@ -122,19 +154,28 @@ export async function POST(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
-    const supabase = getSupabase();
+    const supabase = await createServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    }
+
     const { id } = await req.json();
-    const { data: rec } = await supabase.from("recordings").select("url").eq("id", id).single();
+    const { data: rec } = await supabase
+      .from("recordings")
+      .select("r2_key, url")
+      .eq("id", id)
+      .single();
 
     if (rec) {
-      try {
-        const { client: r2Client, bucket: BUCKET_NAME } = getR2();
-        const fileName = rec.url.split("/").pop();
-        if (fileName) {
-          await r2Client.send(new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: fileName }));
+      const key = rec.r2_key || rec.url?.split("/").slice(-1)[0];
+      if (key) {
+        try {
+          const { client: r2Client, bucket: BUCKET_NAME } = getR2();
+          await r2Client.send(new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: key }));
+        } catch (e) {
+          console.warn("Could not delete from R2", e);
         }
-      } catch (e) {
-        console.warn("Could not delete from R2", e);
       }
     }
 
@@ -149,9 +190,14 @@ export async function DELETE(req: Request) {
 
 export async function PATCH(req: Request) {
   try {
-    const supabase = getSupabase();
+    const supabase = await createServerClient();
     const { id, title } = await req.json();
-    const { data, error } = await supabase.from("recordings").update({ title }).eq("id", id).select().single();
+    const { data, error } = await supabase
+      .from("recordings")
+      .update({ title })
+      .eq("id", id)
+      .select()
+      .single();
     if (error) throw error;
     return NextResponse.json(data);
   } catch (err: any) {

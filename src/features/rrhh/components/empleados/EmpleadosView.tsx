@@ -64,9 +64,16 @@ type EmpleadoBDRow = {
   telefono: string | null;
   estado: string;
   departamentos?: { nombre: string } | null;
+  es_principal?: boolean;
+  empresas_acceso?: Array<{ id: string; nombre: string }>;
 };
 
-function bdToEmpleado(row: EmpleadoBDRow): Empleado {
+type EmpleadoConAcceso = Empleado & {
+  esPrincipal: boolean;
+  empresasAcceso: Array<{ id: string; nombre: string }>;
+};
+
+function bdToEmpleado(row: EmpleadoBDRow): EmpleadoConAcceso {
   return {
     id: row.id,
     nombre: row.nombre ?? "",
@@ -81,6 +88,8 @@ function bdToEmpleado(row: EmpleadoBDRow): Empleado {
     emailEmpresa: row.email_empresa ?? "",
     emailPersonal: row.email_personal ?? "",
     validadorFichajes: "—",
+    esPrincipal: row.es_principal ?? true,
+    empresasAcceso: row.empresas_acceso ?? [],
   };
 }
 
@@ -88,7 +97,7 @@ export function EmpleadosView() {
   const { empresaActual } = useEmpresa();
   const router = useRouter();
 
-  const [empleados, setEmpleados] = useState<Empleado[]>([]);
+  const [empleados, setEmpleados] = useState<EmpleadoConAcceso[]>([]);
   const [loading, setLoading] = useState(true);
 
   const cargar = useCallback(async () => {
@@ -152,6 +161,7 @@ export function EmpleadosView() {
 
   const columnasDef: ToolbarColumna[] = [
     { campo: "empleado", label: "Empleado" },
+    { campo: "empresas", label: "Empresas" },
     { campo: "estado", label: "Estado" },
     { campo: "horario", label: "Horario" },
     { campo: "horasHoy", label: "Horas hoy" },
@@ -163,7 +173,7 @@ export function EmpleadosView() {
     { campo: "validador", label: "Validador fichajes" },
   ];
 
-  const columnDefs: Record<string, { th: ReactNode; td: (emp: Empleado) => ReactNode }> = {
+  const columnDefs: Record<string, { th: ReactNode; td: (emp: EmpleadoConAcceso) => ReactNode }> = {
     empleado: {
       th: <TableHead key="empleado" className="min-w-[200px] text-xs font-medium text-muted-foreground">Empleado</TableHead>,
       td: (emp) => (
@@ -174,7 +184,35 @@ export function EmpleadosView() {
                 {iniciales(emp.nombre, emp.apellidos)}
               </AvatarFallback>
             </Avatar>
-            <span className="font-medium text-foreground whitespace-nowrap text-sm">{emp.nombre} {emp.apellidos}</span>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="font-medium text-foreground whitespace-nowrap text-sm">{emp.nombre} {emp.apellidos}</span>
+              {!emp.esPrincipal && (
+                <span className="text-[10px] uppercase font-semibold text-amber-700 bg-amber-100 dark:text-amber-300 dark:bg-amber-900/30 px-1.5 py-0.5 rounded" title="Empleado de otra empresa con acceso a esta">
+                  Secundario
+                </span>
+              )}
+            </div>
+          </div>
+        </TableCell>
+      ),
+    },
+    empresas: {
+      th: <TableHead key="empresas" className="text-xs font-medium text-muted-foreground">Empresas</TableHead>,
+      td: (emp) => (
+        <TableCell key="empresas">
+          <div className="flex flex-wrap gap-1">
+            {emp.empresasAcceso.length === 0 ? (
+              <span className="text-xs text-muted-foreground">—</span>
+            ) : (
+              emp.empresasAcceso.map((e) => (
+                <span
+                  key={e.id}
+                  className="text-[11px] px-1.5 py-0.5 rounded bg-muted text-foreground"
+                >
+                  {e.nombre}
+                </span>
+              ))
+            )}
           </div>
         </TableCell>
       ),

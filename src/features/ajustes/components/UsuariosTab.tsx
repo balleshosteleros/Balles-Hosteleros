@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Search, KeyRound, Pencil, UserCog,
   Power, PowerOff, UserPlus, Plus, UserCheck, Trash2, Mail, ListFilter,
-  ExternalLink,
+  ExternalLink, Building2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -27,6 +27,7 @@ import {
 import {
   listEmpresasDeUsuario,
   setEmpresasDeUsuario,
+  listAllUserEmpresas,
 } from "@/features/empresa/actions/user-empresas-actions";
 import { Checkbox } from "@/components/ui/checkbox";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
@@ -126,11 +127,13 @@ export function UsuariosTab() {
   const [accesos, setAccesos] = useState<AccesoPortal[]>([]);
   const [sinAcceso, setSinAcceso] = useState<EmpleadoSinAcceso[]>([]);
   const [rolesData, setRolesData] = useState<Rol[]>([]);
+  const [userEmpresas, setUserEmpresas] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   const [filtroEstados, setFiltroEstados] = useState<Set<string>>(new Set());
   const [filtroRoles, setFiltroRoles] = useState<Set<string>>(new Set());
   const [filtroDepartamentos, setFiltroDepartamentos] = useState<Set<string>>(new Set());
+  const [filtroEmpresas, setFiltroEmpresas] = useState<Set<string>>(new Set());
   const [editModal, setEditModal] = useState<AccesoPortal | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createPrefill, setCreatePrefill] = useState<{ nombre: string; apellidos: string; email: string } | null>(null);
@@ -147,9 +150,10 @@ export function UsuariosTab() {
   const loadAccesos = useCallback(async () => {
     setLoading(true);
     try {
-      const [empResult, sinResult] = await Promise.all([
+      const [empResult, sinResult, ueMap] = await Promise.all([
         getEmployees(),
         getEmpleadosSinAcceso(),
+        listAllUserEmpresas(),
       ]);
       if (empResult.error) {
         toast.error(empResult.error);
@@ -159,6 +163,7 @@ export function UsuariosTab() {
         setAccesos(profiles.map((p) => profileToAcceso(p, empresaActual)));
       }
       setSinAcceso((sinResult.data ?? []) as EmpleadoSinAcceso[]);
+      setUserEmpresas(ueMap ?? {});
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error cargando usuarios");
       setAccesos([]);
@@ -221,28 +226,50 @@ export function UsuariosTab() {
     [empresas],
   );
 
-  // Opciones únicas de departamentos derivadas de la config de roles.
+  // Mapa dbId → nombre para resolver los UUIDs guardados en user_empresas
+  // a etiquetas legibles dentro de la columna EMPRESAS.
+  const empresaNombrePorId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const e of empresasDisponibles) map.set(e.dbId, e.nombre);
+    return map;
+  }, [empresasDisponibles]);
+
+  // Opciones para el filtro de la columna EMPRESAS: nombres de empresas
+  // ordenados, derivadas de las empresas disponibles.
+  const empresasOpciones = useMemo(
+    () => empresasDisponibles.map((e) => e.nombre).sort(),
+    [empresasDisponibles],
+  );
+
+  // Opciones únicas de departamentos a partir de profiles.departamento
+  // de cada usuario listado en la pestaña.
   const departamentosOpciones = useMemo(() => {
     const set = new Set<string>();
-    for (const deps of departamentosPorRol.values()) {
-      for (const d of deps) set.add(d);
+    for (const a of accesos) {
+      if (a.departamento) set.add(a.departamento);
     }
     return Array.from(set).sort();
-  }, [departamentosPorRol]);
+  }, [accesos]);
 
   const filtrados = useMemo(() => {
     return accesos.filter((a) => {
-      const texto = `${a.nombreEmpleado} ${a.emailUsuario} ${a.rol} ${a.departamento}`.toLowerCase();
+      const empresasIds = a.userId ? userEmpresas[a.userId] ?? [] : [];
+      const empresasNombres = empresasIds
+        .map((id) => empresaNombrePorId.get(id))
+        .filter((n): n is string => Boolean(n));
+      const texto = `${a.nombreEmpleado} ${a.emailUsuario} ${a.rol} ${a.departamento} ${empresasNombres.join(" ")}`.toLowerCase();
       if (busqueda && !texto.includes(busqueda.toLowerCase())) return false;
       if (filtroEstados.size > 0 && !filtroEstados.has(a.estadoAcceso)) return false;
       if (filtroRoles.size > 0 && !filtroRoles.has(a.rol)) return false;
       if (filtroDepartamentos.size > 0) {
-        const deps = departamentosPorRol.get(a.rol.trim().toLowerCase()) ?? [];
-        if (!deps.some((d) => filtroDepartamentos.has(d))) return false;
+        if (!a.departamento || !filtroDepartamentos.has(a.departamento)) return false;
+      }
+      if (filtroEmpresas.size > 0) {
+        if (!empresasNombres.some((n) => filtroEmpresas.has(n))) return false;
       }
       return true;
     });
-  }, [accesos, busqueda, filtroEstados, filtroRoles, filtroDepartamentos, departamentosPorRol]);
+  }, [accesos, busqueda, filtroEstados, filtroRoles, filtroDepartamentos, filtroEmpresas, userEmpresas, empresaNombrePorId]);
 
   const activar = async (acc: AccesoPortal) => {
     setAccesos((prev) => prev.map((a) => a.id === acc.id ? { ...a, estadoAcceso: "Activo" as EstadoAcceso } : a));
@@ -309,7 +336,7 @@ export function UsuariosTab() {
     setResetLoading(false);
   };
 
-  const guardarEdicion = async (updated: AccesoPortal) => {
+  const guardarEdicion = async (updated: AccesoPortal, empresasIds: string[]) => {
     // Enviamos el nombre custom del rol; el server action lo guarda en rol_label
     // y deriva el app_role para user_roles. Nombre/apellidos también se persisten
     // si se editaron en el modal.
@@ -330,6 +357,9 @@ export function UsuariosTab() {
     setAccesos((prev) =>
       prev.map((a) => (a.id === updated.id ? { ...updated, nombreEmpleado } : a)),
     );
+    if (updated.userId) {
+      setUserEmpresas((prev) => ({ ...prev, [updated.userId as string]: empresasIds }));
+    }
     setEditModal(null);
     toast.success("Usuario actualizado");
   };
@@ -382,6 +412,7 @@ export function UsuariosTab() {
               {([
                 { label: "USUARIO" },
                 { label: "DEPARTAMENTO", filter: "departamento" as const },
+                { label: "EMPRESAS", filter: "empresas" as const },
                 { label: "ROL", filter: "rol" as const },
                 { label: "ESTADO", filter: "estado" as const },
                 { label: "ÚLTIMA CONEXIÓN" },
@@ -397,6 +428,14 @@ export function UsuariosTab() {
                         options={departamentosOpciones}
                         selected={filtroDepartamentos}
                         onChange={setFiltroDepartamentos}
+                      />
+                    )}
+                    {col.filter === "empresas" && (
+                      <ColumnFilter
+                        label="Empresas"
+                        options={empresasOpciones}
+                        selected={filtroEmpresas}
+                        onChange={setFiltroEmpresas}
                       />
                     )}
                     {col.filter === "rol" && (
@@ -440,7 +479,17 @@ export function UsuariosTab() {
                 </td>
                 <td className="px-3 py-2.5">
                   <DepartamentosCell
-                    departamentos={departamentosPorRol.get(acc.rol.trim().toLowerCase()) ?? []}
+                    departamentos={acc.departamento ? [acc.departamento] : []}
+                  />
+                </td>
+                <td className="px-3 py-2.5">
+                  <EmpresasCell
+                    nombres={
+                      (acc.userId ? userEmpresas[acc.userId] ?? [] : [])
+                        .map((id) => empresaNombrePorId.get(id))
+                        .filter((n): n is string => Boolean(n))
+                    }
+                    onEdit={() => setEditModal(acc)}
                   />
                 </td>
                 <td className="px-3 py-2.5">
@@ -493,10 +542,10 @@ export function UsuariosTab() {
               </tr>
             ))}
             {loading && (
-              <tr><td colSpan={7} className="text-center py-8"><LoadingSpinner /></td></tr>
+              <tr><td colSpan={8} className="text-center py-8"><LoadingSpinner /></td></tr>
             )}
             {!loading && filtrados.length === 0 && (
-              <tr><td colSpan={7} className="text-center py-8 text-muted-foreground">No se encontraron usuarios.</td></tr>
+              <tr><td colSpan={8} className="text-center py-8 text-muted-foreground">No se encontraron usuarios.</td></tr>
             )}
           </tbody>
         </table>
@@ -666,24 +715,26 @@ export function UsuariosTab() {
               <UserPlus className="h-5 w-5" /> Nuevo usuario
             </DialogTitle>
           </DialogHeader>
-          <form action={handleCreateUser} className="space-y-2">
+          <form action={handleCreateUser} className="space-y-2" autoComplete="off">
+            <input type="text" name="prevent-autofill" autoComplete="off" className="hidden" tabIndex={-1} aria-hidden="true" />
+            <input type="password" name="prevent-autofill-pw" autoComplete="new-password" className="hidden" tabIndex={-1} aria-hidden="true" />
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs font-bold">Nombre</Label>
-                <Input name="nombre" required defaultValue={createPrefill?.nombre ?? ""} />
+                <Input name="nombre" required defaultValue={createPrefill?.nombre ?? ""} autoComplete="off" />
               </div>
               <div>
                 <Label className="text-xs font-bold">Apellidos</Label>
-                <Input name="apellidos" required defaultValue={createPrefill?.apellidos ?? ""} />
+                <Input name="apellidos" required defaultValue={createPrefill?.apellidos ?? ""} autoComplete="off" />
               </div>
             </div>
             <div>
               <Label className="text-xs font-bold">Email</Label>
-              <Input name="email" type="email" required defaultValue={createPrefill?.email ?? ""} />
+              <Input name="email" type="email" required defaultValue={createPrefill?.email ?? ""} autoComplete="off" />
             </div>
             <div>
               <Label className="text-xs font-bold">Contraseña</Label>
-              <Input name="password" type="password" required minLength={6} />
+              <Input name="password" type="password" required minLength={6} autoComplete="new-password" />
             </div>
             <div>
               <Label className="text-xs font-bold">Rol *</Label>
@@ -738,22 +789,32 @@ export function UsuariosTab() {
                 Si marcas más de una, el usuario verá el selector de empresa arriba y podrá entrar a los departamentos asignados en cada una.
               </p>
             </div>
-            <div className="rounded-md border bg-muted/30 px-2.5 py-2 mt-1">
-              <label className="flex items-start gap-2 cursor-pointer">
-                <Checkbox
-                  checked={!createEsEmpleado}
-                  onCheckedChange={(v) => setCreateEsEmpleado(!v)}
-                  className="mt-0.5"
-                />
-                <span className="flex-1">
-                  <span className="text-xs font-bold block">No es empleado</span>
-                  <span className="text-[10px] text-muted-foreground">
-                    Marca esta opción si el usuario es externo (asesor, inversor, gestor, etc.)
-                    y no forma parte de la plantilla.
+            {!createPrefill && (
+              <div
+                className={`rounded-md border px-2.5 py-2 mt-1 transition-colors ${
+                  createEsEmpleado
+                    ? "border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/20"
+                    : "border-emerald-300 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/20"
+                }`}
+              >
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <Checkbox
+                    checked={!createEsEmpleado}
+                    onCheckedChange={(v) => setCreateEsEmpleado(!v)}
+                    className="mt-0.5"
+                  />
+                  <span className="flex-1">
+                    <span className="text-xs font-bold block">No es empleado *</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      Esta casilla es obligatoria. Este formulario solo crea usuarios externos
+                      (asesores, inversores, gestores, etc.). Si necesitas un usuario para un
+                      empleado, créalo primero en <strong>RRHH → Empleados</strong> y dale acceso
+                      desde allí.
+                    </span>
                   </span>
-                </span>
-              </label>
-            </div>
+                </label>
+              </div>
+            )}
             {createError && <p className="text-sm text-red-600">{createError}</p>}
             <div className="flex justify-end gap-2">
               <Button
@@ -768,7 +829,10 @@ export function UsuariosTab() {
               >
                 Cancelar
               </Button>
-              <Button type="submit" disabled={createLoading}>
+              <Button
+                type="submit"
+                disabled={createLoading || (!createPrefill && createEsEmpleado)}
+              >
                 {createLoading ? "Creando..." : "Crear usuario"}
               </Button>
             </div>
@@ -787,7 +851,7 @@ function EditarUsuarioModal({
   roles: string[];
   empresasDisponibles: Array<{ dbId: string; nombre: string }>;
   onClose: () => void;
-  onSave: (a: AccesoPortal) => void;
+  onSave: (a: AccesoPortal, empresasIds: string[]) => void;
 }) {
   const [form, setForm] = useState({ ...acceso });
 
@@ -834,7 +898,7 @@ function EditarUsuarioModal({
         return;
       }
     }
-    onSave(form);
+    onSave(form, empresasIds);
   };
 
   const tituloUsuario = [form.nombre, form.apellidos].filter(Boolean).join(" ").trim()
@@ -1026,6 +1090,69 @@ function ColumnFilter({
         </ul>
       </PopoverContent>
     </Popover>
+  );
+}
+
+/* ─── EMPRESAS CELL ─── */
+// Muestra el primer nombre de empresa como badge; si hay más, un badge "+N"
+// abre un Popover con la lista completa. Si no hay ninguna, mostramos un botón
+// que abre el modal de edición para asignarlas.
+function EmpresasCell({
+  nombres,
+  onEdit,
+}: {
+  nombres: string[];
+  onEdit: () => void;
+}) {
+  if (nombres.length === 0) {
+    return (
+      <button
+        type="button"
+        onClick={onEdit}
+        className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 transition hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-400"
+        title="Asignar empresas"
+      >
+        <Building2 className="h-3 w-3" />
+        Sin empresa
+      </button>
+    );
+  }
+
+  const [primera, ...resto] = nombres;
+
+  return (
+    <div className="flex items-center gap-1">
+      <Badge variant="outline" className="text-[10px] gap-1">
+        <Building2 className="h-3 w-3" />
+        {primera}
+      </Badge>
+      {resto.length > 0 && (
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex items-center rounded-md border border-border/60 bg-muted/40 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              title={`${nombres.length} empresas`}
+            >
+              +{resto.length}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-56 p-0">
+            <div className="border-b px-3 py-2">
+              <p className="text-[10px] font-bold tracking-wider text-muted-foreground">EMPRESAS</p>
+              <p className="text-xs text-muted-foreground">{nombres.length} con acceso</p>
+            </div>
+            <ul className="max-h-64 overflow-y-auto py-1">
+              {nombres.map((n) => (
+                <li key={n} className="px-3 py-1.5 text-sm hover:bg-muted/50">
+                  {n}
+                </li>
+              ))}
+            </ul>
+          </PopoverContent>
+        </Popover>
+      )}
+    </div>
   );
 }
 

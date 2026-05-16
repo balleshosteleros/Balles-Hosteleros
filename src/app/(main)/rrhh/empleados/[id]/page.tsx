@@ -19,8 +19,10 @@ import {
   User,
   Fingerprint, Inbox, FileSignature, Calendar, Timer,
   UserRoundSearch, UserCheck, Gift, Trophy, HandCoins,
-  GraduationCap, ClipboardList, FileQuestion,
+  GraduationCap, ClipboardList, FileQuestion, Building2,
 } from "lucide-react";
+
+type EmpresaAcceso = { id: string; nombre: string; esPrincipal: boolean };
 
 const TOP_TABS = [
   { id: "perfil",          label: "Perfil",         icon: User              },
@@ -87,6 +89,7 @@ export default function FichaEmpleadoPage() {
   const [loading, setLoading] = useState(true);
   const [empleadoBD, setEmpleadoBD] = useState<EmpleadoBD | null>(null);
   const [datosPersonales, setDatosPersonales] = useState<DatosPersonalesCompletos | null>(null);
+  const [empresasAcceso, setEmpresasAcceso] = useState<EmpresaAcceso[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TopTab>("perfil");
 
@@ -100,9 +103,11 @@ export default function FichaEmpleadoPage() {
         setError(res.error ?? "Empleado no encontrado");
         setEmpleadoBD(null);
         setDatosPersonales(null);
+        setEmpresasAcceso([]);
       } else {
         setEmpleadoBD(res.empleado as EmpleadoBD);
         setDatosPersonales(res.datosPersonales ?? null);
+        setEmpresasAcceso((res.empresasAcceso as EmpresaAcceso[]) ?? []);
         setError(null);
       }
       setLoading(false);
@@ -196,6 +201,34 @@ export default function FichaEmpleadoPage() {
         onBack={() => router.push("/rrhh/empleados")}
         onSave={() => { /* el form gestiona su propio guardado */ }}
       />
+
+      {empresasAcceso.length > 0 && (
+        <div className="border-b bg-card px-6 py-2.5 flex items-center gap-2 flex-wrap shrink-0">
+          <Building2 className="h-4 w-4 text-muted-foreground" />
+          <span className="text-xs uppercase tracking-wide text-muted-foreground mr-1">
+            Empresas:
+          </span>
+          {empresasAcceso.map((e) => (
+            <span
+              key={e.id}
+              className={cn(
+                "text-xs px-2 py-0.5 rounded font-medium",
+                e.esPrincipal
+                  ? "bg-primary/10 text-primary"
+                  : "bg-muted text-foreground"
+              )}
+              title={e.esPrincipal ? "Empresa principal" : "Acceso secundario"}
+            >
+              {e.nombre}
+              {e.esPrincipal && (
+                <span className="ml-1.5 text-[9px] uppercase tracking-wider opacity-70">
+                  Principal
+                </span>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="border-b bg-card px-6 flex gap-0 overflow-x-auto shrink-0">
         {TOP_TABS.map((tab) => (

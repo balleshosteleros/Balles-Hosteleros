@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
-import { getRedirectByRolLabel } from '@/features/auth/lib/role-redirect'
+import { LANDING_PATH } from '@/features/auth/lib/role-redirect'
+import { checkProfileGuard } from '@/features/auth/lib/profile-guard'
 import {
   readAccounts,
   upsertAccount,
@@ -91,14 +92,18 @@ export async function GET(request: Request) {
     target = connectNext
   }
   if (!target) {
-    // Login real: todos los usuarios aterrizan en /mi-panel, ignorando
-    // bh_view_mode (cookie de preferencia de navegación interna).
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('rol_label')
-      .eq('user_id', data.session.user.id)
-      .maybeSingle()
-    target = getRedirectByRolLabel(profile?.rol_label as string | null)
+    // Login real: validar que el usuario tenga perfil completo antes de
+    // dejarle pasar. Si no, cerramos sesión y mandamos al login con flag.
+    const guard = await checkProfileGuard(supabase, data.session.user.id)
+    if (!guard.ok) {
+      await supabase.auth.signOut()
+      const fail = NextResponse.redirect(
+        `${origin}/?error=${guard.code}`,
+      )
+      clearPending(fail)
+      return fail
+    }
+    target = LANDING_PATH
   }
 
   const response = NextResponse.redirect(`${origin}${target}`)

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTiposFichaje, type TipoFichajeRow } from "@/features/rrhh/hooks/useHorariosConfig";
+import { SelectorReplicarEmpresas } from "@/features/empresa/components/SelectorReplicarEmpresas";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,12 +29,13 @@ const EMPTY_FORM: FormState = {
   activo: true,
 };
 
-export function TiposFichajeSection() {
-  const { items, loading, create, update, remove } = useTiposFichaje();
+export function TiposFichajeSection({ empresaId }: { empresaId: string }) {
+  const { items, loading, create, update, remove } = useTiposFichaje(empresaId);
   const [busqueda, setBusqueda] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editando, setEditando] = useState<TipoFichajeRow | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [empresasReplicar, setEmpresasReplicar] = useState<string[]>([empresaId]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -48,9 +50,10 @@ export function TiposFichajeSection() {
         });
       } else {
         setForm(EMPTY_FORM);
+        setEmpresasReplicar([empresaId]);
       }
     }
-  }, [showModal, editando]);
+  }, [showModal, editando, empresaId]);
 
   const filtrados = useMemo(() => items.filter((t) =>
     !busqueda || t.nombre.toLowerCase().includes(busqueda.toLowerCase())
@@ -62,7 +65,7 @@ export function TiposFichajeSection() {
     try {
       const ok = editando
         ? await update(editando.id, form)
-        : await create(form);
+        : await create(form, empresasReplicar);
       if (ok) setShowModal(false);
     } finally {
       setSaving(false);
@@ -152,6 +155,13 @@ export function TiposFichajeSection() {
             </div>
             <div className="flex items-center justify-between"><span className="text-sm">Computa tiempo</span><Switch checked={form.computa_tiempo} onCheckedChange={v => setForm(f => ({ ...f, computa_tiempo: v }))} /></div>
             <div className="flex items-center justify-between"><span className="text-sm">Activo</span><Switch checked={form.activo} onCheckedChange={v => setForm(f => ({ ...f, activo: v }))} /></div>
+            {!editando && (
+              <SelectorReplicarEmpresas
+                empresaActualId={empresaId}
+                seleccionadas={empresasReplicar}
+                onChange={setEmpresasReplicar}
+              />
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowModal(false)} disabled={saving}>Cancelar</Button>

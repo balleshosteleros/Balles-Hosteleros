@@ -1,15 +1,28 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { loginAsDemo } from '@/actions/auth'
+
+const LAST_EMAIL_KEY = 'bh:last-login-email'
 
 export function DemoLoginForm() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [email, setEmail] = useState('')
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem(LAST_EMAIL_KEY)
+    if (stored) setEmail(stored)
+  }, [])
 
   async function handleSubmit(formData: FormData) {
     setLoading(true)
     setError(null)
+
+    const submittedEmail = String(formData.get('email') ?? '').trim()
+    if (submittedEmail) {
+      window.localStorage.setItem(LAST_EMAIL_KEY, submittedEmail)
+    }
 
     const result = await loginAsDemo(formData)
 
@@ -113,6 +126,8 @@ export function DemoLoginForm() {
             required
             autoComplete="email"
             placeholder="Correo electrónico"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
             className="block w-full rounded-lg border border-slate-800 bg-slate-900/60 py-3 pl-11 pr-4 text-sm text-white placeholder:text-slate-500 focus:border-blue-500 focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>

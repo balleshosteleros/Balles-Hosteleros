@@ -370,7 +370,6 @@ export const CATALOGO: ModuloDef[] = [
     label: "CONTABILIDAD",
     submodulos: [
       placeholder("contactos", "Contactos"),
-      placeholder("operaciones", "Operaciones"),
       placeholder("facturas", "Facturas"),
       placeholder("impuestos", "Impuestos"),
       placeholder("transacciones", "Transacciones"),

@@ -85,11 +85,44 @@ const HORAS = Array.from(
   { length: HORA_FIN - HORA_INICIO + 1 },
   (_, i) => i + HORA_INICIO,
 );
-const MINUTOS_DIA = 24 * 60;
+const HORA_PX = 48;
 const DIAS_LARGO = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 const DIAS_CORTO = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
 const MOCK_EVENTOS: Evento[] = [];
+
+type SegmentoDia = {
+  inicioMin: number;
+  duracionMin: number;
+  esInicio: boolean;
+  esFin: boolean;
+};
+
+function segmentoEnDia(ev: Evento, dayIso: string): SegmentoDia | null {
+  const dayStart = new Date(`${dayIso}T00:00:00`);
+  const dayEnd = new Date(dayStart);
+  dayEnd.setDate(dayEnd.getDate() + 1);
+  const evStart = new Date(ev.inicio);
+  const evEnd = new Date(ev.fin);
+  if (evEnd <= dayStart || evStart >= dayEnd) return null;
+  const segStart = evStart > dayStart ? evStart : dayStart;
+  const segEnd = evEnd < dayEnd ? evEnd : dayEnd;
+  return {
+    inicioMin: Math.max(0, (segStart.getTime() - dayStart.getTime()) / 60000),
+    duracionMin: Math.max(15, (segEnd.getTime() - segStart.getTime()) / 60000),
+    esInicio: evStart >= dayStart,
+    esFin: evEnd <= dayEnd,
+  };
+}
+
+function allDayCubreFecha(ev: Evento, dayIso: string): boolean {
+  if (!ev.allDay) return false;
+  const startDate = ev.inicio.slice(0, 10);
+  const endDate = ev.fin.slice(0, 10);
+  if (startDate === endDate) return dayIso === startDate;
+  // Google all-day events: end.date es exclusivo → iterar [start, end)
+  return dayIso >= startDate && dayIso < endDate;
+}
 
 interface CalendarDrawerProps {
   children: ReactNode;
@@ -583,12 +616,12 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                   </div>
                   {semanaActual.map((d, i) => {
                     const dayIso = isoDate(d);
-                    const evs = eventosAllDay.filter((e) => e.fechaDia === dayIso);
+                    const evs = eventosAllDay.filter((e) => allDayCubreFecha(e, dayIso));
                     return (
                       <div key={i} className="flex-1 min-h-[28px] border-r p-1 space-y-0.5">
                         {evs.map((ev) => (
                           <button
-                            key={ev.id}
+                            key={`${ev.id}-${dayIso}`}
                             onClick={() => setEventoSel(ev)}
                             className="block w-full truncate rounded px-1.5 py-0.5 text-left text-[10px] font-medium"
                             style={{
@@ -605,13 +638,14 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                 </div>
               )}
 
-              {/* Grid horario — 24 h repartidas por flex */}
-              <div className="flex flex-1 min-h-0">
+              {/* Grid horario — 24 h con altura fija (HORA_PX) y scroll vertical */}
+              <div className="flex flex-1 min-h-0 overflow-y-auto">
                 <div className="flex w-[60px] shrink-0 flex-col border-r">
                   {HORAS.map((h) => (
                     <div
                       key={h}
-                      className="flex flex-1 items-start justify-end border-b px-2 pt-0.5 text-[10px] text-muted-foreground"
+                      style={{ height: HORA_PX }}
+                      className="flex items-start justify-end border-b px-2 pt-0.5 text-[10px] text-muted-foreground"
                     >
                       {h.toString().padStart(2, "0")}:00
                     </div>
@@ -620,7 +654,6 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
 
                 {semanaActual.map((d, diaIdx) => {
                   const dayIso = isoDate(d);
-                  const evsDelDia = eventosTimed.filter((e) => e.fechaDia === dayIso);
                   return (
                     <div
                       key={diaIdx}
@@ -630,34 +663,41 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                         <div
                           key={h}
                           onClick={() => abrirCrear(d, h)}
-                          className="flex-1 cursor-pointer border-b transition-colors hover:bg-blue-50/40 dark:hover:bg-blue-950/20"
+                          style={{ height: HORA_PX }}
+                          className="cursor-pointer border-b transition-colors hover:bg-blue-50/40 dark:hover:bg-blue-950/20"
                         />
                       ))}
 
-                      {evsDelDia.map((ev) => {
-                        const topPct = (ev.inicioMin / MINUTOS_DIA) * 100;
-                        const heightPct = (ev.duracionMin / MINUTOS_DIA) * 100;
-                        if (topPct < 0 || topPct >= 100) return null;
+                      {eventosTimed.map((ev) => {
+                        const seg = segmentoEnDia(ev, dayIso);
+                        if (!seg) return null;
+                        const top = (seg.inicioMin / 60) * HORA_PX;
+                        const height = Math.max(18, (seg.duracionMin / 60) * HORA_PX - 2);
                         const bg = colorEvento(ev);
-                      const txt = textOnColor(bg);
+                        const txt = textOnColor(bg);
                         return (
                           <button
-                            key={ev.id}
+                            key={`${ev.id}-${dayIso}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               setEventoSel(ev);
                             }}
-                            className="absolute left-0.5 right-0.5 z-10 overflow-hidden rounded-[4px] px-1.5 py-0.5 text-left text-[11px] leading-tight transition-shadow hover:z-20 hover:shadow-md"
+                            className={cn(
+                              "absolute left-0.5 right-0.5 z-10 overflow-hidden px-1.5 py-0.5 text-left text-[11px] leading-tight transition-shadow hover:z-20 hover:shadow-md",
+                              seg.esInicio && "rounded-t-[4px]",
+                              seg.esFin && "rounded-b-[4px]",
+                            )}
                             style={{
-                              top: `${topPct}%`,
-                              height: `calc(${heightPct}% - 2px)`,
-                              minHeight: 18,
+                              top,
+                              height,
                               backgroundColor: bg,
                               color: txt,
                             }}
                           >
                             <p className="truncate font-semibold">{ev.titulo}</p>
-                            <p className="truncate text-[10px] opacity-90">{ev.hora}</p>
+                            <p className="truncate text-[10px] opacity-90">
+                              {seg.esInicio ? ev.hora : "continúa"}
+                            </p>
                           </button>
                         );
                       })}
@@ -669,40 +709,42 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
           )}
 
           {/* VISTA DAY */}
-          {vista === "day" && (
+          {vista === "day" && (() => {
+            const dayIso = isoDate(fechaRef);
+            const allDayDelDia = eventosAllDay.filter((e) => allDayCubreFecha(e, dayIso));
+            return (
             <div className="flex flex-1 min-h-0 flex-col">
               {/* All-day del día */}
-              {eventosAllDay.filter((e) => e.fechaDia === isoDate(fechaRef)).length > 0 && (
+              {allDayDelDia.length > 0 && (
                 <div className="shrink-0 border-b bg-muted/20 px-4 py-2">
                   <p className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
                     Todo el día
                   </p>
                   <div className="space-y-1">
-                    {eventosAllDay
-                      .filter((e) => e.fechaDia === isoDate(fechaRef))
-                      .map((ev) => (
-                        <button
-                          key={ev.id}
-                          onClick={() => setEventoSel(ev)}
-                          className="block w-full truncate rounded px-2 py-1 text-left text-xs font-medium"
-                          style={{
-                            backgroundColor: colorEvento(ev),
-                            color: textOnColor(colorEvento(ev)),
-                          }}
-                        >
-                          {ev.titulo}
-                        </button>
-                      ))}
+                    {allDayDelDia.map((ev) => (
+                      <button
+                        key={`${ev.id}-${dayIso}`}
+                        onClick={() => setEventoSel(ev)}
+                        className="block w-full truncate rounded px-2 py-1 text-left text-xs font-medium"
+                        style={{
+                          backgroundColor: colorEvento(ev),
+                          color: textOnColor(colorEvento(ev)),
+                        }}
+                      >
+                        {ev.titulo}
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}
 
-              <div className="flex flex-1 min-h-0">
+              <div className="flex flex-1 min-h-0 overflow-y-auto">
                 <div className="flex w-[60px] shrink-0 flex-col border-r">
                   {HORAS.map((h) => (
                     <div
                       key={h}
-                      className="flex flex-1 items-start justify-end border-b px-2 pt-0.5 text-[10px] text-muted-foreground"
+                      style={{ height: HORA_PX }}
+                      className="flex items-start justify-end border-b px-2 pt-0.5 text-[10px] text-muted-foreground"
                     >
                       {h.toString().padStart(2, "0")}:00
                     </div>
@@ -713,45 +755,49 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                     <div
                       key={h}
                       onClick={() => abrirCrear(fechaRef, h)}
-                      className="flex-1 cursor-pointer border-b transition-colors hover:bg-blue-50/40 dark:hover:bg-blue-950/20"
+                      style={{ height: HORA_PX }}
+                      className="cursor-pointer border-b transition-colors hover:bg-blue-50/40 dark:hover:bg-blue-950/20"
                     />
                   ))}
-                  {eventosTimed
-                    .filter((e) => e.fechaDia === isoDate(fechaRef))
-                    .map((ev) => {
-                      const topPct = (ev.inicioMin / MINUTOS_DIA) * 100;
-                      const heightPct = (ev.duracionMin / MINUTOS_DIA) * 100;
-                      if (topPct < 0 || topPct >= 100) return null;
-                      const bg = colorEvento(ev);
-                      const txt = textOnColor(bg);
-                      return (
-                        <button
-                          key={ev.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEventoSel(ev);
-                          }}
-                          className="absolute left-1 right-1 z-10 overflow-hidden rounded-[4px] px-2 py-1 text-left text-xs leading-tight transition-shadow hover:shadow-md"
-                          style={{
-                            top: `${topPct}%`,
-                            height: `calc(${heightPct}% - 2px)`,
-                            minHeight: 24,
-                            backgroundColor: bg,
-                            color: txt,
-                          }}
-                        >
-                          <p className="truncate font-semibold">{ev.titulo}</p>
-                          <p className="truncate text-[10px] opacity-90">
-                            {ev.hora} · {ev.duracion}
-                          </p>
-                          {ev.lugar && <p className="truncate text-[10px] opacity-90">📍 {ev.lugar}</p>}
-                        </button>
-                      );
-                    })}
+                  {eventosTimed.map((ev) => {
+                    const seg = segmentoEnDia(ev, dayIso);
+                    if (!seg) return null;
+                    const top = (seg.inicioMin / 60) * HORA_PX;
+                    const height = Math.max(24, (seg.duracionMin / 60) * HORA_PX - 2);
+                    const bg = colorEvento(ev);
+                    const txt = textOnColor(bg);
+                    return (
+                      <button
+                        key={`${ev.id}-${dayIso}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEventoSel(ev);
+                        }}
+                        className={cn(
+                          "absolute left-1 right-1 z-10 overflow-hidden px-2 py-1 text-left text-xs leading-tight transition-shadow hover:shadow-md",
+                          seg.esInicio && "rounded-t-[4px]",
+                          seg.esFin && "rounded-b-[4px]",
+                        )}
+                        style={{
+                          top,
+                          height,
+                          backgroundColor: bg,
+                          color: txt,
+                        }}
+                      >
+                        <p className="truncate font-semibold">{ev.titulo}</p>
+                        <p className="truncate text-[10px] opacity-90">
+                          {seg.esInicio ? `${ev.hora} · ${ev.duracion}` : "continúa"}
+                        </p>
+                        {ev.lugar && <p className="truncate text-[10px] opacity-90">📍 {ev.lugar}</p>}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
-          )}
+            );
+          })()}
 
           {/* VISTA MONTH */}
           {vista === "month" && (
@@ -1079,7 +1125,9 @@ function VistaMes({
           const dayIso = isoDate(d);
           const esHoy = d.toDateString() === new Date().toDateString();
           const esMesActual = d.getMonth() === fechaRef.getMonth();
-          const evs = eventos.filter((e) => e.fechaDia === dayIso);
+          const evs = eventos.filter((e) =>
+            e.allDay ? allDayCubreFecha(e, dayIso) : segmentoEnDia(e, dayIso) !== null,
+          );
           return (
             <div
               key={i}
@@ -1100,23 +1148,26 @@ function VistaMes({
                 </span>
               </div>
               <div className="mt-1 space-y-0.5">
-                {evs.slice(0, 3).map((ev) => (
-                  <button
-                    key={ev.id}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onSelect(ev);
-                    }}
-                    className="block w-full truncate rounded px-1 py-0.5 text-left text-[10px] font-medium"
-                    style={{
-                      backgroundColor: colorEv(ev),
-                      color: textOnColor(colorEv(ev)),
-                    }}
-                  >
-                    {ev.allDay ? "" : `${ev.hora} `}
-                    {ev.titulo}
-                  </button>
-                ))}
+                {evs.slice(0, 3).map((ev) => {
+                  const continua = !ev.allDay && ev.fechaDia !== dayIso;
+                  return (
+                    <button
+                      key={`${ev.id}-${dayIso}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelect(ev);
+                      }}
+                      className="block w-full truncate rounded px-1 py-0.5 text-left text-[10px] font-medium"
+                      style={{
+                        backgroundColor: colorEv(ev),
+                        color: textOnColor(colorEv(ev)),
+                      }}
+                    >
+                      {ev.allDay || continua ? "" : `${ev.hora} `}
+                      {ev.titulo}
+                    </button>
+                  );
+                })}
                 {evs.length > 3 && (
                   <p className="px-1 text-[9px] text-muted-foreground">
                     + {evs.length - 3} más

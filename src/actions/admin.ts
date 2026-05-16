@@ -6,6 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { capitalizeText } from '@/shared/lib/utils'
 import { sendEmail } from '@/lib/email/send'
 import { passwordResetEmail } from '@/lib/email/templates/password-reset'
+import { friendlyError } from '@/shared/lib/friendly-errors'
 
 const VALID_ROLES = ['admin', 'director', 'gerencia', 'responsable', 'empleado', 'solo_lectura'] as const
 type AppRole = typeof VALID_ROLES[number]
@@ -46,7 +47,7 @@ async function assertRoleExistsInEmpresa(
     .ilike('nombre', rolLabel.trim())
     .limit(1)
     .maybeSingle()
-  if (error) return { error: `Error validando rol: ${error.message}` }
+  if (error) return { error: `Error validando rol: ${friendlyError(error)}` }
   if (!data) return { error: `El rol "${rolLabel}" no existe en empresa_roles. Créalo primero en la pestaña Roles.` }
   return {}
 }
@@ -118,7 +119,7 @@ export async function createEmployee(formData: FormData) {
     user_metadata: { full_name: fullName },
   })
 
-  if (error) return { error: error.message }
+  if (error) return { error: friendlyError(error) }
 
   // Completar nombre + (departamento opcional) + rol_label en el profile.
   // avatar_obligatorio=true solo para empleados → fuerza la foto en primer login.
@@ -137,14 +138,14 @@ export async function createEmployee(formData: FormData) {
     .update(profilePatch)
     .eq('id', data.user.id)
 
-  if (profileError) return { error: profileError.message }
+  if (profileError) return { error: friendlyError(profileError) }
 
   // Asignar rol RBAC en user_roles (para autorización)
   const { error: roleError } = await admin
     .from('user_roles')
     .insert({ user_id: data.user.id, role })
 
-  if (roleError) return { error: roleError.message }
+  if (roleError) return { error: friendlyError(roleError) }
 
   // Asignar empresas a las que el usuario tendrá acceso (multi-empresa).
   // El cliente envía 0..N campos `empresa_ids`. Si no llega ninguno, asignamos
@@ -159,7 +160,7 @@ export async function createEmployee(formData: FormData) {
     .from('user_empresas')
     .insert(finalEmpresaIds.map((eid) => ({ user_id: data.user.id, empresa_id: eid })))
 
-  if (empresasError) return { error: empresasError.message }
+  if (empresasError) return { error: friendlyError(empresasError) }
 
   revalidatePath('/admin/empleados')
   revalidatePath('/ajustes')
@@ -182,7 +183,7 @@ export async function getEmployees() {
     .select('*')
     .order('created_at', { ascending: false })
 
-  if (error) return { error: error.message, data: [] }
+  if (error) return { error: friendlyError(error), data: [] }
 
   const { data: roles } = await admin
     .from('user_roles')
@@ -228,7 +229,7 @@ export async function resetEmployeePassword(userId: string, newPassword: string)
     password: newPassword,
   })
 
-  if (error) return { error: error.message }
+  if (error) return { error: friendlyError(error) }
 
   return { success: true }
 }
@@ -261,7 +262,7 @@ export async function sendPasswordResetEmail(profileId: string) {
     .eq('id', profileId)
     .maybeSingle()
 
-  if (pErr) return { error: pErr.message }
+  if (pErr) return { error: friendlyError(pErr) }
   if (!profile?.email) return { error: 'El usuario no tiene email asociado.' }
 
   const siteUrl =
@@ -280,7 +281,7 @@ export async function sendPasswordResetEmail(profileId: string) {
   })
 
   if (linkErr || !linkData?.properties?.action_link) {
-    return { error: linkErr?.message ?? 'No se pudo generar el enlace de recuperación.' }
+    return { error: linkErr ? friendlyError(linkErr) : 'No se pudo generar el enlace de recuperación.' }
   }
 
   const actionUrl = linkData.properties.action_link
@@ -317,7 +318,7 @@ export async function sendPasswordResetEmail(profileId: string) {
     redirectTo,
   })
 
-  if (rErr) return { error: rErr.message }
+  if (rErr) return { error: friendlyError(rErr) }
 
   return { success: true, email: profile.email, transport: 'supabase' as const }
 }
@@ -337,7 +338,7 @@ export async function updateEmployeeStatus(profileId: string, estado: 'Activo' |
     .update({ estado_acceso: estado })
     .eq('id', profileId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: friendlyError(error) }
 
   revalidatePath('/ajustes')
   return { success: true }
@@ -364,7 +365,7 @@ export async function getEmpleadosSinAcceso() {
     .is('user_id', null)
     .order('nombre')
 
-  if (error) return { error: error.message, data: [] }
+  if (error) return { error: friendlyError(error), data: [] }
   return { data: data ?? [] }
 }
 
@@ -441,7 +442,7 @@ export async function updateEmployeeProfile(
       .from('profiles')
       .update(profileUpdate)
       .eq('id', profileId)
-    if (error) return { error: error.message }
+    if (error) return { error: friendlyError(error) }
   }
 
   // Actualizar app_role en user_roles si se pidió
@@ -456,7 +457,7 @@ export async function updateEmployeeProfile(
     if (userId) {
       await admin.from('user_roles').delete().eq('user_id', userId)
       const { error } = await admin.from('user_roles').insert({ user_id: userId, role })
-      if (error) return { error: error.message }
+      if (error) return { error: friendlyError(error) }
     }
   }
 
@@ -475,7 +476,7 @@ export async function getDepartamentosDisponibles(): Promise<{
       .from('cronogramas_operativos')
       .select('rol')
       .not('rol', 'is', null)
-    if (error) return { data: [], error: error.message }
+    if (error) return { data: [], error: friendlyError(error) }
     const set = new Set<string>()
     for (const row of data ?? []) {
       const r = (row as { rol: string | null }).rol
@@ -507,9 +508,26 @@ export async function deleteEmployee(userId: string) {
     return { error: 'Supabase admin no configurado. Configura SUPABASE_SERVICE_ROLE_KEY.' }
   }
 
+  // Limpiamos manualmente las filas dependientes en public.* antes de borrar
+  // el usuario en auth.users. Si dejamos que la cascada del FK lo haga, corre
+  // como `supabase_auth_admin`, que NO tiene DELETE sobre estas tablas y el
+  // borrado falla con "permission denied for table empleados".
+  const cleanups: { table: 'empleados' | 'user_empresas' | 'user_roles'; column: string }[] = [
+    { table: 'empleados', column: 'user_id' },
+    { table: 'user_empresas', column: 'user_id' },
+    { table: 'user_roles', column: 'user_id' },
+  ]
+  for (const { table, column } of cleanups) {
+    const { error: cleanErr } = await admin.from(table).delete().eq(column, userId)
+    if (cleanErr) return { error: friendlyError(cleanErr) }
+  }
+  // profiles.id == auth.user.id en este proyecto (mismo UUID); cubrimos también user_id por legacy.
+  await admin.from('profiles').delete().eq('id', userId)
+  await admin.from('profiles').delete().eq('user_id', userId)
+
   const { error } = await admin.auth.admin.deleteUser(userId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: friendlyError(error) }
 
   revalidatePath('/admin/empleados')
   revalidatePath('/ajustes')

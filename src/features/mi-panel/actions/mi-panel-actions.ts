@@ -16,6 +16,7 @@ import {
   getMiBalance,
   getNiveles,
 } from "@/features/toques/services/toques.service";
+import { getEmpresaActivaId } from "@/features/empresa/actions/empresa-activa-actions";
 
 function extractErrorMessage(err: unknown): string {
   if (!err) return "Error desconocido";
@@ -56,10 +57,25 @@ async function getContext() {
     ? `${data.nombre ?? ""} ${data.apellidos ?? ""}`.trim()
     : "";
   const fallbackEmail = user.email?.split("@")[0] ?? "";
+
+  let empresaId = await getEmpresaActivaId();
+  if (!empresaId) {
+    const { data: link } = await supabase
+      .from("user_empresas")
+      .select("empresa_id")
+      .eq("user_id", user.id)
+      .limit(1)
+      .maybeSingle();
+    empresaId =
+      (link?.empresa_id as string | undefined) ??
+      (data?.empresa_id as string | undefined) ??
+      null;
+  }
+
   return {
     supabase,
     user,
-    empresaId: (data?.empresa_id as string | undefined) ?? null,
+    empresaId,
     nombre: nombreCompleto || fallbackEmail || null,
     departamento: (data?.departamento as string | undefined) ?? null,
     rolLabel: (data?.rol_label as string | undefined) ?? null,
@@ -490,6 +506,44 @@ export interface NuevaSolicitudInput {
   motivo?: string;
 }
 
+type SupabaseAny = Awaited<ReturnType<typeof createClient>>;
+
+const SUBTIPO_AUSENCIA_KEYWORD: Record<SolicitudSubtipoAusencia, string> = {
+  baja_medica: "baja",
+  vacaciones: "vacacion",
+  permiso: "permiso",
+};
+
+function diasEntreFechas(inicio: string, fin: string | null): number {
+  const ini = new Date(inicio + "T00:00:00Z");
+  const end = new Date((fin ?? inicio) + "T00:00:00Z");
+  if (Number.isNaN(ini.getTime()) || Number.isNaN(end.getTime())) return 0;
+  const diff = Math.floor((end.getTime() - ini.getTime()) / 86400000) + 1;
+  return Math.max(0, diff);
+}
+
+function diasSolicitudEnAnio(inicio: string, fin: string | null, anio: number): number {
+  const ini = new Date(inicio + "T00:00:00Z");
+  const end = new Date((fin ?? inicio) + "T00:00:00Z");
+  if (Number.isNaN(ini.getTime()) || Number.isNaN(end.getTime())) return 0;
+  const yearStart = new Date(Date.UTC(anio, 0, 1));
+  const yearEndExclusive = new Date(Date.UTC(anio + 1, 0, 1));
+  const lo = ini.getTime() > yearStart.getTime() ? ini : yearStart;
+  const hi = end.getTime() < yearEndExclusive.getTime() ? end : new Date(yearEndExclusive.getTime() - 86400000);
+  if (hi.getTime() < lo.getTime()) return 0;
+  return Math.floor((hi.getTime() - lo.getTime()) / 86400000) + 1;
+}
+
+async function userTieneRolDirector(supabase: SupabaseAny, userId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId);
+  return (data ?? []).some((r: { role: string }) =>
+    r.role === "director" || r.role === "admin",
+  );
+}
+
 export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
   try {
     const { supabase, user, empresaId, nombre } = await getContext();
@@ -500,6 +554,68 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
     }
     if (input.tipo === "trabajo" && !["horas_extras", "dia_trabajado"].includes(input.subtipo)) {
       return { ok: false, error: "Subtipo de trabajo no válido" };
+    }
+
+    if (input.tipo === "ausencia") {
+      const subtipoAus = input.subtipo as SolicitudSubtipoAusencia;
+      const keyword = SUBTIPO_AUSENCIA_KEYWORD[subtipoAus];
+
+      const { data: tipoAusencia } = await supabase
+        .from("tipos_ausencia")
+        .select("nombre, limite_dias, activo")
+        .eq("empresa_id", empresaId)
+        .ilike("nombre", `%${keyword}%`)
+        .eq("activo", true)
+        .order("orden", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      const limite = (tipoAusencia?.limite_dias as number | null | undefined) ?? null;
+
+      if (limite != null && limite > 0) {
+        const esDirector = await userTieneRolDirector(supabase, user.id);
+        if (!esDirector) {
+          const anio = new Date(input.fechaInicio + "T00:00:00Z").getUTCFullYear();
+          const diasSolicitados = diasSolicitudEnAnio(input.fechaInicio, input.fechaFin ?? null, anio);
+
+          const inicioAnio = `${anio}-01-01`;
+          const inicioAnioSig = `${anio + 1}-01-01`;
+          const { data: existentes } = await supabase
+            .from("solicitudes_personal")
+            .select("fecha_inicio, fecha_fin")
+            .eq("empresa_id", empresaId)
+            .eq("user_id", user.id)
+            .eq("tipo", "ausencia")
+            .eq("subtipo", subtipoAus)
+            .in("estado", ["pendiente", "aprobada"])
+            .lt("fecha_inicio", inicioAnioSig)
+            .or(`fecha_fin.gte.${inicioAnio},fecha_fin.is.null`);
+
+          const diasUsados = (existentes ?? []).reduce(
+            (acc: number, s: { fecha_inicio: string; fecha_fin: string | null }) =>
+              acc + diasSolicitudEnAnio(s.fecha_inicio, s.fecha_fin, anio),
+            0,
+          );
+
+          if (diasUsados + diasSolicitados > limite) {
+            const restantes = Math.max(0, limite - diasUsados);
+            const nombreTipo = (tipoAusencia?.nombre as string | undefined) ?? subtipoAus;
+            return {
+              ok: false,
+              error:
+                `Has alcanzado el límite anual de ${nombreTipo}: ${limite} día${limite === 1 ? "" : "s"} por año. ` +
+                `Ya llevas ${diasUsados} usado${diasUsados === 1 ? "" : "s"} en ${anio} ` +
+                `(te queda${restantes === 1 ? "" : "n"} ${restantes}) y estás pidiendo ${diasSolicitados}. ` +
+                `No se puede registrar la solicitud.`,
+            };
+          }
+        }
+      }
+
+      // Aviso suave si fechaFin < fechaInicio (validación básica de coherencia)
+      if (input.fechaFin && diasEntreFechas(input.fechaInicio, input.fechaFin) === 0) {
+        return { ok: false, error: "La fecha de fin no puede ser anterior a la fecha de inicio" };
+      }
     }
 
     const { data, error } = await supabase
@@ -558,7 +674,11 @@ export async function listarSolicitudesEmpresa(filtro: "pendientes" | "todas" = 
       .eq("empresa_id", empresaId)
       .order("created_at", { ascending: false })
       .limit(200);
-    if (filtro === "pendientes") query.eq("estado", "pendiente");
+    if (filtro === "pendientes") {
+      query.eq("estado", "pendiente");
+    } else {
+      query.in("estado", ["aprobada", "rechazada"]);
+    }
     const { data, error } = await query;
     if (error) throw error;
     return { ok: true, data: (data ?? []).map(mapSolicitud) };
