@@ -7,6 +7,7 @@ import {
   FichajesTab, HorariosTab,
 } from "@/features/rrhh/components/empleados/FichaTabsContent";
 import { SubmoduloPorEmpleadoPlaceholder } from "@/features/rrhh/components/empleados/SubmoduloPorEmpleadoPlaceholder";
+import { FirmasEmpleadoTab } from "@/features/rrhh/components/empleados/FirmasEmpleadoTab";
 import { DatosPersonalesForm } from "@/features/mi-panel/components/DatosPersonalesForm";
 import type { DatosPersonalesCompletos } from "@/features/mi-panel/actions/datos-personales-actions";
 import { getEmpleadoConPerfil } from "@/features/rrhh/actions/empleados-actions";
@@ -172,7 +173,7 @@ export default function FichaEmpleadoPage() {
       case "solicitudes":
         return <SubmoduloPorEmpleadoPlaceholder modulo="Solicitudes" path="/rrhh/solicitudes" empleado={empleadoMock!} />;
       case "firmas":
-        return <SubmoduloPorEmpleadoPlaceholder modulo="Firmas" path="/rrhh/firmas" empleado={empleadoMock!} />;
+        return <FirmasEmpleadoTab empleadoId={empleadoBD!.id} />;
       case "calendarios":
         return <SubmoduloPorEmpleadoPlaceholder modulo="Calendarios" path="/rrhh/calendarios" empleado={empleadoMock!} />;
       case "reclutamiento":

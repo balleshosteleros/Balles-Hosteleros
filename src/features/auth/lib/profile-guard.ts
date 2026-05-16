@@ -41,13 +41,11 @@ export async function checkProfileGuard(
   return { ok: true, empresaId, rolLabel }
 }
 
+const GENERIC_ACCESS_MESSAGE = 'Usuario o contraseña incorrectos.'
+
 export const PROFILE_GUARD_MESSAGES: Record<ProfileGuardCode, string> = {
-  sin_perfil:
-    'Tu cuenta no está dada de alta en el sistema. Contacta con el administrador.',
-  cuenta_inactiva:
-    'Tu cuenta está inactiva. Contacta con el administrador del sistema.',
-  sin_empresa:
-    'Tu cuenta no tiene empresa asignada. Contacta con el administrador.',
-  sin_rol:
-    'Tu cuenta no tiene un rol asignado. Contacta con el administrador.',
+  sin_perfil: GENERIC_ACCESS_MESSAGE,
+  cuenta_inactiva: GENERIC_ACCESS_MESSAGE,
+  sin_empresa: GENERIC_ACCESS_MESSAGE,
+  sin_rol: GENERIC_ACCESS_MESSAGE,
 }

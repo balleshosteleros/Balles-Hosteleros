@@ -23,7 +23,7 @@ export interface DailyCounts {
   missedCalls: number; // llamadas entrantes nuevas no vistas
 }
 
-const REFRESH_MS = 5 * 60 * 1000; // 5 minutos
+const REFRESH_MS = 60 * 1000; // 1 minuto
 
 export function useDailyCounts(): DailyCounts {
   const { connected } = useGoogleConnection();
@@ -79,7 +79,9 @@ export function useDailyCounts(): DailyCounts {
     try {
       const ref = ymd(new Date());
       const [emailRes, calRes] = await Promise.allSettled([
-        fetch("/api/google/gmail/messages?carpeta=inbox").then((r) => r.json()),
+        fetch(
+          "/api/google/gmail/messages?carpeta=inbox&q=is:unread&maxResults=50",
+        ).then((r) => r.json()),
         fetch(`/api/google/calendar/events?view=day&date=${ref}`).then((r) =>
           r.json()
         ),
@@ -87,9 +89,7 @@ export function useDailyCounts(): DailyCounts {
 
       let emails = 0;
       if (emailRes.status === "fulfilled") {
-        const mensajes: Array<{ leido?: boolean }> =
-          emailRes.value?.mensajes ?? [];
-        emails = mensajes.filter((m) => m.leido === false).length;
+        emails = (emailRes.value?.mensajes ?? []).length;
       }
 
       let events = 0;
