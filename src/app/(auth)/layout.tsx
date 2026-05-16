@@ -10,7 +10,7 @@ export default function AuthLayout({
       {/* Panel izquierdo: formulario */}
       <div className="flex w-full flex-col justify-between px-6 py-10 lg:w-1/2 lg:px-16">
         <div className="flex flex-1 items-center justify-center">
-          <div className="w-full max-w-md">{children}</div>
+          <div className="w-full max-w-[400px]">{children}</div>
         </div>
 
         {/* Footer */}
