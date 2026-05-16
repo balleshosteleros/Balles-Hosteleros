@@ -232,11 +232,48 @@ export async function concatenarConActa(
   originalPdf: Uint8Array,
   actaPdf: Uint8Array,
 ): Promise<Uint8Array> {
-  const final = await PDFDocument.create();
+  return aplicarFirmaYConcatenar(originalPdf, actaPdf, null, null);
+}
+
+export type PosicionFirmaPdf = {
+  pagina: number;
+  xPct: number;
+  yPct: number;
+  anchoPct: number;
+};
+
+export async function aplicarFirmaYConcatenar(
+  originalPdf: Uint8Array,
+  actaPdf: Uint8Array,
+  trazoPng: Uint8Array | null,
+  posicion: PosicionFirmaPdf | null,
+): Promise<Uint8Array> {
   const orig = await PDFDocument.load(originalPdf, { ignoreEncryption: true });
+
+  if (trazoPng && posicion) {
+    const idx = Math.max(0, Math.min(orig.getPageCount() - 1, posicion.pagina - 1));
+    const page = orig.getPage(idx);
+    const { width: pw, height: ph } = page.getSize();
+    try {
+      const png = await orig.embedPng(trazoPng);
+      const w = Math.max(20, posicion.anchoPct * pw);
+      const ratio = png.width > 0 ? png.height / png.width : 0.35;
+      const h = w * ratio;
+      const xPdf = Math.max(0, Math.min(pw - w, posicion.xPct * pw));
+      // PDF coords (origin bottom-left): convertir desde UI (origin top-left)
+      const yPdf = Math.max(0, Math.min(ph - h, ph - posicion.yPct * ph - h));
+      page.drawImage(png, { x: xPdf, y: yPdf, width: w, height: h });
+    } catch {
+      // si el PNG es inválido se omite, el acta seguirá llevando los datos legales
+    }
+  }
+
+  const final = await PDFDocument.create();
+  const stampedBytes = await orig.save();
+  const stamped = await PDFDocument.load(stampedBytes);
   const acta = await PDFDocument.load(actaPdf);
 
-  const origPages = await final.copyPages(orig, orig.getPageIndices());
+  const origPages = await final.copyPages(stamped, stamped.getPageIndices());
   origPages.forEach((p) => final.addPage(p));
   const actaPages = await final.copyPages(acta, acta.getPageIndices());
   actaPages.forEach((p) => final.addPage(p));
