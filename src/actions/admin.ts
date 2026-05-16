@@ -121,9 +121,12 @@ export async function createEmployee(formData: FormData) {
 
   if (error) return { error: friendlyError(error) }
 
-  // Completar nombre + (departamento opcional) + rol_label en el profile.
+  // Completar empresa + nombre + (departamento opcional) + rol_label en el profile.
   // avatar_obligatorio=true solo para empleados → fuerza la foto en primer login.
+  // empresa_id se asigna aquí (el trigger handle_new_user ya no la pone por
+  // defecto — solo crea la fila base del profile).
   const profilePatch: Record<string, string | boolean | null> = {
+    empresa_id: empresaId,
     full_name: fullName,
     nombre,
     apellidos,
