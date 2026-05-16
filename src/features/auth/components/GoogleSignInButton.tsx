@@ -191,11 +191,6 @@ export function GoogleSignInButton({
         use_fedcm_for_prompt: true,
       })
 
-      const width = Math.min(
-        Math.max(parent.clientWidth || 320, 200),
-        400,
-      )
-
       gid.renderButton(parent, {
         type: 'standard',
         theme: 'outline',
@@ -203,7 +198,7 @@ export function GoogleSignInButton({
         text: 'continue_with',
         shape: 'rectangular',
         logo_alignment: 'left',
-        width,
+        width: 400,
       })
 
       fallbackTimer = setTimeout(() => {
