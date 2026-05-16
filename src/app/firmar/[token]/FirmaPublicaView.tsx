@@ -1,6 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+
+const VisorPdfInteractivo = dynamic(
+  () => import("./VisorPdfInteractivo").then((m) => m.VisorPdfInteractivo),
+  { ssr: false },
+);
+const VisorPdfLimpio = dynamic(
+  () => import("./VisorPdfLimpio").then((m) => m.VisorPdfLimpio),
+  { ssr: false },
+);
+import type { PosicionFirma } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,6 +40,7 @@ import {
   validarOTP,
   firmarDocumento,
   rechazarDocumento,
+  getEstadoFirma,
   type AbrirDocumentoResult,
 } from "./actions";
 
@@ -96,6 +108,26 @@ export function FirmaPublicaView({
     }
   }, [etapa, documento.modalidad, setupCanvas]);
 
+  useEffect(() => {
+    if (etapa === "firmado" || etapa === "rechazado") return;
+    let activo = true;
+    const id = setInterval(async () => {
+      const res = await getEstadoFirma(token);
+      if (!activo) return;
+      if (res.estado === "firmado") {
+        setDescargaUrl(res.descargaUrl ?? null);
+        setEtapa("firmado");
+        toast.success("Documento firmado desde otro dispositivo");
+      } else if (res.estado === "rechazado") {
+        setEtapa("rechazado");
+      }
+    }, 3000);
+    return () => {
+      activo = false;
+      clearInterval(id);
+    };
+  }, [etapa, token]);
+
   const limpiarCanvas = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -157,16 +189,31 @@ export function FirmaPublicaView({
   async function ejecutarFirma() {
     let trazoBase64: string | null = null;
     if (documento.modalidad === "manuscrita_digital") {
-      if (trazoVacio) {
-        toast.error("Dibuja tu firma antes de continuar");
-        return;
-      }
-      const canvas = canvasRef.current;
-      if (canvas) trazoBase64 = canvas.toDataURL("image/png");
+      // En manuscrita usamos VisorPdfInteractivo (ejecutarFirmaManuscrita).
+      // Esta función queda para click_to_sign y email_otp.
+      toast.error("Usa el visor de firma con la firma posicionada.");
+      return;
     }
 
     setFirmando(true);
     const res = await firmarDocumento({ token, trazoFirmaBase64: trazoBase64 });
+    setFirmando(false);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    setDescargaUrl(res.descargaUrl);
+    setEtapa("firmado");
+    toast.success("Documento firmado correctamente");
+  }
+
+  async function ejecutarFirmaManuscrita(data: { trazoBase64: string; posicion: PosicionFirma }) {
+    setFirmando(true);
+    const res = await firmarDocumento({
+      token,
+      trazoFirmaBase64: data.trazoBase64,
+      posicionFirma: data.posicion,
+    });
     setFirmando(false);
     if (!res.ok) {
       toast.error(res.error);
@@ -204,22 +251,40 @@ export function FirmaPublicaView({
           </div>
           <Badge variant="outline" className="gap-1 border-indigo-200 bg-indigo-50 text-indigo-700">
             <ShieldCheck className="h-3 w-3" />
-            {documento.validez.replace("eidas_", "eIDAS ").replace("_", " ")}
+            Firma Digital
           </Badge>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-6 py-6 grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
-        <Card className="overflow-hidden">
-          <div className="px-5 py-3 border-b border-zinc-200 bg-zinc-50 text-sm font-medium text-zinc-700">
+      <main className={
+        etapa === "firmar" && documento.modalidad === "manuscrita_digital"
+          ? "max-w-7xl mx-auto px-6 py-6 space-y-4"
+          : "max-w-5xl mx-auto px-6 py-6 grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6"
+      }>
+        {etapa === "firmar" && documento.modalidad === "manuscrita_digital" ? (
+          <>
+            <div className="px-1 pb-2">
+              <div className="text-sm font-semibold text-zinc-900">{documento.titulo}</div>
+              <div className="text-xs text-zinc-500 mt-0.5">
+                Dibuja tu firma a la derecha y arrástrala al PDF.
+              </div>
+            </div>
+            <VisorPdfInteractivo
+              pdfUrl={documento.pdfUrl}
+              onConfirm={ejecutarFirmaManuscrita}
+              submitting={firmando}
+            />
+          </>
+        ) : (
+        <>
+        <div>
+          <div className="text-sm font-semibold text-zinc-900 mb-3 px-1">
             {documento.titulo}
           </div>
-          <iframe
-            src={documento.pdfUrl}
-            className="w-full h-[720px] bg-white"
-            title={documento.titulo}
-          />
-        </Card>
+          <div className="max-h-[760px] overflow-auto rounded-lg bg-white">
+            <VisorPdfLimpio pdfUrl={documento.pdfUrl} width={640} />
+          </div>
+        </div>
 
         <aside className="space-y-4">
           <Card className="p-5">
@@ -230,9 +295,6 @@ export function FirmaPublicaView({
               <Info label="Enviado por" value={documento.enviadoPor} />
               <Info label="Enviado el" value={formatFecha(documento.enviadoEn)} />
               <Info label="Caduca el" value={formatFecha(documento.expiraEn)} />
-              {documento.observaciones && (
-                <Info label="Observaciones" value={documento.observaciones} />
-              )}
             </dl>
           </Card>
 
@@ -379,6 +441,8 @@ export function FirmaPublicaView({
             </Card>
           )}
         </aside>
+        </>
+        )}
       </main>
 
       <Dialog open={showRechazar} onOpenChange={setShowRechazar}>

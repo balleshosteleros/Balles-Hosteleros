@@ -66,6 +66,12 @@ export async function GET(request: Request) {
   const carpeta = url.searchParams.get("carpeta") ?? "inbox";
   // Si se pasa labelId explícito (etiqueta del usuario), tiene prioridad
   const labelIdParam = url.searchParams.get("labelId");
+  const q = url.searchParams.get("q");
+  const maxResultsParam = Number(url.searchParams.get("maxResults"));
+  const maxResults =
+    Number.isFinite(maxResultsParam) && maxResultsParam > 0
+      ? Math.min(maxResultsParam, 100)
+      : 30;
   const labelMap: Record<string, string> = {
     inbox: "INBOX",
     enviados: "SENT",
@@ -75,8 +81,13 @@ export async function GET(request: Request) {
   const label = labelIdParam ?? labelMap[carpeta] ?? "INBOX";
 
   // 1) Listado de hilos (conversaciones), igual que Gmail web
+  const params = new URLSearchParams({
+    labelIds: label,
+    maxResults: String(maxResults),
+  });
+  if (q) params.set("q", q);
   const listRes = await googleFetchAuto<GmailThreadListResponse>(
-    `https://gmail.googleapis.com/gmail/v1/users/me/threads?labelIds=${encodeURIComponent(label)}&maxResults=30`,
+    `https://gmail.googleapis.com/gmail/v1/users/me/threads?${params.toString()}`,
   );
   if (listRes.needsReauth) {
     return NextResponse.json(
@@ -91,7 +102,7 @@ export async function GET(request: Request) {
 
   // 2) Detalles de cada hilo en paralelo (todos sus mensajes en metadata)
   const detalles = await Promise.all(
-    list.threads.slice(0, 30).map((t) =>
+    list.threads.slice(0, maxResults).map((t) =>
       googleFetchAuto<GmailThreadResponse>(
         `https://gmail.googleapis.com/gmail/v1/users/me/threads/${t.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
       ).then((r) => r.data),

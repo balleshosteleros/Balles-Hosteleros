@@ -12,7 +12,7 @@ import {
 } from "@/features/rrhh/services/firmas/crypto";
 import { registrarEvento, listarEventos } from "@/features/rrhh/services/firmas/audit";
 import { enviarCodigoOTP, enviarCopiaFirmada } from "@/features/rrhh/services/firmas/email";
-import { generarActa, concatenarConActa, type DatosActa } from "@/features/rrhh/services/firmas/pdf";
+import { generarActa, aplicarFirmaYConcatenar, type DatosActa } from "@/features/rrhh/services/firmas/pdf";
 
 const BUCKET = "firmas";
 const OTP_TTL_MIN = 10;
@@ -117,7 +117,7 @@ export async function abrirDocumento(token: string): Promise<AbrirDocumentoResul
       .maybeSingle();
     const { data: empresa } = await admin
       .from("empresas")
-      .select("nombre")
+      .select("nombre, logo_url")
       .eq("id", doc.empresa_id)
       .maybeSingle();
     const { data: enviadoPorUser } = await admin
@@ -197,7 +197,7 @@ export async function solicitarOTP(token: string): Promise<SolicitarOtpResult> {
       .maybeSingle();
     const { data: empresa } = await admin
       .from("empresas")
-      .select("nombre")
+      .select("nombre, logo_url")
       .eq("id", doc.empresa_id)
       .maybeSingle();
 
@@ -238,6 +238,7 @@ export async function solicitarOTP(token: string): Promise<SolicitarOtpResult> {
       to: destino,
       empresaId: doc.empresa_id as string,
       empresaNombre: (empresa?.nombre as string) ?? "Empresa",
+      empresaLogoUrl: (empresa?.logo_url as string | null) ?? null,
       empleadoNombre,
       tituloDocumento: doc.titulo as string,
       codigo,
@@ -341,9 +342,17 @@ export async function validarOTP(token: string, codigo: string): Promise<Validar
   }
 }
 
+export type PosicionFirma = {
+  pagina: number;
+  xPct: number;
+  yPct: number;
+  anchoPct: number;
+};
+
 export type FirmarDocumentoInput = {
   token: string;
   trazoFirmaBase64?: string | null;
+  posicionFirma?: PosicionFirma | null;
 };
 
 export type FirmarResult =
@@ -387,7 +396,7 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
       .maybeSingle();
     const { data: empresa } = await admin
       .from("empresas")
-      .select("nombre")
+      .select("nombre, logo_url")
       .eq("id", doc.empresa_id)
       .maybeSingle();
     const { data: enviadoPorUser } = await admin
@@ -400,6 +409,9 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
     if (doc.modalidad === "manuscrita_digital") {
       if (!input.trazoFirmaBase64) {
         return { ok: false, error: "Falta el trazo de firma manuscrita" };
+      }
+      if (!input.posicionFirma) {
+        return { ok: false, error: "Falta la posición de la firma sobre el documento" };
       }
       const b64 = input.trazoFirmaBase64.replace(/^data:image\/png;base64,/, "");
       try {
@@ -455,7 +467,12 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
       return { ok: false, error: "No se pudo cargar el PDF original" };
     }
     const originalBytes = new Uint8Array(await originalDl.arrayBuffer());
-    const firmadoBytes = await concatenarConActa(originalBytes, actaBytes);
+    const firmadoBytes = await aplicarFirmaYConcatenar(
+      originalBytes,
+      actaBytes,
+      trazoPng,
+      input.posicionFirma ?? null,
+    );
     const sha256Acta = sha256(Buffer.from(firmadoBytes));
 
     const firmadoPath = `${doc.empresa_id}/${documentoId}/firmado.pdf`;
@@ -494,6 +511,7 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
         to: empleadoEmail,
         empresaId: doc.empresa_id as string,
         empresaNombre: (empresa?.nombre as string) ?? "Empresa",
+        empresaLogoUrl: (empresa?.logo_url as string | null) ?? null,
         empleadoNombre: datos.empleadoNombre,
         tituloDocumento: doc.titulo as string,
         firmadoEn: new Date(firmadoEnIso),
@@ -506,6 +524,37 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
     const msg = err instanceof Error ? err.message : "Error firmando documento";
     console.error("[firmar/firmar]", msg);
     return { ok: false, error: msg };
+  }
+}
+
+export async function getEstadoFirma(
+  token: string,
+): Promise<{ estado: "pendiente" | "firmado" | "rechazado" | "expirado" | null; descargaUrl?: string }> {
+  try {
+    const admin = createAdminClient();
+    const tokenHash = hashToken(token);
+    const { data: tk } = await admin
+      .from("firmas_tokens")
+      .select("documento_id")
+      .eq("token_hash", tokenHash)
+      .maybeSingle();
+    if (!tk) return { estado: null };
+    const { data: doc } = await admin
+      .from("firmas_documentos")
+      .select("estado, pdf_firmado_path")
+      .eq("id", tk.documento_id)
+      .maybeSingle();
+    if (!doc) return { estado: null };
+    let descargaUrl: string | undefined;
+    if (doc.estado === "firmado" && doc.pdf_firmado_path) {
+      const signed = await admin.storage
+        .from(BUCKET)
+        .createSignedUrl(doc.pdf_firmado_path as string, COPIA_TTL_SECONDS);
+      descargaUrl = signed.data?.signedUrl ?? undefined;
+    }
+    return { estado: doc.estado as "pendiente" | "firmado" | "rechazado" | "expirado", descargaUrl };
+  } catch {
+    return { estado: null };
   }
 }
 

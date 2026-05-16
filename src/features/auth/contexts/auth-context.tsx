@@ -94,6 +94,7 @@ interface AuthCache {
   roles: AppRole[];
   permisos: PermisoModulo[];
 }
+const LAST_USER_ID_KEY = "bh_last_user_id";
 function authCacheKey(userId: string) {
   return `bh_auth_cache_${userId}`;
 }
@@ -115,15 +116,30 @@ function writeAuthCache(userId: string, value: AuthCache) {
     // quota / private mode → ignoramos
   }
 }
+function readLastCachedAuth(): AuthCache | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const lastUserId = window.localStorage.getItem(LAST_USER_ID_KEY);
+    if (!lastUserId) return null;
+    return readAuthCache(lastUserId);
+  } catch {
+    return null;
+  }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  // Lazy init: si en localStorage hay caché del último usuario, hidratamos roles
+  // y permisos en el PRIMER render del provider. Sin esto, el sidebar se pinta
+  // vacío durante ~100-500 ms hasta que onAuthStateChange dispare INITIAL_SESSION
+  // dentro del useEffect (que corre tras el primer paint).
+  const initialCache = readLastCachedAuth();
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<AuthProfile | null>(null);
-  const [roles, setRoles] = useState<AppRole[]>([]);
+  const [roles, setRoles] = useState<AppRole[]>(initialCache?.roles ?? []);
   const [loading, setLoading] = useState(true);
-  const [permisos, setPermisos] = useState<PermisoModulo[]>([]);
-  const [permisosLoaded, setPermisosLoaded] = useState(false);
+  const [permisos, setPermisos] = useState<PermisoModulo[]>(initialCache?.permisos ?? []);
+  const [permisosLoaded, setPermisosLoaded] = useState(initialCache !== null);
 
   useEffect(() => {
     const supabase = getSupabase();
@@ -152,6 +168,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (session?.user) {
           const userId = session.user.id;
+
+          // Marca este user como "último activo" para que en futuros mounts del
+          // provider podamos hidratar roles/permisos desde caché ANTES del primer
+          // render (ver readLastCachedAuth + lazy init de useState arriba).
+          if (typeof window !== "undefined") {
+            try {
+              window.localStorage.setItem(LAST_USER_ID_KEY, userId);
+            } catch {
+              // ignore
+            }
+          }
 
           // 1) Hidratación instantánea desde localStorage si hay caché del usuario.
           //    Así el sidebar y los gates pueden filtrar al primer render — sin
@@ -228,6 +255,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (user?.id && typeof window !== "undefined") {
       try {
         window.localStorage.removeItem(authCacheKey(user.id));
+        window.localStorage.removeItem(LAST_USER_ID_KEY);
       } catch {
         // ignore
       }

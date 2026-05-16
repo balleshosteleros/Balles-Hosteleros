@@ -73,6 +73,52 @@ async function requireAdmin(): Promise<{ userId: string; userName: string; empre
   return { userId: user.id, userName: fullName, empresaId };
 }
 
+export async function listFirmasPorEmpleado(
+  empleadoId: string,
+): Promise<{ ok: true; data: FirmaResumen[] } | { ok: false; error: string }> {
+  try {
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    const { data, error } = await supabase
+      .from("firmas_documentos")
+      .select(`
+        id, titulo, tipo, modalidad, validez, estado,
+        empleado_id, enviado_por, enviado_en, expira_en, firmado_en,
+        ip_firma, sha256_original, sha256_acta, reenviado_count,
+        empleados!firmas_documentos_empleado_id_fkey ( id, nombre, apellidos, departamentos ( nombre ) )
+      `)
+      .eq("empresa_id", empresaId)
+      .eq("empleado_id", empleadoId)
+      .order("enviado_en", { ascending: false });
+    if (error) throw error;
+
+    type Row = {
+      id: string; titulo: string; tipo: string; modalidad: Modalidad;
+      validez: string; estado: string; empleado_id: string;
+      enviado_por: string; enviado_en: string; expira_en: string;
+      firmado_en: string | null; ip_firma: string | null;
+      sha256_original: string; sha256_acta: string | null; reenviado_count: number;
+      empleados: { id: string; nombre: string | null; apellidos: string | null;
+        departamentos: { nombre: string | null } | null; } | null;
+    };
+    const items: FirmaResumen[] = (data as unknown as Row[]).map((r) => ({
+      id: r.id, titulo: r.titulo, tipo: r.tipo, modalidad: r.modalidad,
+      validez: r.validez, estado: r.estado, empleadoId: r.empleado_id,
+      empleadoNombre: `${r.empleados?.nombre ?? ""} ${r.empleados?.apellidos ?? ""}`.trim() || "—",
+      departamento: r.empleados?.departamentos?.nombre ?? "—",
+      enviadoPor: r.enviado_por, enviadoEn: r.enviado_en, expiraEn: r.expira_en,
+      firmadoEn: r.firmado_en, ipFirma: r.ip_firma,
+      sha256Original: r.sha256_original, sha256Acta: r.sha256_acta,
+      reenviadoCount: r.reenviado_count,
+    }));
+    return { ok: true, data: items };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error";
+    return { ok: false, error: msg };
+  }
+}
+
 export async function listFirmas(): Promise<{ ok: true; data: FirmaResumen[] } | { ok: false; error: string }> {
   try {
     const { supabase, empresaId } = await getAppContext();
@@ -193,10 +239,11 @@ export async function crearFirma(formData: FormData): Promise<CrearFirmaResult> 
 
     const { data: empresa } = await admin
       .from("empresas")
-      .select("nombre")
+      .select("nombre, logo_url")
       .eq("id", empresaId)
       .maybeSingle();
     const empresaNombre = (empresa?.nombre as string) ?? "Tu empresa";
+    const empresaLogoUrl = (empresa?.logo_url as string | null) ?? null;
 
     const ab = await file.arrayBuffer();
     const pdfBuffer = Buffer.from(ab);
@@ -275,6 +322,7 @@ export async function crearFirma(formData: FormData): Promise<CrearFirmaResult> 
       to: destino,
       empresaId,
       empresaNombre,
+      empresaLogoUrl,
       empleadoNombre,
       tituloDocumento: titulo,
       enviadoPor: userName,
@@ -334,10 +382,11 @@ export async function reenviarFirma(
 
     const { data: empresa } = await admin
       .from("empresas")
-      .select("nombre")
+      .select("nombre, logo_url")
       .eq("id", empresaId)
       .maybeSingle();
     const empresaNombre = (empresa?.nombre as string) ?? "Tu empresa";
+    const empresaLogoUrl = (empresa?.logo_url as string | null) ?? null;
 
     await admin.from("firmas_tokens").delete().eq("documento_id", documentoId);
 
@@ -355,6 +404,7 @@ export async function reenviarFirma(
       to: destino,
       empresaId,
       empresaNombre,
+      empresaLogoUrl,
       empleadoNombre,
       tituloDocumento: doc.titulo as string,
       enviadoPor: userName,
