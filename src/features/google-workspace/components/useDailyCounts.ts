@@ -79,9 +79,7 @@ export function useDailyCounts(): DailyCounts {
     try {
       const ref = ymd(new Date());
       const [emailRes, calRes] = await Promise.allSettled([
-        fetch("/api/google/gmail/messages?q=is:unread&maxResults=20").then((r) =>
-          r.json()
-        ),
+        fetch("/api/google/gmail/messages?carpeta=inbox").then((r) => r.json()),
         fetch(`/api/google/calendar/events?view=day&date=${ref}`).then((r) =>
           r.json()
         ),
@@ -89,7 +87,9 @@ export function useDailyCounts(): DailyCounts {
 
       let emails = 0;
       if (emailRes.status === "fulfilled") {
-        emails = (emailRes.value?.messages ?? []).length;
+        const mensajes: Array<{ leido?: boolean }> =
+          emailRes.value?.mensajes ?? [];
+        emails = mensajes.filter((m) => m.leido === false).length;
       }
 
       let events = 0;

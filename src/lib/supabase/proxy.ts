@@ -1,10 +1,11 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { esHostPrincipal } from '@/features/marketing/pagina-web/services/hostname-resolver'
-import { getRedirectByRolLabel } from '@/features/auth/lib/role-redirect'
+import { LANDING_PATH } from '@/features/auth/lib/role-redirect'
+import { checkProfileGuard } from '@/features/auth/lib/profile-guard'
 
-const AUTH_PATHS = ['/', '/signup', '/callback', '/forgot-password', '/update-password', '/check-email']
-const PUBLIC_PREFIXES = ['/carta', '/__site', '/api/google/connect', '/empleo', '/api/empleo']
+const AUTH_PATHS = ['/', '/callback', '/forgot-password', '/update-password', '/check-email', '/acceso-demo']
+const PUBLIC_PREFIXES = ['/carta', '/__site', '/api/google/connect', '/empleo', '/api/empleo', '/firmar']
 
 function isAuthPath(pathname: string) {
   if (pathname === '/') return true
@@ -75,19 +76,23 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname
 
-  // Rutas auth: signup, reset, etc. → libres
+  // Rutas auth: callback, reset, etc. → libres
   // Rutas públicas: carta digital, sitios externos, assets, api → libres
   if (isAuthPath(pathname) || isPublicPath(pathname)) {
-    // Si ya estás logueado y visitas la home/login → te mando a tu módulo
+    // Si ya estás logueado y visitas la home/login → te mando a tu landing
     // (excepto en host demo, donde "/" siempre debe mostrar el formulario)
     if (pathname === '/' && user && !isDemoHost) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('rol_label')
-        .eq('user_id', user.id)
-        .maybeSingle()
-      const target = getRedirectByRolLabel(profile?.rol_label as string | null)
-      return NextResponse.redirect(new URL(target, request.url))
+      // Validamos profile antes de redirigir. Si el usuario tiene sesión
+      // pero su profile no es válido (sin empresa, sin rol, inactivo, etc.),
+      // cerramos sesión y dejamos que vea el login.
+      const guard = await checkProfileGuard(supabase, user.id)
+      if (!guard.ok) {
+        await supabase.auth.signOut()
+        const url = new URL('/', request.url)
+        url.searchParams.set('error', guard.code)
+        return NextResponse.redirect(url)
+      }
+      return NextResponse.redirect(new URL(LANDING_PATH, request.url))
     }
     return supabaseResponse
   }
@@ -95,6 +100,17 @@ export async function updateSession(request: NextRequest) {
   // Resto: privado → requiere sesión
   if (!user) {
     return NextResponse.redirect(new URL('/', request.url))
+  }
+
+  // Y además, perfil completo y activo. Sin esto, un usuario que entrara
+  // por OAuth (o que perdió su empresa/rol) podría navegar a rutas privadas
+  // que no estén bajo los 12 prefijos de módulo del proxy raíz.
+  const guard = await checkProfileGuard(supabase, user.id)
+  if (!guard.ok) {
+    await supabase.auth.signOut()
+    const url = new URL('/', request.url)
+    url.searchParams.set('error', guard.code)
+    return NextResponse.redirect(url)
   }
 
   return supabaseResponse

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import {
   Monitor,
   Mic,
@@ -20,9 +20,12 @@ import {
   Copy,
   Check,
   X,
-  Library,
+  FileVideo,
+  ExternalLink,
+  Trash2,
+  UploadCloud,
+  AlertCircle,
 } from "lucide-react";
-import Link from "next/link";
 import {
   Sheet,
   SheetContent,
@@ -37,16 +40,24 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useRecordingStore } from "../store/recording-store";
-import { useScreenRecorder, formatDuration, type RecordOptions } from "../hooks/useScreenRecorder";
+import { useRecorder, formatDuration } from "../contexts/recorder-context";
 
 export function RecordingDrawer() {
   const { isDrawerOpen, setDrawerOpen, state } = useRecordingStore();
-  
+  const { reset } = useRecorder();
+
+  function handleOpenChange(open: boolean) {
+    if (!open && (state === "done" || state === "error")) {
+      reset();
+    }
+    setDrawerOpen(open);
+  }
+
   return (
-    <Sheet open={isDrawerOpen} onOpenChange={setDrawerOpen}>
-      <SheetContent side="right" className="flex flex-col gap-0 p-0 sm:max-w-md [&>button]:hidden">
+    <Sheet open={isDrawerOpen} onOpenChange={handleOpenChange}>
+      <SheetContent side="right" className="flex flex-col gap-0 p-0 [&>button]:hidden">
         <SheetTitle className="sr-only">Grabadora de Pantalla</SheetTitle>
-        
+
         <SheetHeader className="border-b px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -61,11 +72,10 @@ export function RecordingDrawer() {
                 )} />
               </div>
               <div>
-                <h3 className="font-semibold text-sm">ReelForge Recorder</h3>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Grabación de pantalla</p>
+                <h3 className="font-semibold text-sm">Grabación de pantalla</h3>
               </div>
             </div>
-            
+
             <SheetClose asChild>
               <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
                 <X className="h-4 w-4" />
@@ -83,19 +93,14 @@ export function RecordingDrawer() {
 }
 
 function RecordingContent() {
+  const { state } = useRecordingStore();
   const [title, setTitle] = useState("");
-  const [options, setOptions] = useState<RecordOptions>({
-    includeSystemAudio: true,
-    includeMic: true,
-    includeCamera: false,
-    quality: "1080p",
-  });
   const [copied, setCopied] = useState(false);
   const videoPreviewRef = useRef<HTMLVideoElement>(null);
 
   const {
-    state,
-    elapsed,
+    options,
+    toggleOption,
     error,
     result,
     previewUrl,
@@ -104,7 +109,9 @@ function RecordingContent() {
     resumeRecording,
     stopRecording,
     reset,
-  } = useScreenRecorder(options);
+  } = useRecorder();
+
+  const { elapsed } = useRecordingStore();
 
   useEffect(() => {
     if (previewUrl && videoPreviewRef.current) {
@@ -112,14 +119,10 @@ function RecordingContent() {
     }
   }, [previewUrl]);
 
-  function toggleOption(key: keyof RecordOptions) {
-    setOptions((prev) => ({ ...prev, [key]: !prev[key] }));
-  }
-
   async function handleCopyLink() {
     if (!result) return;
-    const shareUrl = result.url.startsWith("blob:") 
-      ? result.url 
+    const shareUrl = result.url.startsWith("blob:")
+      ? result.url
       : `${window.location.origin}${result.url}`;
     await navigator.clipboard.writeText(shareUrl);
     setCopied(true);
@@ -150,7 +153,7 @@ function RecordingContent() {
             <OptionToggle
               icon={Volume2}
               iconOff={VolumeX}
-              label="Audio del sistema"
+              label="Sonido"
               description="Captura el sonido de tu PC"
               enabled={options.includeSystemAudio}
               onToggle={() => toggleOption("includeSystemAudio")}
@@ -166,8 +169,8 @@ function RecordingContent() {
             <OptionToggle
               icon={Camera}
               iconOff={CameraOff}
-              label="Cámara web"
-              description="Burbuja de cámara (PiP)"
+              label="Cámara"
+              description="Burbuja de cámara"
               enabled={options.includeCamera}
               onToggle={() => toggleOption("includeCamera")}
             />
@@ -181,6 +184,8 @@ function RecordingContent() {
           <Circle className="h-5 w-5 fill-white animate-pulse text-white" />
           Iniciar Grabación
         </Button>
+
+        <RecordingsList />
       </div>
     );
   }
@@ -197,6 +202,10 @@ function RecordingContent() {
         </p>
       </div>
     );
+  }
+
+  if (state === "countdown") {
+    return <CountdownView />;
   }
 
   if (state === "recording" || state === "paused") {
@@ -317,21 +326,32 @@ function RecordingContent() {
           </Button>
         </div>
 
-        <div className="pt-2 border-t space-y-3">
-          <SheetClose asChild>
-            <Link href="/mi-panel/grabaciones" className="block">
-              <Button variant="ghost" className="w-full gap-2 text-primary hover:text-primary hover:bg-primary/5 font-semibold">
-                <Library className="h-4 w-4" />
-                Ver todas las grabaciones
-              </Button>
-            </Link>
-          </SheetClose>
-
+        <div className="pt-2 border-t">
           <Button variant="ghost" className="w-full gap-2 text-muted-foreground" onClick={reset}>
             <RotateCcw className="h-4 w-4" />
             Grabar otro video
           </Button>
         </div>
+
+        <RecordingsList />
+      </div>
+    );
+  }
+
+  if (state === "done" && !result) {
+    return (
+      <div className="space-y-6">
+        <div className="py-8 text-center space-y-3">
+          <h3 className="text-lg font-bold">Grabación anterior cerrada</h3>
+          <p className="text-sm text-muted-foreground">
+            Sigue disponible abajo en tus grabaciones guardadas.
+          </p>
+          <Button variant="outline" onClick={reset} className="gap-2">
+            <RotateCcw className="h-4 w-4" />
+            Nueva grabación
+          </Button>
+        </div>
+        <RecordingsList />
       </div>
     );
   }
@@ -350,6 +370,21 @@ function RecordingContent() {
   return null;
 }
 
+function CountdownView() {
+  const { countdownValue } = useRecordingStore();
+  return (
+    <div className="py-20 text-center space-y-4 animate-in fade-in duration-200">
+      <div className="w-20 h-20 bg-red-600 text-white rounded-3xl flex items-center justify-center mx-auto shadow-lg shadow-red-200">
+        <span className="text-4xl font-bold tabular-nums">{countdownValue}</span>
+      </div>
+      <h3 className="text-xl font-bold">Empezando en {countdownValue}…</h3>
+      <p className="text-sm text-muted-foreground px-4">
+        Prepárate. La grabación arranca en {countdownValue} segundo{countdownValue !== 1 ? "s" : ""}.
+      </p>
+    </div>
+  );
+}
+
 function OptionToggle({
   icon: Icon,
   iconOff: IconOff,
@@ -357,7 +392,14 @@ function OptionToggle({
   description,
   enabled,
   onToggle,
-}: any) {
+}: {
+  icon: typeof Camera;
+  iconOff: typeof CameraOff;
+  label: string;
+  description: string;
+  enabled: boolean;
+  onToggle: () => void;
+}) {
   return (
     <button
       type="button"
@@ -380,5 +422,275 @@ function OptionToggle({
         <p className="text-xs text-muted-foreground">{description}</p>
       </div>
     </button>
+  );
+}
+
+interface SavedRecording {
+  id: string;
+  title: string;
+  url: string;
+  duration: number;
+  file_size: number;
+  created_at: string;
+}
+
+function RecordingsList() {
+  const [recordings, setRecordings] = useState<SavedRecording[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { pendingCount } = useRecorder();
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/recordings")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (alive && Array.isArray(data)) setRecordings(data);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+    // Recargar cuando cambia el número de pendientes (algún reintento tuvo éxito)
+  }, [pendingCount]);
+
+  async function handleDelete(id: string) {
+    if (!confirm("¿Eliminar esta grabación?")) return;
+    const res = await fetch("/api/recordings", {
+      method: "DELETE",
+      body: JSON.stringify({ id }),
+    });
+    if (res.ok) setRecordings((prev) => prev.filter((r) => r.id !== id));
+  }
+
+  return (
+    <div className="space-y-3 pt-4 border-t">
+      <PendingUploadsList />
+
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold">Mis grabaciones</p>
+        <span className="text-[11px] text-muted-foreground">{recordings.length}</span>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-6 text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+        </div>
+      ) : recordings.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-6 text-center">
+          <FileVideo className="h-6 w-6 text-muted-foreground/40 mb-1" />
+          <p className="text-xs text-muted-foreground">Aún no hay grabaciones</p>
+        </div>
+      ) : (
+        <div className="space-y-1.5 max-h-[40vh] overflow-y-auto pr-1">
+          {recordings.map((rec) => (
+            <div
+              key={rec.id}
+              className="flex items-center gap-2 p-2 rounded-md border border-border/60 hover:bg-muted/40 transition-colors"
+            >
+              <div className="w-8 h-8 rounded bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+                <FileVideo className="h-4 w-4" />
+              </div>
+              <a
+                href={rec.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 min-w-0 group"
+                title={rec.title}
+              >
+                <p className="text-xs font-medium truncate group-hover:text-primary transition-colors">
+                  {rec.title}
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  {new Date(rec.created_at).toLocaleDateString("es-ES")} · {formatDuration(rec.duration)}
+                </p>
+              </a>
+              <a
+                href={rec.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary"
+                title="Abrir"
+                aria-label="Abrir"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+              <a
+                href={rec.url}
+                download={`${rec.title}.webm`}
+                className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary"
+                title="Descargar"
+                aria-label="Descargar"
+              >
+                <Download className="h-3.5 w-3.5" />
+              </a>
+              <button
+                type="button"
+                onClick={() => handleDelete(rec.id)}
+                className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                title="Eliminar"
+                aria-label="Eliminar"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PendingUploadsList() {
+  const { refreshPending, retryPending, retryAllPending, deletePending, pendingCount } =
+    useRecorder();
+  const [pending, setPending] = useState<
+    Array<{
+      id: string;
+      title: string;
+      blob: Blob;
+      duration: number;
+      fileSize: number;
+      createdAt: number;
+      retryCount: number;
+      lastError?: string;
+    }>
+  >([]);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [retryingAll, setRetryingAll] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    refreshPending().then((list) => {
+      if (alive) setPending(list);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [refreshPending, pendingCount]);
+
+  // Memo de blob URLs con cleanup para no fugar memoria entre renders
+  const blobUrls = useMemo(() => {
+    const map = new Map<string, string>();
+    pending.forEach((p) => map.set(p.id, URL.createObjectURL(p.blob)));
+    return map;
+  }, [pending]);
+
+  useEffect(() => {
+    return () => {
+      blobUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [blobUrls]);
+
+  if (pending.length === 0) return null;
+
+  async function handleRetry(id: string) {
+    setBusyId(id);
+    await retryPending(id);
+    setBusyId(null);
+  }
+
+  async function handleRetryAll() {
+    setRetryingAll(true);
+    await retryAllPending();
+    setRetryingAll(false);
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("¿Eliminar esta grabación local? No se podrá recuperar.")) return;
+    await deletePending(id);
+  }
+
+  return (
+    <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+          <p className="text-xs font-semibold text-amber-800 truncate">
+            Pendientes de subida · {pending.length}
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 px-2 text-[11px] gap-1 border-amber-300 bg-white hover:bg-amber-100"
+          onClick={handleRetryAll}
+          disabled={retryingAll}
+        >
+          {retryingAll ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <UploadCloud className="h-3 w-3" />
+          )}
+          Subir todo
+        </Button>
+      </div>
+
+      <p className="text-[10px] text-amber-700/80 leading-snug">
+        Estas grabaciones están guardadas en tu navegador. Se subirán automáticamente cuando vuelva
+        la conexión, o puedes reintentarlo ahora.
+      </p>
+
+      <div className="space-y-1.5 max-h-[30vh] overflow-y-auto pr-1">
+        {pending.map((rec) => {
+          const localUrl = blobUrls.get(rec.id) ?? "";
+          const isBusy = busyId === rec.id || retryingAll;
+          return (
+            <div
+              key={rec.id}
+              className="flex items-center gap-2 p-2 rounded-md border border-amber-200/80 bg-white"
+            >
+              <div className="w-8 h-8 rounded bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                <FileVideo className="h-4 w-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium truncate" title={rec.title}>
+                  {rec.title}
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  {formatDuration(rec.duration)} ·{" "}
+                  {(rec.fileSize / (1024 * 1024)).toFixed(1)} MB
+                  {rec.retryCount > 0 ? ` · ${rec.retryCount} intentos` : ""}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleRetry(rec.id)}
+                disabled={isBusy}
+                className="p-1.5 rounded hover:bg-amber-100 text-amber-700 disabled:opacity-50"
+                title="Reintentar subida"
+                aria-label="Reintentar subida"
+              >
+                {isBusy ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <UploadCloud className="h-3.5 w-3.5" />
+                )}
+              </button>
+              <a
+                href={localUrl}
+                download={`${rec.title}.webm`}
+                className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary"
+                title="Descargar"
+                aria-label="Descargar"
+              >
+                <Download className="h-3.5 w-3.5" />
+              </a>
+              <button
+                type="button"
+                onClick={() => handleDelete(rec.id)}
+                className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                title="Eliminar local"
+                aria-label="Eliminar local"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }

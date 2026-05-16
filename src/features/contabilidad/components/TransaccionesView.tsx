@@ -8,6 +8,7 @@ import { Paperclip, MoreVertical, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TransaccionContable, TipoTransaccion } from "@/features/contabilidad/data/contabilidad";
 import { listTransacciones } from "@/features/contabilidad/actions/contabilidad-actions";
+import { listMovimientosBancarios } from "@/features/contabilidad/actions/psd2-actions";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -25,7 +26,9 @@ import { toast } from "sonner";
 
 const TABS = [{ id: "TODAS", label: "Todas" }, { id: "COBRO", label: "Cobros" }, { id: "PAGO", label: "Pagos" }];
 
-function mapDbToTransaccion(row: Record<string, unknown>): TransaccionContable {
+type TransaccionEnriquecida = TransaccionContable & { origen?: "manual" | "psd2" };
+
+function mapDbToTransaccion(row: Record<string, unknown>): TransaccionEnriquecida {
   return {
     id: row.id as string,
     concepto: (row.concepto as string) ?? "",
@@ -36,6 +39,34 @@ function mapDbToTransaccion(row: Record<string, unknown>): TransaccionContable {
     etiquetas: Array.isArray(row.etiquetas) ? (row.etiquetas as { categoria: string; detalle: string; color: string }[]) : [],
     documentos: (row.documentos as number) ?? 0,
     conciliada: (row.conciliada as boolean) ?? false,
+    origen: "manual",
+  };
+}
+
+function mapBankTxToTransaccion(row: Record<string, unknown>): TransaccionEnriquecida {
+  const accounts = row.bank_accounts as
+    | {
+        nombre?: string | null;
+        iban_last4?: string | null;
+        bank_connections?: { institution_name?: string | null } | null;
+      }
+    | null;
+  const institutionName =
+    accounts?.bank_connections?.institution_name ??
+    accounts?.nombre ??
+    "Banco";
+  const importe = Number(row.amount ?? 0);
+  return {
+    id: `psd2:${row.id as string}`,
+    concepto: (row.descripcion as string) || (row.contraparte as string) || "(Sin descripción)",
+    banco: accounts?.iban_last4 ? `${institutionName} · ····${accounts.iban_last4}` : institutionName,
+    fecha: (row.booking_date as string) ?? "",
+    importe,
+    tipo: importe >= 0 ? "COBRO" : "PAGO",
+    etiquetas: [],
+    documentos: 0,
+    conciliada: false,
+    origen: "psd2",
   };
 }
 
@@ -43,7 +74,7 @@ export function TransaccionesView() {
   const { empresaActual } = useEmpresa();
   const [tab, setTab] = useState("TODAS");
   const [busqueda, setBusqueda] = useState("");
-  const [txs, setTxs] = useState<TransaccionContable[]>([]);
+  const [txs, setTxs] = useState<TransaccionEnriquecida[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
@@ -54,14 +85,16 @@ export function TransaccionesView() {
   const loadTransacciones = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await listTransacciones();
-      if (res.ok) {
-        setTxs(res.data.map(mapDbToTransaccion));
-      } else {
-        toast.error("Error al cargar transacciones");
-      }
+      const [manual, psd2] = await Promise.all([
+        listTransacciones().catch(() => ({ ok: false, data: [] as Record<string, unknown>[] })),
+        listMovimientosBancarios(),
+      ]);
+      const lista: TransaccionEnriquecida[] = [];
+      if (manual.ok) lista.push(...manual.data.map(mapDbToTransaccion));
+      if (psd2.ok) lista.push(...psd2.data.map((r) => mapBankTxToTransaccion(r as Record<string, unknown>)));
+      setTxs(lista);
     } catch {
-      toast.error("Error de conexion al cargar transacciones");
+      toast.error("Error de conexión al cargar transacciones");
     } finally {
       setLoading(false);
     }
@@ -76,7 +109,7 @@ export function TransaccionesView() {
     [txs],
   );
 
-  const acceso = (t: TransaccionContable, campo: string): unknown => {
+  const acceso = (t: TransaccionEnriquecida, campo: string): unknown => {
     if (campo === "tipo") return t.tipo;
     if (campo === "banco") return t.banco;
     if (campo === "conciliada") return t.conciliada ? "Conciliada" : "Sin conciliar";
@@ -105,12 +138,19 @@ export function TransaccionesView() {
     { campo: "importe", label: "Cantidad" },
   ];
 
-  const columnDefs: Record<string, { th: ReactNode; td: (t: TransaccionContable) => ReactNode }> = {
+  const columnDefs: Record<string, { th: ReactNode; td: (t: TransaccionEnriquecida) => ReactNode }> = {
     concepto: {
       th: <th key="concepto" className="px-3 py-3 font-medium">Concepto</th>,
       td: (t) => (
         <td key="concepto" className="px-3 py-3">
-          <p className="font-semibold">{t.concepto}</p>
+          <div className="flex items-center gap-2">
+            <p className="font-semibold">{t.concepto}</p>
+            {t.origen === "psd2" && (
+              <Badge variant="outline" className="text-[9px] border-emerald-300 bg-emerald-50 text-emerald-700">
+                Sincronizado
+              </Badge>
+            )}
+          </div>
           <p className="text-[10px] text-muted-foreground">{t.banco}</p>
         </td>
       ),

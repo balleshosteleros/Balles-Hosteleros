@@ -1,37 +1,35 @@
 'use server'
 
+import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { getRedirectByRolLabel } from '@/features/auth/lib/role-redirect'
-
-async function getRolLandingForCurrentUser(): Promise<string> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return '/'
-  const { data } = await supabase
-    .from('profiles')
-    .select('rol_label')
-    .eq('user_id', user.id)
-    .maybeSingle()
-  return getRedirectByRolLabel(data?.rol_label as string | null)
-}
+import { LANDING_PATH } from '@/features/auth/lib/role-redirect'
+import {
+  checkProfileGuard,
+  PROFILE_GUARD_MESSAGES,
+} from '@/features/auth/lib/profile-guard'
 
 export async function login(formData: FormData) {
   const supabase = await createClient()
 
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email: formData.get('email') as string,
     password: formData.get('password') as string,
   })
 
-  if (error) {
-    return { error: error.message }
+  if (error || !data.user) {
+    return { error: error?.message ?? 'No se pudo iniciar sesión.' }
+  }
+
+  const guard = await checkProfileGuard(supabase, data.user.id)
+  if (!guard.ok) {
+    await supabase.auth.signOut()
+    return { error: PROFILE_GUARD_MESSAGES[guard.code] }
   }
 
   revalidatePath('/', 'layout')
-  const target = await getRolLandingForCurrentUser()
-  redirect(target)
+  redirect(LANDING_PATH)
 }
 
 export async function loginAsDemo(_formData: FormData) {
@@ -41,6 +39,23 @@ export async function loginAsDemo(_formData: FormData) {
   if (!email || !password) {
     return {
       error: 'El modo demo no está configurado. Contacta con el administrador.',
+    }
+  }
+
+  // El demo solo está disponible en el host demo. Sin esta comprobación,
+  // cualquiera podría llamar la server action desde el host principal y
+  // entrar con la cuenta demo escribiendo un email cualquiera.
+  const h = await headers()
+  const rawHost =
+    h.get('x-forwarded-host') ?? h.get('host') ?? ''
+  const normalizedHost = rawHost.toLowerCase().split(':')[0]
+  const isDemoHost =
+    normalizedHost === 'demo.balleshosteleros.com' ||
+    normalizedHost.startsWith('demo.')
+
+  if (!isDemoHost) {
+    return {
+      error: 'El acceso demo solo está disponible en demo.balleshosteleros.com.',
     }
   }
 
@@ -58,22 +73,6 @@ export async function loginAsDemo(_formData: FormData) {
 
   revalidatePath('/', 'layout')
   redirect('/mi-panel')
-}
-
-export async function signup(formData: FormData) {
-  const supabase = await createClient()
-
-  const { error } = await supabase.auth.signUp({
-    email: formData.get('email') as string,
-    password: formData.get('password') as string,
-  })
-
-  if (error) {
-    return { error: error.message }
-  }
-
-  revalidatePath('/', 'layout')
-  redirect('/check-email')
 }
 
 export async function signout() {
@@ -113,9 +112,19 @@ export async function updatePassword(formData: FormData) {
     return { error: error.message }
   }
 
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return { error: 'Sesión no disponible.' }
+  }
+
+  const guard = await checkProfileGuard(supabase, user.id)
+  if (!guard.ok) {
+    await supabase.auth.signOut()
+    return { error: PROFILE_GUARD_MESSAGES[guard.code] }
+  }
+
   revalidatePath('/', 'layout')
-  const target = await getRolLandingForCurrentUser()
-  redirect(target)
+  redirect(LANDING_PATH)
 }
 
 export async function updateProfile(formData: FormData) {

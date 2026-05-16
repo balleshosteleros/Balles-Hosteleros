@@ -16,6 +16,7 @@ import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email/send";
 import { bienvenidaEmpleadoEmail } from "@/lib/email/templates/bienvenida-empleado";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 interface PromoverInput {
   candidatoId: string;
@@ -160,7 +161,7 @@ export async function promoverCandidato(input: PromoverInput): Promise<PromoverR
     .eq("empresa_id", empresaId)
     .maybeSingle<CandidatoRow>();
 
-  if (candErr) return { ok: false, error: candErr.message };
+  if (candErr) return { ok: false, error: friendlyError(candErr) };
   if (!cand) return { ok: false, error: "Candidato no encontrado" };
 
   if (cand.estado !== "prueba" || cand.fase !== "seleccionado") {
@@ -183,7 +184,7 @@ export async function promoverCandidato(input: PromoverInput): Promise<PromoverR
     .is("promovido_at", null)
     .select("id");
 
-  if (lockErr) return { ok: false, error: lockErr.message };
+  if (lockErr) return { ok: false, error: friendlyError(lockErr) };
   if (!lockRows || lockRows.length === 0) {
     return { ok: false, error: "Promoción ya en curso (otro click más rápido)." };
   }
@@ -265,7 +266,7 @@ export async function promoverCandidato(input: PromoverInput): Promise<PromoverR
   if (createErr || !created?.user) {
     // Rollback el lock
     await admin.from("candidatos").update({ promovido_at: null, promovido_por: null }).eq("id", cand.id);
-    return { ok: false, error: createErr?.message ?? "No se pudo crear el usuario" };
+    return { ok: false, error: createErr ? friendlyError(createErr) : "No se pudo crear el usuario" };
   }
 
   const newUserId = created.user.id;
@@ -309,7 +310,7 @@ export async function promoverCandidato(input: PromoverInput): Promise<PromoverR
     .single();
 
   if (empErr || !empleado) {
-    return { ok: false, error: empErr?.message ?? "No se pudo crear el empleado" };
+    return { ok: false, error: empErr ? friendlyError(empErr) : "No se pudo crear el empleado" };
   }
 
   // Linkar candidato → empleado

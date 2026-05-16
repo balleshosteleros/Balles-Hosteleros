@@ -12,7 +12,7 @@ export const VIEW_MODE_DASHBOARDS: Record<ViewMode, string> = {
 const STORAGE_KEY = "bh_view_mode";
 const COOKIE_KEY = "bh_view_mode";
 const COOKIE_MAX_AGE_DAYS = 365;
-const DEFAULT_MODE: ViewMode = "paneles";
+const DEFAULT_MODE: ViewMode = "departamentos";
 
 function writeCookie(value: ViewMode) {
   if (typeof document === "undefined") return;

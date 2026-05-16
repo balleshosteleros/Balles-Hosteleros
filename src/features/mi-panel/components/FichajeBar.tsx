@@ -95,8 +95,8 @@ export function FichajeBar({
     setWorking(true);
     const res = await iniciarPausaPersonal(fichaje.id);
     setWorking(false);
-    if (!res.ok) return toast.error(res.error || "No se pudo iniciar la pausa");
-    toast.success("Pausa iniciada");
+    if (!res.ok) return toast.error(res.error || "No se pudo iniciar el descanso");
+    toast.success("Descanso iniciado");
     await refresh();
   }
   async function handleReanudar() {
@@ -117,7 +117,7 @@ export function FichajeBar({
     estadoLabel = "Jornada finalizada";
     estadoColor = "bg-violet-100 text-violet-800 border-violet-200";
   } else if (enPausa) {
-    estadoLabel = "En pausa";
+    estadoLabel = "En descanso";
     estadoColor = "bg-amber-100 text-amber-800 border-amber-200";
   } else if (trabajando) {
     estadoLabel = "Trabajando";
@@ -172,7 +172,7 @@ export function FichajeBar({
             <>
               <Button variant="outline" size="sm" disabled={working} onClick={handlePausa}>
                 <Coffee className="mr-1.5 h-4 w-4" />
-                Iniciar pausa
+                Iniciar descanso
               </Button>
               <Button
                 size="sm"

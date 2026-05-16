@@ -188,7 +188,7 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
               >
                 <div className="font-semibold">Ausencia</div>
                 <div className="text-xs text-muted-foreground mt-0.5">
-                  No vas a venir a trabajar (baja, vacaciones o permiso).
+                  Solicitar una baja, vacaciones o permiso.
                 </div>
               </button>
               <button
@@ -198,7 +198,7 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
               >
                 <div className="font-semibold">Trabajo realizado</div>
                 <div className="text-xs text-muted-foreground mt-0.5">
-                  Añadir horas o un día trabajado.
+                  Solicitar registrar horas o un día trabajado.
                 </div>
               </button>
             </div>

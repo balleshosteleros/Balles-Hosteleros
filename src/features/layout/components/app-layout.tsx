@@ -21,6 +21,7 @@ import {
   CheckCircle2,
   User,
   Camera,
+  Cctv,
   Truck,
   Calculator,
   FileText,
@@ -118,9 +119,13 @@ import {
   useDailyCounts,
 } from "@/features/google-workspace/components";
 import { AgendaDrawer } from "@/features/agenda/components/AgendaDrawer";
+import { CamarasDrawer } from "@/features/camaras/components/CamarasDrawer";
 import { RecordingTrigger } from "@/features/recorder/components/RecordingTrigger";
 import { RecordingDrawer } from "@/features/recorder/components/RecordingDrawer";
 import { RecordingOverlay } from "@/features/recorder/components/RecordingOverlay";
+import { CountdownOverlay } from "@/features/recorder/components/CountdownOverlay";
+import { WebcamPip } from "@/features/recorder/components/WebcamPip";
+import { RecorderProvider } from "@/features/recorder/contexts/recorder-context";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import type { AccesoApp } from "@/features/rrhh/data/accesos-apps";
 import { listAccesosApps } from "@/features/rrhh/actions/accesos-apps-actions";
@@ -142,7 +147,6 @@ const ROUTE_TITLES: Record<string, string> = {
   "/mi-panel/formacion/curso": "CURSO",
   "/mi-panel/points": "POINTS",
   "/mi-panel/datos-personales": "DATOS PERSONALES",
-  "/mi-panel/grabaciones": "MIS GRABACIONES",
   "/mis-departamentos": "MIS DEPARTAMENTOS",
   "/gerencia": "GERENCIA",
   "/direccion/estructura": "ORGANIGRAMA",
@@ -225,7 +229,6 @@ const ROUTE_TITLES: Record<string, string> = {
   "/contabilidad/facturas": "FACTURAS",
   "/contabilidad/impuestos": "IMPUESTOS",
   "/contabilidad/transacciones": "TRANSACCIONES",
-  "/contabilidad/operaciones": "OPERACIONES",
   "/contabilidad/conciliacion": "CONCILIACIÓN",
   "/contabilidad/calendario": "CALENDARIO",
   "/contabilidad/escenarios": "ESCENARIOS",
@@ -381,7 +384,6 @@ const ROUTE_ICONS: Record<string, LucideIcon> = {
   // CONTABILIDAD
   "/contabilidad": Calculator,
   "/contabilidad/contactos": ContactRound,
-  "/contabilidad/operaciones": Sparkles,
   "/contabilidad/facturas": FileText,
   "/contabilidad/impuestos": FileSearch,
   "/contabilidad/transacciones": PenLine,
@@ -513,6 +515,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
+    <RecorderProvider>
     <SidebarProvider>
       <div className="h-screen flex w-full overflow-hidden">
         <AppSidebar />
@@ -569,7 +572,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       </Button>
                     </MeetDrawer>
 
-                    {/* ReelForge Recorder */}
+                    {/* Grabación de pantalla */}
                     <RecordingTrigger />
 
                     {/* Separador visual */}
@@ -621,6 +624,17 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         <Notebook className="!h-[18px] !w-[18px] text-yellow-500" />
                       </Button>
                     </AgendaDrawer>
+
+                    {/* Videovigilancia */}
+                    <CamarasDrawer>
+                      <Button
+                        variant="ghost" size="icon"
+                        className="relative h-8 w-8"
+                        title="Videovigilancia"
+                      >
+                        <Cctv className="!h-[18px] !w-[18px] text-slate-700" />
+                      </Button>
+                    </CamarasDrawer>
                     {/* Separador visual */}
                     <span className="w-px h-5 bg-border mx-0.5" />
 
@@ -921,6 +935,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
       <RecordingDrawer />
       <RecordingOverlay />
+      <CountdownOverlay />
+      <WebcamPip />
     </SidebarProvider>
+    </RecorderProvider>
   );
 }

@@ -50,7 +50,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 
 const contabilidadSubs = [
   { title: "CONTACTOS", url: "/contabilidad/contactos", icon: ContactRound },
-  { title: "OPERACIONES", url: "/contabilidad/operaciones", icon: Sparkles },
   { title: "FACTURAS", url: "/contabilidad/facturas", icon: FileText },
   { title: "IMPUESTOS", url: "/contabilidad/impuestos", icon: FileSearch },
   { title: "TRANSACCIONES", url: "/contabilidad/transacciones", icon: PenLine },
@@ -112,6 +111,7 @@ const gerenciaSubs = [
   { title: "REVISIONES", url: "/gerencia/vencimientos", icon: CalendarDays },
   { title: "CIERRES", url: "/gerencia/cierres", icon: Wallet },
   { title: "DESCUENTOS", url: "/gerencia/descuentos", icon: PercentDiamond },
+  { title: "INFORMES", url: "/gerencia/informes", icon: BarChart3 },
   { title: "RATIOS", url: "/gerencia/ratios", icon: TrendingUp },
   { title: "COMUNICADOS", url: "/gerencia/comunicados", icon: Megaphone },
   { title: "ENCUESTAS", url: "/gerencia/encuestas", icon: ClipboardList },
