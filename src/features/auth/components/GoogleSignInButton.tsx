@@ -245,13 +245,22 @@ export function GoogleSignInButton({
         ref={buttonRef}
         className="flex w-full justify-center [&>div]:!w-full"
       />
-      {busy && (
-        <p className="text-center text-xs text-slate-400">Iniciando sesión…</p>
-      )}
       {error && (
         <p className="rounded-md border border-red-900/50 bg-red-950/40 px-3 py-2 text-sm text-red-300">
           {error}
         </p>
+      )}
+      {busy && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/70 backdrop-blur-sm"
+        >
+          <div className="flex flex-col items-center gap-3 rounded-xl bg-slate-900/90 px-6 py-5 shadow-2xl ring-1 ring-white/10">
+            <div className="h-8 w-8 rounded-full border-2 border-slate-700 border-t-white animate-spin" />
+            <p className="text-sm font-medium text-slate-100">Iniciando sesión…</p>
+          </div>
+        </div>
       )}
     </div>
   )
