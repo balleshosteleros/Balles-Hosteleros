@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getEmpleadoStatus } from "@/features/primer-acceso/actions/perfil-actions";
+import { getEmpleadoStatus } from "@/features/primer-acceso/data/empleado-status";
 import { WizardPrimerAcceso } from "@/features/primer-acceso/components/WizardPrimerAcceso";
 
 export const dynamic = "force-dynamic";
