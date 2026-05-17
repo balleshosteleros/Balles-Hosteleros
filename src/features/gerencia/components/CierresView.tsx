@@ -141,7 +141,7 @@ export function CierresView() {
   }, [config, cierresPorFecha]);
 
   const resumen = useMemo(() => {
-    let total = cierres.length;
+    const total = cierres.length;
     let cuadran = 0;
     let descuadrados = 0;
     let saldoNeto = 0;

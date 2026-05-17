@@ -187,7 +187,7 @@ export function FirmaPublicaView({
   }
 
   async function ejecutarFirma() {
-    let trazoBase64: string | null = null;
+    const trazoBase64: string | null = null;
     if (documento.modalidad === "manuscrita_digital") {
       // En manuscrita usamos VisorPdfInteractivo (ejecutarFirmaManuscrita).
       // Esta función queda para click_to_sign y email_otp.

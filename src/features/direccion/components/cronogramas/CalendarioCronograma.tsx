@@ -594,7 +594,7 @@ function VistaMultiMes({
   onTareaClick: (t: CronogramaOperativo) => void;
 }) {
   let mesInicio: number;
-  let yearInicio = anchor.getFullYear();
+  const yearInicio = anchor.getFullYear();
   if (mesesCount === 3) {
     mesInicio = Math.floor(anchor.getMonth() / 3) * 3;
   } else if (mesesCount === 6) {
