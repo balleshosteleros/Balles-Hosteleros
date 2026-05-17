@@ -99,7 +99,7 @@ export async function generarDossierPDF(escandallos: Escandallo[], categorias: C
     doc.setFont("helvetica", "bold");
     doc.text("RECOMENDACIONES", rightColX, alergenosY);
     
-    let recoY = alergenosY + 10;
+    const recoY = alergenosY + 10;
     if (escandallo.recomendaciones.length > 0) {
       doc.setFontSize(9);
       doc.setFont("helvetica", "normal");
