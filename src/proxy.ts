@@ -108,12 +108,23 @@ export async function proxy(request: NextRequest) {
   }
 
   const appRoles = (rolesRows ?? []).map((r) => r.role as string)
-
-  // 'director' tiene bypass total — es el rol más alto del SaaS.
-  if (appRoles.includes('director')) return sessionResponse
-
   const rolLabel = (profile?.rol_label as string | null) ?? null
   const empresaId = (profile?.empresa_id as string | null) ?? null
+
+  // 'director' es un rol tenant: bypass condicionado a que sea miembro real
+  // de su empresa activa (user_empresas, fuente canónica del Doc 4 §5.1).
+  // El día que el modelo separe rol-tenant vs rol-plataforma (Doc 4 §6),
+  // este bypass desaparece a favor de has_empresa_role(empresa_id, 'director').
+  if (appRoles.includes('director') && empresaId) {
+    const { data: membership } = await admin
+      .from('user_empresas')
+      .select('user_id')
+      .eq('user_id', user.id)
+      .eq('empresa_id', empresaId)
+      .maybeSingle()
+    if (membership) return sessionResponse
+  }
+
   if (!rolLabel || !empresaId) {
     return NextResponse.redirect(new URL('/', request.url))
   }
