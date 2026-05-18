@@ -16,11 +16,14 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
-  // ─── Validar autorización del cron ────────────────────────────────────────
+  // ─── Validar autorización del cron (fail-closed) ──────────────────────────
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
-
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  if (!cronSecret) {
+    console.error("[cron/agora-sync] CRON_SECRET no configurado");
+    return NextResponse.json({ error: "Configuración inválida" }, { status: 503 });
+  }
+  if (authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 

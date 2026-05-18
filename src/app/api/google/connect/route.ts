@@ -4,15 +4,15 @@ import { createClient } from "@/lib/supabase/server";
 const SCOPES = [
   "email",
   "profile",
-  // mail.google.com/ engloba lectura, envío, modificación de etiquetas y
-  // borrado permanente. Reemplaza a gmail.readonly + gmail.send.
-  "https://mail.google.com/",
-  // Necesario para leer la firma corporativa configurada en Gmail.
+  // Scopes granulares de Gmail (SENSIBLE, no RESTRICTED). Evitamos
+  // `mail.google.com/` para no exigir auditoría CASA en verificación.
+  // Coste: no se puede borrar permanente desde el portal (solo papelera).
+  "https://www.googleapis.com/auth/gmail.send",
+  "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/gmail.modify",
   "https://www.googleapis.com/auth/gmail.settings.basic",
-  "https://www.googleapis.com/auth/calendar",
+  "https://www.googleapis.com/auth/calendar.readonly",
   "https://www.googleapis.com/auth/calendar.events",
-  // Necesario para resolver fotos de perfil de los contactos por email
-  // (people:searchContacts y otherContacts:search).
   "https://www.googleapis.com/auth/contacts.readonly",
   "https://www.googleapis.com/auth/contacts.other.readonly",
 ].join(" ");

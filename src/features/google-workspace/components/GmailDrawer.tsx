@@ -17,7 +17,6 @@ import {
   Folder,
   FolderOpen,
   FolderInput,
-  AlertTriangle,
   ChevronRight,
   ChevronDown,
   Menu as MenuIcon,
@@ -57,6 +56,7 @@ import { GoogleConnectBanner } from "./GoogleConnectBanner";
 import { GoogleReauthBanner } from "./GoogleReauthBanner";
 import { GoogleAccountButton } from "./GoogleAccountButton";
 import { useGoogleConnection } from "./useGoogleConnection";
+import { sanitizeEmailHtml } from "@/shared/lib/sanitize-email-html";
 
 type MensajeHilo = {
   id: string;
@@ -396,7 +396,6 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
       const sacaDelListado =
         action === "archive" ||
         action === "trash" ||
-        action === "delete" ||
         action === "moveToLabel";
       if (sacaDelListado) {
         setMensajesReales((prev) =>
@@ -409,14 +408,6 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
     } else {
       toast.error("No se pudo aplicar");
     }
-  }
-
-  async function eliminarDefinitivo(id: string) {
-    const ok = window.confirm(
-      "¿Eliminar este correo de forma definitiva? No podrás recuperarlo desde la papelera.",
-    );
-    if (!ok) return;
-    await actuar("delete", id);
   }
 
   function resetIA() {
@@ -730,7 +721,6 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
                 }
                 onArchivar={() => actuar("archive", seleccionado.id)}
                 onPapelera={() => actuar("trash", seleccionado.id)}
-                onEliminar={() => eliminarDefinitivo(seleccionado.id)}
                 onMover={(labelId) =>
                   actuar("moveToLabel", seleccionado.id, labelId)
                 }
@@ -973,7 +963,7 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
                     {incluirFirma && (
                       <div
                         className="mt-2 max-h-32 overflow-y-auto border-t pt-2 text-xs text-muted-foreground [&_a]:text-blue-600 [&_a]:underline [&_img]:inline [&_img]:max-h-16"
-                        dangerouslySetInnerHTML={{ __html: firmaHtml }}
+                        dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(firmaHtml) }}
                       />
                     )}
                   </div>
@@ -1260,7 +1250,6 @@ interface VistaMensajeProps {
   onEstrella: () => void;
   onArchivar: () => void;
   onPapelera: () => void;
-  onEliminar: () => void;
   onMover: (labelId: string) => void;
   carpetasUsuario: CarpetaUsuario[];
   fotoRemitente: string | null;
@@ -1274,7 +1263,6 @@ function VistaMensaje({
   onEstrella,
   onArchivar,
   onPapelera,
-  onEliminar,
   onMover,
   carpetasUsuario,
   fotoRemitente,
@@ -1336,14 +1324,6 @@ function VistaMensaje({
             </DropdownMenuContent>
           </DropdownMenu>
         )}
-        <button
-          type="button"
-          onClick={onEliminar}
-          className="rounded-full p-2 hover:bg-black/5 text-[#5f6368]"
-          title="Eliminar definitivamente"
-        >
-          <AlertTriangle className="h-4 w-4" />
-        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-16 py-6">
@@ -1534,7 +1514,7 @@ function MensajeHiloItem({
             "[&_table]:border-collapse [&_td]:align-top",
             "[&_p]:my-2 [&_br]:my-0",
           )}
-          dangerouslySetInnerHTML={{ __html: mensaje.cuerpoHtml }}
+          dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(mensaje.cuerpoHtml) }}
         />
       ) : mensaje.cuerpo ? (
         <div className="text-sm leading-relaxed text-[#202124] whitespace-pre-wrap">
@@ -1618,7 +1598,7 @@ function BloqueMensajeUnico({
             "[&_table]:border-collapse [&_td]:align-top",
             "[&_p]:my-2 [&_br]:my-0",
           )}
-          dangerouslySetInnerHTML={{ __html: mensaje.cuerpoHtml }}
+          dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(mensaje.cuerpoHtml) }}
         />
       ) : mensaje.cuerpo ? (
         <div className="text-sm leading-relaxed text-[#202124] whitespace-pre-wrap">

@@ -176,7 +176,7 @@ async function snapshotEmpresaPeriodo(
     bonus_otorgado: bonus,
     titulo,
   });
-  let insertadoGanador = !errG;
+  const insertadoGanador = !errG;
   if (errG && errG.code !== "23505") {
     report.errores.push(`ganador ${periodo}@${empresaId}: ${errG.message}`);
   }
@@ -198,7 +198,7 @@ async function snapshotEmpresaPeriodo(
       : `Bonus ${periodo} (${inicio} – ${fin})`,
     contexto: { periodo, periodo_inicio: inicio, periodo_fin: fin, total_periodo: total },
   });
-  let insertadoBonus = !errM;
+  const insertadoBonus = !errM;
   if (errM && errM.code !== "23505") {
     report.errores.push(`bonus ${periodo}@${empresaId}: ${errM.message}`);
   }
