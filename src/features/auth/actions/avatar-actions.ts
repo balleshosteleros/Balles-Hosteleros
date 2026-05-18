@@ -1,5 +1,6 @@
 "use server";
 
+import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const BUCKET = "avatars";
@@ -8,6 +9,12 @@ const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
 
 export async function uploadAvatar(userId: string, formData: FormData): Promise<string> {
   if (!userId) throw new Error("Usuario no identificado.");
+
+  // Verificar que el userId coincide con la sesión real (impide sobrescribir avatares ajenos).
+  const sb = await createClient();
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) throw new Error("No autorizado.");
+  if (user.id !== userId) throw new Error("No autorizado para este usuario.");
 
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) throw new Error("No se recibió ninguna imagen.");

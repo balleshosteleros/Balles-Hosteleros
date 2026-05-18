@@ -225,12 +225,22 @@ export async function verificarIntegracionesAction() {
 }
 
 export async function enviarEmailAction(campana: CampanaEmail) {
+  const { empresaId } = await getMarketingContext();
+  if (!empresaId) return { success: false, error: "Sin empresa" };
+  if (campana.empresaId !== empresaId) {
+    return { success: false, error: "Empresa no autorizada" };
+  }
   const result = await sendEmailCampana(campana);
   if (result.success) revalidatePath("/marketing/campanas");
   return result;
 }
 
 export async function enviarWhatsAppAction(campana: CampanaWhatsApp) {
+  const { empresaId } = await getMarketingContext();
+  if (!empresaId) return { success: false, error: "Sin empresa" };
+  if (campana.empresaId !== empresaId) {
+    return { success: false, error: "Empresa no autorizada" };
+  }
   const result = await sendWhatsAppCampana(campana);
   if (result.success) revalidatePath("/marketing/campanas");
   return result;
