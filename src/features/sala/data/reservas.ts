@@ -94,7 +94,7 @@ export const SAMPLE_MESAS: Mesa[] = [
   { id: "s11", codigo: "C5", numero: 11, zona: "SALA", capacidad: 3, tipo: "MESA", estado: "LIBRE", x: 88, y: 14, ancho: 5, alto: 5, combinable: false, activa: true },
   { id: "s12", codigo: "C6", numero: 12, zona: "SALA", capacidad: 6, tipo: "MESA", estado: "LIBRE", x: 88, y: 22, ancho: 6, alto: 6, combinable: false, activa: true },
   // VIP
-  { id: "v1", codigo: "VIP1", numero: 13, zona: "SALA", capacidad: 5, tipo: "RESERVADO", estado: "WALK_IN" as any, x: 64, y: 18, ancho: 6, alto: 7, combinable: false, activa: true },
+  { id: "v1", codigo: "VIP1", numero: 13, zona: "SALA", capacidad: 5, tipo: "RESERVADO", estado: "OCUPADA", x: 64, y: 18, ancho: 6, alto: 7, combinable: false, activa: true },
   // TERRAZA INTERIOR
   { id: "ti1", codigo: "TI1", numero: 14, zona: "TERRAZA_INTERIOR", capacidad: 7, tipo: "MESA", estado: "RESERVADA", x: 48, y: 8, ancho: 5, alto: 7, combinable: true, activa: true },
   { id: "ti2", codigo: "TI2", numero: 15, zona: "TERRAZA_INTERIOR", capacidad: 7, tipo: "MESA", estado: "RESERVADA", x: 55, y: 8, ancho: 5, alto: 7, combinable: true, activa: true },

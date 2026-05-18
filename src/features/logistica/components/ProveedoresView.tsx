@@ -548,7 +548,7 @@ function ProveedorModal({ open, onClose, onSave, item, empresaId, categorias }: 
 
   useMemo(() => { setForm(item || blank); }, [item, open]);
 
-  const upd = (key: keyof Proveedor, val: any) => setForm((prev) => ({ ...prev, [key]: val }));
+  const upd = (key: keyof Proveedor, val: unknown) => setForm((prev) => ({ ...prev, [key]: val }));
 
   const handleSubmit = () => {
     // Solo validamos al CREAR (al editar dejamos pasar; el registro ya existe).

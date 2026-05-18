@@ -6,7 +6,7 @@ import type { EstadoReclutamiento, OrigenCandidatura } from "../data/reclutamien
 /**
  * Genera un archivo CSV a partir de un array de objetos
  */
-export function descargarCSV(data: any[], filename: string) {
+export function descargarCSV(data: Record<string, unknown>[], filename: string) {
   if (!data || data.length === 0) return;
 
   const headers = Object.keys(data[0]);
@@ -40,7 +40,19 @@ export function descargarCSV(data: any[], filename: string) {
 /**
  * Genera un informe PDF de los candidatos
  */
-export function generarInformeCandidatosPDF(candidatos: any[], titulo: string = "Informe de Candidatos") {
+type CandidatoExport = {
+  nombre: string;
+  apellidos: string;
+  puesto?: string;
+  vacanteId?: string;
+  fase: string;
+  email: string;
+  telefono: string;
+  origen: string;
+  fechaInscripcion: string;
+};
+
+export function generarInformeCandidatosPDF(candidatos: CandidatoExport[], titulo: string = "Informe de Candidatos") {
   const doc = new jsPDF();
 
   // Header

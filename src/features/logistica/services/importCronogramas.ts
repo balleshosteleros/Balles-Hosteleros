@@ -24,7 +24,7 @@ export function extractDataFromExcel(filePath: string, roleName: string): Cronog
   const sheet = workbook.Sheets[sheetName];
   
   // Parseamos como array de arrays para buscar exactamente donde están las cabeceras reales "TAREAS"
-  const rawData = xlsx.utils.sheet_to_json<any[]>(sheet, { header: 1 });
+  const rawData = xlsx.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
   
   let headerRowIndex = -1;
   let headers: string[] = [];

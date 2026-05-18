@@ -302,8 +302,11 @@ export async function listTareasSugeridas() {
       return { ok: true, data: [] };
     }
 
-    const info = infoLaboral.data as any;
-    const rolesToMatch = [];
+    const info = infoLaboral.data as {
+      departamentos?: { nombre?: string } | null;
+      puestos_trabajo?: { nombre?: string } | null;
+    };
+    const rolesToMatch: string[] = [];
     if (info.departamentos?.nombre) rolesToMatch.push(info.departamentos.nombre.toUpperCase());
     if (info.puestos_trabajo?.nombre) rolesToMatch.push(info.puestos_trabajo.nombre.toUpperCase());
 
@@ -508,7 +511,7 @@ export async function getRolesCronograma(): Promise<Result<string[]>> {
     if (!data || data.length === 0) {
       try {
         console.log("[getRolesCronograma] Sembrando cronogramas_operativos desde mock...");
-        const toInsert = fallbackCronogramas.slice(0, 100).map((f: any) => ({
+        const toInsert = fallbackCronogramas.slice(0, 100).map((f) => ({
           rol: (f.rol || "GENERAL").toUpperCase().trim(),
           tarea: f.tarea || "Tarea sin título",
           frecuencia: (f.frecuencia || "OTRO").toUpperCase(),
@@ -532,7 +535,7 @@ export async function getRolesCronograma(): Promise<Result<string[]>> {
     }
     
     return { ok: true, data: roles };
-  } catch (err: any) {
+  } catch (err) {
     console.error("[getRolesCronograma] Fatal Error, returning Mock Fallback:", err);
     const mockRoles = Array.from(new Set(fallbackCronogramas.map(f => f.rol.toUpperCase().trim()))).sort();
     return { ok: true, data: mockRoles };
@@ -629,7 +632,7 @@ export async function getDepartamentosVisibles(): Promise<
         modulosVisibles: Array.from(new Set(modulosVisibles)),
       },
     };
-  } catch (err: any) {
+  } catch (err) {
     console.error("[getDepartamentosVisibles] Fatal:", err);
     return {
       ok: true,
@@ -638,7 +641,7 @@ export async function getDepartamentosVisibles(): Promise<
   }
 }
 
-export async function listCronogramasPorRol(rol: string): Promise<Result<any[]>> {
+export async function listCronogramasPorRol(rol: string): Promise<Result<Record<string, unknown>[]>> {
   try {
     const { supabase } = await getAppContext();
     // No filtramos por frecuencia para que el usuario vea TODO lo disponible para ese rol
@@ -755,9 +758,10 @@ export async function syncTareasCronograma(dateIso?: string, forcedRol?: string)
     }
 
     return { ok: true, data: { rol, insertadas: rows.length, yaExistian: existSet.size } };
-  } catch (err: any) {
+  } catch (err) {
     console.error("[syncTareasCronograma] Fatal:", err);
-    return { ok: false, error: err?.message || "Error desconocido" };
+    const message = err instanceof Error ? err.message : "Error desconocido";
+    return { ok: false, error: message };
   }
 }
 
@@ -792,8 +796,8 @@ export async function syncTareasCronogramaRange(dates: string[], forcedRol?: str
     const candidatos = await getCronogramasParaSync(rol);
     if (candidatos.length === 0) return { ok: true, data: undefined };
 
-    const toInsert: any[] = [];
-    
+    const toInsert: Record<string, unknown>[] = [];
+
     // Validar UUIDs para evitar error 400
     const idsValidos = candidatos
       .map(c => c.id)

@@ -354,7 +354,7 @@ function AllCandidatosView({ vacantes }: { vacantes: Vacante[] }) {
   const filtered = useMemo(() => {
     if (!search) return allCandidatos;
     const s = search.toLowerCase();
-    return allCandidatos.filter((c) => `${c.nombre} ${c.apellidos} ${c.email} ${(c as any).puesto}`.toLowerCase().includes(s));
+    return allCandidatos.filter((c) => `${c.nombre} ${c.apellidos} ${c.email} ${c.puesto}`.toLowerCase().includes(s));
   }, [allCandidatos, search]);
 
   return (
@@ -385,7 +385,7 @@ function AllCandidatosView({ vacantes }: { vacantes: Vacante[] }) {
                     <span className="font-medium">{c.nombre} {c.apellidos}</span>
                   </div>
                 </TableCell>
-                <TableCell className="font-medium">{(c as any).puesto}</TableCell>
+                <TableCell className="font-medium">{c.puesto}</TableCell>
                 <TableCell>
                   <Badge variant="outline" className="text-[11px]" style={{ borderColor: FASES_CONFIG[c.fase].color, color: FASES_CONFIG[c.fase].color }}>
                     {FASES_CONFIG[c.fase].label}

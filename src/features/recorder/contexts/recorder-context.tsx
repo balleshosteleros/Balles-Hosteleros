@@ -331,7 +331,7 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
         }
 
         if (audioTracksToMix.length > 0) {
-          const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
           audioContextRef.current = audioContext;
           const destination = audioContext.createMediaStreamDestination();
           audioTracksToMix.forEach((track) => {

@@ -14,7 +14,7 @@ import {
   DEPARTAMENTOS, TIPO_CONTRATO_LABELS, ESTADO_ROL_LABELS,
   type TipoContrato, type EstadoRol,
 } from "@/features/rrhh/data/roles-empresa";
-import { TIPO_JORNADA_LABELS, type TipoJornada } from "@/features/rrhh/data/reclutamiento";
+import { TIPO_JORNADA_LABELS, type TipoJornada, type EstadoPublicacion } from "@/features/rrhh/data/reclutamiento";
 import {
   Building2, User, MapPin, Clock, DollarSign, FileText,
   Briefcase, Globe, AlertCircle, CheckCircle2,
@@ -238,7 +238,7 @@ export function RolFormModal({ open, onOpenChange, rol, empresaId, onSave }: Rol
                 </div>
                 <div>
                   <Label className="text-xs">Estado de publicación</Label>
-                  <Select value={form.vacante.estadoPublicacion} onValueChange={(v) => updateVacante("estadoPublicacion", v as any)}>
+                  <Select value={form.vacante.estadoPublicacion} onValueChange={(v) => updateVacante("estadoPublicacion", v as EstadoPublicacion)}>
                     <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="borrador">Borrador</SelectItem>

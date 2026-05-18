@@ -39,6 +39,8 @@ import {
 } from "@/components/ui/select";
 import { getModuloForCronograma } from "@/features/direccion/data/cronogramaAreas";
 
+type InfoTarea = { id: string; tarea?: string; resumen?: string };
+
 // Tipo legacy mantenido por compatibilidad con otras importaciones.
 export interface Tarea {
   id: string;
@@ -218,7 +220,7 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
   const [moduloPropio, setModuloPropio] = useState<string | null>(null);
   const [modulosVisibles, setModulosVisibles] = useState<string[] | null>(null);
   const [selectedRol, setSelectedRol] = useState<string>("default");
-  const [infoTareas, setInfoTareas] = useState<any[]>([]);
+  const [infoTareas, setInfoTareas] = useState<InfoTarea[]>([]);
 
   const cargar = useCallback(async () => {
     const res = await listTareasMias();
@@ -242,8 +244,9 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
 
   // 2. Escuchar evento para abrir desde fuera
   useEffect(() => {
-    const handleOpen = (e: any) => {
-      const { rol, tab: targetTab } = e.detail || {};
+    const handleOpen = (e: Event) => {
+      const detail = (e as CustomEvent<{ rol?: string; tab?: "hoy" | "semana" | "mes" }>).detail;
+      const { rol, tab: targetTab } = detail || {};
       if (rol) setSelectedRol(rol);
       if (targetTab) setTab(targetTab);
       setOpen(true);
@@ -273,31 +276,29 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
       setIsSyncing(true);
       try {
         const forced = selectedRol === "default" ? undefined : selectedRol;
-        let res: any;
         if (tab === "hoy") {
-          res = await syncTareasCronograma(undefined, forced);
+          const res = await syncTareasCronograma(undefined, forced);
           if (res.ok) {
-            if (!forced) setRolUsuario(res.data.rol);
-            if (res.data.insertadas > 0) {
+            if (!forced && res.data.rol) setRolUsuario(res.data.rol);
+            if (res.data.insertadas > 0 && res.data.rol) {
               toast.success(`Sincronizadas ${res.data.insertadas} tareas para ${getModuloForCronograma(res.data.rol)}`);
             }
+          } else {
+            toast.error("Error de sincronización: " + res.error);
           }
-        } else if (tab === "semana") {
-          const dates = weekDays.map((d) => format(d, "yyyy-MM-dd"));
-          res = await syncTareasCronogramaRange(dates, forced);
-        } else if (tab === "mes") {
-          const dates = monthDays.map((d) => format(d, "yyyy-MM-dd"));
-          res = await syncTareasCronogramaRange(dates, forced);
-        }
-        
-        if (res && !res.ok) {
-          toast.error("Error de sincronización: " + res.error);
+        } else if (tab === "semana" || tab === "mes") {
+          const dates = (tab === "semana" ? weekDays : monthDays).map((d) => format(d, "yyyy-MM-dd"));
+          const res = await syncTareasCronogramaRange(dates, forced);
+          if (!res.ok) {
+            toast.error("Error de sincronización: " + res.error);
+          }
         }
 
         lastSyncedKey.current = rangeKey;
         await cargar();
-      } catch (err: any) {
-        toast.error("Error inesperado: " + err.message);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        toast.error("Error inesperado: " + message);
       } finally {
         setIsSyncing(false);
       }
@@ -319,7 +320,7 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
 
       if (rolParaInfo) {
         const resInfo = await listCronogramasPorRol(rolParaInfo);
-        if (!cancelled && resInfo.ok) setInfoTareas(resInfo.data);
+        if (!cancelled && resInfo.ok) setInfoTareas(resInfo.data as unknown as InfoTarea[]);
       } else {
         if (!cancelled) setInfoTareas([]);
       }
@@ -746,7 +747,7 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
   );
 }
 
-function SeccionInformativa({ infoTareas, selectedRol }: { infoTareas: any[], selectedRol: string }) {
+function SeccionInformativa({ infoTareas, selectedRol }: { infoTareas: InfoTarea[], selectedRol: string }) {
   if (!infoTareas || infoTareas.length === 0) return null;
   return (
     <>

@@ -42,7 +42,7 @@ export const generarReportePDF = (proceso: ProcesoJuridico) => {
       styles: { fontSize: 10, cellPadding: 3 },
     });
 
-    let currentY = (doc as any).lastAutoTable.finalY + 12;
+    let currentY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
 
     // Description Section
     if (proceso.descripcion) {
@@ -83,11 +83,11 @@ export const generarReportePDF = (proceso: ProcesoJuridico) => {
           2: { cellWidth: 80 }, // Wide column for detail
         }
       });
-      currentY = (doc as any).lastAutoTable.finalY + 15;
+      currentY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 15;
     }
 
     // Footer
-    const pageCount = (doc as any).internal.getNumberOfPages();
+    const pageCount = doc.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
       doc.setFontSize(8);

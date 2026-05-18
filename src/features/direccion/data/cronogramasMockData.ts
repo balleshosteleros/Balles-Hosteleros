@@ -1,5 +1,14 @@
 // Auto-generado a partir de los Excel Originales
-export const fallbackCronogramas: any[] = [
+type FallbackCronograma = {
+  id: string;
+  rol: string;
+  tarea: string;
+  frecuencia: string;
+  tiempo_requerido?: string;
+  formacion?: string;
+};
+
+export const fallbackCronogramas: FallbackCronograma[] = [
   {
     "id": "1",
     "rol": "CALIDAD",

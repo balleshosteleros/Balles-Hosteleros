@@ -383,7 +383,7 @@ export function PartidasView() {
       )}
 
       {/* Tabs */}
-      <Tabs value={mainTab} onValueChange={v => setMainTab(v as any)}>
+      <Tabs value={mainTab} onValueChange={v => setMainTab(v as typeof mainTab)}>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <TabsList>
             <TabsTrigger value="lista"><List className="h-4 w-4 mr-1" />Lista</TabsTrigger>
@@ -410,7 +410,7 @@ export function PartidasView() {
               </TableHeader>
               <TableBody>
                 {filtered.map(p => {
-                  const emp = empleados.find((e: any) => e.id === p.creador);
+                  const emp = empleados.find((e) => e.id === p.creador);
                   return (
                     <TableRow key={p.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedPartida(p)}>
                       <TableCell className="font-semibold">{p.nombre}</TableCell>
@@ -449,7 +449,7 @@ export function PartidasView() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {filtered.map(p => {
-              const emp = empleados.find((e: any) => e.id === p.creador);
+              const emp = empleados.find((e) => e.id === p.creador);
               return (
                 <Card key={p.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelectedPartida(p)}>
                   <CardHeader className="pb-2">

@@ -44,7 +44,7 @@ export default function ResultadoInventario({ resultados }: Props) {
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input placeholder="Buscar producto…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 h-8 text-xs" />
         </div>
-        <Select value={filterDif} onValueChange={(v: any) => setFilterDif(v)}>
+        <Select value={filterDif} onValueChange={(v) => setFilterDif(v as typeof filterDif)}>
           <SelectTrigger className="w-[150px] h-8 text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="todos">Todas las diferencias</SelectItem>

@@ -386,7 +386,7 @@ export function ReservasView() {
             </div>
             <div className="flex gap-1 flex-wrap text-[10px]">
               {(["TODOS", "CONFIRMADA", "PENDIENTE", "WALK_IN", "LISTA_ESPERA", "NO SHOW"] as const).map(e => (
-                <button key={e} onClick={() => setFiltroEstado(e as any)}
+                <button key={e} onClick={() => setFiltroEstado(e as typeof filtroEstado)}
                   className={cn("px-2 py-1 rounded-full border transition-colors",
                     filtroEstado === e ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:bg-muted")}>
                   {e === "TODOS" ? "Todas" : ESTADO_RESERVA_LABELS[e as EstadoReserva] ?? e}
@@ -430,7 +430,7 @@ export function ReservasView() {
             <span className="font-bold text-sm">{empresaActual.nombre.toUpperCase()}</span>
             <span className="text-xs text-muted-foreground">({mesasOcupadas}/{mesasActivas.length})</span>
             <div className="ml-auto flex items-center gap-2">
-              <Select value={filtroZona} onValueChange={v => setFiltroZona(v as any)}>
+              <Select value={filtroZona} onValueChange={v => setFiltroZona(v as typeof filtroZona)}>
                 <SelectTrigger className="h-7 w-[140px] text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="TODAS">Todas las zonas</SelectItem>

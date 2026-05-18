@@ -48,7 +48,7 @@ export function AmortizacionTab({ lineas, onChange, readOnly = false }: Props) {
     setEditing(null);
   };
   const remove = (id: string) => onChange(lineas.filter(l => l.id !== id));
-  const upd = (field: keyof LineaAmortizacion, val: any) => setEditing(prev => prev ? { ...prev, [field]: val } : null);
+  const upd = (field: keyof LineaAmortizacion, val: unknown) => setEditing(prev => prev ? { ...prev, [field]: val } : null);
 
   return (
     <div className="space-y-6">

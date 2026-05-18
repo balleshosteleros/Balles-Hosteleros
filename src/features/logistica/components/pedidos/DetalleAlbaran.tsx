@@ -76,9 +76,10 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, onBack, onUpdateEstado, 
       } else {
         toast.success("Albarán analizado correctamente. Sin discrepancias.");
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error analyzing albaran:", err);
-      toast.error(err?.message || "Error al analizar el albarán. Inténtalo de nuevo.");
+      const message = err instanceof Error ? err.message : "Error al analizar el albarán. Inténtalo de nuevo.";
+      toast.error(message);
     } finally {
       setAnalyzing(false);
     }

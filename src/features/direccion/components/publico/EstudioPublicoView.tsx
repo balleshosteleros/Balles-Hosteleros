@@ -288,8 +288,8 @@ export function EstudioPublicoView({ data }: { data: EstudioPublico }) {
                         paddingAngle={2}
                         isAnimationActive={false}
                         activeIndex={beneficioIndex >= 0 ? beneficioIndex : undefined}
-                        activeShape={(props: any) => {
-                          const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, fillOpacity } = props;
+                        activeShape={((props: unknown) => {
+                          const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, fillOpacity } = props as { cx: number; cy: number; innerRadius: number; outerRadius: number; startAngle: number; endAngle: number; fill: string; fillOpacity?: number };
                           return (
                             <g style={{ filter: "drop-shadow(0 0 10px rgba(34,197,94,0.55)) drop-shadow(0 0 4px rgba(34,197,94,0.45))" }}>
                               <Sector
@@ -302,7 +302,7 @@ export function EstudioPublicoView({ data }: { data: EstudioPublico }) {
                               />
                             </g>
                           );
-                        }}
+                        }) as unknown as import("recharts").PieProps["activeShape"]}
                       >
                         {donutData.map((d, i) => {
                           const active = isDonutActive(d.group);

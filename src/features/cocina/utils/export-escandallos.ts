@@ -52,7 +52,7 @@ export async function generarDossierPDF(escandallos: Escandallo[], categorias: C
       styles: { fontSize: 10, cellPadding: 5 },
     });
 
-    currentY = (doc as any).lastAutoTable.finalY + 10;
+    currentY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
 
     // Two Columns Layout
     const colWidth = (pageWidth - 40) / 2;
@@ -111,7 +111,7 @@ export async function generarDossierPDF(escandallos: Escandallo[], categorias: C
     }
 
     // Elaboración (Full Width)
-    const tableY = Math.max((doc as any).lastAutoTable.finalY + 10, recoY + 20);
+    const tableY = Math.max((doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10, recoY + 20);
     currentY = tableY;
 
     doc.setFontSize(12);
@@ -127,7 +127,7 @@ export async function generarDossierPDF(escandallos: Escandallo[], categorias: C
       styles: { fontSize: 10, cellPadding: 8 },
     });
 
-    currentY = (doc as any).lastAutoTable.finalY + 10;
+    currentY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
 
     // Additional info
     const infoBody = [

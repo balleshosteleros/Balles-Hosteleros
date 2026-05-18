@@ -144,7 +144,7 @@ function FaseGroup({
   const totalCount = candidatos.length;
 
   // Group candidates by estado within this phase
-  const candidatosPorEstado: Record<EstadoReclutamiento, Candidato[]> = {} as any;
+  const candidatosPorEstado = {} as Record<EstadoReclutamiento, Candidato[]>;
   for (const est of cfg.estados) {
     candidatosPorEstado[est] = candidatos.filter((c) => c.fase === est);
   }
