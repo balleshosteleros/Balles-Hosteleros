@@ -107,7 +107,6 @@ export async function createEmpleado(input: {
   localPorEmpresa?: Record<string, string | null>;
 }) {
   try {
-    await requireAdminUser();
     const { empresaId: empresaActivaId } = await getAppContext();
 
     const empresasSeleccionadas = (input.empresaIds ?? []).filter(Boolean);
@@ -117,6 +116,11 @@ export async function createEmpleado(input: {
     const empresasAcceso = empresasSeleccionadas.length > 0
       ? Array.from(new Set(empresasSeleccionadas))
       : [empresaPrincipalId];
+
+    // Verificar admin + que el caller pertenece a TODAS las empresas a las
+    // que va a dar acceso al nuevo empleado. Sin este check, un admin de la
+    // empresa A podía dar de alta usuarios en la empresa B pasando su UUID.
+    await requireAdminUser({ empresaIds: empresasAcceso });
 
     const emailEmpresa = (input.emailEmpresa ?? "").trim().toLowerCase() || null;
     const emailPersonal = (input.emailPersonal ?? "").trim().toLowerCase();
@@ -309,24 +313,61 @@ export async function listDepartamentos() {
   }
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
- * Verifica que el invocador tenga rol admin o director. Lanza error si no.
- * Devuelve el user para usos posteriores.
+ * Verifica que el invocador tenga rol admin o director y, opcionalmente,
+ * que sea miembro de TODAS las empresas indicadas en `opts.empresaIds`.
+ *
+ * - `director` es un rol de plataforma (Doc 4 §6) y conserva bypass total
+ *   sobre el scope por empresa: un director puede operar cross-tenant.
+ * - `admin` es rol tenant: debe pertenecer (vía user_empresas) a cada una
+ *   de las empresas sobre las que opera. Si se pasa una empresa a la que
+ *   no pertenece, se rechaza con error.
+ *
+ * Doc 4 P0 — gap B del audit 2026-05-15.
  */
-async function requireAdminUser() {
+async function requireAdminUser(opts?: { empresaIds?: string[] }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("No autenticado");
 
-  const { data: roles } = await supabase
+  const { data: rolesRows } = await supabase
     .from("user_roles")
     .select("role")
     .eq("user_id", user.id);
-
-  const ok = (roles ?? []).some((r: { role: string }) =>
-    (ROLES_ADMIN as readonly string[]).includes(r.role),
+  const roles = (rolesRows ?? []).map((r: { role: string }) => r.role);
+  const isAdmin = roles.some((r) =>
+    (ROLES_ADMIN as readonly string[]).includes(r),
   );
-  if (!ok) throw new Error("Sin permisos: solo admin o director pueden modificar empleados");
+  if (!isAdmin) {
+    throw new Error("Sin permisos: solo admin o director pueden modificar empleados");
+  }
+
+  // director (rol plataforma) opera cross-tenant; salta el scope por empresa.
+  if (opts?.empresaIds && opts.empresaIds.length > 0 && !roles.includes("director")) {
+    const empresasReq = Array.from(
+      new Set(opts.empresaIds.filter((id) => typeof id === "string" && UUID_RE.test(id))),
+    );
+    if (empresasReq.length === 0) {
+      throw new Error("Sin permisos: empresas no válidas");
+    }
+    const { data: rels } = await supabase
+      .from("user_empresas")
+      .select("empresa_id")
+      .eq("user_id", user.id)
+      .in("empresa_id", empresasReq);
+    const accesibles = new Set((rels ?? []).map((r: { empresa_id: string }) => r.empresa_id));
+    const sinAcceso = empresasReq.filter((id) => !accesibles.has(id));
+    if (sinAcceso.length > 0) {
+      throw new Error(
+        sinAcceso.length === 1
+          ? "Sin permisos: no tienes acceso a esa empresa"
+          : `Sin permisos: no tienes acceso a ${sinAcceso.length} de las empresas seleccionadas`,
+      );
+    }
+  }
+
   return user;
 }
 
@@ -434,6 +475,7 @@ export async function guardarPerfilEmpleado(
   datos: DatosPersonalesInput,
 ) {
   try {
+    // 1) Gate de rol global. Bloquea a no-admin antes de cualquier lectura.
     await requireAdminUser();
 
     let admin;
@@ -450,6 +492,10 @@ export async function guardarPerfilEmpleado(
       .maybeSingle();
     if (empErr) return { ok: false, error: friendlyError(empErr) };
     if (!emp) return { ok: false, error: "Empleado no encontrado" };
+
+    // 2) Gate de scope por empresa, ya conocida la empresa del empleado.
+    //    Un admin de empresa A no puede editar perfil de un empleado de B.
+    await requireAdminUser({ empresaIds: [emp.empresa_id as string] });
 
     const trim = (v: string | null | undefined) => {
       if (v == null) return null;
