@@ -16,7 +16,7 @@ const ROLES_PERMITIDOS = new Set([
   "jefe_cocina",
 ]);
 
-export async function useComandasPermisos(): Promise<{
+export async function getComandasPermisos(): Promise<{
   allowed: boolean;
   userId: string | null;
   roles: string[];

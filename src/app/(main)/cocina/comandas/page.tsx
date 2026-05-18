@@ -1,10 +1,10 @@
 import { ComandasBoard } from "@/features/cocina/comandas/components/ComandasBoard";
-import { useComandasPermisos } from "@/features/cocina/comandas/hooks/useComandasPermisos";
+import { getComandasPermisos } from "@/features/cocina/comandas/hooks/useComandasPermisos";
 
 export const dynamic = "force-dynamic";
 
 export default async function ComandasPage() {
-  const permisos = await useComandasPermisos();
+  const permisos = await getComandasPermisos();
 
   if (!permisos.allowed) {
     return (

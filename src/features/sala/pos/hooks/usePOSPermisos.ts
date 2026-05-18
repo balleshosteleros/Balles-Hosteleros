@@ -8,7 +8,7 @@ import { getAppContext } from "@/lib/supabase/get-context";
 
 const ROLES_PERMITIDOS = new Set(["admin", "director", "gerencia", "responsable", "empleado"]);
 
-export async function usePOSPermisos(): Promise<{
+export async function getPOSPermisos(): Promise<{
   allowed: boolean;
   userId: string | null;
   roles: string[];

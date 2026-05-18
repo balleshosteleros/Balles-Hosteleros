@@ -1,11 +1,11 @@
 import { listProductosPOS } from "@/features/sala/pos/actions/productos-pos-actions";
 import { POSShell } from "@/features/sala/pos/components/POSShell";
-import { usePOSPermisos } from "@/features/sala/pos/hooks/usePOSPermisos";
+import { getPOSPermisos } from "@/features/sala/pos/hooks/usePOSPermisos";
 
 export const dynamic = "force-dynamic";
 
 export default async function POSPage() {
-  const permisos = await usePOSPermisos();
+  const permisos = await getPOSPermisos();
 
   if (!permisos.allowed) {
     return (
