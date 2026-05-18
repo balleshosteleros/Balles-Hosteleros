@@ -157,7 +157,12 @@ AS $$
   );
 $$;
 
-GRANT EXECUTE ON FUNCTION public.is_member_of_empresa(uuid) TO authenticated;
+-- La función se usa desde policies RLS y código server-side; NO debe estar
+-- expuesta vía /rest/v1/rpc/ a usuarios anónimos. authenticated conserva
+-- el GRANT explícito porque la función usa auth.uid().
+REVOKE EXECUTE ON FUNCTION public.is_member_of_empresa(uuid) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.is_member_of_empresa(uuid) FROM anon;
+GRANT  EXECUTE ON FUNCTION public.is_member_of_empresa(uuid) TO authenticated;
 
 COMMENT ON FUNCTION public.is_member_of_empresa(uuid) IS
   'Doc 4 §5.3: true si auth.uid() es miembro de la empresa (user_empresas o profiles.empresa_id legacy).';
@@ -176,18 +181,23 @@ STABLE
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
+  -- user_roles.role es enum app_role; comparamos con ::text para que la
+  -- firma de la función siga aceptando text y no obligue al caller a
+  -- castear el literal.
   SELECT public.is_member_of_empresa(p_empresa_id)
      AND EXISTS (
        SELECT 1 FROM public.user_roles ur
-        WHERE ur.user_id = auth.uid()
-          AND ur.role    = p_role
+        WHERE ur.user_id    = auth.uid()
+          AND ur.role::text = p_role
      );
 $$;
 
-GRANT EXECUTE ON FUNCTION public.has_empresa_role(uuid, text) TO authenticated;
+REVOKE EXECUTE ON FUNCTION public.has_empresa_role(uuid, text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.has_empresa_role(uuid, text) FROM anon;
+GRANT  EXECUTE ON FUNCTION public.has_empresa_role(uuid, text) TO authenticated;
 
 COMMENT ON FUNCTION public.has_empresa_role(uuid, text) IS
-  'Doc 4 §5.3: true si auth.uid() es miembro de la empresa y tiene el rol global indicado. Cuando exista rol-por-empresa, actualizar esta función sin cambiar firma.';
+  'Doc 4 §5.3: true si auth.uid() es miembro de la empresa y tiene el rol global (user_roles.role::text) indicado. Cuando exista rol-por-empresa, actualizar esta función sin cambiar firma.';
 
 -- 7. Comments documentales
 COMMENT ON TABLE public.user_empresas IS
