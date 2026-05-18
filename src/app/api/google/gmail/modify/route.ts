@@ -7,12 +7,11 @@ import { getGoogleTokens } from "@/lib/google/api";
  * Body: {
  *   id,
  *   action: "read" | "unread" | "star" | "unstar" | "archive"
- *         | "trash" | "untrash" | "delete"
+ *         | "trash" | "untrash"
  *         | "addLabel" | "removeLabel" | "moveToLabel",
  *   labelId?: string  (requerido para addLabel/removeLabel/moveToLabel)
  * }
  *
- * - "delete" borra el mensaje de forma PERMANENTE (no a papelera).
  * - "moveToLabel" añade la etiqueta indicada y saca el mensaje de INBOX.
  */
 export async function POST(request: Request) {
@@ -33,7 +32,6 @@ export async function POST(request: Request) {
 
   const baseUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}`;
   let endpoint = `${baseUrl}/modify`;
-  let method: "POST" | "DELETE" = "POST";
   let payload: Record<string, unknown> = {};
 
   switch (action) {
@@ -59,11 +57,6 @@ export async function POST(request: Request) {
     case "untrash":
       endpoint = `${baseUrl}/untrash`;
       payload = {};
-      break;
-    case "delete":
-      // Borrado PERMANENTE — sin papelera. Requiere scope mail.google.com/.
-      endpoint = baseUrl;
-      method = "DELETE";
       break;
     case "addLabel":
       if (!labelId) {
@@ -97,18 +90,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "invalid_action" }, { status: 400 });
   }
 
-  const init: RequestInit = {
-    method,
+  const res = await fetch(endpoint, {
+    method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
     },
-  };
-  if (method === "POST") {
-    init.body = JSON.stringify(payload);
-  }
-
-  const res = await fetch(endpoint, init);
+    body: JSON.stringify(payload),
+  });
 
   if (!res.ok) {
     const errBody = await res.text();
