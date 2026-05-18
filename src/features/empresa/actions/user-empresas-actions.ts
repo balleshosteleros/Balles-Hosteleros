@@ -120,9 +120,25 @@ export async function removeAccesoEmpresa(input: {
 /**
  * Lista accesos de TODOS los usuarios de la empresa (admin).
  * Devuelve un map userId → empresaIds[].
+ *
+ * Solo accesible a usuarios con rol director/admin.
  */
 export async function listAllUserEmpresas(): Promise<Record<string, string[]>> {
+  const { createClient } = await import("@/lib/supabase/server");
+  const sb = await createClient();
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) return {};
+
   const admin = createAdminClient();
+  const { data: roles } = await admin
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", user.id);
+  const appRoles = (roles ?? []).map((r) => r.role as string);
+  if (!appRoles.includes("director") && !appRoles.includes("admin")) {
+    return {};
+  }
+
   const { data, error } = await admin
     .from("user_empresas")
     .select("user_id, empresa_id");
