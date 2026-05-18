@@ -865,7 +865,7 @@ export function CronogramasView() {
                   {grupos.length === 0 ? (
                     <tr>
                       <td colSpan={9} className="py-12 text-center text-muted-foreground">
-                        Sin tareas. Pulsa "Añadir Tarea".
+                        Sin tareas. Pulsa &quot;Añadir Tarea&quot;.
                       </td>
                     </tr>
                   ) : (

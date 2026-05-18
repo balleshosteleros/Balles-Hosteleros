@@ -263,7 +263,7 @@ export function CanjesAdminView() {
                           {c.fechaDisfrute ? ` · Disfrute ${formatFecha(c.fechaDisfrute)}` : ""}
                         </div>
                         {c.notasSolicitud && (
-                          <div className="text-xs text-slate-600 italic mt-1">"{c.notasSolicitud}"</div>
+                          <div className="text-xs text-slate-600 italic mt-1">&quot;{c.notasSolicitud}&quot;</div>
                         )}
                         {c.notasRevision && (
                           <div className="text-xs text-rose-600 mt-0.5">Revisión: {c.notasRevision}</div>

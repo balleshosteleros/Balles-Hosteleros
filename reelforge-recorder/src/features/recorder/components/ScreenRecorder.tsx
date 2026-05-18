@@ -302,8 +302,8 @@ export function ScreenRecorder() {
         </Card>
 
         <p className="text-xs text-center text-muted-foreground">
-          Para detener la grabación también puedes hacer clic en "Dejar de
-          compartir" en la barra del navegador.
+          Para detener la grabación también puedes hacer clic en &quot;Dejar de
+          compartir&quot; en la barra del navegador.
         </p>
       </div>
     );

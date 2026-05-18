@@ -295,7 +295,7 @@ function TestimoniosPublico({
             {t.estrellas ? (
               <div className="text-yellow-500 mb-2">{"★".repeat(t.estrellas)}</div>
             ) : null}
-            <p className="italic">"{t.texto}"</p>
+            <p className="italic">&quot;{t.texto}&quot;</p>
             <footer className="mt-3 text-sm font-semibold">— {t.nombre}</footer>
           </blockquote>
         ))}

@@ -111,7 +111,7 @@ export function PortalEmpleoConfig() {
             </Button>
           </div>
           <p className="text-[11px] text-muted-foreground italic">
-            Ajusta el atributo "height" según las necesidades de tu web. El ancho se adapta automáticamente al contenedor.
+            Ajusta el atributo &quot;height&quot; según las necesidades de tu web. El ancho se adapta automáticamente al contenedor.
           </p>
         </CardContent>
       </Card>
@@ -171,11 +171,11 @@ export function PortalEmpleoConfig() {
           </div>
           <Separator />
           <div className="space-y-2">
-            <Label className="text-xs font-medium">Título "Sobre nosotros"</Label>
+            <Label className="text-xs font-medium">Título &quot;Sobre nosotros&quot;</Label>
             <Input value={tituloSobreNosotros} onChange={(e) => setTituloSobreNosotros(e.target.value)} maxLength={100} />
           </div>
           <div className="space-y-2">
-            <Label className="text-xs font-medium">Texto "Sobre nosotros"</Label>
+            <Label className="text-xs font-medium">Texto &quot;Sobre nosotros&quot;</Label>
             <Textarea
               value={textoSobreNosotros}
               onChange={(e) => setTextoSobreNosotros(e.target.value)}

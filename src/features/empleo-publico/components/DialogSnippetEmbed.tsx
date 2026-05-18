@@ -154,7 +154,7 @@ export function DialogSnippetEmbed({
           {/* Tab Botón */}
           <TabsContent value="button" className="space-y-3 mt-4">
             <div className="space-y-1.5">
-              <Label>Botón "Trabaja con nosotros"</Label>
+              <Label>Botón &quot;Trabaja con nosotros&quot;</Label>
               <Textarea
                 value={buttonSnippet}
                 readOnly

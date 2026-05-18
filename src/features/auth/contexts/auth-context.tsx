@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
+import { createBrowserClient } from "@supabase/ssr";
 import type { User, Session, SupabaseClient } from "@supabase/supabase-js";
 import type { PermisoModulo } from "@/features/ajustes/data/ajustes";
 import { getUserPermisos } from "@/features/auth/actions/permisos-actions";
@@ -77,8 +78,6 @@ function getSupabase(): SupabaseClient | null {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     if (!url || !key) return null;
-    // Dynamic import to avoid SSR issues
-    const { createBrowserClient } = require("@supabase/ssr");
     supabaseInstance = createBrowserClient(url, key);
   }
   return supabaseInstance;

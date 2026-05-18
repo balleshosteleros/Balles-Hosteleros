@@ -445,7 +445,7 @@ function EscandalloDetalle({
                   </TableBody>
                 </Table>
               ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">Sin ingredientes. Pulsa "Añadir" para empezar.</p>
+                <p className="text-sm text-muted-foreground text-center py-4">Sin ingredientes. Pulsa &quot;Añadir&quot; para empezar.</p>
               )}
             </section>
 

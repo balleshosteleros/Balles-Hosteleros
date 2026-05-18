@@ -237,7 +237,7 @@ export function FaseConfigDialog({ open, onOpenChange, fase, onSaved }: Props) {
                 </SelectContent>
               </Select>
               <p className="text-[10px] text-muted-foreground mt-0.5">
-                Recibirá una tarea automática al mover una receta a esta fase (si se activa "Comunicar")
+                Recibirá una tarea automática al mover una receta a esta fase (si se activa &quot;Comunicar&quot;)
               </p>
             </div>
 
@@ -298,7 +298,7 @@ export function FaseConfigDialog({ open, onOpenChange, fase, onSaved }: Props) {
       <AlertDialog open={confirmarBorrado} onOpenChange={setConfirmarBorrado}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Borrar fase "{fase?.nombre}"?</AlertDialogTitle>
+            <AlertDialogTitle>¿Borrar fase &quot;{fase?.nombre}&quot;?</AlertDialogTitle>
             <AlertDialogDescription>
               Si hay recetas en esta fase el borrado se bloqueará.
               Muévelas a otra fase antes de borrar.

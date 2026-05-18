@@ -39,9 +39,10 @@ export async function GET() {
       return NextResponse.json({ error: "Error al listar grabaciones", details: error.message }, { status: 500 });
     }
     return NextResponse.json(data);
-  } catch (err: any) {
+  } catch (err) {
     console.error("Error fetching recordings:", err);
-    return NextResponse.json({ error: err?.message || "Error al listar grabaciones" }, { status: 500 });
+    const message = err instanceof Error ? err.message : "Error al listar grabaciones";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -110,9 +111,10 @@ export async function POST(req: Request) {
           ContentType: mimeType,
         })
       );
-    } catch (r2Error: any) {
-      console.error("[R2] Error al subir:", r2Error?.message || r2Error);
-      throw new Error(`Fallo en R2: ${r2Error?.message}`);
+    } catch (r2Error) {
+      const r2Msg = r2Error instanceof Error ? r2Error.message : String(r2Error);
+      console.error("[R2] Error al subir:", r2Msg);
+      throw new Error(`Fallo en R2: ${r2Msg}`);
     }
 
     const videoUrl = `${PUBLIC_URL}/${r2Key}`;
@@ -146,9 +148,10 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(data, { status: 201 });
-  } catch (err: any) {
-    console.error("[recordings POST] Error:", err?.message);
-    return NextResponse.json({ error: err?.message || "Error" }, { status: 500 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error";
+    console.error("[recordings POST] Error:", message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -183,8 +186,9 @@ export async function DELETE(req: Request) {
     if (error) throw error;
 
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message || "Error al borrar" }, { status: 500 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error al borrar";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -200,7 +204,8 @@ export async function PATCH(req: Request) {
       .single();
     if (error) throw error;
     return NextResponse.json(data);
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message || "Error al actualizar" }, { status: 500 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error al actualizar";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

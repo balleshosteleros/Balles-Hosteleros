@@ -280,7 +280,7 @@ export function AccesosAdminTab() {
               {!loading && filtered.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-8 text-muted-foreground text-sm">
-                    No hay accesos. Crea el primero con "Nuevo acceso".
+                    No hay accesos. Crea el primero con &quot;Nuevo acceso&quot;.
                   </TableCell>
                 </TableRow>
               )}

@@ -496,9 +496,10 @@ export async function getRolesCronograma(): Promise<Result<string[]>> {
   try {
     const { supabase, empresaId } = await getAppContext();
     
-    let { data, error } = await supabase
+    const { data: initialData, error } = await supabase
       .from("cronogramas_operativos")
       .select("rol");
+    let data = initialData;
     
     if (error) {
       console.error("[getRolesCronograma] DB Error:", error);
