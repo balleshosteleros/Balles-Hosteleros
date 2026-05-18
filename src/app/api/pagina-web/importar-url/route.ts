@@ -9,6 +9,7 @@ import { getAppContext } from "@/lib/supabase/get-context";
 import { importarDesdeHtml } from "@/features/marketing/pagina-web/services/importador-html";
 import { bloquesArraySchema } from "@/features/marketing/pagina-web/services/bloque-schemas";
 import { sanitizarBloqueTextoLibre } from "@/features/marketing/pagina-web/services/sanitize-html";
+import { safeFetchText, SafeFetchError } from "@/shared/lib/safe-fetch";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -45,21 +46,35 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Fetch del HTML
-    const htmlRes = await fetch(parsed.data.url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (compatible; BallesHosteleros-Importer/1.0; +https://balleshosteleros.com)",
-      },
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (!htmlRes.ok) {
-      return NextResponse.json(
-        { ok: false, error: `No se pudo acceder a la URL (HTTP ${htmlRes.status})` },
-        { status: 400 },
-      );
+    // Fetch del HTML — server-side con defensas anti-SSRF.
+    let html: string;
+    try {
+      const fetched = await safeFetchText(parsed.data.url, {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (compatible; BallesHosteleros-Importer/1.0; +https://balleshosteleros.com)",
+        },
+        allowedContentTypes: ["text/html", "application/xhtml+xml"],
+        maxRedirects: 3,
+        maxBytes: 10 * 1024 * 1024,
+        timeoutMs: 20_000,
+      });
+      if (fetched.status < 200 || fetched.status >= 300) {
+        return NextResponse.json(
+          { ok: false, error: `No se pudo acceder a la URL (HTTP ${fetched.status})` },
+          { status: 400 },
+        );
+      }
+      html = fetched.body;
+    } catch (e) {
+      if (e instanceof SafeFetchError) {
+        return NextResponse.json(
+          { ok: false, error: `URL rechazada: ${e.message}` },
+          { status: 400 },
+        );
+      }
+      throw e;
     }
-    const html = await htmlRes.text();
 
     // Importar → bloques + sanitizar texto_libre + validar
     const resultado = importarDesdeHtml(html, parsed.data.url);
