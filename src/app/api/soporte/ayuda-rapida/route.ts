@@ -4,8 +4,29 @@ import {
   buscarBase,
   BASE_CONOCIMIENTO,
 } from "@/lib/soporte/base-conocimiento";
+import { createClient } from "@/lib/supabase/server";
+import { rateLimit } from "@/shared/lib/rate-limit-memory";
 
 export async function POST(request: Request) {
+  // Auth: solo usuarios del SaaS.
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  // Rate limit: 30 consultas/minuto por usuario.
+  const rl = rateLimit(`soporte-ayuda:${user.id}`, 30, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Demasiadas consultas, espera un momento." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)) },
+      },
+    );
+  }
+
   const { pregunta } = (await request.json().catch(() => ({}))) as {
     pregunta?: string;
   };
