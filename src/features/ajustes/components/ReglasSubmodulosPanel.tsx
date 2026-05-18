@@ -442,6 +442,19 @@ export function ReglasSubmodulosPanel({ moduloKey }: { moduloKey: string }) {
     };
   }, [empresaDbId, moduloKey]);
 
+  const hayCambios = useMemo(() => {
+    if (!modulo) return false;
+    if (modoModulo !== modoModuloInicial) return true;
+    for (const sub of modulo.submodulos) {
+      const k = claveSub(modulo.key, sub.key);
+      const a = reglasSub.get(k) ?? reglaSubDefault();
+      const i = reglasSubIniciales.get(k) ?? reglaSubDefault();
+      if (a.modo !== i.modo) return true;
+      if (a.camposPersonalizados.join(",") !== i.camposPersonalizados.join(",")) return true;
+    }
+    return false;
+  }, [modulo, modoModulo, modoModuloInicial, reglasSub, reglasSubIniciales]);
+
   if (!modulo) {
     return (
       <div className="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">
@@ -458,18 +471,6 @@ export function ReglasSubmodulosPanel({ moduloKey }: { moduloKey: string }) {
     next.set(claveSub(modulo.key, subKey), r);
     setReglasSub(next);
   };
-
-  const hayCambios = useMemo(() => {
-    if (modoModulo !== modoModuloInicial) return true;
-    for (const sub of modulo.submodulos) {
-      const k = claveSub(modulo.key, sub.key);
-      const a = reglasSub.get(k) ?? reglaSubDefault();
-      const i = reglasSubIniciales.get(k) ?? reglaSubDefault();
-      if (a.modo !== i.modo) return true;
-      if (a.camposPersonalizados.join(",") !== i.camposPersonalizados.join(",")) return true;
-    }
-    return false;
-  }, [modulo, modoModulo, modoModuloInicial, reglasSub, reglasSubIniciales]);
 
   const guardar = async () => {
     setSaving(true);
