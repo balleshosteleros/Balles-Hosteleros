@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { openrouterChat, type ChatMsg } from "@/lib/ia/openrouter";
 import { BASE_CONOCIMIENTO } from "@/lib/soporte/base-conocimiento";
+import { createClient } from "@/lib/supabase/server";
+import { rateLimit } from "@/shared/lib/rate-limit-memory";
 
 type MensajeIn = { rol: "user" | "ai" | "humano"; texto: string };
 
@@ -21,6 +23,25 @@ const CONTEXTO = BASE_CONOCIMIENTO.map(
 ).join("\n\n");
 
 export async function POST(request: Request) {
+  // Auth: solo usuarios del SaaS pueden usar el chat de soporte.
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  // Rate limit: 20 mensajes/minuto por usuario.
+  const rl = rateLimit(`soporte-chat:${user.id}`, 20, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Demasiadas peticiones, espera un momento." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)) },
+      },
+    );
+  }
+
   const { mensajes } = (await request.json().catch(() => ({}))) as {
     mensajes?: MensajeIn[];
   };
