@@ -6,7 +6,7 @@
 // - Grid de tarjetas: cursos generales + cursos del puesto del empleado
 // El detalle de cada curso vive en /mi-panel/formacion/curso/[cursoId].
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   GraduationCap,
   Sparkles,
@@ -72,7 +72,8 @@ export function PortalFormacionView() {
   }, [visibles, secciones, lecciones, completadas, userKey]);
 
   // Cursos publicados en los últimos 3 meses → badge "Nuevo".
-  const ahora = Date.now();
+  // `ahora` se fija al montar para mantener idempotencia del render.
+  const [ahora] = useState(() => Date.now());
   function esNuevo(fechaIso: string): boolean {
     return ahora - new Date(fechaIso).getTime() <= TRES_MESES_MS;
   }

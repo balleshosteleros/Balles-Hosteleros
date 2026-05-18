@@ -531,7 +531,7 @@ export function ProveedoresView() {
 function ProveedorModal({ open, onClose, onSave, item, empresaId, categorias }: { open: boolean; onClose: () => void; onSave: (p: Proveedor) => void; item: Proveedor | null; empresaId: string; categorias: string[] }) {
   const isEdit = !!item;
   const opcionesCategoria = categorias.length > 0 ? categorias : (CATEGORIAS_PROVEEDOR as unknown as string[]);
-  const blank: Proveedor = {
+  const blankFactory = useCallback((): Proveedor => ({
     id: `prov-${Date.now()}`, empresaId, nombreComercial: "", razonSocial: "", cifNif: "",
     categoria: opcionesCategoria[0], estado: "Activo", observaciones: "",
     personaContacto: "", telefonoPrincipal: "", telefonoSecundario: "", telefonoComercial: "",
@@ -541,12 +541,12 @@ function ProveedorModal({ open, onClose, onSave, item, empresaId, categorias }: 
     viaPago: "", viaPagoNegociada: "", plazoPago: "", plazoPagoNegociado: "",
     condicionesPago: "", plazo: "", observacionesLogisticas: "", comentariosInternos: "",
     creador: "Usuario", createdAt: new Date().toISOString().slice(0, 10), ultimaActualizacion: new Date().toISOString().slice(0, 10),
-  };
-  const [form, setForm] = useState<Proveedor>(item || blank);
+  }), [empresaId, opcionesCategoria]);
+  const [form, setForm] = useState<Proveedor>(() => item || blankFactory());
   const [faltantes, setFaltantes] = useState<string[]>([]);
   const { validar } = useReglasSubmodulo("logistica", "proveedores");
 
-  useMemo(() => { setForm(item || blank); }, [item, open]);
+  useEffect(() => { setForm(item || blankFactory()); }, [item, open, blankFactory]);
 
   const upd = (key: keyof Proveedor, val: unknown) => setForm((prev) => ({ ...prev, [key]: val }));
 

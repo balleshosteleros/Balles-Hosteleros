@@ -18,6 +18,8 @@ export function ProveedorCombobox({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [opciones, setOpciones] = useState<string[]>([]);
+  // `name` aleatorio fijo al montar para evitar autocomplete del navegador.
+  const [searchName] = useState(() => `proveedor-search-${Math.random().toString(36).slice(2, 8)}`);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -78,7 +80,7 @@ export function ProveedorCombobox({
             <input
               ref={inputRef}
               type="search"
-              name={`proveedor-search-${Math.random().toString(36).slice(2, 8)}`}
+              name={searchName}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {

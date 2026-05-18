@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 
 export type ConexionStatus =
@@ -48,9 +49,12 @@ export function EstadoConexionBadge({
   expiresAt?: string | null;
 }) {
   const info = LABELS[status] ?? LABELS.ERROR;
+  // `nowMs` fijo al montar para idempotencia del render; el badge no necesita
+  // recalcular el diff en tiempo real (se re-renderiza al cambiar `expiresAt`).
+  const [nowMs] = useState(() => Date.now());
   let extra = "";
   if (status === "ACTIVE" && expiresAt) {
-    const diff = new Date(expiresAt).getTime() - Date.now();
+    const diff = new Date(expiresAt).getTime() - nowMs;
     const dias = Math.ceil(diff / (24 * 60 * 60 * 1000));
     if (dias <= 7 && dias >= 0) extra = ` · ${dias}d`;
   }

@@ -9,6 +9,12 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, HelpCircle, CheckCircle, XCircle, ShieldAlert } from "lucide-react";
 
+// Helpers fuera del componente para no contaminar idempotencia del render.
+// Se invocan SÓLO desde handlers (envío de mensaje, feedback).
+const newMsgId = (suffix: "u" | "s") => `msg-${Date.now()}-${suffix}`;
+const newConsultaId = () => `consulta-${Date.now()}`;
+const fechaActualLegible = () => new Date().toISOString().slice(0, 16).replace("T", " ");
+
 export function AyudaChat() {
   const { articulos, currentUserRol, addConsulta } = useAyuda();
   const { empresaActual } = useEmpresa();
@@ -54,16 +60,16 @@ export function AyudaChat() {
     setInput("");
 
     const msgUser: MensajeChat = {
-      id: `msg-${Date.now()}-u`, tipo: "usuario", texto: pregunta,
-      fecha: new Date().toISOString().slice(0, 16).replace("T", " "),
+      id: newMsgId("u"), tipo: "usuario", texto: pregunta,
+      fecha: fechaActualLegible(),
     };
 
     const resultado = buscarRespuesta(pregunta);
 
     const msgSistema: MensajeChat = {
-      id: `msg-${Date.now()}-s`, tipo: "sistema", texto: resultado.texto,
+      id: newMsgId("s"), tipo: "sistema", texto: resultado.texto,
       articuloId: resultado.tipo === "encontrado" ? resultado.articuloId : undefined,
-      fecha: new Date().toISOString().slice(0, 16).replace("T", " "),
+      fecha: fechaActualLegible(),
       feedbackDado: false,
     };
 
@@ -79,7 +85,7 @@ export function AyudaChat() {
       const msg = mensajes.find((m) => m.id === msgId);
       const userMsg = mensajes[mensajes.indexOf(msg!) - 1];
       addConsulta({
-        id: `consulta-${Date.now()}`,
+        id: newConsultaId(),
         usuario: "Usuario Actual",
         empresaId: empresaActual.id,
         empresaNombre: empresaActual.nombre,
@@ -87,7 +93,7 @@ export function AyudaChat() {
         rolUsuario: currentUserRol,
         pregunta: userMsg?.texto ?? "",
         respuestaMostrada: msg?.texto ?? "",
-        fecha: new Date().toISOString().slice(0, 16).replace("T", " "),
+        fecha: fechaActualLegible(),
         estado: "pendiente",
       });
     }

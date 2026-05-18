@@ -72,6 +72,8 @@ export function BancosView() {
   const [dialogReconnectId, setDialogReconnectId] = useState<string | undefined>();
   const [sincronizando, setSincronizando] = useState<string | null>(null);
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  // `nowMs` fijo al montar para que `necesitaRenovar` sea idempotente en render.
+  const [nowMs] = useState(() => Date.now());
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [showConfig, setShowConfig] = useState(false);
@@ -159,7 +161,7 @@ export function BancosView() {
     if (c.status === "REQUIRES_RECONSENT" || c.status === "EXPIRED") return true;
     if (c.status === "ACTIVE" && c.expires_at) {
       const diasRestantes = Math.ceil(
-        (new Date(c.expires_at).getTime() - Date.now()) /
+        (new Date(c.expires_at).getTime() - nowMs) /
           (24 * 60 * 60 * 1000),
       );
       return diasRestantes <= 7;
