@@ -25,17 +25,6 @@ export async function getUserPermisos(): Promise<UserPermisos> {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return empty
 
-    // Bypass local para el usuario de dirección
-    if (user.email === 'REDACTED@local') {
-      return {
-        permisos: [], // El proxy ya le dará acceso total si tiene rol director
-        rolLabel: 'Dirección',
-        empresaId: '00000000-0000-0000-0000-000000000001',
-        appRoles: ['director', 'admin'],
-        departamento: null,
-      }
-    }
-
     const admin = createAdminClient()
 
     const [{ data: profile }, { data: rolesRows }] = await Promise.all([
