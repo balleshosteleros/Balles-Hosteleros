@@ -1,11 +1,13 @@
 "use server";
 
+import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { AccesoApp } from "@/features/rrhh/data/accesos-apps";
 
 type Row = {
   id: string;
   empresa_slug: string;
+  empresa_id: string | null;
   nombre: string;
   descripcion: string;
   url: string;
@@ -66,9 +68,46 @@ function appToRow(a: Partial<AccesoApp> & { id: string; empresaId: string }) {
   };
 }
 
-/** Devuelve todos los accesos de una empresa. */
+/**
+ * Resuelve empresa_id (uuid) a partir del slug usando la sesión del usuario,
+ * de forma que RLS (`empresas_read`) garantice que el usuario tiene acceso.
+ * Devuelve null si el slug no existe o el usuario no pertenece a esa empresa.
+ */
+async function resolverEmpresaIdDesdeSlug(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  slug: string,
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("empresas")
+    .select("id")
+    .eq("slug", slug)
+    .maybeSingle();
+  if (error || !data) return null;
+  return data.id as string;
+}
+
+async function getUserOrNull(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const { data: { user } } = await supabase.auth.getUser();
+  return user;
+}
+
+async function userTieneRolAdminODirector(userId: string): Promise<boolean> {
+  // Roles son globales (no por empresa) — leer con service role es seguro.
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId);
+  const roles = (data ?? []).map((r) => r.role as string);
+  return roles.includes("director") || roles.includes("admin");
+}
+
+/** Lista accesos de UNA empresa. RLS enforça que el usuario pertenezca a ella. */
 export async function listAccesosApps(empresaSlug: string): Promise<AccesoApp[]> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
+  const user = await getUserOrNull(supabase);
+  if (!user) return [];
+
   const { data, error } = await supabase
     .from("accesos_apps")
     .select("*")
@@ -77,16 +116,23 @@ export async function listAccesosApps(empresaSlug: string): Promise<AccesoApp[]>
     .order("nombre", { ascending: true });
   if (error) {
     console.error("[accesos-apps] listAccesosApps:", error);
-    // En local/offline, devolvemos un array vacío en vez de romper la app
     return [];
   }
   return (data ?? []).map((r) => rowToApp(r as Row));
 }
 
-/** Devuelve TODOS los accesos (todas las empresas) para el panel admin. */
+/**
+ * Lista TODOS los accesos (todas las empresas). Solo admin/director.
+ * Otros usuarios reciben array vacío (no se filtra: se rechaza).
+ */
 export async function listAllAccesosApps(): Promise<AccesoApp[]> {
-  const supabase = createAdminClient();
-  const { data, error } = await supabase
+  const supabase = await createClient();
+  const user = await getUserOrNull(supabase);
+  if (!user) return [];
+  if (!(await userTieneRolAdminODirector(user.id))) return [];
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
     .from("accesos_apps")
     .select("*")
     .order("empresa_slug", { ascending: true })
@@ -99,13 +145,19 @@ export async function listAllAccesosApps(): Promise<AccesoApp[]> {
   return (data ?? []).map((r) => rowToApp(r as Row));
 }
 
-/** Crea un acceso. Genera id si no se proporciona. */
+/** Crea un acceso. RLS rechaza si el usuario no pertenece a la empresa indicada. */
 export async function createAccesoApp(
   app: Omit<AccesoApp, "id" | "ultimaActualizacion"> & { id?: string },
 ): Promise<AccesoApp> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
+  const user = await getUserOrNull(supabase);
+  if (!user) throw new Error("No autorizado");
+
+  const empresaId = await resolverEmpresaIdDesdeSlug(supabase, app.empresaId);
+  if (!empresaId) throw new Error("Empresa no encontrada o sin acceso");
+
   const id = app.id?.trim() || `app-${Date.now()}`;
-  const row = appToRow({ ...app, id });
+  const row = { ...appToRow({ ...app, id }), empresa_id: empresaId };
   const { data, error } = await supabase
     .from("accesos_apps")
     .insert(row)
@@ -118,15 +170,25 @@ export async function createAccesoApp(
   return rowToApp(data as Row);
 }
 
-/** Actualiza un acceso por id. */
+/** Actualiza un acceso por id. RLS rechaza cross-tenant. */
 export async function updateAccesoApp(
   id: string,
   patch: Partial<AccesoApp>,
 ): Promise<AccesoApp> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
+  const user = await getUserOrNull(supabase);
+  if (!user) throw new Error("No autorizado");
+
   const row = appToRow({ ...patch, id, empresaId: patch.empresaId ?? "" });
-  // Si patch no trae empresaId, no lo sobrescribas
-  if (!patch.empresaId) delete (row as Partial<typeof row>).empresa_slug;
+  // Si el patch no trae empresaId, no sobreescribir empresa_slug (ni empresa_id)
+  if (!patch.empresaId) {
+    delete (row as Partial<typeof row>).empresa_slug;
+  } else {
+    const empresaId = await resolverEmpresaIdDesdeSlug(supabase, patch.empresaId);
+    if (!empresaId) throw new Error("Empresa no encontrada o sin acceso");
+    (row as Record<string, unknown>).empresa_id = empresaId;
+  }
+
   const { data, error } = await supabase
     .from("accesos_apps")
     .update(row)
@@ -140,9 +202,12 @@ export async function updateAccesoApp(
   return rowToApp(data as Row);
 }
 
-/** Elimina un acceso por id. */
+/** Elimina un acceso por id. RLS rechaza cross-tenant. */
 export async function deleteAccesoApp(id: string): Promise<void> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
+  const user = await getUserOrNull(supabase);
+  if (!user) throw new Error("No autorizado");
+
   const { error } = await supabase.from("accesos_apps").delete().eq("id", id);
   if (error) {
     console.error("[accesos-apps] deleteAccesoApp:", error);
