@@ -105,6 +105,7 @@ const HORAS = Array.from(
   (_, i) => i + HORA_INICIO,
 );
 const HORA_PX = 48;
+const GRID_PX = HORAS.length * HORA_PX; // 1152
 const DIAS_LARGO = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 const DIAS_CORTO = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
@@ -875,6 +876,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                     <div
                       key={diaIdx}
                       className="relative flex flex-1 flex-col border-r"
+                      style={{ height: GRID_PX }}
                       onMouseMove={(e) => handleColumnMouseMove(d, e)}
                       onMouseUp={handleColumnMouseUp}
                     >
@@ -997,6 +999,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                 <ColumnaHoras tzSecundaria={tzSecundaria} fechaRef={fechaRef} />
                 <div
                   className="relative flex flex-1 flex-col border-r"
+                  style={{ height: GRID_PX }}
                   onMouseMove={(e) => handleColumnMouseMove(fechaRef, e)}
                   onMouseUp={handleColumnMouseUp}
                 >
@@ -1370,7 +1373,7 @@ function ColumnaHoras({
   return (
     <div
       className="flex shrink-0 flex-col border-r"
-      style={{ width: tzSecundaria ? 104 : 52 }}
+      style={{ width: tzSecundaria ? 104 : 52, height: GRID_PX }}
     >
       {HORAS.map((h) => (
         <div
