@@ -92,6 +92,22 @@ export interface ConfigOperativa {
   colorPrimario: string;
 }
 
+// ─── Telefonía ──────────────────────────────────────────────────
+export type TelefoniaProveedor = "none" | "b2com_sip" | "sip" | "twilio";
+
+export interface TelefoniaConfig {
+  proveedor: TelefoniaProveedor;
+  callerId: string;
+  displayName: string;
+  sipServer: string;
+  sipUser: string;
+  sipPassword: string;
+  twilioAccountSid: string;
+  twilioAuthToken: string;
+  twilioAppSid: string;
+  grabarLlamadas: boolean;
+}
+
 export interface EntradaAuditoria {
   id: string;
   usuario: string;
@@ -107,6 +123,7 @@ export interface AjustesEmpresa {
   roles: Rol[];
   contactos: Contacto;
   configOperativa: ConfigOperativa;
+  telefonia: TelefoniaConfig;
   auditoria: EntradaAuditoria[];
 }
 
@@ -212,6 +229,18 @@ export function buildDefaultAjustes(empresaNombre: string): AjustesEmpresa {
       moneda: "EUR (€)", idioma: "Español", zonaHoraria: "Europe/Madrid",
       formatoFecha: "DD/MM/AAAA", primerDiaSemana: "Lunes",
       localesAsociados: "", etiquetasInternas: "", colorPrimario: "#3B82F6",
+    },
+    telefonia: {
+      proveedor: "none",
+      callerId: "",
+      displayName: "",
+      sipServer: "",
+      sipUser: "",
+      sipPassword: "",
+      twilioAccountSid: "",
+      twilioAuthToken: "",
+      twilioAppSid: "",
+      grabarLlamadas: false,
     },
     auditoria: [
       { id: "a1", usuario: "Admin Principal", accion: "Empresa creada", apartado: "Datos generales", fecha: "2026-01-15 10:00" },

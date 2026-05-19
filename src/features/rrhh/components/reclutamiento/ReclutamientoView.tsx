@@ -57,6 +57,10 @@ import { reclutamientoIO } from "@/features/rrhh/io/reclutamiento.io";
 import { ReclutamientoConfigView } from "@/features/rrhh/components/reclutamiento/config/ReclutamientoConfigView";
 import { CandidatosRealesTab } from "@/features/rrhh/components/reclutamiento/CandidatosRealesTab";
 import { OfertaFormDialog } from "@/features/rrhh/components/reclutamiento/OfertaFormDialog";
+import { NuevoChooserDialog } from "@/features/rrhh/components/reclutamiento/NuevoChooserDialog";
+import { CandidatoFormDialog } from "@/features/rrhh/components/reclutamiento/CandidatoFormDialog";
+import { CandidatoDetailModal } from "@/features/rrhh/components/reclutamiento/CandidatoDetailModal";
+import { FunnelMetrics } from "@/features/rrhh/components/reclutamiento/FunnelMetrics";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -258,16 +262,28 @@ function CandidatosView({ vacante, faseInicial, onBack }: { vacante: Vacante; fa
   const [faseFilter, setFaseFilter] = useState<string>(faseInicial || "todas");
   const [search, setSearch] = useState("");
   const [selectedCandidato, setSelectedCandidato] = useState<Candidato | null>(null);
+  const [candidatosLocal, setCandidatosLocal] = useState<Candidato[]>(vacante.candidatos);
+
+  useEffect(() => { setCandidatosLocal(vacante.candidatos); }, [vacante]);
 
   const filtered = useMemo(() => {
-    let list = vacante.candidatos;
+    let list = candidatosLocal;
     if (faseFilter !== "todas") list = list.filter((c) => c.fase === faseFilter);
     if (search) {
       const s = search.toLowerCase();
       list = list.filter((c) => `${c.nombre} ${c.apellidos} ${c.email}`.toLowerCase().includes(s));
     }
     return list;
-  }, [vacante, faseFilter, search]);
+  }, [candidatosLocal, faseFilter, search]);
+
+  const handleUpdateCandidato = (updated: Candidato) => {
+    setCandidatosLocal((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    setSelectedCandidato(updated);
+  };
+
+  const handleMoverEstado = (c: Candidato, estado: EstadoReclutamiento) => {
+    handleUpdateCandidato({ ...c, fase: estado });
+  };
 
   return (
     <div className="space-y-4">
@@ -277,9 +293,11 @@ function CandidatosView({ vacante, faseInicial, onBack }: { vacante: Vacante; fa
         </Button>
         <div>
           <h2 className="text-xl font-bold text-foreground">{vacante.puesto}</h2>
-          <p className="text-sm text-muted-foreground">{vacante.candidatos.length} candidatos · {vacante.ubicacion}</p>
+          <p className="text-sm text-muted-foreground">{candidatosLocal.length} candidatos · {vacante.ubicacion}</p>
         </div>
       </div>
+
+      <FunnelMetrics candidatos={candidatosLocal} />
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[200px] max-w-xs">
@@ -340,7 +358,16 @@ function CandidatosView({ vacante, faseInicial, onBack }: { vacante: Vacante; fa
         </Table>
       </Card>
 
-      <CandidatoDialog candidato={selectedCandidato} open={!!selectedCandidato} onOpenChange={(o) => !o && setSelectedCandidato(null)} />
+      <CandidatoDetailModal
+        open={!!selectedCandidato}
+        onOpenChange={(o) => !o && setSelectedCandidato(null)}
+        candidato={selectedCandidato}
+        candidatos={filtered}
+        vacante={vacante}
+        onSelectCandidato={setSelectedCandidato}
+        onUpdateCandidato={handleUpdateCandidato}
+        onMoverEstado={handleMoverEstado}
+      />
     </div>
   );
 }
@@ -480,7 +507,9 @@ export function ReclutamientoView() {
   const [viewMode, setViewMode] = useState<"kanban" | "tabla">("kanban");
 
   // Dialogs (creación/edición + share)
+  const [nuevoChooserOpen, setNuevoChooserOpen] = useState(false);
   const [nuevaOfertaOpen, setNuevaOfertaOpen] = useState(false);
+  const [nuevoCandidatoOpen, setNuevoCandidatoOpen] = useState(false);
   const [ofertaEditando, setOfertaEditando] = useState<Vacante | null>(null);
   const [snippetVacante, setSnippetVacante] = useState<Vacante | null>(null);
   const [snippetGlobalOpen, setSnippetGlobalOpen] = useState(false);
@@ -631,7 +660,7 @@ export function ReclutamientoView() {
             busqueda={search}
             onBusquedaChange={setSearch}
             placeholderBusqueda="Buscar"
-            onNuevo={() => setNuevaOfertaOpen(true)}
+            onNuevo={() => setNuevoChooserOpen(true)}
             filtros={filtros}
             onFiltrosChange={setFiltros}
             orden={orden}
@@ -691,6 +720,17 @@ export function ReclutamientoView() {
         </TabsContent>
       </Tabs>
 
+      {/* ── Chooser inicial: ¿vacante o candidato? ──── */}
+      <NuevoChooserDialog
+        open={nuevoChooserOpen}
+        onOpenChange={setNuevoChooserOpen}
+        onPick={(tipo) => {
+          setNuevoChooserOpen(false);
+          if (tipo === "vacante") setNuevaOfertaOpen(true);
+          else setNuevoCandidatoOpen(true);
+        }}
+      />
+
       {/* ── Dialog crear/editar oferta ───────────────── */}
       <OfertaFormDialog
         open={nuevaOfertaOpen}
@@ -699,6 +739,13 @@ export function ReclutamientoView() {
           if (!o) setOfertaEditando(null);
         }}
         vacanteId={ofertaEditando?.id ?? null}
+        onSaved={recargar}
+      />
+
+      {/* ── Dialog crear candidato suelto ────────────── */}
+      <CandidatoFormDialog
+        open={nuevoCandidatoOpen}
+        onOpenChange={setNuevoCandidatoOpen}
         onSaved={recargar}
       />
 

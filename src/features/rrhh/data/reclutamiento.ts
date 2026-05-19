@@ -1,5 +1,15 @@
-// ─── Fase principal (grupo) ──────────────────────────────────────
-export type FasePrincipal = "nuevo" | "en_progreso" | "oferta" | "seleccionado" | "descartado";
+// ─── Fase principal (3 grupos) ──────────────────────────────────
+// Incluye los nombres legacy ("nuevo", "en_progreso", "oferta",
+// "seleccionado") para no romper historial antiguo en BD; el render
+// activo solo usa los 3 nuevos.
+export type FasePrincipal =
+  | "seleccion"
+  | "formacion"
+  | "descartado"
+  | "nuevo"
+  | "en_progreso"
+  | "oferta"
+  | "seleccionado";
 
 // ─── Estado interno (columna dentro de la fase) ─────────────────
 export type EstadoReclutamiento =
@@ -17,55 +27,69 @@ export type EstadoReclutamiento =
 // Keep old alias for backward compat in places that just need the estado
 export type FaseReclutamiento = EstadoReclutamiento;
 
+// ─── Género ────────────────────────────────────────────────────
+export type Genero = "hombre" | "mujer" | "no_binario" | "prefiere_no_decir";
+
+export const GENERO_LABELS: Record<Genero, string> = {
+  hombre: "Hombre",
+  mujer: "Mujer",
+  no_binario: "No binario",
+  prefiere_no_decir: "Prefiere no decirlo",
+};
+
 // ─── Fase config ────────────────────────────────────────────────
 export interface FasePrincipalConfig {
   label: string;
-  color: string;        // gradient / bar color
-  colorFrom: string;    // gradient start
-  colorTo: string;      // gradient end
+  color: string;
+  colorFrom: string;
+  colorTo: string;
   estados: EstadoReclutamiento[];
 }
 
+// Solo las 3 fases canónicas se muestran en el pipeline; las legacy
+// se mantienen como alias para que el historial antiguo se renderice
+// sin crashear.
 export const FASES_PRINCIPALES_ORDER: FasePrincipal[] = [
-  "nuevo", "en_progreso", "oferta", "seleccionado", "descartado",
+  "seleccion",
+  "formacion",
+  "descartado",
 ];
 
+const SELECCION_CONFIG: FasePrincipalConfig = {
+  label: "Selección",
+  color: "hsl(220, 70%, 55%)",
+  colorFrom: "hsl(220, 80%, 60%)",
+  colorTo: "hsl(200, 70%, 50%)",
+  estados: ["nuevo", "elegido", "entrevista"],
+};
+
+const FORMACION_CONFIG: FasePrincipalConfig = {
+  label: "Formación",
+  color: "hsl(145, 63%, 42%)",
+  colorFrom: "hsl(145, 70%, 50%)",
+  colorTo: "hsl(145, 55%, 35%)",
+  estados: ["teorica", "practica", "prueba", "empleado"],
+};
+
+const DESCARTADO_CONFIG: FasePrincipalConfig = {
+  label: "Descartado",
+  color: "hsl(0, 72%, 51%)",
+  colorFrom: "hsl(0, 80%, 58%)",
+  colorTo: "hsl(0, 65%, 42%)",
+  estados: ["papelera", "no_se_presenta", "suspenso_formacion"],
+};
+
 export const FASES_PRINCIPALES: Record<FasePrincipal, FasePrincipalConfig> = {
-  nuevo: {
-    label: "Nuevo",
-    color: "hsl(220, 70%, 55%)",
-    colorFrom: "hsl(220, 80%, 60%)",
-    colorTo: "hsl(220, 60%, 45%)",
-    estados: ["nuevo"],
-  },
-  en_progreso: {
-    label: "En progreso",
-    color: "hsl(200, 70%, 50%)",
-    colorFrom: "hsl(200, 80%, 55%)",
-    colorTo: "hsl(200, 60%, 40%)",
-    estados: ["elegido", "papelera"],
-  },
-  oferta: {
-    label: "Oferta",
-    color: "hsl(145, 63%, 42%)",
-    colorFrom: "hsl(145, 70%, 50%)",
-    colorTo: "hsl(145, 55%, 35%)",
-    estados: ["entrevista"],
-  },
-  seleccionado: {
-    label: "Seleccionado",
-    color: "hsl(145, 70%, 35%)",
-    colorFrom: "hsl(145, 75%, 42%)",
-    colorTo: "hsl(145, 60%, 28%)",
-    estados: ["teorica", "practica", "prueba", "empleado"],
-  },
-  descartado: {
-    label: "Descartado",
-    color: "hsl(0, 72%, 51%)",
-    colorFrom: "hsl(0, 80%, 58%)",
-    colorTo: "hsl(0, 65%, 42%)",
-    estados: ["no_se_presenta", "suspenso_formacion"],
-  },
+  seleccion: SELECCION_CONFIG,
+  formacion: FORMACION_CONFIG,
+  descartado: DESCARTADO_CONFIG,
+  // Aliases legacy — apuntan a la fase nueva equivalente para que
+  // FASES_PRINCIPALES[historialAntiguo.faseAnterior] siga devolviendo
+  // un config válido sin crashear.
+  nuevo: SELECCION_CONFIG,
+  en_progreso: SELECCION_CONFIG,
+  oferta: SELECCION_CONFIG,
+  seleccionado: FORMACION_CONFIG,
 };
 
 // ─── Estado config ──────────────────────────────────────────────
@@ -84,18 +108,18 @@ export const ESTADOS_CONFIG: Record<EstadoReclutamiento, { label: string; color:
 
 // Flat order of all estados (for legacy compat)
 export const FASES_ORDER: EstadoReclutamiento[] = [
-  "nuevo", "elegido", "papelera", "entrevista", "teorica", "practica", "prueba", "empleado", "no_se_presenta", "suspenso_formacion",
+  "nuevo", "elegido", "entrevista", "teorica", "practica", "prueba", "empleado", "papelera", "no_se_presenta", "suspenso_formacion",
 ];
 
 // Legacy alias
 export const FASES_CONFIG = ESTADOS_CONFIG;
 
-// ─── Helper: get the fase principal for a given estado ──────────
+// ─── Helper: get the fase principal (canónica) for a given estado ──
 export function getFasePrincipal(estado: EstadoReclutamiento): FasePrincipal {
-  for (const [fase, cfg] of Object.entries(FASES_PRINCIPALES)) {
-    if (cfg.estados.includes(estado)) return fase as FasePrincipal;
-  }
-  return "nuevo";
+  if (SELECCION_CONFIG.estados.includes(estado)) return "seleccion";
+  if (FORMACION_CONFIG.estados.includes(estado)) return "formacion";
+  if (DESCARTADO_CONFIG.estados.includes(estado)) return "descartado";
+  return "seleccion";
 }
 
 // ─── Origen ─────────────────────────────────────────────────────
@@ -120,6 +144,40 @@ export interface HistorialCambioFase {
   emailEnviado: boolean;
 }
 
+// ─── Reseñas / Notas / Criterios ───────────────────────────────
+export interface CriterioResena {
+  id: string;
+  nombre: string;
+}
+
+export const CRITERIOS_RESENA_DEFAULT: CriterioResena[] = [
+  { id: "actitud", nombre: "Actitud" },
+  { id: "experiencia", nombre: "Experiencia previa" },
+  { id: "disponibilidad", nombre: "Disponibilidad" },
+  { id: "comunicacion", nombre: "Comunicación" },
+  { id: "encaje_cultural", nombre: "Encaje cultural" },
+];
+
+export interface ResenaCriterio {
+  criterioId: string;
+  estrellas: number;
+}
+
+export interface ResenaCandidato {
+  id: string;
+  autor: string;
+  fecha: string;
+  puntuaciones: ResenaCriterio[];
+  comentario?: string;
+}
+
+export interface NotaCandidato {
+  id: string;
+  autor: string;
+  fecha: string;
+  texto: string;
+}
+
 // ─── Candidato ──────────────────────────────────────────────────
 export interface Candidato {
   id: string;
@@ -128,13 +186,23 @@ export interface Candidato {
   telefono: string;
   email: string;
   cvAdjunto?: string;
+  cvTamanoKb?: number;
   fechaInscripcion: string;
   origen: OrigenCandidatura;
   notasInternas: string;
-  fase: EstadoReclutamiento; // the estado (kept as `fase` for back-compat)
+  fase: EstadoReclutamiento;
   vacanteId: string;
   reclutadorAsignado: string;
   historial: HistorialCambioFase[];
+  // Extensiones del refactor 2026-05 (todos opcionales para no romper BD)
+  ubicacion?: string;
+  genero?: Genero;
+  expectativasSalariales?: string;
+  disponibleDesde?: string;
+  sobreTi?: string;
+  resenas?: ResenaCandidato[];
+  notas?: NotaCandidato[];
+  marcadoComoNoVisto?: boolean;
 }
 
 // ─── Email plantillas por estado ────────────────────────────────
@@ -168,6 +236,59 @@ export interface Vacante {
   favorita: boolean;
   candidatos: Candidato[];
   empresaId: string;
+}
+
+// ─── Métricas del embudo ───────────────────────────────────────
+export interface FilaEmbudo {
+  estado: EstadoReclutamiento;
+  label: string;
+  count: number;
+  porcentaje: number;
+  color: string;
+}
+
+export interface MetricasEmbudo {
+  totalBase: number;
+  grupoSeleccion: { count: number; porcentaje: number };
+  grupoFormacion: { count: number; porcentaje: number };
+  grupoDescartado: { count: number; porcentaje: number };
+  progreso: FilaEmbudo[];
+  descartado: FilaEmbudo[];
+}
+
+export function calcularMetricasEmbudo(candidatos: Candidato[]): MetricasEmbudo {
+  const totalBase = candidatos.length;
+  const counts = contarCandidatosPorFase(candidatos);
+
+  const sumEstados = (estados: EstadoReclutamiento[]) =>
+    estados.reduce((acc, e) => acc + (counts[e] || 0), 0);
+
+  const seleccionCount = sumEstados(SELECCION_CONFIG.estados);
+  const formacionCount = sumEstados(FORMACION_CONFIG.estados);
+  const descartadoCount = sumEstados(DESCARTADO_CONFIG.estados);
+
+  const pct = (n: number) =>
+    totalBase === 0 ? 0 : Math.round((n / totalBase) * 1000) / 10;
+
+  const filaEstado = (estado: EstadoReclutamiento): FilaEmbudo => ({
+    estado,
+    label: ESTADOS_CONFIG[estado].label,
+    count: counts[estado] || 0,
+    porcentaje: pct(counts[estado] || 0),
+    color: ESTADOS_CONFIG[estado].color,
+  });
+
+  return {
+    totalBase,
+    grupoSeleccion: { count: seleccionCount, porcentaje: pct(seleccionCount) },
+    grupoFormacion: { count: formacionCount, porcentaje: pct(formacionCount) },
+    grupoDescartado: { count: descartadoCount, porcentaje: pct(descartadoCount) },
+    progreso: [
+      ...SELECCION_CONFIG.estados.map(filaEstado),
+      ...FORMACION_CONFIG.estados.map(filaEstado),
+    ],
+    descartado: DESCARTADO_CONFIG.estados.map(filaEstado),
+  };
 }
 
 // ─── Mock data generator ────────────────────────────────────────

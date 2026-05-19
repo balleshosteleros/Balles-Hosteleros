@@ -34,9 +34,52 @@ export async function listCandidatosReales() {
   }
 }
 
+export async function createCandidato(input: {
+  nombre: string;
+  apellidos: string;
+  email: string;
+  telefono: string;
+  vacante_id: string | null;
+  origen: string;
+  notas: string;
+}) {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" } as const;
+
+    const { error } = await supabase.from("candidatos").insert({
+      empresa_id: empresaId,
+      vacante_id: input.vacante_id,
+      nombre: input.nombre.trim(),
+      apellidos: input.apellidos.trim() || null,
+      email: input.email.trim(),
+      telefono: input.telefono.trim() || null,
+      origen: input.origen,
+      notas: input.notas.trim() || null,
+      fase: "seleccion",
+      estado: "nuevo",
+    });
+
+    if (error) throw error;
+    revalidatePath("/rrhh/reclutamiento");
+    return { ok: true } as const;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    return { ok: false, error: msg } as const;
+  }
+}
+
 export async function moverCandidatoFase(
   id: string,
-  fase: "nuevo" | "en_progreso" | "oferta" | "seleccionado" | "descartado",
+  fase:
+    | "seleccion"
+    | "formacion"
+    | "descartado"
+    // Aliases legacy aceptados por compat con datos antiguos de BD.
+    | "nuevo"
+    | "en_progreso"
+    | "oferta"
+    | "seleccionado",
   estado: string,
 ) {
   try {

@@ -1,6 +1,6 @@
 "use client";
 
-import { Users, Shield, Layers, Store, AppWindow, Palette } from "lucide-react";
+import { Users, Shield, Layers, Store, AppWindow, Palette, Wrench } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UsuariosTab } from "@/features/ajustes/components/UsuariosTab";
@@ -9,6 +9,7 @@ import { DepartamentosTab } from "@/features/ajustes/components/DepartamentosTab
 import { EmpresasTab } from "@/features/ajustes/components/EmpresasTab";
 import { AplicacionesTab } from "@/features/ajustes/components/AplicacionesTab";
 import { ImagenMarcaTab } from "@/features/ajustes/components/ImagenMarcaTab";
+import { HerramientasTab } from "@/features/ajustes/components/HerramientasTab";
 import { useHydrateUsuarios } from "@/features/ajustes/hooks/use-hydrate-usuarios";
 
 const tabs = [
@@ -18,6 +19,7 @@ const tabs = [
   { id: "roles",          label: "Roles",           icon: Shield    },
   { id: "departamentos",  label: "Departamentos",   icon: Layers    },
   { id: "aplicaciones",   label: "Aplicaciones",    icon: AppWindow },
+  { id: "herramientas",   label: "Herramientas",    icon: Wrench    },
 ];
 
 export default function AjustesPage() {
@@ -53,6 +55,7 @@ export default function AjustesPage() {
         <TabsContent value="roles"><RolesTab /></TabsContent>
         <TabsContent value="departamentos"><DepartamentosTab /></TabsContent>
         <TabsContent value="aplicaciones"><AplicacionesTab /></TabsContent>
+        <TabsContent value="herramientas"><HerramientasTab /></TabsContent>
       </Tabs>
     </div>
   );
