@@ -435,6 +435,101 @@ export async function reenviarFirma(
   }
 }
 
+export async function ampliarPlazoFirma(
+  documentoId: string,
+  diasPlazo: number,
+): Promise<{ ok: true; emailEnviado: boolean } | { ok: false; error: string }> {
+  try {
+    const dias = Math.floor(diasPlazo);
+    if (!Number.isFinite(dias) || dias < 1 || dias > 365) {
+      return { ok: false, error: "Plazo inválido. Debe ser un número entre 1 y 365 días." };
+    }
+
+    const { userId, userName, empresaId } = await requireAdmin();
+    const admin = createAdminClient();
+    const meta = await getRequestMeta();
+
+    const { data: doc, error } = await admin
+      .from("firmas_documentos")
+      .select("id, empresa_id, empleado_id, titulo, estado, reenviado_count")
+      .eq("id", documentoId)
+      .maybeSingle();
+    if (error || !doc) return { ok: false, error: "Documento no encontrado" };
+    if (doc.empresa_id !== empresaId) return { ok: false, error: "Sin acceso a este documento" };
+    if (doc.estado !== "expirado") {
+      return { ok: false, error: "Solo se puede ampliar plazo a firmas expiradas" };
+    }
+
+    const { data: emp } = await admin
+      .from("empleados")
+      .select("nombre, apellidos, email_empresa, email_personal")
+      .eq("id", doc.empleado_id)
+      .maybeSingle();
+    const destino = (emp?.email_empresa as string | null) || (emp?.email_personal as string | null);
+    if (!destino) return { ok: false, error: "El empleado no tiene email" };
+
+    const { data: empresa } = await admin
+      .from("empresas")
+      .select("nombre, logo_url")
+      .eq("id", empresaId)
+      .maybeSingle();
+    const empresaNombre = (empresa?.nombre as string) ?? "Tu empresa";
+    const empresaLogoUrl = (empresa?.logo_url as string | null) ?? null;
+
+    const nuevaExpiraEn = new Date(Date.now() + dias * 24 * 60 * 60 * 1000);
+
+    // Limpiar tokens anteriores y generar uno nuevo
+    await admin.from("firmas_tokens").delete().eq("documento_id", documentoId);
+    const token = generarToken();
+    const tokenHash = hashToken(token);
+    const { error: tokErr } = await admin.from("firmas_tokens").insert({
+      documento_id: documentoId,
+      token_hash: tokenHash,
+      expira_en: nuevaExpiraEn.toISOString(),
+    });
+    if (tokErr) return { ok: false, error: tokErr.message };
+
+    // Reabrir firma: vuelve a pendiente con nuevo expira_en
+    await admin
+      .from("firmas_documentos")
+      .update({
+        estado: "pendiente",
+        expira_en: nuevaExpiraEn.toISOString(),
+        reenviado_count: (doc.reenviado_count as number) + 1,
+      })
+      .eq("id", documentoId);
+
+    const empleadoNombre = `${emp?.nombre ?? ""} ${emp?.apellidos ?? ""}`.trim();
+    const sendResult = await enviarInvitacionFirma({
+      to: destino,
+      empresaId,
+      empresaNombre,
+      empresaLogoUrl,
+      empleadoNombre,
+      tituloDocumento: doc.titulo as string,
+      enviadoPor: userName,
+      token,
+      expiraEn: nuevaExpiraEn,
+    });
+
+    await registrarEvento({
+      documentoId,
+      tipo: "reenviado",
+      actorUserId: userId,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      metadata: { destino, emailOk: sendResult.ok, motivo: "ampliar_plazo", dias },
+    });
+
+    revalidatePath("/rrhh/firmas");
+    return { ok: true, emailEnviado: sendResult.ok };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[firmas] ampliarPlazoFirma:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
 export async function cancelarFirma(
   documentoId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
