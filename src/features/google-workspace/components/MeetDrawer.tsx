@@ -8,6 +8,7 @@ import {
   Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { GoogleConnectBanner } from "./GoogleConnectBanner";
 import { GoogleReauthBanner } from "./GoogleReauthBanner";
 import { GoogleAccountButton } from "./GoogleAccountButton";
@@ -59,6 +60,15 @@ function inicioSemanaLunes(base: Date): Date {
   return d;
 }
 
+function useNow(intervalMs = 60_000): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+  return now;
+}
+
 function etiquetaFecha(iso: string): string {
   const fecha = new Date(iso);
   const hoy = new Date();
@@ -83,6 +93,7 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<"hoy" | "semana">("hoy");
   const [needsReauth, setNeedsReauth] = useState(false);
+  const nowTime = useNow();
 
   const load = useCallback(async () => {
     if (!connected) return;
@@ -199,7 +210,8 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
 
         <div className="flex border-b bg-muted/20 shrink-0">
           {(["hoy", "semana"] as const).map((t) => {
-            const count = t === "hoy" ? grupos.hoy.length : grupos.semana.length;
+            const items = t === "hoy" ? grupos.hoy : grupos.semana;
+            const count = items.filter((e) => new Date(e.fin).getTime() > nowTime).length;
             return (
               <button
                 key={t}
@@ -247,15 +259,34 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
               {lista.map((ev) => {
                 const fecha = etiquetaFecha(ev.inicio);
                 const asistentes = ev.participantes?.length ?? 0;
+                const inicioMs = new Date(ev.inicio).getTime();
+                const finMs = new Date(ev.fin).getTime();
+                const finalizada = finMs <= nowTime;
+                const enCurso = !finalizada && inicioMs <= nowTime;
                 return (
                   <li
                     key={`${ev.calendarId}-${ev.id}`}
-                    className="px-5 py-4 hover:bg-muted/30 transition-colors"
+                    className={cn(
+                      "px-5 py-4 hover:bg-muted/30 transition-colors",
+                      finalizada && "opacity-70",
+                      enCurso && "bg-emerald-50/60",
+                    )}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 mb-1 block">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 mb-1 flex items-center gap-1.5">
                           {fecha}
+                          {enCurso && (
+                            <span className="inline-flex items-center gap-1 text-emerald-700">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                              En curso
+                            </span>
+                          )}
+                          {finalizada && (
+                            <span className="text-muted-foreground font-medium normal-case tracking-normal">
+                              · Finalizada
+                            </span>
+                          )}
                         </span>
                         <p className="font-semibold text-sm leading-tight">
                           {ev.titulo}
@@ -280,7 +311,7 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
                         </div>
                       </div>
 
-                      {ev.meetLink && (
+                      {ev.meetLink && !finalizada && (
                         <Button
                           size="sm"
                           className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 shrink-0 h-9 px-4 shadow-sm shadow-emerald-600/20"

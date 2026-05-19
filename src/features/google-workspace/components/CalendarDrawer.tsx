@@ -67,6 +67,15 @@ type Evento = {
 
 const FALLBACK_COLOR = "#039be5";
 
+function useNow(intervalMs = 60_000): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+  return now;
+}
+
 function textOnColor(hex: string): string {
   const c = (hex || FALLBACK_COLOR).replace("#", "");
   if (c.length !== 6) return "#ffffff";
@@ -196,6 +205,12 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
   const [guardando, setGuardando] = useState(false);
   const [needsReauth, setNeedsReauth] = useState(false);
   const [sidebarAbierto, setSidebarAbierto] = useState(true);
+  const nowTime = useNow();
+  const nowIso = useMemo(() => isoDate(new Date(nowTime)), [nowTime]);
+  const nowMinutes = useMemo(() => {
+    const d = new Date(nowTime);
+    return d.getHours() * 60 + d.getMinutes();
+  }, [nowTime]);
 
   // 1) Lista de calendarios al conectar
   useEffect(() => {
@@ -617,13 +632,20 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                   {semanaActual.map((d, i) => {
                     const dayIso = isoDate(d);
                     const evs = eventosAllDay.filter((e) => allDayCubreFecha(e, dayIso));
+                    const diaPasado = dayIso < nowIso;
                     return (
-                      <div key={i} className="flex-1 min-h-[28px] border-r p-1 space-y-0.5">
+                      <div key={i} className={cn(
+                        "flex-1 min-h-[28px] border-r p-1 space-y-0.5",
+                        diaPasado && "bg-muted/30",
+                      )}>
                         {evs.map((ev) => (
                           <button
                             key={`${ev.id}-${dayIso}`}
                             onClick={() => setEventoSel(ev)}
-                            className="block w-full truncate rounded px-1.5 py-0.5 text-left text-[10px] font-medium"
+                            className={cn(
+                              "block w-full truncate rounded px-1.5 py-0.5 text-left text-[10px] font-medium",
+                              diaPasado && "opacity-70",
+                            )}
                             style={{
                               backgroundColor: colorEvento(ev),
                               color: textOnColor(colorEvento(ev)),
@@ -654,19 +676,37 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
 
                 {semanaActual.map((d, diaIdx) => {
                   const dayIso = isoDate(d);
+                  const diaPasado = dayIso < nowIso;
+                  const esHoy = dayIso === nowIso;
                   return (
                     <div
                       key={diaIdx}
                       className="relative flex flex-1 flex-col border-r"
                     >
-                      {HORAS.map((h) => (
+                      {HORAS.map((h) => {
+                        const slotPasado = diaPasado || (esHoy && (h + 1) * 60 <= nowMinutes);
+                        return (
+                          <div
+                            key={h}
+                            onClick={() => abrirCrear(d, h)}
+                            style={{ height: HORA_PX }}
+                            className={cn(
+                              "cursor-pointer border-b transition-colors hover:bg-blue-50/40 dark:hover:bg-blue-950/20",
+                              slotPasado && "bg-muted/40",
+                            )}
+                          />
+                        );
+                      })}
+
+                      {esHoy && (
                         <div
-                          key={h}
-                          onClick={() => abrirCrear(d, h)}
-                          style={{ height: HORA_PX }}
-                          className="cursor-pointer border-b transition-colors hover:bg-blue-50/40 dark:hover:bg-blue-950/20"
-                        />
-                      ))}
+                          className="pointer-events-none absolute left-0 right-0 z-20 flex items-center"
+                          style={{ top: (nowMinutes / 60) * HORA_PX }}
+                        >
+                          <span className="h-2 w-2 -ml-1 rounded-full bg-red-500" />
+                          <span className="flex-1 h-px bg-red-500" />
+                        </div>
+                      )}
 
                       {eventosTimed.map((ev) => {
                         const seg = segmentoEnDia(ev, dayIso);
@@ -675,6 +715,10 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                         const height = Math.max(18, (seg.duracionMin / 60) * HORA_PX - 2);
                         const bg = colorEvento(ev);
                         const txt = textOnColor(bg);
+                        const finMs = new Date(ev.fin).getTime();
+                        const inicioMs = new Date(ev.inicio).getTime();
+                        const finalizado = finMs <= nowTime;
+                        const enCurso = !finalizado && inicioMs <= nowTime;
                         return (
                           <button
                             key={`${ev.id}-${dayIso}`}
@@ -686,6 +730,8 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                               "absolute left-0.5 right-0.5 z-10 overflow-hidden px-1.5 py-0.5 text-left text-[11px] leading-tight transition-shadow hover:z-20 hover:shadow-md",
                               seg.esInicio && "rounded-t-[4px]",
                               seg.esFin && "rounded-b-[4px]",
+                              finalizado && "opacity-70",
+                              enCurso && "ring-2 ring-red-400",
                             )}
                             style={{
                               top,
@@ -712,6 +758,8 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
           {vista === "day" && (() => {
             const dayIso = isoDate(fechaRef);
             const allDayDelDia = eventosAllDay.filter((e) => allDayCubreFecha(e, dayIso));
+            const diaPasado = dayIso < nowIso;
+            const esHoy = dayIso === nowIso;
             return (
             <div className="flex flex-1 min-h-0 flex-col">
               {/* All-day del día */}
@@ -725,7 +773,10 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                       <button
                         key={`${ev.id}-${dayIso}`}
                         onClick={() => setEventoSel(ev)}
-                        className="block w-full truncate rounded px-2 py-1 text-left text-xs font-medium"
+                        className={cn(
+                          "block w-full truncate rounded px-2 py-1 text-left text-xs font-medium",
+                          diaPasado && "opacity-70",
+                        )}
                         style={{
                           backgroundColor: colorEvento(ev),
                           color: textOnColor(colorEvento(ev)),
@@ -751,14 +802,31 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                   ))}
                 </div>
                 <div className="relative flex flex-1 flex-col border-r">
-                  {HORAS.map((h) => (
+                  {HORAS.map((h) => {
+                    const slotPasado = diaPasado || (esHoy && (h + 1) * 60 <= nowMinutes);
+                    return (
+                      <div
+                        key={h}
+                        onClick={() => abrirCrear(fechaRef, h)}
+                        style={{ height: HORA_PX }}
+                        className={cn(
+                          "cursor-pointer border-b transition-colors hover:bg-blue-50/40 dark:hover:bg-blue-950/20",
+                          slotPasado && "bg-muted/40",
+                        )}
+                      />
+                    );
+                  })}
+
+                  {esHoy && (
                     <div
-                      key={h}
-                      onClick={() => abrirCrear(fechaRef, h)}
-                      style={{ height: HORA_PX }}
-                      className="cursor-pointer border-b transition-colors hover:bg-blue-50/40 dark:hover:bg-blue-950/20"
-                    />
-                  ))}
+                      className="pointer-events-none absolute left-0 right-0 z-20 flex items-center"
+                      style={{ top: (nowMinutes / 60) * HORA_PX }}
+                    >
+                      <span className="h-2 w-2 -ml-1 rounded-full bg-red-500" />
+                      <span className="flex-1 h-px bg-red-500" />
+                    </div>
+                  )}
+
                   {eventosTimed.map((ev) => {
                     const seg = segmentoEnDia(ev, dayIso);
                     if (!seg) return null;
@@ -766,6 +834,10 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                     const height = Math.max(24, (seg.duracionMin / 60) * HORA_PX - 2);
                     const bg = colorEvento(ev);
                     const txt = textOnColor(bg);
+                    const finMs = new Date(ev.fin).getTime();
+                    const inicioMs = new Date(ev.inicio).getTime();
+                    const finalizado = finMs <= nowTime;
+                    const enCurso = !finalizado && inicioMs <= nowTime;
                     return (
                       <button
                         key={`${ev.id}-${dayIso}`}
@@ -777,6 +849,8 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                           "absolute left-1 right-1 z-10 overflow-hidden px-2 py-1 text-left text-xs leading-tight transition-shadow hover:shadow-md",
                           seg.esInicio && "rounded-t-[4px]",
                           seg.esFin && "rounded-b-[4px]",
+                          finalizado && "opacity-70",
+                          enCurso && "ring-2 ring-red-400",
                         )}
                         style={{
                           top,
@@ -807,6 +881,8 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
               onSelect={setEventoSel}
               onSlot={abrirCrear}
               colorPorCalendario={colorPorCalendario}
+              nowIso={nowIso}
+              nowTime={nowTime}
             />
           )}
         </div>
@@ -1081,12 +1157,16 @@ function VistaMes({
   onSelect,
   onSlot,
   colorPorCalendario,
+  nowIso,
+  nowTime,
 }: {
   fechaRef: Date;
   eventos: Evento[];
   onSelect: (ev: Evento) => void;
   onSlot: (fecha: Date) => void;
   colorPorCalendario: Map<string, string>;
+  nowIso: string;
+  nowTime: number;
 }) {
   const colorEv = (ev: Evento): string =>
     ev.eventColorHex ||
@@ -1123,8 +1203,9 @@ function VistaMes({
       <div className="grid grid-cols-7">
         {dias.map((d, i) => {
           const dayIso = isoDate(d);
-          const esHoy = d.toDateString() === new Date().toDateString();
+          const esHoy = dayIso === nowIso;
           const esMesActual = d.getMonth() === fechaRef.getMonth();
+          const diaPasado = esMesActual && dayIso < nowIso;
           const evs = eventos.filter((e) =>
             e.allDay ? allDayCubreFecha(e, dayIso) : segmentoEnDia(e, dayIso) !== null,
           );
@@ -1135,6 +1216,7 @@ function VistaMes({
               className={cn(
                 "min-h-[100px] cursor-pointer border-b border-r p-1 transition-colors hover:bg-blue-50/30 dark:hover:bg-blue-950/20",
                 !esMesActual && "bg-muted/20 text-muted-foreground",
+                diaPasado && "bg-muted/30",
               )}
             >
               <div className="flex justify-end">
@@ -1150,6 +1232,7 @@ function VistaMes({
               <div className="mt-1 space-y-0.5">
                 {evs.slice(0, 3).map((ev) => {
                   const continua = !ev.allDay && ev.fechaDia !== dayIso;
+                  const finalizado = new Date(ev.fin).getTime() <= nowTime;
                   return (
                     <button
                       key={`${ev.id}-${dayIso}`}
@@ -1157,7 +1240,10 @@ function VistaMes({
                         e.stopPropagation();
                         onSelect(ev);
                       }}
-                      className="block w-full truncate rounded px-1 py-0.5 text-left text-[10px] font-medium"
+                      className={cn(
+                        "block w-full truncate rounded px-1 py-0.5 text-left text-[10px] font-medium",
+                        finalizado && "opacity-70",
+                      )}
                       style={{
                         backgroundColor: colorEv(ev),
                         color: textOnColor(colorEv(ev)),
