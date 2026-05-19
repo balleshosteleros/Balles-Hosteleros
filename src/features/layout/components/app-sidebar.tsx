@@ -36,7 +36,7 @@ function AccesosIcon({ className }: { className?: string }) {
     </svg>
   );
 }
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { NavLink } from "@/features/layout/components/nav-link";
 import { useAuth } from "@/features/auth/contexts/auth-context";
@@ -273,6 +273,16 @@ export function AppSidebar() {
   const activeKey = sections.find((s) => pathname.startsWith(s.prefix))?.key ?? null;
   const [openKey, setOpenKey] = useState<string | null>(activeKey);
 
+  // Evitar hydration mismatch: useAuth y useViewMode leen localStorage en el render
+  // inicial (caché de roles/permisos y modo de vista). En SSR esos lookups devuelven
+  // valores por defecto y en cliente devuelven la caché real, así que las secciones
+  // del menú difieren. Diferimos el render dinámico al post-mount; la caché ya está
+  // poblada para entonces, así que no hay parpadeo perceptible.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="px-3 py-3">
@@ -310,7 +320,7 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
-        {mode === "paneles" ? (
+        {!mounted ? null : mode === "paneles" ? (
           <SidebarGroup>
             <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs tracking-widest">
               {!collapsed && "MIS PANELES"}
