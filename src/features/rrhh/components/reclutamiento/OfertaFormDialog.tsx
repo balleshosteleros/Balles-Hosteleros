@@ -260,40 +260,20 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3 items-start">
-              <div className="space-y-1.5">
-                <Label>Estado</Label>
-                <Select
-                  value={form.estado_publicacion}
-                  onValueChange={(v) => setForm({ ...form, estado_publicacion: v as EstadoPub })}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="borrador">Borrador (no visible)</SelectItem>
-                    <SelectItem value="publicada">Publicada</SelectItem>
-                    <SelectItem value="cerrada">Cerrada</SelectItem>
-                    <SelectItem value="archivada">Archivada</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>Visibilidad pública</Label>
-                <div className="flex items-center gap-3 rounded-md border p-3">
-                  <Switch
-                    checked={form.visible_publicamente}
-                    onCheckedChange={(n) => setForm({ ...form, visible_publicamente: n })}
-                    disabled={form.estado_publicacion !== "publicada"}
-                  />
-                  <span className="text-sm">
-                    {form.visible_publicamente ? "Aparece en el portal" : "Oculta"}
-                  </span>
-                </div>
-                {form.estado_publicacion !== "publicada" && (
-                  <p className="text-[11px] text-muted-foreground">
-                    Activa <b>Publicada</b> para hacerla visible.
-                  </p>
-                )}
+            <div className="space-y-1.5">
+              <Label>Visibilidad pública</Label>
+              <div className="flex items-center gap-3 rounded-md border p-3">
+                <Switch
+                  checked={form.visible_publicamente}
+                  onCheckedChange={(n) => setForm({
+                    ...form,
+                    visible_publicamente: n,
+                    estado_publicacion: n ? "publicada" : "borrador",
+                  })}
+                />
+                <span className="text-sm">
+                  {form.visible_publicamente ? "Publicada · aparece en el portal" : "Borrador · oculta"}
+                </span>
               </div>
             </div>
           </div>

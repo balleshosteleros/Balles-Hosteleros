@@ -482,7 +482,7 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
               <div className="px-5 py-3 border-b bg-muted/10 flex gap-2 shrink-0">
                 <Input
                   value={newTitulo}
-                  onChange={(e) => setNewTitulo(e.target.value)}
+                  onChange={(e) => setNewTitulo(e.target.value.toUpperCase())}
                   onKeyDown={(e) => e.key === "Enter" && addTarea()}
                   placeholder="Añadir tarea de hoy…"
                   className="h-8 text-sm flex-1"
@@ -579,7 +579,7 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
               <div className="px-5 py-3 border-b bg-muted/10 flex gap-2 shrink-0">
                 <Input
                   value={newTitulo}
-                  onChange={(e) => setNewTitulo(e.target.value)}
+                  onChange={(e) => setNewTitulo(e.target.value.toUpperCase())}
                   onKeyDown={(e) => e.key === "Enter" && addTarea()}
                   placeholder={`Tarea para ${format(refDate, "EEEE d", { locale: es })}…`}
                   className="h-8 text-sm flex-1"
@@ -706,7 +706,7 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
                 <div className="px-5 py-3 border-b flex gap-2">
                   <Input
                     value={newTitulo}
-                    onChange={(e) => setNewTitulo(e.target.value)}
+                    onChange={(e) => setNewTitulo(e.target.value.toUpperCase())}
                     onKeyDown={(e) => e.key === "Enter" && addTarea()}
                     placeholder="Añadir tarea…"
                     className="h-8 text-sm flex-1"
