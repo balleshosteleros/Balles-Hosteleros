@@ -23,7 +23,7 @@ type ConfigSection =
   | "gestion_datos";
 
 const SECTIONS: { id: ConfigSection; label: string; icon: React.ReactNode; isConfig?: boolean }[] = [
-  { id: "ofertas", label: "Ofertas de trabajo", icon: <Briefcase className="h-4 w-4" /> },
+  { id: "ofertas", label: "Vacantes", icon: <Briefcase className="h-4 w-4" /> },
   { id: "candidatos", label: "Candidatos", icon: <Users className="h-4 w-4" /> },
   { id: "configuracion", label: "Configuración", icon: <Settings className="h-4 w-4" strokeWidth={1.75} />, isConfig: true },
   { id: "portal", label: "Portal de empleo", icon: <Globe className="h-4 w-4" /> },

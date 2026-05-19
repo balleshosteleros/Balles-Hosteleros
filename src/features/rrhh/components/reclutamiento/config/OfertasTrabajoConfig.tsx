@@ -23,7 +23,7 @@ export function OfertasTrabajoConfig() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-bold text-foreground">Ofertas de trabajo</h2>
+        <h2 className="text-lg font-bold text-foreground">Vacantes</h2>
         <p className="text-sm text-muted-foreground mt-0.5">
           Configura categorías, tipos de jornada, ubicaciones y fases del proceso de selección
         </p>
