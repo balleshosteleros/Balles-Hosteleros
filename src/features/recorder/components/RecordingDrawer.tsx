@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import {
   Monitor,
   Mic,
@@ -25,6 +25,9 @@ import {
   Trash2,
   UploadCloud,
   AlertCircle,
+  Search,
+  Pencil,
+  HardDrive,
 } from "lucide-react";
 import {
   Sheet,
@@ -39,8 +42,40 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
 import { useRecordingStore } from "../store/recording-store";
 import { useRecorder, formatDuration } from "../contexts/recorder-context";
+
+function formatBytes(bytes: number): string {
+  if (!bytes || bytes < 0) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(0)} KB`;
+  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+  return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
+}
+
+type DateBucket = "hoy" | "ayer" | "semana" | "antiguas";
+
+function getDateBucket(iso: string): DateBucket {
+  const now = new Date();
+  const d = new Date(iso);
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfDate = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diffDays = Math.floor((startOfToday - startOfDate) / 86_400_000);
+  if (diffDays <= 0) return "hoy";
+  if (diffDays === 1) return "ayer";
+  if (diffDays < 7) return "semana";
+  return "antiguas";
+}
+
+const BUCKET_LABEL: Record<DateBucket, string> = {
+  hoy: "Hoy",
+  ayer: "Ayer",
+  semana: "Esta semana",
+  antiguas: "Más antiguas",
+};
+
+const BUCKET_ORDER: DateBucket[] = ["hoy", "ayer", "semana", "antiguas"];
 
 export function RecordingDrawer() {
   const { isDrawerOpen, setDrawerOpen, state } = useRecordingStore();
@@ -437,6 +472,12 @@ interface SavedRecording {
 function RecordingsList() {
   const [recordings, setRecordings] = useState<SavedRecording[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
+  const [savingRename, setSavingRename] = useState(false);
+  const [quota, setQuota] = useState<{ used: number; limit: number } | null>(null);
   const { pendingCount } = useRecorder();
 
   useEffect(() => {
@@ -453,8 +494,43 @@ function RecordingsList() {
     return () => {
       alive = false;
     };
-    // Recargar cuando cambia el número de pendientes (algún reintento tuvo éxito)
   }, [pendingCount]);
+
+  useEffect(() => {
+    let alive = true;
+    const supabase = createClient();
+    supabase
+      .from("storage_usage_global")
+      .select("bytes_used, bytes_limit")
+      .single()
+      .then(({ data }) => {
+        if (!alive || !data) return;
+        setQuota({ used: Number(data.bytes_used ?? 0), limit: Number(data.bytes_limit ?? 0) });
+      });
+    return () => {
+      alive = false;
+    };
+  }, [recordings.length, pendingCount]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return recordings;
+    return recordings.filter((r) => r.title.toLowerCase().includes(q));
+  }, [recordings, search]);
+
+  const grouped = useMemo(() => {
+    const map = new Map<DateBucket, SavedRecording[]>();
+    for (const rec of filtered) {
+      const bucket = getDateBucket(rec.created_at);
+      const list = map.get(bucket) ?? [];
+      list.push(rec);
+      map.set(bucket, list);
+    }
+    return BUCKET_ORDER.flatMap((bucket) => {
+      const list = map.get(bucket);
+      return list && list.length > 0 ? [{ bucket, items: list }] : [];
+    });
+  }, [filtered]);
 
   async function handleDelete(id: string) {
     if (!confirm("¿Eliminar esta grabación?")) return;
@@ -465,14 +541,78 @@ function RecordingsList() {
     if (res.ok) setRecordings((prev) => prev.filter((r) => r.id !== id));
   }
 
+  async function handleCopyLink(rec: SavedRecording) {
+    try {
+      await navigator.clipboard.writeText(rec.url);
+      setCopiedId(rec.id);
+      setTimeout(() => setCopiedId((id) => (id === rec.id ? null : id)), 1500);
+    } catch {
+      // clipboard puede fallar en http o iframes; ignoramos silenciosamente
+    }
+  }
+
+  function startEdit(rec: SavedRecording) {
+    setEditingId(rec.id);
+    setEditingTitle(rec.title);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditingTitle("");
+  }
+
+  const saveEdit = useCallback(async () => {
+    if (!editingId) return;
+    const trimmed = editingTitle.trim();
+    if (!trimmed) {
+      cancelEdit();
+      return;
+    }
+    const current = recordings.find((r) => r.id === editingId);
+    if (!current || current.title === trimmed) {
+      cancelEdit();
+      return;
+    }
+    setSavingRename(true);
+    try {
+      const res = await fetch("/api/recordings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editingId, title: trimmed }),
+      });
+      if (res.ok) {
+        setRecordings((prev) =>
+          prev.map((r) => (r.id === editingId ? { ...r, title: trimmed } : r))
+        );
+      }
+    } finally {
+      setSavingRename(false);
+      cancelEdit();
+    }
+  }, [editingId, editingTitle, recordings]);
+
   return (
     <div className="space-y-3 pt-4 border-t">
       <PendingUploadsList />
+
+      {quota && quota.limit > 0 && <QuotaBar used={quota.used} limit={quota.limit} />}
 
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold">Mis grabaciones</p>
         <span className="text-[11px] text-muted-foreground">{recordings.length}</span>
       </div>
+
+      {recordings.length > 3 && (
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por título…"
+            className="h-8 pl-8 text-xs"
+          />
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-6 text-muted-foreground">
@@ -483,62 +623,154 @@ function RecordingsList() {
           <FileVideo className="h-6 w-6 text-muted-foreground/40 mb-1" />
           <p className="text-xs text-muted-foreground">Aún no hay grabaciones</p>
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-6 text-center">
+          <Search className="h-5 w-5 text-muted-foreground/40 mb-1" />
+          <p className="text-xs text-muted-foreground">Sin resultados para “{search}”</p>
+        </div>
       ) : (
-        <div className="space-y-1.5 max-h-[40vh] overflow-y-auto pr-1">
-          {recordings.map((rec) => (
-            <div
-              key={rec.id}
-              className="flex items-center gap-2 p-2 rounded-md border border-border/60 hover:bg-muted/40 transition-colors"
-            >
-              <div className="w-8 h-8 rounded bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
-                <FileVideo className="h-4 w-4" />
-              </div>
-              <a
-                href={rec.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex-1 min-w-0 group"
-                title={rec.title}
-              >
-                <p className="text-xs font-medium truncate group-hover:text-primary transition-colors">
-                  {rec.title}
-                </p>
-                <p className="text-[10px] text-muted-foreground">
-                  {new Date(rec.created_at).toLocaleDateString("es-ES")} · {formatDuration(rec.duration)}
-                </p>
-              </a>
-              <a
-                href={rec.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary"
-                title="Abrir"
-                aria-label="Abrir"
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-              </a>
-              <a
-                href={rec.url}
-                download={`${rec.title}.webm`}
-                className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary"
-                title="Descargar"
-                aria-label="Descargar"
-              >
-                <Download className="h-3.5 w-3.5" />
-              </a>
-              <button
-                type="button"
-                onClick={() => handleDelete(rec.id)}
-                className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
-                title="Eliminar"
-                aria-label="Eliminar"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
+        <div className="space-y-3 max-h-[40vh] overflow-y-auto pr-1">
+          {grouped.map(({ bucket, items }) => (
+            <div key={bucket} className="space-y-1.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 px-1">
+                {BUCKET_LABEL[bucket]}
+              </p>
+              {items.map((rec) => {
+                const isEditing = editingId === rec.id;
+                const isCopied = copiedId === rec.id;
+                return (
+                  <div
+                    key={rec.id}
+                    className="flex items-center gap-2 p-2 rounded-md border border-border/60 hover:bg-muted/40 transition-colors"
+                  >
+                    <div className="w-8 h-8 rounded bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+                      <FileVideo className="h-4 w-4" />
+                    </div>
+
+                    {isEditing ? (
+                      <div className="flex-1 min-w-0">
+                        <Input
+                          autoFocus
+                          value={editingTitle}
+                          onChange={(e) => setEditingTitle(e.target.value)}
+                          onBlur={saveEdit}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              saveEdit();
+                            } else if (e.key === "Escape") {
+                              e.preventDefault();
+                              cancelEdit();
+                            }
+                          }}
+                          disabled={savingRename}
+                          className="h-7 text-xs"
+                        />
+                      </div>
+                    ) : (
+                      <a
+                        href={rec.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 min-w-0 group"
+                        title={rec.title}
+                      >
+                        <p className="text-xs font-medium truncate group-hover:text-primary transition-colors">
+                          {rec.title}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {new Date(rec.created_at).toLocaleDateString("es-ES")} ·{" "}
+                          {formatDuration(rec.duration)} · {formatBytes(rec.file_size)}
+                        </p>
+                      </a>
+                    )}
+
+                    {!isEditing && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => startEdit(rec)}
+                          className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary"
+                          title="Renombrar"
+                          aria-label="Renombrar"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyLink(rec)}
+                          className={cn(
+                            "p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary",
+                            isCopied && "text-green-600"
+                          )}
+                          title={isCopied ? "Copiado" : "Copiar enlace"}
+                          aria-label="Copiar enlace"
+                        >
+                          {isCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                        </button>
+                        <a
+                          href={rec.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary"
+                          title="Abrir"
+                          aria-label="Abrir"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                        <a
+                          href={rec.url}
+                          download={`${rec.title}.webm`}
+                          className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary"
+                          title="Descargar"
+                          aria-label="Descargar"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(rec.id)}
+                          className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                          title="Eliminar"
+                          aria-label="Eliminar"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function QuotaBar({ used, limit }: { used: number; limit: number }) {
+  const pct = Math.min(100, Math.round((used / limit) * 100));
+  const tone =
+    pct >= 95 ? "bg-red-500" : pct >= 80 ? "bg-amber-500" : "bg-emerald-500";
+  const textTone =
+    pct >= 95 ? "text-red-600" : pct >= 80 ? "text-amber-700" : "text-muted-foreground";
+  return (
+    <div className="rounded-lg border border-border/60 bg-muted/30 p-2.5 space-y-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <HardDrive className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <p className="text-[11px] font-medium text-muted-foreground truncate">
+            Almacenamiento beta
+          </p>
+        </div>
+        <p className={cn("text-[11px] font-semibold tabular-nums", textTone)}>
+          {formatBytes(used)} / {formatBytes(limit)}
+        </p>
+      </div>
+      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+        <div className={cn("h-full transition-all", tone)} style={{ width: `${pct}%` }} />
+      </div>
     </div>
   );
 }
