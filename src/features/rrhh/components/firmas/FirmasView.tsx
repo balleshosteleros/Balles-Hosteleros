@@ -41,7 +41,6 @@ import {
 } from "@/components/ui/dialog";
 import {
   FileSignature,
-  CheckCircle2,
   Clock,
   XCircle,
   Inbox,
@@ -438,24 +437,9 @@ export function FirmasView() {
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <FileSignature className="h-6 w-6 text-primary" />
-            Firmas electrónicas
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Envía documentos con validez legal eIDAS. Cada firma incluye email
-            con enlace único, OTP, timestamp servidor, IP, hash SHA-256 y acta
-            de evidencia.
-          </p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KPI titulo="Total" valor={stats.total} Icono={FileSignature} />
         <KPI titulo="Pendientes" valor={stats.pendientes} Icono={Clock} color="text-amber-600" />
-        <KPI titulo="Firmados hoy" valor={stats.firmadosHoy} Icono={CheckCircle2} color="text-emerald-600" />
         <KPI titulo="Expirados" valor={stats.expirados} Icono={AlertTriangle} color="text-zinc-600" />
         <KPI titulo="Rechazados" valor={stats.rechazados} Icono={XCircle} color="text-rose-600" />
       </div>
