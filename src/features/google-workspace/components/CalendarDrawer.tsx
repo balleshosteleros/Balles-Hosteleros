@@ -14,6 +14,8 @@ import {
   X,
   Check,
   Menu as MenuIcon,
+  Search,
+  Globe,
 } from "lucide-react";
 import {
   Sheet,
@@ -28,6 +30,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { GoogleConnectBanner } from "./GoogleConnectBanner";
@@ -167,6 +177,54 @@ function isoDate(d: Date): string {
   return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, "0")}-${d.getDate().toString().padStart(2, "0")}`;
 }
 
+function horaEnTZ(h: number, tz: string, base: Date): string {
+  const d = new Date(base);
+  d.setHours(h, 0, 0, 0);
+  return new Intl.DateTimeFormat("es-ES", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: tz,
+    hour12: false,
+  }).format(d);
+}
+
+function labelTZLocal(): string {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (tz.includes("Madrid") || tz.includes("Europe")) return "España";
+    return tz.split("/").pop() || tz;
+  } catch {
+    return "Local";
+  }
+}
+
+function shortTZLabel(tz: string): string {
+  const map: Record<string, string> = {
+    "Asia/Makassar": "Bali",
+    "Asia/Jakarta": "Yakarta",
+    "America/New_York": "NY",
+    "America/Los_Angeles": "LA",
+    "America/Mexico_City": "MX",
+    "Europe/London": "Londres",
+    "Asia/Tokyo": "Tokio",
+    "Asia/Dubai": "Dubái",
+    "Australia/Sydney": "Sídney",
+  };
+  return map[tz] || tz.split("/").pop() || tz;
+}
+
+const TZ_OPCIONES: { value: string; label: string }[] = [
+  { value: "Asia/Makassar", label: "Bali (UTC+8)" },
+  { value: "Asia/Jakarta", label: "Yakarta (UTC+7)" },
+  { value: "America/New_York", label: "Nueva York (UTC−5/4)" },
+  { value: "America/Los_Angeles", label: "Los Ángeles (UTC−8/7)" },
+  { value: "America/Mexico_City", label: "Ciudad de México" },
+  { value: "Europe/London", label: "Londres" },
+  { value: "Asia/Tokyo", label: "Tokio (UTC+9)" },
+  { value: "Asia/Dubai", label: "Dubái (UTC+4)" },
+  { value: "Australia/Sydney", label: "Sídney" },
+];
+
 type Form = {
   id?: string;
   calendarId: string;
@@ -204,8 +262,30 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
   const [form, setForm] = useState<Form | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [needsReauth, setNeedsReauth] = useState(false);
-  const [sidebarAbierto, setSidebarAbierto] = useState(true);
+  const [sidebarAbierto, setSidebarAbierto] = useState(false);
+  const [busqueda, setBusqueda] = useState("");
+  const [buscadorAbierto, setBuscadorAbierto] = useState(false);
+  const [tzSecundaria, setTzSecundaria] = useState<string | null>(null);
+  const [drag, setDrag] = useState<{
+    dayIso: string;
+    startMin: number;
+    endMin: number;
+  } | null>(null);
   const nowTime = useNow();
+
+  // Persistencia ligera del huso secundario
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem("calendar:tz2");
+      if (v) setTzSecundaria(v);
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try {
+      if (tzSecundaria) localStorage.setItem("calendar:tz2", tzSecundaria);
+      else localStorage.removeItem("calendar:tz2");
+    } catch {}
+  }, [tzSecundaria]);
   const nowIso = useMemo(() => isoDate(new Date(nowTime)), [nowTime]);
   const nowMinutes = useMemo(() => {
     const d = new Date(nowTime);
@@ -286,6 +366,50 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
         }
       });
   }
+
+  // Callback-ref: al montar el contenedor scrollable, posiciona en la hora actual.
+  // Funciona también al abrir el Sheet (portal monta el DOM en ese momento).
+  const setScrollContainer = (el: HTMLDivElement | null) => {
+    if (!el) return;
+    const horaObjetivo = Math.max(0, Math.min(22, Math.floor(nowMinutes / 60) - 1));
+    el.scrollTop = horaObjetivo * HORA_PX;
+  };
+
+  // Drag-to-create: mousedown en un slot, mousemove en la columna, mouseup abre el form.
+  function handleSlotMouseDown(d: Date, h: number) {
+    if (!connected) return;
+    setDrag({ dayIso: isoDate(d), startMin: h * 60, endMin: h * 60 + 60 });
+  }
+  function handleColumnMouseMove(d: Date, e: React.MouseEvent<HTMLDivElement>) {
+    if (!drag || drag.dayIso !== isoDate(d)) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const minBruto = Math.round((y / HORA_PX) * 4) * 15; // snap a 15 min
+    const minClamp = Math.max(drag.startMin + 15, Math.min(24 * 60, minBruto));
+    setDrag((cur) => (cur ? { ...cur, endMin: minClamp } : cur));
+  }
+  function handleColumnMouseUp() {
+    if (!drag) return;
+    const fmt = (m: number) =>
+      `${Math.floor(m / 60).toString().padStart(2, "0")}:${(m % 60).toString().padStart(2, "0")}`;
+    const startMin = Math.min(drag.startMin, drag.endMin);
+    const endMin = Math.max(drag.startMin + 15, drag.endMin);
+    setForm({
+      ...FORM_VACIO,
+      calendarId: Array.from(seleccionados)[0] || "primary",
+      fecha: drag.dayIso,
+      inicio: fmt(startMin),
+      fin: fmt(endMin),
+    });
+    setDrag(null);
+  }
+  // Si el mouseup ocurre fuera de la columna, cancelar el drag.
+  useEffect(() => {
+    if (!drag) return;
+    const cancel = () => setDrag(null);
+    window.addEventListener("mouseup", cancel);
+    return () => window.removeEventListener("mouseup", cancel);
+  }, [drag]);
 
   // Navegación
   function navegar(delta: number) {
@@ -438,6 +562,19 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
     });
   }, [fechaRef]);
 
+  // Filtro de búsqueda (insensible a acentos y mayúsculas)
+  const q = busqueda.trim().toLowerCase();
+  function coincide(ev: Evento): boolean {
+    if (!q) return true;
+    const norm = (s: string) =>
+      s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+    return (
+      norm(ev.titulo).includes(norm(q)) ||
+      norm(ev.descripcion || "").includes(norm(q)) ||
+      norm(ev.lugar || "").includes(norm(q))
+    );
+  }
+
   const eventosTimed = eventos.filter((e) => !e.allDay);
   const eventosAllDay = eventos.filter((e) => e.allDay);
 
@@ -480,6 +617,18 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
               <Loader2 className="h-4 w-4 animate-spin text-[#5f6368]" />
             )}
             <div className="ml-auto flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setBuscadorAbierto((v) => !v)}
+                className={cn(
+                  "rounded-full p-3 transition-colors",
+                  buscadorAbierto ? "bg-blue-100 text-blue-700" : "text-[#5f6368] hover:bg-black/5",
+                )}
+                title="Buscar eventos"
+              >
+                <Search className="h-5 w-5" />
+              </button>
+              <SelectorTZ tz={tzSecundaria} onChange={setTzSecundaria} />
               <GoogleAccountButton />
               <SheetClose asChild>
                 <button
@@ -502,6 +651,32 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
 
         {connected && needsReauth && (
           <GoogleReauthBanner servicio="el calendario" />
+        )}
+
+        {buscadorAbierto && (
+          <div className="flex items-center gap-2 border-b bg-card px-3 py-2">
+            <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <input
+              autoFocus
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Buscar por título, descripción o lugar…"
+              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            />
+            {busqueda && (
+              <button
+                type="button"
+                onClick={() => setBusqueda("")}
+                className="rounded p-1 text-muted-foreground hover:bg-muted"
+                title="Limpiar"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+            <span className="text-[11px] text-muted-foreground">
+              {q ? `${eventos.filter(coincide).length} coincidencias` : ""}
+            </span>
+          </div>
         )}
 
         {/* Toolbar */}
@@ -538,8 +713,13 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
         <div className="flex flex-1 min-h-0">
           {/* Sidebar de calendarios */}
           {sidebarAbierto && (
-          <aside className="w-56 shrink-0 overflow-y-auto border-r bg-muted/20 p-3">
-            <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <aside className="w-48 lg:w-56 xl:w-64 shrink-0 overflow-y-auto border-r bg-muted/20 p-2">
+            <MiniCalendario
+              fechaRef={fechaRef}
+              onSelect={(d) => setFechaRef(d)}
+              nowIso={nowIso}
+            />
+            <p className="mb-1 mt-3 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               Mis calendarios
             </p>
             {calendarios.length === 0 && (
@@ -596,29 +776,45 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
             <div className="flex flex-1 min-h-0 flex-col">
               {/* Cabecera de días */}
               <div className="flex shrink-0 border-b bg-card">
-                <div className="w-[60px] shrink-0 border-r" />
+                <div
+                  className="shrink-0 border-r flex items-end justify-around pb-1 text-[9px] uppercase text-muted-foreground"
+                  style={{ width: tzSecundaria ? 104 : 52 }}
+                >
+                  {tzSecundaria ? (
+                    <>
+                      <span className="font-semibold">{labelTZLocal()}</span>
+                      <span className="font-semibold">{shortTZLabel(tzSecundaria)}</span>
+                    </>
+                  ) : null}
+                </div>
                 {semanaActual.map((d, i) => {
                   const esHoy = d.toDateString() === new Date().toDateString();
                   return (
-                    <div
+                    <button
                       key={i}
-                      className={cn(
-                        "flex-1 border-r px-2 py-2 text-center",
-                        esHoy && "bg-blue-50 dark:bg-blue-950/30",
-                      )}
+                      type="button"
+                      onClick={() => {
+                        setFechaRef(d);
+                        setVista("day");
+                      }}
+                      className="flex-1 border-r px-1 py-1 text-center transition-colors hover:bg-muted/40"
+                      title="Ver día"
                     >
-                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                      <p className={cn(
+                        "text-[10px] font-medium uppercase tracking-wider",
+                        esHoy ? "text-blue-600" : "text-muted-foreground",
+                      )}>
                         {DIAS_CORTO[i]}
                       </p>
                       <p
                         className={cn(
-                          "text-base font-bold",
-                          esHoy ? "text-blue-600" : "text-foreground",
+                          "mx-auto mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold",
+                          esHoy ? "bg-blue-600 text-white" : "text-foreground",
                         )}
                       >
                         {d.getDate()}
                       </p>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -626,8 +822,11 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
               {/* Fila de all-day events */}
               {eventosAllDay.length > 0 && (
                 <div className="flex shrink-0 border-b bg-muted/10">
-                  <div className="w-[60px] shrink-0 border-r px-2 py-1 text-right text-[9px] uppercase text-muted-foreground">
-                    Todo el día
+                  <div
+                    className="shrink-0 border-r px-1 py-1 text-right text-[9px] uppercase text-muted-foreground"
+                    style={{ width: tzSecundaria ? 104 : 52 }}
+                  >
+                    Todo&nbsp;el&nbsp;día
                   </div>
                   {semanaActual.map((d, i) => {
                     const dayIso = isoDate(d);
@@ -645,6 +844,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                             className={cn(
                               "block w-full truncate rounded px-1.5 py-0.5 text-left text-[10px] font-medium",
                               diaPasado && "opacity-70",
+                              q && !coincide(ev) && "opacity-20",
                             )}
                             style={{
                               backgroundColor: colorEvento(ev),
@@ -661,34 +861,29 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
               )}
 
               {/* Grid horario — 24 h con altura fija (HORA_PX) y scroll vertical */}
-              <div className="flex flex-1 min-h-0 overflow-y-auto">
-                <div className="flex w-[60px] shrink-0 flex-col border-r">
-                  {HORAS.map((h) => (
-                    <div
-                      key={h}
-                      style={{ height: HORA_PX }}
-                      className="flex items-start justify-end border-b px-2 pt-0.5 text-[10px] text-muted-foreground"
-                    >
-                      {h.toString().padStart(2, "0")}:00
-                    </div>
-                  ))}
-                </div>
+              <div ref={setScrollContainer} className="flex flex-1 min-h-0 overflow-y-auto">
+                <ColumnaHoras tzSecundaria={tzSecundaria} fechaRef={fechaRef} />
 
                 {semanaActual.map((d, diaIdx) => {
                   const dayIso = isoDate(d);
                   const diaPasado = dayIso < nowIso;
                   const esHoy = dayIso === nowIso;
+                  const dragEnDia = drag?.dayIso === dayIso;
+                  const dragTop = dragEnDia ? (Math.min(drag!.startMin, drag!.endMin) / 60) * HORA_PX : 0;
+                  const dragHeight = dragEnDia ? (Math.abs(drag!.endMin - drag!.startMin) / 60) * HORA_PX : 0;
                   return (
                     <div
                       key={diaIdx}
                       className="relative flex flex-1 flex-col border-r"
+                      onMouseMove={(e) => handleColumnMouseMove(d, e)}
+                      onMouseUp={handleColumnMouseUp}
                     >
                       {HORAS.map((h) => {
                         const slotPasado = diaPasado || (esHoy && (h + 1) * 60 <= nowMinutes);
                         return (
                           <div
                             key={h}
-                            onClick={() => abrirCrear(d, h)}
+                            onMouseDown={() => handleSlotMouseDown(d, h)}
                             style={{ height: HORA_PX }}
                             className={cn(
                               "cursor-pointer border-b transition-colors hover:bg-blue-50/40 dark:hover:bg-blue-950/20",
@@ -697,6 +892,13 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                           />
                         );
                       })}
+
+                      {dragEnDia && dragHeight > 0 && (
+                        <div
+                          className="pointer-events-none absolute left-0.5 right-0.5 z-30 rounded bg-blue-500/30 ring-2 ring-blue-500"
+                          style={{ top: dragTop, height: Math.max(8, dragHeight) }}
+                        />
+                      )}
 
                       {esHoy && (
                         <div
@@ -732,6 +934,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                               seg.esFin && "rounded-b-[4px]",
                               finalizado && "opacity-70",
                               enCurso && "ring-2 ring-red-400",
+                              q && !coincide(ev) && "opacity-20",
                             )}
                             style={{
                               top,
@@ -776,6 +979,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                         className={cn(
                           "block w-full truncate rounded px-2 py-1 text-left text-xs font-medium",
                           diaPasado && "opacity-70",
+                          q && !coincide(ev) && "opacity-20",
                         )}
                         style={{
                           backgroundColor: colorEvento(ev),
@@ -789,25 +993,19 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                 </div>
               )}
 
-              <div className="flex flex-1 min-h-0 overflow-y-auto">
-                <div className="flex w-[60px] shrink-0 flex-col border-r">
-                  {HORAS.map((h) => (
-                    <div
-                      key={h}
-                      style={{ height: HORA_PX }}
-                      className="flex items-start justify-end border-b px-2 pt-0.5 text-[10px] text-muted-foreground"
-                    >
-                      {h.toString().padStart(2, "0")}:00
-                    </div>
-                  ))}
-                </div>
-                <div className="relative flex flex-1 flex-col border-r">
+              <div ref={setScrollContainer} className="flex flex-1 min-h-0 overflow-y-auto">
+                <ColumnaHoras tzSecundaria={tzSecundaria} fechaRef={fechaRef} />
+                <div
+                  className="relative flex flex-1 flex-col border-r"
+                  onMouseMove={(e) => handleColumnMouseMove(fechaRef, e)}
+                  onMouseUp={handleColumnMouseUp}
+                >
                   {HORAS.map((h) => {
                     const slotPasado = diaPasado || (esHoy && (h + 1) * 60 <= nowMinutes);
                     return (
                       <div
                         key={h}
-                        onClick={() => abrirCrear(fechaRef, h)}
+                        onMouseDown={() => handleSlotMouseDown(fechaRef, h)}
                         style={{ height: HORA_PX }}
                         className={cn(
                           "cursor-pointer border-b transition-colors hover:bg-blue-50/40 dark:hover:bg-blue-950/20",
@@ -816,6 +1014,16 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                       />
                     );
                   })}
+
+                  {drag?.dayIso === dayIso && (
+                    <div
+                      className="pointer-events-none absolute left-1 right-1 z-30 rounded bg-blue-500/30 ring-2 ring-blue-500"
+                      style={{
+                        top: (Math.min(drag.startMin, drag.endMin) / 60) * HORA_PX,
+                        height: Math.max(8, (Math.abs(drag.endMin - drag.startMin) / 60) * HORA_PX),
+                      }}
+                    />
+                  )}
 
                   {esHoy && (
                     <div
@@ -851,6 +1059,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                           seg.esFin && "rounded-b-[4px]",
                           finalizado && "opacity-70",
                           enCurso && "ring-2 ring-red-400",
+                          q && !coincide(ev) && "opacity-20",
                         )}
                         style={{
                           top,
@@ -1147,6 +1356,172 @@ function CalendarLogo({ className }: { className?: string }) {
         Calendar
       </text>
     </svg>
+  );
+}
+
+// ─── Columna de horas (con huso secundario opcional) ────────
+function ColumnaHoras({
+  tzSecundaria,
+  fechaRef,
+}: {
+  tzSecundaria: string | null;
+  fechaRef: Date;
+}) {
+  return (
+    <div
+      className="flex shrink-0 flex-col border-r"
+      style={{ width: tzSecundaria ? 104 : 52 }}
+    >
+      {HORAS.map((h) => (
+        <div
+          key={h}
+          style={{ height: HORA_PX }}
+          className="flex items-start justify-end border-b text-[10px] text-muted-foreground"
+        >
+          <div className="flex h-full w-[52px] items-start justify-end px-2 pt-0.5">
+            {h.toString().padStart(2, "0")}:00
+          </div>
+          {tzSecundaria && (
+            <div className="flex h-full w-[52px] items-start justify-end border-l px-2 pt-0.5 text-muted-foreground/70">
+              {horaEnTZ(h, tzSecundaria, fechaRef)}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Selector de huso horario secundario ─────────────────────
+function SelectorTZ({
+  tz,
+  onChange,
+}: {
+  tz: string | null;
+  onChange: (tz: string | null) => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "rounded-full p-3 transition-colors",
+            tz ? "bg-blue-100 text-blue-700" : "text-[#5f6368] hover:bg-black/5",
+          )}
+          title={tz ? `Mostrando ${shortTZLabel(tz)}` : "Huso horario secundario"}
+        >
+          <Globe className="h-5 w-5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel className="text-xs">Huso secundario</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => onChange(null)}>
+          <span className={cn("flex-1", !tz && "font-semibold text-blue-700")}>
+            Ninguno (sólo local)
+          </span>
+          {!tz && <Check className="h-3.5 w-3.5" />}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {TZ_OPCIONES.map((opt) => (
+          <DropdownMenuItem key={opt.value} onClick={() => onChange(opt.value)}>
+            <span
+              className={cn(
+                "flex-1 truncate text-xs",
+                tz === opt.value && "font-semibold text-blue-700",
+              )}
+            >
+              {opt.label}
+            </span>
+            {tz === opt.value && <Check className="h-3.5 w-3.5" />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// ─── Mini-calendario sidebar ─────────────────────────────────
+function MiniCalendario({
+  fechaRef,
+  onSelect,
+  nowIso,
+}: {
+  fechaRef: Date;
+  onSelect: (d: Date) => void;
+  nowIso: string;
+}) {
+  const [mes, setMes] = useState(() => new Date(fechaRef.getFullYear(), fechaRef.getMonth(), 1));
+  useEffect(() => {
+    setMes(new Date(fechaRef.getFullYear(), fechaRef.getMonth(), 1));
+  }, [fechaRef]);
+  const inicio = getInicioSemana(mes);
+  const ultimo = new Date(mes.getFullYear(), mes.getMonth() + 1, 0);
+  const fin = getInicioSemana(ultimo);
+  fin.setDate(fin.getDate() + 7);
+  const dias: Date[] = [];
+  const cur = new Date(inicio);
+  while (cur < fin) {
+    dias.push(new Date(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+  const refIso = isoDate(fechaRef);
+  return (
+    <div className="px-1">
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-[11px] font-semibold capitalize text-foreground">
+          {fmtMesAnio(mes)}
+        </span>
+        <div className="flex">
+          <button
+            type="button"
+            onClick={() => setMes(new Date(mes.getFullYear(), mes.getMonth() - 1, 1))}
+            className="rounded p-0.5 text-muted-foreground hover:bg-muted"
+            aria-label="Mes anterior"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setMes(new Date(mes.getFullYear(), mes.getMonth() + 1, 1))}
+            className="rounded p-0.5 text-muted-foreground hover:bg-muted"
+            aria-label="Mes siguiente"
+          >
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+      <div className="grid grid-cols-7 gap-y-0.5 text-center">
+        {["L", "M", "X", "J", "V", "S", "D"].map((d) => (
+          <span key={d} className="text-[9px] font-medium text-muted-foreground">
+            {d}
+          </span>
+        ))}
+        {dias.map((d) => {
+          const dIso = isoDate(d);
+          const esHoy = dIso === nowIso;
+          const esRef = dIso === refIso;
+          const esMes = d.getMonth() === mes.getMonth();
+          return (
+            <button
+              key={dIso}
+              type="button"
+              onClick={() => onSelect(d)}
+              className={cn(
+                "mx-auto inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] transition-colors",
+                !esMes && "text-muted-foreground/40",
+                esMes && !esHoy && !esRef && "text-foreground hover:bg-muted",
+                esRef && !esHoy && "bg-blue-100 text-blue-700 font-semibold",
+                esHoy && "bg-blue-600 text-white font-semibold",
+              )}
+            >
+              {d.getDate()}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
