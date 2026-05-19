@@ -116,15 +116,16 @@ function VacanteCard({
         </div>
         <div className="flex items-center gap-2">
           {!estaPublicada ? (
-            <Button
-              size="sm"
-              variant="default"
-              className="text-xs h-8 gap-1.5"
-              onClick={() => onPublicar?.(vacante.id)}
-              disabled={!onPublicar}
-            >
-              <Send className="h-3.5 w-3.5" /> Publicar
-            </Button>
+            <div className="flex items-center gap-2 px-2 py-1 rounded-md border border-border bg-muted/30">
+              <button
+                type="button"
+                onClick={() => onPublicar?.(vacante.id)}
+                disabled={!onPublicar}
+                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
+              >
+                <Send className="h-3 w-3" /> Publicar
+              </button>
+            </div>
           ) : (
             <div className="flex items-center gap-2 px-2 py-1 rounded-md border border-border bg-muted/30">
               <span className="text-[11px] text-muted-foreground">Pública</span>
