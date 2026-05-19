@@ -93,6 +93,7 @@ import {
   Trophy,
   Building2,
   Rocket,
+  FileSignature,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useState, useContext } from "react";
@@ -165,6 +166,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/rrhh/calendarios": "CALENDARIOS",
   "/rrhh/horarios": "HORARIOS",
   "/rrhh/reclutamiento": "RECLUTAMIENTO",
+  "/rrhh/firmas": "FIRMAS",
   "/rrhh/comunicados": "COMUNICADOS",
   "/logistica": "LOGÍSTICA",
   "/logistica/fichas-tecnicas": "FICHAS TÉCNICAS",
@@ -351,6 +353,7 @@ const ROUTE_ICONS: Record<string, LucideIcon> = {
   "/rrhh/calendarios": CalendarIcon,
   "/rrhh/horarios": Timer,
   "/rrhh/reclutamiento": UserRoundSearch,
+  "/rrhh/firmas": FileSignature,
   "/rrhh/boarding": UserCheck,
   "/rrhh/bonus": Gift,
   "/rrhh/points": Trophy,
