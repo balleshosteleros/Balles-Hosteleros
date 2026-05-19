@@ -34,7 +34,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -517,6 +516,7 @@ export function ReclutamientoView() {
   // Selector de área (vacantes operativas vs. administrativas)
   const [areaFiltro, setAreaFiltro] = useState<"operativa" | "administrativa">("operativa");
   const [showConfig, setShowConfig] = useState(false);
+  const [showCandidatos, setShowCandidatos] = useState(false);
 
   const categorias = useMemo(() => [...new Set(vacantes.map((v) => v.categoria))], [vacantes]);
 
@@ -620,20 +620,46 @@ export function ReclutamientoView() {
   const totalCandidatos = vacantes.reduce((a, v) => a + v.candidatos.length, 0);
   const vacantesAbiertas = vacantes.filter((v) => v.estadoPublicacion === "publicada").length;
 
+  // Render condicional según el modo (vacantes / candidatos / config)
+  if (showConfig) {
+    return (
+      <div className="px-4 md:px-6 pt-2 pb-6 max-w-[1400px] mx-auto space-y-2">
+        <div className="flex items-center justify-between">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowConfig(false)}
+            className="gap-1.5 text-xs"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Volver a vacantes
+          </Button>
+        </div>
+        <ReclutamientoConfigView />
+      </div>
+    );
+  }
+
+  if (showCandidatos) {
+    return (
+      <div className="px-4 md:px-6 pt-2 pb-6 max-w-[1400px] mx-auto space-y-2">
+        <div className="flex items-center justify-between">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowCandidatos(false)}
+            className="gap-1.5 text-xs"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Volver a vacantes
+          </Button>
+        </div>
+        <CandidatosRealesTab />
+      </div>
+    );
+  }
+
   return (
     <div className="px-4 md:px-6 pt-2 pb-6 max-w-[1400px] mx-auto space-y-2">
-      <Tabs defaultValue="vacantes">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-2">
-          <div className="flex items-center gap-2">
-            <TabsList className="h-9">
-              <TabsTrigger value="vacantes" className="text-xs">Vacantes</TabsTrigger>
-              <TabsTrigger value="candidatos" className="text-xs">Candidatos</TabsTrigger>
-              <TabsTrigger value="config" className="text-xs">Configuración</TabsTrigger>
-            </TabsList>
-          </div>
-        </div>
-
-        <TabsContent value="vacantes" className="space-y-3 mt-2">
+      <div className="space-y-3 mt-2">
           {/* Selector de área (mismo estilo que COMPRA/VENTA/ELABORACIONES) */}
           <div className="flex items-center gap-2 flex-wrap">
             <Button
@@ -665,6 +691,16 @@ export function ReclutamientoView() {
             onFiltrosChange={setFiltros}
             orden={orden}
             onOrdenChange={setOrden}
+            extraIzquierda={
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowCandidatos(true)}
+                className="gap-1.5"
+              >
+                <Users className="h-3.5 w-3.5" /> Candidatos
+              </Button>
+            }
             extraDerecha={
               <>
                 {empresaActual.id ? (
@@ -674,9 +710,9 @@ export function ReclutamientoView() {
                 ) : null}
                 <Button
                   size="icon"
-                  variant={showConfig ? "default" : "outline"}
+                  variant="outline"
                   className="h-9 w-9"
-                  onClick={() => setShowConfig((v) => !v)}
+                  onClick={() => setShowConfig(true)}
                   title="Configuración"
                   aria-label="Configuración"
                 >
@@ -709,16 +745,7 @@ export function ReclutamientoView() {
               />
             ))}
           </div>
-        </TabsContent>
-
-        <TabsContent value="candidatos" className="mt-4">
-          <CandidatosRealesTab />
-        </TabsContent>
-
-        <TabsContent value="config" className="mt-4">
-          <ReclutamientoConfigView />
-        </TabsContent>
-      </Tabs>
+        </div>
 
       {/* ── Chooser inicial: ¿vacante o candidato? ──── */}
       <NuevoChooserDialog
