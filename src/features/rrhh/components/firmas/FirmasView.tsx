@@ -95,6 +95,33 @@ type EventoUI = {
   hash: string;
 };
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const IPS_LOCALES = new Set(["::1", "127.0.0.1", "localhost"]);
+
+function displayEnviadoPor(value: string | null | undefined): string {
+  if (!value) return "—";
+  return UUID_REGEX.test(value.trim()) ? "—" : value;
+}
+
+function displayIp(value: string | null | undefined): string {
+  if (!value) return "—";
+  return IPS_LOCALES.has(value.trim()) ? "—" : value;
+}
+
+function deduplicarEventos(eventos: EventoUI[]): { evento: EventoUI; count: number }[] {
+  const out: { evento: EventoUI; count: number }[] = [];
+  for (const e of eventos) {
+    const last = out[out.length - 1];
+    if (last && last.evento.tipo === e.tipo) {
+      last.count += 1;
+      last.evento = e; // mantener fecha del más reciente
+    } else {
+      out.push({ evento: e, count: 1 });
+    }
+  }
+  return out;
+}
+
 function formatFechaHora(s: string | null): string {
   if (!s) return "—";
   try {
@@ -396,7 +423,7 @@ export function FirmasView() {
       td: (d) => (
         <TableCell key="documento" className="font-medium max-w-[260px]">
           <div className="line-clamp-1">{d.titulo}</div>
-          <div className="text-xs text-muted-foreground">Enviado por {d.enviadoPor}</div>
+          <div className="text-xs text-muted-foreground">Enviado por {displayEnviadoPor(d.enviadoPor)}</div>
         </TableCell>
       ),
     },
@@ -768,11 +795,11 @@ export function FirmasView() {
                     </Badge>
                   }
                 />
-                <Info label="Enviado por" value={verDoc.enviadoPor} />
+                <Info label="Enviado por" value={displayEnviadoPor(verDoc.enviadoPor)} />
                 <Info label="Enviado el" value={formatFechaHora(verDoc.enviadoEn)} />
                 <Info label="Expira" value={formatFechaHora(verDoc.expiraEn)} />
                 <Info label="Firmado el" value={formatFechaHora(verDoc.firmadoEn)} />
-                <Info label="IP de firma" value={verDoc.ipFirma ?? "—"} />
+                <Info label="IP de firma" value={displayIp(verDoc.ipFirma)} />
                 <Info label="Hash" value={verDoc.hash ? `${verDoc.hash.slice(0, 16)}…` : "—"} />
               </div>
 
@@ -802,16 +829,25 @@ export function FirmasView() {
                   <div className="text-xs text-muted-foreground">Sin eventos registrados.</div>
                 ) : (
                   <ol className="space-y-1.5 text-xs">
-                    {auditoria.map((e) => (
-                      <li key={e.id} className="font-mono">
-                        <span className="text-muted-foreground">
-                          {formatFechaHora(e.ocurridoEn)}
-                        </span>{" "}
-                        <span className="font-semibold text-foreground">{e.tipo}</span>{" "}
-                        {e.ip && <span className="text-muted-foreground">· IP {e.ip}</span>}{" "}
-                        <span className="text-muted-foreground">· {e.hash.slice(0, 12)}…</span>
-                      </li>
-                    ))}
+                    {deduplicarEventos(auditoria).map(({ evento: e, count }) => {
+                      const ipMostrar = displayIp(e.ip);
+                      return (
+                        <li key={e.id} className="font-mono">
+                          <span className="text-muted-foreground">
+                            {formatFechaHora(e.ocurridoEn)}
+                          </span>{" "}
+                          <span className="font-semibold text-foreground">{e.tipo}</span>
+                          {count > 1 && (
+                            <span className="ml-1 text-[10px] font-bold text-primary">
+                              ×{count}
+                            </span>
+                          )}
+                          {ipMostrar !== "—" && (
+                            <span className="text-muted-foreground"> · IP {ipMostrar}</span>
+                          )}
+                        </li>
+                      );
+                    })}
                   </ol>
                 )}
               </div>
