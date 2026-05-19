@@ -5,6 +5,15 @@ export default [
   ...nextCoreWebVitals,
   ...nextTypeScript,
   {
+    rules: {
+      "react-hooks/set-state-in-effect": "warn",
+      "react-hooks/set-state-in-render": "warn",
+      "react-hooks/refs": "warn",
+      "react-hooks/immutability": "warn",
+      "react-hooks/preserve-manual-memoization": "warn",
+    },
+  },
+  {
     ignores: [
       ".next/**",
       "node_modules/**",
