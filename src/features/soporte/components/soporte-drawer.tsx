@@ -317,10 +317,6 @@ export function SoporteDrawer({ children }: SoporteDrawerProps) {
                 </div>
               </div>
             </button>
-
-            <p className="pt-1 text-center text-[11px] text-muted-foreground">
-              Tu jefe directo se asigna automáticamente cuando te dan de alta como empleado.
-            </p>
           </div>
         )}
 
