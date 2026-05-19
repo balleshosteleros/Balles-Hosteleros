@@ -6,6 +6,8 @@ import {
   ORIGEN_LABELS,
   EMAIL_PLANTILLAS_FASE,
   getFasePrincipal,
+  puedeMoverA,
+  siguienteEstado,
   type Candidato,
   type EstadoReclutamiento,
   type FasePrincipal,
@@ -52,7 +54,7 @@ function CandidatoCard({
       draggable
       onDragStart={(e) => onDragStart(e, candidato)}
       onClick={() => onClick(candidato)}
-      className="bg-card border border-border rounded-lg p-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow group"
+      className="bg-card border border-border rounded-lg p-2 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow group"
     >
       <div className="flex items-start gap-2">
         <GripVertical className="h-3.5 w-3.5 text-muted-foreground/30 mt-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -100,7 +102,7 @@ function EstadoColumn({
 
   return (
     <div
-      className={`flex flex-col min-w-[200px] flex-1 transition-colors rounded-lg ${
+      className={`flex flex-col min-w-[140px] flex-1 transition-colors rounded-lg ${
         dragOver ? "bg-primary/5 ring-1 ring-primary/30" : ""
       }`}
       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
@@ -150,7 +152,7 @@ function FaseGroup({
   }
 
   return (
-    <div className="flex flex-col shrink-0" style={{ minWidth: cfg.estados.length === 1 ? "220px" : `${cfg.estados.length * 215}px` }}>
+    <div className="flex flex-col shrink-0" style={{ minWidth: cfg.estados.length === 1 ? "160px" : `${cfg.estados.length * 150}px` }}>
       {/* Phase header bar with gradient */}
       <div
         className="h-2 rounded-t-lg"
@@ -382,6 +384,15 @@ export function KanbanPipeline({ vacante, onBack, onUpdateCandidatos }: KanbanPi
       draggedCandidato.current = null;
       return;
     }
+    if (!puedeMoverA(c.fase, estadoDestino)) {
+      const siguiente = siguienteEstado(c.fase);
+      const sugerencia = siguiente
+        ? ` Debe pasar primero por ${ESTADOS_CONFIG[siguiente].label}.`
+        : "";
+      toast.error("No se pueden saltar fases." + sugerencia);
+      draggedCandidato.current = null;
+      return;
+    }
     setEmailConfirm({ candidato: c, estadoNuevo: estadoDestino });
     draggedCandidato.current = null;
   }, []);
@@ -443,7 +454,7 @@ export function KanbanPipeline({ vacante, onBack, onUpdateCandidatos }: KanbanPi
 
       {/* Kanban Board */}
       <div className="flex-1 overflow-x-auto p-4">
-        <div className="flex gap-3 min-w-max">
+        <div className="flex gap-2 min-w-max">
           {FASES_PRINCIPALES_ORDER.map((fase) => (
             <FaseGroup
               key={fase}

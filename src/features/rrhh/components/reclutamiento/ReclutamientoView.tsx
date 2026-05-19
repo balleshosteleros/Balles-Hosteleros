@@ -119,7 +119,7 @@ function VacanteCard({
         </div>
         <div className="flex items-center gap-2">
           {!estaPublicada ? (
-            <div className="flex items-center gap-2 px-2 py-1 rounded-md border border-border bg-muted/30">
+            <div className="h-8 flex items-center gap-2 px-3 rounded-md border border-border bg-muted/30">
               <button
                 type="button"
                 onClick={() => onPublicar?.(vacante.id)}
@@ -130,7 +130,7 @@ function VacanteCard({
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-2 px-2 py-1 rounded-md border border-border bg-muted/30">
+            <div className="h-8 flex items-center gap-2 px-3 rounded-md border border-border bg-muted/30">
               <span className="text-[11px] text-muted-foreground">Pública</span>
               <Switch
                 checked={visiblePublicamente}

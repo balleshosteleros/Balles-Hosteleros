@@ -423,3 +423,39 @@ export const ORIGEN_LABELS: Record<OrigenCandidatura, string> = {
   portal_empleo: "Portal de empleo",
   otros: "Otros",
 };
+
+// ─── Reglas de movimiento entre estados ─────────────────────────
+// Cadena de progreso secuencial: solo +1 (o −1 para corregir). Cualquier
+// estado puede ir directo a un descartado (rescate al revés también vale).
+const CADENA_PROGRESO: EstadoReclutamiento[] = [
+  "nuevo",
+  "elegido",
+  "entrevista",
+  "teorica",
+  "practica",
+  "prueba",
+  "empleado",
+];
+
+export function puedeMoverA(
+  origen: EstadoReclutamiento,
+  destino: EstadoReclutamiento,
+): boolean {
+  if (origen === destino) return false;
+  const destinoFase = getFasePrincipal(destino);
+  if (destinoFase === "descartado") return true;
+  const origenFase = getFasePrincipal(origen);
+  if (origenFase === "descartado") return true; // rescate
+  const idxOrigen = CADENA_PROGRESO.indexOf(origen);
+  const idxDestino = CADENA_PROGRESO.indexOf(destino);
+  if (idxOrigen === -1 || idxDestino === -1) return false;
+  return Math.abs(idxDestino - idxOrigen) === 1;
+}
+
+export function siguienteEstado(
+  origen: EstadoReclutamiento,
+): EstadoReclutamiento | null {
+  const idx = CADENA_PROGRESO.indexOf(origen);
+  if (idx === -1 || idx >= CADENA_PROGRESO.length - 1) return null;
+  return CADENA_PROGRESO[idx + 1];
+}
