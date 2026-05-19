@@ -4,7 +4,7 @@ import { ReactNode, useState, useEffect, useCallback, useMemo, useRef } from "re
 import Link from "next/link";
 import {
   CheckSquare2, Square, Plus, Trash2, ChevronLeft, ChevronRight, Link2, Sparkles,
-  CalendarClock, Info, AlertTriangle, Users, RefreshCw, Clock,
+  CalendarClock, Info, AlertTriangle, Users, RefreshCw, Clock, Lock,
 } from "lucide-react";
 import { PosponerTareaDialog } from "./PosponerTareaDialog";
 import {
@@ -79,6 +79,8 @@ function TareaItem({
 }) {
   const esReceta = t.tipo === "nueva_receta_fase";
   const esCronograma = t.tipo === "sistema";
+  const esEncargo =
+    !esCronograma && t.created_by != null && t.user_id != null && t.created_by !== t.user_id;
   const icon = esReceta ? <Sparkles className="h-3 w-3 text-violet-600" /> : null;
   const horaCorta = t.hora_inicio ? t.hora_inicio.slice(0, 5) : null;
   const pospuestaCount = t.pospuesta_count ?? 0;
@@ -145,6 +147,13 @@ function TareaItem({
         >
           <CalendarClock className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} />
         </Button>
+      ) : esEncargo ? (
+        <span
+          className={`${compact ? "h-5 w-5" : "h-6 w-6"} shrink-0 inline-flex items-center justify-center text-muted-foreground/70`}
+          title="Asignada por otro usuario · no se puede eliminar"
+        >
+          <Lock className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} />
+        </span>
       ) : (
         <Button
           variant="ghost"
@@ -518,40 +527,70 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
                 </div>
               ) : (
                 (() => {
-                  const cron = tareasHoy.filter((t) => t.tipo === "cronograma");
-                  const otras = tareasHoy.filter((t) => t.tipo !== "cronograma");
+                  const rutinarias = tareasHoy.filter((t) => t.tipo === "sistema");
+                  const encargos = tareasHoy.filter(
+                    (t) =>
+                      t.tipo !== "sistema" &&
+                      t.created_by != null &&
+                      t.user_id != null &&
+                      t.created_by !== t.user_id,
+                  );
+                  const personales = tareasHoy.filter(
+                    (t) =>
+                      t.tipo !== "sistema" &&
+                      (t.created_by == null || t.user_id == null || t.created_by === t.user_id),
+                  );
                   return (
                     <div className="flex-1">
-                      {cron.length > 0 && (
+                      {rutinarias.length > 0 && (
                         <>
                           <div className="px-5 py-2 bg-violet-50/70 border-b border-violet-100 flex items-center gap-2">
                             <CalendarClock className="h-3.5 w-3.5 text-violet-700" />
                             <span className="text-[11px] font-bold uppercase tracking-wider text-violet-800">
-                              Tareas del cronograma
+                              Rutinarias · del cronograma
                             </span>
                             <Badge variant="secondary" className="ml-auto text-[10px] h-4 px-1.5">
-                              {cron.filter((t) => !t.hecha).length} pendientes
+                              {rutinarias.filter((t) => !t.hecha).length} pendientes
                             </Badge>
                           </div>
                           <div className="divide-y bg-violet-50/20">
-                            {cron.map((t) => <TareaItem key={t.id} t={t} {...itemProps} />)}
+                            {rutinarias.map((t) => <TareaItem key={t.id} t={t} {...itemProps} />)}
                           </div>
                         </>
                       )}
-                      
+
                       <SeccionInformativa infoTareas={infoTareas} selectedRol={selectedRol} />
 
-                      {otras.length > 0 && (
+                      {encargos.length > 0 && (
                         <>
-                          { (cron.length > 0 || infoTareas.length > 0) && (
-                            <div className="px-5 py-2 bg-muted/30 border-b mt-4">
-                              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                                Otras tareas
-                              </span>
-                            </div>
-                          )}
+                          <div className="px-5 py-2 bg-sky-50/70 border-b border-sky-100 flex items-center gap-2 mt-4">
+                            <Lock className="h-3.5 w-3.5 text-sky-700" />
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-sky-800">
+                              Encargos · pedidos por otros
+                            </span>
+                            <Badge variant="secondary" className="ml-auto text-[10px] h-4 px-1.5">
+                              {encargos.filter((t) => !t.hecha).length} pendientes
+                            </Badge>
+                          </div>
+                          <div className="divide-y bg-sky-50/20">
+                            {encargos.map((t) => <TareaItem key={t.id} t={t} {...itemProps} />)}
+                          </div>
+                        </>
+                      )}
+
+                      {personales.length > 0 && (
+                        <>
+                          <div className="px-5 py-2 bg-muted/30 border-b mt-4 flex items-center gap-2">
+                            <Plus className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                              Personales · añadidas por ti
+                            </span>
+                            <Badge variant="secondary" className="ml-auto text-[10px] h-4 px-1.5">
+                              {personales.filter((t) => !t.hecha).length} pendientes
+                            </Badge>
+                          </div>
                           <div className="divide-y">
-                            {otras.map((t) => <TareaItem key={t.id} t={t} {...itemProps} />)}
+                            {personales.map((t) => <TareaItem key={t.id} t={t} {...itemProps} />)}
                           </div>
                         </>
                       )}
