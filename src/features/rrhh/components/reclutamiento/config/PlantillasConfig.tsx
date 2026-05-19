@@ -12,8 +12,13 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Pencil, Mail, Eye, Copy, Search, ChevronRight, Clock,
-  Variable, CheckCircle2, XCircle, Sparkles, RefreshCw, Loader2,
+  Variable, CheckCircle2, XCircle, Sparkles, RefreshCw, Loader2, Trash2,
 } from "lucide-react";
 import {
   FASES_PRINCIPALES_ORDER,
@@ -345,22 +350,24 @@ function PlantillaEditorDialog({
   onOpenChange,
   onSave,
   empresaNombre,
+  initialTab = "editar",
 }: {
   plantilla: PlantillaEmail | null;
   open: boolean;
   onOpenChange: (o: boolean) => void;
   onSave: (p: PlantillaEmail) => void;
   empresaNombre: string;
+  initialTab?: "editar" | "preview";
 }) {
   const [form, setForm] = useState<PlantillaEmail | null>(null);
-  const [tab, setTab] = useState<"editar" | "preview">("editar");
+  const [tab, setTab] = useState<"editar" | "preview">(initialTab);
   const [showIA, setShowIA] = useState(false);
 
   // Sync form when plantilla changes or dialog opens
   const plantillaId = plantilla?.id;
   if (plantilla && (!form || form.id !== plantillaId)) {
     setForm({ ...plantilla });
-    setTab("editar");
+    setTab(initialTab);
   }
 
   if (!plantilla || !form) return null;
@@ -403,13 +410,13 @@ function PlantillaEditorDialog({
 
           <div className="flex border-b border-border">
             <button
-              className={`flex-1 py-2.5 text-xs font-medium transition-colors ${tab === "editar" ? "text-primary border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"}`}
+              className={`flex-1 py-2.5 text-xs font-medium transition-colors ${tab === "editar" ? "text-primary border-b-2 border-primary bg-primary/5" : "text-muted-foreground hover:text-foreground"}`}
               onClick={() => setTab("editar")}
             >
               <Pencil className="h-3.5 w-3.5 inline mr-1.5" />Editar
             </button>
             <button
-              className={`flex-1 py-2.5 text-xs font-medium transition-colors ${tab === "preview" ? "text-primary border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"}`}
+              className={`flex-1 py-2.5 text-xs font-medium transition-colors ${tab === "preview" ? "text-primary border-b-2 border-primary bg-primary/5" : "text-muted-foreground hover:text-foreground"}`}
               onClick={() => setTab("preview")}
             >
               <Eye className="h-3.5 w-3.5 inline mr-1.5" />Vista previa
@@ -531,6 +538,8 @@ export function PlantillasConfig() {
   const { empresaActual } = useEmpresa();
   const [plantillas, setPlantillas] = useState<PlantillaEmail[]>(buildPlantillasIniciales);
   const [editingPlantilla, setEditingPlantilla] = useState<PlantillaEmail | null>(null);
+  const [editingTab, setEditingTab] = useState<"editar" | "preview">("editar");
+  const [confirmDelete, setConfirmDelete] = useState<PlantillaEmail | null>(null);
   const [search, setSearch] = useState("");
   const [filtroFase, setFiltroFase] = useState<string>("todas");
   const [filtroActivo, setFiltroActivo] = useState<string>("todos");
@@ -663,11 +672,32 @@ export function PlantillasConfig() {
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDuplicate(p)} title="Duplicar">
                         <Copy className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditingPlantilla(p)} title="Editar">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => { setEditingTab("editar"); setEditingPlantilla(p); }}
+                        title="Editar"
+                      >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditingPlantilla(p)} title="Vista previa">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => { setEditingTab("preview"); setEditingPlantilla(p); }}
+                        title="Vista previa"
+                      >
                         <Eye className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => setConfirmDelete(p)}
+                        title="Eliminar"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </div>
@@ -685,7 +715,34 @@ export function PlantillasConfig() {
         onOpenChange={(o) => !o && setEditingPlantilla(null)}
         onSave={handleSave}
         empresaNombre={empresaActual.nombre}
+        initialTab={editingTab}
       />
+
+      {/* Confirmar borrado */}
+      <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar plantilla?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Vas a eliminar la plantilla <b>{confirmDelete?.nombreInterno}</b>. Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (!confirmDelete) return;
+                setPlantillas((prev) => prev.filter((p) => p.id !== confirmDelete.id));
+                toast.success("Plantilla eliminada");
+                setConfirmDelete(null);
+              }}
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

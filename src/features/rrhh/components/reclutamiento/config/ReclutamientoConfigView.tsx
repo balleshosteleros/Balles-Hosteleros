@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import {
-  Briefcase, Users, Settings, Globe, Share2, Building2, FileText, Database,
+  Briefcase, Users, Settings, Globe, Share2, Building2, FileText,
 } from "lucide-react";
 import { OfertasTrabajoConfig } from "./OfertasTrabajoConfig";
 import { CandidatosConfig } from "./CandidatosConfig";
@@ -10,7 +10,6 @@ import { PortalEmpleoConfig } from "./PortalEmpleoConfig";
 import { PublicacionesPortalesConfig } from "./PublicacionesPortalesConfig";
 import { DatosEmpresaConfig } from "./DatosEmpresaConfig";
 import { PlantillasConfig } from "./PlantillasConfig";
-import { GestionDatosConfig } from "./GestionDatosConfig";
 
 type ConfigSection =
   | "ofertas"
@@ -19,8 +18,7 @@ type ConfigSection =
   | "portal"
   | "publicaciones"
   | "datos_empresa"
-  | "plantillas"
-  | "gestion_datos";
+  | "plantillas";
 
 const SECTIONS: { id: ConfigSection; label: string; icon: React.ReactNode }[] = [
   { id: "ofertas", label: "Vacantes", icon: <Briefcase className="h-4 w-4" /> },
@@ -29,7 +27,6 @@ const SECTIONS: { id: ConfigSection; label: string; icon: React.ReactNode }[] = 
   { id: "publicaciones", label: "Publicaciones en portales", icon: <Share2 className="h-4 w-4" /> },
   { id: "datos_empresa", label: "Datos de tu empresa", icon: <Building2 className="h-4 w-4" /> },
   { id: "plantillas", label: "Plantillas", icon: <FileText className="h-4 w-4" /> },
-  { id: "gestion_datos", label: "Gestión de datos", icon: <Database className="h-4 w-4" /> },
   { id: "configuracion", label: "Configuración general", icon: <Settings className="h-4 w-4" strokeWidth={1.75} /> },
 ];
 
@@ -41,7 +38,6 @@ const CONTENT: Record<ConfigSection, React.ReactNode> = {
   publicaciones: <PublicacionesPortalesConfig />,
   datos_empresa: <DatosEmpresaConfig />,
   plantillas: <PlantillasConfig />,
-  gestion_datos: <GestionDatosConfig />,
 };
 
 export function ReclutamientoConfigView() {
