@@ -132,3 +132,31 @@ Para el siguiente paso, el smoke necesita:
 - credenciales reales con acceso a RRHH y al menos un empleado para `mi-panel`, o
 - autorizacion para crear un usuario temporal de smoke y limpiarlo despues
 
+## Donde retomar en la siguiente sesion
+
+La siguiente sesion debe arrancar por el smoke funcional de `TASK-002`, no por mas construccion.
+
+Orden recomendado:
+1. Entrar con un usuario real que tenga acceso a `RRHH`.
+2. Verificar en `/rrhh/empleados` que el alta y la ficha muestran el contrato canonico.
+3. Abrir una ficha de empleado y comprobar:
+   - edicion de datos laborales
+   - local principal
+   - teletrabajo
+   - acceso multiempresa
+4. Pasar a `/mi-panel` con el mismo empleado y validar:
+   - entrada
+   - pausa
+   - salida
+   - fichaje manual
+5. Revisar `/rrhh/fichajes` para confirmar:
+   - incidencias clicables
+   - observaciones editables
+   - resolucion de incidencias
+   - exportacion usando datos reales
+
+Criterio para cerrar `TASK-002`:
+- si el smoke funcional sale bien, `TASK-002` puede darse por cerrada o quedar solo con ajustes menores
+- si aparece un fallo real, documentarlo antes de seguir con `TASK-003`
+
+No hace falta volver a tocar la estructura de commits de esta sesion; el siguiente paso ya es operativo y de verificacion.
