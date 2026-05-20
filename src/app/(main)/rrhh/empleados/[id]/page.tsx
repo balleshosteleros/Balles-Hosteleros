@@ -4,13 +4,23 @@ import { useState, useMemo, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { FichaEmpleadoHeader } from "@/features/rrhh/components/empleados/FichaEmpleadoHeader";
 import {
-  FichajesTab, HorariosTab,
+  FichajesTab, HorariosTab, SolicitudesEmpleadoTab,
 } from "@/features/rrhh/components/empleados/FichaTabsContent";
 import { SubmoduloPorEmpleadoPlaceholder } from "@/features/rrhh/components/empleados/SubmoduloPorEmpleadoPlaceholder";
 import { FirmasEmpleadoTab } from "@/features/rrhh/components/empleados/FirmasEmpleadoTab";
 import { DatosPersonalesForm } from "@/features/mi-panel/components/DatosPersonalesForm";
 import type { DatosPersonalesCompletos } from "@/features/mi-panel/actions/datos-personales-actions";
-import { getEmpleadoConPerfil } from "@/features/rrhh/actions/empleados-actions";
+import {
+  getEmpleadoConPerfil,
+  getEmpleadoHorarioActual,
+  listSolicitudesEmpleado,
+  type EmpleadoHorarioActual,
+} from "@/features/rrhh/actions/empleados-actions";
+import {
+  listFichajesEmpleado,
+  type FichajeEmpleadoResumen,
+} from "@/features/rrhh/actions/fichajes-actions";
+import type { SolicitudPersonal } from "@/features/mi-panel/types";
 import type { Empleado } from "@/features/rrhh/data/rrhh";
 import { getFichaEmpleado } from "@/features/rrhh/data/empleados-ficha";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
@@ -91,6 +101,9 @@ export default function FichaEmpleadoPage() {
   const [empleadoBD, setEmpleadoBD] = useState<EmpleadoBD | null>(null);
   const [datosPersonales, setDatosPersonales] = useState<DatosPersonalesCompletos | null>(null);
   const [empresasAcceso, setEmpresasAcceso] = useState<EmpresaAcceso[]>([]);
+  const [fichajes, setFichajes] = useState<FichajeEmpleadoResumen[]>([]);
+  const [solicitudes, setSolicitudes] = useState<SolicitudPersonal[]>([]);
+  const [horarioActual, setHorarioActual] = useState<EmpleadoHorarioActual | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TopTab>("perfil");
 
@@ -98,17 +111,28 @@ export default function FichaEmpleadoPage() {
     if (!id) return;
     let alive = true;
     setLoading(true);
-    getEmpleadoConPerfil(id).then((res) => {
+    Promise.all([
+      getEmpleadoConPerfil(id),
+      listFichajesEmpleado(id),
+      listSolicitudesEmpleado(id),
+      getEmpleadoHorarioActual(id),
+    ]).then(([res, fichajesRes, solicitudesRes, horarioRes]) => {
       if (!alive) return;
       if (!res.ok) {
         setError(res.error ?? "Empleado no encontrado");
         setEmpleadoBD(null);
         setDatosPersonales(null);
         setEmpresasAcceso([]);
+        setFichajes([]);
+        setSolicitudes([]);
+        setHorarioActual(null);
       } else {
         setEmpleadoBD(res.empleado as EmpleadoBD);
         setDatosPersonales(res.datosPersonales ?? null);
         setEmpresasAcceso((res.empresasAcceso as EmpresaAcceso[]) ?? []);
+        setFichajes(fichajesRes.ok ? fichajesRes.data : []);
+        setSolicitudes(solicitudesRes.ok ? solicitudesRes.data : []);
+        setHorarioActual(horarioRes.ok ? horarioRes.data : null);
         setError(null);
       }
       setLoading(false);
@@ -165,13 +189,13 @@ export default function FichaEmpleadoPage() {
           </div>
         );
       case "fichajes":
-        return <div className="p-6"><FichajesTab empleado={empleadoMock!} /></div>;
+        return <div className="p-6"><FichajesTab empleado={empleadoMock!} fichajes={fichajes} /></div>;
       case "horarios":
         return ficha
-          ? <div className="p-6"><HorariosTab empleado={empleadoMock!} ficha={ficha} /></div>
+          ? <div className="p-6"><HorariosTab empleado={empleadoMock!} ficha={ficha} horario={horarioActual} /></div>
           : <SubmoduloPorEmpleadoPlaceholder modulo="Horarios" path="/rrhh/horarios" empleado={empleadoMock!} />;
       case "solicitudes":
-        return <SubmoduloPorEmpleadoPlaceholder modulo="Solicitudes" path="/rrhh/solicitudes" empleado={empleadoMock!} />;
+        return <div className="p-6"><SolicitudesEmpleadoTab solicitudes={solicitudes} /></div>;
       case "firmas":
         return <FirmasEmpleadoTab empleadoId={empleadoBD!.id} />;
       case "calendarios":

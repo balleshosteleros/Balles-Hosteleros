@@ -97,8 +97,9 @@ function monthBounds(anio: number, mes: number) {
 
 // ─── FICHAJE ─────────────────────────────────────────────────
 
-// Cierra automáticamente fichajes abiertos de días pasados marcándolos como
-// incidencia. Se ejecuta solo después de las 8:00 (hora local del servidor)
+// Cierra automáticamente fichajes abiertos de días pasados conservando la
+// incidencia en su campo propio. La tabla no admite un estado "incidencia".
+// Se ejecuta solo después de las 8:00 (hora local del servidor)
 // para no interrumpir turnos de noche en curso.
 async function autoCerrarFichajesHuerfanos(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -111,7 +112,8 @@ async function autoCerrarFichajesHuerfanos(
     await supabase
       .from("fichajes")
       .update({
-        estado: "incidencia",
+        estado: "completado",
+        hora_salida: now.toISOString(),
         incidencia: "Fichaje sin cierre — pendiente de revisión",
       })
       .eq("empresa_id", empresaId)
@@ -821,7 +823,7 @@ export async function getMiPanelResumen(): Promise<{
       getNiveles(supabase, empresaId).catch(() => []),
       supabase
         .from("fichajes")
-        .select("horas_totales, estado")
+        .select("horas_totales, estado, incidencia")
         .eq("empresa_id", empresaId)
         .eq("empleado_id", user.id)
         .gte("fecha", desde)
@@ -839,11 +841,10 @@ export async function getMiPanelResumen(): Promise<{
     const fRows = (fichajesMes.data ?? []) as Array<{
       horas_totales: number | null;
       estado: string | null;
+      incidencia: string | null;
     }>;
     const mesHoras = fRows.reduce((acc, r) => acc + (r.horas_totales ?? 0), 0);
-    const incidencias = fRows.filter(
-      (r) => r.estado === "incidencia" || r.estado === "sin cerrar",
-    ).length;
+    const incidencias = fRows.filter((r) => Boolean(r.incidencia)).length;
 
     const sRows = (solicitudes.data ?? []) as Array<{ estado: string | null }>;
     const pendientes = sRows.filter((s) => s.estado === "pendiente").length;

@@ -1,7 +1,7 @@
 /**
  * Cron endpoint: cierra automáticamente fichajes que quedaron abiertos
- * (sin hora_salida) en días anteriores y los marca como incidencia para
- * que RRHH los revise.
+ * (sin hora_salida) en días anteriores y deja la incidencia en su campo
+ * propio. La tabla `fichajes` no admite un estado "incidencia".
  *
  * Se ejecuta a las 08:00 UTC (configurado en vercel.json).
  * Solo acepta llamadas con header `Authorization: Bearer ${CRON_SECRET}`.
@@ -34,7 +34,8 @@ export async function GET(request: Request) {
   const { data, error } = await supabase
     .from("fichajes")
     .update({
-      estado: "incidencia",
+      estado: "completado",
+      hora_salida: new Date().toISOString(),
       incidencia: "Fichaje sin cierre — pendiente de revisión",
     })
     .lt("fecha", hoy)

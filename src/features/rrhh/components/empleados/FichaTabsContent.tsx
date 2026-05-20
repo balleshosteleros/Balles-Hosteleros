@@ -6,6 +6,10 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Clock, CalendarDays, BarChart3, FileSignature, FolderOpen, Star, Plus, ChevronRight } from "lucide-react";
 import type { FichaEmpleado } from "@/features/rrhh/data/empleados-ficha";
 import type { Empleado } from "@/features/rrhh/data/rrhh";
+import type { FichajeEmpleadoResumen } from "@/features/rrhh/actions/fichajes-actions";
+import type { EmpleadoHorarioActual } from "@/features/rrhh/actions/empleados-actions";
+import type { SolicitudPersonal } from "@/features/mi-panel/types";
+import { ESTADO_COLOR, ESTADO_LABEL, SUBTIPO_LABEL } from "@/features/mi-panel/types";
 
 function EmptyState({ icon: Icon, texto }: { icon: React.ElementType; texto: string }) {
   return (
@@ -17,7 +21,75 @@ function EmptyState({ icon: Icon, texto }: { icon: React.ElementType; texto: str
 }
 
 /* ─── FICHAJES ─── */
-export function FichajesTab({ empleado }: { empleado: Empleado }) {
+function formatearFechaHora(value: string | null): string {
+  if (!value) return "—";
+  try {
+    return new Date(value).toLocaleString("es-ES", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return value;
+  }
+}
+
+export function FichajesTab({
+  empleado,
+  fichajes,
+}: {
+  empleado: Empleado;
+  fichajes?: FichajeEmpleadoResumen[];
+}) {
+  if (fichajes) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-foreground">Historial de fichajes</h3>
+          <Badge variant="outline">{fichajes.length} registros</Badge>
+        </div>
+        {fichajes.length > 0 ? (
+          <div className="rounded-lg border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Entrada</TableHead>
+                  <TableHead>Salida</TableHead>
+                  <TableHead>Horas</TableHead>
+                  <TableHead>Estado</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {fichajes.map((f) => (
+                  <TableRow key={f.id}>
+                    <TableCell className="font-medium">{formatearFecha(f.fecha)}</TableCell>
+                    <TableCell>{formatearFechaHora(f.horaEntrada)}</TableCell>
+                    <TableCell>{formatearFechaHora(f.horaSalida)}</TableCell>
+                    <TableCell>{f.horasTotales.toFixed(2)}h</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <Badge variant="outline">{f.estado}</Badge>
+                        {f.incidencia && (
+                          <span className="text-xs text-amber-700 dark:text-amber-300">
+                            {f.incidencia}
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ) : (
+          <EmptyState icon={Clock} texto="No hay fichajes reales registrados para este empleado." />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -30,6 +102,63 @@ export function FichajesTab({ empleado }: { empleado: Empleado }) {
         </div>
       ) : (
         <EmptyState icon={Clock} texto="No hay fichajes registrados para hoy." />
+      )}
+    </div>
+  );
+}
+
+/* ─── SOLICITUDES ─── */
+export function SolicitudesEmpleadoTab({ solicitudes }: { solicitudes: SolicitudPersonal[] }) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-foreground">Solicitudes del empleado</h3>
+        <Badge variant="outline">{solicitudes.length} registros</Badge>
+      </div>
+      {solicitudes.length > 0 ? (
+        <div className="rounded-lg border overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Tipo</TableHead>
+                <TableHead>Periodo</TableHead>
+                <TableHead>Motivo</TableHead>
+                <TableHead>Estado</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {solicitudes.map((s) => (
+                <TableRow key={s.id}>
+                  <TableCell>
+                    <div className="flex flex-col">
+                      <span className="text-xs uppercase text-muted-foreground">
+                        {s.tipo === "ausencia" ? "Ausencia" : "Trabajo"}
+                      </span>
+                      <span className="font-medium">{SUBTIPO_LABEL[s.subtipo]}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {formatearFecha(s.fechaInicio)}
+                    {s.fechaFin && s.fechaFin !== s.fechaInicio ? ` - ${formatearFecha(s.fechaFin)}` : ""}
+                    {s.horas != null ? ` · ${s.horas}h` : ""}
+                  </TableCell>
+                  <TableCell className="max-w-[280px]">
+                    <span className="line-clamp-2 text-sm text-muted-foreground">
+                      {s.motivo || "—"}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={ESTADO_COLOR[s.estado]}>
+                      {ESTADO_LABEL[s.estado]}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      ) : (
+        <EmptyState icon={CalendarDays} texto="No hay solicitudes reales registradas para este empleado." />
       )}
     </div>
   );
@@ -200,42 +329,63 @@ function generarHistorialHorarios(empleado: Empleado, ficha: FichaEmpleado): His
   return historial.reverse();
 }
 
-export function HorariosTab({ empleado, ficha }: { empleado: Empleado; ficha: FichaEmpleado }) {
+export function HorariosTab({
+  empleado,
+  ficha,
+  horario,
+}: {
+  empleado: Empleado;
+  ficha: FichaEmpleado;
+  horario?: EmpleadoHorarioActual | null;
+}) {
   const [abierto, setAbierto] = useState(false);
-  const historial = generarHistorialHorarios(empleado, ficha);
+  const historial = horario ? [] : generarHistorialHorarios(empleado, ficha);
 
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold text-foreground">Horarios del empleado</h3>
       <div className="rounded-lg border bg-card p-4">
-        <p className="text-sm text-muted-foreground">Horario base: <span className="font-semibold text-foreground">{empleado.horarioTipo}</span></p>
-        <p className="text-sm text-muted-foreground mt-1">Jornada semanal: <span className="font-semibold text-foreground">{empleado.horarioSemanal}</span></p>
+        {horario ? (
+          <>
+            <p className="text-sm text-muted-foreground">Patrón activo: <span className="font-semibold text-foreground">{horario.nombre}</span></p>
+            <p className="text-sm text-muted-foreground mt-1">Tipo: <span className="font-semibold text-foreground">{horario.tipo}</span></p>
+            <p className="text-sm text-muted-foreground mt-1">Asignado: <span className="font-semibold text-foreground">{formatearFechaHora(horario.asignadoAt)}</span></p>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-muted-foreground">Horario base: <span className="font-semibold text-foreground">{empleado.horarioTipo}</span></p>
+            <p className="text-sm text-muted-foreground mt-1">Jornada semanal: <span className="font-semibold text-foreground">{empleado.horarioSemanal}</span></p>
+            <p className="text-xs text-muted-foreground mt-3">No hay patrón real asignado; se muestra información heredada como referencia.</p>
+          </>
+        )}
       </div>
 
-      <Collapsible open={abierto} onOpenChange={setAbierto}>
-        <CollapsibleTrigger className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
-          <ChevronRight className={`h-3.5 w-3.5 transition-transform ${abierto ? "rotate-90" : ""}`} />
-          <span>Historial de horarios{historial.length > 0 ? ` (${historial.length})` : ""}</span>
-        </CollapsibleTrigger>
-        <CollapsibleContent className="pt-2">
-          {historial.length === 0 ? (
-            <p className="text-xs text-muted-foreground pl-5">Sin historial registrado.</p>
-          ) : (
-            <ul className="pl-5 space-y-1">
-              {historial.map((h, i) => (
-                <li key={i} className="flex items-baseline gap-2 text-xs text-muted-foreground">
-                  <span className="tabular-nums">
-                    {formatearFecha(h.desde)} → {h.hasta ? formatearFecha(h.hasta) : "actual"}
-                  </span>
-                  <span className="text-foreground">·</span>
-                  <span className="text-foreground">{h.tipo}</span>
-                  <span>({h.semanal})</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CollapsibleContent>
-      </Collapsible>
+      {!horario && (
+        <Collapsible open={abierto} onOpenChange={setAbierto}>
+          <CollapsibleTrigger className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+            <ChevronRight className={`h-3.5 w-3.5 transition-transform ${abierto ? "rotate-90" : ""}`} />
+            <span>Historial de horarios{historial.length > 0 ? ` (${historial.length})` : ""}</span>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-2">
+            {historial.length === 0 ? (
+              <p className="text-xs text-muted-foreground pl-5">Sin historial registrado.</p>
+            ) : (
+              <ul className="pl-5 space-y-1">
+                {historial.map((h, i) => (
+                  <li key={i} className="flex items-baseline gap-2 text-xs text-muted-foreground">
+                    <span className="tabular-nums">
+                      {formatearFecha(h.desde)} → {h.hasta ? formatearFecha(h.hasta) : "actual"}
+                    </span>
+                    <span className="text-foreground">·</span>
+                    <span className="text-foreground">{h.tipo}</span>
+                    <span>({h.semanal})</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
+      )}
     </div>
   );
 }

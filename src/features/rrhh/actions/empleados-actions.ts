@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 import type { DatosPersonalesInput, DatosPersonalesCompletos } from "@/features/mi-panel/actions/datos-personales-actions";
+import type { SolicitudPersonal, SolicitudSubtipo, SolicitudTipo, SolicitudEstado } from "@/features/mi-panel/types";
 
 const ROLES_ADMIN = ["admin", "director"] as const;
 
@@ -461,6 +462,106 @@ export async function getEmpleadoConPerfil(empleadoId: string) {
   }
 }
 
+function mapSolicitudEmpleado(row: Record<string, unknown>): SolicitudPersonal {
+  return {
+    id: row.id as string,
+    empresaId: row.empresa_id as string,
+    userId: row.user_id as string,
+    empleadoNombre: (row.empleado_nombre as string) ?? "",
+    tipo: row.tipo as SolicitudTipo,
+    subtipo: row.subtipo as SolicitudSubtipo,
+    fechaInicio: row.fecha_inicio as string,
+    fechaFin: (row.fecha_fin as string | null) ?? null,
+    horas: (row.horas as number | null) ?? null,
+    motivo: (row.motivo as string) ?? "",
+    estado: row.estado as SolicitudEstado,
+    createdAt: row.created_at as string,
+  };
+}
+
+export async function listSolicitudesEmpleado(
+  empleadoId: string,
+): Promise<{ ok: true; data: SolicitudPersonal[] } | { ok: false; data: []; error: string }> {
+  try {
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false, data: [], error: "No autenticado" };
+
+    const { data: empleado, error: empErr } = await supabase
+      .from("empleados")
+      .select("user_id")
+      .eq("id", empleadoId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (empErr) throw empErr;
+    if (!empleado?.user_id) return { ok: false, data: [], error: "Empleado sin usuario vinculado" };
+
+    const { data, error } = await supabase
+      .from("solicitudes_personal")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .eq("user_id", empleado.user_id)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (error) throw error;
+
+    return { ok: true, data: (data ?? []).map((row) => mapSolicitudEmpleado(row as Record<string, unknown>)) };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[rrhh] listSolicitudesEmpleado:", msg);
+    return { ok: false, data: [], error: msg };
+  }
+}
+
+export type EmpleadoHorarioActual = {
+  patronId: string;
+  nombre: string;
+  tipo: string;
+  asignadoAt: string;
+};
+
+export async function getEmpleadoHorarioActual(
+  empleadoId: string,
+): Promise<{ ok: true; data: EmpleadoHorarioActual | null } | { ok: false; data: null; error: string }> {
+  try {
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false, data: null, error: "No autenticado" };
+
+    const { data, error } = await supabase
+      .from("rrhh_patron_empleados")
+      .select("asignado_at, rrhh_patrones!inner(id, nombre, tipo, empresa_id, activo)")
+      .eq("empleado_id", empleadoId)
+      .eq("rrhh_patrones.empresa_id", empresaId)
+      .eq("rrhh_patrones.activo", true)
+      .order("asignado_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return { ok: true, data: null };
+
+    const patron = data.rrhh_patrones as unknown as {
+      id: string;
+      nombre: string;
+      tipo: string;
+    } | null;
+
+    if (!patron) return { ok: true, data: null };
+
+    return {
+      ok: true,
+      data: {
+        patronId: patron.id,
+        nombre: patron.nombre,
+        tipo: patron.tipo,
+        asignadoAt: data.asignado_at as string,
+      },
+    };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[rrhh] getEmpleadoHorarioActual:", msg);
+    return { ok: false, data: null, error: msg };
+  }
+}
+
 /**
  * Admin guarda los datos personales del empleado en el profile vinculado.
  * Sólo accesible por admin o director. Por contrato (NOT NULL) todo empleado
@@ -575,7 +676,7 @@ export async function getMiInformacionLaboral() {
         departamentos(nombre),
         puestos_trabajo(nombre)
       `)
-      .eq("profile_id", userId)
+      .eq("user_id", userId)
       .maybeSingle();
 
     if (error) throw error;

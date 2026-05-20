@@ -55,6 +55,74 @@ export async function listFichajes(fecha?: string) {
   }
 }
 
+export type FichajeEmpleadoResumen = {
+  id: string;
+  fecha: string;
+  horaEntrada: string | null;
+  horaSalida: string | null;
+  pausaInicio: string | null;
+  pausaFin: string | null;
+  horasTotales: number;
+  estado: string;
+  incidencia: string | null;
+  observaciones: string;
+  centro: string;
+};
+
+export async function listFichajesEmpleado(
+  empleadoId: string,
+  rango?: { desde?: string; hasta?: string },
+): Promise<{ ok: true; data: FichajeEmpleadoResumen[] } | { ok: false; data: []; error: string }> {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, data: [], error: "No autenticado" };
+
+    const { data: empleado, error: empErr } = await supabase
+      .from("empleados")
+      .select("user_id")
+      .eq("id", empleadoId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (empErr) throw empErr;
+    if (!empleado?.user_id) return { ok: false, data: [], error: "Empleado sin usuario vinculado" };
+
+    const query = supabase
+      .from("fichajes")
+      .select("id, fecha, hora_entrada, hora_salida, pausa_inicio, pausa_fin, horas_totales, estado, incidencia, observaciones, centro")
+      .eq("empresa_id", empresaId)
+      .eq("empleado_id", empleado.user_id)
+      .order("fecha", { ascending: false })
+      .limit(60);
+
+    if (rango?.desde) query.gte("fecha", rango.desde);
+    if (rango?.hasta) query.lte("fecha", rango.hasta);
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    return {
+      ok: true,
+      data: (data ?? []).map((row) => ({
+        id: row.id as string,
+        fecha: row.fecha as string,
+        horaEntrada: (row.hora_entrada as string | null) ?? null,
+        horaSalida: (row.hora_salida as string | null) ?? null,
+        pausaInicio: (row.pausa_inicio as string | null) ?? null,
+        pausaFin: (row.pausa_fin as string | null) ?? null,
+        horasTotales: Number(row.horas_totales ?? 0),
+        estado: (row.estado as string | null) ?? "pendiente",
+        incidencia: (row.incidencia as string | null) ?? null,
+        observaciones: (row.observaciones as string | null) ?? "",
+        centro: (row.centro as string | null) ?? "",
+      })),
+    };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[fichajes] listFichajesEmpleado:", msg);
+    return { ok: false, data: [], error: msg };
+  }
+}
+
 type GeoInput = { lat: number; lng: number; precision: number } | null;
 
 export async function ficharEntrada(geo: GeoInput) {
@@ -308,7 +376,7 @@ export async function updateFichaje(
     const { error } = await supabase
       .from("fichajes")
       .update({
-        ...(updates.notas !== undefined && { notas: updates.notas }),
+        ...(updates.notas !== undefined && { observaciones: updates.notas }),
         ...(updates.estado !== undefined && { estado: updates.estado }),
       })
       .eq("id", id);

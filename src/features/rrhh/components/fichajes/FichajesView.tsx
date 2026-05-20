@@ -163,7 +163,7 @@ export function FichajesView() {
     }
   }, [manualForm, loadFichajes]);
 
-  const incidencias = useMemo(() => fichajes.filter(f => f.estado === "incidencia").map(f => ({
+  const incidencias = useMemo(() => fichajes.filter(f => Boolean(f.incidencia)).map(f => ({
     id: f.id,
     fichajeId: f.id,
     empleadoNombre: f.empleadoNombre,

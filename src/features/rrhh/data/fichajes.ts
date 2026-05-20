@@ -1,4 +1,12 @@
-export type EstadoFichaje = "completo" | "incompleto" | "incidencia" | "pendiente" | "validado";
+export type EstadoFichaje =
+  | "pendiente"
+  | "trabajando"
+  | "pausa"
+  | "completado"
+  | "completo"
+  | "incompleto"
+  | "incidencia"
+  | "validado";
 
 export type TipoFichajeCodigo = "ENT" | "SAL" | "IPA" | "FPA" | "MAN" | "COR" | "VAL" | "NOR";
 
@@ -69,18 +77,24 @@ export const TIPOS_INCIDENCIA_LABEL: Record<TipoIncidencia, string> = {
 };
 
 export const ESTADO_FICHAJE_LABEL: Record<EstadoFichaje, string> = {
+  completado: "Completado",
   completo: "Completo",
   incompleto: "Incompleto",
   incidencia: "Incidencia",
+  pausa: "En pausa",
   pendiente: "Pendiente",
+  trabajando: "Trabajando",
   validado: "Validado",
 };
 
 export const ESTADO_FICHAJE_COLOR: Record<EstadoFichaje, string> = {
+  completado: "bg-emerald-500",
   completo: "bg-emerald-500",
   incompleto: "bg-amber-400",
   incidencia: "bg-destructive",
+  pausa: "bg-amber-400",
   pendiente: "bg-muted-foreground/40",
+  trabajando: "bg-blue-500",
   validado: "bg-sky-500",
 };
 
