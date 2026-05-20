@@ -318,13 +318,23 @@ export async function crearFichajeManual(input: CrearFichajeManualInput) {
     const horaSalidaIso = input.horaSalida
       ? toIsoCombinado(input.fecha, input.horaSalida)
       : null;
+    const pausaInicioIso = input.pausaInicio
+      ? toIsoCombinado(input.fecha, input.pausaInicio)
+      : null;
+    const pausaFinIso = input.pausaFin
+      ? toIsoCombinado(input.fecha, input.pausaFin)
+      : null;
 
     let horasTotales = 0;
     if (horaSalidaIso) {
       const entrada = new Date(horaEntradaIso).getTime();
       const salida = new Date(horaSalidaIso).getTime();
+      const pausaMs =
+        pausaInicioIso && pausaFinIso
+          ? Math.max(0, new Date(pausaFinIso).getTime() - new Date(pausaInicioIso).getTime())
+          : 0;
       horasTotales =
-        Math.max(0, Math.round(((salida - entrada) / 3600000) * 100) / 100);
+        Math.max(0, Math.round((((salida - entrada) - pausaMs) / 3600000) * 100) / 100);
     }
 
     const nombreCompleto = `${empleado.nombre ?? ""} ${empleado.apellidos ?? ""}`.trim();
@@ -340,8 +350,8 @@ export async function crearFichajeManual(input: CrearFichajeManualInput) {
         fecha: input.fecha,
         hora_entrada: horaEntradaIso,
         hora_salida: horaSalidaIso,
-        pausa_inicio: input.pausaInicio || null,
-        pausa_fin: input.pausaFin || null,
+        pausa_inicio: pausaInicioIso,
+        pausa_fin: pausaFinIso,
         horas_totales: horasTotales,
         estado: horaSalidaIso ? "completado" : "trabajando",
         local_id: empleado.local_id,

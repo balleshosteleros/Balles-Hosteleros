@@ -22,6 +22,7 @@ import {
 import {
   listDepartamentos,
   updateEmpleado,
+  updateEmpleadoEmpresasAcceso,
   setEmpleadoEstado,
   deleteEmpleado,
   type EstadoEmpleado,
@@ -31,6 +32,7 @@ import {
   listLocales,
   setEmpleadoTeletrabajo,
 } from "@/features/ajustes/actions/locales-actions";
+import { getEmpresasAccesibles, type EmpresaAccesible } from "@/features/empresa/actions/empresas-accesibles-actions";
 
 type DepartamentoOpt = { id: string; nombre: string };
 type LocalOpt = { id: string; nombre: string };
@@ -39,6 +41,7 @@ type Props = {
   empleadoId: string;
   initial: {
     empresaId: string;
+    empresasAcceso: string[];
     nombre: string;
     apellidos: string | null;
     departamentoId: string | null;
@@ -56,6 +59,8 @@ type Props = {
 export function GestionEmpleadoCard({ empleadoId, initial, onUpdated, onDeleted }: Props) {
   const [departamentos, setDepartamentos] = useState<DepartamentoOpt[]>([]);
   const [locales, setLocales] = useState<LocalOpt[]>([]);
+  const [empresasDisponibles, setEmpresasDisponibles] = useState<EmpresaAccesible[]>([]);
+  const [empresasMarcadas, setEmpresasMarcadas] = useState<string[]>(initial.empresasAcceso);
   const [departamentoId, setDepartamentoId] = useState(initial.departamentoId ?? "__none__");
   const [puesto, setPuesto] = useState(initial.puesto ?? "");
   const [localId, setLocalId] = useState(initial.localId ?? "__none__");
@@ -64,6 +69,7 @@ export function GestionEmpleadoCard({ empleadoId, initial, onUpdated, onDeleted 
   const [estado, setEstado] = useState<EstadoEmpleado>(initial.estado);
   const [fechaBaja, setFechaBaja] = useState(initial.fechaBaja ?? "");
   const [savingLaboral, setSavingLaboral] = useState(false);
+  const [savingEmpresas, setSavingEmpresas] = useState(false);
   const [savingEstado, setSavingEstado] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
@@ -75,9 +81,13 @@ export function GestionEmpleadoCard({ empleadoId, initial, onUpdated, onDeleted 
     listLocales(initial.empresaId).then((res) => {
       setLocales((res.ok ? res.data : []) as LocalOpt[]);
     });
+    getEmpresasAccesibles().then((res) => {
+      setEmpresasDisponibles(res.ok ? res.data : []);
+    });
   }, []);
 
   useEffect(() => {
+    setEmpresasMarcadas(initial.empresasAcceso);
     setDepartamentoId(initial.departamentoId ?? "__none__");
     setPuesto(initial.puesto ?? "");
     setLocalId(initial.localId ?? "__none__");
@@ -86,6 +96,14 @@ export function GestionEmpleadoCard({ empleadoId, initial, onUpdated, onDeleted 
     setEstado(initial.estado);
     setFechaBaja(initial.fechaBaja ?? "");
   }, [initial]);
+
+  function toggleEmpresa(empresaId: string, checked: boolean) {
+    if (empresaId === initial.empresaId && !checked) return;
+    setEmpresasMarcadas((prev) => {
+      if (checked) return prev.includes(empresaId) ? prev : [...prev, empresaId];
+      return prev.filter((id) => id !== empresaId);
+    });
+  }
 
   async function guardarDatosLaborales() {
     setSavingLaboral(true);
@@ -138,6 +156,28 @@ export function GestionEmpleadoCard({ empleadoId, initial, onUpdated, onDeleted 
     }
 
     toast.success("Estado del empleado actualizado");
+    await onUpdated();
+  }
+
+  async function guardarEmpresasAcceso() {
+    if (!empresasMarcadas.includes(initial.empresaId)) {
+      toast.error("La empresa principal del empleado no se puede quitar.");
+      return;
+    }
+
+    setSavingEmpresas(true);
+    const res = await updateEmpleadoEmpresasAcceso({
+      empleadoId,
+      empresaIds: empresasMarcadas,
+    });
+    setSavingEmpresas(false);
+
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudieron actualizar los accesos a empresas");
+      return;
+    }
+
+    toast.success("Accesos a empresas actualizados");
     await onUpdated();
   }
 
@@ -230,6 +270,50 @@ export function GestionEmpleadoCard({ empleadoId, initial, onUpdated, onDeleted 
               ? <><Loader2 className="h-4 w-4 animate-spin" />Guardando…</>
               : <><Save className="h-4 w-4" />Guardar datos laborales</>}
           </Button>
+        </div>
+
+        <div className="border-t pt-6 space-y-4">
+          <div className="space-y-1">
+            <h4 className="text-sm font-semibold text-foreground">Acceso multiempresa</h4>
+            <p className="text-sm text-muted-foreground">
+              La empresa principal queda fijada aquí. Puedes ampliar o reducir accesos secundarios.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            {empresasDisponibles.map((empresa) => {
+              const marcada = empresasMarcadas.includes(empresa.id);
+              const esPrincipal = empresa.id === initial.empresaId;
+              return (
+                <label
+                  key={empresa.id}
+                  className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
+                >
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      checked={marcada}
+                      onCheckedChange={(checked) => toggleEmpresa(empresa.id, checked === true)}
+                      disabled={esPrincipal}
+                    />
+                    <span>{empresa.nombre}</span>
+                  </div>
+                  {esPrincipal && (
+                    <span className="text-[10px] uppercase font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                      Principal
+                    </span>
+                  )}
+                </label>
+              );
+            })}
+          </div>
+
+          <div className="flex justify-end">
+            <Button onClick={guardarEmpresasAcceso} disabled={savingEmpresas} className="gap-2">
+              {savingEmpresas
+                ? <><Loader2 className="h-4 w-4 animate-spin" />Actualizando…</>
+                : <><Save className="h-4 w-4" />Guardar accesos</>}
+            </Button>
+          </div>
         </div>
 
         <div className="border-t pt-6 space-y-4">

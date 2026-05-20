@@ -191,6 +191,7 @@ export default function FichaEmpleadoPage() {
               empleadoId={empleadoRegistro.id}
               initial={{
                 empresaId: empleadoRegistro.empresa_id,
+                empresasAcceso: empresasAcceso.map((e) => e.id),
                 nombre: empleadoRegistro.nombre,
                 apellidos: empleadoRegistro.apellidos,
                 departamentoId: empleadoRegistro.departamento_id,

@@ -219,6 +219,64 @@ type UpdateEmpleadoInput = {
   notas?: string | null;
 };
 
+export async function updateEmpleadoEmpresasAcceso(input: {
+  empleadoId: string;
+  empresaIds: string[];
+}) {
+  try {
+    const empresaIds = Array.from(new Set(input.empresaIds.filter(Boolean)));
+    if (empresaIds.length === 0) {
+      return { ok: false, error: "Selecciona al menos una empresa." };
+    }
+
+    const { supabase } = await getAppContext();
+    const { data: empleado, error: empErr } = await supabase
+      .from("empleados")
+      .select("id, user_id, empresa_id")
+      .eq("id", input.empleadoId)
+      .maybeSingle();
+    if (empErr) throw empErr;
+    if (!empleado?.user_id || !empleado.empresa_id) {
+      return { ok: false, error: "Empleado no encontrado o sin usuario vinculado." };
+    }
+    if (!empresaIds.includes(empleado.empresa_id)) {
+      return {
+        ok: false,
+        error: "La empresa principal del empleado no se puede quitar del acceso.",
+      };
+    }
+
+    await requireAdminUser({ empresaIds });
+
+    let admin;
+    try { admin = createAdminClient(); }
+    catch { return { ok: false, error: "Supabase admin no configurado." }; }
+
+    const { error: deleteErr } = await admin
+      .from("user_empresas")
+      .delete()
+      .eq("user_id", empleado.user_id);
+    if (deleteErr) throw deleteErr;
+
+    const rows = empresaIds.map((empresa_id) => ({
+      user_id: empleado.user_id,
+      empresa_id,
+    }));
+    const { error: insertErr } = await admin
+      .from("user_empresas")
+      .insert(rows);
+    if (insertErr) throw insertErr;
+
+    revalidatePath("/rrhh/empleados");
+    revalidatePath(`/rrhh/empleados/${input.empleadoId}`);
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[rrhh] updateEmpleadoEmpresasAcceso:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
 export async function updateEmpleado(id: string, updates: UpdateEmpleadoInput) {
   try {
     const { supabase } = await getAppContext();
