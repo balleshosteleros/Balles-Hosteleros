@@ -379,7 +379,7 @@ export async function crearFichajeManual(input: CrearFichajeManualInput) {
 
 export async function updateFichaje(
   id: string,
-  updates: { notas?: string; estado?: string }
+  updates: { notas?: string; estado?: string; incidencia?: string | null }
 ) {
   try {
     const { supabase } = await getContext();
@@ -388,6 +388,7 @@ export async function updateFichaje(
       .update({
         ...(updates.notas !== undefined && { observaciones: updates.notas }),
         ...(updates.estado !== undefined && { estado: updates.estado }),
+        ...(updates.incidencia !== undefined && { incidencia: updates.incidencia }),
       })
       .eq("id", id);
     if (error) throw error;

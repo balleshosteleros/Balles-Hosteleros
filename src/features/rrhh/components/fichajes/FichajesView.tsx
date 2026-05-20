@@ -35,6 +35,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertTriangle, Settings, Settings2, ClipboardList, History } from "lucide-react";
@@ -95,6 +96,8 @@ export function FichajesView() {
   const [empleadosOpts, setEmpleadosOpts] = useState<EmpleadoOpcion[]>([]);
   const [manualForm, setManualForm] = useState(initialManualForm());
   const [savingManual, setSavingManual] = useState(false);
+  const [detalleNotas, setDetalleNotas] = useState("");
+  const [savingDetalle, setSavingDetalle] = useState(false);
 
   const loadFichajes = useCallback(async () => {
     setLoading(true);
@@ -116,6 +119,10 @@ export function FichajesView() {
   useEffect(() => {
     loadFichajes();
   }, [loadFichajes]);
+
+  useEffect(() => {
+    setDetalleNotas(fichajeModal?.observaciones ?? "");
+  }, [fichajeModal]);
 
   const openNuevoDialog = useCallback(async () => {
     setManualForm(initialManualForm());
@@ -378,7 +385,14 @@ export function FichajesView() {
               </TableHeader>
               <TableBody>
                 {incidencias.map(i => (
-                  <TableRow key={i.id}>
+                  <TableRow
+                    key={i.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => {
+                      const fichaje = fichajes.find((f) => f.id === i.fichajeId);
+                      if (fichaje) setFichajeModal(fichaje);
+                    }}
+                  >
                     <TableCell className="font-medium text-sm">{i.empleadoNombre}</TableCell>
                     <TableCell className="text-sm">{i.fecha}</TableCell>
                     <TableCell><Badge variant="outline" className="text-xs">{TIPOS_INCIDENCIA_LABEL[i.tipo]}</Badge></TableCell>
@@ -445,10 +459,66 @@ export function FichajesView() {
                 <div><span className="text-muted-foreground">Horas totales:</span><p className="font-semibold">{fichajeModal.horaSalida ? formatHorasDecimal(fichajeModal.horasTotales) : "—"}</p></div>
               </div>
               {fichajeModal.incidencia && <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3"><p className="text-sm font-medium text-destructive">{fichajeModal.incidencia}</p></div>}
-              {fichajeModal.observaciones && <div><span className="text-muted-foreground">Observaciones:</span><p>{fichajeModal.observaciones}</p></div>}
+              <div className="space-y-1.5">
+                <Label className="text-xs">Observaciones RRHH</Label>
+                <Textarea
+                  value={detalleNotas}
+                  onChange={(e) => setDetalleNotas(e.target.value)}
+                  placeholder="Añade contexto o corrección manual"
+                  rows={4}
+                />
+              </div>
             </div>
           )}
           <DialogFooter>
+            {fichajeModal && (
+              <Button
+                variant="outline"
+                disabled={savingDetalle}
+                onClick={async () => {
+                  setSavingDetalle(true);
+                  const res = await updateFichaje(fichajeModal.id, { notas: detalleNotas });
+                  setSavingDetalle(false);
+                  if (res.ok) {
+                    toast.success("Observaciones guardadas");
+                    setFichajeModal((prev) => prev ? { ...prev, observaciones: detalleNotas } : prev);
+                    loadFichajes();
+                  } else {
+                    toast.error(res.error ?? "No se pudieron guardar las observaciones");
+                  }
+                }}
+              >
+                {savingDetalle ? "Guardando…" : "Guardar observaciones"}
+              </Button>
+            )}
+            {fichajeModal && fichajeModal.incidencia && fichajeModal.horaSalida && (
+              <Button
+                disabled={savingDetalle}
+                onClick={async () => {
+                  setSavingDetalle(true);
+                  const res = await updateFichaje(fichajeModal.id, {
+                    notas: detalleNotas,
+                    incidencia: null,
+                    estado: "completado",
+                  });
+                  setSavingDetalle(false);
+                  if (res.ok) {
+                    toast.success("Incidencia resuelta");
+                    setFichajeModal((prev) => prev ? {
+                      ...prev,
+                      observaciones: detalleNotas,
+                      incidencia: null,
+                      estado: "completado",
+                    } : prev);
+                    loadFichajes();
+                  } else {
+                    toast.error(res.error ?? "No se pudo resolver la incidencia");
+                  }
+                }}
+              >
+                Resolver incidencia
+              </Button>
+            )}
             {fichajeModal && !fichajeModal.horaSalida && fichajeModal.horaEntrada && (
               <Button onClick={async () => {
                 const geo = await intentarGeo();
