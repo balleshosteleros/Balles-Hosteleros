@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { distanciaMetros } from "@/features/rrhh/utils/geo";
 import type {
   DiaCalendario,
   MiFichajeHoy,
@@ -86,6 +87,8 @@ function todayISO(): string {
   return new Date().toISOString().split("T")[0];
 }
 
+type GeoInput = { lat: number; lng: number; precision: number } | null;
+
 function monthBounds(anio: number, mes: number) {
   const start = new Date(Date.UTC(anio, mes - 1, 1));
   const end = new Date(Date.UTC(anio, mes, 1));
@@ -167,10 +170,69 @@ export async function getMiFichajeHoy(): Promise<{
   }
 }
 
-export async function ficharEntradaPersonal() {
+export async function ficharEntradaPersonal(geo?: GeoInput) {
   try {
     const { supabase, user, empresaId, nombre } = await getContext();
     if (!user || !empresaId) return { ok: false, error: "No autenticado" };
+    const { data: empleado, error: empleadoErr } = await supabase
+      .from("empleados")
+      .select("local_id, permite_teletrabajo")
+      .eq("user_id", user.id)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (empleadoErr) throw empleadoErr;
+    if (!empleado) {
+      return {
+        ok: false,
+        error: "Tu usuario no está vinculado a ningún empleado.",
+      };
+    }
+    if (!empleado.local_id) {
+      return {
+        ok: false,
+        error: "No tienes un local asignado. Pide a tu responsable que te asigne uno.",
+      };
+    }
+
+    const modoTeletrabajo = Boolean(empleado.permite_teletrabajo);
+    let centro = "";
+
+    if (!modoTeletrabajo) {
+      if (!geo) {
+        return {
+          ok: false,
+          error: "Activa la geolocalización para poder fichar.",
+        };
+      }
+      const { data: local, error: localErr } = await supabase
+        .from("locales")
+        .select("lat, lng, radio_metros, nombre")
+        .eq("id", empleado.local_id)
+        .single();
+      if (localErr) throw localErr;
+      if (!local || local.lat == null || local.lng == null) {
+        return {
+          ok: false,
+          error: "Tu local no tiene ubicación configurada. Avisa a tu responsable.",
+        };
+      }
+      centro = local.nombre ?? "";
+      const dist = distanciaMetros(geo.lat, geo.lng, local.lat, local.lng);
+      if (dist > local.radio_metros) {
+        return {
+          ok: false,
+          error: `Estás a ${Math.round(dist)} m de "${local.nombre}" (radio permitido ${local.radio_metros} m). Acércate al local para fichar.`,
+        };
+      }
+    } else {
+      const { data: local } = await supabase
+        .from("locales")
+        .select("nombre")
+        .eq("id", empleado.local_id)
+        .maybeSingle();
+      centro = local?.nombre ?? "";
+    }
+
     const ahora = new Date();
     const { data, error } = await supabase
       .from("fichajes")
@@ -181,6 +243,12 @@ export async function ficharEntradaPersonal() {
         fecha: todayISO(),
         hora_entrada: ahora.toISOString(),
         estado: "trabajando",
+        local_id: empleado.local_id,
+        lat_entrada: geo?.lat ?? null,
+        lng_entrada: geo?.lng ?? null,
+        precision_entrada_metros: geo?.precision ?? null,
+        modo_teletrabajo: modoTeletrabajo,
+        centro,
       })
       .select()
       .single();
@@ -193,15 +261,39 @@ export async function ficharEntradaPersonal() {
   }
 }
 
-export async function ficharSalidaPersonal(fichajeId: string) {
+export async function ficharSalidaPersonal(fichajeId: string, geo?: GeoInput) {
   try {
     const { supabase } = await getContext();
     const { data: fichaje, error: fetchErr } = await supabase
       .from("fichajes")
-      .select("hora_entrada")
+      .select("hora_entrada, local_id, modo_teletrabajo")
       .eq("id", fichajeId)
       .single();
     if (fetchErr) throw fetchErr;
+
+    if (!fichaje.modo_teletrabajo && fichaje.local_id) {
+      if (!geo) {
+        return {
+          ok: false,
+          error: "Activa la geolocalización para registrar la salida.",
+        };
+      }
+      const { data: local, error: localErr } = await supabase
+        .from("locales")
+        .select("lat, lng, radio_metros, nombre")
+        .eq("id", fichaje.local_id)
+        .single();
+      if (localErr) throw localErr;
+      if (local && local.lat != null && local.lng != null) {
+        const dist = distanciaMetros(geo.lat, geo.lng, local.lat, local.lng);
+        if (dist > local.radio_metros) {
+          return {
+            ok: false,
+            error: `Estás a ${Math.round(dist)} m de "${local.nombre}". Acércate al local para registrar la salida.`,
+          };
+        }
+      }
+    }
 
     const ahora = new Date();
     let horasTotales = 0;
@@ -216,6 +308,9 @@ export async function ficharSalidaPersonal(fichajeId: string) {
         hora_salida: ahora.toISOString(),
         horas_totales: horasTotales,
         estado: "completado",
+        lat_salida: geo?.lat ?? null,
+        lng_salida: geo?.lng ?? null,
+        precision_salida_metros: geo?.precision ?? null,
       })
       .eq("id", fichajeId);
     if (error) throw error;

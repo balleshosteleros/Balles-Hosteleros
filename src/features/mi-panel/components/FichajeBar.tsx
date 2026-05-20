@@ -13,6 +13,7 @@ import {
   getMiFichajeHoy,
   iniciarPausaPersonal,
 } from "@/features/mi-panel/actions/mi-panel-actions";
+import { obtenerPosicionActual } from "@/features/rrhh/utils/geo";
 import type { MiFichajeHoy } from "@/features/mi-panel/types";
 import { formatHorasDecimal } from "@/shared/lib/timeUtils";
 
@@ -71,9 +72,18 @@ export function FichajeBar({
   const trabajando = !!fichaje?.horaEntrada && !finalizado && !enPausa;
   const sinFichar = !fichaje;
 
+  async function intentarGeo() {
+    try {
+      return await obtenerPosicionActual();
+    } catch {
+      return null;
+    }
+  }
+
   async function handleEntrada() {
     setWorking(true);
-    const res = await ficharEntradaPersonal();
+    const geo = await intentarGeo();
+    const res = await ficharEntradaPersonal(geo);
     setWorking(false);
     if (!res.ok) return toast.error(res.error || "No se pudo fichar entrada");
     toast.success("Entrada registrada");
@@ -83,7 +93,8 @@ export function FichajeBar({
   async function handleSalida() {
     if (!fichaje) return;
     setWorking(true);
-    const res = await ficharSalidaPersonal(fichaje.id);
+    const geo = await intentarGeo();
+    const res = await ficharSalidaPersonal(fichaje.id, geo);
     setWorking(false);
     if (!res.ok) return toast.error(res.error || "No se pudo fichar salida");
     toast.success("Salida registrada");
