@@ -1,6 +1,6 @@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Save, Camera } from "lucide-react";
+import { ArrowLeft, Camera } from "lucide-react";
 import { ESTADOS_COLOR, ESTADOS_LABEL, type EmpleadoUI } from "@/features/rrhh/components/empleados/empleado-ui";
 
 const AVATAR_COLORS = [
@@ -17,10 +17,9 @@ function avatarColor(id: string) {
 interface Props {
   empleado: EmpleadoUI;
   onBack: () => void;
-  onSave: () => void;
 }
 
-export function FichaEmpleadoHeader({ empleado, onBack, onSave }: Props) {
+export function FichaEmpleadoHeader({ empleado, onBack }: Props) {
   const iniciales = (empleado.nombre[0] + (empleado.apellidos[0] ?? "")).toUpperCase();
 
   return (
@@ -51,9 +50,6 @@ export function FichaEmpleadoHeader({ empleado, onBack, onSave }: Props) {
           </div>
         </div>
       </div>
-      <Button onClick={onSave} className="gap-2">
-        <Save className="h-4 w-4" /> Guardar cambios
-      </Button>
     </div>
   );
 }

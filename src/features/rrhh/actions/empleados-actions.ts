@@ -237,6 +237,7 @@ export async function updateEmpleado(id: string, updates: UpdateEmpleadoInput) {
     const { error } = await supabase.from("empleados").update(patch).eq("id", id);
     if (error) throw error;
     revalidatePath("/rrhh/empleados");
+    revalidatePath(`/rrhh/empleados/${id}`);
     return { ok: true };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
@@ -275,6 +276,7 @@ export async function setEmpleadoEstado(input: {
     const { error } = await supabase.from("empleados").update(patch).eq("id", input.id);
     if (error) throw error;
     revalidatePath("/rrhh/empleados");
+    revalidatePath(`/rrhh/empleados/${input.id}`);
     return { ok: true };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
@@ -289,6 +291,7 @@ export async function deleteEmpleado(id: string) {
     const { error } = await supabase.from("empleados").delete().eq("id", id);
     if (error) throw error;
     revalidatePath("/rrhh/empleados");
+    revalidatePath(`/rrhh/empleados/${id}`);
     return { ok: true };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";

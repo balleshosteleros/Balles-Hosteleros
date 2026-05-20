@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { FichaEmpleadoHeader } from "@/features/rrhh/components/empleados/FichaEmpleadoHeader";
 import {
   FichajesTab, HorariosTab, SolicitudesEmpleadoTab,
 } from "@/features/rrhh/components/empleados/FichaTabsContent";
+import { GestionEmpleadoCard } from "@/features/rrhh/components/empleados/GestionEmpleadoCard";
 import { SubmoduloPorEmpleadoPlaceholder } from "@/features/rrhh/components/empleados/SubmoduloPorEmpleadoPlaceholder";
 import { FirmasEmpleadoTab } from "@/features/rrhh/components/empleados/FirmasEmpleadoTab";
 import { DatosPersonalesForm } from "@/features/mi-panel/components/DatosPersonalesForm";
@@ -62,6 +63,9 @@ type EmpleadoBD = {
   telefono: string | null;
   user_id: string;
   departamento_id: string | null;
+  puesto: string | null;
+  fecha_baja: string | null;
+  notas: string | null;
   estado: string;
   departamentos?: { nombre: string } | null;
 };
@@ -106,38 +110,40 @@ export default function FichaEmpleadoPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TopTab>("perfil");
 
-  useEffect(() => {
+  const cargarFicha = useCallback(async () => {
     if (!id) return;
-    let alive = true;
     setLoading(true);
-    Promise.all([
+    const [res, fichajesRes, solicitudesRes, horarioRes] = await Promise.all([
       getEmpleadoConPerfil(id),
       listFichajesEmpleado(id),
       listSolicitudesEmpleado(id),
       getEmpleadoHorarioActual(id),
-    ]).then(([res, fichajesRes, solicitudesRes, horarioRes]) => {
-      if (!alive) return;
-      if (!res.ok) {
-        setError(res.error ?? "Empleado no encontrado");
-        setEmpleadoBD(null);
-        setDatosPersonales(null);
-        setEmpresasAcceso([]);
-        setFichajes([]);
-        setSolicitudes([]);
-        setHorarioActual(null);
-      } else {
-        setEmpleadoBD(res.empleado as EmpleadoBD);
-        setDatosPersonales(res.datosPersonales ?? null);
-        setEmpresasAcceso((res.empresasAcceso as EmpresaAcceso[]) ?? []);
-        setFichajes(fichajesRes.ok ? fichajesRes.data : []);
-        setSolicitudes(solicitudesRes.ok ? solicitudesRes.data : []);
-        setHorarioActual(horarioRes.ok ? horarioRes.data : null);
-        setError(null);
-      }
-      setLoading(false);
-    });
-    return () => { alive = false; };
+    ]);
+
+    if (!res.ok) {
+      setError(res.error ?? "Empleado no encontrado");
+      setEmpleadoBD(null);
+      setDatosPersonales(null);
+      setEmpresasAcceso([]);
+      setFichajes([]);
+      setSolicitudes([]);
+      setHorarioActual(null);
+    } else {
+      setEmpleadoBD(res.empleado as EmpleadoBD);
+      setDatosPersonales(res.datosPersonales ?? null);
+      setEmpresasAcceso((res.empresasAcceso as EmpresaAcceso[]) ?? []);
+      setFichajes(fichajesRes.ok ? fichajesRes.data : []);
+      setSolicitudes(solicitudesRes.ok ? solicitudesRes.data : []);
+      setHorarioActual(horarioRes.ok ? horarioRes.data : null);
+      setError(null);
+    }
+
+    setLoading(false);
   }, [id]);
+
+  useEffect(() => {
+    void cargarFicha();
+  }, [cargarFicha]);
 
   const empleadoUI = useMemo(
     () => (empleadoBD ? bdToEmpleadoUI(empleadoBD) : null),
@@ -167,6 +173,8 @@ export default function FichaEmpleadoPage() {
   }
 
   const empleado = empleadoUI;
+  const empleadoRegistro = empleadoBD;
+  const datosPerfil = datosPersonales;
 
   function renderTabContent() {
     switch (activeTab) {
@@ -175,10 +183,24 @@ export default function FichaEmpleadoPage() {
         // modo editable. El guardado va contra el profile vinculado al
         // empleado vía la admin action `guardarPerfilEmpleado`.
         return (
-          <div className="p-4 md:p-6 max-w-3xl mx-auto">
+          <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-6">
+            <GestionEmpleadoCard
+              empleadoId={empleadoRegistro.id}
+              initial={{
+                nombre: empleadoRegistro.nombre,
+                apellidos: empleadoRegistro.apellidos,
+                departamentoId: empleadoRegistro.departamento_id,
+                puesto: empleadoRegistro.puesto,
+                estado: empleadoRegistro.estado as "Activo" | "Baja temporal" | "Baja definitiva",
+                fechaBaja: empleadoRegistro.fecha_baja,
+                notas: empleadoRegistro.notas,
+              }}
+              onUpdated={cargarFicha}
+              onDeleted={() => router.push("/rrhh/empleados")}
+            />
             <DatosPersonalesForm
-              initial={datosPersonales!}
-              targetEmpleadoId={empleadoBD!.id}
+              initial={datosPerfil}
+              targetEmpleadoId={empleadoRegistro.id}
             />
           </div>
         );
@@ -189,7 +211,7 @@ export default function FichaEmpleadoPage() {
       case "solicitudes":
         return <div className="p-6"><SolicitudesEmpleadoTab solicitudes={solicitudes} /></div>;
       case "firmas":
-        return <FirmasEmpleadoTab empleadoId={empleadoBD!.id} />;
+        return <FirmasEmpleadoTab empleadoId={empleadoRegistro.id} />;
       case "calendarios":
         return <SubmoduloPorEmpleadoPlaceholder modulo="Calendarios" path="/rrhh/calendarios" empleado={empleado} />;
       case "reclutamiento":
@@ -216,7 +238,6 @@ export default function FichaEmpleadoPage() {
       <FichaEmpleadoHeader
         empleado={empleado}
         onBack={() => router.push("/rrhh/empleados")}
-        onSave={() => { /* el form gestiona su propio guardado */ }}
       />
 
       {empresasAcceso.length > 0 && (
