@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { ModuleIO, RowSchema } from "@/shared/io";
 import { getFichajesPorEmpresa, type Fichaje } from "@/features/rrhh/data/fichajes";
 
-const ESTADOS = ["completo", "incompleto", "incidencia", "pendiente", "validado"] as const;
+const ESTADOS = ["pendiente", "trabajando", "pausa", "completado"] as const;
 
 const fichajeSchema = z.object({
   id: z.string(),

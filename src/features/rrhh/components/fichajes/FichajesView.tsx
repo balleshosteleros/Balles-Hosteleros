@@ -305,7 +305,12 @@ export function FichajesView() {
             onColumnasOrdenChange={setColumnasOrden}
             extraDerecha={
               <>
-                <IOActions config={fichajesIO} context={{ empresaId: empresaActual.id }} onSuccess={() => window.location.reload()} />
+                <IOActions
+                  config={fichajesIO}
+                  context={{ empresaId: empresaActual.id }}
+                  exportRecords={fichajesFiltrados}
+                  onSuccess={() => window.location.reload()}
+                />
                 <Button
                   size="icon"
                   variant={showConfig ? "default" : "outline"}
