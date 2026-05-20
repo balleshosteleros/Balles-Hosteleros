@@ -3,8 +3,8 @@
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { ESTADOS_LABEL, ESTADOS_COLOR, type EstadoEmpleado, type Empleado } from "@/features/rrhh/data/rrhh";
 import { listEmpleados } from "@/features/rrhh/actions/empleados-actions";
+import { ESTADOS_LABEL, ESTADOS_COLOR, type EmpleadoUI } from "@/features/rrhh/components/empleados/empleado-ui";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -68,17 +68,22 @@ type EmpleadoBDRow = {
   empresas_acceso?: Array<{ id: string; nombre: string }>;
 };
 
-type EmpleadoConAcceso = Empleado & {
+type EmpleadoConAcceso = EmpleadoUI & {
   esPrincipal: boolean;
   empresasAcceso: Array<{ id: string; nombre: string }>;
 };
+
+function normalizarEstadoEmpleado(estado: string): EmpleadoUI["estado"] {
+  if (estado === "Baja temporal" || estado === "Baja definitiva") return estado;
+  return "Activo";
+}
 
 function bdToEmpleado(row: EmpleadoBDRow): EmpleadoConAcceso {
   return {
     id: row.id,
     nombre: row.nombre ?? "",
     apellidos: row.apellidos ?? "",
-    estado: "trabajando", // Mientras no haya estado real desde fichajes
+    estado: normalizarEstadoEmpleado(row.estado),
     horarioTipo: "—",
     horarioSemanal: "—",
     horasHoy: "—",

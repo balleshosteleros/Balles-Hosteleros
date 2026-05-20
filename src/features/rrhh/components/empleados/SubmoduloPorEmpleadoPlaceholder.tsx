@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Construction, ExternalLink } from "lucide-react";
-import type { Empleado } from "@/features/rrhh/data/rrhh";
+import type { EmpleadoUI } from "@/features/rrhh/components/empleados/empleado-ui";
 
 /**
  * Placeholder uniforme para los submódulos de RRHH dentro de la ficha de
@@ -18,7 +18,7 @@ export function SubmoduloPorEmpleadoPlaceholder({
 }: {
   modulo: string;
   path: string;
-  empleado: Empleado;
+  empleado: EmpleadoUI;
 }) {
   const nombreCompleto = `${empleado.nombre} ${empleado.apellidos}`.trim();
 

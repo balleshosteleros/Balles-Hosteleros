@@ -1,7 +1,7 @@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Save, Camera } from "lucide-react";
-import { Empleado, ESTADOS_COLOR, ESTADOS_LABEL } from "@/features/rrhh/data/rrhh";
+import { ESTADOS_COLOR, ESTADOS_LABEL, type EmpleadoUI } from "@/features/rrhh/components/empleados/empleado-ui";
 
 const AVATAR_COLORS = [
   "hsl(var(--primary))", "hsl(25 80% 55%)", "hsl(280 60% 55%)", "hsl(160 55% 42%)",
@@ -15,7 +15,7 @@ function avatarColor(id: string) {
 }
 
 interface Props {
-  empleado: Empleado;
+  empleado: EmpleadoUI;
   onBack: () => void;
   onSave: () => void;
 }

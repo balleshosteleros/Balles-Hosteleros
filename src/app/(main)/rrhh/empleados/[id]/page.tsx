@@ -21,9 +21,7 @@ import {
   type FichajeEmpleadoResumen,
 } from "@/features/rrhh/actions/fichajes-actions";
 import type { SolicitudPersonal } from "@/features/mi-panel/types";
-import type { Empleado } from "@/features/rrhh/data/rrhh";
-import { getFichaEmpleado } from "@/features/rrhh/data/empleados-ficha";
-import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import type { EmpleadoUI } from "@/features/rrhh/components/empleados/empleado-ui";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { cn } from "@/shared/lib/utils";
 import {
@@ -69,16 +67,19 @@ type EmpleadoBD = {
 };
 
 /**
- * Convierte el empleado de BD al shape `Empleado` que esperan los tabs
- * heredados (FichajesTab, HorariosTab) — esos componentes son mock-driven
- * y aún no se han migrado.
+ * Convierte el empleado real de BD al shape UI usado por la ficha.
+ * Los campos que todavía dependen de futuros bloques se dejan explícitamente
+ * como no disponibles en vez de fabricar estados mock.
  */
-function bdToEmpleadoMock(emp: EmpleadoBD): Empleado {
+function bdToEmpleadoUI(emp: EmpleadoBD): EmpleadoUI {
   return {
     id: emp.id,
     nombre: emp.nombre ?? "",
     apellidos: emp.apellidos ?? "",
-    estado: "trabajando",
+    estado:
+      emp.estado === "Baja temporal" || emp.estado === "Baja definitiva"
+        ? emp.estado
+        : "Activo",
     horarioTipo: "—",
     horarioSemanal: "—",
     horasHoy: "—",
@@ -95,8 +96,6 @@ export default function FichaEmpleadoPage() {
   const params = useParams();
   const id = params?.id as string | undefined;
   const router = useRouter();
-  const { empresaActual } = useEmpresa();
-
   const [loading, setLoading] = useState(true);
   const [empleadoBD, setEmpleadoBD] = useState<EmpleadoBD | null>(null);
   const [datosPersonales, setDatosPersonales] = useState<DatosPersonalesCompletos | null>(null);
@@ -140,16 +139,9 @@ export default function FichaEmpleadoPage() {
     return () => { alive = false; };
   }, [id]);
 
-  const empleadoMock = useMemo(
-    () => (empleadoBD ? bdToEmpleadoMock(empleadoBD) : null),
+  const empleadoUI = useMemo(
+    () => (empleadoBD ? bdToEmpleadoUI(empleadoBD) : null),
     [empleadoBD],
-  );
-  // La ficha "vieja" (mocks legacy) se sigue consultando para los tabs que aún
-  // no se han migrado a BD. Si el id no coincide con un mock, devuelve null y
-  // los tabs heredados muestran un fallback.
-  const ficha = useMemo(
-    () => (id ? getFichaEmpleado(empresaActual.id, id) : null),
-    [id, empresaActual.id],
   );
 
   if (loading) {
@@ -160,7 +152,7 @@ export default function FichaEmpleadoPage() {
     );
   }
 
-  if (error || !empleadoBD || !empleadoMock || !datosPersonales) {
+  if (error || !empleadoBD || !empleadoUI || !datosPersonales) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-2">
         <p className="text-muted-foreground">{error ?? "Empleado no encontrado."}</p>
@@ -173,6 +165,8 @@ export default function FichaEmpleadoPage() {
       </div>
     );
   }
+
+  const empleado = empleadoUI;
 
   function renderTabContent() {
     switch (activeTab) {
@@ -189,40 +183,38 @@ export default function FichaEmpleadoPage() {
           </div>
         );
       case "fichajes":
-        return <div className="p-6"><FichajesTab empleado={empleadoMock!} fichajes={fichajes} /></div>;
+        return <div className="p-6"><FichajesTab empleado={empleado} fichajes={fichajes} /></div>;
       case "horarios":
-        return ficha
-          ? <div className="p-6"><HorariosTab empleado={empleadoMock!} ficha={ficha} horario={horarioActual} /></div>
-          : <SubmoduloPorEmpleadoPlaceholder modulo="Horarios" path="/rrhh/horarios" empleado={empleadoMock!} />;
+        return <div className="p-6"><HorariosTab horario={horarioActual} /></div>;
       case "solicitudes":
         return <div className="p-6"><SolicitudesEmpleadoTab solicitudes={solicitudes} /></div>;
       case "firmas":
         return <FirmasEmpleadoTab empleadoId={empleadoBD!.id} />;
       case "calendarios":
-        return <SubmoduloPorEmpleadoPlaceholder modulo="Calendarios" path="/rrhh/calendarios" empleado={empleadoMock!} />;
+        return <SubmoduloPorEmpleadoPlaceholder modulo="Calendarios" path="/rrhh/calendarios" empleado={empleado} />;
       case "reclutamiento":
-        return <SubmoduloPorEmpleadoPlaceholder modulo="Reclutamiento" path="/rrhh/reclutamiento" empleado={empleadoMock!} />;
+        return <SubmoduloPorEmpleadoPlaceholder modulo="Reclutamiento" path="/rrhh/reclutamiento" empleado={empleado} />;
       case "boarding":
-        return <SubmoduloPorEmpleadoPlaceholder modulo="Boarding" path="/rrhh/boarding" empleado={empleadoMock!} />;
+        return <SubmoduloPorEmpleadoPlaceholder modulo="Boarding" path="/rrhh/boarding" empleado={empleado} />;
       case "bonus":
-        return <SubmoduloPorEmpleadoPlaceholder modulo="Bonus" path="/rrhh/bonus" empleado={empleadoMock!} />;
+        return <SubmoduloPorEmpleadoPlaceholder modulo="Bonus" path="/rrhh/bonus" empleado={empleado} />;
       case "points":
-        return <SubmoduloPorEmpleadoPlaceholder modulo="Points" path="/rrhh/points" empleado={empleadoMock!} />;
+        return <SubmoduloPorEmpleadoPlaceholder modulo="Points" path="/rrhh/points" empleado={empleado} />;
       case "pagos":
-        return <SubmoduloPorEmpleadoPlaceholder modulo="Pagos" path="/rrhh/pagos" empleado={empleadoMock!} />;
+        return <SubmoduloPorEmpleadoPlaceholder modulo="Pagos" path="/rrhh/pagos" empleado={empleado} />;
       case "formacion":
-        return <SubmoduloPorEmpleadoPlaceholder modulo="Formación" path="/rrhh/formacion" empleado={empleadoMock!} />;
+        return <SubmoduloPorEmpleadoPlaceholder modulo="Formación" path="/rrhh/formacion" empleado={empleado} />;
       case "encuestas":
-        return <SubmoduloPorEmpleadoPlaceholder modulo="Encuestas" path="/rrhh/encuestas" empleado={empleadoMock!} />;
+        return <SubmoduloPorEmpleadoPlaceholder modulo="Encuestas" path="/rrhh/encuestas" empleado={empleado} />;
       case "cuestionarios":
-        return <SubmoduloPorEmpleadoPlaceholder modulo="Cuestionarios" path="/rrhh/cuestionarios" empleado={empleadoMock!} />;
+        return <SubmoduloPorEmpleadoPlaceholder modulo="Cuestionarios" path="/rrhh/cuestionarios" empleado={empleado} />;
     }
   }
 
   return (
     <div className="flex flex-col h-full">
       <FichaEmpleadoHeader
-        empleado={empleadoMock}
+        empleado={empleado}
         onBack={() => router.push("/rrhh/empleados")}
         onSave={() => { /* el form gestiona su propio guardado */ }}
       />
