@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Save, Trash2, UserRoundX } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -25,16 +26,25 @@ import {
   deleteEmpleado,
   type EstadoEmpleado,
 } from "@/features/rrhh/actions/empleados-actions";
+import {
+  asignarLocalEmpleado,
+  listLocales,
+  setEmpleadoTeletrabajo,
+} from "@/features/ajustes/actions/locales-actions";
 
 type DepartamentoOpt = { id: string; nombre: string };
+type LocalOpt = { id: string; nombre: string };
 
 type Props = {
   empleadoId: string;
   initial: {
+    empresaId: string;
     nombre: string;
     apellidos: string | null;
     departamentoId: string | null;
     puesto: string | null;
+    localId: string | null;
+    permiteTeletrabajo: boolean | null;
     estado: EstadoEmpleado;
     fechaBaja: string | null;
     notas: string | null;
@@ -45,8 +55,11 @@ type Props = {
 
 export function GestionEmpleadoCard({ empleadoId, initial, onUpdated, onDeleted }: Props) {
   const [departamentos, setDepartamentos] = useState<DepartamentoOpt[]>([]);
+  const [locales, setLocales] = useState<LocalOpt[]>([]);
   const [departamentoId, setDepartamentoId] = useState(initial.departamentoId ?? "__none__");
   const [puesto, setPuesto] = useState(initial.puesto ?? "");
+  const [localId, setLocalId] = useState(initial.localId ?? "__none__");
+  const [permiteTeletrabajo, setPermiteTeletrabajo] = useState(Boolean(initial.permiteTeletrabajo));
   const [notas, setNotas] = useState(initial.notas ?? "");
   const [estado, setEstado] = useState<EstadoEmpleado>(initial.estado);
   const [fechaBaja, setFechaBaja] = useState(initial.fechaBaja ?? "");
@@ -59,11 +72,16 @@ export function GestionEmpleadoCard({ empleadoId, initial, onUpdated, onDeleted 
     listDepartamentos().then((res) => {
       setDepartamentos((res.data ?? []) as DepartamentoOpt[]);
     });
+    listLocales(initial.empresaId).then((res) => {
+      setLocales((res.ok ? res.data : []) as LocalOpt[]);
+    });
   }, []);
 
   useEffect(() => {
     setDepartamentoId(initial.departamentoId ?? "__none__");
     setPuesto(initial.puesto ?? "");
+    setLocalId(initial.localId ?? "__none__");
+    setPermiteTeletrabajo(Boolean(initial.permiteTeletrabajo));
     setNotas(initial.notas ?? "");
     setEstado(initial.estado);
     setFechaBaja(initial.fechaBaja ?? "");
@@ -71,15 +89,28 @@ export function GestionEmpleadoCard({ empleadoId, initial, onUpdated, onDeleted 
 
   async function guardarDatosLaborales() {
     setSavingLaboral(true);
-    const res = await updateEmpleado(empleadoId, {
-      departamentoId: departamentoId === "__none__" ? null : departamentoId,
-      puesto: puesto.trim() || null,
-      notas: notas.trim() || null,
-    });
+    const [resEmpleado, resLocal, resTeletrabajo] = await Promise.all([
+      updateEmpleado(empleadoId, {
+        departamentoId: departamentoId === "__none__" ? null : departamentoId,
+        puesto: puesto.trim() || null,
+        notas: notas.trim() || null,
+      }),
+      asignarLocalEmpleado(empleadoId, localId === "__none__" ? null : localId),
+      setEmpleadoTeletrabajo(empleadoId, permiteTeletrabajo),
+    ]);
     setSavingLaboral(false);
 
-    if (!res.ok) {
-      toast.error(res.error ?? "No se pudieron guardar los datos laborales");
+    const error =
+      resEmpleado.ok
+        ? resLocal.ok
+          ? resTeletrabajo.ok
+            ? null
+            : resTeletrabajo.error
+          : resLocal.error
+        : resEmpleado.error;
+
+    if (error) {
+      toast.error(error ?? "No se pudieron guardar los datos laborales");
       return;
     }
 
@@ -153,6 +184,33 @@ export function GestionEmpleadoCard({ empleadoId, initial, onUpdated, onDeleted 
           <div className="space-y-1.5">
             <Label>Puesto</Label>
             <Input value={puesto} onChange={(e) => setPuesto(e.target.value)} placeholder="ej. Camarero/a" />
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label>Local principal</Label>
+            <Select value={localId} onValueChange={setLocalId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Sin asignar" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Sin asignar</SelectItem>
+                {locales.map((local) => (
+                  <SelectItem key={local.id} value={local.id}>{local.nombre}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Teletrabajo</Label>
+            <label className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+              <Checkbox
+                checked={permiteTeletrabajo}
+                onCheckedChange={(checked) => setPermiteTeletrabajo(checked === true)}
+              />
+              <span>Permitir fichaje fuera del local asignado</span>
+            </label>
           </div>
         </div>
 

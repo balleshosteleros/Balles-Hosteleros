@@ -56,6 +56,7 @@ type TopTab = typeof TOP_TABS[number]["id"];
 // Forma del row real de Supabase (joineado con departamentos).
 type EmpleadoBD = {
   id: string;
+  empresa_id: string;
   nombre: string;
   apellidos: string | null;
   email_personal: string | null;
@@ -64,6 +65,8 @@ type EmpleadoBD = {
   user_id: string;
   departamento_id: string | null;
   puesto: string | null;
+  local_id: string | null;
+  permite_teletrabajo: boolean | null;
   fecha_baja: string | null;
   notas: string | null;
   estado: string;
@@ -187,10 +190,13 @@ export default function FichaEmpleadoPage() {
             <GestionEmpleadoCard
               empleadoId={empleadoRegistro.id}
               initial={{
+                empresaId: empleadoRegistro.empresa_id,
                 nombre: empleadoRegistro.nombre,
                 apellidos: empleadoRegistro.apellidos,
                 departamentoId: empleadoRegistro.departamento_id,
                 puesto: empleadoRegistro.puesto,
+                localId: empleadoRegistro.local_id,
+                permiteTeletrabajo: empleadoRegistro.permite_teletrabajo,
                 estado: empleadoRegistro.estado as "Activo" | "Baja temporal" | "Baja definitiva",
                 fechaBaja: empleadoRegistro.fecha_baja,
                 notas: empleadoRegistro.notas,
