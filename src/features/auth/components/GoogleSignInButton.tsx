@@ -152,6 +152,7 @@ export function GoogleSignInButton({
           return
         }
         const code = 'code' in json && json.code ? json.code : 'auth_callback_failed'
+        if (!cancelled) setBusy(false)
         router.replace(`/?error=${encodeURIComponent(code)}`)
       } catch {
         if (!cancelled) {
