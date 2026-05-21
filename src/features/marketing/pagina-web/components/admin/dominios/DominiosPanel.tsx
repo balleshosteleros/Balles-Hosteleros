@@ -29,7 +29,7 @@ import {
   listarDominios,
   verificarDominio,
 } from "../../../actions/dominios-actions";
-import { AnadirDominioDialog } from "./AnadirDominioDialog";
+import { WizardDominioDialog } from "./WizardDominioDialog";
 import { EstadoDominio } from "./EstadoDominio";
 import type { PaginaWebDominio } from "../../../types";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
@@ -115,7 +115,7 @@ export function DominiosPanel({ paginaId, nombrePagina }: Props) {
           </div>
         </div>
         <Button variant="primary" size="lg" onClick={() => setNuevoOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" /> Añadir dominio
+          <Plus className="h-4 w-4 mr-2" /> Conectar dirección web
         </Button>
       </div>
 
@@ -210,11 +210,11 @@ export function DominiosPanel({ paginaId, nombrePagina }: Props) {
         </Table>
       </Card>
 
-      <AnadirDominioDialog
+      <WizardDominioDialog
         open={nuevoOpen}
         onOpenChange={setNuevoOpen}
         paginaId={paginaId}
-        onAdded={cargar}
+        onCompletado={cargar}
       />
 
       <AlertDialog

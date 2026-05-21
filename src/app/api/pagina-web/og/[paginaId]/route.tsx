@@ -1,12 +1,10 @@
 /**
- * OG image runtime con @vercel/og.
+ * OG image runtime con next/og (Fluid Compute, Node.js).
  * Lee título de la página publicada y genera 1200x630.
  */
-import { ImageResponse } from "@vercel/og";
+import { ImageResponse } from "next/og";
 import { NextRequest } from "next/server";
 import { createAnonClient } from "@/lib/supabase/anon";
-
-export const runtime = "edge";
 
 export async function GET(
   _req: NextRequest,

@@ -218,17 +218,7 @@ export function PaginasListView() {
   );
 
   return (
-    <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Globe className="h-6 w-6" /> Página web
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Web corporativa + one-pages de campaña. Dominios custom con SSL automático.
-        </p>
-      </div>
-
+    <div className="p-6 space-y-4 max-w-[1400px] mx-auto">
       <SubmoduleToolbar
         busqueda={search}
         onBusquedaChange={setSearch}
@@ -244,21 +234,16 @@ export function PaginasListView() {
         columnasOrden={columnasOrden}
         onColumnasOrdenChange={setColumnasOrden}
         extraDerecha={
-          <>
-            <span className="text-xs text-muted-foreground">
-              {filtered.length} página{filtered.length !== 1 ? "s" : ""}
-            </span>
-            <Button
-              size="icon"
-              variant={showConfig ? "default" : "outline"}
-              className="h-9 w-9"
-              onClick={() => setShowConfig((v) => !v)}
-              title="Configuración"
-              aria-label="Configuración"
-            >
-              <Settings className="h-4 w-4" strokeWidth={1.75} />
-            </Button>
-          </>
+          <Button
+            size="icon"
+            variant={showConfig ? "default" : "outline"}
+            className="h-9 w-9"
+            onClick={() => setShowConfig((v) => !v)}
+            title="Configuración"
+            aria-label="Configuración"
+          >
+            <Settings className="h-4 w-4" strokeWidth={1.75} />
+          </Button>
         }
       />
 
