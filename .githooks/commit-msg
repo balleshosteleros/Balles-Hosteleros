@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+msg_file="${1:?commit message file is required}"
+
+python3 - "$msg_file" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+lines = text.splitlines()
+
+suffix = " _Fernando"
+skip_prefixes = ("Merge ", "Revert ", "fixup! ", "squash! ")
+
+for i, line in enumerate(lines):
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#"):
+        continue
+    if stripped.startswith(skip_prefixes) or stripped.endswith(suffix):
+        break
+    lines[i] = line.rstrip() + suffix
+    path.write_text("\n".join(lines) + ("\n" if text.endswith("\n") else ""), encoding="utf-8")
+    break
+PY
