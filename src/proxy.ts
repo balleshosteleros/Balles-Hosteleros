@@ -23,6 +23,15 @@ function normalizar(s: string): string {
   return s.normalize('NFD').replace(COMBINING_MARKS, '').toUpperCase().trim()
 }
 
+const MODULO_ALIASES: Record<string, string[]> = {
+  RRHH: ['RRHH', 'RECURSOS HUMANOS'],
+}
+
+function modulosPermitidos(modulo: string): string[] {
+  const moduloNorm = normalizar(modulo)
+  return MODULO_ALIASES[moduloNorm] ?? [moduloNorm]
+}
+
 function moduloRequerido(pathname: string): string | null {
   for (const [prefijo, modulo] of MODULO_POR_PREFIJO) {
     if (pathname === prefijo || pathname.startsWith(prefijo + '/')) {
@@ -137,8 +146,8 @@ export async function proxy(request: NextRequest) {
     .maybeSingle()
 
   const permisos = (rolRow?.permisos ?? []) as Array<{ modulo: string; ver: boolean; editar: boolean }>
-  const moduloReqNorm = normalizar(moduloReq)
-  const allowed = permisos.some((p) => p.ver && normalizar(p.modulo) === moduloReqNorm)
+  const modulosReqNorm = new Set(modulosPermitidos(moduloReq))
+  const allowed = permisos.some((p) => p.ver && modulosReqNorm.has(normalizar(p.modulo)))
 
   if (!allowed) {
     return NextResponse.redirect(new URL('/', request.url))

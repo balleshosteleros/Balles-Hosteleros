@@ -23,12 +23,24 @@ import { listLocales } from "@/features/ajustes/actions/locales-actions";
 type CredencialesAlta = { email: string; password: string };
 type LocalOpt = { id: string; nombre: string };
 
+function ordenarEmpresasConPrincipal(
+  empresaIds: string[],
+  empresaPrincipalId: string | null,
+) {
+  if (!empresaPrincipalId) return empresaIds;
+  const resto = empresaIds.filter((id) => id !== empresaPrincipalId);
+  return empresaIds.includes(empresaPrincipalId)
+    ? [empresaPrincipalId, ...resto]
+    : empresaIds;
+}
+
 export default function NuevoEmpleadoPage() {
   const router = useRouter();
 
   const [departamentos, setDepartamentos] = useState<Array<{ id: string; nombre: string }>>([]);
   const [empresas, setEmpresas] = useState<EmpresaAccesible[]>([]);
   const [empresasMarcadas, setEmpresasMarcadas] = useState<string[]>([]);
+  const [empresaPrincipalId, setEmpresaPrincipalId] = useState<string | null>(null);
   const [localesPorEmpresa, setLocalesPorEmpresa] = useState<Record<string, LocalOpt[]>>({});
   const [localSeleccionado, setLocalSeleccionado] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -69,17 +81,24 @@ export default function NuevoEmpleadoPage() {
     });
   }, [empresasMarcadas, localesPorEmpresa, empresas]);
 
-  const empresaPrincipalId = empresasMarcadas[0] ?? null;
-
   function toggleEmpresa(id: string, checked: boolean) {
     setEmpresasMarcadas((prev) => {
-      if (checked) return prev.includes(id) ? prev : [...prev, id];
+      if (checked) {
+        if (prev.includes(id)) return prev;
+        const next = [...prev, id];
+        setEmpresaPrincipalId((actual) => actual ?? id);
+        return next;
+      }
       const next = prev.filter((x) => x !== id);
       // Si desmarcamos, limpiamos el local elegido para esa empresa.
       setLocalSeleccionado((s) => {
         const copia = { ...s };
         delete copia[id];
         return copia;
+      });
+      setEmpresaPrincipalId((actual) => {
+        if (actual !== id) return actual;
+        return next[0] ?? null;
       });
       return next;
     });
@@ -101,6 +120,15 @@ export default function NuevoEmpleadoPage() {
       toast.error("Selecciona al menos una empresa para el empleado");
       return;
     }
+    if (!empresaPrincipalId || !empresasMarcadas.includes(empresaPrincipalId)) {
+      toast.error("Selecciona una empresa principal válida");
+      return;
+    }
+
+    const empresasOrdenadas = ordenarEmpresasConPrincipal(
+      empresasMarcadas,
+      empresaPrincipalId,
+    );
 
     setSaving(true);
     const res = await createEmpleado({
@@ -111,7 +139,8 @@ export default function NuevoEmpleadoPage() {
       emailEmpresa: emailEmpresa || undefined,
       emailPersonal,
       telefono: (formData.get("telefono") as string) || undefined,
-      empresaIds: empresasMarcadas,
+      empresaIds: empresasOrdenadas,
+      empresaPrincipalId,
       localPorEmpresa: localSeleccionado,
     });
     setSaving(false);
@@ -237,7 +266,7 @@ export default function NuevoEmpleadoPage() {
             </Label>
           </div>
           <p className="text-xs text-muted-foreground">
-            Marca las empresas a las que el empleado podrá acceder. La primera marcada será su empresa principal.
+            Marca las empresas a las que el empleado podrá acceder y elige cuál será la principal.
           </p>
           {empresas.length === 0 ? (
             <div className="text-sm text-muted-foreground py-2">Cargando empresas…</div>
@@ -266,6 +295,25 @@ export default function NuevoEmpleadoPage() {
                     </label>
                     {marcada && (
                       <div className="pl-6 space-y-1">
+                        <div className="flex items-center justify-between gap-3">
+                          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                            Empresa principal
+                          </Label>
+                          <Button
+                            type="button"
+                            variant={esPrincipal ? "default" : "outline"}
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => {
+                              setEmpresaPrincipalId(e.id);
+                              setEmpresasMarcadas((prev) =>
+                                ordenarEmpresasConPrincipal(prev, e.id)
+                              );
+                            }}
+                          >
+                            {esPrincipal ? "Principal" : "Marcar principal"}
+                          </Button>
+                        </div>
                         <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
                           Local en esta empresa
                         </Label>

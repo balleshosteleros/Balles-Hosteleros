@@ -19,6 +19,16 @@ const FALLBACK_DEPARTAMENTOS = [
   "CACHIMBEROS", "ARTISTAS", "MANTENIMIENTO", "RRPP", "ADMINISTRATIVO",
 ].map(nombre => ({ id: `mock-dep-${nombre.toLowerCase().replace(/\s+/g, "-")}`, nombre }));
 
+function ordenarEmpresasConPrincipal(
+  empresaIds: string[],
+  empresaPrincipalId: string,
+) {
+  const resto = empresaIds.filter((id) => id !== empresaPrincipalId);
+  return empresaIds.includes(empresaPrincipalId)
+    ? [empresaPrincipalId, ...resto]
+    : [empresaPrincipalId, ...resto];
+}
+
 export async function listEmpleados() {
   try {
     const { supabase, empresaId } = await getAppContext();
@@ -99,9 +109,10 @@ export async function createEmpleado(input: {
   emailPersonal: string;
   telefono?: string;
   // Empresas a las que el empleado tendrá acceso. La primera es la "principal"
-  // (queda como empleados.empresa_id y profiles.empresa_id). Si va vacío,
-  // se usa la empresa activa del admin (compatibilidad con el flujo antiguo).
+  // (queda como empleados.empresa_id y profiles.empresa_id). Si no se pasa
+  // `empresaPrincipalId`, se usa la primera o la empresa activa del admin.
   empresaIds?: string[];
+  empresaPrincipalId?: string;
   // Local asignado por empresa. Solo se aplica al de la empresa principal en
   // empleados.local_id; el resto se registra solo como acceso vía user_empresas
   // y se podrá editar después desde la ficha del empleado.
@@ -110,13 +121,20 @@ export async function createEmpleado(input: {
   try {
     const { empresaId: empresaActivaId } = await getAppContext();
 
-    const empresasSeleccionadas = (input.empresaIds ?? []).filter(Boolean);
-    const empresaPrincipalId = empresasSeleccionadas[0] ?? empresaActivaId;
+    const empresasSeleccionadas = Array.from(new Set((input.empresaIds ?? []).filter(Boolean)));
+    const empresaPrincipalId = input.empresaPrincipalId ?? empresasSeleccionadas[0] ?? empresaActivaId;
     if (!empresaPrincipalId) return { ok: false, error: "Selecciona al menos una empresa." };
     // Si no se pasó ninguna explícitamente, usamos la activa como única.
-    const empresasAcceso = empresasSeleccionadas.length > 0
-      ? Array.from(new Set(empresasSeleccionadas))
+    const empresasAccesoBase = empresasSeleccionadas.length > 0
+      ? empresasSeleccionadas
       : [empresaPrincipalId];
+    const empresasAcceso = ordenarEmpresasConPrincipal(
+      empresasAccesoBase,
+      empresaPrincipalId,
+    );
+    if (!empresasAcceso.includes(empresaPrincipalId)) {
+      return { ok: false, error: "La empresa principal debe estar incluida en los accesos." };
+    }
 
     // Verificar admin + que el caller pertenece a TODAS las empresas a las
     // que va a dar acceso al nuevo empleado. Sin este check, un admin de la
@@ -153,6 +171,7 @@ export async function createEmpleado(input: {
       full_name: fullName,
       nombre: input.nombre,
       apellidos: input.apellidos ?? null,
+      rol_label: "EMPLEADO",
       es_empleado: true,
       avatar_obligatorio: true,
     }).eq("id", newUserId);
