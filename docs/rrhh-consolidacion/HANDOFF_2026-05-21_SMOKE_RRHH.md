@@ -4,6 +4,23 @@
 
 Sesion cerrada tras ejecutar un smoke real de `TASK-002` sobre RRHH, con fixes operativos en Supabase y documentacion de usuarios/resultado para futuras sesiones.
 
+## Cierre final
+
+- `13ccb72` `Fix RRHH employee creation and access smoke blockers _Fernando`
+- `bcb606d` `Add commit suffix hook for Balles repo _Fernando`
+- `b6acc40` `Fix employee onboarding redirects _Fernando`
+- `e463ddd` `Require primary local for employee creation _Fernando`
+- `1f89d30` `Document reusable RRHH smoke employee _Fernando`
+
+Resultado final validado:
+
+- `createEmpleado()` deja `profiles.rol_label="EMPLEADO"`
+- el alta obliga a asignar un `local` principal
+- `primer-acceso` redirige a `mi-panel`
+- el empleado smoke llega a `mi-panel/fichajes`
+- el fichaje de entrada y salida queda validado
+- el usuario `smoke-localfix-20260523@example.com` queda reusable para futuros smokes
+
 Branch actual: `main`
 Repo: `https://github.com/balleshosteleros/Balles-Hosteleros.git`
 
@@ -78,6 +95,8 @@ Orden recomendado:
 2. Auditar el contrato de empresa principal, `user_empresas` y locales en el alta multiempresa.
 3. Verificar por que el empleado no entra limpio en el listado de la empresa activa esperada.
 4. Revisar el gating posterior de `mi-panel` para separar primer acceso, onboarding formativo y fichaje operativo.
+
+Con el cierre final ya aplicado, estos puntos quedan como referencia historica para futuros cambios, no como bloqueos abiertos de esta sesion.
 
 ## Checkpoint recomendado
 
