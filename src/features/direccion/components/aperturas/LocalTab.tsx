@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ImagePlus, MapPin, Search, Loader2, Trash2 } from "lucide-react";
+import { ImagePlus, MapPin, Search, Loader2, Trash2, X, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   CATEGORIAS_FOTOS_LOCAL,
   type BloqueLocal,
@@ -396,54 +396,191 @@ function Galeria({
   onRemove: (cat: CategoriaFotoLocal, foto: FotoEstudio) => void;
   readOnly?: boolean;
 }) {
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const fotosConUrl = fotos.filter((f) => !!f.url);
+
   return (
-    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
-      {fotos.map((f) => (
-        <div
-          key={f.id}
-          className="relative group aspect-square rounded-md overflow-hidden border bg-muted"
-        >
-          {f.url ? (
-            <img src={f.url} alt={label} className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground">
-              Sin previsualización
-            </div>
-          )}
-          {!readOnly && (
-            <button
-              type="button"
-              onClick={() => onRemove(categoria, f)}
-              className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-black/80"
-              title="Quitar foto"
-              aria-label="Quitar foto"
+    <>
+      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
+        {fotos.map((f) => {
+          const idxAbrible = fotosConUrl.findIndex((x) => x.id === f.id);
+          const abrible = idxAbrible >= 0;
+          return (
+            <div
+              key={f.id}
+              className="relative group aspect-square rounded-md overflow-hidden border bg-muted"
             >
-              <Trash2 className="h-3 w-3" />
-            </button>
-          )}
+              {f.url ? (
+                <button
+                  type="button"
+                  onClick={() => setLightboxIndex(idxAbrible)}
+                  className="block w-full h-full cursor-zoom-in"
+                  title="Ver en grande"
+                  aria-label={`Abrir foto ${label} en grande`}
+                >
+                  <img src={f.url} alt={label} className="w-full h-full object-cover" />
+                </button>
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground">
+                  Sin previsualización
+                </div>
+              )}
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => onRemove(categoria, f)}
+                  className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-black/80"
+                  title="Quitar foto"
+                  aria-label="Quitar foto"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              )}
+              {!abrible && f.url && (
+                <span className="sr-only">no abrible</span>
+              )}
+            </div>
+          );
+        })}
+        {!readOnly && (
+          <label className="aspect-square flex flex-col items-center justify-center gap-0.5 rounded-md border border-dashed border-muted-foreground/30 text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors cursor-pointer text-[11px]">
+            <ImagePlus className="h-4 w-4" strokeWidth={1.75} />
+            <span>Añadir</span>
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(ev) => {
+                const file = ev.target.files?.[0];
+                if (file) onUpload(categoria, file);
+                ev.target.value = "";
+              }}
+            />
+          </label>
+        )}
+        {readOnly && fotos.length === 0 && (
+          <div className="col-span-full text-center text-xs text-muted-foreground py-4">
+            Sin fotos para esta zona.
+          </div>
+        )}
+      </div>
+
+      {lightboxIndex !== null && fotosConUrl[lightboxIndex] && (
+        <Lightbox
+          label={label}
+          fotos={fotosConUrl}
+          index={lightboxIndex}
+          onIndexChange={setLightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+        />
+      )}
+    </>
+  );
+}
+
+function Lightbox({
+  label,
+  fotos,
+  index,
+  onIndexChange,
+  onClose,
+}: {
+  label: string;
+  fotos: FotoEstudio[];
+  index: number;
+  onIndexChange: (next: number | null) => void;
+  onClose: () => void;
+}) {
+  const total = fotos.length;
+  const foto = fotos[index];
+
+  const prev = () => onIndexChange((index - 1 + total) % total);
+  const next = () => onIndexChange((index + 1) % total);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      else if (e.key === "ArrowLeft") prev();
+      else if (e.key === "ArrowRight") next();
+    };
+    window.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [index, total]);
+
+  if (!foto?.url) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Galería ${label}`}
+    >
+      <div className="absolute top-0 left-0 right-0 flex items-center justify-between gap-3 px-4 py-3 bg-gradient-to-b from-black/80 to-transparent">
+        <div className="flex items-center gap-2 text-white">
+          <span className="inline-flex items-center rounded-full bg-white/15 backdrop-blur px-3 py-1 text-sm font-medium tracking-wide">
+            {label}
+          </span>
+          <span className="text-xs text-white/70">
+            {index + 1} / {total}
+          </span>
         </div>
-      ))}
-      {!readOnly && (
-        <label className="aspect-square flex flex-col items-center justify-center gap-0.5 rounded-md border border-dashed border-muted-foreground/30 text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors cursor-pointer text-[11px]">
-          <ImagePlus className="h-4 w-4" strokeWidth={1.75} />
-          <span>Añadir</span>
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(ev) => {
-              const file = ev.target.files?.[0];
-              if (file) onUpload(categoria, file);
-              ev.target.value = "";
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClose();
+          }}
+          className="h-9 w-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+          aria-label="Cerrar"
+          title="Cerrar (Esc)"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+
+      {total > 1 && (
+        <>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              prev();
             }}
-          />
-        </label>
+            className="absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 h-11 w-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+            aria-label="Foto anterior"
+            title="Anterior (←)"
+          >
+            <ChevronLeft className="h-6 w-6" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              next();
+            }}
+            className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 h-11 w-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+            aria-label="Foto siguiente"
+            title="Siguiente (→)"
+          >
+            <ChevronRight className="h-6 w-6" />
+          </button>
+        </>
       )}
-      {readOnly && fotos.length === 0 && (
-        <div className="col-span-full text-center text-xs text-muted-foreground py-4">
-          Sin fotos para esta zona.
-        </div>
-      )}
+
+      <img
+        src={foto.url}
+        alt={label}
+        className="max-w-[92vw] max-h-[88vh] object-contain select-none"
+        onClick={(e) => e.stopPropagation()}
+        draggable={false}
+      />
     </div>
   );
 }
