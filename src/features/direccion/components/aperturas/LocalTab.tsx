@@ -333,13 +333,13 @@ function FotosCard({
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-base">Galería del local</CardTitle>
+          <CardTitle className="text-base">Infografías del concepto</CardTitle>
           <span className="text-xs text-muted-foreground">
-            {totalFotos} {totalFotos === 1 ? "foto" : "fotos"}
+            {totalFotos} {totalFotos === 1 ? "imagen" : "imágenes"}
           </span>
         </div>
         <p className="text-xs text-muted-foreground mt-1">
-          Sube fotos por zona. Las verán los inversores en la presentación.
+          Renders y referencias visuales del local proyectado. No son fotos reales: muestran cómo quedará el espacio una vez ejecutado.
         </p>
       </CardHeader>
       <CardContent className="pt-0">
