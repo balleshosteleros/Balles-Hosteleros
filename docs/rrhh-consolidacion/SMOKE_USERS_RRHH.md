@@ -27,6 +27,23 @@ Estado actual dejado para pruebas:
 - `local_id=9d1ab861-475f-4008-ba8e-4ef0928b4ac6`
 - `permite_teletrabajo=true`
 
+## Empleado smoke reusable validado 2026-05-23
+
+- email: `smoke-localfix-20260523@example.com`
+- user_id: `6da8b950-ca0c-48dc-82ba-8104e7d38687`
+- empleado_id: `9f2850f8-99ae-4e2a-b637-f36bb1912f70`
+
+Estado actual dejado para pruebas:
+
+- empresa principal: `HABANA`
+- accesos: `HABANA`
+- `rol_label='EMPLEADO'`
+- `perfil_completado=true`
+- `local_id=dc78dbe5-b5c1-4ff5-a299-b7bb66c22b4a`
+- `permite_teletrabajo=true`
+- `avatar_url` de smoke ya cargado
+- smoke completo validado: alta RRHH -> primer acceso -> onboarding -> fichar entrada -> fichar salida
+
 ## Procedimiento de reutilizacion
 
 Antes de reutilizar estos usuarios:
@@ -34,9 +51,11 @@ Antes de reutilizar estos usuarios:
 1. Resetear la password por admin/Supabase.
 2. Verificar que `handle_new_user()` sigue alineado con el rol real del proyecto.
 3. Confirmar que el empleado sigue teniendo `rol_label`, empresa principal y `local_id` correctos.
+4. Si el smoke se hace en navegador limpio, recordar que el onboarding de formacion depende de `localStorage` y puede reaparecer aunque el resto del perfil este correcto.
 
 ## Notas
 
 - Estos usuarios se crearon para smoke manual y automatizado de RRHH.
 - Si el flujo de alta o de onboarding cambia, conviene revalidar este documento.
 - Si se quiere usar el empleado para smoke de fichajes, revisar antes los gates de onboarding/formacion detectados en `SMOKE_REPORT_RRHH_2026-05-21.md`.
+- El usuario `smoke-localfix-20260523@example.com` se dejo expresamente como reusable despues de validar el fix que obliga a asignar local en la empresa principal durante el alta.
