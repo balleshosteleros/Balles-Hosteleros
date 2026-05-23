@@ -9,10 +9,10 @@ export default async function PrimerAccesoPage() {
 
   if (!status.empleadoId) {
     // No es empleado o no autenticado
-    redirect("/dashboard");
+    redirect("/mi-panel");
   }
   if (status.perfilCompletado) {
-    redirect("/dashboard");
+    redirect("/mi-panel");
   }
 
   return <WizardPrimerAcceso prefilled={status.prefilled} />;

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/contexts/auth-context";
+import { LANDING_PATH } from "@/features/auth/lib/role-redirect";
 
 const STORAGE_KEY = "balles:onboarding-completado";
 
@@ -96,7 +97,7 @@ export function OnboardingGuard({ children }: { children: React.ReactNode }) {
 
 /**
  * Botón que el usuario pulsa en /formacion cuando ha terminado.
- * Guarda en localStorage que completó y redirige al dashboard.
+ * Guarda en localStorage que completó y redirige al landing principal.
  */
 export function OnboardingCompleteButton() {
   const { user } = useAuth();
@@ -104,7 +105,7 @@ export function OnboardingCompleteButton() {
   function completar() {
     if (!user) return;
     localStorage.setItem(`${STORAGE_KEY}-${user.id}`, "true");
-    window.location.href = "/";
+    window.location.href = LANDING_PATH;
   }
 
   return (

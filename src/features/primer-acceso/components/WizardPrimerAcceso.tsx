@@ -162,7 +162,7 @@ export function WizardPrimerAcceso({ prefilled }: { prefilled: Prefilled }) {
       const res = await guardarPerfilCompleto(form);
       if (res.ok) {
         toast.success("¡Perfil completado!");
-        router.push("/dashboard");
+        router.push("/mi-panel");
         router.refresh();
       } else {
         setError(res.error ?? "Error al guardar");
