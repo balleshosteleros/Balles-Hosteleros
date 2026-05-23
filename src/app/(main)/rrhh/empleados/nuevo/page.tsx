@@ -124,6 +124,11 @@ export default function NuevoEmpleadoPage() {
       toast.error("Selecciona una empresa principal válida");
       return;
     }
+    const localPrincipalId = localSeleccionado[empresaPrincipalId];
+    if (!localPrincipalId) {
+      toast.error("Asigna un local a la empresa principal antes de crear el empleado");
+      return;
+    }
 
     const empresasOrdenadas = ordenarEmpresasConPrincipal(
       empresasMarcadas,

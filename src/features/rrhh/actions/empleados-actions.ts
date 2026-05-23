@@ -196,6 +196,10 @@ export async function createEmpleado(input: {
     const isRealId = (id?: string) => !!id && !id.startsWith("mock-");
     const localPrincipal =
       input.localPorEmpresa?.[empresaPrincipalId] ?? null;
+    if (!localPrincipal) {
+      await admin.auth.admin.deleteUser(newUserId);
+      return { ok: false, error: "La empresa principal debe tener un local asignado." };
+    }
     const { error: empErr } = await admin.from("empleados").insert({
       empresa_id: empresaPrincipalId,
       user_id: newUserId,
