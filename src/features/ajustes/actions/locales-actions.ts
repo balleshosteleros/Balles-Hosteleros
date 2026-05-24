@@ -1,5 +1,6 @@
 "use server";
 
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 
@@ -9,30 +10,63 @@ async function getContext() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { supabase, user: null, empresaId: null, role: null };
-  const { data } = await supabase
-    .from("profiles")
-    .select("empresa_id, role")
-    .eq("user_id", user.id)
-    .single();
+  const [{ data: profile }, { data: roles }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("empresa_id, role")
+      .eq("user_id", user.id)
+      .single(),
+    supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id),
+  ]);
+  const appRole = (roles ?? [])
+    .map((r) => (r.role as string | null) ?? null)
+    .find((role) => role === "admin" || role === "director")
+    ?? (profile?.role as string | null)
+    ?? null;
   return {
     supabase,
     user,
-    empresaId: data?.empresa_id ?? null,
-    role: data?.role ?? null,
+    empresaId: profile?.empresa_id ?? null,
+    role: appRole,
   };
 }
 
 /**
  * Devuelve la empresa con la que operar. Si se pasa `empresaIdOverride`,
- * solo los admin pueden usarlo; el resto se queda con la suya.
+ * admin y director pueden usarlo; el resto se queda con la suya.
  */
 function resolverEmpresa(
   empresaId: string | null,
   role: string | null,
   empresaIdOverride?: string | null
 ): string | null {
-  if (empresaIdOverride && role === "admin") return empresaIdOverride;
+  if (empresaIdOverride && (role === "admin" || role === "director")) return empresaIdOverride;
   return empresaId;
+}
+
+async function resolveEmpresaAutorizada(
+  userId: string,
+  empresaId: string | null,
+  role: string | null,
+  empresaIdOverride?: string | null
+): Promise<string | null> {
+  const target = resolverEmpresa(empresaId, role, empresaIdOverride);
+  if (!target) return null;
+  if (!empresaIdOverride || target === empresaId) return target;
+
+  const supabase = await createClient();
+  const { data: acceso } = await supabase
+    .from("user_empresas")
+    .select("empresa_id")
+    .eq("user_id", userId)
+    .eq("empresa_id", target)
+    .maybeSingle();
+
+  if (acceso) return target;
+  return null;
 }
 
 const localSchema = z.object({
@@ -53,10 +87,17 @@ export type LocalInput = z.infer<typeof localSchema>;
 
 export async function listLocales(empresaIdOverride?: string | null) {
   try {
-    const { supabase, empresaId, role } = await getContext();
-    const target = resolverEmpresa(empresaId, role, empresaIdOverride);
+    const { user, empresaId, role } = await getContext();
+    if (!user) return { ok: false, data: [], error: "No autenticado" };
+    const target = await resolveEmpresaAutorizada(
+      user.id,
+      empresaId,
+      role,
+      empresaIdOverride
+    );
     if (!target) return { ok: false, data: [], error: "Sin empresa activa" };
-    const { data, error } = await supabase
+    const admin = createAdminClient();
+    const { data, error } = await admin
       .from("locales")
       .select(
         "id, empresa_id, nombre, direccion, ciudad, codigo_postal, pais, lat, lng, radio_metros, color, notas, activo, created_at, updated_at"
@@ -68,7 +109,7 @@ export async function listLocales(empresaIdOverride?: string | null) {
     const ids = (data ?? []).map((c) => c.id);
     let counts: Record<string, number> = {};
     if (ids.length > 0) {
-      const { data: empleados } = await supabase
+      const { data: empleados } = await admin
         .from("empleados")
         .select("local_id")
         .in("local_id", ids);
@@ -94,10 +135,13 @@ export async function createLocal(
 ) {
   try {
     const parsed = localSchema.parse(input);
-    const { supabase, user, empresaId, role } = await getContext();
-    const target = resolverEmpresa(empresaId, role, empresaIdOverride);
+    const { user, empresaId, role } = await getContext();
+    const target = user
+      ? await resolveEmpresaAutorizada(user.id, empresaId, role, empresaIdOverride)
+      : null;
     if (!user || !target) return { ok: false, error: "No autenticado" };
-    const { data, error } = await supabase
+    const admin = createAdminClient();
+    const { data, error } = await admin
       .from("locales")
       .insert({
         empresa_id: target,
@@ -174,10 +218,17 @@ export async function listEmpleadosEmpresaParaLocales(
   empresaIdOverride?: string | null
 ) {
   try {
-    const { supabase, empresaId, role } = await getContext();
-    const target = resolverEmpresa(empresaId, role, empresaIdOverride);
+    const { user, empresaId, role } = await getContext();
+    if (!user) return { ok: false, data: [] };
+    const target = await resolveEmpresaAutorizada(
+      user.id,
+      empresaId,
+      role,
+      empresaIdOverride
+    );
     if (!target) return { ok: false, data: [] };
-    const { data, error } = await supabase
+    const admin = createAdminClient();
+    const { data, error } = await admin
       .from("empleados")
       .select("id, nombre, apellidos, estado, local_id, permite_teletrabajo")
       .eq("empresa_id", target)
