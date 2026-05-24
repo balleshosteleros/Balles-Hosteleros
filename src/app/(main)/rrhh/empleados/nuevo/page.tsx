@@ -59,27 +59,21 @@ export default function NuevoEmpleadoPage() {
     });
   }, []);
 
-  // Carga locales bajo demanda cuando se marca una empresa.
+  // Solo cargamos locales para la empresa principal, porque el modelo actual
+  // solo persiste empleados.local_id en esa empresa.
   useEffect(() => {
-    const pendientes = empresasMarcadas.filter((eid) => !(eid in localesPorEmpresa));
-    if (pendientes.length === 0) return;
-    Promise.all(
-      pendientes.map(async (eid) => {
-        const res = await listLocales(eid);
-        if (!res.ok) {
-          const nombreEmpresa = empresas.find((e) => e.id === eid)?.nombre ?? eid;
-          toast.error(`No se pudieron cargar locales de ${nombreEmpresa}: ${res.error ?? "error desconocido"}`);
-        }
-        return [eid, res.ok ? (res.data as LocalOpt[]) : []] as const;
-      })
-    ).then((entries) => {
-      setLocalesPorEmpresa((prev) => {
-        const next = { ...prev };
-        for (const [eid, locs] of entries) next[eid] = locs;
-        return next;
-      });
+    if (!empresaPrincipalId || localesPorEmpresa[empresaPrincipalId]) return;
+    listLocales(empresaPrincipalId).then((res) => {
+      const nombreEmpresa = empresas.find((e) => e.id === empresaPrincipalId)?.nombre ?? empresaPrincipalId;
+      if (!res.ok) {
+        toast.error(`No se pudieron cargar locales de ${nombreEmpresa}: ${res.error ?? "error desconocido"}`);
+      }
+      setLocalesPorEmpresa((prev) => ({
+        ...prev,
+        [empresaPrincipalId]: res.ok ? (res.data as LocalOpt[]) : [],
+      }));
     });
-  }, [empresasMarcadas, localesPorEmpresa, empresas]);
+  }, [empresaPrincipalId, localesPorEmpresa, empresas]);
 
   function toggleEmpresa(id: string, checked: boolean) {
     setEmpresasMarcadas((prev) => {
@@ -280,7 +274,7 @@ export default function NuevoEmpleadoPage() {
               {empresas.map((e) => {
                 const marcada = empresasMarcadas.includes(e.id);
                 const esPrincipal = empresaPrincipalId === e.id;
-                const locales = localesPorEmpresa[e.id] ?? [];
+                const locales = esPrincipal ? (localesPorEmpresa[e.id] ?? []) : [];
                 return (
                   <div
                     key={e.id}
@@ -319,30 +313,39 @@ export default function NuevoEmpleadoPage() {
                             {esPrincipal ? "Principal" : "Marcar principal"}
                           </Button>
                         </div>
-                        <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                          Local en esta empresa
-                        </Label>
-                        <Select
-                          value={localSeleccionado[e.id] ?? ""}
-                          onValueChange={(v) =>
-                            setLocalSeleccionado((prev) => ({ ...prev, [e.id]: v }))
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder={locales.length === 0 ? "Sin locales disponibles" : "Seleccionar local"} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {locales.length === 0 ? (
-                              <SelectItem value="__none__" disabled>
-                                Esta empresa aún no tiene locales
-                              </SelectItem>
-                            ) : (
-                              locales.map((l) => (
-                                <SelectItem key={l.id} value={l.id}>{l.nombre}</SelectItem>
-                              ))
-                            )}
-                          </SelectContent>
-                        </Select>
+                        {esPrincipal ? (
+                          <div className="space-y-1">
+                            <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                              Local principal
+                            </Label>
+                            <Select
+                              value={localSeleccionado[e.id] ?? ""}
+                              onValueChange={(v) =>
+                                setLocalSeleccionado((prev) => ({ ...prev, [e.id]: v }))
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder={locales.length === 0 ? "Sin locales disponibles" : "Seleccionar local"} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {locales.length === 0 ? (
+                                  <SelectItem value="__none__" disabled>
+                                    Esta empresa aún no tiene locales
+                                  </SelectItem>
+                                ) : (
+                                  locales.map((l) => (
+                                    <SelectItem key={l.id} value={l.id}>{l.nombre}</SelectItem>
+                                  ))
+                                )}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            El local solo se asigna en la empresa principal. Este acceso secundario
+                            se guarda sin local asociado.
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>

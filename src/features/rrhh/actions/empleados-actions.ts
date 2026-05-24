@@ -113,9 +113,9 @@ export async function createEmpleado(input: {
   // `empresaPrincipalId`, se usa la primera o la empresa activa del admin.
   empresaIds?: string[];
   empresaPrincipalId?: string;
-  // Local asignado por empresa. Solo se aplica al de la empresa principal en
-  // empleados.local_id; el resto se registra solo como acceso vía user_empresas
-  // y se podrá editar después desde la ficha del empleado.
+  // Mapa transitorio desde la UI. A día de hoy solo persistimos el local de la
+  // empresa principal en empleados.local_id; los accesos secundarios se
+  // guardan únicamente en user_empresas.
   localPorEmpresa?: Record<string, string | null>;
 }) {
   try {
@@ -199,6 +199,18 @@ export async function createEmpleado(input: {
     if (!localPrincipal) {
       await admin.auth.admin.deleteUser(newUserId);
       return { ok: false, error: "La empresa principal debe tener un local asignado." };
+    }
+    const { data: localRow, error: localErr } = await admin
+      .from("locales")
+      .select("id, empresa_id")
+      .eq("id", localPrincipal)
+      .maybeSingle();
+    if (localErr || !localRow || localRow.empresa_id !== empresaPrincipalId) {
+      await admin.auth.admin.deleteUser(newUserId);
+      return {
+        ok: false,
+        error: "El local asignado debe pertenecer a la empresa principal.",
+      };
     }
     const { error: empErr } = await admin.from("empleados").insert({
       empresa_id: empresaPrincipalId,
