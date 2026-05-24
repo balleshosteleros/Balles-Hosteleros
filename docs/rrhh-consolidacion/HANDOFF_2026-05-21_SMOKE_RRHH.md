@@ -102,6 +102,20 @@ Decision operativa:
 - `TASK-003` queda como discovery con gap documentado.
 - El siguiente paso no es seguir ampliando runtime a ciegas, sino decidir si se crea una task de migracion/implementacion para esas tablas o si se recorta el runtime para no depender de ellas.
 
+## Decision recomendada para retomar
+
+La opcion recomendada para la siguiente sesion es:
+
+1. recortar el runtime para que no dependa de `rrhh_turnos`, `rrhh_cuadrantes` y `rrhh_descansos` mientras no exista un modelo versionado localizado;
+2. abrir despues una task especifica de migracion/modelado para horarios y descansos cuando el alcance este bien definido.
+
+Motivo:
+
+- es la via mas segura a corto plazo;
+- evita seguir construyendo sobre tablas usadas por runtime pero no consolidadas en migraciones;
+- mantiene `TASK-003` como discovery honesto y reduce riesgo de bugs silenciosos;
+- deja una siguiente task pequena y acotada en vez de seguir ampliando el bloque actual.
+
 ## Donde retomar
 
 Orden recomendado:
@@ -111,6 +125,7 @@ Orden recomendado:
 3. Verificar por que el empleado no entra limpio en el listado de la empresa activa esperada.
 4. Revisar el gating posterior de `mi-panel` para separar primer acceso, onboarding formativo y fichaje operativo.
 5. Si se retoma horarios y solicitudes, partir de `TASK-003` y cerrar primero el gap de `rrhh_turnos`, `rrhh_cuadrantes` y `rrhh_descansos`.
+6. Si se sigue la recomendacion de este handoff, recortar primero runtime y abrir despues la task de migracion/modelado.
 
 Con el cierre final ya aplicado, estos puntos quedan como referencia historica para futuros cambios, no como bloqueos abiertos de esta sesion.
 
