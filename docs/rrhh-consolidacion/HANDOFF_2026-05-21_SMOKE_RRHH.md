@@ -87,6 +87,21 @@ Nota:
 - No se han dejado contraseñas en el repo
 - Antes de reutilizar, resetear password y validar estado segun el documento
 
+## Cierre de TASK-003
+
+Se ha ejecutado el discovery de horarios y solicitudes sobre el modelo real.
+
+Resultado confirmado:
+
+- `tipos_ausencia`, `tipos_fichaje`, `rrhh_patrones`, `rrhh_patron_semanas`, `rrhh_patron_empleados` y `solicitudes_personal` existen y estan versionadas en migraciones.
+- `rrhh_turnos`, `rrhh_cuadrantes` y `rrhh_descansos` son usadas por runtime, pero no aparecen con migracion versionada localizada en el repositorio.
+- `turnos-actions.ts` y `descansos-actions.ts` dependen de esas tablas faltantes, asi que el bloque de horarios todavia no puede considerarse cerrado por esquema.
+
+Decision operativa:
+
+- `TASK-003` queda como discovery con gap documentado.
+- El siguiente paso no es seguir ampliando runtime a ciegas, sino decidir si se crea una task de migracion/implementacion para esas tablas o si se recorta el runtime para no depender de ellas.
+
 ## Donde retomar
 
 Orden recomendado:
@@ -95,6 +110,7 @@ Orden recomendado:
 2. Auditar el contrato de empresa principal, `user_empresas` y locales en el alta multiempresa.
 3. Verificar por que el empleado no entra limpio en el listado de la empresa activa esperada.
 4. Revisar el gating posterior de `mi-panel` para separar primer acceso, onboarding formativo y fichaje operativo.
+5. Si se retoma horarios y solicitudes, partir de `TASK-003` y cerrar primero el gap de `rrhh_turnos`, `rrhh_cuadrantes` y `rrhh_descansos`.
 
 Con el cierre final ya aplicado, estos puntos quedan como referencia historica para futuros cambios, no como bloqueos abiertos de esta sesion.
 
