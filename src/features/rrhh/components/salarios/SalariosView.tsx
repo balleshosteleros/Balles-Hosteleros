@@ -2,6 +2,7 @@
 
 import { useState, useMemo, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { useTabQuery } from "@/shared/hooks/use-tab-query";
 import { getSalariosEmpresa, type PuestoSalarial, type NormaSalarial, DEPARTAMENTOS_DISPONIBLES } from "@/features/rrhh/data/salarios";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -427,7 +428,7 @@ function DetalleView({ puesto, onBack }: { puesto: PuestoSalarial; onBack: () =>
 }
 
 function ConfigView({ puestos, normas, onBack }: { puestos: PuestoSalarial[]; normas: NormaSalarial[]; onBack: () => void }) {
-  const [tab, setTab] = useState("puestos");
+  const [tab, setTab] = useTabQuery(["puestos", "departamentos", "normas"] as const, "puestos");
 
   return (
     <div className="space-y-4 p-4 md:p-6">
@@ -439,7 +440,7 @@ function ConfigView({ puestos, normas, onBack }: { puestos: PuestoSalarial[]; no
         </div>
       </div>
 
-      <Tabs value={tab} onValueChange={setTab}>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "puestos" | "departamentos" | "normas")}>
         <TabsList>
           <TabsTrigger value="puestos">Puestos</TabsTrigger>
           <TabsTrigger value="departamentos">Departamentos</TabsTrigger>

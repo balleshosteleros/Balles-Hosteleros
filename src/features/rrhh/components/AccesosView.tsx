@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { useTabQuery } from "@/shared/hooks/use-tab-query";
 import { CATEGORIAS_APP, DEPARTAMENTOS, type AccesoApp, type EstadoApp } from "@/features/rrhh/data/accesos-apps";
 import { listAccesosApps } from "@/features/rrhh/actions/accesos-apps-actions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -115,7 +116,7 @@ export function AccesosView() {
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [vista, setVista] = useState<"tabla" | "tarjetas">("tarjetas");
   const [detalle, setDetalle] = useState<AccesoApp | null>(null);
-  const [tab, setTab] = useState("apps");
+  const [tab, setTab] = useTabQuery(["apps", "config"] as const, "apps");
   const [showConfig, setShowConfig] = useState(false);
 
   const categoriasUsadas = [...new Set(apps.map((a) => a.categoria))];
@@ -217,7 +218,7 @@ export function AccesosView() {
 
   return (
     <div className="p-4 md:p-6 space-y-6 w-full">
-      <Tabs value={tab} onValueChange={setTab}>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "apps" | "config")}>
         <TabsList>
           <TabsTrigger value="apps" className="gap-1.5"><Globe className="h-4 w-4" /> Aplicaciones</TabsTrigger>
 <TabsTrigger value="config" aria-label="Configuración" className="ml-auto"><Settings2 className="h-4 w-4" strokeWidth={1.75} /></TabsTrigger>

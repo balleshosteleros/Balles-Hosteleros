@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useMemo, type ReactNode } from "react";
+import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { getPagosPorEmpresa, getResumenPagos, type PagoEmpleado } from "@/features/rrhh/data/pagos";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getResumenPagos, calcularTotalPago, type PagoEmpleado, type PagoArea } from "@/features/rrhh/data/pagos";
+import { listEmpleadosParaPagos } from "@/features/rrhh/actions/pagos-actions";
+import { ZONE_COLORS } from "@/features/direccion/data/direccion";
+import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,23 +27,84 @@ import {
 } from "@/shared/components/SubmoduleToolbar";
 import { IOActions } from "@/shared/io";
 import { pagosIO } from "@/features/rrhh/io/pagos.io";
+import {
+  CalendarRangeToggle,
+  CalendarRangeNav,
+} from "@/shared/components/calendar/CalendarRangeToggle";
+import { useCalendarRange, type CalendarRangeMode } from "@/shared/components/calendar/calendar-range";
+
+const MODES_PAGOS: CalendarRangeMode[] = ["MENSUAL", "TRIMESTRAL", "SEMESTRAL", "ANUAL"];
+
+function rangoKey(rango: { start: Date; end: Date }): string {
+  return `${rango.start.toISOString().slice(0, 10)}_${rango.end.toISOString().slice(0, 10)}`;
+}
+
+function nuevoPagoVacio(empleadoId: string, empleadoNombre: string, area: PagoArea): PagoEmpleado {
+  return {
+    id: `${empleadoId}-pago`,
+    empleadoId,
+    empleadoNombre,
+    area,
+    fijo: false,
+    pago: 0,
+    nomina: 0,
+    horasReales: 0,
+    horasTrabajadas: 0,
+    propina: 0,
+    descuento: 0,
+    horasExtras: 0,
+    bonus: 0,
+    propinaMantenimiento: 0,
+    total: 0,
+    pagado: false,
+  };
+}
 
 export function PagosView() {
   const { empresaActual } = useEmpresa();
+  const calRange = useCalendarRange("MENSUAL");
   const [busqueda, setBusqueda] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [editando, setEditando] = useState<PagoEmpleado | null>(null);
-  const [pagos, setPagos] = useState<PagoEmpleado[]>([]);
-  const [initialized, setInitialized] = useState("");
+  const [pagosPorRango, setPagosPorRango] = useState<Record<string, PagoEmpleado[]>>({});
+  const [loading, setLoading] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
+  const [filtroArea, setFiltroArea] = useState<"todos" | PagoArea>("todos");
 
-  if (initialized !== empresaActual.id) {
-    setPagos(getPagosPorEmpresa(empresaActual.id));
-    setInitialized(empresaActual.id);
-  }
+  const claveRango = rangoKey(calRange.range);
+  const pagos = pagosPorRango[claveRango] ?? [];
+
+  const cargarEmpleados = useCallback(async () => {
+    setLoading(true);
+    const res = await listEmpleadosParaPagos();
+    setLoading(false);
+    if (!res.ok) return;
+    const filas = res.data.map((e) => nuevoPagoVacio(e.empleadoId, e.empleadoNombre, e.area));
+    setPagosPorRango((prev) => ({ ...prev, [claveRango]: filas }));
+  }, [claveRango]);
+
+  useEffect(() => {
+    if (pagosPorRango[claveRango]) return;
+    cargarEmpleados();
+  }, [claveRango, pagosPorRango, cargarEmpleados]);
+
+  // Re-cargar al cambiar empresa (limpia cache)
+  useEffect(() => {
+    setPagosPorRango({});
+  }, [empresaActual.id]);
+
+  const setPagos = useCallback(
+    (updater: (prev: PagoEmpleado[]) => PagoEmpleado[]) => {
+      setPagosPorRango((prev) => ({
+        ...prev,
+        [claveRango]: updater(prev[claveRango] ?? []),
+      }));
+    },
+    [claveRango],
+  );
 
   const acceso = (p: PagoEmpleado, campo: string): unknown => {
     if (campo === "pagado") return p.pagado;
@@ -56,6 +119,7 @@ export function PagosView() {
 
   const pagosFiltrados = useMemo(() => {
     let resultado = pagos.filter((p) => {
+      if (filtroArea !== "todos" && p.area !== filtroArea) return false;
       if (busqueda) {
         const q = busqueda.toLowerCase();
         if (!p.empleadoNombre.toLowerCase().includes(q)) return false;
@@ -65,22 +129,24 @@ export function PagosView() {
     resultado = aplicarFiltrosToolbar(resultado, filtros, acceso);
     resultado = aplicarOrdenToolbar(resultado, orden, acceso);
     return resultado;
-  }, [pagos, busqueda, filtros, orden]);
+  }, [pagos, busqueda, filtros, orden, filtroArea]);
 
-  const resumen = useMemo(() => getResumenPagos(pagos), [pagos]);
+  const resumen = useMemo(() => getResumenPagos(pagosFiltrados), [pagosFiltrados]);
 
   const togglePagado = (id: string) => {
-    setPagos(prev => prev.map(p => p.id === id ? { ...p, pagado: !p.pagado } : p));
+    setPagos((prev) => prev.map((p) => (p.id === id ? { ...p, pagado: !p.pagado } : p)));
   };
 
   const guardarEdicion = (datos: Partial<PagoEmpleado>) => {
     if (!editando) return;
-    setPagos(prev => prev.map(p => {
-      if (p.id !== editando.id) return p;
-      const updated = { ...p, ...datos };
-      updated.total = updated.pago + updated.nomina + updated.propina + updated.horasExtras + updated.bonus + updated.propinaMantenimiento - updated.descuento;
-      return updated;
-    }));
+    setPagos((prev) =>
+      prev.map((p) => {
+        if (p.id !== editando.id) return p;
+        const updated = { ...p, ...datos };
+        updated.total = calcularTotalPago(updated);
+        return updated;
+      }),
+    );
     setEditando(null);
   };
 
@@ -167,10 +233,59 @@ export function PagosView() {
     (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
   );
 
+  const areaOpciones: { value: "todos" | PagoArea; label: string; palette?: { bg: string; border: string; label: string } }[] = [
+    { value: "todos", label: "Todos" },
+    { value: "administrativa", label: "Administrativa", palette: ZONE_COLORS.administrativa },
+    { value: "operativa", label: "Operativa", palette: ZONE_COLORS.operativa },
+  ];
+
   return (
     <div className="p-6 space-y-6 max-w-[1600px] mx-auto">
+      <div className="flex items-center gap-2 flex-wrap">
+        <CalendarRangeToggle
+          mode={calRange.mode}
+          onChange={calRange.setMode}
+          modes={MODES_PAGOS}
+        />
+        <CalendarRangeNav
+          label={calRange.label}
+          onPrev={calRange.prev}
+          onNext={calRange.next}
+          onToday={calRange.goToToday}
+          isToday={calRange.isToday}
+        />
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap">
+        {areaOpciones.map((op) => {
+          const activo = filtroArea === op.value;
+          const style = activo && op.palette
+            ? { backgroundColor: op.palette.bg, borderColor: op.palette.border, color: op.palette.label }
+            : undefined;
+          return (
+            <Button
+              key={op.value}
+              type="button"
+              variant={activo ? "default" : "outline"}
+              size="sm"
+              className="h-8"
+              style={style}
+              onClick={() => setFiltroArea(op.value)}
+            >
+              {op.palette && (
+                <span
+                  className="mr-2 inline-block h-2.5 w-2.5 rounded-full border"
+                  style={{ backgroundColor: op.palette.bg, borderColor: op.palette.border }}
+                />
+              )}
+              {op.label}
+            </Button>
+          );
+        })}
+      </div>
+
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        {kpis.map(k => (
+        {kpis.map((k) => (
           <Card key={k.label}>
             <CardContent className="p-4 flex flex-col items-center text-center gap-1">
               <k.icon className={`h-5 w-5 ${k.color}`} />
@@ -200,6 +315,7 @@ export function PagosView() {
             <IOActions
               config={pagosIO}
               context={{ empresaId: empresaActual.id }}
+              exportRecords={pagosFiltrados}
               onSuccess={() => window.location.reload()}
             />
             <Button
@@ -217,7 +333,6 @@ export function PagosView() {
       />
 
       <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-base">Control de pagos en efectivo</CardTitle></CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <Table>
@@ -229,35 +344,61 @@ export function PagosView() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {pagosFiltrados.map(p => (
-                  <TableRow key={p.id} className={p.pagado ? "bg-emerald-50/40 dark:bg-emerald-950/10" : ""}>
-                    <TableCell className="font-medium">{p.empleadoNombre}</TableCell>
-                    {columnasRender.map((c) => columnDefs[c.campo]?.td(p))}
-                    <TableCell><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditando(p)}><Edit2 className="h-3.5 w-3.5" /></Button></TableCell>
+                {loading && pagosFiltrados.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={columnasRender.length + 2} className="text-center text-muted-foreground py-8">
+                      Cargando empleados…
+                    </TableCell>
                   </TableRow>
-                ))}
-                <TableRow className="bg-muted/60 font-semibold border-t-2">
-                  <TableCell>TOTALES</TableCell><TableCell />
-                  <TableCell className="text-right tabular-nums">{fmt(resumen.totalPagos)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{fmt(resumen.totalNomina)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{pagos.reduce((s, p) => s + p.horasReales, 0)}h</TableCell>
-                  <TableCell className="text-right tabular-nums">{pagos.reduce((s, p) => s + p.horasTrabajadas, 0)}h</TableCell>
-                  <TableCell className="text-right tabular-nums">{fmt(resumen.totalPropinas)}</TableCell>
-                  <TableCell className="text-right tabular-nums text-destructive">{fmt(resumen.totalDescuentos)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{fmt(resumen.totalExtras)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{fmt(resumen.totalBonus)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{fmt(pagos.reduce((s, p) => s + p.propinaMantenimiento, 0))}</TableCell>
-                  <TableCell className="text-right tabular-nums font-bold">{fmt(resumen.totalFinal)}</TableCell>
-                  <TableCell className="text-center"><Badge variant={pagos.every(p => p.pagado) ? "default" : "secondary"} className="text-[10px]">{pagos.filter(p => p.pagado).length}/{pagos.length}</Badge></TableCell>
-                  <TableCell />
-                </TableRow>
+                ) : pagosFiltrados.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={columnasRender.length + 2} className="text-center text-muted-foreground py-8">
+                      No hay empleados en esta empresa.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  pagosFiltrados.map((p) => {
+                    const palette = ZONE_COLORS[p.area];
+                    return (
+                      <TableRow
+                        key={p.id}
+                        className={p.pagado ? "bg-emerald-50/40 dark:bg-emerald-950/10" : ""}
+                        style={{
+                          backgroundColor: p.pagado ? undefined : palette.bg,
+                          boxShadow: `inset 4px 0 0 0 ${palette.border}`,
+                        }}
+                      >
+                        <TableCell className="font-medium" style={{ color: palette.label }}>{p.empleadoNombre}</TableCell>
+                        {columnasRender.map((c) => columnDefs[c.campo]?.td(p))}
+                        <TableCell><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditando(p)}><Edit2 className="h-3.5 w-3.5" /></Button></TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+                {pagosFiltrados.length > 0 && (
+                  <TableRow className="bg-muted/60 font-semibold border-t-2">
+                    <TableCell>TOTALES</TableCell><TableCell />
+                    <TableCell className="text-right tabular-nums">{fmt(resumen.totalPagos)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{fmt(resumen.totalNomina)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{pagosFiltrados.reduce((s, p) => s + p.horasReales, 0)}h</TableCell>
+                    <TableCell className="text-right tabular-nums">{pagosFiltrados.reduce((s, p) => s + p.horasTrabajadas, 0)}h</TableCell>
+                    <TableCell className="text-right tabular-nums">{fmt(resumen.totalPropinas)}</TableCell>
+                    <TableCell className="text-right tabular-nums text-destructive">{fmt(resumen.totalDescuentos)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{fmt(resumen.totalExtras)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{fmt(resumen.totalBonus)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{fmt(pagosFiltrados.reduce((s, p) => s + p.propinaMantenimiento, 0))}</TableCell>
+                    <TableCell className="text-right tabular-nums font-bold">{fmt(resumen.totalFinal)}</TableCell>
+                    <TableCell className="text-center"><Badge variant={pagosFiltrados.every((p) => p.pagado) ? "default" : "secondary"} className="text-[10px]">{pagosFiltrados.filter((p) => p.pagado).length}/{pagosFiltrados.length}</Badge></TableCell>
+                    <TableCell />
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </div>
         </CardContent>
       </Card>
 
-      <Dialog open={!!editando} onOpenChange={open => !open && setEditando(null)}>
+      <Dialog open={!!editando} onOpenChange={(open) => !open && setEditando(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Editar pago — {editando?.empleadoNombre}</DialogTitle></DialogHeader>
           {editando && <EditForm pago={editando} onSave={guardarEdicion} />}
@@ -277,10 +418,10 @@ function EditForm({ pago, onSave }: { pago: PagoEmpleado; onSave: (d: Partial<Pa
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
-        {campos.map(c => (
+        {campos.map((c) => (
           <div key={c.key} className="space-y-1">
             <Label className="text-xs">{c.label}</Label>
-            <Input type="number" value={form[c.key] as number} onChange={e => setForm(prev => ({ ...prev, [c.key]: Number(e.target.value) }))} />
+            <Input type="number" value={form[c.key] as number} onChange={(e) => setForm((prev) => ({ ...prev, [c.key]: Number(e.target.value) }))} />
           </div>
         ))}
       </div>

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ModuleIO, RowSchema } from "@/shared/io";
-import { getPagosPorEmpresa, type PagoEmpleado } from "@/features/rrhh/data/pagos";
+import type { PagoEmpleado } from "@/features/rrhh/data/pagos";
 
 const pagoSchema = z.object({
   id: z.string(),
@@ -45,8 +45,7 @@ export const pagosIO: ModuleIO<PagoEmpleado> = {
     { key: "pagado", label: "Pagado", type: "boolean" },
     { key: "empleadoId", label: "ID Empleado", hideInImport: true },
   ],
-  fetchAll: async (ctx) => {
-    const empresaId = (ctx.empresaId as string) ?? "";
-    return getPagosPorEmpresa(empresaId);
+  fetchAll: async () => {
+    return [];
   },
 };

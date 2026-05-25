@@ -10,7 +10,7 @@ import {
   getCuestionariosPorEmpresa,
   calcularPuntuacionMaxima,
   CATEGORIA_CUESTIONARIO_LABEL,
-} from "@/features/rrhh/data/cuestionarios";
+} from "@/features/calidad/data/cuestionarios";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

@@ -8,7 +8,6 @@ import { ESTADOS_LABEL, ESTADOS_COLOR, type EmpleadoUI } from "@/features/rrhh/c
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Settings } from "lucide-react";
 import {
   SubmoduleToolbar,
@@ -21,6 +20,8 @@ import {
   type ToolbarColumnaVisible,
   type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
+import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
+import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 import { IOActions } from "@/shared/io";
 import { empleadosIO } from "@/features/rrhh/io/empleados.io";
 
@@ -51,10 +52,6 @@ function FichajeBar({ fichajes }: { fichajes: number }) {
   );
 }
 
-// Adapta el row de la tabla `empleados` (BD) al shape `Empleado` que esperan
-// los componentes de listado/filtros. Los campos que la BD aún no tiene se
-// dejan como guiones — se irán rellenando cuando se conecten los submódulos
-// reales (fichajes, horarios, etc.).
 type EmpleadoBDRow = {
   id: string;
   nombre: string;
@@ -124,27 +121,48 @@ export function EmpleadosView() {
   const [showConfig, setShowConfig] = useState(false);
 
   const departamentosUsados = useMemo(
-    () => [...new Set(empleados.map((e) => e.departamento))].sort(),
+    () => [...new Set(empleados.map((e) => e.departamento).filter((d) => d && d !== "—"))].sort(),
+    [empleados],
+  );
+  const empresasUsadas = useMemo(
+    () => [...new Set(empleados.flatMap((e) => e.empresasAcceso.map((a) => a.nombre)))].sort(),
     [empleados],
   );
 
-  const acceso = (e: typeof empleados[number], campo: string): unknown => {
+  const acceso = (e: EmpleadoConAcceso, campo: string): unknown => {
+    if (campo === "empleado") return `${e.nombre} ${e.apellidos}`.trim();
+    if (campo === "empresas") return e.empresasAcceso.map((a) => a.nombre);
     if (campo === "estado") return ESTADOS_LABEL[e.estado];
-    if (campo === "departamento") return e.departamento;
-    if (campo === "horarioTipo") return e.horarioTipo;
+    if (campo === "horario") return e.horarioTipo;
     if (campo === "horasHoy") return e.horasHoy;
+    if (campo === "departamento") return e.departamento;
+    if (campo === "telefono") return e.telefono;
     if (campo === "fichajes") return e.fichajes;
-    if (campo === "nombre") return `${e.nombre} ${e.apellidos}`;
+    if (campo === "emailEmpresa") return e.emailEmpresa;
+    if (campo === "emailPersonal") return e.emailPersonal;
+    if (campo === "validador") return e.validadorFichajes;
     return (e as unknown as Record<string, unknown>)[campo];
   };
 
   const filtrados = useMemo(() => {
     let lista = empleados.filter((e) => {
-      const texto = `${e.nombre} ${e.apellidos} ${e.departamento} ${e.emailEmpresa}`.toLowerCase();
+      const texto = `${e.nombre} ${e.apellidos} ${e.departamento} ${e.emailEmpresa} ${e.emailPersonal} ${e.telefono}`.toLowerCase();
       if (busqueda && !texto.includes(busqueda.toLowerCase())) return false;
       return true;
     });
-    lista = aplicarFiltrosToolbar(lista, filtros, acceso);
+    // Filtros multi-valor: el "empresas" es array → match si cualquier opción seleccionada
+    // está en el array del empleado. aplicarFiltrosToolbar trata el valor escalar; lo
+    // tratamos aparte.
+    const filtrosEmpresas = filtros.filter((f) => f.campo === "empresas");
+    const otrosFiltros = filtros.filter((f) => f.campo !== "empresas");
+    lista = aplicarFiltrosToolbar(lista, otrosFiltros, acceso);
+    if (filtrosEmpresas.length > 0) {
+      lista = lista.filter((e) =>
+        filtrosEmpresas.every((f) =>
+          f.valores?.some((v) => e.empresasAcceso.some((a) => a.nombre === v)),
+        ),
+      );
+    }
     lista = aplicarOrdenToolbar(lista, orden, acceso);
     return lista;
   }, [empleados, busqueda, filtros, orden]);
@@ -165,7 +183,7 @@ export function EmpleadosView() {
   }
 
   const columnasDef: ToolbarColumna[] = [
-    { campo: "empleado", label: "Empleado" },
+    { campo: "empleado", label: "Empleado", bloqueada: true },
     { campo: "empresas", label: "Empresas" },
     { campo: "estado", label: "Estado" },
     { campo: "horario", label: "Horario" },
@@ -180,9 +198,18 @@ export function EmpleadosView() {
 
   const columnDefs: Record<string, { th: ReactNode; td: (emp: EmpleadoConAcceso) => ReactNode }> = {
     empleado: {
-      th: <TableHead key="empleado" className="min-w-[200px] text-xs font-medium text-muted-foreground">Empleado</TableHead>,
+      th: (
+        <TableColumnHeader
+          key="empleado"
+          label="Empleado"
+          campo="empleado"
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
       td: (emp) => (
-        <TableCell key="empleado">
+        <td key="empleado" className="px-3 py-2 align-middle">
           <div className="flex items-center gap-3">
             <Avatar className="h-10 w-10 shrink-0 border-2 border-muted">
               <AvatarFallback className="text-xs font-bold text-white" style={{ backgroundColor: avatarColor(emp.id) }}>
@@ -191,20 +218,25 @@ export function EmpleadosView() {
             </Avatar>
             <div className="flex items-center gap-2 min-w-0">
               <span className="font-medium text-foreground whitespace-nowrap text-sm">{emp.nombre} {emp.apellidos}</span>
-              {!emp.esPrincipal && (
-                <span className="text-[10px] uppercase font-semibold text-amber-700 bg-amber-100 dark:text-amber-300 dark:bg-amber-900/30 px-1.5 py-0.5 rounded" title="Empleado de otra empresa con acceso a esta">
-                  Secundario
-                </span>
-              )}
             </div>
           </div>
-        </TableCell>
+        </td>
       ),
     },
     empresas: {
-      th: <TableHead key="empresas" className="text-xs font-medium text-muted-foreground">Empresas</TableHead>,
+      th: (
+        <TableColumnHeader
+          key="empresas"
+          label="Empresas"
+          campo="empresas"
+          filtroTipo="lista"
+          opciones={empresasUsadas}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+        />
+      ),
       td: (emp) => (
-        <TableCell key="empresas">
+        <td key="empresas" className="px-3 py-2 align-middle">
           <div className="flex flex-wrap gap-1">
             {emp.empresasAcceso.length === 0 ? (
               <span className="text-xs text-muted-foreground">—</span>
@@ -219,71 +251,164 @@ export function EmpleadosView() {
               ))
             )}
           </div>
-        </TableCell>
+        </td>
       ),
     },
     estado: {
-      th: <TableHead key="estado" className="text-xs font-medium text-muted-foreground text-center">Estado</TableHead>,
+      th: (
+        <TableColumnHeader
+          key="estado"
+          label="Estado"
+          campo="estado"
+          align="center"
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+          filtroTipo="lista"
+          opciones={Object.values(ESTADOS_LABEL)}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+        />
+      ),
       td: (emp) => (
-        <TableCell key="estado" className="text-center">
+        <td key="estado" className="px-3 py-2 align-middle text-center">
           <div className="flex items-center justify-center gap-2">
             <span className={`h-2 w-2 rounded-full shrink-0 ${ESTADOS_COLOR[emp.estado]}`} />
             <span className="text-sm text-muted-foreground">{ESTADOS_LABEL[emp.estado]}</span>
           </div>
-        </TableCell>
+        </td>
       ),
     },
     horario: {
-      th: <TableHead key="horario" className="text-xs font-medium text-muted-foreground text-center">Horario</TableHead>,
+      th: (
+        <TableColumnHeader
+          key="horario"
+          label="Horario"
+          campo="horario"
+          align="center"
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
       td: (emp) => (
-        <TableCell key="horario" className="text-center">
+        <td key="horario" className="px-3 py-2 align-middle text-center">
           <div className="leading-tight">
             <span className="text-sm font-semibold text-foreground">{emp.horarioTipo}</span>
             <p className="text-[11px] text-muted-foreground">({emp.horarioSemanal})</p>
           </div>
-        </TableCell>
+        </td>
       ),
     },
     horasHoy: {
-      th: <TableHead key="horasHoy" className="text-xs font-medium text-muted-foreground text-center">Horas hoy</TableHead>,
+      th: (
+        <TableColumnHeader
+          key="horasHoy"
+          label="Horas hoy"
+          campo="horasHoy"
+          align="center"
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
       td: (emp) => (
-        <TableCell key="horasHoy" className="text-center"><span className="text-sm text-muted-foreground">{emp.horasHoy}</span></TableCell>
+        <td key="horasHoy" className="px-3 py-2 align-middle text-center"><span className="text-sm text-muted-foreground">{emp.horasHoy}</span></td>
       ),
     },
     departamento: {
-      th: <TableHead key="departamento" className="text-xs font-medium text-muted-foreground text-center">Departamento</TableHead>,
+      th: (
+        <TableColumnHeader
+          key="departamento"
+          label="Departamento"
+          campo="departamento"
+          align="center"
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+          filtroTipo="lista"
+          opciones={departamentosUsados}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+        />
+      ),
       td: (emp) => (
-        <TableCell key="departamento" className="text-center"><span className="text-sm font-bold text-foreground">{emp.departamento}</span></TableCell>
+        <td key="departamento" className="px-3 py-2 align-middle text-center"><span className="text-sm font-bold text-foreground">{emp.departamento}</span></td>
       ),
     },
     telefono: {
-      th: <TableHead key="telefono" className="text-xs font-medium text-muted-foreground text-center">Teléfono</TableHead>,
+      th: (
+        <TableColumnHeader
+          key="telefono"
+          label="Teléfono"
+          campo="telefono"
+          align="center"
+        />
+      ),
       td: (emp) => (
-        <TableCell key="telefono" className="text-center"><span className="text-sm text-muted-foreground whitespace-nowrap">{emp.telefono}</span></TableCell>
+        <td key="telefono" className="px-3 py-2 align-middle text-center"><span className="text-sm text-muted-foreground whitespace-nowrap">{emp.telefono}</span></td>
       ),
     },
     fichajes: {
-      th: <TableHead key="fichajes" className="text-xs font-medium text-muted-foreground text-center">Fichajes</TableHead>,
+      th: (
+        <TableColumnHeader
+          key="fichajes"
+          label="Fichajes"
+          campo="fichajes"
+          align="center"
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+          filtroTipo="numero"
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+        />
+      ),
       td: (emp) => (
-        <TableCell key="fichajes" className="text-center"><div className="flex justify-center"><FichajeBar fichajes={emp.fichajes} /></div></TableCell>
+        <td key="fichajes" className="px-3 py-2 align-middle text-center"><div className="flex justify-center"><FichajeBar fichajes={emp.fichajes} /></div></td>
       ),
     },
     emailEmpresa: {
-      th: <TableHead key="emailEmpresa" className="text-xs font-medium text-muted-foreground">Email empresa</TableHead>,
+      th: (
+        <TableColumnHeader
+          key="emailEmpresa"
+          label="Email empresa"
+          campo="emailEmpresa"
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
       td: (emp) => (
-        <TableCell key="emailEmpresa"><span className="text-sm text-primary truncate max-w-[180px] block">{emp.emailEmpresa}</span></TableCell>
+        <td key="emailEmpresa" className="px-3 py-2 align-middle"><span className="text-sm text-primary truncate max-w-[180px] block">{emp.emailEmpresa}</span></td>
       ),
     },
     emailPersonal: {
-      th: <TableHead key="emailPersonal" className="text-xs font-medium text-muted-foreground text-center">Email personal</TableHead>,
+      th: (
+        <TableColumnHeader
+          key="emailPersonal"
+          label="Email personal"
+          campo="emailPersonal"
+          align="center"
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
       td: (emp) => (
-        <TableCell key="emailPersonal" className="text-center"><span className="text-sm text-muted-foreground">{emp.emailPersonal}</span></TableCell>
+        <td key="emailPersonal" className="px-3 py-2 align-middle text-center"><span className="text-sm text-muted-foreground">{emp.emailPersonal}</span></td>
       ),
     },
     validador: {
-      th: <TableHead key="validador" className="text-xs font-medium text-muted-foreground">Validador fichajes</TableHead>,
+      th: (
+        <TableColumnHeader
+          key="validador"
+          label="Validador fichajes"
+          campo="validador"
+        />
+      ),
       td: (emp) => (
-        <TableCell key="validador"><span className="text-sm text-foreground whitespace-nowrap">{emp.validadorFichajes}</span></TableCell>
+        <td key="validador" className="px-3 py-2 align-middle"><span className="text-sm text-foreground whitespace-nowrap">{emp.validadorFichajes}</span></td>
       ),
     },
   };
@@ -329,48 +454,49 @@ export function EmpleadosView() {
         }
       />
 
-
-      <div className="rounded-lg border bg-card overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent border-b">
-              <TableHead className="w-10 pl-4"><Checkbox checked={todosSeleccionados} onCheckedChange={toggleAll} /></TableHead>
-              {columnasRender.map((c) => columnDefs[c.campo]?.th)}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtrados.map((emp) => (
-              <TableRow key={emp.id} className="cursor-pointer h-16 border-b last:border-0" onClick={() => router.push(`/rrhh/empleados/${emp.id}`)}>
-                <TableCell className="pl-4" onClick={(e) => e.stopPropagation()}>
-                  <Checkbox checked={seleccionados.has(emp.id)} onCheckedChange={() => toggleOne(emp.id)} />
-                </TableCell>
-                {columnasRender.map((c) => columnDefs[c.campo]?.td(emp))}
-              </TableRow>
-            ))}
-            {loading && empleados.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={11} className="text-center py-12 text-muted-foreground">
-                  Cargando empleados…
-                </TableCell>
-              </TableRow>
-            )}
-            {!loading && empleados.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={11} className="text-center py-12 text-muted-foreground">
-                  No hay empleados todavía. Pulsa <span className="font-medium text-foreground">+ Nuevo</span> para dar de alta el primero.
-                </TableCell>
-              </TableRow>
-            )}
-            {!loading && empleados.length > 0 && filtrados.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={11} className="text-center py-12 text-muted-foreground">
-                  No se encontraron empleados con los filtros seleccionados.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <ResizableColumnsProvider storageKey="rrhh-empleados">
+        <div className="rounded-lg border bg-card overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-muted/30">
+                <th className="w-10 pl-4 py-1.5"><Checkbox checked={todosSeleccionados} onCheckedChange={toggleAll} /></th>
+                {columnasRender.map((c) => columnDefs[c.campo]?.th)}
+              </tr>
+            </thead>
+            <tbody>
+              {filtrados.map((emp) => (
+                <tr key={emp.id} className="cursor-pointer h-16 border-b last:border-0 hover:bg-muted/30 transition-colors" onClick={() => router.push(`/rrhh/empleados/${emp.id}`)}>
+                  <td className="pl-4 align-middle" onClick={(e) => e.stopPropagation()}>
+                    <Checkbox checked={seleccionados.has(emp.id)} onCheckedChange={() => toggleOne(emp.id)} />
+                  </td>
+                  {columnasRender.map((c) => columnDefs[c.campo]?.td(emp))}
+                </tr>
+              ))}
+              {loading && empleados.length === 0 && (
+                <tr>
+                  <td colSpan={columnasRender.length + 1} className="text-center py-12 text-muted-foreground">
+                    Cargando empleados…
+                  </td>
+                </tr>
+              )}
+              {!loading && empleados.length === 0 && (
+                <tr>
+                  <td colSpan={columnasRender.length + 1} className="text-center py-12 text-muted-foreground">
+                    No hay empleados todavía. Pulsa <span className="font-medium text-foreground">+ Nuevo</span> para dar de alta el primero.
+                  </td>
+                </tr>
+              )}
+              {!loading && empleados.length > 0 && filtrados.length === 0 && (
+                <tr>
+                  <td colSpan={columnasRender.length + 1} className="text-center py-12 text-muted-foreground">
+                    No se encontraron empleados con los filtros seleccionados.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </ResizableColumnsProvider>
     </div>
   );
 }
