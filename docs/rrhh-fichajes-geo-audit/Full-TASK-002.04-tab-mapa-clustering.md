@@ -2,7 +2,7 @@
 
 ## Estado
 
-Pendiente.
+Cerrada — 2026-05-25. typecheck pasa. Smoke UI + medición de performance queda para TASK-002.06.
 
 ## Objetivo
 
@@ -223,11 +223,29 @@ export function FichajesMapaView(props: {
 
 ## Resultado validado
 
-_(Pendiente.)_
+- `npm run typecheck`: ✅ pasa.
+- **Refactor sin regresión funcional**: modal de detalle extraído a `FichajeDetalleDialog.tsx`. Comportamiento idéntico al inline anterior (guardar observaciones, resolver incidencia, fichar salida). State `detalleNotas` y `savingDetalle` ahora viven dentro del componente; `intentarGeo` y `obtenerPosicionActual` movidos también allí.
+- `loadFichajes` actualizado para sincronizar `fichajeModal` con la lista refrescada (preserva el comportamiento del inline original de mostrar datos frescos sin cerrar el modal).
+- **Nuevo componente `FichajesMapaView.tsx`** con:
+  - dynamic import de Leaflet base y `leaflet.markercluster` (CDN unpkg, sin nuevas deps npm).
+  - Tile OSM + clustering automático con `markerClusterGroup` (`maxClusterRadius: 50`).
+  - Locales pintados con círculo violeta tenue usando `radio_metros`.
+  - Pines coloreados por status: verde `en-local`, violeta `teletrabajo`, rojo `fuera`, gris `sin-datos`.
+  - `fitBounds` automático sobre todos los puntos (fichajes + locales) con padding del 15%.
+  - Click en pin → callback `onFichajeClick` que abre el modal extraído.
+  - Cleanup correcto en useEffect return.
+  - Leyenda con count de fichajes y locales en la barra inferior.
+- Carga lazy de `listLocales(empresaActual.id)` con reaccion a cambio de empresa activa (multi-tenant).
+- Nueva tab "Mapa" entre "Fichajes" e "Historial" con icono `Map` de lucide.
+- Reuso completo del state `fichajesFiltrados` y `fichajeModal` — filtros y modal funcionan idénticos en tabla y mapa.
+
+## Aprendizaje (Self-Annealing — TASK-002.04)
+
+- **Carga dinámica del plugin markercluster**: requiere que Leaflet base esté en `window.L` ANTES de cargar el plugin (que extiende `L.markerClusterGroup`). El loader debe ser secuencial: primero `cargarLeaflet` (que termina cuando `window.L` existe), luego `cargarMarkerCluster` (que comprueba `typeof L.markerClusterGroup === "function"` después del inyect). Si se intentan en paralelo, fallaría sin error claro.
 
 ## Duracion real
 
-_(Pendiente.)_
+~2.5 h (incluye refactor del modal + componente mapa + integración tab + validación).
 
 ## Ruta canonica
 

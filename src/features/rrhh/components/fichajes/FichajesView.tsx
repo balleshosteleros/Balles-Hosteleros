@@ -4,25 +4,18 @@ import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { ESTADO_FICHAJE_LABEL, ESTADO_FICHAJE_COLOR, TIPOS_INCIDENCIA_LABEL, TIPO_FICHAJE_LABEL, TIPO_FICHAJE_BADGE } from "@/features/rrhh/data/fichajes";
 import type { EstadoFichaje, Fichaje, LocalGeo, ConfigFichajes, TipoFichajeCodigo } from "@/features/rrhh/data/fichajes";
-import { listFichajes, ficharSalida, updateFichaje, crearFichajeManual } from "@/features/rrhh/actions/fichajes-actions";
+import { listFichajes, crearFichajeManual } from "@/features/rrhh/actions/fichajes-actions";
 import { listEmpleados } from "@/features/rrhh/actions/empleados-actions";
-import { obtenerPosicionActual } from "@/features/rrhh/utils/geo";
 import {
   getFichajeGeoStatus,
   FICHAJE_GEO_STATUS_LABEL,
 } from "@/features/rrhh/utils/fichaje-geo-status";
 import { GeoBadge } from "@/features/rrhh/components/fichajes/geo-badge";
-import { FichajeUbicacionMiniMap } from "@/features/rrhh/components/fichajes/FichajeUbicacionMiniMap";
+import { FichajeDetalleDialog } from "@/features/rrhh/components/fichajes/FichajeDetalleDialog";
+import { FichajesMapaView } from "@/features/rrhh/components/fichajes/FichajesMapaView";
+import { listLocales } from "@/features/ajustes/actions/locales-actions";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { toast } from "sonner";
-
-async function intentarGeo() {
-  try {
-    return await obtenerPosicionActual();
-  } catch {
-    return null;
-  }
-}
 
 type EmpleadoOpcion = { id: string; nombre: string };
 
@@ -42,10 +35,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { AlertTriangle, Settings, Settings2, ClipboardList, History } from "lucide-react";
+import { AlertTriangle, Settings, Settings2, ClipboardList, History, Map } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -135,8 +127,7 @@ export function FichajesView() {
   const [empleadosOpts, setEmpleadosOpts] = useState<EmpleadoOpcion[]>([]);
   const [manualForm, setManualForm] = useState(initialManualForm());
   const [savingManual, setSavingManual] = useState(false);
-  const [detalleNotas, setDetalleNotas] = useState("");
-  const [savingDetalle, setSavingDetalle] = useState(false);
+  const [locales, setLocales] = useState<LocalGeo[]>([]);
 
   const loadFichajes = useCallback(async () => {
     setLoading(true);
@@ -144,7 +135,14 @@ export function FichajesView() {
       const today = new Date().toISOString().split("T")[0];
       const res = await listFichajes(today);
       if (res.ok) {
-        setFichajes(res.data.map(mapDbToFichaje));
+        const next = res.data.map(mapDbToFichaje);
+        setFichajes(next);
+        // Sincronizar el modal de detalle si sigue abierto, para que tras
+        // guardar observaciones o resolver incidencia el contenido muestre
+        // los datos frescos sin tener que cerrar y reabrir.
+        setFichajeModal((curr) =>
+          curr ? next.find((f) => f.id === curr.id) ?? null : null,
+        );
       } else {
         toast.error("Error al cargar fichajes");
       }
@@ -159,9 +157,43 @@ export function FichajesView() {
     loadFichajes();
   }, [loadFichajes]);
 
+  // Carga de locales con su geolocalización para pintar círculos en la tab Mapa.
+  // Se re-carga al cambiar de empresa activa para preservar multi-tenant.
   useEffect(() => {
-    setDetalleNotas(fichajeModal?.observaciones ?? "");
-  }, [fichajeModal]);
+    let cancelado = false;
+    const empresaId = empresaActual.id;
+    if (!empresaId) {
+      setLocales([]);
+      return;
+    }
+    (async () => {
+      const res = await listLocales(empresaId);
+      if (cancelado) return;
+      if (res.ok) {
+        const data = res.data as Array<{
+          id: string;
+          nombre: string;
+          lat: number | null;
+          lng: number | null;
+          radio_metros: number;
+          color: string;
+        }>;
+        setLocales(
+          data.map((l) => ({
+            id: l.id,
+            nombre: l.nombre,
+            lat: l.lat,
+            lng: l.lng,
+            radioMetros: l.radio_metros,
+            color: l.color,
+          })),
+        );
+      }
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [empresaActual.id]);
 
   const openNuevoDialog = useCallback(async () => {
     setManualForm(initialManualForm());
@@ -369,6 +401,7 @@ export function FichajesView() {
       <Tabs defaultValue="fichajes" className="space-y-4">
         <TabsList>
           <TabsTrigger value="fichajes" className="gap-1"><ClipboardList className="h-4 w-4" />Fichajes</TabsTrigger>
+          <TabsTrigger value="mapa" className="gap-1"><Map className="h-4 w-4" />Mapa</TabsTrigger>
           <TabsTrigger value="historial" className="gap-1"><History className="h-4 w-4" />Historial</TabsTrigger>
           <TabsTrigger value="incidencias" className="gap-1"><AlertTriangle className="h-4 w-4" />Incidencias</TabsTrigger>
           <TabsTrigger value="config" aria-label="Configuración" className="ml-auto"><Settings2 className="h-4 w-4" strokeWidth={1.75} /></TabsTrigger>
@@ -428,6 +461,16 @@ export function FichajesView() {
                 )}
               </TableBody>
             </Table>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="mapa" className="space-y-4">
+          <Card className="p-4">
+            <FichajesMapaView
+              fichajes={fichajesFiltrados}
+              locales={locales}
+              onFichajeClick={(f) => setFichajeModal(f)}
+            />
           </Card>
         </TabsContent>
 
@@ -525,107 +568,15 @@ export function FichajesView() {
         </TabsContent>
       </Tabs>
 
-      <Dialog open={!!fichajeModal} onOpenChange={() => setFichajeModal(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Detalle de fichaje</DialogTitle></DialogHeader>
-          {fichajeModal && (
-            <div className="space-y-3 text-sm">
-              <div className="grid grid-cols-2 gap-3">
-                <div><span className="text-muted-foreground">Empleado:</span><p className="font-medium">{fichajeModal.empleadoNombre}</p></div>
-                <div><span className="text-muted-foreground">Departamento:</span><p className="font-medium">{fichajeModal.departamento}</p></div>
-                <div><span className="text-muted-foreground">Fecha:</span><p className="font-medium">{fichajeModal.fecha}</p></div>
-                <div><span className="text-muted-foreground">Tipo:</span>
-                  {(() => {
-                    const c = (fichajeModal.tipo ?? "ENT") as TipoFichajeCodigo;
-                    return (
-                      <Badge variant="outline" className={`mt-1 text-xs ${TIPO_FICHAJE_BADGE[c]}`}>
-                        {TIPO_FICHAJE_LABEL[c]}
-                      </Badge>
-                    );
-                  })()}
-                </div>
-                <div><span className="text-muted-foreground">Entrada:</span><p className="font-medium">{formatHora(fichajeModal.horaEntrada)}</p></div>
-                <div><span className="text-muted-foreground">Salida:</span><p className="font-medium">{formatHora(fichajeModal.horaSalida)}</p></div>
-                <div><span className="text-muted-foreground">Descanso:</span><p className="font-medium">{fichajeModal.pausaInicio && fichajeModal.pausaFin ? `${fichajeModal.pausaInicio.slice(0,5)} – ${fichajeModal.pausaFin.slice(0,5)}` : "—"}</p></div>
-                <div><span className="text-muted-foreground">Horas totales:</span><p className="font-semibold">{fichajeModal.horaSalida ? formatHorasDecimal(fichajeModal.horasTotales) : "—"}</p></div>
-              </div>
-              {fichajeModal.incidencia && <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3"><p className="text-sm font-medium text-destructive">{fichajeModal.incidencia}</p></div>}
-              <div className="space-y-1.5">
-                <Label className="text-xs">Ubicación</Label>
-                <FichajeUbicacionMiniMap fichaje={fichajeModal} />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Observaciones RRHH</Label>
-                <Textarea
-                  value={detalleNotas}
-                  onChange={(e) => setDetalleNotas(e.target.value)}
-                  placeholder="Añade contexto o corrección manual"
-                  rows={4}
-                />
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            {fichajeModal && (
-              <Button
-                variant="outline"
-                disabled={savingDetalle}
-                onClick={async () => {
-                  setSavingDetalle(true);
-                  const res = await updateFichaje(fichajeModal.id, { notas: detalleNotas });
-                  setSavingDetalle(false);
-                  if (res.ok) {
-                    toast.success("Observaciones guardadas");
-                    setFichajeModal((prev) => prev ? { ...prev, observaciones: detalleNotas } : prev);
-                    loadFichajes();
-                  } else {
-                    toast.error(res.error ?? "No se pudieron guardar las observaciones");
-                  }
-                }}
-              >
-                {savingDetalle ? "Guardando…" : "Guardar observaciones"}
-              </Button>
-            )}
-            {fichajeModal && fichajeModal.incidencia && fichajeModal.horaSalida && (
-              <Button
-                disabled={savingDetalle}
-                onClick={async () => {
-                  setSavingDetalle(true);
-                  const res = await updateFichaje(fichajeModal.id, {
-                    notas: detalleNotas,
-                    incidencia: null,
-                    estado: "completado",
-                  });
-                  setSavingDetalle(false);
-                  if (res.ok) {
-                    toast.success("Incidencia resuelta");
-                    setFichajeModal((prev) => prev ? {
-                      ...prev,
-                      observaciones: detalleNotas,
-                      incidencia: null,
-                      estado: "completado",
-                    } : prev);
-                    loadFichajes();
-                  } else {
-                    toast.error(res.error ?? "No se pudo resolver la incidencia");
-                  }
-                }}
-              >
-                Resolver incidencia
-              </Button>
-            )}
-            {fichajeModal && !fichajeModal.horaSalida && fichajeModal.horaEntrada && (
-              <Button onClick={async () => {
-                const geo = await intentarGeo();
-                const res = await ficharSalida(fichajeModal.id, geo);
-                if (res.ok) { toast.success("Salida registrada"); setFichajeModal(null); loadFichajes(); }
-                else toast.error(res.error ?? "Error al fichar salida");
-              }}>Fichar salida</Button>
-            )}
-            <Button variant="outline" onClick={() => setFichajeModal(null)}>Cerrar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <FichajeDetalleDialog
+        fichaje={fichajeModal}
+        open={!!fichajeModal}
+        onOpenChange={(open) => {
+          if (!open) setFichajeModal(null);
+        }}
+        onUpdated={loadFichajes}
+      />
+
 
       <Dialog open={showNuevo} onOpenChange={(v) => !savingManual && setShowNuevo(v)}>
         <DialogContent className="max-w-lg">

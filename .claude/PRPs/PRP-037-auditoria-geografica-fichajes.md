@@ -288,6 +288,12 @@ Esta sección es **deliberadamente explícita** para que un agente futuro pueda 
 
 > Esta sección crece con cada error encontrado durante la implementación.
 
+### 2026-05-25 (TASK-002.04): Carga secuencial de Leaflet + markercluster
+- **Error potencial**: cargar `leaflet.markercluster` antes de que Leaflet base esté en `window.L` provoca `L.markerClusterGroup is not a function`. El plugin **extiende** la global `L`, no es independiente.
+- **Fix**: loader secuencial en `cargarLeafletConCluster()` — primero `inyectarScript(LEAFLET_JS)` y esperar `window.L`, luego `inyectarScript(MARKERCLUSTER_JS)` y verificar `typeof L.markerClusterGroup === "function"`. NO usar `Promise.all`.
+- **Aplicar en**: cualquier plugin Leaflet futuro (heatmap, draw, etc.). Patrón: el plugin se carga después de la lib base que extiende.
+- **Promovido a**: pendiente. Si se introduce otro plugin Leaflet, promover a `patterns/leaflet-plugin-loading.md` en el factory.
+
 ### 2026-05-25 (TASK-002.03): Conflicto de `declare global { Window.L }` con MapPicker
 - **Error**: typecheck falló con `TS2717` y `TS2739` al añadir `declare global { interface Window { L?: LeafletGlobal } }` en `FichajeUbicacionMiniMap.tsx`. Causa: `MapPicker.tsx` ya declara `Window.L` con su propia interfaz local `LeafletGlobal` que tiene menos métodos. Dos `declare global` con interfaces locales distintas para la misma propiedad colisionan a nivel TypeScript.
 - **Causa raíz**: el patrón Leaflet con `cargarLeaflet` se introdujo en `MapPicker.tsx` con `declare global` y nadie pensó que se replicaría. Cuando un segundo componente lo replica, la declaración global se duplica.
