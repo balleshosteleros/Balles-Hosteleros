@@ -71,20 +71,48 @@ function getWindowL(): LeafletGlobal | undefined {
   return (window as unknown as { L?: LeafletGlobal }).L;
 }
 
-async function inyectarScript(src: string): Promise<void> {
+async function inyectarScript(
+  src: string,
+  isReady: () => boolean,
+  errorMessage: string,
+): Promise<void> {
+  if (isReady()) return;
+
   await new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const timeout = window.setTimeout(() => {
+      finishError(new Error(errorMessage));
+    }, 10000);
+    const finishOk = () => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeout);
+      if (isReady()) {
+        resolve();
+      } else {
+        reject(new Error(errorMessage));
+      }
+    };
+    const finishError = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeout);
+      reject(error);
+    };
+
     const existing = document.querySelector(`script[src="${src}"]`);
     if (existing) {
-      existing.addEventListener("load", () => resolve(), { once: true });
-      // Si el script ya cargó previamente, no se reemite "load"; comprobamos.
-      resolve();
+      existing.addEventListener("load", finishOk, { once: true });
+      existing.addEventListener("error", () => finishError(new Error(errorMessage)), {
+        once: true,
+      });
       return;
     }
     const script = document.createElement("script");
     script.src = src;
     script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error(`No se pudo cargar ${src}`));
+    script.onload = finishOk;
+    script.onerror = () => finishError(new Error(errorMessage));
     document.head.appendChild(script);
   });
 }
@@ -102,7 +130,11 @@ async function cargarLeafletConCluster(): Promise<LeafletGlobal> {
   // 1. Leaflet base
   if (!getWindowL()) {
     inyectarCss(LEAFLET_CSS);
-    await inyectarScript(LEAFLET_JS);
+    await inyectarScript(
+      LEAFLET_JS,
+      () => Boolean(getWindowL()),
+      "Leaflet no inicializado",
+    );
   }
   let L = getWindowL();
   if (!L) throw new Error("Leaflet no inicializado");
@@ -111,7 +143,11 @@ async function cargarLeafletConCluster(): Promise<LeafletGlobal> {
   if (typeof L.markerClusterGroup !== "function") {
     inyectarCss(MARKERCLUSTER_CSS_1);
     inyectarCss(MARKERCLUSTER_CSS_2);
-    await inyectarScript(MARKERCLUSTER_JS);
+    await inyectarScript(
+      MARKERCLUSTER_JS,
+      () => typeof getWindowL()?.markerClusterGroup === "function",
+      "MarkerCluster plugin no inicializado",
+    );
     L = getWindowL();
     if (!L || typeof L.markerClusterGroup !== "function") {
       throw new Error("MarkerCluster plugin no inicializado");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { ESTADO_FICHAJE_LABEL, ESTADO_FICHAJE_COLOR, TIPOS_INCIDENCIA_LABEL, TIPO_FICHAJE_LABEL, TIPO_FICHAJE_BADGE } from "@/features/rrhh/data/fichajes";
 import type { EstadoFichaje, Fichaje, LocalGeo, ConfigFichajes, TipoFichajeCodigo } from "@/features/rrhh/data/fichajes";
@@ -110,6 +110,7 @@ function mapDbToFichaje(row: Record<string, unknown>): Fichaje {
 
 export function FichajesView() {
   const { empresaActual } = useEmpresa();
+  const empresaActivaRef = useRef(empresaActual.id);
   const [fichajes, setFichajes] = useState<Fichaje[]>([]);
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState<ConfigFichajes>({
@@ -137,10 +138,19 @@ export function FichajesView() {
   const [localesFiltro, setLocalesFiltro] = useState<string[]>([]);
 
   const loadFichajes = useCallback(async () => {
+    const empresaId = empresaActivaRef.current;
+    if (!empresaId) {
+      setFichajes([]);
+      setFichajeModal(null);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
       const today = new Date().toISOString().split("T")[0];
       const res = await listFichajes(today);
+      if (empresaId !== empresaActivaRef.current) return;
       if (res.ok) {
         const next = res.data.map(mapDbToFichaje);
         setFichajes(next);
@@ -154,15 +164,21 @@ export function FichajesView() {
         toast.error("Error al cargar fichajes");
       }
     } catch {
+      if (empresaId !== empresaActivaRef.current) return;
       toast.error("Error de conexion al cargar fichajes");
     } finally {
-      setLoading(false);
+      if (empresaId === empresaActivaRef.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    empresaActivaRef.current = empresaActual.id;
+    setFichajes([]);
+    setLocales([]);
+    setLocalesFiltro([]);
+    setFichajeModal(null);
     loadFichajes();
-  }, [loadFichajes]);
+  }, [empresaActual.id, loadFichajes]);
 
   // Carga de locales con su geolocalización para pintar círculos en la tab Mapa.
   // Se re-carga al cambiar de empresa activa para preservar multi-tenant.
@@ -316,6 +332,12 @@ export function FichajesView() {
     lista = aplicarOrdenToolbar(lista, orden, acceso);
     return lista;
   }, [fichajes, busqueda, filtros, orden, soloFuera, soloTeletrabajo, localesFiltro]);
+
+  const localesMapa = useMemo(() => {
+    if (localesFiltro.length === 0) return locales;
+    const seleccionados = new Set(localesFiltro);
+    return locales.filter((local) => seleccionados.has(local.id));
+  }, [locales, localesFiltro]);
 
   const incidenciasPendientes = incidencias.filter(i => !i.resuelta);
 
@@ -581,7 +603,7 @@ export function FichajesView() {
           <Card className="p-4">
             <FichajesMapaView
               fichajes={fichajesFiltrados}
-              locales={locales}
+              locales={localesMapa}
               onFichajeClick={(f) => setFichajeModal(f)}
             />
           </Card>
