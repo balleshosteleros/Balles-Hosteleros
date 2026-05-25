@@ -12,6 +12,20 @@ Scope:
 - rol app: `director`
 - pensado para smoke RRHH por UI
 
+## RRHH admin no borrar
+
+- email: `rrhh-smoke-admin-no-borrar@example.com`
+- user_id: `9846be41-6a0e-4545-bf28-b0b792fc4fd0`
+
+Estado actual dejado para pruebas:
+
+- empresa principal: `HABANA`
+- accesos: `HABANA`, `BACANAL`
+- rol app: `director`
+- `rol_label='DIRECTOR'`
+- `es_empleado=false`
+- no borrar: cuenta persistente para futuros smokes RRHH
+
 ## Empleado smoke reusable
 
 - email: `smoke-employee-1779371949310@example.com`
