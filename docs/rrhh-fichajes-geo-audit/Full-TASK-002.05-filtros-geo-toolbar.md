@@ -2,7 +2,7 @@
 
 ## Estado
 
-Pendiente.
+Cerrada — 2026-05-25. typecheck pasa. Smoke UI queda para TASK-002.06.
 
 ## Objetivo
 
@@ -200,11 +200,20 @@ type SubmoduleToolbarProps = {
 
 ## Resultado validado
 
-_(Pendiente.)_
+- `npm run typecheck`: ✅ pasa.
+- **Decisión de implementación**: NO se extendió `SubmoduleToolbar`. En su lugar se creó una **barra de filtros geo inline** (JSX local `geoFiltrosBar` dentro de `FichajesView`) que se renderiza en ambas tabs (Fichajes y Mapa). Esto evita riesgo de regresión en otras vistas que usan el toolbar.
+- 3 controles implementados:
+  - Toggle "Solo fuera del radio" (Button variant default cuando activo).
+  - Toggle "Solo teletrabajo" (Button variant default cuando activo).
+  - Multi-select "Locales" usando `Popover` + `Checkbox` con conteo de seleccionados visible.
+- Lógica de filtrado añadida en el `useMemo` `fichajesFiltrados` después de los filtros existentes: `soloFuera` filtra por `getFichajeGeoStatus === "fuera"`, `soloTeletrabajo` por `modoTeletrabajo === true`, `localesFiltro` por `local.id`.
+- Botón "Limpiar" (visible solo cuando hay al menos un filtro activo) resetea los 3 a la vez.
+- Filtros aplican simultáneamente a tabla y a tab Mapa (`fichajesFiltrados` es la única fuente que ambas vistas consumen).
+- Multi-tenant: `locales` se recarga al cambiar `empresaActual.id` (ya implementado en 002.04); cambio de empresa no preserva selección por seguridad (`localesFiltro` puede contener IDs inválidos para la nueva empresa, pero el filtro queda inocuo).
 
 ## Duracion real
 
-_(Pendiente.)_
+~45 min.
 
 ## Ruta canonica
 

@@ -37,7 +37,9 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { AlertTriangle, Settings, Settings2, ClipboardList, History, Map } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/shared/components/ui/popover";
+import { Checkbox } from "@/shared/components/ui/checkbox";
+import { AlertTriangle, Settings, Settings2, ClipboardList, History, Map, Building2, X } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -128,6 +130,11 @@ export function FichajesView() {
   const [manualForm, setManualForm] = useState(initialManualForm());
   const [savingManual, setSavingManual] = useState(false);
   const [locales, setLocales] = useState<LocalGeo[]>([]);
+  // Filtros geo (TASK-002.05). Se aplican sobre fichajesFiltrados y afectan
+  // tanto a la tabla como a la tab Mapa porque ambas leen el mismo state.
+  const [soloFuera, setSoloFuera] = useState(false);
+  const [soloTeletrabajo, setSoloTeletrabajo] = useState(false);
+  const [localesFiltro, setLocalesFiltro] = useState<string[]>([]);
 
   const loadFichajes = useCallback(async () => {
     setLoading(true);
@@ -275,7 +282,7 @@ export function FichajesView() {
       return true;
     });
 
-    // Filtro geo: el status es un categórico derivado (`getFichajeGeoStatus`),
+    // Filtro geo (columna): el status es un categórico derivado (`getFichajeGeoStatus`),
     // no un campo directo del fichaje. Se aplica fuera de aplicarFiltrosToolbar
     // igual que el filtro "empresas" hace en EmpleadosView.
     const filtrosGeo = filtros.filter((fi) => fi.campo === "geo");
@@ -291,9 +298,24 @@ export function FichajesView() {
       });
     }
 
+    // Filtros geo del toolbar de auditoría (TASK-002.05).
+    if (soloFuera) {
+      lista = lista.filter(
+        (fic) => getFichajeGeoStatus(fic, fic.local ?? null) === "fuera",
+      );
+    }
+    if (soloTeletrabajo) {
+      lista = lista.filter((fic) => fic.modoTeletrabajo === true);
+    }
+    if (localesFiltro.length > 0) {
+      lista = lista.filter(
+        (fic) => fic.local != null && localesFiltro.includes(fic.local.id),
+      );
+    }
+
     lista = aplicarOrdenToolbar(lista, orden, acceso);
     return lista;
-  }, [fichajes, busqueda, filtros, orden]);
+  }, [fichajes, busqueda, filtros, orden, soloFuera, soloTeletrabajo, localesFiltro]);
 
   const incidenciasPendientes = incidencias.filter(i => !i.resuelta);
 
@@ -396,6 +418,95 @@ export function FichajesView() {
     (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
   );
 
+  // Barra de filtros geo (TASK-002.05). Se reusa en tab Fichajes y tab Mapa
+  // porque ambas leen el mismo state `fichajesFiltrados`, lo que mantiene
+  // la selección coherente al cambiar entre tabs.
+  const filtrosGeoActivos =
+    soloFuera || soloTeletrabajo || localesFiltro.length > 0;
+  const geoFiltrosBar = (
+    <div className="flex flex-wrap items-center gap-2 px-1">
+      <Button
+        size="sm"
+        variant={soloFuera ? "default" : "outline"}
+        className="h-8 text-xs"
+        onClick={() => setSoloFuera((v) => !v)}
+      >
+        Solo fuera del radio
+      </Button>
+      <Button
+        size="sm"
+        variant={soloTeletrabajo ? "default" : "outline"}
+        className="h-8 text-xs"
+        onClick={() => setSoloTeletrabajo((v) => !v)}
+      >
+        Solo teletrabajo
+      </Button>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            size="sm"
+            variant={localesFiltro.length > 0 ? "default" : "outline"}
+            className="h-8 text-xs gap-1"
+          >
+            <Building2 className="h-3.5 w-3.5" />
+            Locales
+            {localesFiltro.length > 0 && (
+              <span className="ml-1 rounded-full bg-background text-foreground px-1.5 text-[10px] font-medium">
+                {localesFiltro.length}
+              </span>
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-64 p-2" align="start">
+          <div className="text-xs font-medium px-2 py-1 text-muted-foreground">
+            Filtrar por local
+          </div>
+          {locales.length === 0 ? (
+            <div className="px-2 py-3 text-xs text-muted-foreground">
+              Sin locales en esta empresa.
+            </div>
+          ) : (
+            <div className="max-h-64 overflow-y-auto">
+              {locales.map((l) => (
+                <label
+                  key={l.id}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted/50 cursor-pointer"
+                >
+                  <Checkbox
+                    checked={localesFiltro.includes(l.id)}
+                    onCheckedChange={(checked) => {
+                      setLocalesFiltro((curr) =>
+                        checked === true
+                          ? [...curr, l.id]
+                          : curr.filter((id) => id !== l.id),
+                      );
+                    }}
+                  />
+                  <span className="text-sm">{l.nombre}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </PopoverContent>
+      </Popover>
+      {filtrosGeoActivos && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-8 text-xs gap-1"
+          onClick={() => {
+            setSoloFuera(false);
+            setSoloTeletrabajo(false);
+            setLocalesFiltro([]);
+          }}
+        >
+          <X className="h-3 w-3" />
+          Limpiar
+        </Button>
+      )}
+    </div>
+  );
+
   return (
     <div className="p-6 space-y-6">
       <Tabs defaultValue="fichajes" className="space-y-4">
@@ -443,6 +554,7 @@ export function FichajesView() {
               </>
             }
           />
+          {geoFiltrosBar}
           <Card>
             <Table>
               <TableHeader>
@@ -465,6 +577,7 @@ export function FichajesView() {
         </TabsContent>
 
         <TabsContent value="mapa" className="space-y-4">
+          {geoFiltrosBar}
           <Card className="p-4">
             <FichajesMapaView
               fichajes={fichajesFiltrados}

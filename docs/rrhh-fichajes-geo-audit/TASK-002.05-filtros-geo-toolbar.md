@@ -2,7 +2,7 @@
 
 ## Estado
 
-Pendiente.
+Cerrada — 2026-05-25.
 
 ## Objetivo
 
