@@ -2,7 +2,7 @@
 
 ## Estado
 
-Pendiente.
+Cerrada — 2026-05-25. typecheck pasa. Smoke UI queda para TASK-002.06.
 
 ## Objetivo
 
@@ -164,11 +164,18 @@ Cualquiera de los dos en paralelo:
 
 ## Resultado validado
 
-_(Pendiente.)_
+- `npm run typecheck`: ✅ pasa.
+- Import añadido: `LocalGeo`, `getFichajeGeoStatus`, `FICHAJE_GEO_STATUS_LABEL`, `GeoBadge`, `TableColumnHeader`.
+- `mapDbToFichaje` extendido para mapear: local (snake_case → camelCase), coords entrada/salida, precisiones, `modo_teletrabajo`, `distancia_entrada_metros`, `distancia_salida_metros`.
+- `acceso(f, "geo")` devuelve `distanciaEntradaMetros ?? Infinity` para orden (null/teletrabajo → al final asc).
+- `fichajesFiltrados`: filtro geo aplicado fuera de `aplicarFiltrosToolbar` con same patrón que EmpleadosView usa para "empresas". Usa `getFichajeGeoStatus` + `FICHAJE_GEO_STATUS_LABEL`.
+- Columna "Geo" añadida a `columnasDef` al final.
+- `columnDefs.geo` usa `TableColumnHeader` (no `TableHead` simple) para exponer orden + filtro de lista en la propia cabecera. Las opciones del filtro son los 4 labels canónicos (`En local`, `Teletrabajo`, `Fuera`, `Sin datos`).
+- Smoke UI multi-tenant queda para TASK-002.06.
 
 ## Duracion real
 
-_(Pendiente.)_
+~45 min.
 
 ## Ruta canonica
 

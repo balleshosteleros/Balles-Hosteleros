@@ -3,10 +3,16 @@
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { ESTADO_FICHAJE_LABEL, ESTADO_FICHAJE_COLOR, TIPOS_INCIDENCIA_LABEL, TIPO_FICHAJE_LABEL, TIPO_FICHAJE_BADGE } from "@/features/rrhh/data/fichajes";
-import type { EstadoFichaje, Fichaje, ConfigFichajes, TipoFichajeCodigo } from "@/features/rrhh/data/fichajes";
+import type { EstadoFichaje, Fichaje, LocalGeo, ConfigFichajes, TipoFichajeCodigo } from "@/features/rrhh/data/fichajes";
 import { listFichajes, ficharSalida, updateFichaje, crearFichajeManual } from "@/features/rrhh/actions/fichajes-actions";
 import { listEmpleados } from "@/features/rrhh/actions/empleados-actions";
 import { obtenerPosicionActual } from "@/features/rrhh/utils/geo";
+import {
+  getFichajeGeoStatus,
+  FICHAJE_GEO_STATUS_LABEL,
+} from "@/features/rrhh/utils/fichaje-geo-status";
+import { GeoBadge } from "@/features/rrhh/components/fichajes/geo-badge";
+import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { toast } from "sonner";
 
 async function intentarGeo() {
@@ -55,6 +61,27 @@ import { fichajesIO } from "@/features/rrhh/io/fichajes.io";
 import { formatHorasDecimal } from "@/shared/lib/timeUtils";
 
 function mapDbToFichaje(row: Record<string, unknown>): Fichaje {
+  const localRaw = row.locales as
+    | {
+        id: string;
+        nombre: string;
+        lat: number | null;
+        lng: number | null;
+        radio_metros: number;
+        color: string;
+      }
+    | null;
+  const local: LocalGeo | null = localRaw
+    ? {
+        id: localRaw.id,
+        nombre: localRaw.nombre,
+        lat: localRaw.lat,
+        lng: localRaw.lng,
+        radioMetros: localRaw.radio_metros,
+        color: localRaw.color,
+      }
+    : null;
+
   return {
     id: row.id as string,
     empleadoId: (row.empleado_id as string) ?? "",
@@ -72,6 +99,17 @@ function mapDbToFichaje(row: Record<string, unknown>): Fichaje {
     departamento: (row.departamento as string) ?? "",
     centro: (row.centro as string) ?? "",
     tipo: ((row.tipo as TipoFichajeCodigo) ?? "ENT") as TipoFichajeCodigo,
+    // ─── Auditoría geográfica (PRP-037, TASK-002.02) ────────────────────
+    latEntrada: (row.lat_entrada as number | null) ?? null,
+    lngEntrada: (row.lng_entrada as number | null) ?? null,
+    precisionEntradaMetros: (row.precision_entrada_metros as number | null) ?? null,
+    latSalida: (row.lat_salida as number | null) ?? null,
+    lngSalida: (row.lng_salida as number | null) ?? null,
+    precisionSalidaMetros: (row.precision_salida_metros as number | null) ?? null,
+    modoTeletrabajo: Boolean(row.modo_teletrabajo),
+    local,
+    distanciaEntradaMetros: (row.distancia_entrada_metros as number | null) ?? null,
+    distanciaSalidaMetros: (row.distancia_salida_metros as number | null) ?? null,
   };
 }
 
@@ -189,6 +227,12 @@ export function FichajesView() {
     if (campo === "horasTotales") return f.horasTotales;
     if (campo === "fecha") return f.fecha;
     if (campo === "empleado") return f.empleadoNombre;
+    if (campo === "geo") {
+      // Para orden: usar distancia (null → Infinity sortea al final asc).
+      // Para filtro: el campo es categórico derivado; se aplica fuera del
+      // flujo genérico (ver useMemo fichajesFiltrados).
+      return f.distanciaEntradaMetros ?? Number.POSITIVE_INFINITY;
+    }
     return (f as unknown as Record<string, unknown>)[campo];
   };
 
@@ -197,7 +241,23 @@ export function FichajesView() {
       if (busqueda && !f.empleadoNombre.toLowerCase().includes(busqueda.toLowerCase())) return false;
       return true;
     });
-    lista = aplicarFiltrosToolbar(lista, filtros, acceso);
+
+    // Filtro geo: el status es un categórico derivado (`getFichajeGeoStatus`),
+    // no un campo directo del fichaje. Se aplica fuera de aplicarFiltrosToolbar
+    // igual que el filtro "empresas" hace en EmpleadosView.
+    const filtrosGeo = filtros.filter((fi) => fi.campo === "geo");
+    const otrosFiltros = filtros.filter((fi) => fi.campo !== "geo");
+    lista = aplicarFiltrosToolbar(lista, otrosFiltros, acceso);
+    if (filtrosGeo.length > 0) {
+      lista = lista.filter((fic) => {
+        const status = getFichajeGeoStatus(fic, fic.local ?? null);
+        const label = FICHAJE_GEO_STATUS_LABEL[status];
+        return filtrosGeo.every((filtro) =>
+          filtro.valores?.includes(label),
+        );
+      });
+    }
+
     lista = aplicarOrdenToolbar(lista, orden, acceso);
     return lista;
   }, [fichajes, busqueda, filtros, orden]);
@@ -212,6 +272,7 @@ export function FichajesView() {
     { campo: "pausa", label: "Descanso" },
     { campo: "horas", label: "Horas" },
     { campo: "tipo", label: "Tipo" },
+    { campo: "geo", label: "Geo" },
   ];
 
   function formatHora(s: string | null): string {
@@ -271,6 +332,30 @@ export function FichajesView() {
           </TableCell>
         );
       },
+    },
+    geo: {
+      // Esta columna usa TableColumnHeader (en vez de TableHead simple) para
+      // exponer el filtro de lista y el orden por distancia desde la propia
+      // celda de cabecera. Mismo patrón que EmpleadosView aplica a "empresas".
+      th: (
+        <TableColumnHeader
+          key="geo"
+          label="Geo"
+          campo="geo"
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+          filtroTipo="lista"
+          opciones={Object.values(FICHAJE_GEO_STATUS_LABEL)}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+        />
+      ),
+      td: (f) => (
+        <TableCell key="geo">
+          <GeoBadge fichaje={f} />
+        </TableCell>
+      ),
     },
   };
 
