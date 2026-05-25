@@ -2,7 +2,15 @@
 
 ## Estado
 
-Pendiente.
+En progreso — smoke UI pendiente.
+
+### Avance 2026-05-25
+
+- `typecheck`: pasa ✅
+- Revisión estática completa: `createEmpleado`, `handle_new_user`, form `/nuevo`, `fichajes-actions`, `mi-panel-actions` ✅
+- Smoke listado `/rrhh/empleados` con empresa activa HABANA/BACANAL: validado (sesión anterior) ✅
+- Smoke alta multiempresa + reentrada empleado: **pendiente de UI** — script en `HANDOFF_2026-05-25_TASK002_SMOKE_EXTENSION.md`
+- `npm run build`: no ejecutado aún
 
 ## Objetivo
 
