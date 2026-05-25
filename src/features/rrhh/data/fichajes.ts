@@ -32,6 +32,20 @@ export const TIPO_FICHAJE_BADGE: Record<TipoFichajeCodigo, string> = {
   NOR: "bg-sky-50 text-sky-700 border-sky-200",
 };
 
+/**
+ * Local con geolocalización tal y como lo necesita la auditoría geográfica
+ * de fichajes (PRP-037). Estructura camelCase y se construye en el server
+ * mapeando desde `locales` (snake_case).
+ */
+export interface LocalGeo {
+  id: string;
+  nombre: string;
+  lat: number | null;
+  lng: number | null;
+  radioMetros: number;
+  color: string;
+}
+
 export interface Fichaje {
   id: string;
   empleadoId: string;
@@ -49,6 +63,22 @@ export interface Fichaje {
   departamento: string;
   centro: string;
   tipo?: TipoFichajeCodigo;
+  // ─── Auditoría geográfica (PRP-037) ────────────────────────────────
+  // Todos los campos son opcionales para mantener backward-compat con
+  // consumidores que aún no mapean estos datos (p.ej. FichajesView pre
+  // TASK-002.02). El server (`listFichajes`) los rellena precalculados;
+  // los consumidores que no los pueblan dejan `undefined` y el helper
+  // `getFichajeGeoStatus` los trata como `sin-datos`.
+  latEntrada?: number | null;
+  lngEntrada?: number | null;
+  precisionEntradaMetros?: number | null;
+  latSalida?: number | null;
+  lngSalida?: number | null;
+  precisionSalidaMetros?: number | null;
+  modoTeletrabajo?: boolean;
+  local?: LocalGeo | null;
+  distanciaEntradaMetros?: number | null;
+  distanciaSalidaMetros?: number | null;
 }
 
 export interface IncidenciaFichaje {

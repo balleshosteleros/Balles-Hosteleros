@@ -2,7 +2,7 @@
 
 ## Estado
 
-Pendiente.
+Cerrada — 2026-05-25. typecheck + build pasan. Smoke UI multi-tenant queda para TASK-002.06.
 
 ## Objetivo
 
@@ -221,11 +221,20 @@ export function GeoBadge(props: { fichaje: FichajeConGeo }): JSX.Element;
 
 ## Resultado validado
 
-_(Pendiente — rellena el ejecutor al cerrar.)_
+- `npm run typecheck`: ✅ pasa limpio.
+- `npm run build`: ✅ pasa (todas las rutas RRHH generadas, incluida `/rrhh/fichajes`).
+- Tipo `Fichaje` extendido con campos opcionales geo + nuevo tipo `LocalGeo`.
+- `getFichajeGeoStatus` cubre los 4 estados (función pura sin IO).
+- `<GeoBadge>` consume `Fichaje` con campos opcionales; renderiza los 4 estados con color + ícono + distancia formateada (`87 m` / `>5 km`).
+- `listFichajes` aplicado patrón `createAdminClient + requireAdminFichajes({ empresaIds: [empresaId] })` igual que el fix de TASK-002 para `listEmpleados`.
+- JOIN con `locales` vía `locales!local_id(...)`.
+- Distancias precomputadas server-side con `distanciaMetros()` ya existente.
+- Backward compat: campos snake_case del payload original siguen presentes; `FichajesView.mapDbToFichaje` actual no requiere cambios (los pobla TASK-002.02).
+- Smoke UI multi-tenant queda para TASK-002.06 (necesita browser).
 
 ## Duracion real
 
-_(Pendiente — rellena el ejecutor al cerrar.)_
+~1.5 h (incluye lectura de contexto, análisis del fix de TASK-002 sobre listEmpleados, implementación y validación).
 
 ## Ruta canonica
 

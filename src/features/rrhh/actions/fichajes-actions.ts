@@ -1,9 +1,96 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { distanciaMetros } from "@/features/rrhh/utils/geo";
 import { getEmpresaActivaId } from "@/features/empresa/actions/empresa-activa-actions";
 import { revalidatePath } from "next/cache";
+
+const ROLES_ADMIN_FICHAJES = ["admin", "director"] as const;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Verifica admin/director y, opcionalmente, pertenencia del caller a las
+ * empresas indicadas vía user_empresas.
+ *
+ * Mismo patrón que `requireAdminUser` en empleados-actions.ts — el fix de
+ * TASK-002 (handoff 2026-05-25) demostró que el listado RRHH multiempresa
+ * necesita esta combinación: createAdminClient + scope explícito.
+ */
+async function requireAdminFichajes(opts?: { empresaIds?: string[] }) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("No autenticado");
+
+  const { data: rolesRows } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", user.id);
+  const roles = (rolesRows ?? []).map((r: { role: string }) => r.role);
+  const isAdmin = roles.some((r) =>
+    (ROLES_ADMIN_FICHAJES as readonly string[]).includes(r),
+  );
+  if (!isAdmin) {
+    throw new Error(
+      "Sin permisos: solo admin o director pueden gestionar fichajes",
+    );
+  }
+
+  if (opts?.empresaIds && opts.empresaIds.length > 0 && !roles.includes("director")) {
+    const empresasReq = Array.from(
+      new Set(
+        opts.empresaIds.filter(
+          (id) => typeof id === "string" && UUID_RE.test(id),
+        ),
+      ),
+    );
+    if (empresasReq.length === 0) {
+      throw new Error("Sin permisos: empresas no válidas");
+    }
+    const { data: rels } = await supabase
+      .from("user_empresas")
+      .select("empresa_id")
+      .eq("user_id", user.id)
+      .in("empresa_id", empresasReq);
+    const accesibles = new Set(
+      (rels ?? []).map((r: { empresa_id: string }) => r.empresa_id),
+    );
+    const sinAcceso = empresasReq.filter((id) => !accesibles.has(id));
+    if (sinAcceso.length > 0) {
+      throw new Error(
+        sinAcceso.length === 1
+          ? "Sin permisos: no tienes acceso a esa empresa"
+          : `Sin permisos: no tienes acceso a ${sinAcceso.length} de las empresas seleccionadas`,
+      );
+    }
+  }
+
+  return user;
+}
+
+/**
+ * Calcula distancia segura: devuelve `null` si falta cualquier coordenada.
+ * Usado server-side en `listFichajes` para precomputar y evitar exponer
+ * coordenadas innecesariamente al cliente.
+ */
+function computeDistanciaSafe(
+  lat: number | null,
+  lng: number | null,
+  local: { lat: number | null; lng: number | null } | null,
+): number | null {
+  if (
+    lat == null ||
+    lng == null ||
+    !local ||
+    local.lat == null ||
+    local.lng == null
+  ) {
+    return null;
+  }
+  return Math.round(distanciaMetros(lat, lng, local.lat, local.lng));
+}
 
 async function getContext() {
   const supabase = await createClient();
@@ -37,18 +124,80 @@ async function getContext() {
   };
 }
 
+/**
+ * Lista fichajes del supervisor RRHH para la empresa activa.
+ *
+ * Multi-tenant: el listado RRHH multiempresa necesita admin client + scope
+ * explícito porque la RLS de `fichajes` y `locales` filtra por
+ * `profiles.empresa_id` (única) y no por `user_empresas` (canónica). Mismo
+ * patrón aplicado a `listEmpleados` en TASK-002. Sin esto, un admin/director
+ * con empresa activa BACANAL y `profiles.empresa_id = HABANA` no vería ningún
+ * fichaje.
+ *
+ * Geo audit (PRP-037): el payload incluye coordenadas, modo teletrabajo, el
+ * local asignado y las **distancias precalculadas en servidor**. Los campos
+ * snake_case mantienen compat con `FichajesView.mapDbToFichaje` actual; los
+ * consumidores que mapean a `Fichaje` extendido podrán poblar los campos
+ * camelCase desde aquí (TASK-002.02).
+ */
 export async function listFichajes(fecha?: string) {
   try {
-    const { supabase, empresaId } = await getContext();
-    const query = supabase
+    const { empresaId } = await getContext();
+    if (!empresaId) return { ok: false, data: [] };
+    await requireAdminFichajes({ empresaIds: [empresaId] });
+
+    let admin;
+    try {
+      admin = createAdminClient();
+    } catch {
+      return { ok: false, data: [], error: "Supabase admin no configurado." };
+    }
+
+    let query = admin
       .from("fichajes")
-      .select("*")
+      .select(
+        `*, locales!local_id(id, nombre, lat, lng, radio_metros, color)`,
+      )
+      .eq("empresa_id", empresaId)
       .order("created_at", { ascending: false });
-    if (empresaId) query.eq("empresa_id", empresaId);
-    if (fecha) query.eq("fecha", fecha);
+
+    if (fecha) query = query.eq("fecha", fecha);
+
     const { data, error } = await query;
     if (error) throw error;
-    return { ok: true, data: data ?? [] };
+
+    // Precomputar distancias server-side. Se añaden como snake_case para
+    // mantener compat con el mapper actual de FichajesView; los consumidores
+    // que mapeen a Fichaje extendido leen también estos campos.
+    const enriched = (data ?? []).map((row) => {
+      const r = row as Record<string, unknown>;
+      const local = r.locales as
+        | {
+            id: string;
+            nombre: string;
+            lat: number | null;
+            lng: number | null;
+            radio_metros: number;
+            color: string;
+          }
+        | null;
+
+      const latEntrada = (r.lat_entrada as number | null) ?? null;
+      const lngEntrada = (r.lng_entrada as number | null) ?? null;
+      const latSalida = (r.lat_salida as number | null) ?? null;
+      const lngSalida = (r.lng_salida as number | null) ?? null;
+
+      const distanciaEntrada = computeDistanciaSafe(latEntrada, lngEntrada, local);
+      const distanciaSalida = computeDistanciaSafe(latSalida, lngSalida, local);
+
+      return {
+        ...r,
+        distancia_entrada_metros: distanciaEntrada,
+        distancia_salida_metros: distanciaSalida,
+      };
+    });
+
+    return { ok: true, data: enriched };
   } catch (err) {
     console.error("[fichajes] listFichajes:", err);
     return { ok: false, data: [] };
