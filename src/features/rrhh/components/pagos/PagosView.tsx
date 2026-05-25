@@ -318,6 +318,7 @@ export function PagosView() {
             <IOActions
               config={pagosIO}
               context={{ empresaId: empresaActual.id }}
+              exportRecords={pagosFiltrados}
               onSuccess={() => window.location.reload()}
             />
             <Button
