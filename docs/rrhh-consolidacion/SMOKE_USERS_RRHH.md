@@ -58,6 +58,20 @@ Estado actual dejado para pruebas:
 - `avatar_url` de smoke ya cargado
 - smoke completo validado: alta RRHH -> primer acceso -> onboarding -> fichar entrada -> fichar salida
 
+## Empleado smoke multiempresa validado 2026-05-25
+
+- email: `smoke-multiempresa-20260525141329@example.com`
+- user_id: `b919332f-5f51-410c-8c99-212a499faa2b`
+
+Estado actual dejado para pruebas:
+
+- empresa principal: `HABANA`
+- accesos: `HABANA`, `BACANAL`
+- `rol_label='EMPLEADO'`
+- `perfil_completado=true`
+- `local_id=9d1ab861-475f-4008-ba8e-4ef0928b4ac6`
+- alta UI validada: dialog de credenciales, listado HABANA/BACANAL y reentrada a `mi-panel`
+
 ## Procedimiento de reutilizacion
 
 Antes de reutilizar estos usuarios:

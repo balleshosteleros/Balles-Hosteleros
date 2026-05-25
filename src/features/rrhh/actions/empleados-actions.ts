@@ -31,15 +31,23 @@ function ordenarEmpresasConPrincipal(
 
 export async function listEmpleados() {
   try {
-    const { supabase, empresaId } = await getAppContext();
+    const { empresaId } = await getAppContext();
     if (!empresaId) return { ok: false, data: [] };
+    await requireAdminUser({ empresaIds: [empresaId] });
+
+    let admin;
+    try {
+      admin = createAdminClient();
+    } catch {
+      return { ok: false, data: [], error: "Supabase admin no configurado." };
+    }
 
     // Un empleado aparece en una empresa si:
     //   1) su empresa_id es esa empresa (empresa principal), o
     //   2) su user_id tiene acceso a esa empresa vía user_empresas (acceso secundario).
     // Devolvemos todos esos empleados con un flag `es_principal` para la UI.
 
-    const { data: accesosUE } = await supabase
+    const { data: accesosUE } = await admin
       .from("user_empresas")
       .select("user_id")
       .eq("empresa_id", empresaId);
@@ -49,7 +57,7 @@ export async function listEmpleados() {
       ? `empresa_id.eq.${empresaId},user_id.in.(${userIdsConAcceso.join(",")})`
       : `empresa_id.eq.${empresaId}`;
 
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .from("empleados")
       .select(`*, departamentos(nombre)`)
       .or(filtro)
@@ -61,7 +69,7 @@ export async function listEmpleados() {
     const userIds = Array.from(new Set((data ?? []).map((e) => e.user_id as string).filter(Boolean)));
     let empresasPorUser: Record<string, Array<{ id: string; nombre: string }>> = {};
     if (userIds.length > 0) {
-      const { data: rels } = await supabase
+      const { data: rels } = await admin
         .from("user_empresas")
         .select("user_id, empresas:empresa_id(id, nombre)")
         .in("user_id", userIds);

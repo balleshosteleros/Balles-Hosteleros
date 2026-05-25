@@ -1,0 +1,8 @@
+{
+  "defaultShell": "powershell",
+  "permissions": {
+    "allow": [
+      "PowerShell(*)"
+    ]
+  }
+}

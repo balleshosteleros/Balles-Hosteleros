@@ -2,15 +2,16 @@
 
 ## Estado
 
-En progreso — smoke UI pendiente.
+Cerrada — smoke UI validado el 2026-05-25.
 
 ### Avance 2026-05-25
 
 - `typecheck`: pasa ✅
 - Revisión estática completa: `createEmpleado`, `handle_new_user`, form `/nuevo`, `fichajes-actions`, `mi-panel-actions` ✅
 - Smoke listado `/rrhh/empleados` con empresa activa HABANA/BACANAL: validado (sesión anterior) ✅
-- Smoke alta multiempresa + reentrada empleado: **pendiente de UI** — script en `HANDOFF_2026-05-25_TASK002_SMOKE_EXTENSION.md`
-- `npm run build`: no ejecutado aún
+- Smoke alta multiempresa + reentrada empleado: validado por UI real con alta, visibilidad en HABANA/BACANAL, login y `primer-acceso -> /mi-panel` ✅
+- `npm run build`: pasa ✅
+- Ajuste aplicado durante el smoke: `listEmpleados()` pasa a leer `empleados` y `user_empresas` con admin client + scope explícito para que la vista multiempresa no pierda accesos secundarios ✅
 
 ## Objetivo
 

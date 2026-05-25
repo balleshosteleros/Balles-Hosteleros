@@ -2,8 +2,7 @@
 
 ## Estado de sesión
 
-Sesión de revisión estática y preparación del script de smoke UI.
-Chrome/Preview no disponibles en esta sesión — el smoke de UI queda como script ejecutable.
+Sesión cerrada con smoke UI ejecutado de extremo a extremo y `TASK-002` lista para cierre formal.
 
 Branch: `rrhh-sync-origin-c4da3ca`
 Repo: `https://github.com/balleshosteleros/Balles-Hosteleros.git`
@@ -61,7 +60,45 @@ Archivo: `src/app/(main)/rrhh/empleados/nuevo/page.tsx`
 
 ---
 
-## Script de smoke UI pendiente
+## Smoke UI ejecutado
+
+### Resultado final
+
+- Alta multiempresa por UI: OK.
+- Empleado visible en `/rrhh/empleados` con empresa activa `HABANA`: OK.
+- Empleado visible en `/rrhh/empleados` con empresa activa `BACANAL`: OK.
+- Reentrada del empleado: OK.
+- Redirect de `primer-acceso` a `mi-panel` tras completar perfil: OK.
+- `npm run build`: OK.
+
+### Hallazgo de producto corregido durante el smoke
+
+Archivo: `src/features/rrhh/actions/empleados-actions.ts`
+
+- `listEmpleados()` estaba leyendo `user_empresas` y el listado de `empleados` con el cliente sujeto a RLS.
+- Efecto real: el empleado multiempresa aparecía sin badges de acceso en `HABANA` y desaparecía en `BACANAL` aunque `user_empresas` estaba bien persistido.
+- Fix aplicado: para este listado RRHH se usa `createAdminClient()` con scope explícito de empresa activa (`requireAdminUser({ empresaIds: [empresaId] })`), manteniendo la deduplicación por `user_id`.
+
+### Evidencia local
+
+- Artefactos locales del smoke: `output/playwright/task002-smoke/`
+- Resultado final: `output/playwright/task002-smoke/result.json`
+
+### Usuario creado y dejado para reuso
+
+- email: `smoke-multiempresa-20260525141329@example.com`
+- empresa principal: `HABANA`
+- accesos: `HABANA`, `BACANAL`
+- local principal: `Coctelería Habana`
+- ruta observada:
+  - login inicial -> `/mis-departamentos`
+  - acceso a `/mi-panel` -> redirect a `/primer-acceso`
+  - completar wizard -> `/mi-panel`
+
+Nota:
+
+- la contraseña temporal devuelta por el alta no se deja en el repo;
+- si se reutiliza este usuario, resetear password antes del siguiente smoke.
 
 ### Prerequisitos
 - Dev server arrancado: `npm run dev` en `/home/fernandomp/dev/Balles-Hosteleros`
@@ -125,34 +162,28 @@ Desde Mi Panel del empleado smoke:
 
 ## Riesgos activos
 
-- El empleado creado en el smoke tiene `es_empleado=true` pero `perfil_completado=false`.
-  El onboarding puede bloquearlo dependiendo de los gates configurados.
-- Si el smoke arroja error en el alta, el rollback debe haber limpiado el `auth.user`.
-  Verificable en Supabase → Auth → Users buscando el email.
 - `pagos` sigue siendo WIP visible en el módulo — no tocar.
-- `typecheck` confirmado en esta sesión; `npm run build` no ejecutado.
+- El landing inicial del empleado sigue siendo `/mis-departamentos`; el acceso operativo a `mi-panel` ocurre tras el redirect esperado a `primer-acceso`.
+- El formulario de alta muestra transitoriamente `Sin locales disponibles` al cambiar la empresa principal hasta que hidrata el `listLocales()`; el smoke ya contempla esta espera.
 
 ---
 
 ## Usuarios de smoke creados en esta sesión
 
-Ninguno. El usuario `smoke-multiempresa-20260525@example.com` se crea durante el smoke de UI,
-si ese paso se completa.
-
-Si se crea, añadirlo a `docs/rrhh-consolidacion/SMOKE_USERS_RRHH.md`.
+- `smoke-multiempresa-20260525141329@example.com`
 
 ---
 
 ## Dónde retomar
 
-1. Ejecutar el script de smoke UI de este handoff.
-2. Si pasan los 4 pasos: TASK-002 puede marcarse como **cerrada**.
-3. Siguiente: abrir TASK-003 (horarios y solicitudes discovery) —
+1. Usar este handoff y `SMOKE_USERS_RRHH.md` como referencia cerrada de `TASK-002`.
+2. Si hace falta otro smoke RRHH, reutilizar el admin `no borrar` y el empleado multiempresa nuevo reseteando password.
+3. Siguiente: abrir `TASK-003` (horarios y solicitudes discovery) —
    pero NO antes de decidir el modelado de `rrhh_turnos`, `rrhh_cuadrantes`, `rrhh_descansos`.
 
-## Pendiente de TASK-002 para cierre formal
+## Cierre de TASK-002
 
-- [ ] Alta multiempresa via UI — resultado OK/FAIL.
-- [ ] Empleado aparece en lista con empresa activa HABANA y BACANAL.
-- [ ] Reentrada del empleado — login + landing correctos.
-- [ ] `npm run build` — no ejecutado en esta sesión.
+- [x] Alta multiempresa via UI.
+- [x] Empleado aparece en lista con empresa activa HABANA y BACANAL.
+- [x] Reentrada del empleado — login + landing correctos.
+- [x] `npm run build`.
