@@ -11,7 +11,7 @@ interface Body {
   nombre_inspector: string;
   telefono_inspector: string | null;
   fecha_inspeccion: string | null;
-  nombre_encargado: string | null;
+  nombre_jefe_sala: string | null;
   respuestas: RespuestaBody[];
 }
 
@@ -47,7 +47,7 @@ export async function POST(
     nombre_inspector: body.nombre_inspector.trim(),
     telefono_inspector: body.telefono_inspector?.trim() || null,
     fecha_inspeccion: body.fecha_inspeccion,
-    nombre_encargado: body.nombre_encargado?.trim() || null,
+    nombre_jefe_sala: body.nombre_jefe_sala?.trim() || null,
     respuestas: body.respuestas,
     ip,
     user_agent: userAgent,
@@ -57,5 +57,10 @@ export async function POST(
     return NextResponse.json({ ok: false, error: res.error }, { status: 400 });
   }
 
-  return NextResponse.json({ ok: true, envioId: res.envioId, numero: res.numero });
+  return NextResponse.json({
+    ok: true,
+    envioId: res.envioId,
+    numero: res.numero,
+    qr: res.qr,
+  });
 }

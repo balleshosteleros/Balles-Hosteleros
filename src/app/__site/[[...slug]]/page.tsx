@@ -43,7 +43,11 @@ export default async function PublicCatchAllPage() {
   return (
     <PaginaPublicaShell
       bloques={match.bloques}
-      contexto={{ empresaId: match.empresa_id, paginaId: match.pagina_id }}
+      contexto={{
+        empresaId: match.empresa_id,
+        paginaId: match.pagina_id,
+        empresaSlug: match.empresa_slug,
+      }}
     />
   );
 }

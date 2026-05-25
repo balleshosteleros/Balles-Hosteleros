@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 interface Props {
   open: boolean;
@@ -25,6 +26,7 @@ interface Props {
 export function ImportarDeUrlDialog({ open, onOpenChange, paginaId, onImported }: Props) {
   const [url, setUrl] = useState("https://www.bacanalmadrid.com");
   const [cargando, setCargando] = useState(false);
+  useGlobalLoadingSync(cargando);
 
   const onImportar = async () => {
     if (!url.trim()) return;

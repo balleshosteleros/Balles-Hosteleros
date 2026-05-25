@@ -17,6 +17,7 @@ import { Button } from "@/shared/components/ui/button";
 import { Search, X, Check, Wifi } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/shared/lib/utils";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 interface Empleado {
   id: string;
@@ -47,6 +48,7 @@ export function AsignacionEmpleadosLocalDialog({
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
   const [busqueda, setBusqueda] = useState("");
   const [cargando, setCargando] = useState(false);
+  useGlobalLoadingSync(cargando);
 
   const cargar = useCallback(async () => {
     setCargando(true);

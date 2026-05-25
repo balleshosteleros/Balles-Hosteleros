@@ -1,13 +1,23 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { toast } from "sonner";
+import { useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, CheckCircle2 } from "lucide-react";
-import type { InspeccionPublica } from "../types";
+import { Loader2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import type { InspeccionPublica, EmpleadoPublico, EmpleadoSeleccionado, QrTokenPublic } from "../types";
+import { QrViewerDialog } from "./QrViewerDialog";
 
 interface PublicFormularioProps {
   token: string;
@@ -22,8 +32,15 @@ export function PublicFormulario({ token, data }: PublicFormularioProps) {
     data.locales.length === 1 ? data.locales[0].id : null,
   );
   const [submitting, setSubmitting] = useState(false);
-  const [success, setSuccess] = useState<{ numero: number | null } | null>(null);
+  const [success, setSuccess] = useState<{
+    numero: number | null;
+    envioId: string;
+    qr: QrTokenPublic;
+    nombreInspector: string;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
   const accent = data.empresa.color_secundario ?? data.empresa.color ?? "#10b981";
 
@@ -31,35 +48,15 @@ export function PublicFormulario({ token, data }: PublicFormularioProps) {
     setRespuestas((prev) => ({ ...prev, [preguntaId]: valor }));
   }
 
-  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+  // El submit del form solo lanza el diálogo de confirmación.
+  function handleFormSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
-
-    // Validaciones de los 4 datos cabecera + local
-    const datosSec = data.plantilla.secciones[0];
-    const preguntaNombre = datosSec?.preguntas.find((p) => p.enunciado.toLowerCase().includes("nombre inspect"));
-    const preguntaFecha = datosSec?.preguntas.find((p) => p.tipo === "fecha");
-    const preguntaTelefono = datosSec?.preguntas.find((p) => p.tipo === "telefono");
-    const preguntaEncargado = datosSec?.preguntas.find((p) =>
-      p.enunciado.toLowerCase().includes("encargado"),
-    );
-
-    const nombre_inspector = (respuestas[preguntaNombre?.id ?? ""] as string) ?? "";
-    const fecha_inspeccion = (respuestas[preguntaFecha?.id ?? ""] as string) ?? "";
-    const telefono_inspector = (respuestas[preguntaTelefono?.id ?? ""] as string) ?? "";
-    const nombre_encargado = (respuestas[preguntaEncargado?.id ?? ""] as string) ?? "";
-
-    if (!nombre_inspector.trim()) {
-      setError("Pon tu nombre.");
-      window.scrollTo({ top: document.getElementById("formulario")?.offsetTop ?? 0, behavior: "smooth" });
-      return;
-    }
+    // Validación previa para no abrir diálogo si faltan cosas
     if (data.locales.length > 1 && !localId) {
       setError("Elige el local que inspeccionaste.");
       return;
     }
-
-    // Comprobar obligatorias
     const faltan: string[] = [];
     for (const sec of data.plantilla.secciones) {
       for (const p of sec.preguntas) {
@@ -72,12 +69,57 @@ export function PublicFormulario({ token, data }: PublicFormularioProps) {
       setError(`Faltan ${faltan.length} respuestas obligatorias.`);
       return;
     }
+    setConfirmOpen(true);
+  }
+
+  async function confirmarYEnviar() {
+    setConfirmOpen(false);
+    setError(null);
+
+    // Localizamos las preguntas clave por tipo recorriendo todas las secciones,
+    // porque desde la reestructura "Datos del inspeccionado" vive en su propia sección.
+    const todasPreguntas = data.plantilla.secciones.flatMap((s) => s.preguntas);
+    const preguntaNombre = todasPreguntas.find(
+      (p) => p.tipo === "texto_corto" && p.enunciado.toLowerCase().includes("inspector"),
+    );
+    const preguntaFecha = todasPreguntas.find((p) => p.tipo === "fecha");
+    const preguntaTelefono = todasPreguntas.find((p) => p.tipo === "telefono");
+    const preguntaJefeSala = todasPreguntas.find((p) => p.tipo === "empleado_select");
+
+    const nombre_inspector = (respuestas[preguntaNombre?.id ?? ""] as string) ?? "";
+    const fecha_inspeccion = (respuestas[preguntaFecha?.id ?? ""] as string) ?? "";
+    const telefono_inspector = (respuestas[preguntaTelefono?.id ?? ""] as string) ?? "";
+
+    // El valor de empleado_select se guarda como JSON serializado en respuestas.
+    let nombre_jefe_sala = "";
+    const jefeSalaRaw = respuestas[preguntaJefeSala?.id ?? ""];
+    if (typeof jefeSalaRaw === "string" && jefeSalaRaw) {
+      try {
+        const parsed = JSON.parse(jefeSalaRaw) as EmpleadoSeleccionado;
+        nombre_jefe_sala = parsed.nombre_completo ?? "";
+      } catch {
+        // valor inválido, lo trataremos como vacío y el validador hará su trabajo
+      }
+    }
+
+    if (!nombre_inspector.trim()) {
+      setError("Pon tu nombre.");
+      window.scrollTo({ top: document.getElementById("formulario")?.offsetTop ?? 0, behavior: "smooth" });
+      return;
+    }
 
     setSubmitting(true);
     try {
       const todasRespuestas = Object.entries(respuestas)
         .filter(([, v]) => v !== null && v !== "")
         .map(([pregunta_id, valor]) => ({ pregunta_id, valor }));
+
+      // datetime-local llega como "YYYY-MM-DDTHH:mm" sin TZ.
+      // Lo interpretamos en la hora local del navegador (asumimos inspector en España)
+      // y lo enviamos como ISO UTC para que timestamptz lo guarde correctamente.
+      const fechaInspeccionISO = fecha_inspeccion
+        ? new Date(fecha_inspeccion).toISOString()
+        : null;
 
       const res = await fetch(`/api/inspectores/${token}/envio`, {
         method: "POST",
@@ -86,20 +128,25 @@ export function PublicFormulario({ token, data }: PublicFormularioProps) {
           local_id: localId,
           nombre_inspector,
           telefono_inspector: telefono_inspector || null,
-          fecha_inspeccion: fecha_inspeccion || null,
-          nombre_encargado: nombre_encargado || null,
+          fecha_inspeccion: fechaInspeccionISO,
+          nombre_jefe_sala: nombre_jefe_sala || null,
           respuestas: todasRespuestas,
         }),
       });
       const json = (await res.json()) as
-        | { ok: true; numero: number | null }
+        | { ok: true; numero: number | null; envioId: string; qr: QrTokenPublic }
         | { ok: false; error: string };
       if (!res.ok || !json.ok) {
         setError("error" in json ? json.error : "Error al enviar");
         setSubmitting(false);
         return;
       }
-      setSuccess({ numero: json.numero });
+      setSuccess({
+        numero: json.numero,
+        envioId: json.envioId,
+        qr: json.qr,
+        nombreInspector: nombre_inspector.trim(),
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error de red");
     } finally {
@@ -109,21 +156,37 @@ export function PublicFormulario({ token, data }: PublicFormularioProps) {
 
   if (success) {
     return (
-      <div className="rounded-xl bg-white text-foreground p-8 md:p-12 text-center space-y-3 max-w-2xl mx-auto">
-        <CheckCircle2 className="h-14 w-14 mx-auto" style={{ color: accent }} />
-        <h2 className="text-2xl md:text-3xl font-bold">¡Inspección enviada!</h2>
-        <p className="text-muted-foreground">
-          Gracias por tu trabajo. El departamento de Calidad revisará tu informe
-          {success.numero ? ` (referencia #${success.numero})` : ""}.
-        </p>
-      </div>
+      <>
+        <div className="rounded-xl bg-white text-foreground p-8 md:p-12 text-center space-y-3 max-w-2xl mx-auto">
+          <h2 className="text-2xl md:text-3xl font-bold">¡Inspección enviada!</h2>
+          <p className="text-muted-foreground">
+            Gracias por tu trabajo. Tu inspección ha quedado registrada
+            {success.numero ? ` con la referencia #${success.numero}` : ""}.
+            Enseña el QR al jefe de sala para verificar la visita.
+          </p>
+        </div>
+        <QrViewerDialog
+          open
+          publicToken={token}
+          envioId={success.envioId}
+          numero={success.numero}
+          qr={success.qr}
+          accent={accent}
+          nombreInspector={success.nombreInspector}
+          onQrUpdated={(qr) =>
+            setSuccess((prev) => (prev ? { ...prev, qr } : prev))
+          }
+        />
+      </>
     );
   }
 
   return (
+    <>
     <form
       id="formulario"
-      onSubmit={handleSubmit}
+      ref={formRef}
+      onSubmit={handleFormSubmit}
       className="rounded-2xl bg-white text-foreground p-6 md:p-10 shadow-xl space-y-8"
     >
       <div className="space-y-1">
@@ -161,15 +224,32 @@ export function PublicFormulario({ token, data }: PublicFormularioProps) {
               <p className="text-sm text-muted-foreground leading-relaxed">{sec.descripcion}</p>
             )}
           </div>
-          {sec.preguntas.map((p) => (
-            <div key={p.id} className="space-y-2">
-              <Label className="text-sm leading-snug">
-                {p.enunciado}
-                {p.obligatoria && <span className="text-red-500 ml-0.5">*</span>}
-              </Label>
-              <PreguntaInput pregunta={p} valor={respuestas[p.id]} onChange={(v) => setResp(p.id, v)} accent={accent} />
-            </div>
-          ))}
+          {sec.preguntas.map((p) => {
+            const esObservaciones =
+              p.tipo === "texto_largo" && p.enunciado.toLowerCase().startsWith("observaciones");
+            return (
+              <div key={p.id} className="space-y-2">
+                {!esObservaciones && (
+                  <Label className="text-sm leading-snug">
+                    {p.enunciado}
+                    {p.obligatoria && <span className="text-red-500 ml-0.5">*</span>}
+                  </Label>
+                )}
+                {esObservaciones && (
+                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                    Observaciones
+                  </Label>
+                )}
+                <PreguntaInput
+                  pregunta={p}
+                  valor={respuestas[p.id]}
+                  onChange={(v) => setResp(p.id, v)}
+                  accent={accent}
+                  empleados={data.empleados}
+                />
+              </div>
+            );
+          })}
         </div>
       ))}
 
@@ -192,6 +272,33 @@ export function PublicFormulario({ token, data }: PublicFormularioProps) {
         </Button>
       </div>
     </form>
+
+    <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>¿Cerrar la inspección?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Vas a enviar la inspección. Una vez confirmada,{" "}
+            <strong>no podrás editar tus respuestas</strong>. Asegúrate de que
+            todo lo que has escrito es correcto.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={submitting}>Revisar</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={confirmarYEnviar}
+            disabled={submitting}
+            style={{ backgroundColor: accent, color: "#0a0a0a" }}
+          >
+            {submitting ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            ) : null}
+            Sí, finalizar
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
 
@@ -200,19 +307,36 @@ function PreguntaInput({
   valor,
   onChange,
   accent,
+  empleados,
 }: {
   pregunta: InspeccionPublica["plantilla"]["secciones"][number]["preguntas"][number];
   valor: string | number | null | undefined;
   onChange: (v: string | number | null) => void;
   accent: string;
+  empleados: EmpleadoPublico[];
 }) {
   switch (pregunta.tipo) {
     case "texto_corto":
       return <Input value={(valor as string) ?? ""} onChange={(e) => onChange(e.target.value)} />;
-    case "texto_largo":
+    case "texto_largo": {
+      const esObservaciones = pregunta.enunciado.toLowerCase().startsWith("observaciones");
+      if (esObservaciones) {
+        return (
+          <div className="rounded-md border bg-muted/20 p-2">
+            <Textarea
+              value={(valor as string) ?? ""}
+              onChange={(e) => onChange(e.target.value)}
+              rows={4}
+              placeholder="Déjalo vacío si no hay observaciones."
+              className="border-0 bg-transparent focus-visible:ring-0 shadow-none p-2"
+            />
+          </div>
+        );
+      }
       return <Textarea value={(valor as string) ?? ""} onChange={(e) => onChange(e.target.value)} rows={4} />;
+    }
     case "fecha":
-      return <Input type="date" value={(valor as string) ?? ""} onChange={(e) => onChange(e.target.value)} />;
+      return <Input type="datetime-local" value={(valor as string) ?? ""} onChange={(e) => onChange(e.target.value)} />;
     case "telefono":
       return <Input type="tel" value={(valor as string) ?? ""} onChange={(e) => onChange(e.target.value)} placeholder="+34 ..." />;
     case "escala": {
@@ -260,5 +384,62 @@ function PreguntaInput({
           ))}
         </div>
       );
+    case "empleado_select": {
+      // El valor es JSON serializado: { empleado_id, nombre_completo, puesto, departamento }
+      let seleccionado: EmpleadoSeleccionado | null = null;
+      if (typeof valor === "string" && valor) {
+        try {
+          seleccionado = JSON.parse(valor) as EmpleadoSeleccionado;
+        } catch {
+          seleccionado = null;
+        }
+      }
+      return (
+        <div className="space-y-2">
+          <select
+            value={seleccionado?.empleado_id ?? ""}
+            onChange={(e) => {
+              const id = e.target.value;
+              if (!id) {
+                onChange(null);
+                return;
+              }
+              const emp = empleados.find((x) => x.id === id);
+              if (!emp) {
+                onChange(null);
+                return;
+              }
+              const next: EmpleadoSeleccionado = {
+                empleado_id: emp.id,
+                nombre_completo: emp.nombre_completo,
+                puesto: emp.puesto,
+                departamento: emp.departamento,
+              };
+              onChange(JSON.stringify(next));
+            }}
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+          >
+            <option value="">Selecciona un empleado…</option>
+            {empleados.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.nombre_completo}
+              </option>
+            ))}
+          </select>
+          {seleccionado && (
+            <div className="rounded-md border bg-muted/20 px-3 py-2 text-sm space-y-1">
+              <div>
+                <span className="text-xs text-muted-foreground mr-2">Puesto:</span>
+                {seleccionado.puesto ?? "—"}
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground mr-2">Departamento:</span>
+                {seleccionado.departamento ?? "—"}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
   }
 }

@@ -34,7 +34,8 @@ function EmpresaAvatar({ empresa, logoUrl, size = "md" }: { empresa: Empresa; lo
 }
 
 export function EmpresaSelector() {
-  const { empresas, empresaActual, setEmpresaId, getLogoUrl } = useEmpresa();
+  // Avatar pequeño = ISOTIPO (icono sin texto). Fallback al logo completo si no hay isotipo.
+  const { empresas, empresaActual, setEmpresaId, getIsotipoUrl } = useEmpresa();
   const [open, setOpen] = useState(false);
 
   return (
@@ -46,7 +47,7 @@ export function EmpresaSelector() {
           className="flex items-center justify-center rounded-lg p-0.5 hover:bg-sidebar-accent/50 transition-colors focus:outline-none"
           title={empresaActual.nombre}
         >
-          <EmpresaAvatar empresa={empresaActual} logoUrl={getLogoUrl(empresaActual.id)} />
+          <EmpresaAvatar empresa={empresaActual} logoUrl={getIsotipoUrl(empresaActual.id)} />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
@@ -64,7 +65,7 @@ export function EmpresaSelector() {
             onSelect={() => { setEmpresaId(e.id); setOpen(false); }}
             className="flex items-center gap-2 cursor-pointer"
           >
-            <EmpresaAvatar empresa={e} logoUrl={getLogoUrl(e.id)} size="sm" />
+            <EmpresaAvatar empresa={e} logoUrl={getIsotipoUrl(e.id)} size="sm" />
             <span className="text-sm font-medium flex-1 truncate">{e.nombre}</span>
             {e.id === empresaActual.id && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
           </DropdownMenuItem>

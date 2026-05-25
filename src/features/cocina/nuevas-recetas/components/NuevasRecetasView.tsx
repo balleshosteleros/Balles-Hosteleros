@@ -23,6 +23,7 @@ import { CambiosCartaCalendario } from "./CambiosCartaCalendario";
 import type { EstadoGeneral } from "../types";
 import { ESTADO_GENERAL_LABELS } from "../types";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import {
   SubmoduleToolbar,
   colVisible,
@@ -39,6 +40,7 @@ export function NuevasRecetasView() {
   const [fases, setFases] = useState<FaseConPolicies[]>([]);
   const [recetas, setRecetas] = useState<RecetaConExtras[]>([]);
   const [cargando, setCargando] = useState(true);
+  useGlobalLoadingSync(cargando);
   const [busqueda, setBusqueda] = useState("");
   const [estadoGeneral, setEstadoGeneral] = useState<EstadoGeneral>("en_progreso");
   const [vista, setVista] = useState<Vista>("kanban");

@@ -19,6 +19,7 @@ import {
   guardarCategoriasProductoIA,
 } from "@/features/logistica/actions/importador-catalogos-ia-actions";
 import type { ImportadorEntityConfig } from "@/features/logistica/types/importador-catalogo-ia";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 interface GestorCategoriasProductoProps {
   tipo: TipoProducto;
@@ -39,6 +40,7 @@ export function GestorCategoriasProducto({
 }: GestorCategoriasProductoProps) {
   const [items, setItems] = useState<CategoriaProductoRow[]>([]);
   const [cargando, setCargando] = useState(true);
+  useGlobalLoadingSync(cargando);
   const [nuevoNombre, setNuevoNombre] = useState("");
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [editandoValor, setEditandoValor] = useState("");

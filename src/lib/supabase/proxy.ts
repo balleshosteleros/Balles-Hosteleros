@@ -5,7 +5,7 @@ import { LANDING_PATH } from '@/features/auth/lib/role-redirect'
 import { checkProfileGuard } from '@/features/auth/lib/profile-guard'
 
 const AUTH_PATHS = ['/', '/callback', '/forgot-password', '/update-password', '/check-email', '/acceso-demo']
-const PUBLIC_PREFIXES = ['/carta', '/__site', '/api/google/connect', '/empleo', '/api/empleo', '/firmar']
+const PUBLIC_PREFIXES = ['/carta', '/__site', '/api/google/connect', '/empleo', '/api/empleo', '/firmar', '/inspectores', '/inspecciones/verificar']
 
 function isAuthPath(pathname: string) {
   if (pathname === '/') return true

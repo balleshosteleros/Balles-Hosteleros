@@ -12,6 +12,7 @@ import { MapaForm } from "./MapaForm";
 import { FooterForm } from "./FooterForm";
 import { TextoLibreForm } from "./TextoLibreForm";
 import { VideoForm } from "./VideoForm";
+import { BolsaInspectoresForm } from "./BolsaInspectoresForm";
 
 export function BloqueForm({ bloque }: { bloque: Bloque }) {
   switch (bloque.tipo) {
@@ -37,5 +38,7 @@ export function BloqueForm({ bloque }: { bloque: Bloque }) {
       return <TextoLibreForm bloque={bloque} />;
     case "video":
       return <VideoForm bloque={bloque} />;
+    case "bolsa_inspectores":
+      return <BolsaInspectoresForm bloque={bloque} />;
   }
 }

@@ -36,6 +36,7 @@ import {
 import { ProveedorCombobox } from "@/features/logistica/components/productos/ProveedorCombobox";
 import { useCatalogosLogistica } from "@/features/logistica/hooks/useCatalogosLogistica";
 import { toast } from "sonner";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 interface Props {
   productoId: string;
@@ -111,6 +112,7 @@ export function PreciosCompraSection({ productoId, unidad, onCurrentChange, onIt
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  useGlobalLoadingSync(loading || saving || deletingId !== null);
 
   // Form state (nuevo precio o edición de uno existente)
   const [precio, setPrecio] = useState("");

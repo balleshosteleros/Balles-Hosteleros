@@ -24,6 +24,7 @@ import {
 } from "@/features/comunicacion/actions/comunicacion-actions";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 type Canal = {
   id: string;
@@ -108,6 +109,7 @@ export function ComunicacionView() {
   const [busqueda, setBusqueda] = useState("");
   const [cargando, setCargando] = useState(true);
   const [cargandoMsgs, setCargandoMsgs] = useState(false);
+  useGlobalLoadingSync(cargando || cargandoMsgs);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const canal = canales.find((c) => c.id === canalActivo) ?? null;

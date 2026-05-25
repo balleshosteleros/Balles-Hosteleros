@@ -62,6 +62,7 @@ import {
 } from "@/features/direccion/actions/estudios-apertura-actions";
 import { prepararFotoParaSubida } from "@/features/direccion/lib/foto-upload";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { BotonRellenarIA } from "@/features/direccion/components/aperturas/shared/BotonRellenarIA";
 import { BarraConfirmarIA } from "@/features/direccion/components/aperturas/shared/BarraConfirmarIA";
 import { BadgeSugerenciaIA } from "@/features/direccion/components/aperturas/shared/BadgeSugerenciaIA";
@@ -124,6 +125,7 @@ export function AperturasView() {
   const { empresaActual } = useEmpresa();
   const [estudios, setEstudios] = useState<EstudioApertura[]>([]);
   const [loading, setLoading] = useState(true);
+  useGlobalLoadingSync(loading);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selected, setSelected] = useState<EstudioApertura | null>(null);
   const [showNew, setShowNew] = useState(false);

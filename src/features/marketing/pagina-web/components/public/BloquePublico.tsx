@@ -45,7 +45,45 @@ export function BloquePublico({
       return <TextoLibrePublico bloque={bloque} />;
     case "video":
       return <VideoPublico bloque={bloque} />;
+    case "bolsa_inspectores":
+      return <BolsaInspectoresPublico bloque={bloque} contexto={contexto} />;
   }
+}
+
+function BolsaInspectoresPublico({
+  bloque,
+  contexto,
+}: {
+  bloque: Extract<Bloque, { tipo: "bolsa_inspectores" }>;
+  contexto?: PaginaContexto;
+}) {
+  const { titulo, descripcion, cta_label } = bloque.datos;
+  const slug = contexto?.empresaSlug ?? null;
+  const href = slug ? `/inspectores/bolsa/${slug}` : null;
+  return (
+    <section className="py-20 px-4 bg-gradient-to-br from-slate-900 to-slate-700 text-white text-center">
+      <div className="max-w-2xl mx-auto space-y-4">
+        <h2 className="text-3xl md:text-4xl font-bold">{titulo}</h2>
+        {descripcion && (
+          <p className="text-lg text-white/80">{descripcion}</p>
+        )}
+        {href ? (
+          <a
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-block mt-4 px-7 py-3 rounded-full bg-white text-slate-900 font-semibold hover:bg-slate-100 transition-colors"
+          >
+            {cta_label}
+          </a>
+        ) : (
+          <p className="text-xs text-white/60 mt-4">
+            (Configura el slug de la empresa para activar el enlace)
+          </p>
+        )}
+      </div>
+    </section>
+  );
 }
 
 function HeroPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "hero" }> }) {

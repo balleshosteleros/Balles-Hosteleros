@@ -36,6 +36,7 @@ import {
   listPuestosCatalogo, listDepartamentosCatalogo,
 } from "@/features/rrhh/actions/vacantes-actions";
 import { DialogSnippetEmbed } from "@/features/empleo-publico/components/DialogSnippetEmbed";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 type EstadoPub = "publicada" | "borrador" | "cerrada" | "archivada";
 type TipoJornada = "completa" | "parcial" | "rotativa" | "fines_de_semana" | "extra";
@@ -112,6 +113,7 @@ export function OfertasPublicasTab({ empresaSlug }: { empresaSlug?: string | nul
   const [puestos, setPuestos] = useState<PuestoRef[]>([]);
   const [departamentos, setDepartamentos] = useState<DepartamentoRef[]>([]);
   const [loading, setLoading] = useState(true);
+  useGlobalLoadingSync(loading);
   const [isPending, startTransition] = useTransition();
 
   const [dialogOpen, setDialogOpen] = useState(false);

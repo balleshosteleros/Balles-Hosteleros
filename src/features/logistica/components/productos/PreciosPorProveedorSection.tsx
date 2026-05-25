@@ -17,6 +17,7 @@ import {
   listPreciosCompra,
   type PrecioCompraRow,
 } from "@/features/logistica/actions/precios-compra-actions";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 interface Props {
   productoId: string;
@@ -82,6 +83,7 @@ function DiffBadge({ pct }: { pct: number }) {
 export function PreciosPorProveedorSection({ productoId, refreshKey = 0 }: Props) {
   const [items, setItems] = useState<PrecioCompraRow[]>([]);
   const [loading, setLoading] = useState(true);
+  useGlobalLoadingSync(loading);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   useEffect(() => {

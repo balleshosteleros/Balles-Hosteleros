@@ -8,7 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Copy, Pencil, Archive, ArchiveRestore, MoreVertical } from "lucide-react";
+import { Copy, Pencil, Archive, ArchiveRestore, MoreVertical, ArrowLeft, ClipboardList } from "lucide-react";
+import type { AuditoriasTab } from "./CalidadAuditoriasView";
 import { toast } from "sonner";
 import {
   listPlantillas,
@@ -52,7 +53,12 @@ function formatFecha(iso: string | null): string {
   return d.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-export function PlantillasListView() {
+interface PlantillasListViewProps {
+  tab: AuditoriasTab;
+  onTabChange: (t: AuditoriasTab) => void;
+}
+
+export function PlantillasListView({ onTabChange }: PlantillasListViewProps) {
   const router = useRouter();
   const [plantillas, setPlantillas] = useState<PlantillaResumen[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,6 +100,16 @@ export function PlantillasListView() {
         onColumnasVisiblesChange={setColumnasVisibles}
         columnasOrden={columnasOrden}
         onColumnasOrdenChange={setColumnasOrden}
+        extraIzquierda={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onTabChange("envios")}
+            className="gap-1.5"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Auditorías realizadas
+          </Button>
+        }
         extraDerecha={
           <Button
             size="sm"
@@ -244,6 +260,23 @@ function FilaPlantilla({
         </td>
       ))}
     </tr>
+  );
+}
+
+export function PlantillasNavButtonAuditorias({
+  onTabChange,
+}: {
+  onTabChange: (t: AuditoriasTab) => void;
+}) {
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => onTabChange("plantillas")}
+      className="gap-1.5"
+    >
+      <ClipboardList className="h-3.5 w-3.5" /> Plantillas
+    </Button>
   );
 }
 

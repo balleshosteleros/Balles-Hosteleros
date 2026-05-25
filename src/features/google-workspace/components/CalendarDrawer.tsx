@@ -44,6 +44,7 @@ import { GoogleConnectBanner } from "./GoogleConnectBanner";
 import { GoogleReauthBanner } from "./GoogleReauthBanner";
 import { GoogleAccountButton } from "./GoogleAccountButton";
 import { useGoogleConnection } from "./useGoogleConnection";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 type GoogleCalendar = {
   id: string;
@@ -262,6 +263,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
   const [eventoSel, setEventoSel] = useState<Evento | null>(null);
   const [form, setForm] = useState<Form | null>(null);
   const [guardando, setGuardando] = useState(false);
+  useGlobalLoadingSync(cargando || guardando);
   const [needsReauth, setNeedsReauth] = useState(false);
   const [sidebarAbierto, setSidebarAbierto] = useState(false);
   const [busqueda, setBusqueda] = useState("");

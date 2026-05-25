@@ -6,6 +6,7 @@ import { BloquePublico } from "./BloquePublico";
 export interface PaginaContexto {
   empresaId: string | null;
   paginaId: string | null;
+  empresaSlug?: string | null;
 }
 
 interface Props {

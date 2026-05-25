@@ -55,6 +55,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 const DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
@@ -67,6 +68,7 @@ export function PatronesSection({ empresaId }: { empresaId: string }) {
   const [patrones, setPatrones] = useState<PatronCompleto[]>([]);
   const [turnos, setTurnos] = useState<Turno[]>([]);
   const [cargando, setCargando] = useState(true);
+  useGlobalLoadingSync(cargando);
 
   const refrescar = useCallback(async () => {
     setCargando(true);
@@ -420,6 +422,7 @@ function PatronEditor({
   const [celda, setCelda] = useState<CeldaSel>(null);
   const [busquedaTurno, setBusquedaTurno] = useState("");
   const [guardando, setGuardando] = useState(false);
+  useGlobalLoadingSync(guardando);
 
   const asignarTurno = (turnoId: string | null) => {
     if (!celda) return;

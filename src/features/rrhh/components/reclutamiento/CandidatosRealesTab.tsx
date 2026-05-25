@@ -30,6 +30,7 @@ import { promoverCandidato } from "@/features/rrhh/actions/promocion-actions";
 import {
   listPuestosCatalogo, listDepartamentosCatalogo,
 } from "@/features/rrhh/actions/vacantes-actions";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 type Fase = "nuevo" | "en_progreso" | "oferta" | "seleccionado" | "descartado";
 type Estado =
@@ -99,6 +100,7 @@ export function CandidatosRealesTab() {
   const [puestos, setPuestos] = useState<PuestoRef[]>([]);
   const [departamentos, setDepartamentos] = useState<DepartamentoRef[]>([]);
   const [loading, setLoading] = useState(true);
+  useGlobalLoadingSync(loading);
   const [pending, startTransition] = useTransition();
 
   // Dialog promoción

@@ -49,6 +49,7 @@ import {
   reordenarPreguntas,
   type PlantillaConVersion,
 } from "@/features/calidad/actions/plantillas-actions";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 const TIPO_OPTIONS: Array<{ value: AuditoriaTipoPregunta; label: string }> = [
   { value: "escala", label: "Escala 0–5" },
@@ -67,6 +68,7 @@ export function PlantillaEditor({ plantillaId, versionIdInicial }: { plantillaId
   const router = useRouter();
   const [data, setData] = useState<PlantillaConVersion | null>(null);
   const [loading, setLoading] = useState(true);
+  useGlobalLoadingSync(loading);
   const [, startTransition] = useTransition();
 
   const reload = useCallback(async () => {

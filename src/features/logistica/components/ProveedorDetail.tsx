@@ -50,6 +50,7 @@ import {
   Truck,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 type Props = {
   proveedor: Proveedor;
@@ -63,6 +64,7 @@ export function ProveedorDetail({ proveedor, onBack, onSave }: Props) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loadingProductos, setLoadingProductos] = useState(true);
+  useGlobalLoadingSync(saving || loadingProductos);
   const [categoriasBD, setCategoriasBD] = useState<string[]>([]);
   const originalRef = useRef<Proveedor>(proveedor);
 

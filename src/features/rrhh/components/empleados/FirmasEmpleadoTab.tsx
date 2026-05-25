@@ -21,6 +21,7 @@ import {
   type ValidezLegal,
   type EstadoFirma,
 } from "@/features/rrhh/data/firmas";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 type Firma = {
   id: string;
@@ -49,6 +50,7 @@ export function FirmasEmpleadoTab({ empleadoId }: { empleadoId: string }) {
   const [items, setItems] = useState<Firma[]>([]);
   const [loading, setLoading] = useState(true);
   const [descargando, setDescargando] = useState<string | null>(null);
+  useGlobalLoadingSync(loading || descargando !== null);
 
   const cargar = useCallback(async () => {
     setLoading(true);

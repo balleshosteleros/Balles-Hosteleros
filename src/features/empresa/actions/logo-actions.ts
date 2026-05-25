@@ -4,14 +4,18 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 const BUCKET = "empresa-logos";
 
-type LogoVariant = "principal" | "alt";
+type LogoVariant = "principal" | "alt" | "isotipo";
 
 function variantPrefix(variant: LogoVariant): string {
-  return variant === "alt" ? "logo_alt" : "logo";
+  if (variant === "alt") return "logo_alt";
+  if (variant === "isotipo") return "isotipo";
+  return "logo";
 }
 
-function variantColumn(variant: LogoVariant): "logo_url" | "logo_alt_url" {
-  return variant === "alt" ? "logo_alt_url" : "logo_url";
+function variantColumn(variant: LogoVariant): "logo_url" | "logo_alt_url" | "isotipo_url" {
+  if (variant === "alt") return "logo_alt_url";
+  if (variant === "isotipo") return "isotipo_url";
+  return "logo_url";
 }
 
 async function removeFromStorage(supabase: ReturnType<typeof createAdminClient>, publicUrl: string | null | undefined) {
@@ -103,6 +107,16 @@ export async function deleteLogoAlt(empresaSlug: string): Promise<void> {
   return deleteVariant(empresaSlug, "alt");
 }
 
+/** Sube el isotipo (solo icono, sin texto) y lo guarda en empresas.isotipo_url. */
+export async function uploadIsotipo(empresaSlug: string, formData: FormData): Promise<string> {
+  return uploadVariant(empresaSlug, formData, "isotipo");
+}
+
+/** Elimina el isotipo de Storage y limpia empresas.isotipo_url. */
+export async function deleteIsotipo(empresaSlug: string): Promise<void> {
+  return deleteVariant(empresaSlug, "isotipo");
+}
+
 /** Devuelve un mapa slug → logo_url de todas las empresas (lectura admin). */
 export async function getLogoUrls(): Promise<Record<string, string>> {
   const supabase = createAdminClient();
@@ -110,6 +124,17 @@ export async function getLogoUrls(): Promise<Record<string, string>> {
   const result: Record<string, string> = {};
   for (const row of data ?? []) {
     if (row.logo_url) result[row.slug] = row.logo_url;
+  }
+  return result;
+}
+
+/** Devuelve un mapa slug → isotipo_url de todas las empresas. */
+export async function getIsotipoUrls(): Promise<Record<string, string>> {
+  const supabase = createAdminClient();
+  const { data } = await supabase.from("empresas").select("slug, isotipo_url");
+  const result: Record<string, string> = {};
+  for (const row of data ?? []) {
+    if (row.isotipo_url) result[row.slug] = row.isotipo_url;
   }
   return result;
 }
@@ -146,9 +171,12 @@ export type ModoCarta = "claro" | "oscuro" | "auto";
 export interface BrandConfig {
   logoUrl: string | null;
   logoAltUrl: string | null;
+  isotipoUrl: string | null;
   colorPrimario: string | null;
   colorSecundario: string | null;
   colorTexto: string | null;
+  fuenteTitulos: string | null;
+  fuenteCuerpo: string | null;
   cartaColorFondo: string | null;
   cartaColorAcento: string | null;
   cartaFuenteTitulos: string | null;
@@ -164,7 +192,7 @@ export async function getBrandConfig(empresaSlug: string): Promise<BrandConfig |
   const { data, error } = await supabase
     .from("empresas")
     .select(
-      "logo_url, logo_alt_url, color, color_secundario, color_texto, carta_color_fondo, carta_color_acento, carta_fuente_titulos, carta_fuente_cuerpo, carta_hero_url, carta_estilo_cards, carta_modo",
+      "logo_url, logo_alt_url, isotipo_url, color, color_secundario, color_texto, fuente_titulos, fuente_cuerpo, carta_color_fondo, carta_color_acento, carta_fuente_titulos, carta_fuente_cuerpo, carta_hero_url, carta_estilo_cards, carta_modo",
     )
     .eq("slug", empresaSlug)
     .maybeSingle();
@@ -176,9 +204,12 @@ export async function getBrandConfig(empresaSlug: string): Promise<BrandConfig |
   return {
     logoUrl: (data.logo_url as string | null) ?? null,
     logoAltUrl: (data.logo_alt_url as string | null) ?? null,
+    isotipoUrl: (data.isotipo_url as string | null) ?? null,
     colorPrimario: (data.color as string | null) ?? null,
     colorSecundario: (data.color_secundario as string | null) ?? null,
     colorTexto: (data.color_texto as string | null) ?? null,
+    fuenteTitulos: (data.fuente_titulos as string | null) ?? null,
+    fuenteCuerpo: (data.fuente_cuerpo as string | null) ?? null,
     cartaColorFondo: (data.carta_color_fondo as string | null) ?? null,
     cartaColorAcento: (data.carta_color_acento as string | null) ?? null,
     cartaFuenteTitulos: (data.carta_fuente_titulos as string | null) ?? null,
@@ -193,6 +224,8 @@ export interface BrandConfigUpdate {
   primario?: string | null;
   secundario?: string | null;
   texto?: string | null;
+  fuenteTitulos?: string | null;
+  fuenteCuerpo?: string | null;
   cartaColorFondo?: string | null;
   cartaColorAcento?: string | null;
   cartaFuenteTitulos?: string | null;
@@ -208,6 +241,8 @@ export async function saveBrandColors(empresaSlug: string, cfg: BrandConfigUpdat
   if (cfg.primario !== undefined) updates.color = cfg.primario;
   if (cfg.secundario !== undefined) updates.color_secundario = cfg.secundario;
   if (cfg.texto !== undefined) updates.color_texto = cfg.texto;
+  if (cfg.fuenteTitulos !== undefined) updates.fuente_titulos = cfg.fuenteTitulos;
+  if (cfg.fuenteCuerpo !== undefined) updates.fuente_cuerpo = cfg.fuenteCuerpo;
   if (cfg.cartaColorFondo !== undefined) updates.carta_color_fondo = cfg.cartaColorFondo;
   if (cfg.cartaColorAcento !== undefined) updates.carta_color_acento = cfg.cartaColorAcento;
   if (cfg.cartaFuenteTitulos !== undefined) updates.carta_fuente_titulos = cfg.cartaFuenteTitulos;

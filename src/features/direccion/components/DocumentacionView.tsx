@@ -35,6 +35,7 @@ import {
   FileText, FileSpreadsheet, FileImage, File, Download, Trash2,
   FolderOpen, Folder, Settings, ChevronLeft, Upload, FolderPlus,
 } from "lucide-react";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 const BUCKET = "documentacion";
 
@@ -73,6 +74,7 @@ export function DocumentacionView() {
   const [showElegirNivel1, setShowElegirNivel1] = useState(false);
 
   const [uploading, setUploading] = useState(false);
+  useGlobalLoadingSync(loadingCarpetas || loadingDocs || creandoCarpeta || uploading);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   /* ── data loaders ─────────────────────────────────────── */

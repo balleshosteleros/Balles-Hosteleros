@@ -92,5 +92,16 @@ export function crearBloqueDefault(tipo: BloqueTipo, orden: number): Bloque {
         tipo,
         datos: { proveedor: "youtube", url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", autoplay: false, muted: true },
       };
+    case "bolsa_inspectores":
+      return {
+        ...base,
+        tipo,
+        datos: {
+          titulo: "Únete a nuestra bolsa de inspectores",
+          descripcion:
+            "Colabora con inspecciones puntuales en nuestros locales.",
+          cta_label: "Apuntarme a la bolsa",
+        },
+      };
   }
 }

@@ -19,6 +19,7 @@ import {
 } from "@/features/rrhh/actions/empleados-actions";
 import { getEmpresasAccesibles, type EmpresaAccesible } from "@/features/empresa/actions/empresas-accesibles-actions";
 import { listLocales } from "@/features/ajustes/actions/locales-actions";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 type CredencialesAlta = { email: string; password: string };
 type LocalOpt = { id: string; nombre: string };
@@ -46,6 +47,7 @@ export default function NuevoEmpleadoPage() {
   const [saving, setSaving] = useState(false);
   const [credenciales, setCredenciales] = useState<CredencialesAlta | null>(null);
   const [copiado, setCopiado] = useState(false);
+  useGlobalLoadingSync(saving);
 
   useEffect(() => {
     listDepartamentos().then((res) => {

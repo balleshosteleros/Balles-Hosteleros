@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { FormacionRolViewer } from "@/features/formacion/components/FormacionRolViewer";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 interface SoporteDrawerProps {
   children: ReactNode;
@@ -67,6 +68,7 @@ export function SoporteDrawer({ children }: SoporteDrawerProps) {
   ]);
   const [chatInput, setChatInput] = useState("");
   const [chatCargando, setChatCargando] = useState(false);
+  useGlobalLoadingSync(cargando || chatCargando);
   const [escalado, setEscalado] = useState(false);
 
   // FAQ expandida

@@ -38,6 +38,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { getModuloForCronograma } from "@/features/direccion/data/cronogramaAreas";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 type InfoTarea = { id: string; tarea?: string; resumen?: string };
 
@@ -222,6 +223,7 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
   }, [monthStart, monthEnd]);
 
   const [isSyncing, setIsSyncing] = useState(false);
+  useGlobalLoadingSync(isSyncing);
   const [open, setOpen] = useState(false);
   const [tareaPosponer, setTareaPosponer] = useState<TareaRow | null>(null);
   const [rolUsuario, setRolUsuario] = useState<string | null>(null);

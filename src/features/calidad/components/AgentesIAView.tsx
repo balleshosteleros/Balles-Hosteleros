@@ -52,6 +52,7 @@ import {
   type TipoResenaConfig,
   type TonoAgente,
 } from "@/features/calidad/types/resenas";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 const INSTRUCCIONES_DEFAULT =
   "Recibirá reseñas de clientes y debe generar una respuesta como propietario. La respuesta se usará tal cual en Google. Sé natural, evita clichés y no incluyas saludos genéricos.";
@@ -59,6 +60,7 @@ const INSTRUCCIONES_DEFAULT =
 export function AgentesIAView() {
   const [agentes, setAgentes] = useState<AgenteIA[]>([]);
   const [loading, setLoading] = useState(true);
+  useGlobalLoadingSync(loading);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -295,6 +297,7 @@ function AgenteDialog({
   const [piePagina, setPiePagina] = useState("");
   const [maxDia, setMaxDia] = useState(50);
   const [saving, setSaving] = useState(false);
+  useGlobalLoadingSync(saving);
 
   useEffect(() => {
     if (open) {

@@ -68,6 +68,7 @@ import {
   type Resena,
 } from "@/features/calidad/types/resenas";
 import { AgentesIAView } from "./AgentesIAView";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 // ─── Filtro de período ────────────────────────────────────────
 type PeriodoResenas = "todo" | "semana" | "mes" | "personalizado";
@@ -116,6 +117,7 @@ export function ResenasPipeline() {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [detecting, setDetecting] = useState(false);
+  useGlobalLoadingSync(loading || syncing || detecting);
   const [candidatePlace, setCandidatePlace] = useState<{
     placeId: string;
     name: string;
@@ -895,6 +897,7 @@ function DetalleResenaDialog({
   const [saving, setSaving] = useState(false);
   const [generando, setGenerando] = useState(false);
   const [publicando, setPublicando] = useState(false);
+  useGlobalLoadingSync(saving || generando || publicando);
 
   useEffect(() => {
     if (resena) {

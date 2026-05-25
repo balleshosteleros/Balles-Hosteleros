@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { ClipboardCheck } from "lucide-react";
 import { listEnvios, type EnvioResumen } from "@/features/calidad/actions/envios-actions";
+import { PlantillasNavButtonAuditorias } from "./PlantillasListView";
+import type { AuditoriasTab } from "./CalidadAuditoriasView";
 import {
   SubmoduleToolbar,
   type ToolbarColumna,
@@ -42,7 +44,12 @@ function NotaBadge({ nota }: { nota: number | null }) {
   return <Badge className={`tabular-nums font-mono ${color} hover:${color}`}>{nota.toFixed(2).replace(".", ",")}</Badge>;
 }
 
-export function EnviosListView() {
+interface EnviosListViewProps {
+  tab: AuditoriasTab;
+  onTabChange: (t: AuditoriasTab) => void;
+}
+
+export function EnviosListView({ onTabChange }: EnviosListViewProps) {
   const [envios, setEnvios] = useState<EnvioResumen[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
@@ -66,32 +73,19 @@ export function EnviosListView() {
     (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
   );
 
-  if (!loading && envios.length === 0) {
-    return (
-      <Card>
-        <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-          <ClipboardCheck className="h-12 w-12 text-muted-foreground/50 mb-4" />
-          <h3 className="text-lg font-semibold text-foreground">Aún no hay auditorías realizadas</h3>
-          <p className="text-sm text-muted-foreground max-w-md mt-2">
-            Las auditorías rellenadas aparecerán aquí. La creación y el rellenado se construirán
-            en la siguiente fase.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
     <div className="space-y-4">
       <SubmoduleToolbar
         busqueda={busqueda}
         onBusquedaChange={setBusqueda}
         placeholderBusqueda="Buscar auditoría"
+        onNuevo={() => toast.info("Crear auditoría manual: próximamente")}
         columnas={columnasDef}
         columnasVisibles={columnasVisibles}
         onColumnasVisiblesChange={setColumnasVisibles}
         columnasOrden={columnasOrden}
         onColumnasOrdenChange={setColumnasOrden}
+        extraIzquierda={<PlantillasNavButtonAuditorias onTabChange={onTabChange} />}
       />
 
       <ResizableColumnsProvider storageKey="calidad-auditorias-envios">
@@ -105,8 +99,16 @@ export function EnviosListView() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {loading && envios.length === 0 ? (
                 <tr><td colSpan={columnasRender.length} className="text-center py-10"><LoadingSpinner /></td></tr>
+              ) : !loading && envios.length === 0 ? (
+                <tr>
+                  <td colSpan={columnasRender.length} className="text-center py-16">
+                    <ClipboardCheck className="h-10 w-10 mx-auto text-muted-foreground/40 mb-2" />
+                    <div className="text-sm text-muted-foreground">Aún no hay auditorías realizadas.</div>
+                    <div className="text-xs text-muted-foreground mt-1">Aparecerán aquí cuando se rellenen.</div>
+                  </td>
+                </tr>
               ) : filtrados.length === 0 ? (
                 <tr><td colSpan={columnasRender.length} className="text-center py-10 text-muted-foreground">Ninguna auditoría coincide con la búsqueda.</td></tr>
               ) : (
@@ -143,3 +145,4 @@ export function EnviosListView() {
     </div>
   );
 }
+

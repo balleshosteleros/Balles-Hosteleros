@@ -28,6 +28,7 @@ const TIPO_LABEL: Record<string, string> = {
   telefono: "Teléfono",
   escala: "Escala 0-5",
   seleccion: "Selección",
+  empleado_select: "Empleado (desplegable)",
 };
 
 export function PlantillaEditor({ plantillaId }: PlantillaEditorProps) {

@@ -136,6 +136,7 @@ const miPanelSubs = [
   { title: "SOLICITUDES", url: "/mi-panel/ausencias", icon: Inbox },
   { title: "COMUNICADOS", url: "/mi-panel/comunicados", icon: Megaphone },
   { title: "DOCUMENTOS", url: "/mi-panel/documentos", icon: Files },
+  { title: "INSPECCIONES", url: "/mi-panel/inspecciones", icon: FileSearch },
   { title: "EQUIPO", url: "/mi-panel/equipo", icon: Network },
 ];
 

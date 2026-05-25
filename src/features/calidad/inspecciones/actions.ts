@@ -13,7 +13,10 @@ import type {
   EnvioCompleto,
   InspeccionToken,
   EmpresaTheme,
+  JefeSalaFirma,
+  VerificacionResultado,
 } from "./types";
+import { fetchJefeSalaFirma, verificarEnvioConDni } from "./public-data";
 
 async function ctx() {
   const supabase = await createClient();
@@ -48,7 +51,9 @@ export async function getEmpresaTheme(): Promise<EmpresaTheme | null> {
 
 // ─── Presentación ────────────────────────────────────────────────────────
 
-export async function getPresentacion(): Promise<{ slides: Slide[] } | null> {
+export async function getPresentacion(): Promise<
+  { slides: Slide[]; empresaId: string } | null
+> {
   const { supabase, empresaId } = await ctx();
   if (!empresaId) return null;
 
@@ -68,10 +73,10 @@ export async function getPresentacion(): Promise<{ slides: Slide[] } | null> {
       .insert({ empresa_id: empresaId, slides: [] })
       .select("slides")
       .maybeSingle();
-    if (err2 || !nueva) return { slides: [] };
-    return { slides: (nueva.slides as Slide[]) ?? [] };
+    if (err2 || !nueva) return { slides: [], empresaId };
+    return { slides: (nueva.slides as Slide[]) ?? [], empresaId };
   }
-  return { slides: (data.slides as Slide[]) ?? [] };
+  return { slides: (data.slides as Slide[]) ?? [], empresaId };
 }
 
 export async function savePresentacion(
@@ -99,10 +104,12 @@ export interface PlantillaResumen {
   nombre: string;
   descripcion: string | null;
   archivada: boolean;
+  estado: "actual" | "archivada";
   version_vigente: number | null;
   estado_vigente: "borrador" | "publicada" | "archivada" | null;
   num_secciones: number;
   num_preguntas: number;
+  num_envios: number;
   created_at: string;
 }
 
@@ -167,6 +174,15 @@ export async function listPlantillas(): Promise<PlantillaResumen[]> {
     );
   }
 
+  const { data: envios } = await supabase
+    .from("inspeccion_envios")
+    .select("plantilla_id")
+    .eq("empresa_id", empresaId);
+  const enviosPorPlantilla = new Map<string, number>();
+  for (const e of envios ?? []) {
+    enviosPorPlantilla.set(e.plantilla_id, (enviosPorPlantilla.get(e.plantilla_id) ?? 0) + 1);
+  }
+
   return plantillas.map((p): PlantillaResumen => {
     const v = versionPorPlantilla.get(p.id);
     const secciones = v ? secsByVersion.get(v.id) ?? [] : [];
@@ -174,16 +190,20 @@ export async function listPlantillas(): Promise<PlantillaResumen[]> {
       (s, sid) => s + (preguntasPorSec.get(sid) ?? 0),
       0,
     );
+    const estadoPlantilla: "actual" | "archivada" =
+      (p.estado as "actual" | "archivada" | null) ?? (p.archivada ? "archivada" : "archivada");
     return {
       id: p.id,
       numero_secuencial: p.numero_secuencial,
       nombre: p.nombre,
       descripcion: p.descripcion,
       archivada: p.archivada,
+      estado: estadoPlantilla,
       version_vigente: v?.version ?? null,
       estado_vigente: v?.estado ?? null,
       num_secciones: secciones.length,
       num_preguntas: numPreguntas,
+      num_envios: enviosPorPlantilla.get(p.id) ?? 0,
       created_at: p.created_at,
     };
   });
@@ -255,6 +275,37 @@ export async function getPlantillaCompleta(
     created_at: plantilla.created_at,
     vigente_version: vigente,
   };
+}
+
+export async function setPlantillaActual(
+  plantillaId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { supabase, empresaId } = await ctx();
+  if (!empresaId) return { ok: false, error: "Sin sesión" };
+  const { error } = await supabase
+    .from("inspeccion_plantillas")
+    .update({ estado: "actual" })
+    .eq("id", plantillaId)
+    .eq("empresa_id", empresaId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/calidad/inspecciones");
+  return { ok: true };
+}
+
+export async function actualizarPlantilla(
+  plantillaId: string,
+  patch: { nombre?: string; descripcion?: string | null; created_at?: string },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { supabase, empresaId } = await ctx();
+  if (!empresaId) return { ok: false, error: "Sin sesión" };
+  const { error } = await supabase
+    .from("inspeccion_plantillas")
+    .update(patch)
+    .eq("id", plantillaId)
+    .eq("empresa_id", empresaId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/calidad/inspecciones");
+  return { ok: true };
 }
 
 export async function crearPlantillaVacia(
@@ -332,22 +383,41 @@ export async function listEnvios(): Promise<EnvioResumen[]> {
   const { data, error } = await supabase
     .from("inspeccion_envios")
     .select(
-      "id, numero_secuencial, nombre_inspector, fecha_inspeccion, nota_final, estado, created_at, local:locales(nombre)",
+      "id, numero_secuencial, nombre_inspector, nombre_jefe_sala, fecha_inspeccion, nota_final, notas_por_seccion, plantilla_id, estado, verificado_at, created_at, local:locales(nombre), plantilla:inspeccion_plantillas(nombre), verificador:verificado_por_empleado_id(nombre, apellidos)",
     )
     .eq("empresa_id", empresaId)
     .order("created_at", { ascending: false });
   if (error || !data) return [];
-  return data.map((e): EnvioResumen => ({
-    id: e.id,
-    numero_secuencial: e.numero_secuencial,
-    nombre_inspector: e.nombre_inspector,
-    fecha_inspeccion: e.fecha_inspeccion,
-    local_nombre:
-      (Array.isArray(e.local) ? e.local[0]?.nombre : (e.local as { nombre: string } | null)?.nombre) ?? null,
-    nota_final: e.nota_final,
-    estado: e.estado,
-    created_at: e.created_at,
-  }));
+  return data.map((e): EnvioResumen => {
+    const verif = Array.isArray(e.verificador)
+      ? e.verificador[0]
+      : (e.verificador as { nombre: string | null; apellidos: string | null } | null);
+    const verifNombre = verif
+      ? `${verif.nombre ?? ""} ${verif.apellidos ?? ""}`.trim() || null
+      : null;
+    const plantilla = Array.isArray(e.plantilla)
+      ? e.plantilla[0]
+      : (e.plantilla as { nombre: string } | null);
+    return {
+      id: e.id,
+      numero_secuencial: e.numero_secuencial,
+      nombre_inspector: e.nombre_inspector,
+      nombre_jefe_sala: e.nombre_jefe_sala ?? null,
+      fecha_inspeccion: e.fecha_inspeccion,
+      local_nombre:
+        (Array.isArray(e.local)
+          ? e.local[0]?.nombre
+          : (e.local as { nombre: string } | null)?.nombre) ?? null,
+      nota_final: e.nota_final,
+      notas_por_seccion: (e.notas_por_seccion as Record<string, number> | null) ?? null,
+      plantilla_id: e.plantilla_id,
+      plantilla_nombre: plantilla?.nombre ?? null,
+      estado: e.estado,
+      verificado_at: e.verificado_at ?? null,
+      verificado_por_nombre: verifNombre,
+      created_at: e.created_at,
+    };
+  });
 }
 
 export async function getEnvio(envioId: string): Promise<EnvioCompleto | null> {
@@ -356,7 +426,9 @@ export async function getEnvio(envioId: string): Promise<EnvioCompleto | null> {
 
   const { data: envio, error } = await supabase
     .from("inspeccion_envios")
-    .select("*, local:locales(nombre)")
+    .select(
+      "*, local:locales(nombre), plantilla:inspeccion_plantillas(nombre), verificador:verificado_por_empleado_id(nombre, apellidos)",
+    )
     .eq("id", envioId)
     .eq("empresa_id", empresaId)
     .maybeSingle();
@@ -368,6 +440,17 @@ export async function getEnvio(envioId: string): Promise<EnvioCompleto | null> {
     .eq("envio_id", envioId)
     .eq("empresa_id", empresaId);
 
+  const verif = Array.isArray(envio.verificador)
+    ? envio.verificador[0]
+    : (envio.verificador as { nombre: string | null; apellidos: string | null } | null);
+  const verifNombre = verif
+    ? `${verif.nombre ?? ""} ${verif.apellidos ?? ""}`.trim() || null
+    : null;
+
+  const plantilla = Array.isArray(envio.plantilla)
+    ? envio.plantilla[0]
+    : (envio.plantilla as { nombre: string } | null);
+
   return {
     id: envio.id,
     empresa_id: envio.empresa_id,
@@ -375,15 +458,20 @@ export async function getEnvio(envioId: string): Promise<EnvioCompleto | null> {
     local_nombre:
       (Array.isArray(envio.local) ? envio.local[0]?.nombre : (envio.local as { nombre: string } | null)?.nombre) ?? null,
     plantilla_id: envio.plantilla_id,
+    plantilla_nombre: plantilla?.nombre ?? null,
     version_id: envio.version_id,
     numero_secuencial: envio.numero_secuencial,
     nombre_inspector: envio.nombre_inspector,
     telefono_inspector: envio.telefono_inspector,
     fecha_inspeccion: envio.fecha_inspeccion,
-    nombre_encargado: envio.nombre_encargado,
+    nombre_jefe_sala: envio.nombre_jefe_sala,
     nota_final: envio.nota_final,
+    notas_por_seccion: (envio.notas_por_seccion as Record<string, number> | null) ?? null,
     estado: envio.estado,
     notas_calidad: envio.notas_calidad,
+    verificado_at: envio.verificado_at ?? null,
+    verificado_por_empleado_id: envio.verificado_por_empleado_id ?? null,
+    verificado_por_nombre: verifNombre,
     created_at: envio.created_at,
     respuestas: (respuestas ?? []).map((r) => ({
       id: r.id,
@@ -393,6 +481,36 @@ export async function getEnvio(envioId: string): Promise<EnvioCompleto | null> {
       valor_numero: r.valor_numero != null ? Number(r.valor_numero) : null,
     })),
   };
+}
+
+// ─── Verificación QR por DNI del jefe de sala (PRP-041 + DNI) ──────────
+//
+// La firma ya no depende de la sesión del visitante. La pantalla pública
+// carga los datos del jefe de sala con `getFirmaContext` y, al introducir
+// el DNI correcto, llama a `firmarEnvioConDni`. Sin contador de intentos.
+
+export async function getFirmaContext(
+  qrToken: string,
+): Promise<
+  | { ok: true; data: JefeSalaFirma }
+  | { ok: false; motivo: NonNullable<VerificacionResultado["motivo"]>; envio?: VerificacionResultado["envio"] }
+> {
+  return fetchJefeSalaFirma(qrToken);
+}
+
+export async function firmarEnvioConDni(input: {
+  qrToken: string;
+  dni: string;
+}): Promise<VerificacionResultado> {
+  const result = await verificarEnvioConDni({
+    qrToken: input.qrToken,
+    dniIntroducido: input.dni,
+  });
+  if (result.ok) {
+    revalidatePath("/calidad/inspecciones");
+    revalidatePath("/mi-panel/inspecciones");
+  }
+  return result;
 }
 
 export async function revisarEnvio(
@@ -440,12 +558,17 @@ export async function rotarToken(): Promise<
 > {
   const { supabase, empresaId } = await ctx();
   if (!empresaId) return { ok: false, error: "Sin sesión" };
-  // Generamos token en cliente (40 hex chars) — gen_random_bytes solo está en SQL
-  const arr = new Uint8Array(20);
-  crypto.getRandomValues(arr);
-  const token = Array.from(arr)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+
+  // Token legible: [slug-local]-[mes]-[año]. Generado en DB.
+  const { data: tokenRow, error: errRpc } = await supabase.rpc(
+    "inspeccion_token_legible",
+    { p_empresa_id: empresaId },
+  );
+  if (errRpc || !tokenRow) {
+    return { ok: false, error: errRpc?.message ?? "No se pudo generar el enlace" };
+  }
+  const token = String(tokenRow);
+
   const { error } = await supabase
     .from("inspeccion_tokens")
     .update({ token, rotated_at: new Date().toISOString() })

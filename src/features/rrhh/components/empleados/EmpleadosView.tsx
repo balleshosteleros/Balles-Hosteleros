@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { listEmpleados } from "@/features/rrhh/actions/empleados-actions";
 import { ESTADOS_LABEL, ESTADOS_COLOR, type EmpleadoUI } from "@/features/rrhh/components/empleados/empleado-ui";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -101,6 +102,8 @@ export function EmpleadosView() {
 
   const [empleados, setEmpleados] = useState<EmpleadoConAcceso[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useGlobalLoadingSync(loading);
 
   const cargar = useCallback(async () => {
     setLoading(true);

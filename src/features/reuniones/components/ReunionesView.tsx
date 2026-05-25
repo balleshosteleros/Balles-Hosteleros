@@ -29,6 +29,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import {
   listReuniones,
   createReunion,
@@ -51,6 +52,7 @@ type Reunion = {
 export function ReunionesView() {
   const [reuniones, setReuniones] = useState<Reunion[]>([]);
   const [cargando, setCargando] = useState(true);
+  useGlobalLoadingSync(cargando);
   const [busqueda, setBusqueda] = useState("");
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({

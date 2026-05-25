@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Plus,
   Trash2,
@@ -31,8 +32,22 @@ import {
   Sparkles,
   Link2,
   Eye,
+  Users,
+  Wine,
+  Shield,
+  Star,
+  Award,
+  Lightbulb,
+  Coffee,
+  Heart,
+  Target,
+  ThumbsUp,
+  BookOpen,
+  ChevronDown,
+  type LucideIcon,
 } from "lucide-react";
 import { SlideRenderer } from "./SlideRenderer";
+import { ImageInputOrUpload } from "./ImageInputOrUpload";
 import {
   savePresentacion,
   iaReescribirTexto,
@@ -43,7 +58,38 @@ import type { Slide, SlideBlock, SlideLayout, EmpresaTheme } from "../types";
 interface PresentacionEditorProps {
   slidesInitial: Slide[];
   theme: EmpresaTheme;
+  empresaId: string;
 }
+
+const ICON_CATALOG: { value: string; label: string; Icon: LucideIcon }[] = [
+  { value: "users", label: "Personas", Icon: Users },
+  { value: "wine", label: "Bebidas", Icon: Wine },
+  { value: "shield", label: "Privacidad", Icon: Shield },
+  { value: "star", label: "Estrella", Icon: Star },
+  { value: "award", label: "Premio", Icon: Award },
+  { value: "lightbulb", label: "Idea", Icon: Lightbulb },
+  { value: "coffee", label: "Café", Icon: Coffee },
+  { value: "heart", label: "Corazón", Icon: Heart },
+  { value: "sparkles", label: "Destacado", Icon: Sparkles },
+  { value: "target", label: "Objetivo", Icon: Target },
+  { value: "eye", label: "Observación", Icon: Eye },
+  { value: "thumbs-up", label: "Aprobado", Icon: ThumbsUp },
+  { value: "book-open", label: "Manual", Icon: BookOpen },
+];
+
+const BLOCK_TYPE_LABELS: Record<SlideBlock["type"], string> = {
+  title: "Título",
+  subtitle: "Subtítulo",
+  paragraph: "Párrafo",
+  bullets: "Viñetas",
+  numbered: "Lista numerada",
+  cards: "Tarjetas",
+  "icon-row": "Fila de iconos",
+  buttons: "Botones",
+  image: "Imagen",
+  note: "Nota",
+  divider: "Separador",
+};
 
 function uid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
@@ -102,7 +148,7 @@ function emptySlide(): Slide {
   };
 }
 
-export function PresentacionEditor({ slidesInitial, theme }: PresentacionEditorProps) {
+export function PresentacionEditor({ slidesInitial, theme, empresaId }: PresentacionEditorProps) {
   const [slides, setSlides] = useState<Slide[]>(slidesInitial);
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [dirty, setDirty] = useState(false);
@@ -243,6 +289,7 @@ export function PresentacionEditor({ slidesInitial, theme }: PresentacionEditorP
           <SlideWorkspace
             slide={selected}
             theme={theme}
+            empresaId={empresaId}
             onPatchSlide={patchSlide}
             onPatchBlock={patchBlock}
             onAddBlock={addBlock}
@@ -327,6 +374,7 @@ function SlideList({
 function SlideWorkspace({
   slide,
   theme,
+  empresaId,
   onPatchSlide,
   onPatchBlock,
   onAddBlock,
@@ -339,6 +387,7 @@ function SlideWorkspace({
 }: {
   slide: Slide;
   theme: EmpresaTheme;
+  empresaId: string;
   onPatchSlide: (p: Partial<Slide>) => void;
   onPatchBlock: (id: string, p: Partial<SlideBlock>) => void;
   onAddBlock: (type: SlideBlock["type"]) => void;
@@ -361,12 +410,6 @@ function SlideWorkspace({
             <SelectItem value="cover">Portada centrada</SelectItem>
           </SelectContent>
         </Select>
-        <Input
-          value={slide.image ?? ""}
-          onChange={(e) => onPatchSlide({ image: e.target.value || null })}
-          placeholder="URL de imagen (opcional)"
-          className="h-8 text-xs flex-1 min-w-[200px]"
-        />
         <div className="ml-auto flex items-center gap-1">
           <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => onMoveSlide(-1)} disabled={isFirst} title="Subir slide">
             <ArrowUp className="h-3.5 w-3.5" />
@@ -378,6 +421,16 @@ function SlideWorkspace({
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
         </div>
+      </div>
+
+      <div className="rounded-md border bg-muted/30 p-3 space-y-1.5">
+        <Label className="text-xs font-medium">Imagen de fondo de la slide</Label>
+        <ImageInputOrUpload
+          value={slide.image ?? null}
+          onChange={(url) => onPatchSlide({ image: url })}
+          empresaId={empresaId}
+          kind="slide"
+        />
       </div>
 
       <SlideRenderer slide={slide} theme={theme} />
@@ -394,6 +447,7 @@ function SlideWorkspace({
             <BlockEditor
               key={b.id}
               block={b}
+              empresaId={empresaId}
               isFirst={i === 0}
               isLast={i === slide.blocks.length - 1}
               onPatch={(p) => onPatchBlock(b.id, p)}
@@ -432,6 +486,7 @@ function BlockTypeAdder({ onAdd }: { onAdd: (t: SlideBlock["type"]) => void }) {
 
 function BlockEditor({
   block,
+  empresaId,
   isFirst,
   isLast,
   onPatch,
@@ -439,6 +494,7 @@ function BlockEditor({
   onMove,
 }: {
   block: SlideBlock;
+  empresaId: string;
   isFirst: boolean;
   isLast: boolean;
   onPatch: (p: Partial<SlideBlock>) => void;
@@ -449,7 +505,7 @@ function BlockEditor({
     <div className="rounded-md border p-3 space-y-2 bg-background">
       <div className="flex items-center justify-between">
         <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-          {block.type}
+          {BLOCK_TYPE_LABELS[block.type]}
         </span>
         <div className="flex items-center gap-0.5">
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onMove(-1)} disabled={isFirst}>
@@ -463,16 +519,18 @@ function BlockEditor({
           </Button>
         </div>
       </div>
-      <BlockBody block={block} onPatch={onPatch} />
+      <BlockBody block={block} empresaId={empresaId} onPatch={onPatch} />
     </div>
   );
 }
 
 function BlockBody({
   block,
+  empresaId,
   onPatch,
 }: {
   block: SlideBlock;
+  empresaId: string;
   onPatch: (p: Partial<SlideBlock>) => void;
 }) {
   switch (block.type) {
@@ -558,7 +616,13 @@ function BlockBody({
               <div className="space-y-1.5">
                 <Input value={item.titulo} onChange={(e) => onUpd({ titulo: e.target.value })} placeholder="Título" className="h-8 text-sm font-medium" />
                 <Textarea value={item.descripcion} onChange={(e) => onUpd({ descripcion: e.target.value })} placeholder="Descripción" rows={2} className="text-sm" />
-                <Input value={item.imagen ?? ""} onChange={(e) => onUpd({ imagen: e.target.value || null })} placeholder="URL imagen (opcional)" className="h-7 text-xs" />
+                <ImageInputOrUpload
+                  value={item.imagen ?? null}
+                  onChange={(url) => onUpd({ imagen: url })}
+                  empresaId={empresaId}
+                  kind="card"
+                  compact
+                />
               </div>
             )}
             empty={{ titulo: "Tarjeta", descripcion: "Texto", imagen: null }}
@@ -573,14 +637,7 @@ function BlockBody({
           render={(item, onUpd) => (
             <div className="space-y-1.5">
               <div className="flex items-center gap-2">
-                <Select value={item.icono} onValueChange={(v) => onUpd({ icono: v })}>
-                  <SelectTrigger className="h-8 w-32 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {["users","wine","shield","star","award","lightbulb","coffee","heart","sparkles","target","eye","thumbs-up","book-open"].map((i) => (
-                      <SelectItem key={i} value={i}>{i}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <IconPicker value={item.icono} onChange={(v) => onUpd({ icono: v })} />
                 <Input value={item.titulo} onChange={(e) => onUpd({ titulo: e.target.value })} placeholder="Título" className="h-8 text-sm font-medium" />
               </div>
               <Textarea value={item.descripcion} onChange={(e) => onUpd({ descripcion: e.target.value })} placeholder="Descripción" rows={2} className="text-sm" />
@@ -597,7 +654,7 @@ function BlockBody({
           render={(item, onUpd) => (
             <div className="grid grid-cols-[1fr_1fr] gap-2">
               <Input value={item.label} onChange={(e) => onUpd({ label: e.target.value })} placeholder="Texto del botón" className="h-8 text-sm" />
-              <Input value={item.href} onChange={(e) => onUpd({ href: e.target.value })} placeholder="Enlace (o #formulario)" className="h-8 text-sm" />
+              <Input value={item.href} onChange={(e) => onUpd({ href: e.target.value })} placeholder="https://… o #formulario" className="h-8 text-sm" />
             </div>
           )}
           empty={{ label: "Botón", href: "#" }}
@@ -605,8 +662,13 @@ function BlockBody({
       );
     case "image":
       return (
-        <div className="space-y-1.5">
-          <Input value={block.src ?? ""} onChange={(e) => onPatch({ src: e.target.value || null } as Partial<SlideBlock>)} placeholder="URL imagen" className="h-8 text-sm" />
+        <div className="space-y-2">
+          <ImageInputOrUpload
+            value={block.src ?? null}
+            onChange={(url) => onPatch({ src: url } as Partial<SlideBlock>)}
+            empresaId={empresaId}
+            kind="image-block"
+          />
           <Input value={block.alt ?? ""} onChange={(e) => onPatch({ alt: e.target.value } as Partial<SlideBlock>)} placeholder="Texto alternativo" className="h-8 text-sm" />
         </div>
       );
@@ -664,6 +726,56 @@ function ListEditor<T>({
         <Plus className="h-3.5 w-3.5" /> Añadir
       </Button>
     </div>
+  );
+}
+
+function IconPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const selected = ICON_CATALOG.find((i) => i.value === value) ?? ICON_CATALOG[0];
+  const SelectedIcon = selected.Icon;
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 w-32 justify-between gap-2 px-2 text-xs"
+          title={selected.label}
+        >
+          <span className="flex items-center gap-1.5 truncate">
+            <SelectedIcon className="h-4 w-4 shrink-0" />
+            <span className="truncate">{selected.label}</span>
+          </span>
+          <ChevronDown className="h-3 w-3 opacity-50 shrink-0" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-2" align="start">
+        <div className="grid grid-cols-5 gap-1">
+          {ICON_CATALOG.map(({ value: v, label, Icon }) => {
+            const active = v === value;
+            return (
+              <button
+                key={v}
+                type="button"
+                onClick={() => {
+                  onChange(v);
+                  setOpen(false);
+                }}
+                title={label}
+                className={`flex h-10 w-10 items-center justify-center rounded-md border transition-colors ${
+                  active
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-transparent hover:bg-muted"
+                }`}
+              >
+                <Icon className="h-5 w-5" />
+              </button>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 

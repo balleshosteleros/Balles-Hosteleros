@@ -24,6 +24,7 @@ import {
   type ModoCarta,
 } from "@/features/empresa/actions/logo-actions";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 const MAX_HERO_BYTES = 8 * 1024 * 1024;
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
@@ -79,6 +80,7 @@ export function CartaTemaCard({ empresaSlug, nombreEmpresa }: { empresaSlug: str
   const [cargando, setCargando] = useState(true);
   const [subiendoHero, setSubiendoHero] = useState(false);
   const [guardando, setGuardando] = useState(false);
+  useGlobalLoadingSync(cargando || subiendoHero || guardando);
   const fileHeroRef = useRef<HTMLInputElement>(null);
 
   // Carga inicial.

@@ -53,6 +53,7 @@ import {
 } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import {
   CONTACTO_CATEGORIAS,
   CATEGORIA_LABELS,
@@ -129,6 +130,7 @@ export function AgendaDrawer({ children }: { children: ReactNode }) {
   const [contactos, setContactos] = useState<Contacto[]>([]);
   const [etiquetas, setEtiquetas] = useState<Etiqueta[]>([]);
   const [cargando, setCargando] = useState(false);
+  useGlobalLoadingSync(cargando);
   const [busqueda, setBusqueda] = useState("");
   const [grupo, setGrupo] = useState<ContactoCategoria | "todos">("todos");
   const [etiquetaFiltro, setEtiquetaFiltro] = useState<string | null>(null);

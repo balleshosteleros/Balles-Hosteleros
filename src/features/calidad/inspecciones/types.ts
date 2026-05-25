@@ -65,7 +65,27 @@ export type PreguntaTipo =
   | "fecha"
   | "telefono"
   | "escala"
-  | "seleccion";
+  | "seleccion"
+  | "empleado_select";
+
+export interface EmpleadoPublico {
+  id: string;
+  nombre_completo: string;
+  puesto: string | null;
+  departamento: string | null;
+}
+
+/**
+ * Valor serializado de una respuesta tipo `empleado_select`.
+ * Se guarda como JSON en `inspeccion_respuestas.valor_texto` para
+ * conservar puesto/departamento del momento de la inspección.
+ */
+export interface EmpleadoSeleccionado {
+  empleado_id: string;
+  nombre_completo: string;
+  puesto: string | null;
+  departamento: string | null;
+}
 
 export interface Pregunta {
   id: string;
@@ -124,10 +144,16 @@ export interface EnvioResumen {
   id: string;
   numero_secuencial: number | null;
   nombre_inspector: string;
+  nombre_jefe_sala: string | null;
   fecha_inspeccion: string | null;
   local_nombre: string | null;
   nota_final: number | null;
+  notas_por_seccion: Record<string, number> | null;
+  plantilla_id: string;
+  plantilla_nombre: string | null;
   estado: "pendiente_revision" | "revisado" | "archivado";
+  verificado_at: string | null;
+  verificado_por_nombre: string | null;
   created_at: string;
 }
 
@@ -152,17 +178,72 @@ export interface EnvioCompleto {
   local_id: string | null;
   local_nombre: string | null;
   plantilla_id: string;
+  plantilla_nombre: string | null;
   version_id: string;
   numero_secuencial: number | null;
   nombre_inspector: string;
   telefono_inspector: string | null;
   fecha_inspeccion: string | null;
-  nombre_encargado: string | null;
+  nombre_jefe_sala: string | null;
   nota_final: number | null;
+  notas_por_seccion: Record<string, number> | null;
   estado: "pendiente_revision" | "revisado" | "archivado";
   notas_calidad: string | null;
+  verificado_at: string | null;
+  verificado_por_empleado_id: string | null;
+  verificado_por_nombre: string | null;
   created_at: string;
   respuestas: RespuestaCompleta[];
+}
+
+// ─── QR de verificación in-situ (PRP-041) ────────────────────────────
+
+export interface QrTokenPublic {
+  token: string;
+  expires_at: string;
+  verify_url: string;
+}
+
+export interface VerificacionResultado {
+  ok: boolean;
+  motivo?:
+    | "no_session"
+    | "no_empleado"
+    | "local_no_coincide"
+    | "token_caducado"
+    | "token_usado"
+    | "token_revocado"
+    | "token_invalido"
+    | "ya_verificado"
+    | "dni_no_coincide"
+    | "sin_jefe_sala_asignado"
+    | "jefe_sala_sin_dni";
+  envio?: {
+    id: string;
+    numero_secuencial: number | null;
+    local_nombre: string | null;
+    fecha_inspeccion: string | null;
+    nombre_inspector: string;
+    verificado_at?: string;
+    verificado_por_nombre?: string;
+  };
+}
+
+/**
+ * Datos públicos del jefe de sala para la pantalla de firma por DNI.
+ * Se exponen solo nombre y puesto para que se reconozca, NUNCA el DNI
+ * completo.
+ */
+export interface JefeSalaFirma {
+  envio_id: string;
+  numero_secuencial: number | null;
+  local_nombre: string | null;
+  nombre_inspector: string;
+  jefe_sala: {
+    empleado_id: string;
+    nombre_completo: string;
+    puesto: string | null;
+  } | null;
 }
 
 // ─── Token + datos públicos ─────────────────────────────────────────────
@@ -199,4 +280,5 @@ export interface InspeccionPublica {
     nombre: string;
     secciones: Seccion[];
   };
+  empleados: EmpleadoPublico[];
 }

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { ImportadorIACatalogoDialog } from "@/features/logistica/components/ImportadorIACatalogoDialog";
 import type { ImportadorEntityConfig } from "@/features/logistica/types/importador-catalogo-ia";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 interface CampoForm {
   key: string;
@@ -61,6 +62,7 @@ export function GestorCatalogoEstandar<T extends CatalogoItem>({
 }: GestorCatalogoEstandarProps<T>) {
   const [items, setItems] = useState<T[]>([]);
   const [cargando, setCargando] = useState(true);
+  useGlobalLoadingSync(cargando);
   const [nuevo, setNuevo] = useState<Record<string, string>>(() => emptyForm(campos));
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [editandoForm, setEditandoForm] = useState<Record<string, string>>({});
