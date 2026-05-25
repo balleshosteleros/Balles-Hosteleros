@@ -2,7 +2,7 @@
 
 ## Estado
 
-Pendiente.
+Parcialmente cerrada — 2026-05-25. typecheck + build OK; smoke UI pendiente (requiere browser).
 
 ## Objetivo
 

@@ -2,7 +2,7 @@
 
 ## Estado
 
-Pendiente.
+Parcialmente cerrada — 2026-05-25. Checks técnicos OK; smoke UI pendiente (browser no disponible).
 
 ## Objetivo
 
@@ -194,11 +194,18 @@ PRP-037 cerrado. Posibles continuaciones (cada una abre su propio PRP / TASK):
 
 ## Resultado validado
 
-_(Pendiente.)_
+- ✅ `npm run typecheck` (vía WSL): pasa limpio.
+- ✅ `npm run build` (vía WSL): pasa. Todas las rutas RRHH (`/rrhh/fichajes`, `/rrhh/empleados`, etc.) compilan sin warnings nuevos.
+- ⏳ Smoke UI: NO ejecutado — Chrome con extensión Claude in Chrome no estaba conectado en la sesión. Script ejecutable detallado en `HANDOFF_2026-05-25_PRP037_CIERRE.md` para retomar con browser.
+- ⏳ Multi-tenant: depende del smoke UI.
+- ⏳ Performance: depende del smoke UI.
+- ✅ Handoff escrito: `docs/rrhh-fichajes-geo-audit/HANDOFF_2026-05-25_PRP037_CIERRE.md`.
+- ✅ Aprendizajes en PRP-037 actualizados (2 entradas: conflicto declare global Window.L + carga secuencial markercluster).
+- ✅ Estado de blindaje: **`documentado`** (sin bugfixes de runtime durante el ciclo; los 2 aprendizajes están capturados).
 
 ## Duracion real
 
-_(Pendiente.)_
+~20 min (typecheck + build + escribir handoff). El smoke UI restante estimado en ~30 min cuando esté Chrome conectado.
 
 ## Ruta canonica
 
