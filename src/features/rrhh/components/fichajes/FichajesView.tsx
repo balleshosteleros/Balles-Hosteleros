@@ -12,6 +12,7 @@ import {
   FICHAJE_GEO_STATUS_LABEL,
 } from "@/features/rrhh/utils/fichaje-geo-status";
 import { GeoBadge } from "@/features/rrhh/components/fichajes/geo-badge";
+import { FichajeUbicacionMiniMap } from "@/features/rrhh/components/fichajes/FichajeUbicacionMiniMap";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { toast } from "sonner";
 
@@ -549,6 +550,10 @@ export function FichajesView() {
                 <div><span className="text-muted-foreground">Horas totales:</span><p className="font-semibold">{fichajeModal.horaSalida ? formatHorasDecimal(fichajeModal.horasTotales) : "—"}</p></div>
               </div>
               {fichajeModal.incidencia && <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3"><p className="text-sm font-medium text-destructive">{fichajeModal.incidencia}</p></div>}
+              <div className="space-y-1.5">
+                <Label className="text-xs">Ubicación</Label>
+                <FichajeUbicacionMiniMap fichaje={fichajeModal} />
+              </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Observaciones RRHH</Label>
                 <Textarea

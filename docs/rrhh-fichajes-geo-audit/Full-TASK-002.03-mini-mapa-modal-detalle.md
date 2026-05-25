@@ -2,7 +2,7 @@
 
 ## Estado
 
-Pendiente.
+Cerrada — 2026-05-25. typecheck pasa. Smoke UI queda para TASK-002.06.
 
 ## Objetivo
 
@@ -183,11 +183,32 @@ export function FichajeUbicacionMiniMap(props: { fichaje: FichajeConGeo }): JSX.
 
 ## Resultado validado
 
-_(Pendiente.)_
+- `npm run typecheck`: ✅ pasa.
+- Creado `src/features/rrhh/components/fichajes/FichajeUbicacionMiniMap.tsx` con patrón `cargarLeaflet` idéntico al de `MapPicker` pero con interfaces extendidas (`divIcon`, `latLngBounds`, `bindPopup`, `fitBounds`).
+- 4 estados fallback cubiertos:
+  - sin coords del local → `MapPinOff` + "Sin ubicación configurada para este local"
+  - fichaje manual sin lat_entrada → `MapPinOff` + "Entrada sin geolocalización (manual)"
+  - sin lat_entrada sin razón clara → "Sin datos de geolocalización del fichaje"
+  - error de carga de Leaflet → mensaje de error en placeholder
+- Render normal:
+  - tile OSM,
+  - círculo violeta con `radio_metros` del local,
+  - pin azul entrada con `divIcon` + popup `HH:MM ±Xm`,
+  - pin morado salida (si existe) con popup similar,
+  - `fitBounds` con padding adaptativo según haya 1 o 2 pines.
+- Leyenda debajo del mapa: distancias entrada/salida + nombre del local + modo (presencial/teletrabajo).
+- Cleanup correcto en `useEffect` return: remueve layers y llama `map.remove()` para evitar memory leak al abrir/cerrar el modal repetidamente.
+- Sección "Ubicación" insertada en el modal de detalle de `FichajesView` entre "Horas totales" y "Observaciones RRHH".
+
+## Aprendizaje (Self-Annealing — TASK-002.03)
+
+- **Error encontrado**: TypeScript falló con `TS2717` (`Subsequent property declarations must have the same type`) y `TS2739` al hacer `declare global { Window.L }` en mi nuevo componente, porque MapPicker.tsx ya declara `Window.L` con su propia interfaz local de Leaflet — dos interfaces locales `LeafletGlobal` con propiedades distintas generan conflicto.
+- **Fix**: eliminar `declare global` en el componente nuevo y acceder a `window.L` vía cast local (`(window as unknown as { L?: LeafletGlobal }).L`). El módulo queda autocontenido.
+- **Aplicar en**: cualquier futuro componente Leaflet en este repo. No declarar `Window.L` global más de una vez. Promovido a entrada del PRP-037 (Aprendizajes) — pendiente de promoción a `errors/` del factory si se confirma como patrón.
 
 ## Duracion real
 
-_(Pendiente.)_
+~1 h (incluye debugging del conflicto de declaración global).
 
 ## Ruta canonica
 

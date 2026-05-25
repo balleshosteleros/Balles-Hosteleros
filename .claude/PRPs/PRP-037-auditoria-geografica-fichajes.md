@@ -288,7 +288,12 @@ Esta sección es **deliberadamente explícita** para que un agente futuro pueda 
 
 > Esta sección crece con cada error encontrado durante la implementación.
 
-_(Vacía — pendiente de ejecución.)_
+### 2026-05-25 (TASK-002.03): Conflicto de `declare global { Window.L }` con MapPicker
+- **Error**: typecheck falló con `TS2717` y `TS2739` al añadir `declare global { interface Window { L?: LeafletGlobal } }` en `FichajeUbicacionMiniMap.tsx`. Causa: `MapPicker.tsx` ya declara `Window.L` con su propia interfaz local `LeafletGlobal` que tiene menos métodos. Dos `declare global` con interfaces locales distintas para la misma propiedad colisionan a nivel TypeScript.
+- **Causa raíz**: el patrón Leaflet con `cargarLeaflet` se introdujo en `MapPicker.tsx` con `declare global` y nadie pensó que se replicaría. Cuando un segundo componente lo replica, la declaración global se duplica.
+- **Fix**: en el componente nuevo, eliminar el `declare global` y acceder a `window.L` vía cast local: `(window as unknown as { L?: LeafletGlobal }).L`. Ver `FichajeUbicacionMiniMap.tsx` función `getWindowL()`. Cero impacto en MapPicker.
+- **Aplicar en**: cualquier futuro componente Leaflet (`FichajesMapaView` de TASK-002.04 lo replicará). No declarar `Window.L` global más de una vez en el proyecto.
+- **Promovido a**: pendiente — si se confirma como patrón recurrente al cerrar TASK-002.04, promover a `errors/` o `patterns/` de La Forja de SaaS.
 
 ---
 
