@@ -11,7 +11,7 @@ path = Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
 lines = text.splitlines()
 
-suffix = " _Fernando"
+suffix = " _FernandoClaude"
 skip_prefixes = ("Merge ", "Revert ", "fixup! ", "squash! ")
 
 for i, line in enumerate(lines):
