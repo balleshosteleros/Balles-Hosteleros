@@ -1,0 +1,202 @@
+/**
+ * Tipos del módulo Inspecciones Propias.
+ * Presentación (estilo Gamma) + plantilla del formulario + envíos públicos.
+ */
+
+// ─── Slides / presentación ──────────────────────────────────────────────
+
+export type SlideLayout = "default" | "split-right" | "split-left" | "cover";
+export type SlideBackground = "primary" | "secondary" | "neutral";
+
+export type SlideBlock =
+  | { id: string; type: "title"; text: string; href?: string | null }
+  | { id: string; type: "subtitle"; text: string; href?: string | null }
+  | { id: string; type: "paragraph"; text: string; href?: string | null }
+  | { id: string; type: "bullets"; items: string[] }
+  | {
+      id: string;
+      type: "numbered";
+      items: { titulo: string; descripcion: string }[];
+    }
+  | {
+      id: string;
+      type: "cards";
+      columns: 2 | 3 | 4;
+      items: {
+        titulo: string;
+        descripcion: string;
+        imagen?: string | null;
+      }[];
+    }
+  | {
+      id: string;
+      type: "icon-row";
+      items: { icono: string; titulo: string; descripcion: string }[];
+    }
+  | {
+      id: string;
+      type: "buttons";
+      items: { label: string; href: string }[];
+    }
+  | { id: string; type: "image"; src: string | null; alt?: string | null }
+  | { id: string; type: "note"; text: string }
+  | { id: string; type: "divider" };
+
+export interface Slide {
+  id: string;
+  layout: SlideLayout;
+  background: SlideBackground;
+  image: string | null;
+  blocks: SlideBlock[];
+}
+
+export interface Presentacion {
+  id: string;
+  empresa_id: string;
+  slides: Slide[];
+  updated_at: string;
+}
+
+// ─── Plantilla del formulario ───────────────────────────────────────────
+
+export type PreguntaTipo =
+  | "texto_corto"
+  | "texto_largo"
+  | "fecha"
+  | "telefono"
+  | "escala"
+  | "seleccion";
+
+export interface Pregunta {
+  id: string;
+  seccion_id: string;
+  empresa_id: string;
+  orden: number;
+  tipo: PreguntaTipo;
+  enunciado: string;
+  ayuda: string | null;
+  obligatoria: boolean;
+  escala_min: number | null;
+  escala_max: number | null;
+  escala_label_min: string | null;
+  escala_label_max: string | null;
+  opciones: string[] | null;
+  cuenta_para_nota: boolean;
+}
+
+export interface Seccion {
+  id: string;
+  version_id: string;
+  empresa_id: string;
+  orden: number;
+  titulo: string;
+  descripcion: string | null;
+  preguntas: Pregunta[];
+}
+
+export interface PlantillaVersion {
+  id: string;
+  plantilla_id: string;
+  empresa_id: string;
+  version: number;
+  estado: "borrador" | "publicada" | "archivada";
+  vigente: boolean;
+  publicada_at: string | null;
+  publicada_por: string | null;
+  created_at: string;
+  secciones: Seccion[];
+}
+
+export interface Plantilla {
+  id: string;
+  empresa_id: string;
+  numero_secuencial: number | null;
+  nombre: string;
+  descripcion: string | null;
+  archivada: boolean;
+  created_at: string;
+  vigente_version: PlantillaVersion | null;
+}
+
+// ─── Envíos ─────────────────────────────────────────────────────────────
+
+export interface EnvioResumen {
+  id: string;
+  numero_secuencial: number | null;
+  nombre_inspector: string;
+  fecha_inspeccion: string | null;
+  local_nombre: string | null;
+  nota_final: number | null;
+  estado: "pendiente_revision" | "revisado" | "archivado";
+  created_at: string;
+}
+
+export interface RespuestaCompleta {
+  id: string;
+  pregunta_id: string | null;
+  pregunta_snapshot: {
+    seccion_titulo: string;
+    seccion_orden: number;
+    enunciado: string;
+    tipo: PreguntaTipo;
+    orden: number;
+    escala_max: number | null;
+  };
+  valor_texto: string | null;
+  valor_numero: number | null;
+}
+
+export interface EnvioCompleto {
+  id: string;
+  empresa_id: string;
+  local_id: string | null;
+  local_nombre: string | null;
+  plantilla_id: string;
+  version_id: string;
+  numero_secuencial: number | null;
+  nombre_inspector: string;
+  telefono_inspector: string | null;
+  fecha_inspeccion: string | null;
+  nombre_encargado: string | null;
+  nota_final: number | null;
+  estado: "pendiente_revision" | "revisado" | "archivado";
+  notas_calidad: string | null;
+  created_at: string;
+  respuestas: RespuestaCompleta[];
+}
+
+// ─── Token + datos públicos ─────────────────────────────────────────────
+
+export interface InspeccionToken {
+  empresa_id: string;
+  token: string;
+  activo: boolean;
+  plantilla_activa_id: string | null;
+}
+
+export interface EmpresaTheme {
+  id: string;
+  nombre: string;
+  logo_url: string | null;
+  color: string | null;
+  color_secundario: string | null;
+  color_texto: string | null;
+}
+
+export interface LocalPublico {
+  id: string;
+  nombre: string;
+  color: string | null;
+}
+
+export interface InspeccionPublica {
+  empresa: EmpresaTheme;
+  locales: LocalPublico[];
+  presentacion: Slide[];
+  plantilla: {
+    id: string;
+    version_id: string;
+    nombre: string;
+    secciones: Seccion[];
+  };
+}

@@ -15,6 +15,12 @@ interface IOActionsProps<T> {
   context?: IOContext;
   onSuccess?: () => void;
   exportRecords?: T[];
+  /**
+   * Si se proporciona, el botón "Importar" del dropdown se convierte en un
+   * único item que invoca este callback (en lugar del submenu Excel/CSV/Plantilla).
+   * Pensado para flujos de importación con IA.
+   */
+  onCustomImport?: () => void;
 }
 
 export function IOActions<T>({
@@ -22,6 +28,7 @@ export function IOActions<T>({
   context = {},
   onSuccess,
   exportRecords,
+  onCustomImport,
 }: IOActionsProps<T>) {
   const [open, setOpen] = useState(false);
   const [parsed, setParsed] = useState<ParsedFile<T> | null>(null);
@@ -113,8 +120,9 @@ export function IOActions<T>({
         exportFormats={exportFormats}
         disabled={busy}
         label={`Importar / Exportar ${config.label}`}
+        onCustomImport={onCustomImport}
       />
-      {supportsImport && (
+      {supportsImport && !onCustomImport && (
         <ImportDialog
           open={open}
           onOpenChange={setOpen}

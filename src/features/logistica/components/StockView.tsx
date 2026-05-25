@@ -21,7 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/shared/components/ui/popover";
 import {
-  ArrowUpDown, Pencil, Check, X, Sun, Settings, ChevronDown,
+  ArrowUpDown, Pencil, Check, X, Sun, Settings, ChevronDown, ShoppingCart, FlaskConical,
 } from "lucide-react";
 import {
   SubmoduleToolbar,
@@ -79,16 +79,27 @@ export function StockView() {
   useEffect(() => { sessionStorage.setItem("logistica_last", pathname); }, [pathname]);
 
   const { empresaActual } = useEmpresa();
-  const [stock, setStock] = useState<ProductoStock[]>([]);
+  const [tipoActivo, setTipoActivo] = useState<"compra" | "elaboracion">("compra");
+  const [stockPorTipo, setStockPorTipo] = useState<{ compra: ProductoStock[]; elaboracion: ProductoStock[] }>({ compra: [], elaboracion: [] });
   const [temporadas, setTemporadas] = useState<TemporadaStock[]>([]);
   const [loadingStock, setLoadingStock] = useState(true);
+
+  const stock = tipoActivo === "compra" ? stockPorTipo.compra : stockPorTipo.elaboracion;
+  const setStock = useCallback((updater: ProductoStock[] | ((prev: ProductoStock[]) => ProductoStock[])) => {
+    setStockPorTipo((prev) => {
+      const current = tipoActivo === "compra" ? prev.compra : prev.elaboracion;
+      const next = typeof updater === "function" ? (updater as (p: ProductoStock[]) => ProductoStock[])(current) : updater;
+      return tipoActivo === "compra" ? { ...prev, compra: next } : { ...prev, elaboracion: next };
+    });
+  }, [tipoActivo]);
 
   const loadStockData = useCallback(async () => {
     setLoadingStock(true);
     try {
-      const [stockRes, productos] = await Promise.all([
+      const [stockRes, productosCompra, productosElab] = await Promise.all([
         listStock(),
         listProductos("compra"),
+        listProductos("elaboracion"),
       ]);
       const stockByProductoId = new Map<string, { id: string; cantidad: number; minima: number; maxima: number }>();
       const stockByNombre = new Map<string, { id: string; cantidad: number; minima: number; maxima: number }>();
@@ -104,7 +115,7 @@ export function StockView() {
           if (r.producto_nombre) stockByNombre.set(String(r.producto_nombre).toLowerCase(), entry);
         }
       }
-      const merged: ProductoStock[] = productos.map((p) => {
+      const mapToStock = (p: typeof productosCompra[number]): ProductoStock => {
         const s = stockByProductoId.get(p.id) ?? stockByNombre.get(p.nombre.toLowerCase());
         return {
           id: s?.id ?? p.id,
@@ -118,11 +129,14 @@ export function StockView() {
           ultimoInventarioFecha: null,
           empresaId: empresaActual.id,
         };
+      };
+      setStockPorTipo({
+        compra: productosCompra.map(mapToStock),
+        elaboracion: productosElab.map(mapToStock),
       });
-      setStock(merged);
     } catch (err) {
       console.error("Error cargando stock:", err);
-      setStock([]);
+      setStockPorTipo({ compra: [], elaboracion: [] });
     } finally {
       setLoadingStock(false);
     }
@@ -560,6 +574,26 @@ export function StockView() {
 
   return (
     <div className="p-4 md:p-6 space-y-5">
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button
+          variant={tipoActivo === "compra" ? "default" : "outline"}
+          className="gap-2"
+          onClick={() => { setTipoActivo("compra"); setSelected(new Set()); }}
+        >
+          <ShoppingCart className="h-4 w-4" />
+          COMPRA
+          <Badge variant="secondary" className="text-[10px] ml-1">{stockPorTipo.compra.length}</Badge>
+        </Button>
+        <Button
+          variant={tipoActivo === "elaboracion" ? "default" : "outline"}
+          className="gap-2"
+          onClick={() => { setTipoActivo("elaboracion"); setSelected(new Set()); }}
+        >
+          <FlaskConical className="h-4 w-4" />
+          ELABORACIONES
+          <Badge variant="secondary" className="text-[10px] ml-1">{stockPorTipo.elaboracion.length}</Badge>
+        </Button>
+      </div>
       <div className="space-y-4">
           {/* Toolbar */}
           <SubmoduleToolbar

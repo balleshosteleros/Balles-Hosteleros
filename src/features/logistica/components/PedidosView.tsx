@@ -16,13 +16,15 @@ import { DetallePedido } from "@/features/logistica/components/pedidos/DetallePe
 import { DetalleAlbaran } from "@/features/logistica/components/pedidos/DetalleAlbaran";
 import { PedidoModal } from "@/features/logistica/components/pedidos/PedidoModal";
 import { SugerenciasPedidoModal } from "@/features/logistica/components/pedidos/SugerenciasPedidoModal";
+import { FacturasTab } from "@/features/logistica/components/facturas/FacturasTab";
+import { listFacturas, crearFacturaDesdeAlbaran } from "@/features/logistica/actions/facturas-actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Copy, Pencil, Trash2, Printer, MoreHorizontal, ClipboardList, Truck,
-  ChevronDown, Package, Settings,
+  ChevronDown, Package, Settings, Receipt,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
@@ -106,7 +108,9 @@ export function PedidosView() {
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
-  const [tab, setTab] = useState<"pedidos" | "albaranes">("pedidos");
+  const [tab, setTab] = useState<"pedidos" | "albaranes" | "facturas">("pedidos");
+  const [facturasCount, setFacturasCount] = useState(0);
+  const [facturaIdToOpen, setFacturaIdToOpen] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [modalOpen, setModalOpen] = useState(false);
   const [editItem, setEditItem] = useState<Pedido | null>(null);
@@ -115,6 +119,14 @@ export function PedidosView() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [sugerenciasOpen, setSugerenciasOpen] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
+
+  // Estado independiente para la tab ALBARANES (toolbar simétrica con Pedidos/Facturas)
+  const [searchAlb, setSearchAlb] = useState("");
+  const [filtrosAlb, setFiltrosAlb] = useState<ToolbarFiltroActivo[]>([]);
+  const [ordenAlb, setOrdenAlb] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisiblesAlb, setColumnasVisiblesAlb] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrdenAlb, setColumnasOrdenAlb] = useState<string[] | undefined>(undefined);
+  const [showConfigAlb, setShowConfigAlb] = useState(false);
 
   const loadPedidos = useCallback(async () => {
     setLoading(true);
@@ -145,6 +157,7 @@ export function PedidosView() {
           proveedor: (r.proveedor_nombre as string) ?? "",
           documento: (r.documento as string) ?? "",
           factura: (r.factura_ref as string) ?? "",
+          numeroProveedor: (r.numero_proveedor as string | null) ?? null,
           almacen: (r.almacen as string) ?? "",
           fecha: (r.fecha as string) ?? "",
           estado: (r.estado as Albaran["estado"]) ?? "Pendiente",
@@ -163,10 +176,20 @@ export function PedidosView() {
     }
   }, []);
 
+  const loadFacturasCount = useCallback(async () => {
+    try {
+      const res = await listFacturas();
+      if (res.ok) setFacturasCount(res.data.filter((f) => f.estado !== "Anulada").length);
+    } catch {
+      // silencioso
+    }
+  }, []);
+
   useEffect(() => {
     loadPedidos();
     loadAlbaranes();
-  }, [loadPedidos, loadAlbaranes]);
+    loadFacturasCount();
+  }, [loadPedidos, loadAlbaranes, loadFacturasCount]);
 
   const proveedoresUsados = useMemo(
     () => [...new Set(pedidos.map((p) => p.proveedor).filter(Boolean))].sort(),
@@ -268,7 +291,9 @@ export function PedidosView() {
     const copy: Pedido = {
       ...structuredClone(src),
       id: `ped-${Date.now()}`,
-      numero: `PED-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900) + 100)}`,
+      // numero/numero_secuencial los asigna el servidor al guardar el pedido nuevo.
+      numero: "",
+      numeroSecuencial: undefined,
       estado: "Borrador", albaranId: null, ultimaActualizacion: new Date().toISOString().slice(0, 10),
     };
     setPedidos((prev) => [copy, ...prev]);
@@ -276,11 +301,9 @@ export function PedidosView() {
   };
 
   const handleConfirmarPedido = async (ped: Pedido) => {
-    const albNumero = `ALB-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900) + 100)}`;
     const fecha = new Date().toISOString().slice(0, 10);
 
     const res = await createAlbaran({
-      numero: albNumero,
       pedidoId: ped.id,
       proveedorNombre: ped.proveedor,
       almacen: ped.almacen,
@@ -291,6 +314,7 @@ export function PedidosView() {
       notas: ped.notas,
       creador: ped.creador,
       lineas: ped.lineas.map((l) => ({ ...l, docPedido: ped.numero })),
+      numeroSecuencial: ped.numeroSecuencial,
     });
 
     if (!res.ok) {
@@ -298,9 +322,10 @@ export function PedidosView() {
       return;
     }
 
-    const albId = res.id!;
+    const albId = res.id;
+    const albNumero = res.numero ?? "";
     const newAlbaran: Albaran = {
-      id: albId, numero: albNumero, empresaId: ped.empresaId, empresa: ped.empresa,
+      id: albId, numeroSecuencial: res.numeroSecuencial, numero: albNumero, empresaId: ped.empresaId, empresa: ped.empresa,
       proveedor: ped.proveedor, documento: `ALB-${ped.numero}`, factura: "",
       almacen: ped.almacen, fecha, estado: "Pendiente",
       lineas: ped.lineas.map((l) => ({ ...l, docPedido: ped.numero })),
@@ -390,6 +415,15 @@ export function PedidosView() {
           onBack={() => setDetalleAlbaran(null)}
           onUpdateEstado={updateAlbaranEstado}
           onConfirmar={handleConfirmarAlbaran}
+          onGenerarFactura={async (alb) => {
+            const res = await crearFacturaDesdeAlbaran({ albaranId: alb.id });
+            if (!res.ok) { toast.error(res.error); return; }
+            toast.success(`Factura ${res.data.numero} creada desde ${alb.numero}`);
+            await loadFacturasCount();
+            setDetalleAlbaran(null);
+            setFacturaIdToOpen(res.data.id);
+            setTab("facturas");
+          }}
         />
       </div>
     );
@@ -593,6 +627,15 @@ export function PedidosView() {
             ALBARANES
             <Badge variant="secondary" className="text-[10px] ml-1">{albaranes.length}</Badge>
           </Button>
+          <Button
+            variant={tab === "facturas" ? "default" : "outline"}
+            className="gap-2"
+            onClick={() => setTab("facturas")}
+          >
+            <Receipt className="h-4 w-4" />
+            FACTURAS
+            <Badge variant="secondary" className="text-[10px] ml-1">{facturasCount}</Badge>
+          </Button>
         </div>
 
         {/* PEDIDOS TAB */}
@@ -681,8 +724,19 @@ export function PedidosView() {
                     {columnasRender.map((c) => columnDefs[c.campo]?.td(p))}
                   </tr>
                 ))}
-                {filteredPedidos.length === 0 && (
-                  <tr><td colSpan={20} className="text-center py-12 text-muted-foreground">No se encontraron pedidos.</td></tr>
+                {filteredPedidos.length === 0 && !loading && (
+                  <tr>
+                    <td colSpan={columnasRender.length + 1} className="text-center py-12 text-muted-foreground">
+                      <ClipboardList className="h-8 w-8 mx-auto opacity-30 mb-2" />
+                      <div className="font-medium text-foreground">No hay ningún pedido creado</div>
+                      <div className="text-xs mt-1">
+                        Crea un pedido nuevo desde el botón <span className="font-semibold">+ Nuevo</span> o usa <span className="font-semibold">Sugerir pedido</span>.
+                      </div>
+                      <div className="text-[11px] mt-2 opacity-70">
+                        Flujo: Pedido → Albarán → Factura
+                      </div>
+                    </td>
+                  </tr>
                 )}
               </tbody>
             </table>
@@ -692,42 +746,177 @@ export function PedidosView() {
         </div>}
 
         {/* ALBARANES TAB */}
-        {tab === "albaranes" && <div className="space-y-4">
-          <ResizableColumnsProvider storageKey="logistica-albaranes">
-          <div className="bg-card rounded-lg border overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b bg-muted/50">
-                {["ID", "Nº Albarán", "Proveedor", "Documento", "Almacén", "Fecha", "Estado", "Pedido", "Total (€)"].map((h) => (
-                  <TableColumnHeader key={h} label={h} />
-                ))}
-              </tr></thead>
-              <tbody>
-                {albaranes.map((a) => {
-                  const t = calcularTotalesLineas(a.lineas);
-                  return (
-                    <tr key={a.id} className="border-b hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setDetalleAlbaran(a)}>
-                      <td className="px-3 py-2.5 text-xs tabular-nums font-medium text-muted-foreground whitespace-nowrap">{a.numeroSecuencial != null ? `ALB-${a.numeroSecuencial}` : "—"}</td>
-                      <td className="px-3 py-2.5 font-semibold text-primary whitespace-nowrap">{a.numero}</td>
-                      <td className="px-3 py-2.5 text-xs font-medium uppercase">{a.proveedor}</td>
-                      <td className="px-3 py-2.5 text-xs">{a.documento}</td>
-                      <td className="px-3 py-2.5 text-xs">{a.almacen}</td>
-                      <td className="px-3 py-2.5 text-xs whitespace-nowrap">{a.fecha}</td>
-                      <td className="px-3 py-2.5">
-                        <Badge variant="outline" className="text-[11px]">{a.estado}</Badge>
-                      </td>
-                      <td className="px-3 py-2.5 text-xs text-muted-foreground">{pedidos.find((p) => p.id === a.pedidoId)?.numero || "—"}</td>
-                      <td className="px-3 py-2.5 text-xs font-bold text-right">{t.total.toFixed(2)}</td>
-                    </tr>
-                  );
-                })}
-                {albaranes.length === 0 && (
-                  <tr><td colSpan={9} className="text-center py-12 text-muted-foreground">No hay albaranes generados.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          </ResizableColumnsProvider>
-        </div>}
+        {tab === "albaranes" && (() => {
+          const columnasDefAlb: ToolbarColumna[] = [
+            { campo: "idSecuencial", label: "ID", bloqueada: true },
+            { campo: "numero", label: "Nº", bloqueada: true },
+            { campo: "proveedor", label: "Proveedor" },
+            { campo: "almacen", label: "Almacén" },
+            { campo: "fecha", label: "Fecha" },
+            { campo: "estado", label: "Estado" },
+            { campo: "pedidoNumero", label: "Pedido" },
+            { campo: "total", label: "Total (€)" },
+          ];
+          const accesoAlb = (a: Albaran, campo: string): unknown => {
+            if (campo === "pedidoNumero") return pedidos.find((p) => p.id === a.pedidoId)?.numero ?? "";
+            if (campo === "total") return calcularTotalesLineas(a.lineas).total;
+            return (a as unknown as Record<string, unknown>)[campo];
+          };
+          let filteredAlb = albaranes.filter((a) => coincideBusquedaUniversal(a, searchAlb));
+          filteredAlb = aplicarFiltrosToolbar(filteredAlb, filtrosAlb, accesoAlb);
+          filteredAlb = aplicarOrdenToolbar(filteredAlb, ordenAlb, accesoAlb);
+          const colsRenderAlb = ordenarColumnas(columnasDefAlb, columnasOrdenAlb).filter(
+            (c) => c.bloqueada || colVisible(columnasVisiblesAlb, c.campo),
+          );
+          return (
+            <div className="space-y-4">
+              <SubmoduleToolbar
+                busqueda={searchAlb}
+                onBusquedaChange={setSearchAlb}
+                placeholderBusqueda="Buscar"
+                filtros={filtrosAlb}
+                onFiltrosChange={setFiltrosAlb}
+                columnas={columnasDefAlb}
+                columnasVisibles={columnasVisiblesAlb}
+                onColumnasVisiblesChange={setColumnasVisiblesAlb}
+                columnasOrden={columnasOrdenAlb}
+                onColumnasOrdenChange={setColumnasOrdenAlb}
+                extraDerecha={
+                  <Button
+                    size="icon"
+                    variant={showConfigAlb ? "default" : "outline"}
+                    className="h-9 w-9"
+                    onClick={() => setShowConfigAlb((v) => !v)}
+                    title="Configuración"
+                    aria-label="Configuración"
+                  >
+                    <Settings className="h-4 w-4" strokeWidth={1.75} />
+                  </Button>
+                }
+              />
+              {showConfigAlb && (
+                <div className="rounded-xl border bg-card p-5">
+                  <p className="text-sm text-muted-foreground">Configuración de albaranes — próximamente.</p>
+                </div>
+              )}
+
+              <ResizableColumnsProvider storageKey="logistica-albaranes">
+                <div className="bg-card rounded-lg border overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/50">
+                        {colsRenderAlb.map((c) => (
+                          <TableColumnHeader
+                            key={c.campo}
+                            label={c.label}
+                            campo={c.campo}
+                            ordenable
+                            orden={ordenAlb}
+                            onOrdenChange={setOrdenAlb}
+                            align={c.campo === "total" ? "right" : undefined}
+                          />
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredAlb.map((a) => {
+                        const t = calcularTotalesLineas(a.lineas);
+                        const pedNum = pedidos.find((p) => p.id === a.pedidoId)?.numero || "—";
+                        return (
+                          <tr
+                            key={a.id}
+                            className="border-b hover:bg-muted/30 transition-colors cursor-pointer"
+                            onClick={() => setDetalleAlbaran(a)}
+                          >
+                            {colsRenderAlb.map((c) => {
+                              switch (c.campo) {
+                                case "idSecuencial":
+                                  return (
+                                    <td key={c.campo} className="px-3 py-2.5 text-xs tabular-nums font-medium text-muted-foreground whitespace-nowrap">
+                                      {a.numeroSecuencial != null ? `ALB-${a.numeroSecuencial}` : "—"}
+                                    </td>
+                                  );
+                                case "numero":
+                                  return (
+                                    <td key={c.campo} className="px-3 py-2.5 font-semibold text-primary whitespace-nowrap">
+                                      {a.numero}
+                                    </td>
+                                  );
+                                case "proveedor":
+                                  return (
+                                    <td key={c.campo} className="px-3 py-2.5 text-xs font-medium uppercase max-w-[200px] truncate">
+                                      {a.proveedor}
+                                    </td>
+                                  );
+                                case "almacen":
+                                  return (
+                                    <td key={c.campo} className="px-3 py-2.5 text-xs">
+                                      {a.almacen}
+                                    </td>
+                                  );
+                                case "fecha":
+                                  return (
+                                    <td key={c.campo} className="px-3 py-2.5 text-xs whitespace-nowrap">
+                                      {a.fecha}
+                                    </td>
+                                  );
+                                case "estado":
+                                  return (
+                                    <td key={c.campo} className="px-3 py-2.5">
+                                      <Badge variant="outline" className="text-[11px]">{a.estado}</Badge>
+                                    </td>
+                                  );
+                                case "pedidoNumero":
+                                  return (
+                                    <td key={c.campo} className="px-3 py-2.5 text-xs text-muted-foreground">
+                                      {pedNum}
+                                    </td>
+                                  );
+                                case "total":
+                                  return (
+                                    <td key={c.campo} className="px-3 py-2.5 text-xs font-bold text-right tabular-nums">
+                                      {t.total.toFixed(2)}
+                                    </td>
+                                  );
+                                default:
+                                  return <td key={c.campo} />;
+                              }
+                            })}
+                          </tr>
+                        );
+                      })}
+                      {filteredAlb.length === 0 && (
+                        <tr>
+                          <td colSpan={colsRenderAlb.length} className="text-center py-12 text-muted-foreground">
+                            <Truck className="h-8 w-8 mx-auto opacity-30 mb-2" />
+                            <div className="font-medium text-foreground">Aún no hay albaranes</div>
+                            <div className="text-xs mt-1">
+                              Los albaranes se generan al confirmar un pedido desde la pestaña <span className="font-semibold">PEDIDOS</span>.
+                            </div>
+                            <div className="text-[11px] mt-2 opacity-70">
+                              Flujo: Pedido → Albarán → Factura
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </ResizableColumnsProvider>
+              <div className="text-xs text-muted-foreground text-right">
+                {filteredAlb.length} de {albaranes.length} albaranes
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* FACTURAS TAB */}
+        {tab === "facturas" && (
+          <FacturasTab
+            openFacturaId={facturaIdToOpen}
+            onOpened={() => setFacturaIdToOpen(null)}
+          />
+        )}
       </div>
 
       {/* Modal */}

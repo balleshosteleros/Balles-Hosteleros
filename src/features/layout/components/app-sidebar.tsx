@@ -118,8 +118,8 @@ const gerenciaSubs = [
 ];
 const calidadSubs = [
   { title: "AUDITORÍAS", url: "/calidad/auditorias", icon: ClipboardList },
-  { title: "EMPLEADOS", url: "/calidad/empleados", icon: UsersRound },
-  { title: "CLIENTES", url: "/calidad/clientes", icon: ContactRound },
+  { title: "CUESTIONARIOS", url: "/calidad/cuestionarios", icon: FileQuestion },
+  { title: "RESEÑAS", url: "/calidad/resenas", icon: ContactRound },
   { title: "INSPECCIONES", url: "/calidad/inspecciones", icon: FileSearch },
 ];
 const miPanelSubs = [
@@ -153,7 +153,6 @@ const rrhhSubs = [
   { title: "PAGOS", url: "/rrhh/pagos", icon: HandCoins },
   { title: "FORMACIÓN", url: "/rrhh/formacion", icon: GraduationCap },
   { title: "ENCUESTAS", url: "/rrhh/encuestas", icon: ClipboardList },
-  { title: "CUESTIONARIOS", url: "/rrhh/cuestionarios", icon: FileQuestion },
 ];
 
 type SubItem = { title: string; url: string; icon: React.ElementType };

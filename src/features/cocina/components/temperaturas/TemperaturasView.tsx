@@ -1,4 +1,7 @@
+"use client";
+
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
+import { useTabQuery } from "@/shared/hooks/use-tab-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -77,6 +80,10 @@ interface Props {
 
 export default function TemperaturasView({ area, equiposIniciales, registrosIniciales }: Props) {
   const { empresaActual } = useEmpresa();
+  const [tempTab, setTempTab] = useTabQuery(
+    ["registros", "equipos", "historico"] as const,
+    "registros",
+  );
   const [equipos, setEquipos] = useState<EquipoFrio[]>(equiposIniciales ?? []);
   const [registros, setRegistros] = useState<RegistroTemperatura[]>(registrosIniciales ?? []);
   const [loading, setLoading] = useState(true);
@@ -355,7 +362,7 @@ export default function TemperaturasView({ area, equiposIniciales, registrosInic
         <Card><CardContent className="p-4 text-center"><div className="flex items-center justify-center gap-1"><AlertTriangle className="h-4 w-4 text-red-600" /><p className="text-2xl font-bold text-red-600">{alertasHoy}</p></div><p className="text-xs text-muted-foreground">Alertas hoy</p></CardContent></Card>
       </div>
 
-      <Tabs defaultValue="registros">
+      <Tabs value={tempTab} onValueChange={(v) => setTempTab(v as "registros" | "equipos" | "historico")}>
         <TabsList>
           <TabsTrigger value="registros"><Thermometer className="h-4 w-4 mr-1" />Registros</TabsTrigger>
           <TabsTrigger value="equipos"><Settings2 className="h-4 w-4 mr-1" />Equipos</TabsTrigger>

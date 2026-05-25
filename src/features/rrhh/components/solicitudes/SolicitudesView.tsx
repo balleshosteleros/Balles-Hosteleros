@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useTabQuery } from "@/shared/hooks/use-tab-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -74,7 +75,7 @@ function formatFechaHora(s: string): string {
 type Modo = "aprobar" | "rechazar";
 
 export function SolicitudesView() {
-  const [tab, setTab] = useState<"pendientes" | "todas">("pendientes");
+  const [tab, setTab] = useTabQuery(["pendientes", "todas"] as const, "pendientes");
   const [items, setItems] = useState<SolicitudPersonal[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");

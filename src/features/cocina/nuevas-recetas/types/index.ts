@@ -133,6 +133,7 @@ export interface Receta {
   esc_pvp_propuesto: number | null;
   esc_coste_estimado: number | null;
   esc_etiquetas_finales: string[];
+  esc_video_url: string | null;
   propuesto_por: string | null;
   propuesto_por_nombre: string | null;
   created_at: string;

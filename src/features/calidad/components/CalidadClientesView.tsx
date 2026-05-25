@@ -1,24 +1,38 @@
 "use client";
 
-import { Card, CardContent } from "@/components/ui/card";
-import { ContactRound } from "lucide-react";
+import { Bot, MessageSquare } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { useTabQuery } from "@/shared/hooks/use-tab-query";
+import { ResenasPipeline } from "./ResenasPipeline";
+import { AgentesIAView } from "./AgentesIAView";
+
+const VISTAS = ["resenas", "agentes"] as const;
 
 export function CalidadClientesView() {
+  const [vista, setVista] = useTabQuery(VISTAS, "resenas");
+
   return (
-    <div className="space-y-6 p-6">
-      <Card>
-        <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-          <ContactRound className="h-12 w-12 text-muted-foreground/50 mb-4" />
-          <h3 className="text-lg font-semibold text-foreground">
-            Submódulo de Calidad de Clientes listo para configurar
-          </h3>
-          <p className="text-sm text-muted-foreground max-w-md mt-2">
-            Aquí podrás gestionar encuestas de satisfacción, reseñas, NPS,
-            quejas y reclamaciones, y métricas de experiencia. Dile a Claude
-            qué quieres añadir.
-          </p>
-        </CardContent>
-      </Card>
+    <div className="p-6 space-y-4">
+      <Tabs value={vista} onValueChange={(v) => setVista(v as (typeof VISTAS)[number])}>
+        <TabsList>
+          <TabsTrigger value="resenas" className="gap-2">
+            <MessageSquare className="h-3.5 w-3.5" />
+            Reseñas
+          </TabsTrigger>
+          <TabsTrigger value="agentes" className="gap-2">
+            <Bot className="h-3.5 w-3.5" />
+            Agentes IA
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="resenas" className="mt-4">
+          <ResenasPipeline />
+        </TabsContent>
+
+        <TabsContent value="agentes" className="mt-4">
+          <AgentesIAView />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -102,6 +102,8 @@ export interface Albaran {
   id: string;
   numeroSecuencial?: number;
   numero: string;
+  /** Nº de albarán que figura en el documento del proveedor. Distinto del `numero` interno. */
+  numeroProveedor?: string | null;
   empresaId: string;
   empresa: string;
   proveedor: string;

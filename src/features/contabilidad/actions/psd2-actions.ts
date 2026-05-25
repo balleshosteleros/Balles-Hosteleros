@@ -12,6 +12,8 @@ import {
 } from "@/features/contabilidad/services/psd2/mappers";
 import { runSyncForAccount } from "@/features/contabilidad/services/psd2/sync";
 
+import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 const DEFAULT_PROVIDER: ProviderId = "gocardless";
 const ACCESS_VALID_FOR_DAYS = 90;
 
@@ -37,12 +39,8 @@ async function getContext() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { supabase, user: null, empresaId: null as string | null };
-  const { data } = await supabase
-    .from("profiles")
-    .select("empresa_id")
-    .eq("user_id", user.id)
-    .single();
-  return { supabase, user, empresaId: (data?.empresa_id ?? null) as string | null };
+  const empresaId = await getEmpresaActivaForUser(supabase as unknown as SupabaseClient, user.id);
+  return { supabase, user, empresaId };
 }
 
 function appUrl(): string {

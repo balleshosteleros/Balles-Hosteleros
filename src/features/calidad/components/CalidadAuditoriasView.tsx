@@ -1,23 +1,39 @@
 "use client";
 
-import { Card, CardContent } from "@/components/ui/card";
-import { ClipboardList } from "lucide-react";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { FileText, ClipboardCheck } from "lucide-react";
+import { PlantillasListView } from "./PlantillasListView";
+import { EnviosListView } from "./EnviosListView";
+
+type Tab = "plantillas" | "envios";
 
 export function CalidadAuditoriasView() {
+  const [tab, setTab] = useState<Tab>("plantillas");
+
   return (
-    <div className="space-y-6 p-6">
-      <Card>
-        <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-          <ClipboardList className="h-12 w-12 text-muted-foreground/50 mb-4" />
-          <h3 className="text-lg font-semibold text-foreground">
-            Submódulo de Auditorías listo para configurar
-          </h3>
-          <p className="text-sm text-muted-foreground max-w-md mt-2">
-            Aquí podrás programar auditorías, asignar responsables, registrar
-            hallazgos y generar informes. Dile a Claude qué quieres añadir.
-          </p>
-        </CardContent>
-      </Card>
+    <div className="p-4 md:p-6 space-y-3">
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button
+          variant={tab === "plantillas" ? "default" : "outline"}
+          className="gap-2"
+          onClick={() => setTab("plantillas")}
+        >
+          <FileText className="h-4 w-4" />
+          PLANTILLAS
+        </Button>
+        <Button
+          variant={tab === "envios" ? "default" : "outline"}
+          className="gap-2"
+          onClick={() => setTab("envios")}
+        >
+          <ClipboardCheck className="h-4 w-4" />
+          AUDITORÍAS REALIZADAS
+        </Button>
+      </div>
+
+      {tab === "plantillas" ? <PlantillasListView /> : <EnviosListView />}
     </div>
   );
 }

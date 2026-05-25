@@ -27,7 +27,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Mail, AlertTriangle, Settings, Pencil, Trash2, Plus, X } from "lucide-react";
+import { Mail, AlertTriangle, Settings, Pencil, Trash2, Plus, Sparkles, X } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -45,6 +45,14 @@ import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 import { IOActions } from "@/shared/io";
 import { proveedoresIO } from "@/features/logistica/io/proveedores.io";
 import { ProveedorDetail } from "@/features/logistica/components/ProveedorDetail";
+import { ImportadorIACatalogoDialog } from "@/features/logistica/components/ImportadorIACatalogoDialog";
+import {
+  analizarProveedoresIA,
+  guardarProveedoresIA,
+  analizarCategoriasProveedorIA,
+  guardarCategoriasProveedorIA,
+} from "@/features/logistica/actions/importador-catalogos-ia-actions";
+import type { ImportadorEntityConfig } from "@/features/logistica/types/importador-catalogo-ia";
 import { useReglasSubmodulo } from "@/features/ajustes/hooks/use-reglas-submodulo";
 import { ValidacionFaltantesDialog } from "@/features/ajustes/components/ValidacionFaltantesDialog";
 import { toast } from "sonner";
@@ -129,6 +137,36 @@ export function ProveedoresView() {
     ocultar_precios_compra_impresion: false,
   });
   const [savingOperativa, setSavingOperativa] = useState(false);
+  const [iaProvOpen, setIaProvOpen] = useState(false);
+
+  const iaProveedoresConfig: ImportadorEntityConfig = {
+    titulo: "Importar proveedores con IA",
+    subtitulo:
+      "Sube un Excel, PDF o foto de un listado de proveedores. La IA extraerá nombre, categoría y contacto. Tú revisas antes de guardar.",
+    campos: [
+      { key: "nombreComercial", label: "Nombre comercial", obligatorio: true, tipo: "texto" },
+      {
+        key: "categoria",
+        label: "Categoría",
+        obligatorio: true,
+        tipo: "select",
+        opciones: categoriasFull.map((c) => ({ value: c.nombre, label: c.nombre })),
+        placeholderVacio: "Sin categorías — créalas en Configuración",
+        deshabilitadoSiVacio: true,
+      },
+      { key: "personaContacto", label: "Contacto", obligatorio: false, tipo: "texto" },
+      { key: "telefonoPrincipal", label: "Teléfono", obligatorio: false, tipo: "texto" },
+      { key: "emailPrincipal", label: "Email", obligatorio: false, tipo: "texto" },
+      { key: "emailPedidos", label: "Email pedidos", obligatorio: false, tipo: "texto" },
+      { key: "direccion", label: "Dirección", obligatorio: false, tipo: "texto" },
+      { key: "ciudad", label: "Ciudad", obligatorio: false, tipo: "texto" },
+      { key: "codigoPostal", label: "CP", obligatorio: false, tipo: "texto" },
+      { key: "web", label: "Web", obligatorio: false, tipo: "texto" },
+      { key: "observaciones", label: "Observaciones", obligatorio: false, tipo: "texto" },
+    ],
+    analyze: analizarProveedoresIA,
+    save: guardarProveedoresIA,
+  };
 
   const reloadCategorias = useCallback(async () => {
     const res = await listCategoriasProveedor();
@@ -486,7 +524,11 @@ export function ProveedoresView() {
             onColumnasOrdenChange={setColumnasOrden}
             extraDerecha={
               <>
-                <IOActions config={proveedoresIO} onSuccess={() => window.location.reload()} />
+                <IOActions
+                  config={proveedoresIO}
+                  onSuccess={() => window.location.reload()}
+                  onCustomImport={() => setIaProvOpen(true)}
+                />
                 <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => setShowConfig(true)} title="Configuración" aria-label="Configuración">
                   <Settings className="h-4 w-4" strokeWidth={1.75} />
                 </Button>
@@ -522,6 +564,13 @@ export function ProveedoresView() {
 
       {/* Modal */}
       <ProveedorModal open={modalOpen} onClose={() => setModalOpen(false)} onSave={handleSave} item={editItem} empresaId={empresaActual.id} categorias={categoriasBD} />
+
+      <ImportadorIACatalogoDialog
+        open={iaProvOpen}
+        onOpenChange={setIaProvOpen}
+        config={iaProveedoresConfig}
+        onImportSuccess={() => loadProveedores()}
+      />
     </div>
   );
 }
@@ -736,6 +785,18 @@ function CategoriasProveedorManager({
   const [editVal, setEditVal] = useState("");
   const [newVal, setNewVal] = useState("");
   const [busy, setBusy] = useState(false);
+  const [iaOpen, setIaOpen] = useState(false);
+
+  const iaConfig: ImportadorEntityConfig = {
+    titulo: "Importar categorías de proveedor con IA",
+    subtitulo:
+      "Sube cualquier archivo. La IA extraerá las categorías de proveedor únicas y las podrás revisar antes de añadir.",
+    campos: [
+      { key: "nombre", label: "Nombre de la categoría", obligatorio: true, tipo: "texto" },
+    ],
+    analyze: analizarCategoriasProveedorIA,
+    save: guardarCategoriasProveedorIA,
+  };
 
   const startEdit = (id: string, nombre: string) => {
     setEditId(id);
@@ -787,7 +848,18 @@ function CategoriasProveedorManager({
 
   return (
     <div className="space-y-2">
-      <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Categorías</h4>
+      <div className="flex items-center justify-between">
+        <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Categorías</h4>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setIaOpen(true)}
+          className="gap-1 h-7 text-xs"
+          title="Importar varias categorías desde un archivo"
+        >
+          <Sparkles className="h-3 w-3 text-amber-500" /> Importar con IA
+        </Button>
+      </div>
       <div className="rounded-md border divide-y">
         {items.map((it) => (
           <div key={it.id} className="flex items-center gap-2 px-3 py-1.5">
@@ -844,6 +916,15 @@ function CategoriasProveedorManager({
           </Button>
         </div>
       </div>
+
+      <ImportadorIACatalogoDialog
+        open={iaOpen}
+        onOpenChange={setIaOpen}
+        config={iaConfig}
+        onImportSuccess={() => {
+          void onChanged();
+        }}
+      />
     </div>
   );
 }

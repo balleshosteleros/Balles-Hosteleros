@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { useTabQuery } from "@/shared/hooks/use-tab-query";
 import { Partida, ProductoPartida, MisePlaceItem, ESTADO_PARTIDA_LABELS, EstadoPartida, type ConfigPartidas, type AreaPrincipal, getPartidasByEmpresa } from "@/features/cocina/data/partidas";
 import { getEmpleadosPorEmpresa } from "@/features/rrhh/data/rrhh";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -274,7 +275,7 @@ export function PartidasView() {
     setPartidas(existentes.length > 0 ? existentes : buildSeedPartidas());
   }, [empresaId]);
 
-  const [mainTab, setMainTab] = useState<"lista" | "pipeline" | "config">("lista");
+  const [mainTab, setMainTab] = useTabQuery(["lista", "pipeline", "config"] as const, "lista");
   const [search, setSearch] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("todos");
   const [selectedPartida, setSelectedPartida] = useState<Partida | null>(null);
@@ -383,7 +384,7 @@ export function PartidasView() {
       )}
 
       {/* Tabs */}
-      <Tabs value={mainTab} onValueChange={v => setMainTab(v as typeof mainTab)}>
+      <Tabs value={mainTab} onValueChange={v => setMainTab(v as "lista" | "pipeline" | "config")}>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <TabsList>
             <TabsTrigger value="lista"><List className="h-4 w-4 mr-1" />Lista</TabsTrigger>

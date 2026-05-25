@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { LineaProcedencia, ORIGENES_CAPITAL, OrigenCapital } from "@/features/direccion/data/aperturas";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 const COLORS = ["hsl(210 70% 55%)", "hsl(150 60% 45%)", "hsl(40 90% 55%)", "hsl(340 65% 55%)", "hsl(270 60% 55%)", "hsl(20 80% 55%)", "hsl(180 60% 45%)", "hsl(0 60% 55%)"];
 
@@ -27,6 +28,7 @@ interface Props {
 export function ProcedenciaTab({ lineas, onChange, readOnly = false }: Props) {
   const [editing, setEditing] = useState<LineaProcedencia | null>(null);
   const [isNew, setIsNew] = useState(false);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
   const totalCapital = lineas.reduce((s, l) => s + l.total, 0);
 
@@ -40,11 +42,23 @@ export function ProcedenciaTab({ lineas, onChange, readOnly = false }: Props) {
     else onChange(lineas.map(l => l.id === editing.id ? editing : l));
     setEditing(null);
   };
-  const remove = (id: string) => onChange(lineas.filter(l => l.id !== id));
+  const remove = async (id: string) => {
+    const linea = lineas.find(l => l.id === id);
+    const detalle = linea ? `${linea.entidad || linea.origen}` : "";
+    const ok = await confirmDelete({
+      title: "¿Borrar esta línea de procedencia?",
+      description: detalle
+        ? `Se eliminará "${detalle}". Esta acción no se puede deshacer.`
+        : "Esta acción no se puede deshacer.",
+    });
+    if (!ok) return;
+    onChange(lineas.filter(l => l.id !== id));
+  };
   const upd = (field: keyof LineaProcedencia, val: unknown) => setEditing(prev => prev ? { ...prev, [field]: val } : null);
 
   return (
     <div className="space-y-6">
+      {confirmDeleteDialog}
       {/* Resumen */}
       <div className="grid md:grid-cols-3 gap-4">
         <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold">{fmt(totalCapital)}€</p><p className="text-xs text-muted-foreground">Capital total previsto</p></CardContent></Card>

@@ -16,20 +16,51 @@ import {
   deleteFotoStorage,
 } from "@/features/direccion/actions/estudios-apertura-actions";
 import { prepararFotoParaSubida } from "@/features/direccion/lib/foto-upload";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { BadgeSugerenciaIA } from "@/features/direccion/components/aperturas/shared/BadgeSugerenciaIA";
+import type { DraftMarca } from "@/features/direccion/types/aperturas-ia";
+
+type CampoMarcaIA =
+  | "claim"
+  | "descripcion"
+  | "publicoObjetivo"
+  | "valores"
+  | "tipografiaTitulares"
+  | "tipografiaCuerpo"
+  | "paleta";
 
 interface Props {
   estudioId: string;
   marca: ImagenMarcaEstudio;
   onChange: (next: ImagenMarcaEstudio, opts?: { flush?: boolean }) => void;
   readOnly?: boolean;
+  iaDraft?: DraftMarca;
+  onClearIaField?: (campo: CampoMarcaIA) => void;
 }
 
 const uid = () => `c-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
-export function MarcaTab({ estudioId, marca, onChange, readOnly = false }: Props) {
+export function MarcaTab({
+  estudioId,
+  marca,
+  onChange,
+  readOnly = false,
+  iaDraft,
+  onClearIaField,
+}: Props) {
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
+  const ia = (campo: CampoMarcaIA): boolean => {
+    if (!iaDraft) return false;
+    return (iaDraft as Record<string, unknown>)[campo] !== undefined;
+  };
   const set = (patch: Partial<ImagenMarcaEstudio>) => {
     if (readOnly) return;
     onChange({ ...marca, ...patch });
+    if (onClearIaField) {
+      for (const k of Object.keys(patch) as Array<keyof ImagenMarcaEstudio>) {
+        onClearIaField(k as CampoMarcaIA);
+      }
+    }
   };
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
@@ -39,13 +70,33 @@ export function MarcaTab({ estudioId, marca, onChange, readOnly = false }: Props
     valores[i] = val;
     set({ valores });
   };
-  const removeValor = (i: number) => set({ valores: (marca.valores ?? []).filter((_, j) => j !== i) });
+  const removeValor = async (i: number) => {
+    const valor = (marca.valores ?? [])[i];
+    const ok = await confirmDelete({
+      title: "¿Quitar este valor de marca?",
+      description: valor
+        ? `Se eliminará "${valor}". Esta acción no se puede deshacer.`
+        : "Se eliminará el valor. Esta acción no se puede deshacer.",
+    });
+    if (!ok) return;
+    set({ valores: (marca.valores ?? []).filter((_, j) => j !== i) });
+  };
 
   const addColor = () => set({ paleta: [...(marca.paleta ?? []), { id: uid(), nombre: "Color", hex: "#000000" }] });
   const updateColor = (id: string, patch: Partial<ColorPaleta>) => {
     set({ paleta: (marca.paleta ?? []).map((c) => (c.id === id ? { ...c, ...patch } : c)) });
   };
-  const removeColor = (id: string) => set({ paleta: (marca.paleta ?? []).filter((c) => c.id !== id) });
+  const removeColor = async (id: string) => {
+    const color = (marca.paleta ?? []).find((c) => c.id === id);
+    const ok = await confirmDelete({
+      title: "¿Quitar este color de la paleta?",
+      description: color
+        ? `Se eliminará "${color.nombre || color.hex}". Esta acción no se puede deshacer.`
+        : "Esta acción no se puede deshacer.",
+    });
+    if (!ok) return;
+    set({ paleta: (marca.paleta ?? []).filter((c) => c.id !== id) });
+  };
 
   const handleLogo = async (file: File) => {
     setUploadingLogo(true);
@@ -80,6 +131,11 @@ export function MarcaTab({ estudioId, marca, onChange, readOnly = false }: Props
   };
 
   const removeLogo = async () => {
+    const ok = await confirmDelete({
+      title: "¿Quitar el logo?",
+      description: "Se eliminará el logo del estudio. Podrás subir otro después.",
+    });
+    if (!ok) return;
     const path = marca.logoPath;
     onChange({ ...marca, logoPath: undefined, logoUrl: undefined }, { flush: true });
     if (path) {
@@ -90,6 +146,7 @@ export function MarcaTab({ estudioId, marca, onChange, readOnly = false }: Props
 
   return (
     <div className="space-y-4">
+      {confirmDeleteDialog}
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
@@ -102,20 +159,33 @@ export function MarcaTab({ estudioId, marca, onChange, readOnly = false }: Props
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <Field label="Claim / tagline">
-              <Input disabled={readOnly} value={marca.claim} onChange={(e) => set({ claim: e.target.value })} placeholder="Ej. La cocina mediterránea de mercado" />
+            <Field label="Claim / tagline" badge={ia("claim") ? <BadgeSugerenciaIA /> : null}>
+              <Input
+                disabled={readOnly}
+                value={marca.claim}
+                onChange={(e) => set({ claim: e.target.value })}
+                placeholder="Ej. La cocina mediterránea de mercado"
+                className={ia("claim") ? "bg-amber-50/60 border-amber-200" : undefined}
+              />
             </Field>
-            <Field label="Público objetivo">
-              <Input disabled={readOnly} value={marca.publicoObjetivo} onChange={(e) => set({ publicoObjetivo: e.target.value })} placeholder="Ej. Profesionales 30-45, parejas, foodies" />
+            <Field label="Público objetivo" badge={ia("publicoObjetivo") ? <BadgeSugerenciaIA /> : null}>
+              <Input
+                disabled={readOnly}
+                value={marca.publicoObjetivo}
+                onChange={(e) => set({ publicoObjetivo: e.target.value })}
+                placeholder="Ej. Profesionales 30-45, parejas, foodies"
+                className={ia("publicoObjetivo") ? "bg-amber-50/60 border-amber-200" : undefined}
+              />
             </Field>
           </div>
-          <Field label="Descripción del concepto">
+          <Field label="Descripción del concepto" badge={ia("descripcion") ? <BadgeSugerenciaIA /> : null}>
             <Textarea
               disabled={readOnly}
               value={marca.descripcion}
               onChange={(e) => set({ descripcion: e.target.value })}
               rows={4}
               placeholder="Describe la experiencia, el tono, qué hace único al restaurante…"
+              className={ia("descripcion") ? "bg-amber-50/60 border-amber-200" : undefined}
             />
           </Field>
         </CardContent>
@@ -171,9 +241,12 @@ export function MarcaTab({ estudioId, marca, onChange, readOnly = false }: Props
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className={ia("paleta") ? "ring-1 ring-amber-200" : undefined}>
         <CardHeader>
-          <CardTitle className="text-base">Paleta de colores</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2">
+            Paleta de colores
+            {ia("paleta") && <BadgeSugerenciaIA />}
+          </CardTitle>
           <p className="text-xs text-muted-foreground mt-1">
             Define los colores principales de la marca. Mínimo 1, recomendado 3-5.
           </p>
@@ -247,17 +320,32 @@ export function MarcaTab({ estudioId, marca, onChange, readOnly = false }: Props
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <Field label="Tipografía titulares">
-              <Input disabled={readOnly} value={marca.tipografiaTitulares} onChange={(e) => set({ tipografiaTitulares: e.target.value })} placeholder="Ej. Playfair Display" />
+            <Field label="Tipografía titulares" badge={ia("tipografiaTitulares") ? <BadgeSugerenciaIA /> : null}>
+              <Input
+                disabled={readOnly}
+                value={marca.tipografiaTitulares}
+                onChange={(e) => set({ tipografiaTitulares: e.target.value })}
+                placeholder="Ej. Playfair Display"
+                className={ia("tipografiaTitulares") ? "bg-amber-50/60 border-amber-200" : undefined}
+              />
             </Field>
-            <Field label="Tipografía cuerpo">
-              <Input disabled={readOnly} value={marca.tipografiaCuerpo} onChange={(e) => set({ tipografiaCuerpo: e.target.value })} placeholder="Ej. Inter" />
+            <Field label="Tipografía cuerpo" badge={ia("tipografiaCuerpo") ? <BadgeSugerenciaIA /> : null}>
+              <Input
+                disabled={readOnly}
+                value={marca.tipografiaCuerpo}
+                onChange={(e) => set({ tipografiaCuerpo: e.target.value })}
+                placeholder="Ej. Inter"
+                className={ia("tipografiaCuerpo") ? "bg-amber-50/60 border-amber-200" : undefined}
+              />
             </Field>
           </div>
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <Label className="text-muted-foreground text-xs">Valores de marca</Label>
+              <div className="flex items-center gap-1.5">
+                <Label className="text-muted-foreground text-xs">Valores de marca</Label>
+                {ia("valores") && <BadgeSugerenciaIA />}
+              </div>
               {!readOnly && (
                 <Button size="sm" variant="ghost" onClick={addValor} className="h-7 text-xs">
                   <Plus className="h-3.5 w-3.5 mr-1" /> Añadir valor
@@ -299,10 +387,21 @@ export function MarcaTab({ estudioId, marca, onChange, readOnly = false }: Props
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+  badge,
+}: {
+  label: string;
+  children: React.ReactNode;
+  badge?: React.ReactNode;
+}) {
   return (
     <div>
-      <Label className="text-muted-foreground text-xs">{label}</Label>
+      <div className="flex items-center gap-1.5">
+        <Label className="text-muted-foreground text-xs">{label}</Label>
+        {badge}
+      </div>
       <div className="mt-1">{children}</div>
     </div>
   );

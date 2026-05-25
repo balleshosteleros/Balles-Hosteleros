@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { TrendingUp, TrendingDown, FileText, Calculator, ArrowLeft, Landmark, Target, Clock, Settings, ImagePlus, X, ChevronDown, ChevronRight, Plus, Trash2, Receipt, Building2, Sparkles, ChefHat, Activity, Ticket, Layers, Share2, Link2, Copy, RefreshCw, EyeOff, Check } from "lucide-react";
+import { TrendingUp, TrendingDown, FileText, Calculator, ArrowLeft, Landmark, Target, Clock, Settings, ImagePlus, X, ChevronDown, ChevronRight, Plus, Trash2, Receipt, Building2, Sparkles, ChefHat, Activity, Ticket, Layers, Share2, Link2, Copy, RefreshCw, EyeOff, Check, Lightbulb } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -61,6 +61,19 @@ import {
   type EstudioRow,
 } from "@/features/direccion/actions/estudios-apertura-actions";
 import { prepararFotoParaSubida } from "@/features/direccion/lib/foto-upload";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { BotonRellenarIA } from "@/features/direccion/components/aperturas/shared/BotonRellenarIA";
+import { BarraConfirmarIA } from "@/features/direccion/components/aperturas/shared/BarraConfirmarIA";
+import { BadgeSugerenciaIA } from "@/features/direccion/components/aperturas/shared/BadgeSugerenciaIA";
+import { ModoPresentacion } from "@/features/direccion/components/aperturas/presentacion/ModoPresentacion";
+import { Monitor as MonitorIcon, Presentation as PresentationIcon } from "lucide-react";
+import { RellenoIADialog } from "@/features/direccion/components/aperturas/ia/RellenoIADialog";
+import { aplicarDraftCompleto } from "@/features/direccion/services/aperturas-ia/merge";
+import type {
+  BloqueIAKey,
+  BloqueIAAnyKey,
+  DraftIAEstudio,
+} from "@/features/direccion/types/aperturas-ia";
 
 function rowToEstudio(row: EstudioRow): EstudioApertura {
   return {
@@ -199,6 +212,7 @@ export function AperturasView() {
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [showConfig, setShowConfig] = useState(false);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
   const acceso = (e: EstudioApertura, campo: string): unknown => {
     if (campo === "nombre") return e.datos.nombre;
@@ -220,31 +234,76 @@ export function AperturasView() {
     return lista;
   }, [estudios, busqueda, filtros, orden]);
 
-  if (selected) {
-    return (
-      <DetalleEstudio
-        estudio={selected}
-        onBack={() => setSelected(null)}
-        onUpdate={(e, opts) => {
-          setEstudios(prev => prev.map(x => x.id === e.id ? e : x));
-          setSelected(e);
-          if (opts?.flush) void saveNow(e);
-          else scheduleSave(e);
-        }}
-        onSetViabilidad={(v) => setViabilidad(selected.id, v)}
-        onSetActividad={(v) => setActividad(selected.id, v)}
-        onEnableShare={() => handleEnableShare(selected.id)}
-        onDisableShare={() => handleDisableShare(selected.id)}
-        onRegenerateShare={() => handleRegenerateShare(selected.id)}
-      />
-    );
-  }
-
   const removeImagen = async (id: string) => {
+    const ok = await confirmDelete({
+      title: "¿Borrar la foto del estudio?",
+      description: "Se eliminará la imagen de portada de este estudio. Esta acción no se puede deshacer.",
+    });
+    if (!ok) return;
     setEstudios(prev => prev.map(x => x.id === id ? { ...x, imagen: undefined } : x));
+    setSelected(s => s && s.id === id ? { ...s, imagen: undefined } : s);
     const res = await deleteFotoEstudio(id);
     if (!res.ok) console.error("[aperturas] deleteFoto:", res.error);
   };
+
+  const onUploadImagen = async (id: string, file: File) => {
+    const previo = estudios.find(x => x.id === id)?.imagen;
+    try {
+      const prep = await prepararFotoParaSubida(file);
+      if (!prep.ok) {
+        window.alert(prep.error);
+        return;
+      }
+      setEstudios(prev => prev.map(x => x.id === id ? { ...x, imagen: prep.dataUrl } : x));
+      setSelected(s => s && s.id === id ? { ...s, imagen: prep.dataUrl } : s);
+      const res = await uploadFotoEstudio({
+        estudioId: id,
+        fileBase64: prep.dataUrl,
+        fileType: prep.tipo,
+        fileSize: prep.tamano,
+      });
+      if (!res.ok) {
+        console.error("[aperturas] uploadFoto:", res.error);
+        window.alert(`No se pudo subir la imagen: ${res.error}`);
+        setEstudios(prev => prev.map(x => x.id === id ? { ...x, imagen: previo } : x));
+        setSelected(s => s && s.id === id ? { ...s, imagen: previo } : s);
+        return;
+      }
+      setEstudios(prev => prev.map(x => x.id === id ? { ...x, imagen: res.foto_url } : x));
+      setSelected(s => s && s.id === id ? { ...s, imagen: res.foto_url } : s);
+    } catch (err) {
+      console.error("[aperturas] uploadFoto threw:", err);
+      window.alert("No se pudo subir la imagen. Prueba con un archivo más pequeño.");
+      setEstudios(prev => prev.map(x => x.id === id ? { ...x, imagen: previo } : x));
+      setSelected(s => s && s.id === id ? { ...s, imagen: previo } : s);
+    }
+  };
+
+  if (selected) {
+    return (
+      <>
+        {confirmDeleteDialog}
+        <DetalleEstudio
+          estudio={selected}
+          onBack={() => setSelected(null)}
+          onUpdate={(e, opts) => {
+            setEstudios(prev => prev.map(x => x.id === e.id ? e : x));
+            setSelected(e);
+            if (opts?.suppressSave) return;
+            if (opts?.flush) void saveNow(e);
+            else scheduleSave(e);
+          }}
+          onSetViabilidad={(v) => setViabilidad(selected.id, v)}
+          onSetActividad={(v) => setActividad(selected.id, v)}
+          onEnableShare={() => handleEnableShare(selected.id)}
+          onDisableShare={() => handleDisableShare(selected.id)}
+          onRegenerateShare={() => handleRegenerateShare(selected.id)}
+          onUploadPortada={(file) => onUploadImagen(selected.id, file)}
+          onRemovePortada={() => removeImagen(selected.id)}
+        />
+      </>
+    );
+  }
 
   const setViabilidad = async (id: string, viabilidad: EstadoViabilidad) => {
     setEstudios(prev => prev.map(x => x.id === id ? { ...x, viabilidad } : x));
@@ -295,35 +354,6 @@ export function AperturasView() {
     setSelected(s => s && s.id === id ? { ...s, shareSlug: slug, shareActive: true } : s);
   };
 
-  const onUploadImagen = async (id: string, file: File) => {
-    const previo = estudios.find(x => x.id === id)?.imagen;
-    try {
-      const prep = await prepararFotoParaSubida(file);
-      if (!prep.ok) {
-        window.alert(prep.error);
-        return;
-      }
-      setEstudios(prev => prev.map(x => x.id === id ? { ...x, imagen: prep.dataUrl } : x));
-      const res = await uploadFotoEstudio({
-        estudioId: id,
-        fileBase64: prep.dataUrl,
-        fileType: prep.tipo,
-        fileSize: prep.tamano,
-      });
-      if (!res.ok) {
-        console.error("[aperturas] uploadFoto:", res.error);
-        window.alert(`No se pudo subir la imagen: ${res.error}`);
-        setEstudios(prev => prev.map(x => x.id === id ? { ...x, imagen: previo } : x));
-        return;
-      }
-      setEstudios(prev => prev.map(x => x.id === id ? { ...x, imagen: res.foto_url } : x));
-    } catch (err) {
-      console.error("[aperturas] uploadFoto threw:", err);
-      window.alert("No se pudo subir la imagen. Prueba con un archivo más pequeño.");
-      setEstudios(prev => prev.map(x => x.id === id ? { ...x, imagen: previo } : x));
-    }
-  };
-
   const columnasDef: ToolbarColumna[] = [
     { campo: "nombre", label: "Nombre" },
     { campo: "ciudad", label: "Ciudad" },
@@ -334,6 +364,7 @@ export function AperturasView() {
 
   return (
     <div className="p-6 space-y-6">
+      {confirmDeleteDialog}
       <SubmoduleToolbar
         busqueda={busqueda}
         onBusquedaChange={setBusqueda}
@@ -711,25 +742,127 @@ function DetalleEstudio({
   onEnableShare,
   onDisableShare,
   onRegenerateShare,
+  onUploadPortada,
+  onRemovePortada,
 }: {
   estudio: EstudioApertura;
   onBack: () => void;
-  onUpdate: (e: EstudioApertura, opts?: { flush?: boolean }) => void;
+  onUpdate: (e: EstudioApertura, opts?: { flush?: boolean; suppressSave?: boolean }) => void;
   onSetViabilidad: (v: EstadoViabilidad) => void;
   onSetActividad: (v: EstadoActividad) => void;
   onEnableShare: () => void;
   onDisableShare: () => void;
   onRegenerateShare: () => void;
+  onUploadPortada: (file: File) => void;
+  onRemovePortada: () => void;
 }) {
+  const { empresaActual } = useEmpresa();
   const [costes, setCostes] = useState<EstructuraCostes>(estudio.costes);
   const [facturacion, setFacturacion] = useState<EstructuraFacturacion>(estudio.facturacion);
   const [periodo, setPeriodo] = useState<Periodo>("mensual");
+
+  /* ── Modo Presentación (PRP-038, Fase 7) ── */
+  const [modoPresentacion, setModoPresentacion] = useState(false);
+
+  /* ── Estado del flujo "Rellenar con IA" (PRP-038) ── */
+  const [iaDraft, setIaDraft] = useState<DraftIAEstudio>({});
+  const [iaSnapshot, setIaSnapshot] = useState<EstudioApertura | null>(null);
+  type IaDialogState =
+    | { tipo: "bloque"; bloque: BloqueIAKey }
+    | { tipo: "completa" }
+    | null;
+  const [iaDialogState, setIaDialogState] = useState<IaDialogState>(null);
+  const iaDialogOpen = iaDialogState !== null;
+  const hayDraftIA = Object.keys(iaDraft).length > 0;
+  const numBloquesDraft = Object.keys(iaDraft).length;
+
+  const recibirDraftIA = useCallback(
+    (draft: DraftIAEstudio, _bloques: BloqueIAAnyKey[]) => {
+      // Snapshot solo la primera vez (para "Descartar")
+      setIaSnapshot((prev) => prev ?? estudio);
+      setIaDraft((prev) => ({ ...prev, ...draft }));
+      // Aplica el draft al estudio sin disparar scheduleSave
+      const merged = aplicarDraftCompleto(estudio, draft);
+      onUpdate(merged, { suppressSave: true });
+    },
+    [estudio, onUpdate],
+  );
+
+  const limpiarBloqueIA = useCallback((bloque: keyof DraftIAEstudio) => {
+    setIaDraft((prev) => {
+      if (!(bloque in prev)) return prev;
+      const next = { ...prev };
+      delete next[bloque];
+      // Si ya no queda nada en draft, liberar snapshot
+      if (Object.keys(next).length === 0) setIaSnapshot(null);
+      return next;
+    });
+  }, []);
+
+  const clearIaField = useCallback((bloque: keyof DraftIAEstudio, campo: string) => {
+    setIaDraft((prev) => {
+      const bloqueDraft = prev[bloque] as Record<string, unknown> | undefined;
+      if (!bloqueDraft || !(campo in bloqueDraft)) return prev;
+      const nuevoBloque = { ...bloqueDraft };
+      delete nuevoBloque[campo];
+      const next = { ...prev };
+      if (Object.keys(nuevoBloque).length === 0) {
+        delete next[bloque];
+      } else {
+        (next as Record<string, unknown>)[bloque] = nuevoBloque;
+      }
+      if (Object.keys(next).length === 0) setIaSnapshot(null);
+      return next;
+    });
+  }, []);
+
+  const aceptarBloqueIA = useCallback(
+    (bloque: keyof DraftIAEstudio) => {
+      // El estudio ya está mergeado en memoria → solo flush y limpiar
+      onUpdate(estudio, { flush: true });
+      limpiarBloqueIA(bloque);
+    },
+    [estudio, onUpdate, limpiarBloqueIA],
+  );
+
+  const descartarBloqueIA = useCallback(
+    (bloque: keyof DraftIAEstudio) => {
+      // Restaurar el campo correspondiente del snapshot pre-IA
+      if (iaSnapshot) {
+        let restaurado: EstudioApertura = estudio;
+        if (bloque === "datos") restaurado = { ...restaurado, datos: iaSnapshot.datos };
+        else if (bloque === "local") restaurado = { ...restaurado, local: iaSnapshot.local };
+        else if (bloque === "marca") restaurado = { ...restaurado, imagenMarca: iaSnapshot.imagenMarca };
+        else if (bloque === "gastronomia") restaurado = { ...restaurado, propuesta: iaSnapshot.propuesta };
+        else if (bloque === "ocupacion") restaurado = { ...restaurado, ocupacion: iaSnapshot.ocupacion };
+        onUpdate(restaurado, { suppressSave: true });
+      }
+      limpiarBloqueIA(bloque);
+    },
+    [estudio, iaSnapshot, onUpdate, limpiarBloqueIA],
+  );
+
+  const aceptarTodoIA = useCallback(() => {
+    // El estudio ya tiene todos los drafts mergeados en memoria → flush y limpiar
+    onUpdate(estudio, { flush: true });
+    setIaDraft({});
+    setIaSnapshot(null);
+  }, [estudio, onUpdate]);
+
+  const descartarTodoIA = useCallback(() => {
+    if (iaSnapshot) {
+      onUpdate(iaSnapshot, { suppressSave: true });
+    }
+    setIaDraft({});
+    setIaSnapshot(null);
+  }, [iaSnapshot, onUpdate]);
+
   const [hoveredKpi, setHoveredKpi] = useState<KpiKey | null>(null);
   const [facturacionPeriodo, setFacturacionPeriodo] = useState<Periodo>("mensual");
   const [costesPeriodo, setCostesPeriodo] = useState<Periodo>("mensual");
   const [facturacionTab, setFacturacionTab] = useState<"facturacion" | "ocupacion" | "ticket">("facturacion");
   const [costesTab, setCostesTab] = useState<"pilares" | "equilibrio">("pilares");
-  const [mainTab, setMainTab] = useState<"datos" | "concepto" | "facturacion" | "costes" | "escenarios" | "inversion">("escenarios");
+  const [mainTab, setMainTab] = useState<"datos" | "concepto" | "facturacion" | "costes" | "escenarios" | "inversion">("datos");
   const [expandEscFact, setExpandEscFact] = useState(false);
   const [expandEscCostes, setExpandEscCostes] = useState(false);
   const factor = PERIODO_FACTOR[periodo];
@@ -767,8 +900,18 @@ function DetalleEstudio({
     setPilarFact(key, { ...pilar, partidas: [...pilar.partidas, nuevaPartidaFacturacion()] });
   };
 
-  const removePartidaFact = (key: FactPilarKey, partidaId: string) => {
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
+
+  const removePartidaFact = async (key: FactPilarKey, partidaId: string) => {
     const pilar = facturacion[key];
+    const partida = pilar.partidas.find((p) => p.id === partidaId);
+    const ok = await confirmDelete({
+      title: "¿Borrar esta partida de facturación?",
+      description: partida?.nombre
+        ? `Se eliminará "${partida.nombre}". Esta acción no se puede deshacer.`
+        : "Se eliminará la partida. Esta acción no se puede deshacer.",
+    });
+    if (!ok) return;
     setPilarFact(key, { ...pilar, partidas: pilar.partidas.filter((p) => p.id !== partidaId) });
   };
 
@@ -783,8 +926,16 @@ function DetalleEstudio({
     setPilar(key, { ...pilar, partidas: [...pilar.partidas, nuevaPartida()] });
   };
 
-  const removePartida = (key: PilarKey, partidaId: string) => {
+  const removePartida = async (key: PilarKey, partidaId: string) => {
     const pilar = costes[key];
+    const partida = pilar.partidas.find((p) => p.id === partidaId);
+    const ok = await confirmDelete({
+      title: "¿Borrar esta partida de costes?",
+      description: partida?.nombre
+        ? `Se eliminará "${partida.nombre}". Esta acción no se puede deshacer.`
+        : "Se eliminará la partida. Esta acción no se puede deshacer.",
+    });
+    if (!ok) return;
     setPilar(key, { ...pilar, partidas: pilar.partidas.filter((p) => p.id !== partidaId) });
   };
 
@@ -834,6 +985,7 @@ function DetalleEstudio({
 
   return (
     <div className="p-6 space-y-6">
+      {confirmDeleteDialog}
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="h-4 w-4" /></Button>
         <div className="min-w-0">
@@ -841,6 +993,43 @@ function DetalleEstudio({
           <p className="text-muted-foreground text-sm truncate">{estudio.datos.ciudad} — {estudio.datos.zona}</p>
         </div>
         <div className="ml-auto flex items-center gap-1.5 shrink-0">
+          {/* Toggle Software / Presentación */}
+          <div className="inline-flex rounded-md border bg-muted/50 p-0.5">
+            <button
+              type="button"
+              onClick={() => setModoPresentacion(false)}
+              className={`inline-flex items-center gap-1.5 rounded px-2.5 h-7 text-xs font-medium transition-colors ${
+                !modoPresentacion
+                  ? "bg-background shadow-sm text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <MonitorIcon className="h-3 w-3" />
+              Software
+            </button>
+            <button
+              type="button"
+              onClick={() => setModoPresentacion(true)}
+              className={`inline-flex items-center gap-1.5 rounded px-2.5 h-7 text-xs font-medium transition-colors ${
+                modoPresentacion
+                  ? "bg-background shadow-sm text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <PresentationIcon className="h-3 w-3" />
+              Presentación
+            </button>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => setIaDialogState({ tipo: "completa" })}
+            className="gap-1.5 bg-amber-600 text-white hover:bg-amber-700"
+            title="Genera todas las pestañas a la vez con un prompt o documentos"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            Generar apertura completa
+          </Button>
           <EstadoBadgeMenu
             value={estudio.viabilidad}
             options={[
@@ -867,6 +1056,37 @@ function DetalleEstudio({
         </div>
       </div>
 
+      {hayDraftIA && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+          <div className="flex items-center gap-2 text-sm text-amber-900">
+            <Sparkles className="h-4 w-4" />
+            <span>
+              <strong>{numBloquesDraft}</strong> bloque{numBloquesDraft === 1 ? "" : "s"} con sugerencias IA sin confirmar. Revisa cada pestaña o decide globalmente:
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={descartarTodoIA}
+              className="gap-1.5 border-amber-300 text-amber-800 hover:bg-amber-100"
+            >
+              Descartar todo
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={aceptarTodoIA}
+              className="gap-1.5 bg-amber-600 text-white hover:bg-amber-700"
+            >
+              <Check className="h-3.5 w-3.5" />
+              Aceptar todo
+            </Button>
+          </div>
+        </div>
+      )}
+
       <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as typeof mainTab)}>
         <div className="flex items-center justify-between gap-3">
           <TabsList className="h-11 gap-1 rounded-xl border bg-muted/50 p-1 shadow-sm">
@@ -880,7 +1100,7 @@ function DetalleEstudio({
               value="concepto"
               className="h-9 gap-1.5 rounded-lg px-4 font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md"
             >
-              <Sparkles className="h-4 w-4" />Concepto
+              <Lightbulb className="h-4 w-4" />Concepto
             </TabsTrigger>
             <TabsTrigger
               value="facturacion"
@@ -1238,15 +1458,31 @@ function DetalleEstudio({
         </TabsContent>
 
         {/* ── DATOS DEL PROYECTO ── */}
-        <TabsContent value="datos">
-          <Card>
+        <TabsContent value="datos" className="space-y-2">
+          <div className="flex items-center justify-end">
+            <BotonRellenarIA onClick={() => setIaDialogState({ tipo: "bloque", bloque: "datos" })} />
+          </div>
+          <Card className={iaDraft.datos ? "ring-1 ring-amber-200" : undefined}>
             <CardContent className="p-6">
               <DatosEditor
                 datos={estudio.datos}
-                onChange={(datos) => onUpdate({ ...estudio, datos })}
+                onChange={(datos) =>
+                  onUpdate(
+                    { ...estudio, datos },
+                    { suppressSave: !!iaDraft.datos },
+                  )
+                }
+                iaDraft={iaDraft.datos}
+                onClearIaField={(campo) => clearIaField("datos", campo)}
               />
             </CardContent>
           </Card>
+          <BarraConfirmarIA
+            activo={!!iaDraft.datos}
+            resumen="Hay propuesta de IA en Datos del proyecto sin confirmar."
+            onAceptar={() => aceptarBloqueIA("datos")}
+            onDescartar={() => descartarBloqueIA("datos")}
+          />
         </TabsContent>
 
         {/* ── CONCEPTO (Local + Imagen de marca + Gastronomía) ── */}
@@ -1272,26 +1508,79 @@ function DetalleEstudio({
                 <ChefHat className="h-4 w-4" />Gastronomía
               </TabsTrigger>
             </TabsList>
-            <TabsContent value="local" className="mt-4">
+            <TabsContent value="local" className="mt-4 space-y-2">
+              <div className="flex items-center justify-end">
+                <BotonRellenarIA onClick={() => setIaDialogState({ tipo: "bloque", bloque: "local" })} />
+              </div>
               <LocalTab
                 estudioId={estudio.id}
                 local={estudio.local}
-                onChange={(local, opts) => onUpdate({ ...estudio, local }, opts)}
+                onChange={(local, opts) =>
+                  onUpdate(
+                    { ...estudio, local },
+                    { ...opts, suppressSave: !!iaDraft.local },
+                  )
+                }
+                portada={{
+                  imagen: estudio.imagen,
+                  nombre: estudio.datos.nombre,
+                  onUpload: onUploadPortada,
+                  onRemove: onRemovePortada,
+                }}
+                iaDraft={iaDraft.local}
+                onClearIaField={(_seccion, campo) => clearIaField("local", campo)}
+              />
+              <BarraConfirmarIA
+                activo={!!iaDraft.local}
+                resumen="Hay propuesta de IA en Local sin confirmar."
+                onAceptar={() => aceptarBloqueIA("local")}
+                onDescartar={() => descartarBloqueIA("local")}
               />
             </TabsContent>
-            <TabsContent value="marca" className="mt-4">
+            <TabsContent value="marca" className="mt-4 space-y-2">
+              <div className="flex items-center justify-end">
+                <BotonRellenarIA onClick={() => setIaDialogState({ tipo: "bloque", bloque: "marca" })} />
+              </div>
               <MarcaTab
                 estudioId={estudio.id}
                 marca={estudio.imagenMarca}
-                onChange={(imagenMarca, opts) => onUpdate({ ...estudio, imagenMarca }, opts)}
+                onChange={(imagenMarca, opts) =>
+                  onUpdate(
+                    { ...estudio, imagenMarca },
+                    { ...opts, suppressSave: !!iaDraft.marca },
+                  )
+                }
+                iaDraft={iaDraft.marca}
+                onClearIaField={(campo) => clearIaField("marca", campo)}
+              />
+              <BarraConfirmarIA
+                activo={!!iaDraft.marca}
+                resumen="Hay propuesta de IA en Imagen de marca sin confirmar."
+                onAceptar={() => aceptarBloqueIA("marca")}
+                onDescartar={() => descartarBloqueIA("marca")}
               />
             </TabsContent>
-            <TabsContent value="gastronomia" className="mt-4">
+            <TabsContent value="gastronomia" className="mt-4 space-y-2">
+              <div className="flex items-center justify-end">
+                <BotonRellenarIA onClick={() => setIaDialogState({ tipo: "bloque", bloque: "gastronomia" })} />
+              </div>
               <GastronomiaTab
                 estudioId={estudio.id}
                 propuesta={estudio.propuesta}
-                ventasMensuales={ventas}
-                onChange={(propuesta, opts) => onUpdate({ ...estudio, propuesta }, opts)}
+                onChange={(propuesta, opts) =>
+                  onUpdate(
+                    { ...estudio, propuesta },
+                    { ...opts, suppressSave: !!iaDraft.gastronomia },
+                  )
+                }
+                iaDraft={iaDraft.gastronomia}
+                onClearIaField={(campo) => clearIaField("gastronomia", campo)}
+              />
+              <BarraConfirmarIA
+                activo={!!iaDraft.gastronomia}
+                resumen="Hay propuesta de IA en Gastronomía sin confirmar."
+                onAceptar={() => aceptarBloqueIA("gastronomia")}
+                onDescartar={() => descartarBloqueIA("gastronomia")}
               />
             </TabsContent>
           </Tabs>
@@ -1450,14 +1739,29 @@ function DetalleEstudio({
           })()}
             </TabsContent>
 
-            <TabsContent value="ocupacion" className="mt-4">
+            <TabsContent value="ocupacion" className="mt-4 space-y-2">
+              <div className="flex items-center justify-end">
+                <BotonRellenarIA onClick={() => setIaDialogState({ tipo: "bloque", bloque: "ocupacion" })} />
+              </div>
               <OcupacionTab
                 ocupacion={estudio.ocupacion}
                 plazasTotales={
                   (estudio.local?.caracteristicas?.plazasInterior ?? 0) +
                   (estudio.local?.caracteristicas?.plazasTerraza ?? 0)
                 }
-                onChange={(ocupacion, opts) => onUpdate({ ...estudio, ocupacion }, opts)}
+                onChange={(ocupacion, opts) =>
+                  onUpdate(
+                    { ...estudio, ocupacion },
+                    { ...opts, suppressSave: !!iaDraft.ocupacion },
+                  )
+                }
+                iaActiva={!!iaDraft.ocupacion}
+              />
+              <BarraConfirmarIA
+                activo={!!iaDraft.ocupacion}
+                resumen="Hay propuesta de IA en Ocupación sin confirmar."
+                onAceptar={() => aceptarBloqueIA("ocupacion")}
+                onDescartar={() => descartarBloqueIA("ocupacion")}
               />
             </TabsContent>
 
@@ -2099,6 +2403,23 @@ function DetalleEstudio({
           </Tabs>
         </TabsContent>
       </Tabs>
+
+      <RellenoIADialog
+        open={iaDialogOpen}
+        onOpenChange={(o) => {
+          if (!o) setIaDialogState(null);
+        }}
+        modo={iaDialogState ?? { tipo: "completa" }}
+        onDraft={recibirDraftIA}
+      />
+
+      {modoPresentacion && (
+        <ModoPresentacion
+          estudio={estudio}
+          empresaSlug={empresaActual.id}
+          onExit={() => setModoPresentacion(false)}
+        />
+      )}
     </div>
   );
 }
@@ -2327,8 +2648,25 @@ function PilarFactBloque({
 }
 
 /* ── Editor inline de datos del proyecto ── */
-function DatosEditor({ datos, onChange }: { datos: DatosProyecto; onChange: (d: DatosProyecto) => void }) {
-  const set = (key: keyof DatosProyecto, val: string | number) => onChange({ ...datos, [key]: val });
+function DatosEditor({
+  datos,
+  onChange,
+  iaDraft,
+  onClearIaField,
+}: {
+  datos: DatosProyecto;
+  onChange: (d: DatosProyecto) => void;
+  iaDraft?: import("@/features/direccion/types/aperturas-ia").DraftDatos;
+  onClearIaField?: (campo: keyof DatosProyecto) => void;
+}) {
+  const ia = (campo: keyof DatosProyecto): boolean => {
+    if (!iaDraft) return false;
+    return (iaDraft as Record<string, unknown>)[campo as string] !== undefined;
+  };
+  const set = (key: keyof DatosProyecto, val: string | number) => {
+    onChange({ ...datos, [key]: val });
+    onClearIaField?.(key);
+  };
 
   const textFields: { key: keyof DatosProyecto; label: string }[] = [
     { key: "nombre", label: "Nombre" },
@@ -2352,7 +2690,10 @@ function DatosEditor({ datos, onChange }: { datos: DatosProyecto; onChange: (d: 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
         {textFields.map((f) => (
           <div key={f.key}>
-            <Label className="text-muted-foreground text-xs">{f.label}</Label>
+            <div className="flex items-center gap-1.5">
+              <Label className="text-muted-foreground text-xs">{f.label}</Label>
+              {ia(f.key) && <BadgeSugerenciaIA />}
+            </div>
             <Input
               value={(datos[f.key] as string) ?? ""}
               onChange={(e) => set(f.key, e.target.value)}
@@ -2361,9 +2702,12 @@ function DatosEditor({ datos, onChange }: { datos: DatosProyecto; onChange: (d: 
         ))}
         {numberFields.map((f) => (
           <div key={f.key}>
-            <Label className="text-muted-foreground text-xs">
-              {f.label}{f.suffix ? ` (${f.suffix})` : ""}
-            </Label>
+            <div className="flex items-center gap-1.5">
+              <Label className="text-muted-foreground text-xs">
+                {f.label}{f.suffix ? ` (${f.suffix})` : ""}
+              </Label>
+              {ia(f.key) && <BadgeSugerenciaIA />}
+            </div>
             <Input
               type="number"
               value={(datos[f.key] as number) || ""}
@@ -2373,11 +2717,17 @@ function DatosEditor({ datos, onChange }: { datos: DatosProyecto; onChange: (d: 
         ))}
       </div>
       <div>
-        <Label className="text-muted-foreground text-xs">Competencia</Label>
+        <div className="flex items-center gap-1.5">
+          <Label className="text-muted-foreground text-xs">Competencia</Label>
+          {ia("competencia") && <BadgeSugerenciaIA />}
+        </div>
         <Input value={datos.competencia} onChange={(e) => set("competencia", e.target.value)} />
       </div>
       <div>
-        <Label className="text-muted-foreground text-xs">Observaciones</Label>
+        <div className="flex items-center gap-1.5">
+          <Label className="text-muted-foreground text-xs">Observaciones</Label>
+          {ia("observaciones") && <BadgeSugerenciaIA />}
+        </div>
         <Textarea
           value={datos.observaciones ?? ""}
           onChange={(e) => set("observaciones", e.target.value)}

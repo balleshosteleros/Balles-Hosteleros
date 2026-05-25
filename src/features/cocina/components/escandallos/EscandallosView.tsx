@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback, useEffect, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { useTabQuery } from "@/shared/hooks/use-tab-query";
 import {
   crearEscandalloVacio, calcularMargen,
   generateShareToken, registerSharedEscandallo, unregisterSharedEscandallo,
@@ -707,7 +708,7 @@ export function EscandallosView() {
   const empresaConfig = configs[empresaActual.id] ?? defaultConfig;
 
   const [view, setView] = useState<"lista" | "pipeline">("lista");
-  const [tab, setTab] = useState("escandallos");
+  const [tab, setTab] = useTabQuery(["escandallos", "config"] as const, "escandallos");
   const [search, setSearch] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
@@ -1008,7 +1009,7 @@ export function EscandallosView() {
         </CardContent></Card>
       </div>
 
-      <Tabs value={tab} onValueChange={setTab}>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "escandallos" | "config")}>
         <TabsContent value="escandallos" className="space-y-4 mt-4">
           {selected.size > 0 && (
             <div className="flex gap-1.5 justify-end">

@@ -2,6 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
+import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   altaEmailContent,
   bajaEmailContent,
@@ -22,12 +24,8 @@ async function getContext() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { supabase, user: null, empresaId: null as string | null, empresaNombre: "" };
-  const { data } = await supabase
-    .from("profiles")
-    .select("empresa_id")
-    .eq("user_id", user.id)
-    .single();
-  const empresaId = (data?.empresa_id as string | undefined) ?? null;
+  const empresaId = await getEmpresaActivaForUser(supabase as unknown as SupabaseClient, user.id);
+
   let empresaNombre = "";
   if (empresaId) {
     const { data: e } = await supabase.from("empresas").select("nombre").eq("id", empresaId).maybeSingle();

@@ -78,11 +78,37 @@ export async function listEmpleados() {
       );
     }
 
-    const enriched = (data ?? []).map((e) => ({
+    // Dedup por user_id: si el mismo usuario tiene ficha en varias empresas
+    // (p.ej. director multiempresa), la query con OR lo trae 2 veces — una
+    // por su ficha principal en esta empresa y otra por la ficha de la otra
+    // empresa incluida vía user_empresas. Nos quedamos con UNA fila por
+    // user_id, prefiriendo la ficha de esta empresa (es_principal).
+    const porUser = new Map<string, typeof data[number]>();
+    const sinUser: typeof data = [];
+    for (const e of data ?? []) {
+      const uid = e.user_id as string | null;
+      if (!uid) {
+        sinUser.push(e);
+        continue;
+      }
+      const prev = porUser.get(uid);
+      if (!prev) {
+        porUser.set(uid, e);
+        continue;
+      }
+      const prevPrincipal = prev.empresa_id === empresaId;
+      const currPrincipal = e.empresa_id === empresaId;
+      if (currPrincipal && !prevPrincipal) porUser.set(uid, e);
+    }
+
+    const enriched = [...porUser.values(), ...sinUser].map((e) => ({
       ...e,
       es_principal: e.empresa_id === empresaId,
       empresas_acceso: empresasPorUser[e.user_id as string] ?? [],
     }));
+    enriched.sort((a, b) =>
+      String(a.nombre ?? "").localeCompare(String(b.nombre ?? ""), "es"),
+    );
 
     return { ok: true, data: enriched };
   } catch (err) {

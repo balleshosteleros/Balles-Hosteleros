@@ -6,8 +6,8 @@ import {
   TipoProducto,
   ESTADOS_PRODUCTO, ESTADO_COLOR, EstadoProducto, type Producto, type Conservacion,
   type PreparacionVenta,
-  IVA_OPCIONES, CONSERVACION_OPCIONES, UNIDADES_PRODUCTO, getFormatosPorUnidad, getUnidadDeFormato,
-  PREPARACION_OPCIONES, getPartidasPorPreparacion,
+  getUnidadDeFormato,
+  getPartidasPorPreparacion,
 } from "@/features/logistica/data/productos";
 import {
   listProductos, createProducto, updateProducto, deleteProducto,
@@ -30,11 +30,45 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { IOActions } from "@/shared/io";
+import { capitalizeText } from "@/shared/lib/utils";
 import {
   productosCompraIO,
   productosVentaIO,
   productosElaboracionIO,
 } from "@/features/logistica/io/productos.io";
+import { ImportadorIADialog } from "@/features/logistica/components/ImportadorIADialog";
+import { GestorCategoriasProducto } from "@/features/logistica/components/productos/GestorCategoriasProducto";
+import { GestorCatalogoEstandar } from "@/features/logistica/components/productos/GestorCatalogoEstandar";
+import { listCategoriasProducto } from "@/features/logistica/actions/categorias-producto-actions";
+import {
+  listUnidadesMedida,
+  createUnidadMedida,
+  updateUnidadMedida,
+  deleteUnidadMedida,
+  listIvas,
+  createIva,
+  updateIva,
+  deleteIva,
+  listConservaciones,
+  createConservacion,
+  updateConservacion,
+  deleteConservacion,
+  listPreparaciones,
+  createPreparacion,
+  updatePreparacion,
+  deletePreparacion,
+} from "@/features/logistica/actions/catalogos-estandar-actions";
+import {
+  analizarUnidadesIA,
+  guardarUnidadesIA,
+  analizarIvasIA,
+  guardarIvasIA,
+  analizarConservacionesIA,
+  guardarConservacionesIA,
+  analizarPreparacionesIA,
+  guardarPreparacionesIA,
+} from "@/features/logistica/actions/importador-catalogos-ia-actions";
+import { useCatalogosLogistica } from "@/features/logistica/hooks/useCatalogosLogistica";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -116,6 +150,7 @@ function ProductoDetalle({
   const categorias = categoriasOpts ?? [];
   const estadosList = estadosOpts ?? [...ESTADOS_PRODUCTO];
   const { empresaActual } = useEmpresa();
+  const catalogos = useCatalogosLogistica();
 
   const [nombre, setNombre] = useState(producto?.nombre ?? "");
   const [categoria, setCategoria] = useState(producto?.categoria ?? "");
@@ -178,7 +213,7 @@ function ProductoDetalle({
     }
   }, [esCompra, usarVigente, vigenteSnapshot, vigenteLoaded]);
 
-  const formatosUnidad = getFormatosPorUnidad(unidad);
+  const formatosUnidad = catalogos.formatosPorUnidad[unidad] ?? [];
   const partidasOpts = getPartidasPorPreparacion(preparacion);
 
   // Reset formato when unidad changes if current formato is not valid for new unidad.
@@ -315,7 +350,7 @@ function ProductoDetalle({
         <CardHeader className="pb-3">
           <Input
             value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
+            onChange={(e) => setNombre(capitalizeText(e.target.value))}
             placeholder="Nombre del producto"
             className="text-xl font-black tracking-tight h-auto py-1 w-full"
           />
@@ -342,7 +377,7 @@ function ProductoDetalle({
                   <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Sin especificar</SelectItem>
-                    {CONSERVACION_OPCIONES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    {catalogos.conservaciones.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -355,7 +390,7 @@ function ProductoDetalle({
                     <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Sin especificar</SelectItem>
-                      {PREPARACION_OPCIONES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                      {catalogos.preparaciones.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -391,7 +426,7 @@ function ProductoDetalle({
               <Select value={unidad} onValueChange={setUnidad}>
                 <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                 <SelectContent>
-                  {UNIDADES_PRODUCTO.map((u) => <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>)}
+                  {catalogos.unidades.map((u) => <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -449,7 +484,7 @@ function ProductoDetalle({
                   <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Sin especificar</SelectItem>
-                    {IVA_OPCIONES.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                    {catalogos.ivas.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -510,7 +545,7 @@ function ProductoDetalle({
                   <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Sin especificar</SelectItem>
-                    {IVA_OPCIONES.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                    {catalogos.ivas.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -674,6 +709,7 @@ function TablaProductos({
   umbralNaranja: number;
 }) {
   const { empresaActual } = useEmpresa();
+  const catalogos = useCatalogosLogistica();
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -696,6 +732,7 @@ function TablaProductos({
       : {},
   );
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
+  const [importadorIAOpen, setImportadorIAOpen] = useState(false);
 
   const esCompra = tipo === "compra";
   const esVenta = tipo === "venta";
@@ -829,7 +866,7 @@ function TablaProductos({
           label="Conservación"
           campo="conservacion"
           filtroTipo="lista"
-          opciones={[...CONSERVACION_OPCIONES]}
+          opciones={catalogos.conservaciones}
           filtros={filtros}
           onFiltrosChange={setFiltros}
           ordenable
@@ -850,7 +887,7 @@ function TablaProductos({
           label="Preparación"
           campo="preparacion"
           filtroTipo="lista"
-          opciones={[...PREPARACION_OPCIONES]}
+          opciones={catalogos.preparaciones}
           filtros={filtros}
           onFiltrosChange={setFiltros}
           ordenable
@@ -1053,6 +1090,7 @@ function TablaProductos({
                   : productosElaboracionIO
               }
               onSuccess={() => window.location.reload()}
+              onCustomImport={() => setImportadorIAOpen(true)}
             />
             <Button size="icon" variant={showConfig ? "default" : "outline"} className="h-9 w-9" onClick={onToggleConfig} title="Configuración" aria-label="Configuración">
               <Settings className="h-4 w-4" strokeWidth={1.75} />
@@ -1093,6 +1131,13 @@ function TablaProductos({
       </div>
       </ResizableColumnsProvider>
       <div className="text-xs text-muted-foreground text-right">{filtrados.length} de {productos.length} productos</div>
+
+      <ImportadorIADialog
+        open={importadorIAOpen}
+        onOpenChange={setImportadorIAOpen}
+        tipo={tipo}
+        onImportSuccess={() => window.location.reload()}
+      />
     </div>
   );
 }
@@ -1185,17 +1230,20 @@ function useProductConfig(tipo: TipoProducto) {
   const [estados, setEstRaw] = useState<string[]>([...ESTADOS_PRODUCTO]);
   const [umbralVerde, setUmbralVerdeRaw] = useState<number>(30);
   const [umbralNaranja, setUmbralNaranjaRaw] = useState<number>(40);
+  const [reloadCatKey, setReloadCatKey] = useState(0);
 
   useEffect(() => {
     setCatRaw([]);
     let cancelled = false;
     Promise.all([
-      getProductoConfigSection(tipo, "categorias"),
+      // Categorías ahora viven en la tabla `categorias_producto` (catálogo cerrado).
+      // Para crear/renombrar/borrar, ver GestorCategoriasProducto en el panel Configuración.
+      listCategoriasProducto(tipo),
       getProductoConfigSection("global", "estados"),
       getProductoConfigSection("venta", "umbral_coste"),
-    ]).then(([cats, ests, umbral]) => {
+    ]).then(([catsRes, ests, umbral]) => {
       if (cancelled) return;
-      setCatRaw(cats);
+      setCatRaw(catsRes.ok ? catsRes.data.map((c) => c.nombre) : []);
       setEstRaw(ests);
       const v = parseFloat(umbral?.[0] ?? "30");
       const n = parseFloat(umbral?.[1] ?? "40");
@@ -1203,12 +1251,9 @@ function useProductConfig(tipo: TipoProducto) {
       if (!Number.isNaN(n)) setUmbralNaranjaRaw(n);
     });
     return () => { cancelled = true; };
-  }, [tipo]);
+  }, [tipo, reloadCatKey]);
 
-  const setCategorias = async (v: string[]) => {
-    setCatRaw(v);
-    await saveProductoConfigSection(tipo, "categorias", v);
-  };
+  const reloadCategorias = () => setReloadCatKey((k) => k + 1);
   const setEstados = async (v: string[]) => {
     setEstRaw(v);
     await saveProductoConfigSection("global", "estados", v);
@@ -1219,7 +1264,7 @@ function useProductConfig(tipo: TipoProducto) {
     await saveProductoConfigSection("venta", "umbral_coste", [String(verde), String(naranja)]);
   };
 
-  return { categorias, setCategorias, estados, setEstados, umbralVerde, umbralNaranja, setUmbrales };
+  return { categorias, reloadCategorias, estados, setEstados, umbralVerde, umbralNaranja, setUmbrales };
 }
 
 /* ─── LIST MANAGER: sección editable (categorías / estados) ─── */
@@ -1236,7 +1281,7 @@ function ListManager({ title, items, onChange, readOnly = false }: {
   const startEdit = (i: number) => { setEditIdx(i); setEditVal(items[i]); };
   const confirmEdit = () => {
     if (editIdx === null) return;
-    const trimmed = editVal.trim();
+    const trimmed = capitalizeText(editVal.trim());
     if (!trimmed) return;
     const next = [...items];
     next[editIdx] = trimmed;
@@ -1245,7 +1290,7 @@ function ListManager({ title, items, onChange, readOnly = false }: {
   };
   const remove = (i: number) => onChange(items.filter((_, idx) => idx !== i));
   const add = () => {
-    const trimmed = newVal.trim();
+    const trimmed = capitalizeText(newVal.trim());
     if (!trimmed || items.includes(trimmed)) return;
     onChange([...items, trimmed]);
     setNewVal("");
@@ -1262,7 +1307,7 @@ function ListManager({ title, items, onChange, readOnly = false }: {
                 <Input
                   autoFocus
                   value={editVal}
-                  onChange={(e) => setEditVal(e.target.value)}
+                  onChange={(e) => setEditVal(capitalizeText(e.target.value))}
                   onKeyDown={(e) => { if (e.key === "Enter") confirmEdit(); if (e.key === "Escape") setEditIdx(null); }}
                   className="h-7 text-sm flex-1"
                 />
@@ -1292,7 +1337,7 @@ function ListManager({ title, items, onChange, readOnly = false }: {
           <div className="flex items-center gap-2 px-3 py-1.5">
             <Input
               value={newVal}
-              onChange={(e) => setNewVal(e.target.value)}
+              onChange={(e) => setNewVal(capitalizeText(e.target.value))}
               onKeyDown={(e) => { if (e.key === "Enter") add(); }}
               placeholder={`Nueva ${title.toLowerCase().replace(/s$/, "")}…`}
               className="h-7 text-sm flex-1"
@@ -1429,19 +1474,128 @@ function UmbralCosteEditor({
 }
 
 function ConfigProductos({
-  categorias, setCategorias,
+  tipo, onCategoriasChanged,
   mostrarUmbralCoste = false, umbralVerde = 30, umbralNaranja = 40, onUmbralesChange,
 }: {
-  categorias: string[];
-  setCategorias: (v: string[]) => void;
+  tipo: TipoProducto;
+  onCategoriasChanged: () => void;
   mostrarUmbralCoste?: boolean;
   umbralVerde?: number;
   umbralNaranja?: number;
   onUmbralesChange?: (verde: number, naranja: number) => void;
 }) {
   return (
-    <div className="space-y-5">
-      <ListManager title="Categorías" items={categorias} onChange={setCategorias} />
+    <div className="space-y-6">
+      <GestorCategoriasProducto tipo={tipo} onChanged={onCategoriasChanged} />
+
+      {/* ── Catálogos transversales (mismos para los 3 tipos de producto) ── */}
+      <GestorCatalogoEstandar
+        titulo="Unidades de medida"
+        hint="Unidades base con las que se miden los productos (kg, L, ud…). Vienen 3 estándar; añade más si las necesitas."
+        campos={[
+          { key: "codigo", label: "Código (kg, L, ud…)", obligatorio: true, ancho: "w-32" },
+          { key: "label", label: "Etiqueta visible", ancho: "flex-1" },
+        ]}
+        itemPrincipal={(it) => it.codigo}
+        itemSecundario={(it) => (it.label !== it.codigo ? it.label : null)}
+        itemAPatch={(it) => ({ codigo: it.codigo, label: it.label })}
+        list={listUnidadesMedida}
+        create={(input) => createUnidadMedida({ codigo: input.codigo, label: input.label || input.codigo })}
+        update={(id, patch) => updateUnidadMedida(id, patch)}
+        remove={deleteUnidadMedida}
+        iaConfig={{
+          titulo: "Importar unidades de medida con IA",
+          campos: [
+            { key: "codigo", label: "Código", obligatorio: true, tipo: "texto" },
+            { key: "label", label: "Etiqueta", obligatorio: false, tipo: "texto" },
+          ],
+          analyze: analizarUnidadesIA,
+          save: guardarUnidadesIA,
+        }}
+      />
+
+      <GestorCatalogoEstandar
+        titulo="IVA"
+        hint="Tipos impositivos aplicables. España viene con los 4 estándar; añade otros si vendes en otros países."
+        campos={[
+          { key: "codigo", label: "Código (21%)", obligatorio: true, ancho: "w-24" },
+          { key: "porcentaje", label: "Porcentaje (21)", obligatorio: true, ancho: "w-28" },
+          { key: "label", label: "Etiqueta", ancho: "flex-1" },
+        ]}
+        itemPrincipal={(it) => it.codigo}
+        itemSecundario={(it) => it.label}
+        itemAPatch={(it) => ({ codigo: it.codigo, porcentaje: String(it.porcentaje), label: it.label ?? "" })}
+        list={listIvas}
+        create={(input) =>
+          createIva({
+            codigo: input.codigo,
+            porcentaje: parseFloat(input.porcentaje.replace(",", ".")) || 0,
+            label: input.label,
+          })
+        }
+        update={(id, patch) =>
+          updateIva(id, {
+            codigo: patch.codigo,
+            porcentaje: patch.porcentaje ? parseFloat(patch.porcentaje.replace(",", ".")) : undefined,
+            label: patch.label || null,
+          })
+        }
+        remove={deleteIva}
+        iaConfig={{
+          titulo: "Importar tipos de IVA con IA",
+          campos: [
+            { key: "codigo", label: "Código", obligatorio: true, tipo: "texto" },
+            { key: "porcentaje", label: "%", obligatorio: true, tipo: "texto" },
+            { key: "label", label: "Etiqueta", obligatorio: false, tipo: "texto" },
+          ],
+          analyze: analizarIvasIA,
+          save: guardarIvasIA,
+        }}
+      />
+
+      <GestorCatalogoEstandar
+        titulo="Conservación"
+        hint="Zonas de almacenaje según temperatura (APPCC). Vienen las 4 estándar."
+        campos={[
+          { key: "nombre", label: "Nombre", obligatorio: true, ancho: "flex-1" },
+          { key: "rangoTemp", label: "Rango (ej: 0–8 °C)", ancho: "w-44" },
+        ]}
+        itemPrincipal={(it) => it.nombre}
+        itemSecundario={(it) => it.rango_temp}
+        itemAPatch={(it) => ({ nombre: it.nombre, rangoTemp: it.rango_temp ?? "" })}
+        list={listConservaciones}
+        create={(input) => createConservacion({ nombre: input.nombre, rangoTemp: input.rangoTemp })}
+        update={(id, patch) => updateConservacion(id, { nombre: patch.nombre, rangoTemp: patch.rangoTemp ?? null })}
+        remove={deleteConservacion}
+        iaConfig={{
+          titulo: "Importar modos de conservación con IA",
+          campos: [
+            { key: "nombre", label: "Nombre", obligatorio: true, tipo: "texto" },
+            { key: "rangoTemp", label: "Rango temperatura", obligatorio: false, tipo: "texto" },
+          ],
+          analyze: analizarConservacionesIA,
+          save: guardarConservacionesIA,
+        }}
+      />
+
+      <GestorCatalogoEstandar
+        titulo="Preparación"
+        hint="Zonas de preparación del establecimiento (Barra, Cocina…)."
+        campos={[{ key: "nombre", label: "Nombre", obligatorio: true }]}
+        itemPrincipal={(it) => it.nombre}
+        itemAPatch={(it) => ({ nombre: it.nombre })}
+        list={listPreparaciones}
+        create={(input) => createPreparacion({ nombre: input.nombre })}
+        update={(id, patch) => updatePreparacion(id, { nombre: patch.nombre })}
+        remove={deletePreparacion}
+        iaConfig={{
+          titulo: "Importar modos de preparación con IA",
+          campos: [{ key: "nombre", label: "Nombre", obligatorio: true, tipo: "texto" }],
+          analyze: analizarPreparacionesIA,
+          save: guardarPreparacionesIA,
+        }}
+      />
+
       {mostrarUmbralCoste && onUmbralesChange && (
         <UmbralCosteEditor
           umbralVerde={umbralVerde}
@@ -1531,15 +1685,6 @@ export function ProductosView() {
           <Badge variant="secondary" className="text-[10px] ml-1">{countCompra}</Badge>
         </Button>
         <Button
-          variant={tipoActivo === "venta" ? "default" : "outline"}
-          className="gap-2"
-          onClick={() => { setTipoActivo("venta"); setShowConfig(false); }}
-        >
-          <Store className="h-4 w-4" />
-          VENTA
-          <Badge variant="secondary" className="text-[10px] ml-1">{countVenta}</Badge>
-        </Button>
-        <Button
           variant={tipoActivo === "elaboracion" ? "default" : "outline"}
           className="gap-2"
           onClick={() => { setTipoActivo("elaboracion"); setShowConfig(false); }}
@@ -1547,6 +1692,15 @@ export function ProductosView() {
           <FlaskConical className="h-4 w-4" />
           ELABORACIONES
           <Badge variant="secondary" className="text-[10px] ml-1">{countElab}</Badge>
+        </Button>
+        <Button
+          variant={tipoActivo === "venta" ? "default" : "outline"}
+          className="gap-2"
+          onClick={() => { setTipoActivo("venta"); setShowConfig(false); }}
+        >
+          <Store className="h-4 w-4" />
+          VENTA
+          <Badge variant="secondary" className="text-[10px] ml-1">{countVenta}</Badge>
         </Button>
 
       </div>
@@ -1557,8 +1711,8 @@ export function ProductosView() {
             CONFIGURACIÓN — {tipoActivo === "compra" ? "PRODUCTOS DE COMPRA" : tipoActivo === "venta" ? "PRODUCTOS DE VENTA" : "ELABORACIONES"}
           </h3>
           <ConfigProductos
-            categorias={config.categorias}
-            setCategorias={config.setCategorias}
+            tipo={tipoActivo}
+            onCategoriasChanged={config.reloadCategorias}
             mostrarUmbralCoste={tipoActivo === "venta"}
             umbralVerde={config.umbralVerde}
             umbralNaranja={config.umbralNaranja}

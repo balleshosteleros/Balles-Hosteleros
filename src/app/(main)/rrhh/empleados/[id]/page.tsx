@@ -236,7 +236,7 @@ export default function FichaEmpleadoPage() {
       case "encuestas":
         return <SubmoduloPorEmpleadoPlaceholder modulo="Encuestas" path="/rrhh/encuestas" empleado={empleado} />;
       case "cuestionarios":
-        return <SubmoduloPorEmpleadoPlaceholder modulo="Cuestionarios" path="/rrhh/cuestionarios" empleado={empleado} />;
+        return <SubmoduloPorEmpleadoPlaceholder modulo="Cuestionarios" path="/calidad/cuestionarios" empleado={empleado} />;
     }
   }
 

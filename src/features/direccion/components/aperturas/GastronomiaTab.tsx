@@ -5,12 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ImagePlus, X, Plus, Trash2, ChefHat, ExternalLink, PieChart as PieIcon } from "lucide-react";
+import { ImagePlus, X, Plus, Trash2, ChefHat, ExternalLink } from "lucide-react";
 import {
-  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
-} from "recharts";
-import {
-  type CategoriaVentaEstimada,
   type PlatoDestacado,
   type PropuestaGastronomica,
 } from "@/features/direccion/data/aperturas";
@@ -19,36 +15,57 @@ import {
   deleteFotoStorage,
 } from "@/features/direccion/actions/estudios-apertura-actions";
 import { prepararFotoParaSubida } from "@/features/direccion/lib/foto-upload";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { BadgeSugerenciaIA } from "@/features/direccion/components/aperturas/shared/BadgeSugerenciaIA";
+import type { DraftGastronomia } from "@/features/direccion/types/aperturas-ia";
+
+/* Campos escalares de la propuesta gastronómica que la IA puede sugerir
+   y que pueden mostrar badge. Los arrays (platos, categoriasVenta) se
+   marcan a nivel de sección, no por campo. */
+type CampoGastronomiaIA =
+  | "concepto"
+  | "descripcion"
+  | "estiloServicio"
+  | "rangoPrecioMedio"
+  | "numeroPlatosCarta"
+  | "cartaUrl"
+  | "platos"
+  | "categoriasVenta";
 
 interface Props {
   estudioId: string;
   propuesta: PropuestaGastronomica;
-  ventasMensuales: number;
   onChange: (next: PropuestaGastronomica, opts?: { flush?: boolean }) => void;
   readOnly?: boolean;
-}
-
-const CAT_COLORS = [
-  "hsl(210 70% 55%)",
-  "hsl(40 90% 55%)",
-  "hsl(340 65% 55%)",
-  "hsl(150 60% 45%)",
-  "hsl(265 60% 60%)",
-  "hsl(20 80% 55%)",
-  "hsl(190 60% 50%)",
-  "hsl(95 50% 45%)",
-];
-
-function fmtEur(n: number) {
-  return n.toLocaleString("es-ES", { maximumFractionDigits: 0 });
+  /** Campos sugeridos por IA pendientes de aceptar — pinta badge ámbar. */
+  iaDraft?: DraftGastronomia;
+  /** Al editar un campo IA, AperturasView limpia esa marca (badge desaparece). */
+  onClearIaField?: (campo: CampoGastronomiaIA) => void;
 }
 
 const uid = () => `p-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
-export function GastronomiaTab({ estudioId, propuesta, ventasMensuales, onChange, readOnly = false }: Props) {
+export function GastronomiaTab({
+  estudioId,
+  propuesta,
+  onChange,
+  readOnly = false,
+  iaDraft,
+  onClearIaField,
+}: Props) {
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
+  const ia = (campo: CampoGastronomiaIA): boolean => {
+    if (!iaDraft) return false;
+    return (iaDraft as Record<string, unknown>)[campo] !== undefined;
+  };
   const set = (patch: Partial<PropuestaGastronomica>) => {
     if (readOnly) return;
     onChange({ ...propuesta, ...patch });
+    if (onClearIaField) {
+      for (const k of Object.keys(patch) as Array<keyof PropuestaGastronomica>) {
+        onClearIaField(k as CampoGastronomiaIA);
+      }
+    }
   };
 
   const updatePlatoFlush = (id: string, patch: Partial<PlatoDestacado>) =>
@@ -56,36 +73,6 @@ export function GastronomiaTab({ estudioId, propuesta, ventasMensuales, onChange
       { ...propuesta, platos: (propuesta.platos ?? []).map((p) => (p.id === id ? { ...p, ...patch } : p)) },
       { flush: true },
     );
-
-  const categorias = propuesta.categoriasVenta ?? [];
-  const totalPctCategorias = categorias.reduce((s, c) => s + (c.porcentaje || 0), 0);
-  const restante = Math.max(0, 100 - totalPctCategorias);
-
-  const setCategorias = (next: CategoriaVentaEstimada[]) => set({ categoriasVenta: next });
-
-  const addCategoria = () => {
-    setCategorias([
-      ...categorias,
-      { id: uid(), nombre: "", porcentaje: 0 },
-    ]);
-  };
-
-  const updateCategoria = (id: string, patch: Partial<CategoriaVentaEstimada>) => {
-    setCategorias(categorias.map((c) => (c.id === id ? { ...c, ...patch } : c)));
-  };
-
-  const updatePorcentaje = (id: string, raw: number) => {
-    const cat = categorias.find((c) => c.id === id);
-    if (!cat) return;
-    const otros = categorias.reduce((s, c) => s + (c.id === id ? 0 : (c.porcentaje || 0)), 0);
-    const max = Math.max(0, 100 - otros);
-    const valor = Math.max(0, Math.min(max, Number.isFinite(raw) ? raw : 0));
-    updateCategoria(id, { porcentaje: valor });
-  };
-
-  const removeCategoria = (id: string) => {
-    setCategorias(categorias.filter((c) => c.id !== id));
-  };
 
   const addPlato = () =>
     set({
@@ -100,6 +87,13 @@ export function GastronomiaTab({ estudioId, propuesta, ventasMensuales, onChange
 
   const removePlato = async (id: string) => {
     const plato = (propuesta.platos ?? []).find((p) => p.id === id);
+    const ok = await confirmDelete({
+      title: "¿Borrar este plato destacado?",
+      description: plato?.nombre
+        ? `Se eliminará "${plato.nombre}" y su foto. Esta acción no se puede deshacer.`
+        : "Se eliminará el plato y su foto. Esta acción no se puede deshacer.",
+    });
+    if (!ok) return;
     onChange(
       { ...propuesta, platos: (propuesta.platos ?? []).filter((p) => p.id !== id) },
       { flush: true },
@@ -142,6 +136,13 @@ export function GastronomiaTab({ estudioId, propuesta, ventasMensuales, onChange
 
   const removeFotoPlato = async (platoId: string) => {
     const plato = (propuesta.platos ?? []).find((p) => p.id === platoId);
+    const ok = await confirmDelete({
+      title: "¿Quitar la foto de este plato?",
+      description: plato?.nombre
+        ? `Se eliminará la foto de "${plato.nombre}". Podrás subir otra después.`
+        : "Se eliminará la foto del plato. Podrás subir otra después.",
+    });
+    if (!ok) return;
     const path = plato?.foto?.path;
     updatePlatoFlush(platoId, { foto: undefined });
     if (path) {
@@ -152,6 +153,7 @@ export function GastronomiaTab({ estudioId, propuesta, ventasMensuales, onChange
 
   return (
     <div className="space-y-4">
+      {confirmDeleteDialog}
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
@@ -161,57 +163,63 @@ export function GastronomiaTab({ estudioId, propuesta, ventasMensuales, onChange
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <Field label="Concepto culinario">
+            <Field label="Concepto culinario" badge={ia("concepto") ? <BadgeSugerenciaIA /> : null}>
               <Input
                 disabled={readOnly}
                 value={propuesta.concepto}
                 onChange={(e) => set({ concepto: e.target.value })}
                 placeholder="Ej. Cocina mediterránea de mercado"
+                className={ia("concepto") ? "bg-amber-50/60 border-amber-200" : undefined}
               />
             </Field>
-            <Field label="Estilo de servicio">
+            <Field label="Estilo de servicio" badge={ia("estiloServicio") ? <BadgeSugerenciaIA /> : null}>
               <Input
                 disabled={readOnly}
                 value={propuesta.estiloServicio}
                 onChange={(e) => set({ estiloServicio: e.target.value })}
                 placeholder="Ej. A la carta + menú degustación"
+                className={ia("estiloServicio") ? "bg-amber-50/60 border-amber-200" : undefined}
               />
             </Field>
-            <Field label="Rango precio medio">
+            <Field label="Rango precio medio" badge={ia("rangoPrecioMedio") ? <BadgeSugerenciaIA /> : null}>
               <Input
                 disabled={readOnly}
                 value={propuesta.rangoPrecioMedio}
                 onChange={(e) => set({ rangoPrecioMedio: e.target.value })}
                 placeholder="Ej. 30-45€"
+                className={ia("rangoPrecioMedio") ? "bg-amber-50/60 border-amber-200" : undefined}
               />
             </Field>
-            <Field label="Nº platos en carta">
+            <Field label="Nº platos en carta" badge={ia("numeroPlatosCarta") ? <BadgeSugerenciaIA /> : null}>
               <Input
                 disabled={readOnly}
                 type="number"
                 value={propuesta.numeroPlatosCarta || ""}
                 onChange={(e) => set({ numeroPlatosCarta: Number(e.target.value) })}
+                className={ia("numeroPlatosCarta") ? "bg-amber-50/60 border-amber-200" : undefined}
               />
             </Field>
           </div>
 
-          <Field label="Descripción de la propuesta">
+          <Field label="Descripción de la propuesta" badge={ia("descripcion") ? <BadgeSugerenciaIA /> : null}>
             <Textarea
               disabled={readOnly}
               value={propuesta.descripcion}
               onChange={(e) => set({ descripcion: e.target.value })}
               rows={4}
               placeholder="Producto, técnicas, proveedores, identidad gastronómica…"
+              className={ia("descripcion") ? "bg-amber-50/60 border-amber-200" : undefined}
             />
           </Field>
 
-          <Field label="Enlace a carta (PDF / web)">
+          <Field label="Enlace a carta (PDF / web)" badge={ia("cartaUrl") ? <BadgeSugerenciaIA /> : null}>
             <div className="flex items-center gap-2">
               <Input
                 disabled={readOnly}
                 value={propuesta.cartaUrl}
                 onChange={(e) => set({ cartaUrl: e.target.value })}
                 placeholder="https://…"
+                className={ia("cartaUrl") ? "bg-amber-50/60 border-amber-200" : undefined}
               />
               {propuesta.cartaUrl && (
                 <a
@@ -228,164 +236,14 @@ export function GastronomiaTab({ estudioId, propuesta, ventasMensuales, onChange
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <PieIcon className="h-4 w-4" />
-            Mix de ventas por categoría
-          </CardTitle>
-          <p className="text-xs text-muted-foreground mt-1">
-            Estima qué peso tendrá cada categoría sobre la facturación total. La suma no puede superar el 100%.
-            La facturación por categoría se calcula automáticamente a partir de la facturación mensual estimada
-            ({fmtEur(ventasMensuales)}€).
-          </p>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Tabla editable */}
-            <div className="space-y-2">
-              <table className="w-full text-sm">
-                <thead><tr className="border-b bg-muted/40">
-                  <th className="text-left p-2 font-medium">Categoría</th>
-                  <th className="text-left p-2 font-medium w-28">% sobre ventas</th>
-                  <th className="text-right p-2 font-medium">Facturación / mes</th>
-                  <th className="w-10"></th>
-                </tr></thead>
-                <tbody>
-                  {categorias.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="p-4 text-center text-xs text-muted-foreground">
-                        Aún no hay categorías. Añade la primera.
-                      </td>
-                    </tr>
-                  ) : (
-                    categorias.map((c) => {
-                      const factCat = ventasMensuales * (c.porcentaje || 0) / 100;
-                      return (
-                        <tr key={c.id} className="border-b hover:bg-muted/20">
-                          <td className="p-2">
-                            <Input
-                              disabled={readOnly}
-                              value={c.nombre}
-                              onChange={(e) => updateCategoria(c.id, { nombre: e.target.value })}
-                              placeholder="Ej. Bebidas, Entrantes, Postres…"
-                              className="h-8 text-sm"
-                            />
-                          </td>
-                          <td className="p-2">
-                            <div className="relative">
-                              <Input
-                                disabled={readOnly}
-                                type="number"
-                                min={0}
-                                max={100}
-                                step={1}
-                                value={c.porcentaje || ""}
-                                onChange={(e) => updatePorcentaje(c.id, Number(e.target.value))}
-                                className="h-8 text-sm pr-7 w-24"
-                              />
-                              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
-                            </div>
-                          </td>
-                          <td className="p-2 text-right font-medium">{fmtEur(factCat)}€</td>
-                          <td className="p-2">
-                            {!readOnly && (
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-7 w-7 text-muted-foreground hover:text-red-600"
-                                onClick={() => removeCategoria(c.id)}
-                                title="Eliminar categoría"
-                                aria-label="Eliminar categoría"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                  {!readOnly && (
-                    <tr>
-                      <td colSpan={4} className="p-2">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-8 text-xs text-muted-foreground hover:text-foreground"
-                          onClick={addCategoria}
-                          disabled={restante <= 0}
-                        >
-                          <Plus className="h-3.5 w-3.5 mr-1" />
-                          Añadir categoría
-                        </Button>
-                      </td>
-                    </tr>
-                  )}
-                  <tr className="bg-muted/30 font-semibold">
-                    <td className="p-2">TOTAL</td>
-                    <td className="p-2">
-                      <span className={totalPctCategorias > 100 ? "text-red-600" : ""}>
-                        {totalPctCategorias.toFixed(1)}%
-                      </span>
-                      <span className="text-xs text-muted-foreground font-normal ml-1">
-                        ({restante.toFixed(1)}% libre)
-                      </span>
-                    </td>
-                    <td className="p-2 text-right">
-                      {fmtEur(ventasMensuales * totalPctCategorias / 100)}€
-                    </td>
-                    <td></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            {/* Gráfica */}
-            <div>
-              {categorias.some((c) => (c.porcentaje || 0) > 0) ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={categorias
-                        .filter((c) => (c.porcentaje || 0) > 0)
-                        .map((c) => ({ name: c.nombre || "Sin nombre", value: c.porcentaje }))}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={110}
-                      label={({ name, value }) => `${name} ${value}%`}
-                    >
-                      {categorias
-                        .filter((c) => (c.porcentaje || 0) > 0)
-                        .map((_, i) => (
-                          <Cell key={i} fill={CAT_COLORS[i % CAT_COLORS.length]} />
-                        ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(v: number, _name, props) => {
-                        const fact = ventasMensuales * (v / 100);
-                        return [`${v}% — ${fmtEur(fact)}€`, props?.payload?.name];
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-[300px] flex items-center justify-center text-sm text-muted-foreground border rounded-md">
-                  Añade categorías y porcentajes para ver la gráfica
-                </div>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
+      <Card className={ia("platos") ? "ring-1 ring-amber-200" : undefined}>
         <CardHeader>
           <div className="flex items-start justify-between gap-2">
             <div>
-              <CardTitle className="text-base">Platos destacados</CardTitle>
+              <CardTitle className="text-base flex items-center gap-2">
+                Platos destacados
+                {ia("platos") && <BadgeSugerenciaIA />}
+              </CardTitle>
               <p className="text-xs text-muted-foreground mt-1">
                 Selecciona los platos que mejor representan la propuesta. Cada uno con foto, descripción y precio.
               </p>
@@ -440,10 +298,10 @@ function PlatoCard({
 }) {
   return (
     <div className="rounded-lg border overflow-hidden flex flex-col">
-      <div className="relative aspect-[4/3] bg-muted">
+      <div className="relative aspect-[4/3] bg-muted overflow-hidden">
         {plato.foto?.url ? (
           <>
-            <img src={plato.foto.url} alt={plato.nombre} className="w-full h-full object-cover" />
+            <img src={plato.foto.url} alt={plato.nombre} className="absolute inset-0 w-full h-full object-cover" />
             {!readOnly && (
               <button
                 type="button"
@@ -533,10 +391,21 @@ function PlatoCard({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+  badge,
+}: {
+  label: string;
+  children: React.ReactNode;
+  badge?: React.ReactNode;
+}) {
   return (
     <div>
-      <Label className="text-muted-foreground text-xs">{label}</Label>
+      <div className="flex items-center gap-1.5">
+        <Label className="text-muted-foreground text-xs">{label}</Label>
+        {badge}
+      </div>
       <div className="mt-1">{children}</div>
     </div>
   );

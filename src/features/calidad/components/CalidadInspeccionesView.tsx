@@ -1,24 +1,53 @@
 "use client";
 
-import { Card, CardContent } from "@/components/ui/card";
-import { FileSearch } from "lucide-react";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { LayoutPanelTop, FileText, ClipboardCheck } from "lucide-react";
+import { PresentacionTab } from "@/features/calidad/inspecciones/components/PresentacionTab";
+import { PlantillasListView } from "@/features/calidad/inspecciones/components/PlantillasListView";
+import { RealizadasView } from "@/features/calidad/inspecciones/components/RealizadasView";
+
+type Tab = "presentacion" | "plantillas" | "realizadas";
 
 export function CalidadInspeccionesView() {
+  const [tab, setTab] = useState<Tab>("realizadas");
+
   return (
-    <div className="space-y-6 p-6">
-      <Card>
-        <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-          <FileSearch className="h-12 w-12 text-muted-foreground/50 mb-4" />
-          <h3 className="text-lg font-semibold text-foreground">
-            Submódulo de Inspecciones listo para configurar
-          </h3>
-          <p className="text-sm text-muted-foreground max-w-md mt-2">
-            Aquí podrás registrar visitas de Sanidad, APPCC, ITV, mantenimiento
-            preventivo y cualquier inspección con sus actas y resultados. Dile
-            a Claude qué quieres añadir.
-          </p>
-        </CardContent>
-      </Card>
+    <div className="p-4 md:p-6 space-y-3">
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button
+          variant={tab === "presentacion" ? "default" : "outline"}
+          className="gap-2"
+          onClick={() => setTab("presentacion")}
+        >
+          <LayoutPanelTop className="h-4 w-4" />
+          PRESENTACIÓN
+        </Button>
+        <Button
+          variant={tab === "plantillas" ? "default" : "outline"}
+          className="gap-2"
+          onClick={() => setTab("plantillas")}
+        >
+          <FileText className="h-4 w-4" />
+          PLANTILLAS
+        </Button>
+        <Button
+          variant={tab === "realizadas" ? "default" : "outline"}
+          className="gap-2"
+          onClick={() => setTab("realizadas")}
+        >
+          <ClipboardCheck className="h-4 w-4" />
+          INSPECCIONES REALIZADAS
+        </Button>
+      </div>
+
+      {tab === "presentacion" ? (
+        <PresentacionTab />
+      ) : tab === "plantillas" ? (
+        <PlantillasListView />
+      ) : (
+        <RealizadasView />
+      )}
     </div>
   );
 }

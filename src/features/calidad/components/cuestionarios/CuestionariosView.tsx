@@ -18,7 +18,7 @@ import {
   ESTADO_CUESTIONARIO_COLOR,
   TIPO_PREGUNTA_CUESTIONARIO_LABEL,
   CATEGORIA_CUESTIONARIO_LABEL,
-} from "@/features/rrhh/data/cuestionarios";
+} from "@/features/calidad/data/cuestionarios";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -36,10 +36,15 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Search, Plus, MoreHorizontal, ArrowLeft, Trash2, GripVertical, AlertCircle,
+  Plus, MoreHorizontal, ArrowLeft, Trash2, GripVertical, AlertCircle,
   Users, Settings2, ListChecks, BarChart3, GraduationCap, CheckCircle2, XCircle,
-  Clock, Award,
+  Clock, Award, Settings,
 } from "lucide-react";
+import {
+  SubmoduleToolbar,
+  type ToolbarColumna,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
 
 function ListadoCuestionarios({
   cuestionarios, empleados, onSelect, onCrear,
@@ -51,6 +56,17 @@ function ListadoCuestionarios({
 }) {
   const [busq, setBusq] = useState("");
   const [filtro, setFiltro] = useState<"todos" | EstadoCuestionario>("todos");
+  const [showConfig, setShowConfig] = useState(false);
+
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "estado", label: "Estado", bloqueada: true },
+    { campo: "nombre", label: "Cuestionario", bloqueada: true },
+    { campo: "categoria", label: "Categoría" },
+    { campo: "notaCorte", label: "Nota corte" },
+    { campo: "aprobados", label: "Aprobados" },
+  ];
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[]>([]);
 
   const filtered = useMemo(() => {
     let list = cuestionarios;
@@ -65,18 +81,33 @@ function ListadoCuestionarios({
   const totalEmpleados = empleados.length;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-end">
-        <Button variant="primary" size="sm" onClick={onCrear}>
-          <Plus className="h-4 w-4" />Nuevo cuestionario
-        </Button>
-      </div>
+    <div className="space-y-4">
+      <SubmoduleToolbar
+        busqueda={busq}
+        onBusquedaChange={setBusq}
+        placeholderBusqueda="Buscar"
+        onNuevo={onCrear}
+        textoNuevo="Nuevo"
+        columnas={columnasDef}
+        columnasVisibles={columnasVisibles}
+        onColumnasVisiblesChange={setColumnasVisibles}
+        columnasOrden={columnasOrden}
+        onColumnasOrdenChange={setColumnasOrden}
+        extraDerecha={
+          <Button
+            size="icon"
+            variant={showConfig ? "default" : "outline"}
+            className="h-9 w-9"
+            onClick={() => setShowConfig((v) => !v)}
+            title="Configuración"
+            aria-label="Configuración"
+          >
+            <Settings className="h-4 w-4" strokeWidth={1.75} />
+          </Button>
+        }
+      />
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[200px] max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar cuestionario..." value={busq} onChange={(e) => setBusq(e.target.value)} className="pl-9" />
-        </div>
+      <div className="flex flex-wrap items-center gap-2">
         {(["todos", "activo", "borrador", "finalizado", "archivado"] as const).map((f) => (
           <Button key={f} size="sm" variant={filtro === f ? "default" : "outline"} onClick={() => setFiltro(f)}>
             {f === "todos" ? "Todos" : ESTADO_CUESTIONARIO_LABEL[f as EstadoCuestionario]}
