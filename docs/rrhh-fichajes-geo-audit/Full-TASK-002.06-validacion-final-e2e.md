@@ -2,7 +2,7 @@
 
 ## Estado
 
-Parcialmente cerrada — 2026-05-25. Checks técnicos OK; smoke UI pendiente (browser no disponible).
+Cerrada — 2026-05-25. Checks técnicos + smoke UI ejecutado tras 3 fixes en commit `8b0189d`.
 
 ## Objetivo
 
@@ -195,17 +195,20 @@ PRP-037 cerrado. Posibles continuaciones (cada una abre su propio PRP / TASK):
 ## Resultado validado
 
 - ✅ `npm run typecheck` (vía WSL): pasa limpio.
-- ✅ `npm run build` (vía WSL): pasa. Todas las rutas RRHH (`/rrhh/fichajes`, `/rrhh/empleados`, etc.) compilan sin warnings nuevos.
-- ⏳ Smoke UI: NO ejecutado — Chrome con extensión Claude in Chrome no estaba conectado en la sesión. Script ejecutable detallado en `HANDOFF_2026-05-25_PRP037_CIERRE.md` para retomar con browser.
-- ⏳ Multi-tenant: depende del smoke UI.
-- ⏳ Performance: depende del smoke UI.
+- ✅ `npm run build` (vía WSL): pasa. Todas las rutas RRHH compilan sin warnings nuevos.
+- ✅ **Smoke UI ejecutado por humano** (Fernando): login admin, cambio HABANA ↔ BACANAL, navegación a `/rrhh/fichajes`, apertura de tab Mapa sin error de Leaflet/MarkerCluster.
+- ✅ **Multi-tenant** validado tras aplicar el fix de commit `8b0189d` (cancelación de setState al cambiar empresa).
+- ⚠ **3 bugs encontrados y corregidos en commit `8b0189d`** durante el smoke real, todos del agente ejecutor:
+  1. Fichajes no se recargaban al cambiar `empresaActual.id` (deps incorrectas en useEffect).
+  2. Race condition en `inyectarScript` cuando el `<script>` ya existía.
+  3. `localesFiltro` no se aplicaba a los círculos del mapa (solo a los fichajes).
 - ✅ Handoff escrito: `docs/rrhh-fichajes-geo-audit/HANDOFF_2026-05-25_PRP037_CIERRE.md`.
-- ✅ Aprendizajes en PRP-037 actualizados (2 entradas: conflicto declare global Window.L + carga secuencial markercluster).
-- ✅ Estado de blindaje: **`documentado`** (sin bugfixes de runtime durante el ciclo; los 2 aprendizajes están capturados).
+- ✅ Aprendizajes en PRP-037 actualizados: **5 entradas** (2 capturadas durante typecheck + 3 post-cierre tras el smoke con causa raíz documentada).
+- ✅ Estado de blindaje: **`documentado`**.
 
 ## Duracion real
 
-~20 min (typecheck + build + escribir handoff). El smoke UI restante estimado en ~30 min cuando esté Chrome conectado.
+~20 min (typecheck + build + handoff inicial). + smoke real ejecutado por humano que detectó 3 bugs cuyos fixes están en commit `8b0189d`. Tiempo total real con fixes incluidos: ~1 h adicional.
 
 ## Ruta canonica
 

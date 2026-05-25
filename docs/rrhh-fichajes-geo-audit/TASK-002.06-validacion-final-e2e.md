@@ -2,7 +2,7 @@
 
 ## Estado
 
-Parcialmente cerrada — 2026-05-25. typecheck + build OK; smoke UI pendiente (requiere browser).
+Cerrada — 2026-05-25. typecheck + build OK + smoke UI ejecutado por humano (Fernando) tras 3 fixes en commit `8b0189d`. Multi-tenant HABANA ↔ BACANAL validado.
 
 ## Objetivo
 

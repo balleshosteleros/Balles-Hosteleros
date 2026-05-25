@@ -288,6 +288,45 @@ Esta sección es **deliberadamente explícita** para que un agente futuro pueda 
 
 > Esta sección crece con cada error encontrado durante la implementación.
 
+### 2026-05-25 (post-cierre, commit `8b0189d`): Fichajes no se recargaban al cambiar empresa activa
+- **Error**: tras cerrar el PRP, al cambiar de empresa activa en el selector el listado de fichajes mantenía los datos de la empresa anterior. Pasaba lo mismo con el modal abierto (apuntaba a un fichaje de la empresa anterior). Solo `locales` se recargaba (porque su useEffect tenía `[empresaActual.id]` como dependencia).
+- **Causa raíz**: el `useEffect` de `loadFichajes` tenía `[loadFichajes]` como dependencia, pero `loadFichajes` está memoizado con `useCallback([])` — nunca cambia. Resultado: solo se ejecutaba en mount. El patrón correcto ya estaba en `EmpleadosView`: `useEffect(() => { cargar() }, [cargar, empresaActual.id])`. **No lo seguí**.
+- **Causa secundaria detectada en el fix**: incluso añadiendo `empresaActual.id` a deps, sigue habiendo race condition si el usuario cambia de empresa dos veces rápido — la query lenta resuelve después y sobrescribe los datos correctos. El fix introduce `empresaActivaRef` y comprueba `if (empresaId !== empresaActivaRef.current) return` antes de cada `setState`.
+- **Fix aplicado** (commit `8b0189d`):
+  - `empresaActivaRef = useRef(empresaActual.id)` actualizado al inicio del useEffect.
+  - `useEffect` con deps `[empresaActual.id, loadFichajes]` que limpia state previo (`setFichajes([])`, `setLocales([])`, `setLocalesFiltro([])`, `setFichajeModal(null)`) antes de re-cargar.
+  - Dentro de `loadFichajes`, lee `empresaActivaRef.current` y descarta cualquier `setState` si la empresa cambió durante la query.
+- **Aplicar en**: cualquier server action que use `getAppContext()` o `getEmpresaActivaId()` y se llame desde un componente con empresa activa contextual. Patrón obligatorio.
+- **Promovido a**: pendiente — candidato fuerte para `patterns/multitenant-data-loading.md` del factory.
+
+### 2026-05-25 (post-cierre, commit `8b0189d`): Race condition en `inyectarScript` cuando el `<script>` ya existía
+- **Error**: en `FichajesMapaView.cargarLeafletConCluster()`, si Leaflet ya estaba siendo cargado por otro componente (p.ej. `FichajeUbicacionMiniMap` se abrió primero y todavía no había terminado), mi `inyectarScript` hacía `resolve()` inmediatamente al detectar el `<script>` existente, sin esperar a que `window.L` estuviera realmente disponible. Resultado intermitente: `Leaflet no inicializado` al abrir la tab Mapa después del modal.
+- **Causa raíz**: mi código tenía la lógica:
+  ```typescript
+  if (existing) {
+    existing.addEventListener("load", () => resolve(), { once: true });
+    resolve();  // ← BUG: resuelve antes de que load dispare
+    return;
+  }
+  ```
+- **Fix aplicado** (commit `8b0189d`): refactor de `inyectarScript` con timeout de 10s, callback `isReady()` que verifica el estado real (`window.L` existe / `L.markerClusterGroup` es función) antes de resolver, y manejo de error con `addEventListener("error", ...)`. Ver `FichajesMapaView.tsx` líneas 74-118.
+- **Aplicar en**: cualquier inyección dinámica de script en el repo. El patrón con `isReady()` es estricto y debería ser el default.
+- **Promovido a**: pendiente — junto al aprendizaje del `declare global` forma un patrón completo "carga dinámica de Leaflet" que merece archivo propio en el factory.
+
+### 2026-05-25 (post-cierre, commit `8b0189d`): Filtro de Locales no se aplicaba a los círculos del mapa
+- **Error**: al filtrar por un local específico en la barra de filtros geo, los **fichajes** se filtraban correctamente, pero los **círculos del radio** de los otros locales seguían apareciendo en el mapa. Inconsistencia visual: el usuario veía una flota de círculos sin pines.
+- **Causa raíz**: en `FichajesView`, `localesFiltro` solo se aplicaba al `useMemo` `fichajesFiltrados`. El array `locales` (completo, sin filtrar) se pasaba como prop a `<FichajesMapaView>` que los pintaba todos.
+- **Fix aplicado** (commit `8b0189d`): nuevo `useMemo` `localesMapa` que filtra `locales` por `localesFiltro` (o devuelve todos si el filtro está vacío) y se pasa al componente del mapa en lugar de `locales`.
+  ```typescript
+  const localesMapa = useMemo(() => {
+    if (localesFiltro.length === 0) return locales;
+    const seleccionados = new Set(localesFiltro);
+    return locales.filter((local) => seleccionados.has(local.id));
+  }, [locales, localesFiltro]);
+  ```
+- **Aplicar en**: cualquier filtro UI debe propagarse a todas las visualizaciones de los datos filtrados, no solo a la principal. Revisar futuras vistas con filtros + multi-render.
+- **Promovido a**: solo local (es un detalle de scope, no un patrón reusable a nivel factory).
+
 ### 2026-05-25 (TASK-002.04): Carga secuencial de Leaflet + markercluster
 - **Error potencial**: cargar `leaflet.markercluster` antes de que Leaflet base esté en `window.L` provoca `L.markerClusterGroup is not a function`. El plugin **extiende** la global `L`, no es independiente.
 - **Fix**: loader secuencial en `cargarLeafletConCluster()` — primero `inyectarScript(LEAFLET_JS)` y esperar `window.L`, luego `inyectarScript(MARKERCLUSTER_JS)` y verificar `typeof L.markerClusterGroup === "function"`. NO usar `Promise.all`.

@@ -2,16 +2,22 @@
 
 ## Estado de sesión
 
-PRP-037 implementado al completo en 5 sesiones (5 tasks `code`) + validación parcial (TASK-002.06 `ops`).
+PRP-037 **cerrado funcionalmente** tras 6 tasks `code/ops` + 3 fixes posteriores + smoke UI ejecutado.
 
-**Checks técnicos cerrados** (los 2 que no requieren browser):
-- ✅ `npm run typecheck`: pasa limpio en cada cierre de task y en la validación final.
-- ✅ `npm run build`: pasa en la validación final. Rutas RRHH (`/rrhh/fichajes`, etc.) compilan sin warnings.
+**Checks técnicos cerrados**:
+- ✅ `npm run typecheck`: pasa limpio.
+- ✅ `npm run build`: pasa. Rutas RRHH compilan sin warnings.
+- ✅ **Smoke UI ejecutado**: login admin, navegación a `/rrhh/fichajes`, apertura de tab Mapa sin error de Leaflet/MarkerCluster.
+- ✅ **Multi-tenant HABANA ↔ BACANAL** validado en navegador después de aplicar el fix de commit `8b0189d`.
 
-**Checks pendientes** (requieren Chrome con extensión Claude in Chrome conectada o navegador manual):
-- ⏳ Smoke UI completo: tabla con columna Geo, modal con mini-mapa, tab Mapa con clustering, 3 filtros.
-- ⏳ Multi-tenant: HABANA ↔ BACANAL.
-- ⏳ Performance: tab Mapa con > 100 fichajes en < 1 s.
+**Fixes aplicados tras mi entrega inicial** (commit `8b0189d` — corregido por Fernando):
+- Bug 1: fichajes no se recargaban al cambiar `empresaActual.id` (mi `useEffect` con deps `[loadFichajes]` no se re-disparaba). Fix: `useRef` de empresa activa + cancelación de setState si la empresa cambió durante la query.
+- Bug 2: race condition en `inyectarScript` cuando el `<script>` de Leaflet ya estaba en curso (resolve inmediato sin esperar `window.L`). Fix: timeout + callback `isReady()` que verifica estado real.
+- Bug 3: `localesFiltro` no se aplicaba a los círculos del mapa, solo a los fichajes. Fix: nuevo `useMemo` `localesMapa` que filtra antes de pasar al componente del mapa.
+
+Estos 3 errores son míos y están documentados como entradas Self-Annealing en el PRP-037 con causa raíz y patrón de fix.
+
+**Único elemento no versionado**: contraseña del usuario smoke (guardada en artefacto local no versionado en git, por seguridad).
 
 Branch: `rrhh-sync-origin-c4da3ca`
 Repo: `https://github.com/balleshosteleros/Balles-Hosteleros.git`
@@ -49,15 +55,18 @@ Repo: `https://github.com/balleshosteleros/Balles-Hosteleros.git`
 
 ## Aprendizajes promovidos al PRP-037 (Self-Annealing)
 
-Ver `.claude/PRPs/PRP-037-auditoria-geografica-fichajes.md` sección **Aprendizajes**:
+Ver `.claude/PRPs/PRP-037-auditoria-geografica-fichajes.md` sección **Aprendizajes**. Total: **5 entradas**.
 
-1. **2026-05-25 (TASK-002.04): Carga secuencial de Leaflet + markercluster**.
-   El plugin `leaflet.markercluster` extiende `window.L`, por lo que debe cargarse DESPUÉS de Leaflet base. Loader secuencial en `cargarLeafletConCluster`, no paralelo.
+Durante la ejecución de las 6 tasks (capturados por typecheck):
+1. **TASK-002.03**: Conflicto de `declare global { Window.L }` con MapPicker.
+2. **TASK-002.04**: Carga secuencial obligatoria de Leaflet + markercluster.
 
-2. **2026-05-25 (TASK-002.03): Conflicto de `declare global { Window.L }`**.
-   `MapPicker.tsx` ya declara `Window.L` con su propia interfaz `LeafletGlobal`. Replicar `declare global` en un segundo componente genera `TS2717`. Solución: en componentes nuevos, acceder a `window.L` con cast local (`(window as unknown as { L?: LeafletGlobal }).L`).
+Tras la entrega inicial, encontrados en smoke real (commit `8b0189d`):
+3. **Post-cierre**: Fichajes no recargaban al cambiar empresa activa — patrón de `useEffect([empresaId, ...])` + `useRef` de empresa activa para cancelar setState stale.
+4. **Post-cierre**: Race condition en `inyectarScript` cuando el script ya existía — patrón con `isReady()` callback + timeout.
+5. **Post-cierre**: Filtro de Locales no propagaba a los círculos del mapa — `useMemo` separado para `localesMapa`.
 
-**Promoción al factory**: pendiente. Si en el futuro se introduce un tercer componente Leaflet (heatmap, draw plugin, etc.) los dos aprendizajes deberían promoverse a `patterns/leaflet-loading.md` en La Forja de SaaS. Por ahora viven en el PRP del proyecto.
+**Promoción al factory**: los aprendizajes 1+2+4 forman un patrón completo "carga dinámica de Leaflet en Next.js" que merece archivo propio en `patterns/leaflet-loading.md`. El aprendizaje 3 es candidato a `patterns/multitenant-data-loading.md` (cancelación de queries en cambio de empresa activa). El 5 es local al PRP-037.
 
 ---
 
@@ -65,9 +74,7 @@ Ver `.claude/PRPs/PRP-037-auditoria-geografica-fichajes.md` sección **Aprendiza
 
 **`documentado`**.
 
-Razón: durante el ciclo de 6 tasks no apareció ningún bugfix de runtime (solo el conflicto de TypeScript en TASK-002.03, que fue caught por typecheck antes de ejecutar nada). Los dos aprendizajes están capturados en la sección Self-Annealing del PRP.
-
-El siguiente agente que toque Leaflet en este repo encontrará los aprendizajes documentados en el PRP padre.
+Los 5 aprendizajes están capturados en la sección Self-Annealing del PRP-037 con causa raíz, fix concreto y dónde más aplica. Especialmente importante: las 3 entradas post-cierre vienen de bugs reales encontrados en smoke UI ejecutado por humano y deberían propagarse al factory como patrones reusables (ver "Promoción al factory" arriba).
 
 ---
 
