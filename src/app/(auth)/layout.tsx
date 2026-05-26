@@ -44,7 +44,7 @@ export default function AuthLayout({
           <div className="flex items-center gap-6">
             <div className="relative h-44 w-44 shrink-0">
               <Image
-                src="/logo-balles.png?v=2"
+                src="/logo-balles.png"
                 alt="Balles Hosteleros"
                 fill
                 priority

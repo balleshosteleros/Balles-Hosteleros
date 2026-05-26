@@ -199,7 +199,7 @@ function Navbar() {
       <div className="mx-auto flex h-20 max-w-6xl items-center justify-between px-6">
         <Link href="/software" className="flex items-center" aria-label="Balles Hosteleros">
           <Image
-            src="/logo-balles.png?v=2"
+            src="/logo-balles.png"
             alt="Balles Hosteleros"
             width={160}
             height={48}

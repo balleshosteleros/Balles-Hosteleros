@@ -7,7 +7,7 @@ export function InvalidLinkScreen() {
       <div className="w-full max-w-xl text-center text-white space-y-8">
         <div className="flex justify-center">
           <Image
-            src="/logo-balles.png?v=2"
+            src="/logo-balles.png"
             alt="Balles Hosteleros"
             width={220}
             height={60}

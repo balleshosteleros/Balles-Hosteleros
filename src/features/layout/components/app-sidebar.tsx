@@ -308,7 +308,7 @@ export function AppSidebar() {
               <PanelLeft className="h-4 w-4 text-sidebar-foreground/60" />
             </button>
             <img
-              src="/logo-balles.png?v=2"
+              src="/logo-balles.png"
               alt="Balles Hosteleros"
               className="w-36 transition-all duration-200"
             />
