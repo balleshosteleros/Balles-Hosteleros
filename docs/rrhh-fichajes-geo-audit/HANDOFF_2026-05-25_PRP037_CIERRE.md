@@ -55,7 +55,7 @@ Repo: `https://github.com/balleshosteleros/Balles-Hosteleros.git`
 
 ## Aprendizajes promovidos al PRP-037 (Self-Annealing)
 
-Ver `.claude/PRPs/PRP-037-auditoria-geografica-fichajes.md` sección **Aprendizajes**. Total: **5 entradas**.
+Ver `.claude/PRPs/PRP-037-A-auditoria-geografica-fichajes.md` sección **Aprendizajes**. Total: **5 entradas**.
 
 Durante la ejecución de las 6 tasks (capturados por typecheck):
 1. **TASK-002.03**: Conflicto de `declare global { Window.L }` con MapPicker.

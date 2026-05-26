@@ -2,7 +2,7 @@
 
 Fecha: 2026-05-25
 Repo: `Balles-Hosteleros`
-PRP origen: `.claude/PRPs/PRP-037-auditoria-geografica-fichajes.md`
+PRP origen: `.claude/PRPs/PRP-037-A-auditoria-geografica-fichajes.md`
 Branch: `rrhh-sync-origin-c4da3ca`
 
 ## Propósito
@@ -64,7 +64,7 @@ Línea crítica más larga: `002.01 → 002.03 → 002.04 → 002.05 → 002.06`
 
 ## Fuera de alcance (delegado a futuro)
 
-Ver sección "Fuera de Alcance" en `PRP-037-auditoria-geografica-fichajes.md`:
+Ver sección "Fuera de Alcance" en `PRP-037-A-auditoria-geografica-fichajes.md`:
 - Heatmap / densidad
 - Tracking realtime
 - Notificaciones push por outliers

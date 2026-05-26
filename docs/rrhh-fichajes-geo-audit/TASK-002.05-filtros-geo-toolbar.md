@@ -27,7 +27,7 @@ Baja-media. Es lógica de filtrado sobre el state existente. Reutiliza patrones 
 - taskId: TASK-002.05
 - taskMode: code
 - reviewMode: standard
-- sourcePRP: `.claude/PRPs/PRP-037-auditoria-geografica-fichajes.md`
+- sourcePRP: `.claude/PRPs/PRP-037-A-auditoria-geografica-fichajes.md`
 
 ## Scope IN
 
@@ -68,4 +68,4 @@ Baja-media. Es lógica de filtrado sobre el state existente. Reutiliza patrones 
 
 ## PRP origen
 
-`.claude/PRPs/PRP-037-auditoria-geografica-fichajes.md` — Fase 6 del Blueprint.
+`.claude/PRPs/PRP-037-A-auditoria-geografica-fichajes.md` — Fase 6 del Blueprint.

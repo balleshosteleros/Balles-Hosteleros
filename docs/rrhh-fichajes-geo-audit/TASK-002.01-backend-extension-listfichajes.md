@@ -21,7 +21,7 @@ Media. Toca un server action existente sin breaking change y añade tres fichero
 - taskId: TASK-002.01
 - taskMode: code
 - reviewMode: standard
-- sourcePRP: `.claude/PRPs/PRP-037-auditoria-geografica-fichajes.md`
+- sourcePRP: `.claude/PRPs/PRP-037-A-auditoria-geografica-fichajes.md`
 
 ## Scope IN
 
@@ -64,4 +64,4 @@ Media. Toca un server action existente sin breaking change y añade tres fichero
 
 ## PRP origen
 
-`.claude/PRPs/PRP-037-auditoria-geografica-fichajes.md` — Fase 1 + Fase 2 del Blueprint.
+`.claude/PRPs/PRP-037-A-auditoria-geografica-fichajes.md` — Fase 1 + Fase 2 del Blueprint.

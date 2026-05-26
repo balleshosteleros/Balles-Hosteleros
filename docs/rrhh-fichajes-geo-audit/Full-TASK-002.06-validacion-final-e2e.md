@@ -49,7 +49,7 @@ Estado de blindaje explícito en el handoff:
 - taskMode: ops
 - reviewMode: standard
 - sourceTask: docs/rrhh-fichajes-geo-audit/TASK-002.06-validacion-final-e2e.md
-- sourcePRP: .claude/PRPs/PRP-037-auditoria-geografica-fichajes.md
+- sourcePRP: .claude/PRPs/PRP-037-A-auditoria-geografica-fichajes.md
 
 ## Contexto previo obligatorio
 
@@ -109,7 +109,7 @@ Estado de blindaje explícito en el handoff:
 ## Outputs esperados
 
 - `docs/rrhh-fichajes-geo-audit/HANDOFF_YYYY-MM-DD_PRP037_CIERRE.md` — handoff con los 5 checks.
-- `.claude/PRPs/PRP-037-auditoria-geografica-fichajes.md` — sección Aprendizajes actualizada (o anotada como vacía).
+- `.claude/PRPs/PRP-037-A-auditoria-geografica-fichajes.md` — sección Aprendizajes actualizada (o anotada como vacía).
 - Estado de blindaje explícito.
 
 ## Riesgos conocidos
@@ -130,7 +130,7 @@ Estado de blindaje explícito en el handoff:
 
 ## Paths del proyecto
 
-- `.claude/PRPs/PRP-037-auditoria-geografica-fichajes.md` — actualizar sección Aprendizajes.
+- `.claude/PRPs/PRP-037-A-auditoria-geografica-fichajes.md` — actualizar sección Aprendizajes.
 - `docs/rrhh-fichajes-geo-audit/HANDOFF_YYYY-MM-DD_PRP037_CIERRE.md` — crear.
 
 ## Agentes recomendados

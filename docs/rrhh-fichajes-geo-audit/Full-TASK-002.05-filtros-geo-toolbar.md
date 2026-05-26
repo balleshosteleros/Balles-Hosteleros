@@ -34,7 +34,7 @@ Baja-media (S/M). Aprox 3–4 horas:
 - taskMode: code
 - reviewMode: standard
 - sourceTask: docs/rrhh-fichajes-geo-audit/TASK-002.05-filtros-geo-toolbar.md
-- sourcePRP: .claude/PRPs/PRP-037-auditoria-geografica-fichajes.md
+- sourcePRP: .claude/PRPs/PRP-037-A-auditoria-geografica-fichajes.md
 
 ## Contexto previo obligatorio
 
@@ -99,7 +99,7 @@ Baja-media (S/M). Aprox 3–4 horas:
 
 ## Inputs
 
-- `.claude/PRPs/PRP-037-auditoria-geografica-fichajes.md` — PRP padre.
+- `.claude/PRPs/PRP-037-A-auditoria-geografica-fichajes.md` — PRP padre.
 - `src/shared/components/SubmoduleToolbar.tsx` — toolbar a posiblemente extender.
 - `src/features/ajustes/actions/locales-actions.ts` — `listLocales`.
 - `src/features/rrhh/utils/fichaje-geo-status.ts` — helper de 002.01.

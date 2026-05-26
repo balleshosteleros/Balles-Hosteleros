@@ -34,7 +34,7 @@ Cleanup correcto del mapa al cerrar el modal (no debe quedar instancia colgada a
 - taskMode: code
 - reviewMode: standard
 - sourceTask: docs/rrhh-fichajes-geo-audit/TASK-002.03-mini-mapa-modal-detalle.md
-- sourcePRP: .claude/PRPs/PRP-037-auditoria-geografica-fichajes.md
+- sourcePRP: .claude/PRPs/PRP-037-A-auditoria-geografica-fichajes.md
 
 ## Contexto previo obligatorio
 
@@ -101,7 +101,7 @@ Cleanup correcto del mapa al cerrar el modal (no debe quedar instancia colgada a
 
 ## Inputs
 
-- `.claude/PRPs/PRP-037-auditoria-geografica-fichajes.md` — PRP padre.
+- `.claude/PRPs/PRP-037-A-auditoria-geografica-fichajes.md` — PRP padre.
 - `src/features/ajustes/components/locales/MapPicker.tsx` — patrón Leaflet.
 - `src/features/rrhh/components/fichajes/FichajesView.tsx` — modal a extender.
 

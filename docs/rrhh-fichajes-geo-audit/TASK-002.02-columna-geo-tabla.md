@@ -21,7 +21,7 @@ Baja-media. Es solo edición de `FichajesView.tsx` consumiendo lo construido en 
 - taskId: TASK-002.02
 - taskMode: code
 - reviewMode: standard
-- sourcePRP: `.claude/PRPs/PRP-037-auditoria-geografica-fichajes.md`
+- sourcePRP: `.claude/PRPs/PRP-037-A-auditoria-geografica-fichajes.md`
 
 ## Scope IN
 
@@ -60,4 +60,4 @@ Baja-media. Es solo edición de `FichajesView.tsx` consumiendo lo construido en 
 
 ## PRP origen
 
-`.claude/PRPs/PRP-037-auditoria-geografica-fichajes.md` — Fase 3 del Blueprint.
+`.claude/PRPs/PRP-037-A-auditoria-geografica-fichajes.md` — Fase 3 del Blueprint.

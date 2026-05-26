@@ -32,7 +32,7 @@ Baja. Es validación, no implementación. Asume que 002.01 a 002.05 están cerra
 - taskId: TASK-002.06
 - taskMode: ops
 - reviewMode: standard
-- sourcePRP: `.claude/PRPs/PRP-037-auditoria-geografica-fichajes.md`
+- sourcePRP: `.claude/PRPs/PRP-037-A-auditoria-geografica-fichajes.md`
 
 ## Scope IN
 
@@ -73,4 +73,4 @@ Baja. Es validación, no implementación. Asume que 002.01 a 002.05 están cerra
 
 ## PRP origen
 
-`.claude/PRPs/PRP-037-auditoria-geografica-fichajes.md` — Fase 7 del Blueprint.
+`.claude/PRPs/PRP-037-A-auditoria-geografica-fichajes.md` — Fase 7 del Blueprint.

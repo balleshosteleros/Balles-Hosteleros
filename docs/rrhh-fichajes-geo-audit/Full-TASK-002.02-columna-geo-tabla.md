@@ -30,7 +30,7 @@ Baja (S). Aprox 2–3 horas:
 - taskMode: code
 - reviewMode: standard
 - sourceTask: docs/rrhh-fichajes-geo-audit/TASK-002.02-columna-geo-tabla.md
-- sourcePRP: .claude/PRPs/PRP-037-auditoria-geografica-fichajes.md
+- sourcePRP: .claude/PRPs/PRP-037-A-auditoria-geografica-fichajes.md
 
 ## Contexto previo obligatorio
 
@@ -82,7 +82,7 @@ Baja (S). Aprox 2–3 horas:
 
 ## Inputs
 
-- `.claude/PRPs/PRP-037-auditoria-geografica-fichajes.md` — PRP padre.
+- `.claude/PRPs/PRP-037-A-auditoria-geografica-fichajes.md` — PRP padre.
 - `src/features/rrhh/components/fichajes/FichajesView.tsx` — archivo a editar.
 - `src/features/rrhh/components/fichajes/geo-badge.tsx` — creado en 002.01.
 - `src/features/rrhh/utils/fichaje-geo-status.ts` — creado en 002.01.

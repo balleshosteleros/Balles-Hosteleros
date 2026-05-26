@@ -1,4 +1,6 @@
-# PRP-037: Auditoría Geográfica de Fichajes RRHH
+# PRP-037-A: Auditoría Geográfica de Fichajes RRHH
+
+> Nota: Renumerado de `PRP-037` a `PRP-037-A` el 2026-05-26 al detectar colisión con `PRP-037-logistica-importador-ia` que entró desde upstream. El trabajo está cerrado y mergeado a `main`; el rename solo evita ambigüedad documental.
 
 > **Estado**: PENDIENTE
 > **Fecha**: 2026-05-25

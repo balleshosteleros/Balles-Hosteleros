@@ -26,7 +26,7 @@ Click en una fila de la tabla abre el modal de detalle, y dentro del modal apare
 - taskId: TASK-002.03
 - taskMode: code
 - reviewMode: standard
-- sourcePRP: `.claude/PRPs/PRP-037-auditoria-geografica-fichajes.md`
+- sourcePRP: `.claude/PRPs/PRP-037-A-auditoria-geografica-fichajes.md`
 
 ## Scope IN
 
@@ -65,4 +65,4 @@ Click en una fila de la tabla abre el modal de detalle, y dentro del modal apare
 
 ## PRP origen
 
-`.claude/PRPs/PRP-037-auditoria-geografica-fichajes.md` — Fase 4 del Blueprint.
+`.claude/PRPs/PRP-037-A-auditoria-geografica-fichajes.md` — Fase 4 del Blueprint.

@@ -41,7 +41,7 @@ Alta (L). Aprox 8–10 horas:
 - taskMode: code
 - reviewMode: standard
 - sourceTask: docs/rrhh-fichajes-geo-audit/TASK-002.04-tab-mapa-clustering.md
-- sourcePRP: .claude/PRPs/PRP-037-auditoria-geografica-fichajes.md
+- sourcePRP: .claude/PRPs/PRP-037-A-auditoria-geografica-fichajes.md
 
 ## Contexto previo obligatorio
 
@@ -110,7 +110,7 @@ Alta (L). Aprox 8–10 horas:
 
 ## Inputs
 
-- `.claude/PRPs/PRP-037-auditoria-geografica-fichajes.md` — PRP padre.
+- `.claude/PRPs/PRP-037-A-auditoria-geografica-fichajes.md` — PRP padre.
 - `src/features/ajustes/components/locales/MapPicker.tsx` — patrón Leaflet.
 - `src/features/rrhh/components/fichajes/FichajeUbicacionMiniMap.tsx` — patrón mini-mapa.
 - `src/features/rrhh/components/fichajes/FichajesView.tsx` — vista a editar + modal a extraer.

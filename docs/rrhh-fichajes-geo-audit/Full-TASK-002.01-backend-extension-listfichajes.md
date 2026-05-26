@@ -32,7 +32,7 @@ Media (M). Aprox 4–6 horas:
 - taskMode: code
 - reviewMode: standard
 - sourceTask: docs/rrhh-fichajes-geo-audit/TASK-002.01-backend-extension-listfichajes.md
-- sourcePRP: .claude/PRPs/PRP-037-auditoria-geografica-fichajes.md
+- sourcePRP: .claude/PRPs/PRP-037-A-auditoria-geografica-fichajes.md
 
 ## Contexto previo obligatorio
 
@@ -94,7 +94,7 @@ Media (M). Aprox 4–6 horas:
 
 ## Inputs
 
-- `.claude/PRPs/PRP-037-auditoria-geografica-fichajes.md` — PRP padre.
+- `.claude/PRPs/PRP-037-A-auditoria-geografica-fichajes.md` — PRP padre.
 - `supabase/migrations/20260514130000_rrhh_centros_y_geolocalizacion.sql` — schema BD geo.
 - `supabase/migrations/20260515100000_rename_centros_to_locales.sql` — rename centros→locales.
 
