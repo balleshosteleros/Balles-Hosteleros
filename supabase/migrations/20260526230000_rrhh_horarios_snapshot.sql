@@ -241,21 +241,12 @@ comment on table public.rrhh_descansos is
   'Descansos configurables por empresa. turnos jsonb son referencias blandas a rrhh_turnos.id.';
 
 -- ============================================================
--- Anexo: Seed actual (NO se incluye en este migration)
+-- Seed asociado
 -- ============================================================
--- Producción tiene poblados:
---   - 43 turnos BACANAL (bt-art-cenas, bt-art-comidas, bt-cal,
---     bt-cam-{vie,sab,dom}, bt-coc-{lun,mar,jue,vie,sab,dom},
---     bt-con, bt-edm-dom, bt-emd-diario, bt-en1-sab, bt-en2-{vie,sab},
---     bt-enc-{vie,dom}, bt-etd-diario, bt-jc1-{lun,mar,mie,jue,vie,sab,dom},
---     bt-jc2-{lun,mar,mie,jue,vie,sab,dom}, bt-jc3-{vie,sab,dom},
---     bt-jef-{vie,sab}, bt-jf2-vie, bt-lim-diario, bt-lpo-{vie,sab,dom},
---     bt-man-diario) con tramos reales.
---   - 3 cuadrantes: cuad-bacanal-diario, cuad-bacanal-fines,
---     cuad-habana-general.
---   - 12 descansos BACANAL.
+-- El seed con los datos reales de BACANAL (3 cuadrantes + 43
+-- turnos + 12 descansos) se aplica desde el migration siguiente:
+--   20260526230100_rrhh_horarios_seed_bacanal_real.sql
 --
--- Si se aprovisiona un entorno nuevo (staging/dev) y se quiere
--- replicar BACANAL, abrir un seed dedicado tras exportar los
--- datos reales:
---   ./scripts/supabase-mgmt-query.sh -f sql/export-bacanal-horarios.sql
+-- Idempotente vía ON CONFLICT (id) DO NOTHING, resuelve empresa_id
+-- por nombre (BACANAL / HABANA) para que funcione en staging/dev
+-- aunque los UUIDs difieran de prod.
