@@ -3,7 +3,13 @@ set -euo pipefail
 
 msg_file="${1:?commit message file is required}"
 
-python3 - "$msg_file" <<'PY'
+PYTHON3=$(command -v python3 2>/dev/null || command -v python 2>/dev/null || echo "")
+if [ -z "$PYTHON3" ]; then
+    echo "Warning: python not found, skipping commit-msg suffix check" >&2
+    exit 0
+fi
+
+"$PYTHON3" - "$msg_file" <<'PY'
 from pathlib import Path
 import sys
 
