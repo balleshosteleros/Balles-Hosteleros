@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, CheckCircle2, Briefcase } from "lucide-react";
 import { inscribirInspectorPublico } from "../public-actions";
+import { normalizarNombre } from "../data";
 import type { BolsaConfig, BolsaPublicaEmpresa } from "../types";
 
 interface Props {
@@ -72,6 +73,21 @@ function BolsaForm({
   const [telefono, setTelefono] = useState("");
   const [email, setEmail] = useState("");
   const [ciudad, setCiudad] = useState("");
+  const [horarios, setHorarios] = useState<string[]>([]);
+  const [vehiculo, setVehiculo] = useState<"si" | "no" | "">("");
+
+  const HORARIO_OPCIONES = [
+    "Mañanas entre semana",
+    "Tardes entre semana",
+    "Fines de semana",
+    "Festivos",
+  ] as const;
+
+  function toggleHorario(opt: string) {
+    setHorarios((prev) =>
+      prev.includes(opt) ? prev.filter((h) => h !== opt) : [...prev, opt],
+    );
+  }
   const [notas, setNotas] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -80,14 +96,24 @@ function BolsaForm({
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    if (horarios.length === 0) {
+      setError("Selecciona al menos una disponibilidad horaria.");
+      return;
+    }
+    if (vehiculo === "") {
+      setError("Indica si tienes vehículo propio.");
+      return;
+    }
     setSubmitting(true);
     const res = await inscribirInspectorPublico({
       empresa_slug: slug,
       nombre,
-      apellidos: apellidos || null,
-      email: email || null,
+      apellidos,
+      email,
       telefono,
-      ciudad: ciudad || null,
+      ciudad,
+      horario_disponibilidad: horarios.join(", "),
+      vehiculo_propio: vehiculo === "si",
       notas: notas || null,
     });
     setSubmitting(false);
@@ -122,17 +148,29 @@ function BolsaForm({
           <Input
             value={nombre}
             onChange={(e) => setNombre(e.target.value)}
+            onBlur={() => setNombre((v) => normalizarNombre(v))}
             required
             minLength={2}
           />
         </div>
         <div>
-          <Label className="text-xs">Apellidos</Label>
+          <Label className="text-xs">Apellidos *</Label>
           <Input
             value={apellidos}
             onChange={(e) => setApellidos(e.target.value)}
+            onBlur={() => setApellidos((v) => normalizarNombre(v))}
+            required
           />
         </div>
+      </div>
+      <div>
+        <Label className="text-xs">Email *</Label>
+        <Input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+        />
       </div>
       <div>
         <Label className="text-xs">Teléfono *</Label>
@@ -142,31 +180,64 @@ function BolsaForm({
           value={telefono}
           onChange={(e) => setTelefono(e.target.value)}
           required
-          placeholder="+34 ..."
         />
       </div>
       <div>
-        <Label className="text-xs">Email (opcional)</Label>
-        <Input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-      </div>
-      <div>
-        <Label className="text-xs">Ciudad</Label>
+        <Label className="text-xs">Ciudad *</Label>
         <Input
           value={ciudad}
           onChange={(e) => setCiudad(e.target.value)}
+          required
         />
       </div>
       <div>
-        <Label className="text-xs">¿Algo que debamos saber?</Label>
+        <Label className="text-xs">Disponibilidad horaria *</Label>
+        <div className="grid grid-cols-2 gap-2 mt-1">
+          {HORARIO_OPCIONES.map((opt) => {
+            const selected = horarios.includes(opt);
+            return (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => toggleHorario(opt)}
+                className={`rounded-md border px-3 py-2 text-sm transition-colors ${
+                  selected
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border bg-background text-foreground hover:bg-muted"
+                }`}
+              >
+                {opt}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div>
+        <Label className="text-xs">Vehículo propio *</Label>
+        <div className="flex gap-2 mt-1">
+          {(["si", "no"] as const).map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => setVehiculo(opt)}
+              className={`flex-1 rounded-md border px-3 py-2 text-sm transition-colors ${
+                vehiculo === opt
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border bg-background text-foreground hover:bg-muted"
+              }`}
+            >
+              {opt === "si" ? "Sí" : "No"}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <Label className="text-xs">¿Algo más que debamos saber?</Label>
         <Textarea
           rows={3}
           value={notas}
           onChange={(e) => setNotas(e.target.value)}
-          placeholder="Disponibilidad, experiencia previa, etc."
+          placeholder="Experiencia previa, idiomas, etc."
         />
       </div>
 

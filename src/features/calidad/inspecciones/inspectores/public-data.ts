@@ -4,8 +4,12 @@
  * PRP-040.
  */
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { BolsaConfig, BolsaPublicaEmpresa } from "./types";
-import { BOLSA_CONFIG_DEFAULTS } from "./types";
+import type {
+  BolsaCamposActivos,
+  BolsaConfig,
+  BolsaPublicaEmpresa,
+} from "./types";
+import { BOLSA_CONFIG_DEFAULTS, mergeCamposActivos } from "./types";
 
 export async function fetchBolsaPublicaEmpresa(
   slug: string,
@@ -41,6 +45,9 @@ export async function fetchBolsaPublicaEmpresa(
         color_fondo: cfg.color_fondo,
         color_acento: cfg.color_acento,
         color_texto: cfg.color_texto,
+        campos_activos: mergeCamposActivos(
+          cfg.campos_activos as Partial<BolsaCamposActivos> | null,
+        ),
       }
     : { ...BOLSA_CONFIG_DEFAULTS };
 

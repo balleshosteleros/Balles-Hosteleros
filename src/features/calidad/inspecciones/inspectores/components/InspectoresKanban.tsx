@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, MapPin, Phone, GripVertical, FileSearch } from "lucide-react";
+import { Mail, MapPin, Phone, GripVertical, FileSearch, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { llamarDesdeApp } from "@/features/google-workspace/components/TelefonoDrawer";
 import {
   FASES_INSPECTOR_CONFIG,
   FASES_PRINCIPALES_INSPECTOR,
@@ -14,6 +15,13 @@ import {
 } from "../data";
 import type { InspectorFase, InspectorListItem } from "../types";
 import { moverInspectorFase } from "../actions";
+
+function telefonoParaWhatsapp(input: string | null | undefined): string {
+  if (!input) return "";
+  const limpio = input.replace(/[^\d]/g, "");
+  if (limpio.length === 9 && /^[679]/.test(limpio)) return "34" + limpio;
+  return limpio;
+}
 
 interface Props {
   inspectores: InspectorListItem[];
@@ -37,42 +45,60 @@ function InspectorCard({
       draggable
       onDragStart={(e) => onDragStart(e, insp.id)}
       onClick={() => onClick(insp.id)}
-      className="bg-card border border-border rounded-lg p-2 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow group"
+      className="relative bg-card border border-border rounded-lg p-2 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow group mx-auto w-full max-w-[200px]"
     >
-      <div className="flex items-start gap-2">
-        <GripVertical className="h-3.5 w-3.5 text-muted-foreground/30 mt-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="h-6 w-6 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-[10px] shrink-0">
-              {inicial || "?"}
-            </div>
-            <span className="font-medium text-xs text-foreground truncate">
-              {insp.nombre} {insp.apellidos ?? ""}
-            </span>
+      <GripVertical className="absolute left-0.5 top-2 h-3.5 w-3.5 text-muted-foreground/30 opacity-0 group-hover:opacity-100 transition-opacity" />
+      <div className="min-w-0">
+        <div className="flex items-center gap-1.5 mb-1">
+          <div className="h-6 w-6 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-[10px] shrink-0">
+            {inicial || "?"}
           </div>
-          <div className="space-y-0.5 text-[11px] text-muted-foreground pl-8">
-            {insp.telefono && (
-              <div className="flex items-center gap-1">
+          <span className="font-medium text-xs text-foreground truncate">
+            {insp.nombre} {insp.apellidos ?? ""}
+          </span>
+        </div>
+        <div className="space-y-0.5 text-[11px] text-muted-foreground pl-[30px]">
+          {insp.telefono && (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  llamarDesdeApp(insp.telefono!);
+                }}
+                title="Llamar desde el software"
+                className="text-muted-foreground hover:text-sky-600 transition-colors"
+              >
                 <Phone className="h-3 w-3 shrink-0" />
-                <span className="truncate">{insp.telefono}</span>
-              </div>
-            )}
-            {insp.ciudad && (
-              <div className="flex items-center gap-1">
-                <MapPin className="h-3 w-3 shrink-0" />
-                <span className="truncate">{insp.ciudad}</span>
-              </div>
-            )}
-            {insp.num_inspecciones > 0 && (
-              <div className="flex items-center gap-1 text-emerald-700">
-                <FileSearch className="h-3 w-3 shrink-0" />
-                {insp.num_inspecciones}
-                {insp.nota_media != null
-                  ? ` · ${insp.nota_media.toFixed(2)}`
-                  : ""}
-              </div>
-            )}
-          </div>
+              </button>
+              <span className="truncate">{insp.telefono}</span>
+              <a
+                href={`https://wa.me/${telefonoParaWhatsapp(insp.telefono)}`}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                title="Abrir WhatsApp"
+                className="text-emerald-600 hover:text-emerald-700 transition-colors"
+              >
+                <MessageCircle className="h-3 w-3 shrink-0" />
+              </a>
+            </div>
+          )}
+          {insp.ciudad && (
+            <div className="flex items-center gap-1">
+              <MapPin className="h-3 w-3 shrink-0" />
+              <span className="truncate">{insp.ciudad}</span>
+            </div>
+          )}
+          {insp.num_inspecciones > 0 && (
+            <div className="flex items-center gap-1 text-emerald-700">
+              <FileSearch className="h-3 w-3 shrink-0" />
+              {insp.num_inspecciones}
+              {insp.nota_media != null
+                ? ` · ${insp.nota_media.toFixed(2)}`
+                : ""}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -98,7 +124,7 @@ function EstadoColumn({
 
   return (
     <div
-      className={`flex flex-col min-w-[190px] flex-1 transition-colors rounded-lg ${
+      className={`flex flex-col flex-1 min-w-0 transition-colors rounded-lg ${
         dragOver ? "bg-primary/5 ring-1 ring-primary/30" : ""
       }`}
       onDragOver={(e) => {
@@ -164,10 +190,9 @@ function FaseGroup({
 
   return (
     <div
-      className="flex flex-col shrink-0"
+      className="flex flex-col min-w-0"
       style={{
-        minWidth:
-          cfg.estados.length === 1 ? "210px" : `${cfg.estados.length * 200}px`,
+        flex: `${cfg.estados.length} 1 0`,
       }}
     >
       {/* Phase header bar with gradient */}
@@ -237,8 +262,8 @@ export function InspectoresKanban({ inspectores, onSelect, onRefresh }: Props) {
   }
 
   return (
-    <div className="flex-1 overflow-x-auto">
-      <div className="flex gap-2 min-w-max pb-2">
+    <div className="flex-1 w-full">
+      <div className="flex gap-2 w-full pb-2">
         {FASES_PRINCIPALES_INSPECTOR_ORDER.map((fp) => (
           <FaseGroup
             key={fp}

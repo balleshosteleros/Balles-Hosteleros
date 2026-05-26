@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { normalizarNombre } from "@/shared/lib/normalizar-nombre";
 
 async function getCtx() {
   const supabase = await createClient();
@@ -75,7 +76,7 @@ export async function guardarPerfilCompleto(input: PerfilCompletoInput) {
       direccion: input.direccion.trim(),
       iban: ibanNorm,
       numero_ss: input.numero_ss.trim(),
-      contacto_emergencia_nombre: input.contacto_emergencia_nombre.trim(),
+      contacto_emergencia_nombre: normalizarNombre(input.contacto_emergencia_nombre),
       contacto_emergencia_telefono: input.contacto_emergencia_telefono.trim(),
       contacto_emergencia_relacion: input.contacto_emergencia_relacion.trim(),
       talla_uniforme: input.talla_uniforme ?? null,

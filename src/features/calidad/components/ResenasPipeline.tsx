@@ -69,6 +69,7 @@ import {
 } from "@/features/calidad/types/resenas";
 import { AgentesIAView } from "./AgentesIAView";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 
 // ─── Filtro de período ────────────────────────────────────────
 type PeriodoResenas = "todo" | "semana" | "mes" | "personalizado";
@@ -126,6 +127,7 @@ export function ResenasPipeline() {
   const [manualMode, setManualMode] = useState(false);
   const [agentesOpen, setAgentesOpen] = useState(false);
   const [detalleResena, setDetalleResena] = useState<Resena | null>(null);
+  const { empresaActual } = useEmpresa();
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -140,7 +142,7 @@ export function ResenasPipeline() {
 
   useEffect(() => {
     cargar();
-  }, [cargar]);
+  }, [cargar, empresaActual.id]);
 
   // ─── Filtrado por búsqueda + período ─────────────────────────
   const rango = useMemo(
@@ -308,6 +310,12 @@ export function ResenasPipeline() {
         ocultarNuevo
         extraDerecha={
           <>
+            <span
+              className="hidden md:inline-flex items-center text-[11px] text-muted-foreground mr-1"
+              title="Reseñas acumuladas históricas — nunca se borran"
+            >
+              {resenas.length} acumuladas
+            </span>
             <Button
               variant="outline"
               size="sm"
@@ -319,7 +327,7 @@ export function ResenasPipeline() {
                   ? "Configura GOOGLE_MAPS_API_KEY en el servidor"
                   : sinPlaceId
                     ? "Primero vincula la empresa con Google (Ajustes)"
-                    : "Traer reseñas de Google"
+                    : "Traer reseñas de Google · se sincroniza automáticamente cada día"
               }
             >
               {syncing ? (
@@ -742,7 +750,7 @@ function KanbanColumna({
         setDragOver(false);
         onDrop();
       }}
-      className={`flex flex-col rounded-lg border bg-card border-t-4 ${accent} transition-colors ${
+      className={`flex flex-col min-w-0 overflow-hidden rounded-lg border bg-card border-t-4 ${accent} transition-colors ${
         dragOver ? "ring-2 ring-primary/30 bg-primary/5" : ""
       }`}
     >
@@ -801,11 +809,11 @@ function ResenaCard({
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onClick={onClick}
-      className={`bg-background border rounded-md p-2.5 cursor-grab active:cursor-grabbing hover:border-primary/40 hover:shadow-sm transition-all ${
+      className={`w-full min-w-0 overflow-hidden bg-background border rounded-md p-2.5 cursor-grab active:cursor-grabbing hover:border-primary/40 hover:shadow-sm transition-all ${
         isDragging ? "opacity-40" : ""
       }`}
     >
-      <div className="flex items-start gap-2">
+      <div className="flex items-start gap-2 min-w-0">
         {resena.autor_avatar ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -845,7 +853,7 @@ function ResenaCard({
             </div>
           ) : null}
           {resena.comentario && (
-            <p className="text-[11px] text-muted-foreground mt-1 line-clamp-3">
+            <p className="text-[11px] text-muted-foreground mt-1 line-clamp-3 break-words">
               {resena.comentario}
             </p>
           )}

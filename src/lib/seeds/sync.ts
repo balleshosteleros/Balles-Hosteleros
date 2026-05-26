@@ -15,6 +15,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { DEPARTAMENTOS_SEED, normalizeDeptoNombre } from "./departamentos";
 import { ROLES_SEED, normalizeRolNombre } from "./roles";
 import { ORGANIGRAMA_SEED } from "./organigrama";
+import { INSPECTOR_EMAIL_PLANTILLAS_SEED } from "./inspector-email-plantillas";
+import { INSPECCION_PRESENTACION_SEED } from "./inspeccion-presentacion";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -190,6 +192,70 @@ export async function syncVacantesAEmpresa(
 }
 
 /**
+ * Sincroniza plantillas de email del pipeline de inspectores (aditivo).
+ * Solo crea las fases que aún no existen en la empresa; NUNCA sobreescribe
+ * personalizaciones del cliente.
+ */
+export async function syncInspectorEmailPlantillasAEmpresa(
+  admin: Admin,
+  empresaId: string,
+): Promise<{ creadas: number }> {
+  const { data: existentes } = await admin
+    .from("inspector_email_plantillas")
+    .select("fase")
+    .eq("empresa_id", empresaId);
+  const setExistentes = new Set(
+    (existentes ?? []).map((r) => r.fase as string),
+  );
+
+  const aCrear = INSPECTOR_EMAIL_PLANTILLAS_SEED
+    .filter((p) => !setExistentes.has(p.fase))
+    .map((p) => ({
+      empresa_id: empresaId,
+      fase: p.fase,
+      asunto: p.asunto,
+      cuerpo: p.cuerpo,
+      activa: p.activa,
+    }));
+
+  if (aCrear.length === 0) return { creadas: 0 };
+  const { error } = await admin
+    .from("inspector_email_plantillas")
+    .insert(aCrear);
+  if (error) throw error;
+  return { creadas: aCrear.length };
+}
+
+/**
+ * Siembra la presentación canónica de inspecciones SOLO si la empresa no
+ * tiene una aún (o la tiene vacía). No sobreescribe ediciones del cliente.
+ */
+export async function syncInspeccionPresentacionAEmpresa(
+  admin: Admin,
+  empresaId: string,
+): Promise<{ creada: boolean }> {
+  const { data: existente } = await admin
+    .from("inspeccion_presentaciones")
+    .select("slides")
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+
+  const slidesActuales = (existente?.slides as unknown[] | null) ?? null;
+  const tienePresentacion =
+    Array.isArray(slidesActuales) && slidesActuales.length > 0;
+  if (tienePresentacion) return { creada: false };
+
+  const { error } = await admin
+    .from("inspeccion_presentaciones")
+    .upsert(
+      { empresa_id: empresaId, slides: INSPECCION_PRESENTACION_SEED },
+      { onConflict: "empresa_id" },
+    );
+  if (error) throw error;
+  return { creada: true };
+}
+
+/**
  * Siembra una empresa nueva con todos los pilares canónicos.
  * Llamar desde `createEmpresa()` justo después del INSERT en `empresas`.
  */
@@ -202,6 +268,8 @@ export async function seedEmpresaDefaults(
   await syncRolesAEmpresa(admin, empresaId);
   await syncOrganigramaAEmpresa(admin, empresaSlug);
   await syncVacantesAEmpresa(admin, empresaId, empresaSlug);
+  await syncInspectorEmailPlantillasAEmpresa(admin, empresaId);
+  await syncInspeccionPresentacionAEmpresa(admin, empresaId);
 }
 
 /**
@@ -217,6 +285,8 @@ export async function syncSeedsToAllEmpresas(): Promise<{
     rolesCreados: number;
     organigramaCreado: boolean;
     vacantesCreadas: number;
+    inspectorEmailsCreadas: number;
+    inspeccionPresentacionCreada: boolean;
   }>;
   error?: string;
 }> {
@@ -234,6 +304,8 @@ export async function syncSeedsToAllEmpresas(): Promise<{
       rolesCreados: number;
       organigramaCreado: boolean;
       vacantesCreadas: number;
+      inspectorEmailsCreadas: number;
+      inspeccionPresentacionCreada: boolean;
     }> = [];
 
     for (const e of empresas ?? []) {
@@ -244,12 +316,16 @@ export async function syncSeedsToAllEmpresas(): Promise<{
       const r = await syncRolesAEmpresa(admin, empresaId);
       const o = await syncOrganigramaAEmpresa(admin, empresaSlug);
       const v = await syncVacantesAEmpresa(admin, empresaId, empresaSlug);
+      const iep = await syncInspectorEmailPlantillasAEmpresa(admin, empresaId);
+      const ipres = await syncInspeccionPresentacionAEmpresa(admin, empresaId);
       resumen.push({
         empresa: empresaNombre,
         deptosCreados: d.creados,
         rolesCreados: r.creados,
         organigramaCreado: o.creado,
         vacantesCreadas: v.creadas,
+        inspectorEmailsCreadas: iep.creadas,
+        inspeccionPresentacionCreada: ipres.creada,
       });
     }
 

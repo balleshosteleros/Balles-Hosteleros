@@ -18,6 +18,8 @@ export type InspectorOrigen = "formulario_publico" | "alta_manual" | "referido";
 export interface InspectorDisponibilidad {
   dias?: string[];
   franja?: "manana" | "tarde" | "ambas";
+  horario?: string;
+  vehiculo_propio?: boolean;
   notas?: string;
 }
 
@@ -79,6 +81,43 @@ export interface InspectorDetalle extends Inspector {
 
 // ─── Public bolsa ──────────────────────────────────────────────────────
 
+// Campos toggleables del formulario público (nombre+apellidos y teléfono
+// son siempre obligatorios por esquema y no se pueden desactivar).
+export type BolsaCampoKey =
+  | "email"
+  | "ciudad"
+  | "horario_disponibilidad"
+  | "vehiculo_propio";
+
+export type BolsaCamposActivos = Record<BolsaCampoKey, boolean>;
+
+export const BOLSA_CAMPOS_DEFAULTS: BolsaCamposActivos = {
+  email: true,
+  ciudad: true,
+  horario_disponibilidad: true,
+  vehiculo_propio: true,
+};
+
+export const BOLSA_CAMPOS_OBLIGATORIOS: Record<BolsaCampoKey, boolean> = {
+  email: true,
+  ciudad: true,
+  horario_disponibilidad: false,
+  vehiculo_propio: false,
+};
+
+export const BOLSA_CAMPOS_LABELS: Record<BolsaCampoKey, string> = {
+  email: "Email",
+  ciudad: "Ciudad",
+  horario_disponibilidad: "Disponibilidad horaria",
+  vehiculo_propio: "Vehículo propio",
+};
+
+export function mergeCamposActivos(
+  raw: Partial<BolsaCamposActivos> | null | undefined,
+): BolsaCamposActivos {
+  return { ...BOLSA_CAMPOS_DEFAULTS, ...(raw ?? {}) };
+}
+
 export interface BolsaConfig {
   activa: boolean;
   titulo_seccion: string;
@@ -90,6 +129,7 @@ export interface BolsaConfig {
   color_fondo: string | null;
   color_acento: string | null;
   color_texto: string | null;
+  campos_activos: BolsaCamposActivos;
 }
 
 export const BOLSA_CONFIG_DEFAULTS: BolsaConfig = {
@@ -105,6 +145,7 @@ export const BOLSA_CONFIG_DEFAULTS: BolsaConfig = {
   color_fondo: null,
   color_acento: null,
   color_texto: null,
+  campos_activos: { ...BOLSA_CAMPOS_DEFAULTS },
 };
 
 export interface BolsaPublicaEmpresa {
@@ -129,6 +170,8 @@ export interface InscripcionPublicaInput {
   ciudad?: string | null;
   provincia?: string | null;
   disponibilidad?: InspectorDisponibilidad | null;
+  horario_disponibilidad?: string | null;
+  vehiculo_propio?: boolean | null;
   notas?: string | null;
   cv_url?: string | null;
 }

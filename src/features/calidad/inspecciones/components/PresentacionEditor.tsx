@@ -48,6 +48,7 @@ import {
 } from "lucide-react";
 import { SlideRenderer } from "./SlideRenderer";
 import { ImageInputOrUpload } from "./ImageInputOrUpload";
+import { FocalPointPicker } from "./FocalPointPicker";
 import {
   savePresentacion,
   iaReescribirTexto,
@@ -279,7 +280,7 @@ export function PresentacionEditor({ slidesInitial, theme, empresaId }: Presenta
         </div>
       </div>
 
-      <div className="grid grid-cols-[220px_1fr] gap-3 min-h-[600px]">
+      <div className="grid grid-cols-[220px_minmax(0,1fr)] gap-3 min-h-[600px]">
         <SlideList
           slides={slides}
           selectedIdx={selectedIdx}
@@ -288,6 +289,7 @@ export function PresentacionEditor({ slidesInitial, theme, empresaId }: Presenta
         {selected ? (
           <SlideWorkspace
             slide={selected}
+            slideIndex={selectedIdx}
             theme={theme}
             empresaId={empresaId}
             onPatchSlide={patchSlide}
@@ -324,8 +326,8 @@ export function PresentacionEditor({ slidesInitial, theme, empresaId }: Presenta
             <DialogTitle>Vista previa de la presentación</DialogTitle>
           </DialogHeader>
           <div className="space-y-6 py-2">
-            {slides.map((s) => (
-              <SlideRenderer key={s.id} slide={s} theme={theme} />
+            {slides.map((s, i) => (
+              <SlideRenderer key={s.id} slide={s} theme={theme} index={i} />
             ))}
           </div>
         </DialogContent>
@@ -373,6 +375,7 @@ function SlideList({
 
 function SlideWorkspace({
   slide,
+  slideIndex,
   theme,
   empresaId,
   onPatchSlide,
@@ -386,6 +389,7 @@ function SlideWorkspace({
   isLast,
 }: {
   slide: Slide;
+  slideIndex: number;
   theme: EmpresaTheme;
   empresaId: string;
   onPatchSlide: (p: Partial<Slide>) => void;
@@ -399,7 +403,7 @@ function SlideWorkspace({
   isLast: boolean;
 }) {
   return (
-    <div className="rounded-xl border bg-card p-4 space-y-4">
+    <div className="rounded-xl border bg-card p-4 space-y-4 min-w-0">
       <div className="flex flex-wrap items-center gap-2">
         <Select value={slide.layout} onValueChange={(v) => onPatchSlide({ layout: v as SlideLayout })}>
           <SelectTrigger className="h-8 w-[180px] text-xs"><SelectValue /></SelectTrigger>
@@ -423,17 +427,41 @@ function SlideWorkspace({
         </div>
       </div>
 
-      <div className="rounded-md border bg-muted/30 p-3 space-y-1.5">
-        <Label className="text-xs font-medium">Imagen de fondo de la slide</Label>
+      <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+        <Label className="text-xs font-medium">
+          Imagen lateral de la slide
+          {slide.layout !== "split-left" && slide.layout !== "split-right" && (
+            <span className="ml-1.5 font-normal text-muted-foreground">
+              (visible con layout «Imagen a la izquierda/derecha»)
+            </span>
+          )}
+        </Label>
         <ImageInputOrUpload
           value={slide.image ?? null}
-          onChange={(url) => onPatchSlide({ image: url })}
+          onChange={(url) =>
+            onPatchSlide({
+              image: url,
+              image_focal_x: url ? slide.image_focal_x ?? 50 : null,
+              image_focal_y: url ? slide.image_focal_y ?? 50 : null,
+            })
+          }
           empresaId={empresaId}
           kind="slide"
         />
+        {slide.image && (slide.layout === "split-left" || slide.layout === "split-right") && (
+          <FocalPointPicker
+            src={slide.image}
+            focalX={slide.image_focal_x ?? 50}
+            focalY={slide.image_focal_y ?? 50}
+            onChange={(x, y) => onPatchSlide({ image_focal_x: x, image_focal_y: y })}
+            aspect="card"
+          />
+        )}
       </div>
 
-      <SlideRenderer slide={slide} theme={theme} />
+      <div className="mx-auto w-full max-w-3xl">
+        <SlideRenderer slide={slide} theme={theme} index={slideIndex} />
+      </div>
 
       <div className="space-y-2 pt-2 border-t">
         <div className="flex items-center justify-between">
@@ -618,11 +646,26 @@ function BlockBody({
                 <Textarea value={item.descripcion} onChange={(e) => onUpd({ descripcion: e.target.value })} placeholder="Descripción" rows={2} className="text-sm" />
                 <ImageInputOrUpload
                   value={item.imagen ?? null}
-                  onChange={(url) => onUpd({ imagen: url })}
+                  onChange={(url) =>
+                    onUpd({
+                      imagen: url,
+                      imagen_focal_x: url ? item.imagen_focal_x ?? 50 : null,
+                      imagen_focal_y: url ? item.imagen_focal_y ?? 50 : null,
+                    })
+                  }
                   empresaId={empresaId}
                   kind="card"
                   compact
                 />
+                {item.imagen && (
+                  <FocalPointPicker
+                    src={item.imagen}
+                    focalX={item.imagen_focal_x ?? 50}
+                    focalY={item.imagen_focal_y ?? 50}
+                    onChange={(x, y) => onUpd({ imagen_focal_x: x, imagen_focal_y: y })}
+                    aspect="card"
+                  />
+                )}
               </div>
             )}
             empty={{ titulo: "Tarjeta", descripcion: "Texto", imagen: null }}
@@ -665,10 +708,25 @@ function BlockBody({
         <div className="space-y-2">
           <ImageInputOrUpload
             value={block.src ?? null}
-            onChange={(url) => onPatch({ src: url } as Partial<SlideBlock>)}
+            onChange={(url) =>
+              onPatch({
+                src: url,
+                focal_x: url ? block.focal_x ?? 50 : null,
+                focal_y: url ? block.focal_y ?? 50 : null,
+              } as Partial<SlideBlock>)
+            }
             empresaId={empresaId}
             kind="image-block"
           />
+          {block.src && (
+            <FocalPointPicker
+              src={block.src}
+              focalX={block.focal_x ?? 50}
+              focalY={block.focal_y ?? 50}
+              onChange={(x, y) => onPatch({ focal_x: x, focal_y: y } as Partial<SlideBlock>)}
+              aspect="video"
+            />
+          )}
           <Input value={block.alt ?? ""} onChange={(e) => onPatch({ alt: e.target.value } as Partial<SlideBlock>)} placeholder="Texto alternativo" className="h-8 text-sm" />
         </div>
       );

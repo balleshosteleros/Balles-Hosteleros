@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import type {
   Contacto,
   ContactoInput,
@@ -12,12 +13,7 @@ async function getEmpresaId(): Promise<string | null> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
-  const { data } = await supabase
-    .from("profiles")
-    .select("empresa_id")
-    .eq("user_id", user.id)
-    .single();
-  return data?.empresa_id ?? null;
+  return getEmpresaActivaForUser(supabase, user.id);
 }
 
 // ─────────────────────────── Contactos ───────────────────────────

@@ -3,8 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
-import { estadoActividadParaFase, normalizarTelefono } from "./data";
+import {
+  estadoActividadParaFase,
+  normalizarNombre,
+  normalizarTelefono,
+} from "./data";
+import { sendInspectorFaseEmail } from "./email-sender";
 import type {
+  BolsaCamposActivos,
   BolsaConfig,
   Inspector,
   InspectorDetalle,
@@ -12,7 +18,7 @@ import type {
   InspectorHistorialItem,
   InspectorListItem,
 } from "./types";
-import { BOLSA_CONFIG_DEFAULTS } from "./types";
+import { BOLSA_CONFIG_DEFAULTS, mergeCamposActivos } from "./types";
 
 async function ctx() {
   const supabase = await createClient();
@@ -182,10 +188,12 @@ export async function getInspectorDetalle(
 
 export interface CrearInspectorInput {
   nombre: string;
-  apellidos?: string | null;
-  email?: string | null;
+  apellidos: string;
+  email: string;
   telefono: string;
-  ciudad?: string | null;
+  ciudad: string;
+  horario_disponibilidad: string;
+  vehiculo_propio: boolean;
   provincia?: string | null;
   notas?: string | null;
   fase?: InspectorFase;
@@ -198,8 +206,31 @@ export async function crearInspectorManual(
   if (!empresaId) return { ok: false, error: "Sin sesión" };
 
   const tel = input.telefono?.trim();
-  if (!input.nombre?.trim() || !tel) {
-    return { ok: false, error: "Nombre y teléfono son obligatorios" };
+  const nombre = normalizarNombre(input.nombre);
+  const apellidos = normalizarNombre(input.apellidos);
+  const email = input.email?.trim();
+  const ciudad = input.ciudad?.trim();
+  const horario = input.horario_disponibilidad?.trim();
+  if (!nombre || nombre.length < 2) {
+    return { ok: false, error: "Nombre inválido" };
+  }
+  if (!apellidos) {
+    return { ok: false, error: "Apellidos obligatorios" };
+  }
+  if (!tel) {
+    return { ok: false, error: "Teléfono obligatorio" };
+  }
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { ok: false, error: "Email inválido" };
+  }
+  if (!ciudad) {
+    return { ok: false, error: "Ciudad obligatoria" };
+  }
+  if (!horario) {
+    return { ok: false, error: "Selecciona al menos una disponibilidad horaria" };
+  }
+  if (typeof input.vehiculo_propio !== "boolean") {
+    return { ok: false, error: "Indica si tiene vehículo propio" };
   }
 
   const fase: InspectorFase = input.fase ?? "bolsa";
@@ -208,12 +239,13 @@ export async function crearInspectorManual(
     .from("inspectores")
     .insert({
       empresa_id: empresaId,
-      nombre: input.nombre.trim(),
-      apellidos: input.apellidos?.trim() || null,
-      email: input.email?.trim() || null,
+      nombre,
+      apellidos,
+      email,
       telefono: tel,
-      ciudad: input.ciudad?.trim() || null,
+      ciudad,
       provincia: input.provincia?.trim() || null,
+      disponibilidad: { horario, vehiculo_propio: input.vehiculo_propio },
       notas: input.notas?.trim() || null,
       fase,
       estado_actividad: estadoActividadParaFase(fase),
@@ -227,6 +259,14 @@ export async function crearInspectorManual(
       return { ok: false, error: "Ya existe un inspector con ese teléfono" };
     }
     return { ok: false, error: error?.message ?? "Error al crear" };
+  }
+
+  // Email automático correspondiente a la fase de creación (normalmente "Nuevo").
+  const res = await sendInspectorFaseEmail(empresaId, data.id, fase);
+  if (!res.sent) {
+    console.log(
+      `[crearInspectorManual] email fase=${fase} no enviado: ${res.reason}`,
+    );
   }
 
   revalidatePath("/calidad/inspecciones");
@@ -270,6 +310,15 @@ export async function moverInspectorFase(
   const { supabase, empresaId, user } = await ctx();
   if (!empresaId || !user) return { ok: false, error: "Sin sesión" };
 
+  // Fase actual para evitar reenviar el email si no hay cambio real.
+  const { data: actual } = await supabase
+    .from("inspectores")
+    .select("fase")
+    .eq("id", inspectorId)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+  const faseAnterior = (actual?.fase as InspectorFase | undefined) ?? null;
+
   const { error } = await supabase
     .from("inspectores")
     .update({
@@ -280,6 +329,17 @@ export async function moverInspectorFase(
     .eq("id", inspectorId)
     .eq("empresa_id", empresaId);
   if (error) return { ok: false, error: error.message };
+
+  // Dispara el email automático de la fase destino (no bloquea ni revierte).
+  if (faseAnterior !== fase) {
+    const res = await sendInspectorFaseEmail(empresaId, inspectorId, fase);
+    if (!res.sent) {
+      console.log(
+        `[moverInspectorFase] email fase=${fase} no enviado: ${res.reason}`,
+      );
+    }
+  }
+
   revalidatePath("/calidad/inspecciones");
   return { ok: true };
 }
@@ -348,6 +408,9 @@ export async function getBolsaConfig(): Promise<
         color_fondo: row.color_fondo,
         color_acento: row.color_acento,
         color_texto: row.color_texto,
+        campos_activos: mergeCamposActivos(
+          row.campos_activos as Partial<BolsaCamposActivos> | null,
+        ),
       }
     : { ...BOLSA_CONFIG_DEFAULTS };
 

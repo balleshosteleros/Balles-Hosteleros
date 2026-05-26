@@ -14,6 +14,7 @@ import type {
   LocalPublico,
   EmpleadoPublico,
   EmpleadoSeleccionado,
+  InspectorPublico,
   JefeSalaFirma,
   QrTokenPublic,
   VerificacionResultado,
@@ -24,6 +25,19 @@ function normalizarDni(d: string | null | undefined): string | null {
   if (!d) return null;
   const limpio = d.toUpperCase().replace(/\s+/g, "").replace(/-/g, "");
   return limpio.length > 0 ? limpio : null;
+}
+
+// Si el usuario escribe en MAYÚSCULAS ("DAYANA LANZURI"), lo convertimos a
+// formato nombre ("Dayana Lanzuri"). Si ya hay alguna minúscula, respetamos el
+// casing del usuario para no romper apellidos tipo "McCarthy" o conectores "y".
+function normalizarNombre<T extends string | null | undefined>(s: T): T {
+  if (!s) return s;
+  const trimmed = s.trim();
+  if (!trimmed) return trimmed as T;
+  if (/\p{Ll}/u.test(trimmed)) return trimmed as T;
+  return trimmed
+    .toLocaleLowerCase("es-ES")
+    .replace(/(^|[\s\-'])(\p{L})/gu, (_m, sep: string, ch: string) => sep + ch.toLocaleUpperCase("es-ES")) as T;
 }
 
 interface PreguntaSnapshot {
@@ -90,7 +104,7 @@ export async function fetchInspeccionPublica(
   // Plantilla activa (versión vigente)
   const { data: plantilla } = await admin
     .from("inspeccion_plantillas")
-    .select("id, nombre")
+    .select("id, nombre, numero_secuencial")
     .eq("id", plantillaId)
     .eq("empresa_id", empresaId)
     .maybeSingle();
@@ -164,6 +178,22 @@ export async function fetchInspeccionPublica(
     };
   });
 
+  // Inspectores en "proceso de colaboración" (fases prueba/activo).
+  // Son los únicos que pueden rellenar el formulario público.
+  const { data: inspectoresRows } = await admin
+    .from("inspectores")
+    .select("id, nombre, apellidos, telefono, email, fase")
+    .eq("empresa_id", empresaId)
+    .in("fase", ["prueba", "activo"])
+    .order("nombre");
+
+  const inspectores: InspectorPublico[] = (inspectoresRows ?? []).map((i) => ({
+    id: i.id as string,
+    nombre_completo: `${i.nombre ?? ""}${i.apellidos ? " " + i.apellidos : ""}`.trim(),
+    telefono: (i.telefono as string | null) ?? "",
+    email: (i.email as string | null) ?? null,
+  }));
+
   return {
     empresa: empresaTheme,
     locales: localesPublic,
@@ -172,15 +202,18 @@ export async function fetchInspeccionPublica(
       id: plantilla.id,
       version_id: version.id,
       nombre: plantilla.nombre,
+      numero_secuencial: (plantilla.numero_secuencial as number | null) ?? null,
       secciones: secs,
     },
     empleados,
+    inspectores,
   };
 }
 
 interface EnvioInput {
   token: string;
   local_id: string | null;
+  inspector_id: string | null;
   nombre_inspector: string;
   telefono_inspector: string | null;
   fecha_inspeccion: string | null;
@@ -214,6 +247,25 @@ export async function submitInspeccion(
   }
   const empresaId = tokenRow.empresa_id as string;
   const plantillaId = tokenRow.plantilla_activa_id as string;
+
+  // 1b) Validar inspector: debe existir, pertenecer a la empresa y estar
+  // en una fase de colaboración (prueba/activo). Sin esto no se acepta
+  // envío: el formulario no permite avanzar sin escogerlo.
+  if (!input.inspector_id) {
+    return { ok: false, error: "Debes elegirte en el desplegable de inspectores" };
+  }
+  const { data: inspectorRow } = await admin
+    .from("inspectores")
+    .select("id, nombre, apellidos, telefono, fase, empresa_id")
+    .eq("id", input.inspector_id)
+    .maybeSingle();
+  if (
+    !inspectorRow ||
+    inspectorRow.empresa_id !== empresaId ||
+    !["prueba", "activo"].includes(inspectorRow.fase as string)
+  ) {
+    return { ok: false, error: "Inspector no autorizado" };
+  }
 
   // 2) Resolver versión vigente
   const { data: version } = await admin
@@ -295,10 +347,10 @@ export async function submitInspeccion(
       local_id: input.local_id,
       plantilla_id: plantillaId,
       version_id: version.id,
-      nombre_inspector: input.nombre_inspector,
+      nombre_inspector: normalizarNombre(input.nombre_inspector),
       telefono_inspector: input.telefono_inspector,
       fecha_inspeccion: input.fecha_inspeccion,
-      nombre_jefe_sala: input.nombre_jefe_sala,
+      nombre_jefe_sala: normalizarNombre(input.nombre_jefe_sala),
       jefe_sala_empleado_id: jefeSalaEmpleadoId,
       nota_final: notaFinal,
       estado: "pendiente_revision",
@@ -308,6 +360,20 @@ export async function submitInspeccion(
     .select("id, numero_secuencial")
     .maybeSingle();
   if (errEnvio || !envio) return { ok: false, error: errEnvio?.message ?? "Error" };
+
+  // 6b) Vincular envío ↔ inspector (ficha de la bolsa).
+  // Hacemos upsert por envio_id por idempotencia. Si fallase, no abortamos el
+  // envío entero: el responsable de calidad podrá vincular manualmente luego.
+  await admin
+    .from("inspector_asignaciones")
+    .upsert(
+      {
+        empresa_id: empresaId,
+        inspector_id: input.inspector_id,
+        envio_id: envio.id,
+      },
+      { onConflict: "envio_id" },
+    );
 
   // 7) Insertar respuestas con snapshot
   const filas = input.respuestas.map((r) => {

@@ -4,8 +4,6 @@ import { useState, useEffect, useCallback, useMemo, useTransition, type ReactNod
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -13,16 +11,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import {
   SubmoduleToolbar,
   type ToolbarColumna,
@@ -38,13 +26,15 @@ import {
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
-import { Settings, ClipboardCheck, CheckCircle2, Copy, RefreshCw, Loader2, Users, LayoutPanelTop, ArrowLeft, Check, X } from "lucide-react";
-import { listEnvios, getEnvio, revisarEnvio, getToken, rotarToken, setPlantillaActiva, listPlantillas } from "../actions";
+import { Settings, ClipboardCheck, CheckCircle2, Loader2, Users, ArrowLeft, Check, X, Share2 } from "lucide-react";
+import { listEnvios, getEnvio, revisarEnvio } from "../actions";
 import type { EnvioResumen, EnvioCompleto } from "../types";
 import { InspectoresTab } from "@/features/calidad/inspecciones/inspectores/components/InspectoresTab";
-import { PresentacionTab } from "./PresentacionTab";
+import { InspectoresConfigView } from "@/features/calidad/inspecciones/inspectores/components/config/InspectoresConfigView";
+import { DialogCompartirInspectores } from "@/features/calidad/inspecciones/inspectores/components/DialogCompartirInspectores";
 import { PlantillasNavButton } from "./PlantillasListView";
 import type { InspeccionesTab } from "@/features/calidad/components/CalidadInspeccionesView";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 
 const columnasDef: ToolbarColumna[] = [
   { campo: "numero_secuencial", label: "Nº", bloqueada: true },
@@ -150,11 +140,22 @@ function nombreCortoSeccion(titulo: string): string {
   return titulo.replace(/^TEMA\s*\d+:\s*/i, "").trim();
 }
 
-function NotasPorSeccionCell({ notas }: { notas: Record<string, number> | null }) {
+function NotasPorSeccionCell({
+  notas,
+  orden,
+}: {
+  notas: Record<string, number> | null;
+  orden?: Map<string, number>;
+}) {
   if (!notas || Object.keys(notas).length === 0) {
     return <span className="text-muted-foreground text-xs">—</span>;
   }
   const entradas = Object.entries(notas);
+  if (orden) {
+    entradas.sort(
+      (a, b) => (orden.get(a[0]) ?? Number.MAX_SAFE_INTEGER) - (orden.get(b[0]) ?? Number.MAX_SAFE_INTEGER),
+    );
+  }
   return (
     <div className="flex flex-wrap gap-1">
       {entradas.map(([seccion, valor]) => {
@@ -178,16 +179,29 @@ function NotasPorSeccionCell({ notas }: { notas: Record<string, number> | null }
   );
 }
 
-function PlantillaBadge({ nombre, numero }: { nombre: string | null; numero?: number | null }) {
+function EscalaBadge({ valor, max }: { valor: number; max: number }) {
+  const pct = max > 0 ? valor / max : 0;
+  const color =
+    pct >= 0.9 ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+    pct >= 0.7 ? "bg-blue-50 text-blue-700 border-blue-200" :
+    pct >= 0.5 ? "bg-amber-50 text-amber-700 border-amber-200" :
+    "bg-red-50 text-red-700 border-red-200";
+  return (
+    <Badge variant="outline" className={`font-mono tabular-nums ${color}`}>
+      {valor} / {max}
+    </Badge>
+  );
+}
+
+function PlantillaBadge({ nombre, version }: { nombre: string | null; version?: number | null }) {
   if (!nombre) return <span className="text-muted-foreground text-xs">—</span>;
-  const version = `V${numero ? ((numero - 1) % 3) + 1 : 1}`;
   return (
     <Badge
       variant="outline"
       className="text-[10px] font-mono tabular-nums font-normal text-muted-foreground border-muted-foreground/30"
       title={nombre}
     >
-      {version}
+      V{version ?? 1}
     </Badge>
   );
 }
@@ -245,12 +259,11 @@ function fechaIsoDia(iso: string | null): string {
 }
 
 interface RealizadasViewProps {
-  empresaSlug?: string | null;
   tab: InspeccionesTab;
   onTabChange: (t: InspeccionesTab) => void;
 }
 
-export function RealizadasView({ empresaSlug = null, onTabChange }: RealizadasViewProps) {
+export function RealizadasView({ onTabChange }: RealizadasViewProps) {
   const [envios, setEnvios] = useState<EnvioResumen[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
@@ -260,7 +273,9 @@ export function RealizadasView({ empresaSlug = null, onTabChange }: RealizadasVi
   const [columnasOrden, setColumnasOrden] = useState<string[]>(columnasDef.map((c) => c.campo));
   const [showConfig, setShowConfig] = useState(false);
   const [showInspectores, setShowInspectores] = useState(false);
+  const [compartirOpen, setCompartirOpen] = useState(false);
   const [selectedEnvioId, setSelectedEnvioId] = useState<string | null>(null);
+  const { empresaActual } = useEmpresa();
 
   const reload = useCallback(() => {
     setLoading(true);
@@ -270,7 +285,7 @@ export function RealizadasView({ empresaSlug = null, onTabChange }: RealizadasVi
     });
   }, []);
 
-  useEffect(() => { reload(); }, [reload]);
+  useEffect(() => { reload(); }, [reload, empresaActual.id]);
 
   const mesesUsados = useMemo(
     () => [...new Set(envios.map((e) => mesReserva(e.fecha_inspeccion)).filter((m) => m !== "—"))]
@@ -486,7 +501,7 @@ export function RealizadasView({ empresaSlug = null, onTabChange }: RealizadasVi
       ),
       td: (e) => (
         <td key="plantilla_nombre" className="px-3 py-1.5">
-          <PlantillaBadge nombre={e.plantilla_nombre} numero={e.numero_secuencial} />
+          <PlantillaBadge nombre={e.plantilla_nombre} version={e.plantilla_version} />
         </td>
       ),
     },
@@ -591,7 +606,6 @@ export function RealizadasView({ empresaSlug = null, onTabChange }: RealizadasVi
   if (showInspectores) {
     return (
       <InspectoresTab
-        empresaSlug={empresaSlug}
         onBack={() => setShowInspectores(false)}
         backLabel="Volver a inspecciones"
       />
@@ -600,7 +614,17 @@ export function RealizadasView({ empresaSlug = null, onTabChange }: RealizadasVi
 
   if (showConfig) {
     return (
-      <ConfigPageView onBack={() => setShowConfig(false)} />
+      <div className="space-y-3">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowConfig(false)}
+          className="gap-1.5 text-xs"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" /> Volver a inspecciones
+        </Button>
+        <InspectoresConfigView />
+      </div>
     );
   }
 
@@ -632,17 +656,32 @@ export function RealizadasView({ empresaSlug = null, onTabChange }: RealizadasVi
           </>
         }
         extraDerecha={
-          <Button
-            size="icon"
-            variant={showConfig ? "default" : "outline"}
-            className="h-9 w-9"
-            onClick={() => setShowConfig((v) => !v)}
-            title="Configuración"
-            aria-label="Configuración"
-          >
-            <Settings className="h-4 w-4" strokeWidth={1.75} />
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setCompartirOpen(true)}
+            >
+              <Share2 className="h-3.5 w-3.5" /> Compartir
+            </Button>
+            <Button
+              size="icon"
+              variant={showConfig ? "default" : "outline"}
+              className="h-9 w-9"
+              onClick={() => setShowConfig((v) => !v)}
+              title="Configuración"
+              aria-label="Configuración"
+            >
+              <Settings className="h-4 w-4" strokeWidth={1.75} />
+            </Button>
+          </>
         }
+      />
+
+      <DialogCompartirInspectores
+        open={compartirOpen}
+        onOpenChange={setCompartirOpen}
       />
 
       <ResizableColumnsProvider storageKey="calidad-inspecciones-realizadas">
@@ -690,179 +729,6 @@ export function RealizadasView({ empresaSlug = null, onTabChange }: RealizadasVi
   );
 }
 
-function ConfigPageView({ onBack }: { onBack: () => void }) {
-  const [token, setToken] = useState<string | null>(null);
-  const [plantillaActivaId, setPlantillaActivaId] = useState<string | null>(null);
-  const [plantillas, setPlantillas] = useState<{ id: string; nombre: string }[]>([]);
-  const [loadingRot, setLoadingRot] = useState(false);
-  const [confirmRotarOpen, setConfirmRotarOpen] = useState(false);
-  const [presentacionOpen, setPresentacionOpen] = useState(false);
-
-  useEffect(() => {
-    Promise.all([getToken(), listPlantillas()]).then(([t, ps]) => {
-      setToken(t?.token ?? null);
-      setPlantillaActivaId(t?.plantilla_activa_id ?? null);
-      setPlantillas(ps.filter((p) => !p.archivada).map((p) => ({ id: p.id, nombre: p.nombre })));
-    });
-  }, []);
-
-  async function copyLink() {
-    if (!token) return;
-    try {
-      await navigator.clipboard.writeText(`${window.location.origin}/inspectores/${token}`);
-      toast.success("Enlace copiado");
-    } catch {
-      toast.error("No se pudo copiar");
-    }
-  }
-
-  async function confirmarRotacion() {
-    setConfirmRotarOpen(false);
-    setLoadingRot(true);
-    const res = await rotarToken();
-    setLoadingRot(false);
-    if (res.ok) {
-      setToken(res.token);
-      toast.success("Enlace rotado. Actualiza el mensaje automático de Calidad.");
-    } else {
-      toast.error(res.error);
-    }
-  }
-
-  async function cambiarPlantilla(id: string) {
-    const res = await setPlantillaActiva(id);
-    if (res.ok) {
-      setPlantillaActivaId(id);
-      toast.success("Plantilla activa actualizada");
-    } else {
-      toast.error(res.error);
-    }
-  }
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onBack}
-          className="gap-1.5 text-xs"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" /> Volver a inspecciones
-        </Button>
-      </div>
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Configuración</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-        <div className="space-y-1.5">
-          <Label className="text-xs">Enlace público para inspectores</Label>
-          <div className="flex items-center gap-2">
-            <code className="flex-1 rounded-md border bg-muted/30 px-2.5 py-1.5 text-xs font-mono truncate">
-              {token ? `${typeof window !== "undefined" ? window.location.origin : ""}/inspectores/${token}` : "—"}
-            </code>
-            <Button size="sm" variant="outline" onClick={copyLink} disabled={!token}>
-              <Copy className="h-3.5 w-3.5" /> Copiar
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setConfirmRotarOpen(true)} disabled={loadingRot}>
-              {loadingRot ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-              Rotar
-            </Button>
-          </div>
-          <p className="text-[11px] text-muted-foreground">
-            Compártelo con los inspectores externos. Se mantiene estable salvo que lo rotes manualmente.
-          </p>
-        </div>
-
-        <AlertDialog open={confirmRotarOpen} onOpenChange={setConfirmRotarOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle className="text-destructive">¿Rotar el enlace de inspecciones?</AlertDialogTitle>
-              <AlertDialogDescription asChild>
-                <div className="space-y-2 text-sm">
-                  <p><strong>Esto invalida el enlace actual de forma inmediata e irreversible.</strong></p>
-                  <p>Como consecuencia:</p>
-                  <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-                    <li>Cualquier inspector que abra el enlace antiguo verá un error 404.</li>
-                    <li>El mensaje automático de Calidad <strong>dejará de funcionar</strong> hasta que pegues el enlace nuevo.</li>
-                    <li>Los envíos ya recibidos NO se ven afectados, solo el acceso futuro.</li>
-                  </ul>
-                  <p className="pt-1">Rota solo si necesitas cortar el acceso (p. ej. el enlace se ha filtrado).</p>
-                </div>
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={confirmarRotacion}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                Sí, rotar y cortar acceso
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-        <div className="space-y-1.5 pt-2 border-t">
-          <Label className="text-xs">Plantilla activa</Label>
-          <div className="grid gap-1.5">
-            {plantillas.length === 0 ? (
-              <div className="text-xs text-muted-foreground">Aún no hay plantillas. Crea una en la pestaña PLANTILLAS.</div>
-            ) : plantillas.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => cambiarPlantilla(p.id)}
-                className={`text-left rounded-md border px-3 py-2 text-sm transition-colors ${
-                  plantillaActivaId === p.id ? "border-primary bg-primary/5" : "hover:bg-muted/50"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span>{p.nombre}</span>
-                  {plantillaActivaId === p.id && <CheckCircle2 className="h-4 w-4 text-primary" />}
-                </div>
-              </button>
-            ))}
-          </div>
-          <p className="text-[11px] text-muted-foreground">
-            La plantilla activa es la que el inspector verá automáticamente al abrir el enlace.
-          </p>
-        </div>
-
-        <div className="space-y-1.5 pt-2 border-t">
-          <Label className="text-xs">Presentación pública</Label>
-          <div className="flex items-start gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPresentacionOpen(true)}
-              className="gap-1.5"
-            >
-              <LayoutPanelTop className="h-3.5 w-3.5" /> Editar presentación
-            </Button>
-            <p className="text-[11px] text-muted-foreground flex-1">
-              Diapositivas que el inspector ve al abrir el enlace, antes de empezar la inspección.
-            </p>
-          </div>
-        </div>
-
-        <Dialog open={presentacionOpen} onOpenChange={setPresentacionOpen}>
-          <DialogContent className="max-w-[100vw] sm:max-w-[95vw] w-full h-[95vh] p-0 gap-0 overflow-hidden flex flex-col">
-            <DialogHeader className="px-4 py-3 border-b flex-row items-center justify-between space-y-0">
-              <DialogTitle className="text-base flex items-center gap-2">
-                <LayoutPanelTop className="h-4 w-4" /> Presentación pública
-              </DialogTitle>
-            </DialogHeader>
-            <div className="flex-1 overflow-auto p-4">
-              <PresentacionTab />
-            </div>
-          </DialogContent>
-        </Dialog>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
 function EnvioDetailDialog({
   envioId,
   onClose,
@@ -902,12 +768,16 @@ function EnvioDetailDialog({
   }
 
   const respuestasPorSeccion = new Map<string, typeof envio extends null ? never : NonNullable<typeof envio>["respuestas"]>();
+  const seccionOrden = new Map<string, number>();
   if (envio) {
     for (const r of envio.respuestas) {
       const k = r.pregunta_snapshot.seccion_titulo;
       const arr = respuestasPorSeccion.get(k) ?? [];
       arr.push(r);
       respuestasPorSeccion.set(k, arr);
+      if (!seccionOrden.has(k)) {
+        seccionOrden.set(k, r.pregunta_snapshot.seccion_orden);
+      }
     }
   }
 
@@ -933,12 +803,12 @@ function EnvioDetailDialog({
               <div><span className="text-muted-foreground text-xs">Publicada:</span> {formatFechaHora(envio.created_at)}</div>
               <div><span className="text-muted-foreground text-xs">Local:</span> {envio.local_nombre ?? "—"}</div>
               <div><span className="text-muted-foreground text-xs">Cumplimiento:</span> <CumplimientoBadge createdAt={envio.created_at} fechaInspeccion={envio.fecha_inspeccion} /></div>
-              <div className="col-span-2"><span className="text-muted-foreground text-xs">Plantilla:</span> <PlantillaBadge nombre={envio.plantilla_nombre} numero={envio.numero_secuencial} /></div>
+              <div className="col-span-2"><span className="text-muted-foreground text-xs">Plantilla:</span> <PlantillaBadge nombre={envio.plantilla_nombre} version={envio.plantilla_version} /></div>
               <div className="col-span-2"><span className="text-muted-foreground text-xs">Jefe de sala:</span> {envio.nombre_jefe_sala ?? "—"}</div>
               {envio.notas_por_seccion && Object.keys(envio.notas_por_seccion).length > 0 && (
                 <div className="col-span-2">
                   <div className="text-muted-foreground text-xs mb-1.5">Notas por sección</div>
-                  <NotasPorSeccionCell notas={envio.notas_por_seccion} />
+                  <NotasPorSeccionCell notas={envio.notas_por_seccion} orden={seccionOrden} />
                 </div>
               )}
               <div className="col-span-2">
@@ -966,11 +836,14 @@ function EnvioDetailDialog({
                     .slice()
                     .sort((a, b) => a.pregunta_snapshot.orden - b.pregunta_snapshot.orden)
                     .map((r) => {
+                      // El empleado inspeccionado ya se muestra arriba como
+                      // "Jefe de sala"; no lo repetimos dentro de la inspección.
+                      if (r.pregunta_snapshot.tipo === "empleado_select") return null;
+
                       const enun = r.pregunta_snapshot.enunciado;
                       const esObs =
                         r.pregunta_snapshot.tipo === "texto_largo" &&
                         enun.toLowerCase().startsWith("observaciones");
-                      const esEmpleado = r.pregunta_snapshot.tipo === "empleado_select";
 
                       // Observaciones: siempre se muestra el bloque para mantener
                       // consistencia entre apartados; si está vacío indicamos "Sin observaciones".
@@ -989,37 +862,12 @@ function EnvioDetailDialog({
                         );
                       }
 
-                      // Empleado seleccionado: nombre + puesto + departamento.
-                      if (esEmpleado && r.valor_texto) {
-                        let parsed: { empleado_id?: string; nombre_completo?: string; puesto?: string | null; departamento?: string | null } | null = null;
-                        try {
-                          parsed = JSON.parse(r.valor_texto);
-                        } catch {
-                          parsed = null;
-                        }
-                        if (parsed) {
-                          return (
-                            <div key={r.id} className="text-sm space-y-0.5">
-                              <div className="font-medium">{parsed.nombre_completo ?? "—"}</div>
-                              <div className="text-xs text-muted-foreground">
-                                Puesto: {parsed.puesto ?? "—"}
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                Departamento: {parsed.departamento ?? "—"}
-                              </div>
-                            </div>
-                          );
-                        }
-                      }
-
                       return (
                         <div key={r.id} className="text-sm">
                           <div className="text-foreground/90">{enun}</div>
                           <div className="mt-0.5">
                             {r.pregunta_snapshot.tipo === "escala" && r.valor_numero !== null ? (
-                              <Badge variant="outline" className="font-mono tabular-nums">
-                                {r.valor_numero} / {r.pregunta_snapshot.escala_max ?? 5}
-                              </Badge>
+                              <EscalaBadge valor={r.valor_numero} max={r.pregunta_snapshot.escala_max ?? 5} />
                             ) : r.valor_texto ? (
                               <div className="rounded bg-muted/30 px-2 py-1.5 text-xs whitespace-pre-wrap">{r.valor_texto}</div>
                             ) : (

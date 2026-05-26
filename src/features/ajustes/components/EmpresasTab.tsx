@@ -217,7 +217,7 @@ export function EmpresasTab() {
           {editTarget && (
             <div className="space-y-4">
               <ConfiguracionTab />
-              <LocalesEmpresaTab empresaId={editTarget.id} />
+              <LocalesEmpresaTab empresaId={editTarget.dbId} />
             </div>
           )}
         </DialogContent>

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { normalizarNombre } from "@/shared/lib/normalizar-nombre";
 
 interface Props {
   empresaSlug: string;
@@ -143,6 +144,7 @@ export function FormCandidaturaPublica({ empresaSlug, empresaId, ofertaId, ofert
             required
             value={form.nombre}
             onChange={(e) => update("nombre", e.target.value)}
+            onBlur={() => update("nombre", normalizarNombre(form.nombre))}
             autoComplete="given-name"
           />
         </div>
@@ -153,6 +155,7 @@ export function FormCandidaturaPublica({ empresaSlug, empresaId, ofertaId, ofert
             required
             value={form.apellidos}
             onChange={(e) => update("apellidos", e.target.value)}
+            onBlur={() => update("apellidos", normalizarNombre(form.apellidos))}
             autoComplete="family-name"
           />
         </div>

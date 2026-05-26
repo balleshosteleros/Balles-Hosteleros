@@ -26,6 +26,8 @@ export type SlideBlock =
         titulo: string;
         descripcion: string;
         imagen?: string | null;
+        imagen_focal_x?: number | null;
+        imagen_focal_y?: number | null;
       }[];
     }
   | {
@@ -38,7 +40,14 @@ export type SlideBlock =
       type: "buttons";
       items: { label: string; href: string }[];
     }
-  | { id: string; type: "image"; src: string | null; alt?: string | null }
+  | {
+      id: string;
+      type: "image";
+      src: string | null;
+      alt?: string | null;
+      focal_x?: number | null;
+      focal_y?: number | null;
+    }
   | { id: string; type: "note"; text: string }
   | { id: string; type: "divider" };
 
@@ -47,6 +56,9 @@ export interface Slide {
   layout: SlideLayout;
   background: SlideBackground;
   image: string | null;
+  /** Punto focal de `image` (0-100 ambos ejes). Default 50/50 = centrado. */
+  image_focal_x?: number | null;
+  image_focal_y?: number | null;
   blocks: SlideBlock[];
 }
 
@@ -151,6 +163,7 @@ export interface EnvioResumen {
   notas_por_seccion: Record<string, number> | null;
   plantilla_id: string;
   plantilla_nombre: string | null;
+  plantilla_version: number | null;
   estado: "pendiente_revision" | "revisado" | "archivado";
   verificado_at: string | null;
   verificado_por_nombre: string | null;
@@ -179,6 +192,7 @@ export interface EnvioCompleto {
   local_nombre: string | null;
   plantilla_id: string;
   plantilla_nombre: string | null;
+  plantilla_version: number | null;
   version_id: string;
   numero_secuencial: number | null;
   nombre_inspector: string;
@@ -270,6 +284,13 @@ export interface LocalPublico {
   color: string | null;
 }
 
+export interface InspectorPublico {
+  id: string;
+  nombre_completo: string;
+  telefono: string;
+  email: string | null;
+}
+
 export interface InspeccionPublica {
   empresa: EmpresaTheme;
   locales: LocalPublico[];
@@ -278,7 +299,9 @@ export interface InspeccionPublica {
     id: string;
     version_id: string;
     nombre: string;
+    numero_secuencial: number | null;
     secciones: Seccion[];
   };
   empleados: EmpleadoPublico[];
+  inspectores: InspectorPublico[];
 }

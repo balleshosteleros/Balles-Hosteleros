@@ -1,8 +1,17 @@
 "use client";
 
+import { Phone, MessageCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { FASES_INSPECTOR_CONFIG } from "../data";
 import type { InspectorListItem } from "../types";
+import { llamarDesdeApp } from "@/features/google-workspace/components/TelefonoDrawer";
+
+function telefonoParaWhatsapp(input: string | null | undefined): string {
+  if (!input) return "";
+  const limpio = input.replace(/[^\d]/g, "");
+  if (limpio.length === 9 && /^[679]/.test(limpio)) return "34" + limpio;
+  return limpio;
+}
 
 interface Props {
   inspectores: InspectorListItem[];
@@ -49,7 +58,34 @@ export function InspectoresListado({ inspectores, onSelect }: Props) {
                   {i.nombre} {i.apellidos ?? ""}
                 </td>
                 <td className="px-3 py-2 text-muted-foreground">
-                  {i.telefono}
+                  {i.telefono ? (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          llamarDesdeApp(i.telefono!);
+                        }}
+                        title="Llamar desde el software"
+                        className="hover:text-sky-600 transition-colors"
+                      >
+                        <Phone className="h-3.5 w-3.5" />
+                      </button>
+                      <span>{i.telefono}</span>
+                      <a
+                        href={`https://wa.me/${telefonoParaWhatsapp(i.telefono)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        title="Abrir WhatsApp"
+                        className="text-emerald-600 hover:text-emerald-700 transition-colors"
+                      >
+                        <MessageCircle className="h-3.5 w-3.5" />
+                      </a>
+                    </div>
+                  ) : (
+                    "—"
+                  )}
                 </td>
                 <td className="px-3 py-2 text-muted-foreground">
                   {i.ciudad ?? "—"}

@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Loader2 } from "lucide-react";
 import { crearInspectorManual } from "../actions";
+import { normalizarNombre } from "../data";
 
 interface Props {
   open: boolean;
@@ -22,15 +23,30 @@ interface Props {
   onCreated?: () => void;
 }
 
+const HORARIO_OPCIONES = [
+  "Mañanas entre semana",
+  "Tardes entre semana",
+  "Fines de semana",
+  "Festivos",
+] as const;
+
 export function InspectorFormDialog({ open, onOpenChange, onCreated }: Props) {
   const [nombre, setNombre] = useState("");
   const [apellidos, setApellidos] = useState("");
   const [email, setEmail] = useState("");
   const [telefono, setTelefono] = useState("");
   const [ciudad, setCiudad] = useState("");
+  const [horarios, setHorarios] = useState<string[]>([]);
+  const [vehiculo, setVehiculo] = useState<"si" | "no" | "">("");
   const [notas, setNotas] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  function toggleHorario(opt: string) {
+    setHorarios((prev) =>
+      prev.includes(opt) ? prev.filter((h) => h !== opt) : [...prev, opt],
+    );
+  }
 
   function reset() {
     setNombre("");
@@ -38,6 +54,8 @@ export function InspectorFormDialog({ open, onOpenChange, onCreated }: Props) {
     setEmail("");
     setTelefono("");
     setCiudad("");
+    setHorarios([]);
+    setVehiculo("");
     setNotas("");
     setError(null);
   }
@@ -45,13 +63,23 @@ export function InspectorFormDialog({ open, onOpenChange, onCreated }: Props) {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    if (horarios.length === 0) {
+      setError("Selecciona al menos una disponibilidad horaria.");
+      return;
+    }
+    if (vehiculo === "") {
+      setError("Indica si tiene vehículo propio.");
+      return;
+    }
     setSaving(true);
     const res = await crearInspectorManual({
       nombre,
-      apellidos: apellidos || null,
-      email: email || null,
+      apellidos,
+      email,
       telefono,
-      ciudad: ciudad || null,
+      ciudad,
+      horario_disponibilidad: horarios.join(", "),
+      vehiculo_propio: vehiculo === "si",
       notas: notas || null,
     });
     setSaving(false);
@@ -81,14 +109,17 @@ export function InspectorFormDialog({ open, onOpenChange, onCreated }: Props) {
               <Input
                 value={nombre}
                 onChange={(e) => setNombre(e.target.value)}
+                onBlur={() => setNombre((v) => normalizarNombre(v))}
                 required
               />
             </div>
             <div>
-              <Label className="text-xs">Apellidos</Label>
+              <Label className="text-xs">Apellidos *</Label>
               <Input
                 value={apellidos}
                 onChange={(e) => setApellidos(e.target.value)}
+                onBlur={() => setApellidos((v) => normalizarNombre(v))}
+                required
               />
             </div>
           </div>
@@ -103,19 +134,62 @@ export function InspectorFormDialog({ open, onOpenChange, onCreated }: Props) {
             />
           </div>
           <div>
-            <Label className="text-xs">Email</Label>
+            <Label className="text-xs">Email *</Label>
             <Input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              required
             />
           </div>
           <div>
-            <Label className="text-xs">Ciudad</Label>
+            <Label className="text-xs">Ciudad *</Label>
             <Input
               value={ciudad}
               onChange={(e) => setCiudad(e.target.value)}
+              required
             />
+          </div>
+          <div>
+            <Label className="text-xs">Disponibilidad horaria *</Label>
+            <div className="grid grid-cols-2 gap-2 mt-1">
+              {HORARIO_OPCIONES.map((opt) => {
+                const selected = horarios.includes(opt);
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => toggleHorario(opt)}
+                    className={`rounded-md border px-3 py-2 text-sm transition-colors ${
+                      selected
+                        ? "border-foreground bg-foreground text-background"
+                        : "border-border bg-background text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    {opt}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs">Vehículo propio *</Label>
+            <div className="flex gap-2 mt-1">
+              {(["si", "no"] as const).map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => setVehiculo(opt)}
+                  className={`flex-1 rounded-md border px-3 py-2 text-sm transition-colors ${
+                    vehiculo === opt
+                      ? "border-foreground bg-foreground text-background"
+                      : "border-border bg-background text-foreground hover:bg-muted"
+                  }`}
+                >
+                  {opt === "si" ? "Sí" : "No"}
+                </button>
+              ))}
+            </div>
           </div>
           <div>
             <Label className="text-xs">Notas</Label>

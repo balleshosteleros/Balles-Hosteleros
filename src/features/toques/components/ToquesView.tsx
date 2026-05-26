@@ -40,6 +40,7 @@ import { CanjeConfirmDialog } from "./CanjeConfirmDialog";
 import { NivelesRoadmap } from "./NivelesRoadmap";
 import { CatalogoToques } from "./CatalogoToques";
 import { useToquesRealtime } from "@/features/toques/hooks/useToquesRealtime";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 
 const PERIODOS: ToquePeriodo[] = ["dia", "semana", "mes", "trimestre", "ano", "historico"];
 
@@ -53,6 +54,8 @@ const EMPTY_BALANCE: Balance = {
 
 export function ToquesView() {
   const supabase = useMemo(() => createClient(), []);
+  const { empresaActual } = useEmpresa();
+  const empresaActualDbId = empresaActual.dbId ?? null;
   const [userId, setUserId] = useState<string | null>(null);
   const [empresaId, setEmpresaId] = useState<string | null>(null);
   const [balance, setBalance] = useState<Balance>(EMPTY_BALANCE);
@@ -87,10 +90,10 @@ export function ToquesView() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("empresa_id, fecha_alta")
+        .select("fecha_alta")
         .eq("user_id", user.id)
         .maybeSingle();
-      const eId = (profile?.empresa_id as string) ?? null;
+      const eId = empresaActualDbId;
       setEmpresaId(eId);
       setFechaAlta((profile?.fecha_alta as string | null) ?? null);
 
@@ -137,7 +140,7 @@ export function ToquesView() {
       setError(msg);
       setBootLoading(false);
     }
-  }, [supabase]);
+  }, [supabase, empresaActualDbId]);
 
   const cargarRanking = useCallback(
     async (eId: string, p: ToquePeriodo, levels: Nivel[]) => {

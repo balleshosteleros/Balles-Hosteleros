@@ -8,25 +8,19 @@ import {
   FileText,
   LayoutPanelTop,
   Mail,
-  Building2,
-  Settings,
 } from "lucide-react";
 import { InspectoresPoolConfig } from "./InspectoresPoolConfig";
 import { BolsaPublicaConfig } from "./BolsaPublicaConfig";
 import { PlantillasInspeccionConfig } from "./PlantillasInspeccionConfig";
 import { PresentacionConfig } from "./PresentacionConfig";
 import { EmailsConfig } from "./EmailsConfig";
-import { DatosEmpresaConfig } from "./DatosEmpresaConfig";
-import { ConfigGeneralInspeccionesConfig } from "./ConfigGeneralInspeccionesConfig";
 
 type ConfigSection =
   | "inspectores"
   | "bolsa"
   | "plantillas"
   | "presentacion"
-  | "emails"
-  | "datos_empresa"
-  | "configuracion";
+  | "emails";
 
 const SECTIONS: { id: ConfigSection; label: string; icon: React.ReactNode }[] = [
   { id: "inspectores", label: "Inspectores", icon: <Users className="h-4 w-4" /> },
@@ -34,8 +28,6 @@ const SECTIONS: { id: ConfigSection; label: string; icon: React.ReactNode }[] = 
   { id: "plantillas", label: "Plantillas de inspección", icon: <FileText className="h-4 w-4" /> },
   { id: "presentacion", label: "Presentación", icon: <LayoutPanelTop className="h-4 w-4" /> },
   { id: "emails", label: "Plantillas de email", icon: <Mail className="h-4 w-4" /> },
-  { id: "datos_empresa", label: "Datos de tu empresa", icon: <Building2 className="h-4 w-4" /> },
-  { id: "configuracion", label: "Configuración general", icon: <Settings className="h-4 w-4" strokeWidth={1.75} /> },
 ];
 
 const CONTENT: Record<ConfigSection, React.ReactNode> = {
@@ -44,8 +36,6 @@ const CONTENT: Record<ConfigSection, React.ReactNode> = {
   plantillas: <PlantillasInspeccionConfig />,
   presentacion: <PresentacionConfig />,
   emails: <EmailsConfig />,
-  datos_empresa: <DatosEmpresaConfig />,
-  configuracion: <ConfigGeneralInspeccionesConfig />,
 };
 
 export function InspectoresConfigView() {

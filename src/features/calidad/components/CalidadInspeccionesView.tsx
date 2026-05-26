@@ -6,11 +6,7 @@ import { RealizadasView } from "@/features/calidad/inspecciones/components/Reali
 
 export type InspeccionesTab = "plantillas" | "realizadas";
 
-interface Props {
-  empresaSlug: string | null;
-}
-
-export function CalidadInspeccionesView({ empresaSlug }: Props) {
+export function CalidadInspeccionesView() {
   const [tab, setTab] = useState<InspeccionesTab>("realizadas");
 
   return (
@@ -18,7 +14,7 @@ export function CalidadInspeccionesView({ empresaSlug }: Props) {
       {tab === "plantillas" ? (
         <PlantillasListView tab={tab} onTabChange={setTab} />
       ) : (
-        <RealizadasView tab={tab} onTabChange={setTab} empresaSlug={empresaSlug} />
+        <RealizadasView tab={tab} onTabChange={setTab} />
       )}
     </div>
   );

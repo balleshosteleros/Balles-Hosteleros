@@ -16,8 +16,34 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import type { InspeccionPublica, EmpleadoPublico, EmpleadoSeleccionado, QrTokenPublic } from "../types";
+import type {
+  InspeccionPublica,
+  EmpleadoPublico,
+  EmpleadoSeleccionado,
+  InspectorPublico,
+  QrTokenPublic,
+} from "../types";
 import { QrViewerDialog } from "./QrViewerDialog";
+
+// Limpia sufijos del nombre de la plantilla (" — versión 2", " — V3",
+// " — 2023"...) para mostrar el título de forma neutra. El badge V# va aparte.
+function limpiarNombrePlantilla(nombre: string): string {
+  return nombre
+    .replace(/\s*[—-]\s*versi[oó]n\s*\d+\s*$/i, "")
+    .replace(/\s*[—-]\s*v\s*\d+\s*$/i, "")
+    .replace(/\s*[—-]\s*\d{4}\s*$/, "")
+    .trim();
+}
+
+type PreguntaPublica =
+  InspeccionPublica["plantilla"]["secciones"][number]["preguntas"][number];
+
+function esPreguntaNombreInspector(p: PreguntaPublica): boolean {
+  return p.tipo === "texto_corto" && p.enunciado.toLowerCase().includes("inspector");
+}
+function esPreguntaTelefonoInspector(p: PreguntaPublica): boolean {
+  return p.tipo === "telefono" && p.enunciado.toLowerCase().includes("inspector");
+}
 
 interface PublicFormularioProps {
   token: string;
@@ -31,6 +57,9 @@ export function PublicFormulario({ token, data }: PublicFormularioProps) {
   const [localId, setLocalId] = useState<string | null>(
     data.locales.length === 1 ? data.locales[0].id : null,
   );
+  const [inspectorId, setInspectorId] = useState<string | null>(null);
+  const inspectorSeleccionado: InspectorPublico | null =
+    data.inspectores.find((i) => i.id === inspectorId) ?? null;
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<{
     numero: number | null;
@@ -53,14 +82,22 @@ export function PublicFormulario({ token, data }: PublicFormularioProps) {
     e.preventDefault();
     setError(null);
     // Validación previa para no abrir diálogo si faltan cosas
+    if (!inspectorSeleccionado) {
+      setError("Elígete en el desplegable de inspectores para continuar.");
+      return;
+    }
     if (data.locales.length > 1 && !localId) {
       setError("Elige el local que inspeccionaste.");
       return;
     }
+    // Las preguntas de nombre/teléfono del inspector las cubrimos con el
+    // desplegable, así que las saltamos en la comprobación de obligatorias.
     const faltan: string[] = [];
     for (const sec of data.plantilla.secciones) {
       for (const p of sec.preguntas) {
         if (!p.obligatoria) continue;
+        if (esPreguntaNombreInspector(p)) continue;
+        if (esPreguntaTelefonoInspector(p)) continue;
         const v = respuestas[p.id];
         if (v === undefined || v === null || v === "") faltan.push(p.enunciado);
       }
@@ -76,19 +113,24 @@ export function PublicFormulario({ token, data }: PublicFormularioProps) {
     setConfirmOpen(false);
     setError(null);
 
+    if (!inspectorSeleccionado) {
+      setError("Elígete en el desplegable de inspectores para continuar.");
+      return;
+    }
+
     // Localizamos las preguntas clave por tipo recorriendo todas las secciones,
     // porque desde la reestructura "Datos del inspeccionado" vive en su propia sección.
     const todasPreguntas = data.plantilla.secciones.flatMap((s) => s.preguntas);
-    const preguntaNombre = todasPreguntas.find(
-      (p) => p.tipo === "texto_corto" && p.enunciado.toLowerCase().includes("inspector"),
-    );
+    const preguntaNombre = todasPreguntas.find(esPreguntaNombreInspector);
     const preguntaFecha = todasPreguntas.find((p) => p.tipo === "fecha");
-    const preguntaTelefono = todasPreguntas.find((p) => p.tipo === "telefono");
+    const preguntaTelefono = todasPreguntas.find(esPreguntaTelefonoInspector);
     const preguntaJefeSala = todasPreguntas.find((p) => p.tipo === "empleado_select");
 
-    const nombre_inspector = (respuestas[preguntaNombre?.id ?? ""] as string) ?? "";
+    // Nombre y teléfono salen del inspector elegido en el desplegable,
+    // no del input (ese ya no existe en la UI).
+    const nombre_inspector = inspectorSeleccionado.nombre_completo;
+    const telefono_inspector = inspectorSeleccionado.telefono || "";
     const fecha_inspeccion = (respuestas[preguntaFecha?.id ?? ""] as string) ?? "";
-    const telefono_inspector = (respuestas[preguntaTelefono?.id ?? ""] as string) ?? "";
 
     // El valor de empleado_select se guarda como JSON serializado en respuestas.
     let nombre_jefe_sala = "";
@@ -102,15 +144,16 @@ export function PublicFormulario({ token, data }: PublicFormularioProps) {
       }
     }
 
-    if (!nombre_inspector.trim()) {
-      setError("Pon tu nombre.");
-      window.scrollTo({ top: document.getElementById("formulario")?.offsetTop ?? 0, behavior: "smooth" });
-      return;
-    }
-
     setSubmitting(true);
     try {
-      const todasRespuestas = Object.entries(respuestas)
+      // Inyectamos en `respuestas` el nombre/teléfono del inspector elegido,
+      // así quedan guardados también en `inspeccion_respuestas` para conservar
+      // el snapshot histórico de la inspección.
+      const respuestasFinal: Respuestas = { ...respuestas };
+      if (preguntaNombre) respuestasFinal[preguntaNombre.id] = nombre_inspector;
+      if (preguntaTelefono) respuestasFinal[preguntaTelefono.id] = telefono_inspector;
+
+      const todasRespuestas = Object.entries(respuestasFinal)
         .filter(([, v]) => v !== null && v !== "")
         .map(([pregunta_id, valor]) => ({ pregunta_id, valor }));
 
@@ -126,6 +169,7 @@ export function PublicFormulario({ token, data }: PublicFormularioProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           local_id: localId,
+          inspector_id: inspectorSeleccionado.id,
           nombre_inspector,
           telefono_inspector: telefono_inspector || null,
           fecha_inspeccion: fechaInspeccionISO,
@@ -189,11 +233,23 @@ export function PublicFormulario({ token, data }: PublicFormularioProps) {
       onSubmit={handleFormSubmit}
       className="rounded-2xl bg-white text-foreground p-6 md:p-10 shadow-xl space-y-8"
     >
-      <div className="space-y-1">
-        <h2 className="text-2xl md:text-3xl font-bold">{data.plantilla.nombre}</h2>
-        <p className="text-sm text-muted-foreground">
-          Responde a todas las preguntas. Sé lo más específic@ posible.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-1 min-w-0">
+          <h2 className="text-2xl md:text-3xl font-bold">
+            {limpiarNombrePlantilla(data.plantilla.nombre)}
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Responde a todas las preguntas. Sé lo más específico posible.
+          </p>
+        </div>
+        {data.plantilla.numero_secuencial != null && (
+          <span
+            className="shrink-0 rounded-md border border-muted-foreground/30 px-2 py-0.5 text-[11px] font-mono uppercase tracking-wide text-muted-foreground"
+            title={`Versión ${data.plantilla.numero_secuencial}`}
+          >
+            v{data.plantilla.numero_secuencial}
+          </span>
+        )}
       </div>
 
       {data.locales.length > 1 && (
@@ -216,42 +272,94 @@ export function PublicFormulario({ token, data }: PublicFormularioProps) {
         </div>
       )}
 
-      {data.plantilla.secciones.map((sec) => (
-        <div key={sec.id} className="space-y-4">
-          <div className="space-y-1 pb-2 border-b">
-            <h3 className="text-lg font-semibold">{sec.titulo}</h3>
-            {sec.descripcion && (
-              <p className="text-sm text-muted-foreground leading-relaxed">{sec.descripcion}</p>
-            )}
-          </div>
-          {sec.preguntas.map((p) => {
-            const esObservaciones =
-              p.tipo === "texto_largo" && p.enunciado.toLowerCase().startsWith("observaciones");
-            return (
-              <div key={p.id} className="space-y-2">
-                {!esObservaciones && (
-                  <Label className="text-sm leading-snug">
-                    {p.enunciado}
-                    {p.obligatoria && <span className="text-red-500 ml-0.5">*</span>}
-                  </Label>
+      {data.plantilla.secciones.map((sec) => {
+        const preguntasVisibles = sec.preguntas.filter(
+          (p) => !esPreguntaNombreInspector(p) && !esPreguntaTelefonoInspector(p),
+        );
+        // Detectamos la sección "Datos del inspector" por contener la pregunta
+        // oculta del nombre del inspector: ahí pintamos el selector + sus datos
+        // (teléfono y email) DEBAJO del título, para que el título tenga sentido.
+        const esSeccionDatosInspector = sec.preguntas.some(esPreguntaNombreInspector);
+        // Si la sección queda sin preguntas tras ocultar nombre/teléfono y no es
+        // la sección donde inyectamos el selector, no pintamos nada.
+        if (preguntasVisibles.length === 0 && !esSeccionDatosInspector) return null;
+        return (
+          <div key={sec.id} className="space-y-4">
+            <div className="space-y-1 pb-2 border-b">
+              <h3 className="text-lg font-semibold">{sec.titulo}</h3>
+              {sec.descripcion && (
+                <p className="text-sm text-muted-foreground leading-relaxed">{sec.descripcion}</p>
+              )}
+            </div>
+            {esSeccionDatosInspector && (
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium">
+                  Inspector <span className="text-red-500 ml-0.5">*</span>
+                </Label>
+                {data.inspectores.length === 0 ? (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 text-amber-800 px-3 py-2 text-sm">
+                    No hay inspectores en proceso de colaboración. Pide a calidad
+                    que te active antes de rellenar el formulario.
+                  </div>
+                ) : (
+                  <>
+                    <select
+                      value={inspectorId ?? ""}
+                      onChange={(e) => setInspectorId(e.target.value || null)}
+                      className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                    >
+                      <option value="">Selecciona tu nombre…</option>
+                      {data.inspectores.map((i) => (
+                        <option key={i.id} value={i.id}>
+                          {i.nombre_completo}
+                        </option>
+                      ))}
+                    </select>
+                    {inspectorSeleccionado && (
+                      <div className="rounded-md border bg-muted/20 px-3 py-2 text-sm space-y-1">
+                        <div>
+                          <span className="text-xs text-muted-foreground mr-2">Teléfono:</span>
+                          {inspectorSeleccionado.telefono || "—"}
+                        </div>
+                        <div>
+                          <span className="text-xs text-muted-foreground mr-2">Email:</span>
+                          {inspectorSeleccionado.email || "—"}
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
-                {esObservaciones && (
-                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-                    Observaciones
-                  </Label>
-                )}
-                <PreguntaInput
-                  pregunta={p}
-                  valor={respuestas[p.id]}
-                  onChange={(v) => setResp(p.id, v)}
-                  accent={accent}
-                  empleados={data.empleados}
-                />
               </div>
-            );
-          })}
-        </div>
-      ))}
+            )}
+            {preguntasVisibles.map((p) => {
+              const esObservaciones =
+                p.tipo === "texto_largo" && p.enunciado.toLowerCase().startsWith("observaciones");
+              return (
+                <div key={p.id} className="space-y-2">
+                  {!esObservaciones && (
+                    <Label className="text-sm leading-snug">
+                      {p.enunciado}
+                      {p.obligatoria && <span className="text-red-500 ml-0.5">*</span>}
+                    </Label>
+                  )}
+                  {esObservaciones && (
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                      Observaciones
+                    </Label>
+                  )}
+                  <PreguntaInput
+                    pregunta={p}
+                    valor={respuestas[p.id]}
+                    onChange={(v) => setResp(p.id, v)}
+                    accent={accent}
+                    empleados={data.empleados}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
 
       {error && (
         <div className="rounded-md border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-sm">
@@ -263,7 +371,7 @@ export function PublicFormulario({ token, data }: PublicFormularioProps) {
         <Button
           type="submit"
           size="lg"
-          disabled={submitting}
+          disabled={submitting || !inspectorSeleccionado}
           className="w-full md:w-auto"
           style={{ backgroundColor: accent, color: "#0a0a0a" }}
         >

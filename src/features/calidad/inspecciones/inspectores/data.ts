@@ -146,3 +146,6 @@ export function normalizarTelefono(input: string | null | undefined): string {
   // Quita +34 inicial para comparar igual con/sin prefijo
   return limpio.replace(/^\+?34/, "");
 }
+
+// Re-export del helper compartido para mantener imports existentes en inspectores.
+export { normalizarNombre } from "@/shared/lib/normalizar-nombre";

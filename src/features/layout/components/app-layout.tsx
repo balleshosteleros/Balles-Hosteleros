@@ -476,12 +476,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const router = useRouter();
   const userEmail = profile?.email ?? user?.email ?? "";
-  const userInitial = userEmail ? userEmail[0].toUpperCase() : "?";
+  const userInitial = profile
+    ? (profile.nombre ? profile.nombre[0].toUpperCase() : (userEmail[0]?.toUpperCase() ?? "?"))
+    : "";
   const userName = profile?.nombre
     ? profile.apellidos
       ? `${profile.nombre} ${profile.apellidos}`
       : profile.nombre
-    : (userEmail.split("@")[0] || "—");
+    : profile
+      ? (userEmail.split("@")[0] || "—")
+      : "";
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [appsMenuOpen, setAppsMenuOpen] = useState(false);
   const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});

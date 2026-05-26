@@ -8,6 +8,7 @@ interface RespuestaBody {
 
 interface Body {
   local_id: string | null;
+  inspector_id: string | null;
   nombre_inspector: string;
   telefono_inspector: string | null;
   fecha_inspeccion: string | null;
@@ -31,6 +32,12 @@ export async function POST(
     return NextResponse.json({ ok: false, error: "JSON inválido" }, { status: 400 });
   }
 
+  if (!body.inspector_id) {
+    return NextResponse.json(
+      { ok: false, error: "Debes elegirte en el desplegable de inspectores" },
+      { status: 400 },
+    );
+  }
   if (!body.nombre_inspector?.trim()) {
     return NextResponse.json({ ok: false, error: "Falta el nombre del inspector" }, { status: 400 });
   }
@@ -44,6 +51,7 @@ export async function POST(
   const res = await submitInspeccion({
     token,
     local_id: body.local_id,
+    inspector_id: body.inspector_id,
     nombre_inspector: body.nombre_inspector.trim(),
     telefono_inspector: body.telefono_inspector?.trim() || null,
     fecha_inspeccion: body.fecha_inspeccion,

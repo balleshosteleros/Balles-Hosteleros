@@ -18,24 +18,27 @@ import { InspectoresListado } from "./InspectoresListado";
 import { InspectorDetailDialog } from "./InspectorDetailDialog";
 import { InspectorFormDialog } from "./InspectorFormDialog";
 import { InspectoresConfigView } from "./config/InspectoresConfigView";
+import { DialogCompartirInspectores } from "./DialogCompartirInspectores";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 
 type SubVista = "pipeline" | "listado";
 
 interface Props {
-  empresaSlug?: string | null;
   onBack?: () => void;
   backLabel?: string;
 }
 
-export function InspectoresTab({ empresaSlug, onBack, backLabel = "Volver" }: Props) {
+export function InspectoresTab({ onBack, backLabel = "Volver" }: Props) {
   const [vista, setVista] = useState<SubVista>("pipeline");
   const [inspectores, setInspectores] = useState<InspectorListItem[]>([]);
   const [busqueda, setBusqueda] = useState("");
   const [seleccionado, setSeleccionado] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
+  const [compartirOpen, setCompartirOpen] = useState(false);
   const [, startTransition] = useTransition();
   const [loading, setLoading] = useState(true);
+  const { empresaActual } = useEmpresa();
 
   const refresh = useCallback(() => {
     startTransition(async () => {
@@ -48,7 +51,7 @@ export function InspectoresTab({ empresaSlug, onBack, backLabel = "Volver" }: Pr
 
   useEffect(() => {
     refresh();
-  }, [refresh]);
+  }, [refresh, empresaActual.id]);
 
   const q = busqueda.trim().toLowerCase();
   const filtrados = q
@@ -59,7 +62,6 @@ export function InspectoresTab({ empresaSlug, onBack, backLabel = "Volver" }: Pr
       )
     : inspectores;
 
-  const bolsaUrl = empresaSlug ? `/inspectores/bolsa/${empresaSlug}` : null;
 
   if (showConfig) {
     return (
@@ -121,18 +123,14 @@ export function InspectoresTab({ empresaSlug, onBack, backLabel = "Volver" }: Pr
         onNuevo={() => setFormOpen(true)}
         extraDerecha={
           <>
-            {bolsaUrl && (
-              <Button
-                variant="outline"
-                size="sm"
-                asChild
-                className="gap-1.5"
-              >
-                <a href={bolsaUrl} target="_blank" rel="noreferrer">
-                  <Share2 className="h-3.5 w-3.5" /> Compartir portal
-                </a>
-              </Button>
-            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setCompartirOpen(true)}
+            >
+              <Share2 className="h-3.5 w-3.5" /> Compartir
+            </Button>
             <Button
               size="icon"
               variant="outline"
@@ -145,6 +143,11 @@ export function InspectoresTab({ empresaSlug, onBack, backLabel = "Volver" }: Pr
             </Button>
           </>
         }
+      />
+
+      <DialogCompartirInspectores
+        open={compartirOpen}
+        onOpenChange={setCompartirOpen}
       />
 
       {loading ? (

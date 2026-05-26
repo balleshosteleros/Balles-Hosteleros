@@ -14,6 +14,7 @@
 
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { sendEmail } from "@/lib/email/send";
 import { bienvenidaEmpleadoEmail } from "@/lib/email/templates/bienvenida-empleado";
 import { friendlyError } from "@/shared/lib/friendly-errors";
@@ -58,12 +59,13 @@ async function getActor() {
   if (!user) return { user: null, empresaId: null as string | null };
   const { data: profile } = await supabase
     .from("profiles")
-    .select("empresa_id, full_name, email")
+    .select("full_name, email")
     .eq("user_id", user.id)
     .single();
+  const empresaId = await getEmpresaActivaForUser(supabase, user.id);
   return {
     user,
-    empresaId: (profile?.empresa_id ?? null) as string | null,
+    empresaId,
     actorEmail: (profile?.email ?? user.email ?? null) as string | null,
     actorName: (profile?.full_name ?? null) as string | null,
   };

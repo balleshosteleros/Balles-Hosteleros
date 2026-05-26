@@ -383,7 +383,7 @@ export async function listEnvios(): Promise<EnvioResumen[]> {
   const { data, error } = await supabase
     .from("inspeccion_envios")
     .select(
-      "id, numero_secuencial, nombre_inspector, nombre_jefe_sala, fecha_inspeccion, nota_final, notas_por_seccion, plantilla_id, estado, verificado_at, created_at, local:locales(nombre), plantilla:inspeccion_plantillas(nombre), verificador:verificado_por_empleado_id(nombre, apellidos)",
+      "id, numero_secuencial, nombre_inspector, nombre_jefe_sala, fecha_inspeccion, nota_final, notas_por_seccion, plantilla_id, version_id, estado, verificado_at, created_at, local:locales(nombre), plantilla:inspeccion_plantillas(nombre, numero_secuencial), verificador:verificado_por_empleado_id(nombre, apellidos)",
     )
     .eq("empresa_id", empresaId)
     .order("created_at", { ascending: false });
@@ -397,7 +397,7 @@ export async function listEnvios(): Promise<EnvioResumen[]> {
       : null;
     const plantilla = Array.isArray(e.plantilla)
       ? e.plantilla[0]
-      : (e.plantilla as { nombre: string } | null);
+      : (e.plantilla as { nombre: string; numero_secuencial: number | null } | null);
     return {
       id: e.id,
       numero_secuencial: e.numero_secuencial,
@@ -412,6 +412,7 @@ export async function listEnvios(): Promise<EnvioResumen[]> {
       notas_por_seccion: (e.notas_por_seccion as Record<string, number> | null) ?? null,
       plantilla_id: e.plantilla_id,
       plantilla_nombre: plantilla?.nombre ?? null,
+      plantilla_version: plantilla?.numero_secuencial ?? null,
       estado: e.estado,
       verificado_at: e.verificado_at ?? null,
       verificado_por_nombre: verifNombre,
@@ -427,7 +428,7 @@ export async function getEnvio(envioId: string): Promise<EnvioCompleto | null> {
   const { data: envio, error } = await supabase
     .from("inspeccion_envios")
     .select(
-      "*, local:locales(nombre), plantilla:inspeccion_plantillas(nombre), verificador:verificado_por_empleado_id(nombre, apellidos)",
+      "*, local:locales(nombre), plantilla:inspeccion_plantillas(nombre, numero_secuencial), verificador:verificado_por_empleado_id(nombre, apellidos)",
     )
     .eq("id", envioId)
     .eq("empresa_id", empresaId)
@@ -449,7 +450,7 @@ export async function getEnvio(envioId: string): Promise<EnvioCompleto | null> {
 
   const plantilla = Array.isArray(envio.plantilla)
     ? envio.plantilla[0]
-    : (envio.plantilla as { nombre: string } | null);
+    : (envio.plantilla as { nombre: string; numero_secuencial: number | null } | null);
 
   return {
     id: envio.id,
@@ -459,6 +460,7 @@ export async function getEnvio(envioId: string): Promise<EnvioCompleto | null> {
       (Array.isArray(envio.local) ? envio.local[0]?.nombre : (envio.local as { nombre: string } | null)?.nombre) ?? null,
     plantilla_id: envio.plantilla_id,
     plantilla_nombre: plantilla?.nombre ?? null,
+    plantilla_version: plantilla?.numero_secuencial ?? null,
     version_id: envio.version_id,
     numero_secuencial: envio.numero_secuencial,
     nombre_inspector: envio.nombre_inspector,

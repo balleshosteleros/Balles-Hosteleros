@@ -3,6 +3,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import {
+  normalizarNombre,
+  normalizarNombreOrNull,
+} from "@/shared/lib/normalizar-nombre";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   altaEmailContent,
@@ -171,8 +175,8 @@ export async function crearAlta(input: AltaInput, emailExtra?: string | null): P
     const insert = {
       empresa_id: empresaId,
       tipo: "alta" as const,
-      nombre: input.nombre,
-      apellidos: input.apellidos ?? null,
+      nombre: normalizarNombre(input.nombre),
+      apellidos: normalizarNombreOrNull(input.apellidos),
       dni: input.dni ?? null,
       numero_ss: input.numero_ss ?? null,
       fecha_comienzo: input.fecha_comienzo,

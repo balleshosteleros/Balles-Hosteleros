@@ -56,6 +56,7 @@ import {
   validarIban,
   type TipoDocumento,
 } from "@/features/mi-panel/lib/datos-personales-validators";
+import { normalizarNombre } from "@/shared/lib/normalizar-nombre";
 
 interface Props {
   initial: DatosPersonalesCompletos;
@@ -252,6 +253,7 @@ export function DatosPersonalesForm({ initial, readOnly = false, targetEmpleadoI
             <Input
               value={form.nombre}
               onChange={(e) => update("nombre", e.target.value)}
+              onBlur={() => update("nombre", normalizarNombre(form.nombre))}
               required
             />
           </Field>
@@ -259,6 +261,7 @@ export function DatosPersonalesForm({ initial, readOnly = false, targetEmpleadoI
             <Input
               value={form.apellidos}
               onChange={(e) => update("apellidos", e.target.value)}
+              onBlur={() => update("apellidos", normalizarNombre(form.apellidos))}
             />
           </Field>
           <Field label="Fecha de nacimiento">
@@ -570,6 +573,7 @@ export function DatosPersonalesForm({ initial, readOnly = false, targetEmpleadoI
             <Input
               value={form.emergencia_nombre}
               onChange={(e) => update("emergencia_nombre", e.target.value)}
+              onBlur={() => update("emergencia_nombre", normalizarNombre(form.emergencia_nombre))}
             />
           </Field>
           <Field label="Relación">

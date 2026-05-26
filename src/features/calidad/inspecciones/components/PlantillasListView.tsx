@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Check, Pencil, Settings, ClipboardList } from "lucide-react";
+import { ArrowLeft, Check, Pencil, Settings, ClipboardList, Share2 } from "lucide-react";
 import type { InspeccionesTab } from "@/features/calidad/components/CalidadInspeccionesView";
 import {
   SubmoduleToolbar,
@@ -32,7 +32,10 @@ import {
   actualizarPlantilla,
 } from "../actions";
 import { PlantillaEditor } from "./PlantillaEditor";
+import { InspectoresConfigView } from "@/features/calidad/inspecciones/inspectores/components/config/InspectoresConfigView";
+import { DialogCompartirInspectores } from "@/features/calidad/inspecciones/inspectores/components/DialogCompartirInspectores";
 import type { PlantillaResumen } from "../actions";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 
 const columnasDef: ToolbarColumna[] = [
   { campo: "version", label: "Versión", bloqueada: true },
@@ -62,9 +65,11 @@ export function PlantillasListView({ onTabChange }: PlantillasListViewProps) {
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[]>(columnasDef.map((c) => c.campo));
   const [showConfig, setShowConfig] = useState(false);
+  const [compartirOpen, setCompartirOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [nuevaOpen, setNuevaOpen] = useState(false);
   const [editPlantilla, setEditPlantilla] = useState<PlantillaResumen | null>(null);
+  const { empresaActual } = useEmpresa();
 
   const reload = useCallback(() => {
     setLoading(true);
@@ -74,7 +79,7 @@ export function PlantillasListView({ onTabChange }: PlantillasListViewProps) {
     });
   }, []);
 
-  useEffect(() => { reload(); }, [reload]);
+  useEffect(() => { reload(); }, [reload, empresaActual.id]);
 
   if (selectedId) {
     return (
@@ -83,6 +88,22 @@ export function PlantillasListView({ onTabChange }: PlantillasListViewProps) {
           <ArrowLeft className="h-4 w-4" /> Volver a plantillas
         </Button>
         <PlantillaEditor plantillaId={selectedId} />
+      </div>
+    );
+  }
+
+  if (showConfig) {
+    return (
+      <div className="space-y-3">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowConfig(false)}
+          className="gap-1.5 text-xs"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" /> Volver a plantillas
+        </Button>
+        <InspectoresConfigView />
       </div>
     );
   }
@@ -116,17 +137,32 @@ export function PlantillasListView({ onTabChange }: PlantillasListViewProps) {
         columnasOrden={columnasOrden}
         onColumnasOrdenChange={setColumnasOrden}
         extraDerecha={
-          <Button
-            size="icon"
-            variant={showConfig ? "default" : "outline"}
-            className="h-9 w-9"
-            onClick={() => setShowConfig((v) => !v)}
-            title="Configuración"
-            aria-label="Configuración"
-          >
-            <Settings className="h-4 w-4" strokeWidth={1.75} />
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setCompartirOpen(true)}
+            >
+              <Share2 className="h-3.5 w-3.5" /> Compartir
+            </Button>
+            <Button
+              size="icon"
+              variant={showConfig ? "default" : "outline"}
+              className="h-9 w-9"
+              onClick={() => setShowConfig((v) => !v)}
+              title="Configuración"
+              aria-label="Configuración"
+            >
+              <Settings className="h-4 w-4" strokeWidth={1.75} />
+            </Button>
+          </>
         }
+      />
+
+      <DialogCompartirInspectores
+        open={compartirOpen}
+        onOpenChange={setCompartirOpen}
       />
 
       <ResizableColumnsProvider storageKey="calidad-inspecciones-plantillas">

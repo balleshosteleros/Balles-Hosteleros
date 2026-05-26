@@ -1,6 +1,10 @@
 export type SolicitudTipo = "ausencia" | "trabajo";
 
-export type SolicitudSubtipoAusencia = "baja_medica" | "vacaciones" | "permiso";
+export type SolicitudSubtipoAusencia =
+  | "baja_medica"
+  | "vacaciones"
+  | "permiso"
+  | "baja_contrato";
 export type SolicitudSubtipoTrabajo = "horas_extras" | "dia_trabajado";
 export type SolicitudSubtipo = SolicitudSubtipoAusencia | SolicitudSubtipoTrabajo;
 
@@ -45,6 +49,7 @@ export const SUBTIPO_LABEL: Record<SolicitudSubtipo, string> = {
   baja_medica: "Baja médica",
   vacaciones: "Vacaciones",
   permiso: "Permiso",
+  baja_contrato: "Baja de contrato",
   horas_extras: "Horas extras",
   dia_trabajado: "Día trabajado",
 };

@@ -17,10 +17,21 @@ import {
   Loader2,
   Trash2,
   CheckCircle2,
+  MessageCircle,
+  Clock,
+  Car,
 } from "lucide-react";
 import { FASES_INSPECTOR_CONFIG } from "../data";
 import type { InspectorDetalle } from "../types";
 import { eliminarInspector, getInspectorDetalle } from "../actions";
+import { llamarDesdeApp } from "@/features/google-workspace/components/TelefonoDrawer";
+
+function telefonoParaWhatsapp(input: string | null | undefined): string {
+  if (!input) return "";
+  const limpio = input.replace(/[^\d]/g, "");
+  if (limpio.length === 9 && /^[679]/.test(limpio)) return "34" + limpio;
+  return limpio;
+}
 
 interface Props {
   inspectorId: string | null;
@@ -105,12 +116,29 @@ export function InspectorDetailDialog({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
                 {data.telefono && (
                   <div className="flex items-center gap-2">
-                    <Phone className="h-3.5 w-3.5 text-muted-foreground" />
-                    <a
-                      href={`tel:${data.telefono}`}
-                      className="hover:underline"
+                    <button
+                      type="button"
+                      onClick={() => llamarDesdeApp(data.telefono!)}
+                      title="Llamar desde el software"
+                      className="text-muted-foreground hover:text-sky-600 transition-colors"
+                    >
+                      <Phone className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => llamarDesdeApp(data.telefono!)}
+                      className="hover:underline text-left"
                     >
                       {data.telefono}
+                    </button>
+                    <a
+                      href={`https://wa.me/${telefonoParaWhatsapp(data.telefono)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="Abrir WhatsApp"
+                      className="text-emerald-600 hover:text-emerald-700 transition-colors"
+                    >
+                      <MessageCircle className="h-3.5 w-3.5" />
                     </a>
                   </div>
                 )}
@@ -129,6 +157,21 @@ export function InspectorDetailDialog({
                   <div className="flex items-center gap-2">
                     <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
                     {[data.ciudad, data.provincia].filter(Boolean).join(", ")}
+                  </div>
+                )}
+                {data.disponibilidad?.horario && (
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                    {data.disponibilidad.horario}
+                  </div>
+                )}
+                {typeof data.disponibilidad?.vehiculo_propio === "boolean" && (
+                  <div className="flex items-center gap-2">
+                    <Car className="h-3.5 w-3.5 text-muted-foreground" />
+                    Vehículo propio:{" "}
+                    <span className="font-medium">
+                      {data.disponibilidad.vehiculo_propio ? "Sí" : "No"}
+                    </span>
                   </div>
                 )}
               </div>
