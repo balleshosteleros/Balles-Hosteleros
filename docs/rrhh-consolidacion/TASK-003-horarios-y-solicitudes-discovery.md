@@ -2,7 +2,9 @@
 
 ## Estado
 
-Pendiente.
+✅ Cerrada 2026-05-26. Resultado en [DISCOVERY_TASK003_2026-05-26.md](./DISCOVERY_TASK003_2026-05-26.md).
+
+Conclusión: **solicitudes** puede cerrarse independientemente. **Horarios** tiene gap crítico — `rrhh_turnos`/`rrhh_cuadrantes`/`rrhh_descansos` sin migración versionada. Discovery deriva una TASK-007 nueva (migración + seed alineado) que debe ejecutarse antes de runtime de planificación.
 
 ## Objetivo
 
