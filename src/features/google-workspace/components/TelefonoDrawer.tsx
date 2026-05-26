@@ -86,7 +86,16 @@ const DIAL_KEYS = [
   ["*", "0", "#"],
 ];
 
+export const LLAMAR_EVENT = "balles:llamar";
+
+/** Dispara una llamada desde cualquier parte del software. Abre el TelefonoDrawer con el número precargado. */
+export function llamarDesdeApp(numero: string) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(LLAMAR_EVENT, { detail: { numero } }));
+}
+
 export function TelefonoDrawer({ children }: { children: ReactNode }) {
+  const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"marcador" | "recientes" | "ajustes">("marcador");
   const [numero, setNumero] = useState("");
   const [callState, setCallState] = useState<CallState>("idle");
@@ -101,6 +110,18 @@ export function TelefonoDrawer({ children }: { children: ReactNode }) {
     const cfg = loadConfig();
     setConfig(cfg);
     setCfgForm(cfg);
+  }, []);
+
+  useEffect(() => {
+    function handler(e: Event) {
+      const ce = e as CustomEvent<{ numero?: string }>;
+      const n = ce.detail?.numero?.replace(/\s/g, "") ?? "";
+      if (n) setNumero(n);
+      setTab("marcador");
+      setOpen(true);
+    }
+    window.addEventListener(LLAMAR_EVENT, handler);
+    return () => window.removeEventListener(LLAMAR_EVENT, handler);
   }, []);
 
   // Timer during call
@@ -146,7 +167,7 @@ export function TelefonoDrawer({ children }: { children: ReactNode }) {
   const isConnected = config.provider !== "none";
 
   return (
-    <Sheet>
+    <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>{children}</SheetTrigger>
       <SheetContent side="right" className="flex flex-col gap-0 p-0">
         <SheetHeader className="border-b px-5 py-3 shrink-0">

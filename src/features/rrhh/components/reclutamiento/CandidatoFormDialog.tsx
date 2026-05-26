@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { createCandidato } from "@/features/rrhh/actions/candidatos-actions";
 import { listVacantes } from "@/features/rrhh/actions/vacantes-actions";
+import { normalizarNombre } from "@/shared/lib/normalizar-nombre";
 import { ORIGEN_LABELS } from "@/features/rrhh/data/reclutamiento";
 
 type Origen =
@@ -111,6 +112,7 @@ export function CandidatoFormDialog({ open, onOpenChange, onSaved }: Props) {
                 id="nombre"
                 value={form.nombre}
                 onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+                onBlur={() => setForm((f) => ({ ...f, nombre: normalizarNombre(f.nombre) }))}
                 placeholder="Nombre"
               />
             </div>
@@ -120,6 +122,7 @@ export function CandidatoFormDialog({ open, onOpenChange, onSaved }: Props) {
                 id="apellidos"
                 value={form.apellidos}
                 onChange={(e) => setForm({ ...form, apellidos: e.target.value })}
+                onBlur={() => setForm((f) => ({ ...f, apellidos: normalizarNombre(f.apellidos) }))}
                 placeholder="Apellidos"
               />
             </div>

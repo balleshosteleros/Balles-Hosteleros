@@ -11,6 +11,7 @@ import {
   Notebook,
   Cctv,
   Rocket,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -20,6 +21,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { TelefonoConfigPanel } from "@/features/ajustes/components/TelefonoConfigPanel";
+import { VisitaLandingConfigPanel } from "@/features/ajustes/components/VisitaLandingConfigPanel";
 
 type Herramienta = {
   id: string;
@@ -80,6 +82,14 @@ const HERRAMIENTAS: Herramienta[] = [
     iconClassName: "text-sky-600",
   },
   {
+    id: "visita-landing",
+    nombre: "Landing de visita",
+    descripcion:
+      "QR para mesas → landing con tu marca → captura de leads y reseñas.",
+    Icon: Sparkles,
+    iconClassName: "text-violet-600",
+  },
+  {
     id: "agenda",
     nombre: "Agenda de contactos",
     descripcion: "Directorio de contactos compartido.",
@@ -135,6 +145,8 @@ export function HerramientasTab() {
             <AccordionContent>
               {id === "telefono" ? (
                 <TelefonoConfigPanel />
+              ) : id === "visita-landing" ? (
+                <VisitaLandingConfigPanel />
               ) : (
                 <div className="rounded-md border border-dashed bg-muted/30 p-4 text-center text-xs text-muted-foreground">
                   Sin ajustes globales configurados todavía.

@@ -15,12 +15,8 @@ import { ExternalLink, Eye, EyeOff, Copy, Settings, Settings2, LayoutGrid, List,
 import { toast } from "sonner";
 import {
   SubmoduleToolbar,
-  aplicarFiltrosToolbar,
-  aplicarOrdenToolbar,
   colVisible,
   ordenarColumnas,
-  type ToolbarFiltroActivo,
-  type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
   type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
@@ -110,8 +106,6 @@ export function AccesosView() {
   }, [empresaActual.id]);
 
   const [buscar, setBuscar] = useState("");
-  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
-  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [vista, setVista] = useState<"tabla" | "tarjetas">("tarjetas");
@@ -119,35 +113,15 @@ export function AccesosView() {
   const [tab, setTab] = useTabQuery(["apps", "config"] as const, "apps");
   const [showConfig, setShowConfig] = useState(false);
 
-  const categoriasUsadas = [...new Set(apps.map((a) => a.categoria))];
-  const depsUsados = [...new Set(apps.flatMap((a) => a.departamentos))];
-
-  const acceso = (a: AccesoApp, campo: string): unknown => {
-    if (campo === "categoria") return a.categoria;
-    if (campo === "estado") return a.estado;
-    if (campo === "tipoIntegracion") return a.tipoIntegracion.toUpperCase();
-    if (campo === "nombre") return a.nombre;
-    if (campo === "departamentos") return a.departamentos.join(", ");
-    return (a as unknown as Record<string, unknown>)[campo];
-  };
-
-  const filtered = apps.filter((a) => {
-    if (buscar && !a.nombre.toLowerCase().includes(buscar.toLowerCase()) && !a.descripcion.toLowerCase().includes(buscar.toLowerCase())) return false;
+  const filteredAdvanced = apps.filter((a) => {
+    if (
+      buscar &&
+      !a.nombre.toLowerCase().includes(buscar.toLowerCase()) &&
+      !a.descripcion.toLowerCase().includes(buscar.toLowerCase())
+    )
+      return false;
     return true;
   });
-
-  // Filtro especial para departamentos (multi-valor en lista)
-  const filteredAdvanced = (() => {
-    let lista = aplicarFiltrosToolbar(filtered, filtros.filter(f => f.campo !== "departamento"), acceso);
-    const filtroDep = filtros.find((f) => f.campo === "departamento");
-    if (filtroDep?.valores?.length) {
-      lista = lista.filter((a) =>
-        filtroDep.valores!.some((d) => a.departamentos.includes(d) || a.departamentos.includes("Todos")),
-      );
-    }
-    lista = aplicarOrdenToolbar(lista, orden, acceso);
-    return lista;
-  })();
 
   const columnasDef: ToolbarColumna[] = [
     { campo: "aplicacion", label: "Aplicación" },
@@ -225,38 +199,33 @@ export function AccesosView() {
         </TabsList>
 
         <TabsContent value="apps" className="space-y-4 mt-4">
-          <div className="flex items-end gap-3">
-            <div className="flex-1">
-              <SubmoduleToolbar
-                busqueda={buscar}
-                onBusquedaChange={setBuscar}
-                placeholderBusqueda="Buscar"
-                filtros={filtros}
-                onFiltrosChange={setFiltros}
-                orden={orden}
-                onOrdenChange={setOrden}
-                columnas={columnasDef}
-                columnasVisibles={columnasVisibles}
-                onColumnasVisiblesChange={setColumnasVisibles}
-                columnasOrden={columnasOrden}
-                onColumnasOrdenChange={setColumnasOrden}
-                extraDerecha={
-                  <>
-                    <IOActions config={accesosIO} context={{ empresaId: empresaActual.id }} onSuccess={() => window.location.reload()} />
-                    <Button
-                      size="icon"
-                      variant={showConfig ? "default" : "outline"}
-                      className="h-9 w-9"
-                      onClick={() => setShowConfig((v) => !v)}
-                      title="Configuración"
-                      aria-label="Configuración"
-                    >
-                      <Settings className="h-4 w-4" strokeWidth={1.75} />
-                    </Button>
-                  </>
-                }
-              />
-            </div>
+          <SubmoduleToolbar
+            busqueda={buscar}
+            onBusquedaChange={setBuscar}
+            placeholderBusqueda="Buscar"
+            columnas={columnasDef}
+            columnasVisibles={columnasVisibles}
+            onColumnasVisiblesChange={setColumnasVisibles}
+            columnasOrden={columnasOrden}
+            onColumnasOrdenChange={setColumnasOrden}
+            extraDerecha={
+              <>
+                <IOActions config={accesosIO} context={{ empresaId: empresaActual.id }} onSuccess={() => window.location.reload()} />
+                <Button
+                  size="icon"
+                  variant={showConfig ? "default" : "outline"}
+                  className="h-9 w-9"
+                  onClick={() => setShowConfig((v) => !v)}
+                  title="Configuración"
+                  aria-label="Configuración"
+                >
+                  <Settings className="h-4 w-4" strokeWidth={1.75} />
+                </Button>
+              </>
+            }
+          />
+
+          <div className="flex justify-end">
             <div className="flex border rounded-md overflow-hidden h-9">
               <button onClick={() => setVista("tabla")} className={`px-2 ${vista === "tabla" ? "bg-accent" : "hover:bg-accent/50"}`} aria-label="Vista tabla"><List className="h-4 w-4" /></button>
               <button onClick={() => setVista("tarjetas")} className={`px-2 ${vista === "tarjetas" ? "bg-accent" : "hover:bg-accent/50"}`} aria-label="Vista tarjetas"><LayoutGrid className="h-4 w-4" /></button>

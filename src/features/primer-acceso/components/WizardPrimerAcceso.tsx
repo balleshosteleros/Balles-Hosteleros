@@ -17,6 +17,7 @@ import {
   uploadDocumentoEmpleado,
   type PerfilCompletoInput,
 } from "@/features/primer-acceso/actions/perfil-actions";
+import { normalizarNombre } from "@/shared/lib/normalizar-nombre";
 
 interface Prefilled {
   nombre?: string | null;
@@ -366,6 +367,12 @@ export function WizardPrimerAcceso({ prefilled }: { prefilled: Prefilled }) {
                   <Input
                     value={form.contacto_emergencia_nombre}
                     onChange={(e) => update("contacto_emergencia_nombre", e.target.value)}
+                    onBlur={() =>
+                      update(
+                        "contacto_emergencia_nombre",
+                        normalizarNombre(form.contacto_emergencia_nombre),
+                      )
+                    }
                   />
                 </div>
                 <div className="space-y-1.5">

@@ -94,6 +94,7 @@ import {
   Building2,
   Rocket,
   FileSignature,
+  FileQuestion,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useState, useContext } from "react";
@@ -208,8 +209,8 @@ const ROUTE_TITLES: Record<string, string> = {
   "/direccion/aperturas": "APERTURAS",
   "/calidad": "CALIDAD",
   "/calidad/auditorias": "AUDITORÍAS",
-  "/calidad/empleados": "CALIDAD — EMPLEADOS",
-  "/calidad/clientes": "CALIDAD — CLIENTES",
+  "/calidad/cuestionarios": "CUESTIONARIOS",
+  "/calidad/resenas": "RESEÑAS",
   "/calidad/inspecciones": "INSPECCIONES",
   "/gerencia/cierres": "CIERRES",
   "/gerencia/descuentos": "DESCUENTOS",
@@ -227,6 +228,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/logistica/pedidos": "PEDIDOS",
   "/logistica/stock": "STOCK",
   "/logistica/inventarios": "INVENTARIOS",
+  "/logistica/tarifas": "TARIFAS",
   "/contabilidad/contactos": "CONTACTOS",
   "/contabilidad/facturas": "FACTURAS",
   "/contabilidad/impuestos": "IMPUESTOS",
@@ -341,8 +343,8 @@ const ROUTE_ICONS: Record<string, LucideIcon> = {
   // CALIDAD
   "/calidad": CheckCircle2,
   "/calidad/auditorias": ClipboardList,
-  "/calidad/empleados": UsersRound,
-  "/calidad/clientes": ContactRound,
+  "/calidad/cuestionarios": FileQuestion,
+  "/calidad/resenas": ContactRound,
   "/calidad/inspecciones": FileSearch,
 
   // RRHH
@@ -474,12 +476,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const router = useRouter();
   const userEmail = profile?.email ?? user?.email ?? "";
-  const userInitial = userEmail ? userEmail[0].toUpperCase() : "?";
+  const userInitial = profile
+    ? (profile.nombre ? profile.nombre[0].toUpperCase() : (userEmail[0]?.toUpperCase() ?? "?"))
+    : "";
   const userName = profile?.nombre
     ? profile.apellidos
       ? `${profile.nombre} ${profile.apellidos}`
       : profile.nombre
-    : (userEmail.split("@")[0] || "—");
+    : profile
+      ? (userEmail.split("@")[0] || "—")
+      : "";
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [appsMenuOpen, setAppsMenuOpen] = useState(false);
   const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});

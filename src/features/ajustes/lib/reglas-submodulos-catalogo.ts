@@ -345,7 +345,6 @@ export const CATALOGO: ModuloDef[] = [
       placeholder("pagos", "Pagos"),
       placeholder("formacion", "Formación"),
       placeholder("encuestas", "Encuestas"),
-      placeholder("cuestionarios", "Cuestionarios"),
     ],
   },
 
@@ -388,7 +387,7 @@ export const CATALOGO: ModuloDef[] = [
     label: "CALIDAD",
     submodulos: [
       placeholder("auditorias", "Auditorías"),
-      placeholder("empleados", "Empleados"),
+      placeholder("cuestionarios", "Cuestionarios"),
       placeholder("clientes", "Clientes"),
       placeholder("inspecciones", "Inspecciones"),
     ],

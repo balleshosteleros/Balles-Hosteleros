@@ -46,6 +46,7 @@ import {
 } from "@/features/agenda/types";
 import { toast } from "sonner";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import {
   listContactos,
   createContacto,
@@ -86,6 +87,7 @@ const EMPTY_FORM: ContactoInput = {
 export function AgendaView() {
   const [contactos, setContactos] = useState<Contacto[]>([]);
   const [cargando, setCargando] = useState(true);
+  useGlobalLoadingSync(cargando);
   const [busqueda, setBusqueda] = useState("");
   const [tab, setTab] = useState<ContactoCategoria | "todos">("todos");
 

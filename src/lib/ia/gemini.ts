@@ -15,11 +15,20 @@ export class GeminiKeyMissingError extends Error {
   }
 }
 
+export interface GeminiInlineAttachment {
+  /** Tipo MIME (e.g. "image/jpeg", "application/pdf"). */
+  mimeType: string;
+  /** Contenido del archivo en base64 (sin prefijo data:). */
+  base64: string;
+}
+
 export interface GeminiJSONOptions {
   model?: string;
   systemInstruction?: string;
   responseSchema: Schema;
   temperature?: number;
+  /** Adjuntos multimodales (imágenes, PDFs). Gemini los lee de forma nativa. */
+  attachments?: GeminiInlineAttachment[];
 }
 
 export interface GeminiJSONResult<T> {
@@ -48,7 +57,22 @@ export async function geminiJSON<T = unknown>(
     },
   });
 
-  const result = await model.generateContent(prompt);
+  const hasAttachments = opts.attachments && opts.attachments.length > 0;
+  const result = hasAttachments
+    ? await model.generateContent({
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: prompt },
+              ...opts.attachments!.map((a) => ({
+                inlineData: { mimeType: a.mimeType, data: a.base64 },
+              })),
+            ],
+          },
+        ],
+      })
+    : await model.generateContent(prompt);
   const text = result.response.text();
 
   let data: T;

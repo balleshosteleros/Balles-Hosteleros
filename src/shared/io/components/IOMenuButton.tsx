@@ -9,6 +9,7 @@ import {
   FileCode,
   FileDown,
   FileType2,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,6 +34,12 @@ interface IOMenuButtonProps {
   exportFormats?: IOFormat[];
   disabled?: boolean;
   label?: string;
+  /**
+   * Si se proporciona, reemplaza el submenu "Importar" por un solo item
+   * que invoca este callback (típicamente abre un diálogo de importación con IA).
+   * Cuando está activo, ignora `onImport` y `onDownloadTemplate`.
+   */
+  onCustomImport?: () => void;
 }
 
 const FORMAT_META: Record<IOFormat, { label: string; icon: typeof FileText }> = {
@@ -50,15 +57,17 @@ export function IOMenuButton({
   exportFormats = ["xlsx", "pdf"],
   disabled,
   label = "Descargar",
+  onCustomImport,
 }: IOMenuButtonProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const useCustomImport = !!onCustomImport;
   const acceptAttr = importFormats
     .map((f) => (f === "xlsx" ? ".xlsx,.xls" : f === "csv" ? ".csv,text/csv" : ".json,application/json"))
     .join(",");
 
   return (
     <>
-      {onImport && (
+      {onImport && !useCustomImport && (
         <input
           ref={fileInputRef}
           type="file"
@@ -89,7 +98,18 @@ export function IOMenuButton({
         </DropdownMenuTrigger>
 
         <DropdownMenuContent align="end" className="w-48">
-          {onImport && (
+          {useCustomImport && (
+            <DropdownMenuItem
+              className="gap-2 text-xs cursor-pointer"
+              onClick={onCustomImport}
+            >
+              <Upload className="h-3.5 w-3.5" />
+              <span className="flex-1">Importar</span>
+              <Sparkles className="h-3 w-3 text-amber-500" aria-label="con IA" />
+            </DropdownMenuItem>
+          )}
+
+          {!useCustomImport && onImport && (
             <DropdownMenuSub>
               <DropdownMenuSubTrigger className="gap-2 text-xs cursor-pointer">
                 <Upload className="h-3.5 w-3.5" />

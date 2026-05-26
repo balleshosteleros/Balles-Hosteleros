@@ -1,13 +1,14 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef } from "react";
+import { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Incidencia, SAMPLE_DATA } from "@/features/empresa/data/mantenimiento";
 import { AjustesEmpresa, buildDefaultAjustes, DatosGenerales, ConfigOperativa } from "@/features/ajustes/data/ajustes";
-import { getLogoUrls } from "@/features/empresa/actions/logo-actions";
+import { getLogoUrls, getIsotipoUrls } from "@/features/empresa/actions/logo-actions";
 import { listEmpresasCompletas } from "@/features/empresa/actions/empresas-actions";
 import { listEmpresasDeUsuario } from "@/features/empresa/actions/user-empresas-actions";
 import { setEmpresaActiva, getEmpresaActivaId } from "@/features/empresa/actions/empresa-activa-actions";
+import { useGlobalLoading } from "@/shared/stores/use-global-loading";
 
 export interface Empresa {
   id: string;       // slug — identificador lógico estable para FK en accesos_apps, etc.
@@ -124,7 +125,9 @@ interface EmpresaContextValue {
   ajustes: AjustesEmpresa;
   setAjustes: (updater: (prev: AjustesEmpresa) => AjustesEmpresa) => void;
   getLogoUrl: (empresaId: string) => string;
+  getIsotipoUrl: (empresaId: string) => string;
   setLogoUrl: (empresaSlug: string, url: string) => void;
+  setIsotipoUrl: (empresaSlug: string, url: string) => void;
   addEmpresa: (empresa: Empresa) => void;
   updateEmpresa: (id: string, data: Partial<Empresa>) => void;
   deleteEmpresa: (id: string) => void;
@@ -135,16 +138,21 @@ const EmpresaContext = createContext<EmpresaContextValue | null>(null);
 export function EmpresaProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const isHydrated = useRef(false);
+  const [, startTransition] = useTransition();
+  const showLoading = useGlobalLoading((s) => s.show);
+  const hideLoading = useGlobalLoading((s) => s.hide);
   const [empresasList, setEmpresasList] = useState<Empresa[]>(EMPRESAS);
   const [empresaId, setEmpresaId] = useState(EMPRESAS[0].id);
   const [allData, setAllData] = useState<Record<string, Incidencia[]>>(buildInitialData);
   const [allAjustes, setAllAjustes] = useState<Record<string, AjustesEmpresa>>(buildInitialAjustes);
   // Logo URLs cargadas desde Supabase Storage (fuente de verdad)
   const [logoUrls, setLogoUrls] = useState<Record<string, string>>({});
+  const [isotipoUrls, setIsotipoUrls] = useState<Record<string, string>>({});
 
-  // Cargar logos desde Supabase al montar
+  // Cargar logos + isotipos desde Supabase al montar
   useEffect(() => {
     getLogoUrls().then(setLogoUrls).catch(() => {});
+    getIsotipoUrls().then(setIsotipoUrls).catch(() => {});
   }, []);
 
   // Hidratar empresas + ajustes desde Supabase (fuente de verdad).
@@ -252,6 +260,13 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
     [logoUrls, allAjustes],
   );
 
+  // Isotipo (icono sin texto) — fallback al logo completo si no hay isotipo.
+  const getIsotipoUrl = useCallback(
+    (eid: string) =>
+      isotipoUrls[eid] ?? logoUrls[eid] ?? allAjustes[eid]?.datosGenerales?.logoUrl ?? "",
+    [isotipoUrls, logoUrls, allAjustes],
+  );
+
   // Actualiza el logo en el contexto inmediatamente tras subir/eliminar
   const setLogoUrl = useCallback((empresaSlug: string, url: string) => {
     setLogoUrls((prev) => ({ ...prev, [empresaSlug]: url }));
@@ -266,6 +281,18 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
         },
       },
     }));
+  }, []);
+
+  // Actualiza el isotipo en el contexto inmediatamente tras subir/eliminar.
+  // url vacío = limpiar (al borrar el isotipo el avatar cae al logo).
+  const setIsotipoUrl = useCallback((empresaSlug: string, url: string) => {
+    setIsotipoUrls((prev) => {
+      if (!url) {
+        const { [empresaSlug]: _ignored, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [empresaSlug]: url };
+    });
   }, []);
 
   const addEmpresa = useCallback((empresa: Empresa) => {
@@ -296,14 +323,31 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
     if (!isHydrated.current) return;
     const empresa = empresasList.find((e) => e.id === id);
     if (!empresa?.dbId) return;
+    showLoading("Cambiando de empresa…");
     setEmpresaActiva(empresa.dbId)
-      .then((res) => { if (res.ok) router.refresh(); })
-      .catch((err) => console.error("[empresa-context] setEmpresaActiva:", err));
-  }, [empresasList, router]);
+      .then((res) => {
+        if (!res.ok) {
+          hideLoading();
+          return;
+        }
+        startTransition(() => {
+          router.refresh();
+        });
+        // El re-render de los Server Components no es awaitable directamente:
+        // damos margen prudente para que la UI rehidratada se pinte y luego
+        // apagamos el overlay. Si la cookie cambia más rápido, el detector
+        // de navegación o el usuario percibirán la transición igualmente.
+        window.setTimeout(() => hideLoading(), 900);
+      })
+      .catch((err) => {
+        console.error("[empresa-context] setEmpresaActiva:", err);
+        hideLoading();
+      });
+  }, [empresasList, router, showLoading, hideLoading]);
 
   return (
     <EmpresaContext.Provider
-      value={{ empresas: empresasList, empresaActual, setEmpresaId: handleSetEmpresaId, datos, setDatos, ajustes, setAjustes, getLogoUrl, setLogoUrl, addEmpresa, updateEmpresa, deleteEmpresa }}
+      value={{ empresas: empresasList, empresaActual, setEmpresaId: handleSetEmpresaId, datos, setDatos, ajustes, setAjustes, getLogoUrl, getIsotipoUrl, setLogoUrl, setIsotipoUrl, addEmpresa, updateEmpresa, deleteEmpresa }}
     >
       {children}
     </EmpresaContext.Provider>

@@ -24,6 +24,7 @@ import {
   type CambioCartaConSemanas, type CambioCartaSemana, type FaseColor,
 } from "../types";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { CalendarRangeToggle, CalendarRangeNav } from "@/shared/components/calendar/CalendarRangeToggle";
 import { useCalendarRange, type CalendarRangeMode } from "@/shared/components/calendar/calendar-range";
 import { cn } from "@/lib/utils";
@@ -73,6 +74,7 @@ export function CambiosCartaCalendario() {
   const rango = useCalendarRange("ANUAL");
   const [cambios, setCambios] = useState<CambioCartaConSemanas[]>([]);
   const [cargando, setCargando] = useState(true);
+  useGlobalLoadingSync(cargando);
 
   const [showNuevo, setShowNuevo] = useState(false);
   const [fechaNueva, setFechaNueva] = useState<string>(() => {
@@ -84,6 +86,7 @@ export function CambiosCartaCalendario() {
   });
   const [notasNuevo, setNotasNuevo] = useState("");
   const [guardando, setGuardando] = useState(false);
+  useGlobalLoadingSync(guardando);
 
   const [detalle, setDetalle] = useState<CambioCartaConSemanas | null>(null);
 

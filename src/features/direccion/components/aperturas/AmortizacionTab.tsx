@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { LineaAmortizacion, TIPOS_AMORTIZACION, TipoAmortizacion, MESES, TRIMESTRES } from "@/features/direccion/data/aperturas";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 function fmt(n: number) { return n.toLocaleString("es-ES", { maximumFractionDigits: 2 }); }
 
@@ -25,6 +26,7 @@ interface Props {
 export function AmortizacionTab({ lineas, onChange, readOnly = false }: Props) {
   const [editing, setEditing] = useState<LineaAmortizacion | null>(null);
   const [isNew, setIsNew] = useState(false);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
   const totalAmort = lineas.reduce((s, l) => s + l.total, 0);
   const totalIntereses = lineas.reduce((s, l) => s + l.intereses, 0);
@@ -47,11 +49,22 @@ export function AmortizacionTab({ lineas, onChange, readOnly = false }: Props) {
     else onChange(lineas.map(l => l.id === editing.id ? editing : l));
     setEditing(null);
   };
-  const remove = (id: string) => onChange(lineas.filter(l => l.id !== id));
+  const remove = async (id: string) => {
+    const linea = lineas.find(l => l.id === id);
+    const ok = await confirmDelete({
+      title: "¿Borrar este registro de amortización?",
+      description: linea
+        ? `Se eliminará el registro de ${linea.fecha} (${linea.tipo}). Esta acción no se puede deshacer.`
+        : "Esta acción no se puede deshacer.",
+    });
+    if (!ok) return;
+    onChange(lineas.filter(l => l.id !== id));
+  };
   const upd = (field: keyof LineaAmortizacion, val: unknown) => setEditing(prev => prev ? { ...prev, [field]: val } : null);
 
   return (
     <div className="space-y-6">
+      {confirmDeleteDialog}
       {/* Resumen */}
       <div className="grid md:grid-cols-3 gap-4">
         <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold">{fmt(totalAmort)}€</p><p className="text-xs text-muted-foreground">Total amortización</p></CardContent></Card>

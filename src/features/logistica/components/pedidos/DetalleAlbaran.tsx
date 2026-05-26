@@ -2,13 +2,15 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { EstadoAlbaranBadge } from "./BadgesPedido";
 import { AlbaranUploadModal } from "./AlbaranUploadModal";
 import { ComparativaAlbaran } from "./ComparativaAlbaran";
 import { ESTADOS_ALBARAN, calcularTotalesLineas, type Albaran, type Pedido, type AnalisisAlbaran, type DocumentoAdjunto } from "@/features/logistica/data/pedidos";
-import { ArrowLeft, FileText, Send, Paperclip, CheckCircle2, Loader2, AlertTriangle, FileWarning, Eye } from "lucide-react";
+import { updateAlbaranNumeroProveedor } from "@/features/logistica/actions/albaranes-actions";
+import { ArrowLeft, FileText, Send, Paperclip, CheckCircle2, Loader2, AlertTriangle, FileWarning, Eye, Receipt } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 const supabase = createClient();
@@ -19,17 +21,20 @@ interface Props {
   onBack: () => void;
   onUpdateEstado: (id: string, estado: string) => void;
   onConfirmar: (albaran: Albaran) => void;
+  onGenerarFactura?: (albaran: Albaran) => void;
 }
 
-export function DetalleAlbaran({ albaran, pedidoOrigen, onBack, onUpdateEstado, onConfirmar }: Props) {
+export function DetalleAlbaran({ albaran, pedidoOrigen, onBack, onUpdateEstado, onConfirmar, onGenerarFactura }: Props) {
   const totales = calcularTotalesLineas(albaran.lineas);
   const canConfirm = albaran.estado === "Pendiente";
+  const canFacturar = albaran.estado === "Confirmado" || albaran.estado === "Recibido";
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analisisResult, setAnalisisResult] = useState<AnalisisAlbaran | null>(null);
   const [documentos, setDocumentos] = useState<DocumentoAdjunto[]>([]);
   const [showComparativa, setShowComparativa] = useState(false);
+  const [numProv, setNumProv] = useState<string>(albaran.numeroProveedor ?? "");
 
   const handleFileReady = async (file: File) => {
     setUploadOpen(false);
@@ -102,6 +107,11 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, onBack, onUpdateEstado, 
         </Button>
         {canConfirm && (
           <Button size="sm" className="gap-1" onClick={() => onConfirmar(albaran)}><CheckCircle2 className="h-4 w-4" /> Confirmar albarán</Button>
+        )}
+        {canFacturar && onGenerarFactura && (
+          <Button size="sm" className="gap-1" onClick={() => onGenerarFactura(albaran)}>
+            <Receipt className="h-4 w-4" /> Generar factura
+          </Button>
         )}
       </div>
 
@@ -191,8 +201,22 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, onBack, onUpdateEstado, 
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div><span className="text-muted-foreground text-xs block">Proveedor</span><span className="font-semibold">{albaran.proveedor}</span></div>
-            <div><span className="text-muted-foreground text-xs block">Documento</span><span className="font-medium">{albaran.documento}</span></div>
-            <div><span className="text-muted-foreground text-xs block">Factura</span><span className="font-medium">{albaran.factura || "—"}</span></div>
+            <div>
+              <span className="text-muted-foreground text-xs block">Nº albarán del proveedor</span>
+              <Input
+                value={numProv}
+                onChange={(e) => setNumProv(e.target.value)}
+                onBlur={async () => {
+                  const next = numProv.trim() || null;
+                  if (next === (albaran.numeroProveedor ?? null)) return;
+                  const res = await updateAlbaranNumeroProveedor(albaran.id, next);
+                  if (res.ok) toast.success("Nº proveedor actualizado");
+                  else toast.error(res.error ?? "No se pudo guardar");
+                }}
+                placeholder="(según factura del proveedor)"
+                className="h-8 text-sm font-medium mt-0.5"
+              />
+            </div>
             <div><span className="text-muted-foreground text-xs block">Almacén</span><span className="font-medium">{albaran.almacen}</span></div>
             <div><span className="text-muted-foreground text-xs block">Fecha</span><span className="font-medium">{albaran.fecha}</span></div>
             <div><span className="text-muted-foreground text-xs block">Pedido origen</span><span className="font-medium">{albaran.pedidoId}</span></div>

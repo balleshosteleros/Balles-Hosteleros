@@ -3,6 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { INFORME_TIPOS, type InformeRow, type InformeTipo } from "@/features/gerencia/data/informes";
 
+import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 const BUCKET = "gerencia-informes";
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
@@ -10,12 +12,8 @@ async function getContext() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { supabase, user: null, empresaId: null as string | null };
-  const { data } = await supabase
-    .from("profiles")
-    .select("empresa_id")
-    .eq("user_id", user.id)
-    .single();
-  return { supabase, user, empresaId: (data?.empresa_id as string | null) ?? null };
+  const empresaId = await getEmpresaActivaForUser(supabase as unknown as SupabaseClient, user.id);
+return { supabase, user, empresaId };
 }
 
 function sanitizeFilename(name: string): string {

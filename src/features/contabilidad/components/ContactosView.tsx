@@ -20,8 +20,11 @@ import {
   type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
+import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 import { IOActions } from "@/shared/io";
 import { contactosContablesIO } from "@/features/contabilidad/io/contactos.io";
+import { ImportadorIAContactosDialog } from "@/features/contabilidad/components/ImportadorIAContactosDialog";
+import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 const TABS: { id: string; label: string }[] = [
@@ -57,6 +60,7 @@ export function ContactosView() {
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [showConfig, setShowConfig] = useState(false);
+  const [importadorAbierto, setImportadorAbierto] = useState(false);
 
   const loadContactos = useCallback(async () => {
     setLoading(true);
@@ -115,7 +119,7 @@ export function ContactosView() {
   }, [contactos, tab, busqueda, filtros, orden]);
 
   const columnasDef: ToolbarColumna[] = [
-    { campo: "nombre", label: "Nombre" },
+    { campo: "nombre", label: "Nombre", bloqueada: true },
     { campo: "documento", label: "Nº documento" },
     { campo: "email", label: "Email" },
     { campo: "categoria", label: "Conceptos de etiqueta" },
@@ -124,7 +128,16 @@ export function ContactosView() {
 
   const columnDefs: Record<string, { th: ReactNode; td: (c: ContactoContable) => ReactNode }> = {
     nombre: {
-      th: <TableColumnHeader key="nombre" label="Nombre" />,
+      th: (
+        <TableColumnHeader
+          key="nombre"
+          label="Nombre"
+          campo="nombre"
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
       td: (c) => (
         <td key="nombre" className="px-3 py-3">
           <p className="font-semibold">{c.nombre}</p>
@@ -133,25 +146,66 @@ export function ContactosView() {
       ),
     },
     documento: {
-      th: <TableColumnHeader key="documento" label="Nº documento" />,
+      th: (
+        <TableColumnHeader
+          key="documento"
+          label="Nº documento"
+          campo="documento"
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
       td: (c) => (
         <td key="documento" className="px-3 py-3 text-muted-foreground">{c.documento || "—"}</td>
       ),
     },
     email: {
-      th: <TableColumnHeader key="email" label="Email" />,
+      th: (
+        <TableColumnHeader
+          key="email"
+          label="Email"
+          campo="email"
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
       td: (c) => (
         <td key="email" className="px-3 py-3 text-muted-foreground">{c.email || "—"}</td>
       ),
     },
     categoria: {
-      th: <TableColumnHeader key="categoria" label="Conceptos de etiqueta" />,
+      th: (
+        <TableColumnHeader
+          key="categoria"
+          label="Conceptos de etiqueta"
+          campo="categoria"
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+          filtroTipo="lista"
+          opciones={categoriasUsadas}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+        />
+      ),
       td: (c) => (
         <td key="categoria" className="px-3 py-3 text-muted-foreground">{c.categoria || "—"}</td>
       ),
     },
     etiquetas: {
-      th: <TableColumnHeader key="etiquetas" label="Etiquetas" />,
+      th: (
+        <TableColumnHeader
+          key="etiquetas"
+          label="Etiquetas"
+          campo="etiquetas"
+          filtroTipo="lista"
+          opciones={etiquetasUsadas}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+        />
+      ),
       td: (c) => (
         <td key="etiquetas" className="px-3 py-3">
           <div className="flex gap-1 flex-wrap">
@@ -197,6 +251,16 @@ export function ContactosView() {
           onColumnasOrdenChange={setColumnasOrden}
           extraDerecha={
             <>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-9 gap-1.5"
+                onClick={() => setImportadorAbierto(true)}
+                title="Importar con IA"
+              >
+                <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                Importar IA
+              </Button>
               <IOActions config={contactosContablesIO} onSuccess={() => window.location.reload()} />
               <Button
                 size="icon"
@@ -216,33 +280,41 @@ export function ContactosView() {
       {/* Table */}
       <div className="flex-1 overflow-auto px-6 pb-4">
         <div className="text-[10px] text-muted-foreground mb-2">{filtrados.length} resultados</div>
-        <div className="bg-card rounded-lg border overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase tracking-wider">
-                <th className="px-3 py-3 w-8"></th>
-                {columnasRender.map((c) => columnDefs[c.campo]?.th)}
-                <th className="px-3 py-3 w-10"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtrados.map(c => {
-                const Icon = tipoIcon[c.tipo];
-                return (
-                  <tr key={c.id} className="border-b hover:bg-muted/30 transition-colors">
-                    <td className="px-3 py-3"><Icon className="h-4 w-4 text-muted-foreground" /></td>
-                    {columnasRender.map((col) => columnDefs[col.campo]?.td(c))}
-                    <td className="px-3 py-3"><Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-3.5 w-3.5" /></Button></td>
-                  </tr>
-                );
-              })}
-              {filtrados.length === 0 && (
-                <tr><td colSpan={7} className="text-center py-12 text-muted-foreground">No se encontraron contactos.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <ResizableColumnsProvider storageKey="contabilidad-contactos">
+          <div className="bg-card rounded-lg border overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase tracking-wider">
+                  <th className="px-3 py-3 w-8"></th>
+                  {columnasRender.map((c) => columnDefs[c.campo]?.th)}
+                  <th className="px-3 py-3 w-10"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtrados.map(c => {
+                  const Icon = tipoIcon[c.tipo];
+                  return (
+                    <tr key={c.id} className="border-b hover:bg-muted/30 transition-colors">
+                      <td className="px-3 py-3"><Icon className="h-4 w-4 text-muted-foreground" /></td>
+                      {columnasRender.map((col) => columnDefs[col.campo]?.td(c))}
+                      <td className="px-3 py-3"><Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-3.5 w-3.5" /></Button></td>
+                    </tr>
+                  );
+                })}
+                {filtrados.length === 0 && (
+                  <tr><td colSpan={columnasRender.length + 2} className="text-center py-12 text-muted-foreground">No se encontraron contactos.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </ResizableColumnsProvider>
       </div>
+
+      <ImportadorIAContactosDialog
+        open={importadorAbierto}
+        onOpenChange={setImportadorAbierto}
+        onImportSuccess={loadContactos}
+      />
     </div>
   );
 }

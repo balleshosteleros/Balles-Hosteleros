@@ -25,7 +25,8 @@ const EMPTY_FORM: EmpresaFormData = {
 };
 
 export function EmpresasTab() {
-  const { empresas, empresaActual, addEmpresa, deleteEmpresa, getLogoUrl, setEmpresaId } = useEmpresa();
+  // Avatar 40x40 = ISOTIPO (icono sin texto). Fallback al logotipo si no hay isotipo.
+  const { empresas, empresaActual, addEmpresa, deleteEmpresa, getIsotipoUrl, setEmpresaId } = useEmpresa();
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<EmpresaFormData>(EMPTY_FORM);
   const [deleteTarget, setDeleteTarget] = useState<Empresa | null>(null);
@@ -86,7 +87,7 @@ export function EmpresasTab() {
 
       <div className="grid gap-3">
         {empresas.map((emp) => {
-          const logoUrl = mounted ? getLogoUrl(emp.id) : "";
+          const logoUrl = mounted ? getIsotipoUrl(emp.id) : "";
           return (
             <Card key={emp.id} className={emp.id === empresaActual.id ? "border-primary/40 shadow-sm" : ""}>
               <CardContent className="p-4">
@@ -216,7 +217,7 @@ export function EmpresasTab() {
           {editTarget && (
             <div className="space-y-4">
               <ConfiguracionTab />
-              <LocalesEmpresaTab empresaId={editTarget.id} />
+              <LocalesEmpresaTab empresaId={editTarget.dbId} />
             </div>
           )}
         </DialogContent>

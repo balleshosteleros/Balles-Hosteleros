@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, ChevronLeft } from "lucide-react";
+import { Loader2, ChevronLeft, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { crearSolicitudPersonal } from "@/features/mi-panel/actions/mi-panel-actions";
 import type {
@@ -31,6 +31,31 @@ interface SolicitudModalProps {
 }
 
 type Paso = "tipo" | "subtipo" | "detalle";
+
+const BAJA_CONTRATO_PREAVISO_MIN = 15;
+const BAJA_CONTRATO_PREAVISO_MAX = 45;
+
+function todayISO(): string {
+  return new Date().toISOString().split("T")[0];
+}
+
+function addDaysISO(base: string, days: number): string {
+  const d = new Date(base + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().split("T")[0];
+}
+
+function diasNaturales(desde: string, hasta: string): number {
+  const a = new Date(desde + "T00:00:00Z");
+  const b = new Date(hasta + "T00:00:00Z");
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return 0;
+  return Math.floor((b.getTime() - a.getTime()) / 86400000);
+}
+
+function formatFechaEs(iso: string): string {
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
 
 export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModalProps) {
   const [paso, setPaso] = useState<Paso>("tipo");
@@ -89,7 +114,12 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
 
   async function enviar() {
     if (!tipo || !subtipo) return;
-    if (!fechaInicio) {
+    if (subtipo === "baja_contrato") {
+      if (!fechaFin) {
+        toast.error("Indica el día que quieres que se haga efectiva tu baja");
+        return;
+      }
+    } else if (!fechaInicio) {
       toast.error("Indica una fecha de inicio");
       return;
     }
@@ -104,7 +134,8 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
     const res = await crearSolicitudPersonal({
       tipo,
       subtipo,
-      fechaInicio,
+      // baja_contrato: el server fija fecha_inicio = hoy; mandamos un placeholder.
+      fechaInicio: subtipo === "baja_contrato" ? todayISO() : fechaInicio,
       fechaFin: fechaFin || null,
       horas: subtipo === "horas_extras" ? Number(horas) : null,
       motivo: motivo.trim(),
@@ -125,6 +156,7 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
     baja_medica: "Baja médica",
     vacaciones: "Vacaciones",
     permiso: "Permiso",
+    baja_contrato: "Baja de contrato",
     horas_extras: "Horas extras",
     dia_trabajado: "Día trabajado",
   };
@@ -133,6 +165,11 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
     { value: "baja_medica", label: "Baja médica", desc: "Indisposición o enfermedad con parte médico" },
     { value: "vacaciones", label: "Vacaciones", desc: "Días de vacaciones del año en curso" },
     { value: "permiso", label: "Permiso", desc: "Permiso retribuido o asunto propio" },
+    {
+      value: "baja_contrato",
+      label: "Baja de contrato",
+      desc: "Solicitar dejar la empresa (preaviso 15-45 días naturales)",
+    },
   ];
 
   const opcionesTrabajo: { value: SolicitudSubtipoTrabajo; label: string; desc: string }[] = [
@@ -237,7 +274,70 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
           )}
 
           {/* PASO 3: DETALLE */}
-          {paso === "detalle" && subtipo && (
+          {paso === "detalle" && subtipo && subtipo === "baja_contrato" && (() => {
+            const hoy = todayISO();
+            const minBaja = addDaysISO(hoy, BAJA_CONTRATO_PREAVISO_MIN);
+            const maxBaja = addDaysISO(hoy, BAJA_CONTRATO_PREAVISO_MAX);
+            const dias = fechaFin ? diasNaturales(hoy, fechaFin) : 0;
+            const fueraDeRango =
+              !!fechaFin &&
+              (dias < BAJA_CONTRATO_PREAVISO_MIN || dias > BAJA_CONTRATO_PREAVISO_MAX);
+            return (
+              <div className="grid gap-4 py-2">
+                <div className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <div className="text-xs leading-relaxed">
+                    Al enviar esta solicitud arrancas hoy ({formatFechaEs(hoy)}) tu
+                    periodo de preaviso. El plazo debe ser de entre{" "}
+                    {BAJA_CONTRATO_PREAVISO_MIN} y {BAJA_CONTRATO_PREAVISO_MAX} días
+                    naturales. RRHH te confirmará por email cuando la reciba.
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="fechaBaja">
+                    ¿Qué día quieres que sea efectiva tu baja?
+                  </Label>
+                  <Input
+                    id="fechaBaja"
+                    type="date"
+                    value={fechaFin}
+                    onChange={(e) => setFechaFin(e.target.value)}
+                    min={minBaja}
+                    max={maxBaja}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Primer día disponible: {formatFechaEs(minBaja)} · último:{" "}
+                    {formatFechaEs(maxBaja)}
+                  </p>
+                  {fechaFin && !fueraDeRango && (
+                    <p className="text-xs font-medium text-emerald-700">
+                      Preaviso: {dias} días naturales.
+                    </p>
+                  )}
+                  {fueraDeRango && (
+                    <p className="text-xs font-medium text-rose-600">
+                      Fuera del rango permitido ({BAJA_CONTRATO_PREAVISO_MIN}-
+                      {BAJA_CONTRATO_PREAVISO_MAX} días).
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="motivo">Motivo (opcional)</Label>
+                  <Textarea
+                    id="motivo"
+                    value={motivo}
+                    onChange={(e) => setMotivo(e.target.value)}
+                    rows={3}
+                    placeholder="Si quieres, cuéntanos por qué te vas. Nos ayuda a mejorar."
+                  />
+                </div>
+              </div>
+            );
+          })()}
+
+          {paso === "detalle" && subtipo && subtipo !== "baja_contrato" && (
             <div className="grid gap-4 py-2">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">

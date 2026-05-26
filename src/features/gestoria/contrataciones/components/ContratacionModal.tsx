@@ -28,6 +28,7 @@ import type {
   ModificacionInput,
   TipoContratacion,
 } from "@/features/gestoria/contrataciones/types";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 interface Props {
   open: boolean;
@@ -49,6 +50,7 @@ export function ContratacionModal({ open, onClose, onSaved, initialTipo = "alta"
   const [empleados, setEmpleados] = useState<EmpleadoActivo[]>([]);
   const [empleadosLoading, setEmpleadosLoading] = useState(false);
   const [puestos, setPuestos] = useState<string[]>([]);
+  useGlobalLoadingSync(submitting || empleadosLoading);
 
   const todayISO = useMemo(() => new Date().toISOString().slice(0, 10), []);
 

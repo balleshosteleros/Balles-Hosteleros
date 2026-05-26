@@ -17,12 +17,15 @@ import {
   type FranjaHoraria,
   type MatrizOcupacion,
 } from "@/features/direccion/data/aperturas";
+import { BadgeSugerenciaIA } from "@/features/direccion/components/aperturas/shared/BadgeSugerenciaIA";
 
 interface Props {
   ocupacion: BloqueOcupacion;
   plazasTotales: number;
   onChange: (next: BloqueOcupacion, opts?: { flush?: boolean }) => void;
   readOnly?: boolean;
+  /** Si true, los 3 escenarios actuales vienen de un draft IA sin confirmar. */
+  iaActiva?: boolean;
 }
 
 function clamp01_100(n: number): number {
@@ -34,7 +37,7 @@ function fmtNum(n: number): string {
   return n.toLocaleString("es-ES", { maximumFractionDigits: 0 });
 }
 
-export function OcupacionTab({ ocupacion, plazasTotales, onChange, readOnly = false }: Props) {
+export function OcupacionTab({ ocupacion, plazasTotales, onChange, readOnly = false, iaActiva = false }: Props) {
   const bloque = ocupacion.escenarios.length > 0 ? ocupacion : bloqueOcupacionInicial();
 
   const [activoId, setActivoId] = useState<string>(
@@ -123,9 +126,12 @@ export function OcupacionTab({ ocupacion, plazasTotales, onChange, readOnly = fa
   return (
     <div className="space-y-4">
       {/* Selector + edición de escenario activo */}
-      <Card>
+      <Card className={iaActiva ? "ring-1 ring-amber-200" : undefined}>
         <CardHeader>
-          <CardTitle className="text-base">Escenarios</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2">
+            Escenarios
+            {iaActiva && <BadgeSugerenciaIA />}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap items-center gap-2">

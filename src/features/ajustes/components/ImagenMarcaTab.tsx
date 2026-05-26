@@ -7,47 +7,58 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Upload, Trash2, Loader2, ImageIcon, Wand2, Info, Eye } from "lucide-react";
+import { Upload, Trash2, Loader2, ImageIcon, Info, Eye, Sparkles } from "lucide-react";
 import {
   uploadLogo,
   deleteLogo,
-  uploadLogoAlt,
-  deleteLogoAlt,
+  uploadIsotipo,
+  deleteIsotipo,
   saveBrandColors,
   getBrandConfig,
 } from "@/features/empresa/actions/logo-actions";
-import { extractBrandColorsFromUrl, pickReadableTextColor } from "@/features/empresa/lib/extract-brand-colors";
+import { pickReadableTextColor } from "@/features/empresa/lib/extract-brand-colors";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import { ImportarMarcaDialog } from "./ImportarMarcaDialog";
+import type { MarcaImportada } from "@/features/empresa/actions/marca-import-actions";
 
 const MAX_LOGO_BYTES = 5 * 1024 * 1024;
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
 type Estado = {
   logoUrl: string | null;
-  logoAltUrl: string | null;
+  isotipoUrl: string | null;
   primario: string;
   secundario: string;
   texto: string;
+  fuenteTitulos: string;
+  fuenteCuerpo: string;
 };
 
 const DEFAULT_ESTADO: Estado = {
   logoUrl: null,
-  logoAltUrl: null,
+  isotipoUrl: null,
   primario: "#1F2937",
   secundario: "#94A3B8",
   texto: "#FFFFFF",
+  fuenteTitulos: "",
+  fuenteCuerpo: "",
 };
 
 export function ImagenMarcaTab() {
-  const { empresaActual, setLogoUrl } = useEmpresa();
+  const { empresaActual, setLogoUrl, setIsotipoUrl } = useEmpresa();
   const [estado, setEstado] = useState<Estado>(DEFAULT_ESTADO);
   const [cargando, setCargando] = useState(true);
   const [subiendoPrincipal, setSubiendoPrincipal] = useState(false);
-  const [subiendoAlt, setSubiendoAlt] = useState(false);
-  const [extrayendo, setExtrayendo] = useState(false);
+  const [subiendoIsotipo, setSubiendoIsotipo] = useState(false);
   const [guardando, setGuardando] = useState(false);
+  const [importarOpen, setImportarOpen] = useState(false);
+  const [aplicandoImport, setAplicandoImport] = useState(false);
+  useGlobalLoadingSync(
+    cargando || subiendoPrincipal || subiendoIsotipo || guardando || aplicandoImport,
+  );
   const filePrincipalRef = useRef<HTMLInputElement>(null);
-  const fileAltRef = useRef<HTMLInputElement>(null);
+  const fileIsotipoRef = useRef<HTMLInputElement>(null);
 
   // Cargar config de marca de la empresa actual
   useEffect(() => {
@@ -61,11 +72,13 @@ export function ImagenMarcaTab() {
         } else {
           setEstado({
             logoUrl: cfg.logoUrl,
-            logoAltUrl: cfg.logoAltUrl,
+            isotipoUrl: cfg.isotipoUrl,
             primario: cfg.colorPrimario && HEX_RE.test(cfg.colorPrimario) ? cfg.colorPrimario : DEFAULT_ESTADO.primario,
             secundario:
               cfg.colorSecundario && HEX_RE.test(cfg.colorSecundario) ? cfg.colorSecundario : DEFAULT_ESTADO.secundario,
             texto: cfg.colorTexto && HEX_RE.test(cfg.colorTexto) ? cfg.colorTexto : DEFAULT_ESTADO.texto,
+            fuenteTitulos: cfg.fuenteTitulos ?? "",
+            fuenteCuerpo: cfg.fuenteCuerpo ?? "",
           });
         }
       })
@@ -101,23 +114,24 @@ export function ImagenMarcaTab() {
     }
   };
 
-  const subirLogoAlt = async (file: File) => {
+  const subirIsotipoFile = async (file: File) => {
     if (file.size > MAX_LOGO_BYTES) {
-      toast.error("El logotipo es demasiado grande. Usa una imagen de menos de 5 MB.");
+      toast.error("El isotipo es demasiado grande. Usa una imagen de menos de 5 MB.");
       return;
     }
-    setSubiendoAlt(true);
+    setSubiendoIsotipo(true);
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const url = await uploadLogoAlt(empresaActual.id, fd);
-      setEstado((prev) => ({ ...prev, logoAltUrl: url }));
-      toast.success("Logotipo alternativo guardado");
+      const url = await uploadIsotipo(empresaActual.id, fd);
+      setEstado((prev) => ({ ...prev, isotipoUrl: url }));
+      setIsotipoUrl(empresaActual.id, url);
+      toast.success("Isotipo guardado");
     } catch (err) {
-      console.error("[ImagenMarcaTab] uploadLogoAlt:", err);
+      console.error("[ImagenMarcaTab] uploadIsotipo:", err);
       toast.error(friendlyError(err));
     } finally {
-      setSubiendoAlt(false);
+      setSubiendoIsotipo(false);
     }
   };
 
@@ -136,40 +150,74 @@ export function ImagenMarcaTab() {
     }
   };
 
-  const borrarAlt = async () => {
-    setSubiendoAlt(true);
+  const borrarIsotipo = async () => {
+    setSubiendoIsotipo(true);
     try {
-      await deleteLogoAlt(empresaActual.id);
-      setEstado((prev) => ({ ...prev, logoAltUrl: null }));
-      toast.success("Logotipo alternativo eliminado");
+      await deleteIsotipo(empresaActual.id);
+      setEstado((prev) => ({ ...prev, isotipoUrl: null }));
+      setIsotipoUrl(empresaActual.id, "");
+      toast.success("Isotipo eliminado");
     } catch (err) {
-      console.error("[ImagenMarcaTab] deleteLogoAlt:", err);
+      console.error("[ImagenMarcaTab] deleteIsotipo:", err);
       toast.error(friendlyError(err));
     } finally {
-      setSubiendoAlt(false);
+      setSubiendoIsotipo(false);
     }
   };
 
-  const autoDetectar = async () => {
-    if (!estado.logoUrl) {
-      toast.error("Sube primero un logotipo principal.");
-      return;
-    }
-    setExtrayendo(true);
+  const aplicarMarcaImportada = async (data: MarcaImportada) => {
+    setAplicandoImport(true);
     try {
-      const palette = await extractBrandColorsFromUrl(estado.logoUrl);
+      let nextLogoUrl: string | null = estado.logoUrl;
+      let nextIsotipoUrl: string | null = estado.isotipoUrl;
+
+      // 1) Logotipo (imagen ancha con texto)
+      if (data.logotipo) {
+        const blob = await (await fetch(data.logotipo.dataUrl)).blob();
+        const ext = (data.logotipo.mimeType.split("/")[1] ?? "png").replace("svg+xml", "svg");
+        const file = new File([blob], `logo-importado.${ext}`, { type: data.logotipo.mimeType });
+        const fd = new FormData();
+        fd.append("file", file);
+        nextLogoUrl = await uploadLogo(empresaActual.id, fd);
+        setLogoUrl(empresaActual.id, nextLogoUrl);
+      }
+
+      // 2) Isotipo (icono cuadrado)
+      if (data.isotipo) {
+        const blob = await (await fetch(data.isotipo.dataUrl)).blob();
+        const ext = (data.isotipo.mimeType.split("/")[1] ?? "png").replace("svg+xml", "svg");
+        const file = new File([blob], `isotipo-importado.${ext}`, { type: data.isotipo.mimeType });
+        const fd = new FormData();
+        fd.append("file", file);
+        nextIsotipoUrl = await uploadIsotipo(empresaActual.id, fd);
+        setIsotipoUrl(empresaActual.id, nextIsotipoUrl);
+      }
+
+      // 3) Paleta + tipografía
+      await saveBrandColors(empresaActual.id, {
+        primario: data.paleta.primario,
+        secundario: data.paleta.secundario,
+        texto: data.paleta.texto,
+        fuenteTitulos: data.tipografia.titulos ?? undefined,
+        fuenteCuerpo: data.tipografia.cuerpo ?? undefined,
+      });
+
+      // 4) Reflejar en UI
       setEstado((prev) => ({
         ...prev,
-        primario: palette.primario,
-        secundario: palette.secundario,
-        texto: palette.texto,
+        logoUrl: nextLogoUrl,
+        isotipoUrl: nextIsotipoUrl,
+        primario: data.paleta.primario,
+        secundario: data.paleta.secundario,
+        texto: data.paleta.texto,
+        fuenteTitulos: data.tipografia.titulos ?? prev.fuenteTitulos,
+        fuenteCuerpo: data.tipografia.cuerpo ?? prev.fuenteCuerpo,
       }));
-      toast.success("Colores detectados desde el logotipo");
     } catch (err) {
-      console.error("[ImagenMarcaTab] auto-detect:", err);
-      toast.error(friendlyError(err));
+      console.error("[ImagenMarcaTab] aplicarMarcaImportada:", err);
+      throw new Error(friendlyError(err));
     } finally {
-      setExtrayendo(false);
+      setAplicandoImport(false);
     }
   };
 
@@ -184,8 +232,10 @@ export function ImagenMarcaTab() {
         primario: estado.primario,
         secundario: estado.secundario,
         texto: estado.texto,
+        fuenteTitulos: estado.fuenteTitulos.trim() || null,
+        fuenteCuerpo: estado.fuenteCuerpo.trim() || null,
       });
-      toast.success("Paleta de marca guardada");
+      toast.success("Marca guardada");
     } catch (err) {
       console.error("[ImagenMarcaTab] saveBrandColors:", err);
       toast.error(friendlyError(err));
@@ -205,8 +255,18 @@ export function ImagenMarcaTab() {
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader className="pb-3">
+        <CardHeader className="pb-3 flex flex-row items-center justify-between gap-2">
           <CardTitle className="text-base">Imagen de marca · {empresaActual.nombre}</CardTitle>
+          <Button
+            size="sm"
+            variant="primary"
+            className="gap-1.5"
+            onClick={() => setImportarOpen(true)}
+            disabled={aplicandoImport}
+          >
+            {aplicandoImport ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+            Importar con IA
+          </Button>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex items-start gap-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
@@ -216,14 +276,15 @@ export function ImagenMarcaTab() {
               y paleta de marca. Se aplica al selector de empresa, comunicaciones y como base de la carta digital.
               El estilo específico de la carta (cabecera, tipografías, modo claro/oscuro…) se configura desde el
               módulo Marketing → Carta digital.
+              {" "}<span className="text-foreground">Atajo:</span> pulsa <strong>Importar con IA</strong> y pega la URL de tu web para rellenarlo todo en segundos.
             </p>
           </div>
 
           {/* Logos */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <LogoSlot
-              titulo="Logotipo principal"
-              descripcion="Para fondos claros. Recomendado: PNG o SVG con fondo transparente."
+              titulo="Logotipo"
+              descripcion="Icono + texto. Se usa en presentaciones, comunicaciones y header de la carta."
               url={estado.logoUrl}
               previewBg="#FFFFFF"
               uploading={subiendoPrincipal}
@@ -232,32 +293,20 @@ export function ImagenMarcaTab() {
               onDelete={borrarPrincipal}
             />
             <LogoSlot
-              titulo="Logotipo alternativo (opcional)"
-              descripcion="Para fondos oscuros. Se usa cuando el principal no es legible."
-              url={estado.logoAltUrl}
-              previewBg="#1F2937"
-              uploading={subiendoAlt}
-              fileRef={fileAltRef}
-              onUpload={subirLogoAlt}
-              onDelete={borrarAlt}
+              titulo="Isotipo"
+              descripcion="Solo el icono, sin texto. Se usa en el avatar del sidebar, favicons y vistas compactas."
+              url={estado.isotipoUrl}
+              previewBg="#FFFFFF"
+              uploading={subiendoIsotipo}
+              fileRef={fileIsotipoRef}
+              onUpload={subirIsotipoFile}
+              onDelete={borrarIsotipo}
             />
           </div>
 
           {/* Colores */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold">Paleta de marca</h3>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                onClick={autoDetectar}
-                disabled={!estado.logoUrl || extrayendo}
-              >
-                {extrayendo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
-                Auto-detectar del logo
-              </Button>
-            </div>
+            <h3 className="text-sm font-semibold">Paleta de marca</h3>
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               <ColorField
@@ -281,6 +330,39 @@ export function ImagenMarcaTab() {
                 value={estado.texto}
                 onChange={(v) => setEstado((prev) => ({ ...prev, texto: v }))}
               />
+            </div>
+          </div>
+
+          {/* Tipografía */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold">Tipografía de marca</h3>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Familia para títulos</Label>
+                <Input
+                  value={estado.fuenteTitulos}
+                  onChange={(e) =>
+                    setEstado((prev) => ({ ...prev, fuenteTitulos: e.target.value }))
+                  }
+                  placeholder='ej. "Playfair Display"'
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Nombre exacto (cualquier Google Font funciona). Vacío = tipografía por defecto del sistema.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Familia para cuerpo de texto</Label>
+                <Input
+                  value={estado.fuenteCuerpo}
+                  onChange={(e) =>
+                    setEstado((prev) => ({ ...prev, fuenteCuerpo: e.target.value }))
+                  }
+                  placeholder='ej. "Inter"'
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Si la dejas vacía se usará la misma que los títulos.
+                </p>
+              </div>
             </div>
           </div>
 
@@ -310,6 +392,12 @@ export function ImagenMarcaTab() {
           </div>
         </CardContent>
       </Card>
+
+      <ImportarMarcaDialog
+        open={importarOpen}
+        onOpenChange={setImportarOpen}
+        onApply={aplicarMarcaImportada}
+      />
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Save, Tags } from "lucide-react";
+import { Plus, Trash2, Save, Tags, Video } from "lucide-react";
 import { toast } from "sonner";
 import { updateReceta, upsertIngredientes } from "../actions/recetas-actions";
 import type { RecetaConExtras } from "../actions/recetas-actions";
@@ -30,6 +30,7 @@ export function EscandalloTab({ receta, onChanged, definirEtiquetasFinales }: Pr
   const [nuevoAlergeno, setNuevoAlergeno] = useState("");
   const [etiquetas, setEtiquetas] = useState<string[]>(receta.esc_etiquetas_finales ?? []);
   const [nuevaEtiqueta, setNuevaEtiqueta] = useState("");
+  const [videoUrl, setVideoUrl] = useState(receta.esc_video_url ?? "");
 
   const [ingredientes, setIngredientes] = useState<IngredienteLinea[]>(
     (receta.ingredientes ?? []).map((i) => ({
@@ -68,6 +69,7 @@ export function EscandalloTab({ receta, onChanged, definirEtiquetasFinales }: Pr
         esc_coste_estimado: coste ? parseFloat(coste) : null,
         esc_alergenos: alergenos,
         esc_etiquetas_finales: etiquetas,
+        esc_video_url: videoUrl.trim() || null,
       });
       if (!res1.ok) { toast.error(res1.error); return; }
 
@@ -136,6 +138,23 @@ export function EscandalloTab({ receta, onChanged, definirEtiquetasFinales }: Pr
             onChange={(e) => setElaboracion(e.target.value)}
             className="mt-1 w-full min-h-[100px] rounded-md border bg-background px-3 py-2 text-sm"
           />
+        </div>
+
+        {/* Video de preparación (MVP: URL externa) */}
+        <div className="col-span-2">
+          <Label className="inline-flex items-center gap-1.5">
+            <Video className="h-3.5 w-3.5" /> Video de preparación
+            <span className="text-[10px] font-normal text-muted-foreground">(beta — solo URL externa por ahora)</span>
+          </Label>
+          <Input
+            value={videoUrl}
+            onChange={(e) => setVideoUrl(e.target.value)}
+            placeholder="https://youtu.be/… · https://vimeo.com/… · https://loom.com/share/…"
+            className="mt-1"
+          />
+          {videoUrl.trim() && (
+            <VideoEmbed url={videoUrl.trim()} />
+          )}
         </div>
 
         {/* Alérgenos */}
@@ -214,6 +233,52 @@ export function EscandalloTab({ receta, onChanged, definirEtiquetasFinales }: Pr
           {saving ? "Guardando..." : "Guardar escandallo"}
         </Button>
       </div>
+    </div>
+  );
+}
+
+function toEmbedUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, "");
+    if (host === "youtu.be") {
+      return `https://www.youtube.com/embed/${u.pathname.slice(1)}`;
+    }
+    if (host === "youtube.com" || host === "m.youtube.com") {
+      const v = u.searchParams.get("v");
+      return v ? `https://www.youtube.com/embed/${v}` : null;
+    }
+    if (host === "vimeo.com") {
+      const id = u.pathname.split("/").filter(Boolean)[0];
+      return id ? `https://player.vimeo.com/video/${id}` : null;
+    }
+    if (host === "loom.com" && u.pathname.startsWith("/share/")) {
+      return url.replace("/share/", "/embed/");
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function VideoEmbed({ url }: { url: string }) {
+  const embed = toEmbedUrl(url);
+  if (!embed) {
+    return (
+      <p className="mt-2 text-xs text-muted-foreground">
+        Formato no reconocido para previsualizar. <a href={url} target="_blank" rel="noreferrer" className="text-primary underline">Abrir en pestaña nueva</a>.
+      </p>
+    );
+  }
+  return (
+    <div className="mt-2 aspect-video w-full max-w-xl overflow-hidden rounded-md border bg-black">
+      <iframe
+        src={embed}
+        title="Video de preparación"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
+        className="h-full w-full"
+      />
     </div>
   );
 }

@@ -44,6 +44,7 @@ import {
   Pencil, Share2, EyeOff, Trash2, Utensils, Building2, Settings,
 } from "lucide-react";
 import { DialogSnippetEmbed } from "@/features/empleo-publico/components/DialogSnippetEmbed";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -438,6 +439,7 @@ export function ReclutamientoView() {
   const router = useRouter();
   const [vacantes, setVacantes] = useState<Vacante[]>([]);
   const [loading, setLoading] = useState(true);
+  useGlobalLoadingSync(loading);
   const [reloadKey, setReloadKey] = useState(0);
   const recargar = useCallback(() => setReloadKey((k) => k + 1), []);
 

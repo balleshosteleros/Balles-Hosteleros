@@ -145,6 +145,12 @@ export const videoDatosSchema = z.object({
   muted: z.boolean(),
 });
 
+export const bolsaInspectoresDatosSchema = z.object({
+  titulo: z.string().min(1).max(200),
+  descripcion: z.string().max(500).optional(),
+  cta_label: z.string().min(1).max(80),
+});
+
 export const datosSchemaPorTipo = {
   hero: heroDatosSchema,
   galeria: galeriaDatosSchema,
@@ -157,6 +163,7 @@ export const datosSchemaPorTipo = {
   footer: footerDatosSchema,
   texto_libre: textoLibreDatosSchema,
   video: videoDatosSchema,
+  bolsa_inspectores: bolsaInspectoresDatosSchema,
 } as const;
 
 export const bloqueSchema = z.discriminatedUnion("tipo", [
@@ -171,6 +178,7 @@ export const bloqueSchema = z.discriminatedUnion("tipo", [
   bloqueBaseSchema.extend({ tipo: z.literal("footer"), datos: footerDatosSchema }),
   bloqueBaseSchema.extend({ tipo: z.literal("texto_libre"), datos: textoLibreDatosSchema }),
   bloqueBaseSchema.extend({ tipo: z.literal("video"), datos: videoDatosSchema }),
+  bloqueBaseSchema.extend({ tipo: z.literal("bolsa_inspectores"), datos: bolsaInspectoresDatosSchema }),
 ]);
 
 export const bloquesArraySchema = z.array(bloqueSchema).max(80);

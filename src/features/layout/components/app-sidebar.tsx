@@ -118,8 +118,8 @@ const gerenciaSubs = [
 ];
 const calidadSubs = [
   { title: "AUDITORÍAS", url: "/calidad/auditorias", icon: ClipboardList },
-  { title: "EMPLEADOS", url: "/calidad/empleados", icon: UsersRound },
-  { title: "CLIENTES", url: "/calidad/clientes", icon: ContactRound },
+  { title: "CUESTIONARIOS", url: "/calidad/cuestionarios", icon: FileQuestion },
+  { title: "RESEÑAS", url: "/calidad/resenas", icon: ContactRound },
   { title: "INSPECCIONES", url: "/calidad/inspecciones", icon: FileSearch },
 ];
 const miPanelSubs = [
@@ -136,6 +136,7 @@ const miPanelSubs = [
   { title: "SOLICITUDES", url: "/mi-panel/ausencias", icon: Inbox },
   { title: "COMUNICADOS", url: "/mi-panel/comunicados", icon: Megaphone },
   { title: "DOCUMENTOS", url: "/mi-panel/documentos", icon: Files },
+  { title: "INSPECCIONES", url: "/mi-panel/inspecciones", icon: FileSearch },
   { title: "EQUIPO", url: "/mi-panel/equipo", icon: Network },
 ];
 
@@ -153,7 +154,6 @@ const rrhhSubs = [
   { title: "PAGOS", url: "/rrhh/pagos", icon: HandCoins },
   { title: "FORMACIÓN", url: "/rrhh/formacion", icon: GraduationCap },
   { title: "ENCUESTAS", url: "/rrhh/encuestas", icon: ClipboardList },
-  { title: "CUESTIONARIOS", url: "/rrhh/cuestionarios", icon: FileQuestion },
 ];
 
 type SubItem = { title: string; url: string; icon: React.ElementType };
@@ -308,7 +308,7 @@ export function AppSidebar() {
               <PanelLeft className="h-4 w-4 text-sidebar-foreground/60" />
             </button>
             <img
-              src="/logo-balles.png"
+              src="/logo-balles.png?v=2"
               alt="Balles Hosteleros"
               className="w-36 transition-all duration-200"
             />

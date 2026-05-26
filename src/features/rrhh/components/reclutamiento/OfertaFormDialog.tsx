@@ -22,6 +22,7 @@ import {
 } from "@/features/rrhh/actions/vacantes-actions";
 import { useReglasSubmodulo } from "@/features/ajustes/hooks/use-reglas-submodulo";
 import { ValidacionFaltantesDialog } from "@/features/ajustes/components/ValidacionFaltantesDialog";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 type EstadoPub = "publicada" | "borrador" | "cerrada" | "archivada";
 
@@ -76,6 +77,7 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
   const [departamentos, setDepartamentos] = useState<DepartamentoRef[]>([]);
   const [pending, startTransition] = useTransition();
   const [loadingExisting, setLoadingExisting] = useState(false);
+  useGlobalLoadingSync(loadingExisting);
   const [faltantes, setFaltantes] = useState<string[]>([]);
   const { validar } = useReglasSubmodulo("rrhh", "reclutamiento");
 

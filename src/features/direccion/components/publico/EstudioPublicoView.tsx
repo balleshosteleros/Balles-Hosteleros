@@ -540,7 +540,7 @@ export function EstudioPublicoView({ data }: { data: EstudioPublico }) {
               <MarcaTab estudioId={estudio.id} marca={imagenMarca} onChange={noop} readOnly />
             </TabsContent>
             <TabsContent value="gastronomia" className="mt-4">
-              <GastronomiaTab estudioId={estudio.id} propuesta={propuesta} ventasMensuales={ventas} onChange={noop} readOnly />
+              <GastronomiaTab estudioId={estudio.id} propuesta={propuesta} onChange={noop} readOnly />
             </TabsContent>
           </Tabs>
         </TabsContent>

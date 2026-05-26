@@ -50,6 +50,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 const DIAS: DiaSemana[] = ["L", "M", "X", "J", "V", "S", "D"];
 
@@ -103,6 +104,7 @@ export function DescansosSection({ empresaId }: { empresaId: string }) {
   >({});
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
+  useGlobalLoadingSync(cargando || guardando);
   const [busqueda, setBusqueda] = useState("");
   const [showEdit, setShowEdit] = useState(false);
   const [editando, setEditando] = useState<DescansoDraft | null>(null);

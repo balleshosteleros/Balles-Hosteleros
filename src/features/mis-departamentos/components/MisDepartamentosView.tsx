@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth, type AppRole } from "@/features/auth/contexts/auth-context";
 import { Card } from "@/components/ui/card";
 import {
@@ -75,6 +75,11 @@ export function MisDepartamentosView() {
   const { profile, user, roles, puedeVer, permisosLoaded, hasRole } = useAuth();
   const rolPrincipal: AppRole | null = roles[0] ?? null;
 
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const tiles = useMemo(() => {
     // 'director' / 'admin' tienen bypass total — ven todos los departamentos.
     if (hasRole("director") || hasRole("admin")) return ALL_DEPARTAMENTOS;
@@ -84,26 +89,33 @@ export function MisDepartamentosView() {
     return ALL_DEPARTAMENTOS.filter((d) => puedeVer(d.modulo));
   }, [hasRole, permisosLoaded, puedeVer]);
 
-  const today = new Date();
-  const fechaLarga = `${DIAS_LARGOS[today.getDay()]} ${today.getDate()} de ${MESES_LARGOS[today.getMonth()]}`;
-
   const userName = profile?.nombre
     ? profile.apellidos
       ? `${profile.nombre} ${profile.apellidos}`
       : profile.nombre
     : (user?.email?.split("@")[0] ?? "");
 
+  const today = mounted ? new Date() : null;
+  const fechaLarga = today
+    ? `${DIAS_LARGOS[today.getDay()]} ${today.getDate()} de ${MESES_LARGOS[today.getMonth()]}`
+    : "";
+
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6">
-      {/* Cabecera */}
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
-          {saludoSegunHora()}{userName ? `, ${userName.split(" ")[0]}` : ""}
-        </h1>
-        <p className="text-sm text-muted-foreground capitalize">{fechaLarga}</p>
-        <p className="text-sm text-muted-foreground mt-1">
-          {dashboardSubtitlePorRol(rolPrincipal)}
-        </p>
+      {/* Cabecera — se renderiza solo tras montar para evitar hydration mismatch
+          (saludo por hora local, fecha por zona local y subtítulo por rol cargado async). */}
+      <div className="min-h-[5.5rem]">
+        {mounted ? (
+          <>
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+              {saludoSegunHora()}{userName ? `, ${userName.split(" ")[0]}` : ""}
+            </h1>
+            <p className="text-sm text-muted-foreground capitalize">{fechaLarga}</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {dashboardSubtitlePorRol(rolPrincipal)}
+            </p>
+          </>
+        ) : null}
       </div>
 
       {tiles.length === 0 ? (

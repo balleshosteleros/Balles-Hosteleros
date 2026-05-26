@@ -2,6 +2,11 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { distanciaMetros } from "@/features/rrhh/utils/geo";
+import { sendEmail } from "@/lib/email/send";
+import { bajaContratoRecibidaEmail } from "@/lib/email/templates/baja-contrato-recibida";
+import { crearFirmaInterno } from "@/features/rrhh/services/firmas/crear-firma";
+import { generarCartaBajaVoluntariaPDF } from "@/features/rrhh/services/firmas/baja-voluntaria-pdf";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type {
   DiaCalendario,
   MiFichajeHoy,
@@ -605,11 +610,30 @@ export interface NuevaSolicitudInput {
 
 type SupabaseAny = Awaited<ReturnType<typeof createClient>>;
 
-const SUBTIPO_AUSENCIA_KEYWORD: Record<SolicitudSubtipoAusencia, string> = {
+const SUBTIPO_AUSENCIA_KEYWORD: Record<
+  Exclude<SolicitudSubtipoAusencia, "baja_contrato">,
+  string
+> = {
   baja_medica: "baja",
   vacaciones: "vacacion",
   permiso: "permiso",
 };
+
+// Ventana de preaviso para la solicitud de baja de contrato (días naturales).
+const BAJA_CONTRATO_PREAVISO_MIN_DIAS = 15;
+const BAJA_CONTRATO_PREAVISO_MAX_DIAS = 45;
+
+function diasNaturales(desde: string, hasta: string): number {
+  const a = new Date(desde + "T00:00:00Z");
+  const b = new Date(hasta + "T00:00:00Z");
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return 0;
+  return Math.floor((b.getTime() - a.getTime()) / 86400000);
+}
+
+function formatFechaEs(iso: string): string {
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
 
 function diasEntreFechas(inicio: string, fin: string | null): number {
   const ini = new Date(inicio + "T00:00:00Z");
@@ -646,15 +670,101 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
     const { supabase, user, empresaId, nombre } = await getContext();
     if (!user || !empresaId) return { ok: false, error: "No autenticado" };
 
-    if (input.tipo === "ausencia" && !["baja_medica", "vacaciones", "permiso"].includes(input.subtipo)) {
+    if (
+      input.tipo === "ausencia" &&
+      !["baja_medica", "vacaciones", "permiso", "baja_contrato"].includes(input.subtipo)
+    ) {
       return { ok: false, error: "Subtipo de ausencia no válido" };
     }
     if (input.tipo === "trabajo" && !["horas_extras", "dia_trabajado"].includes(input.subtipo)) {
       return { ok: false, error: "Subtipo de trabajo no válido" };
     }
 
+    // BAJA DE CONTRATO: reglas propias. Cliente solo elige fecha_fin (último día efectivo);
+    // el servidor fija fecha_inicio = hoy (primer día de preaviso) y exige 15-45 días.
+    if (input.tipo === "ausencia" && input.subtipo === "baja_contrato") {
+      const hoy = todayISO();
+      if (!input.fechaFin) {
+        return { ok: false, error: "Indica la fecha solicitada de baja" };
+      }
+      const dias = diasNaturales(hoy, input.fechaFin);
+      if (dias < BAJA_CONTRATO_PREAVISO_MIN_DIAS) {
+        return {
+          ok: false,
+          error: `El preaviso mínimo es de ${BAJA_CONTRATO_PREAVISO_MIN_DIAS} días naturales. La fecha más cercana que puedes solicitar es ${formatFechaEs(
+            new Date(Date.now() + BAJA_CONTRATO_PREAVISO_MIN_DIAS * 86400000)
+              .toISOString()
+              .split("T")[0],
+          )}.`,
+        };
+      }
+      if (dias > BAJA_CONTRATO_PREAVISO_MAX_DIAS) {
+        return {
+          ok: false,
+          error: `El preaviso máximo es de ${BAJA_CONTRATO_PREAVISO_MAX_DIAS} días naturales.`,
+        };
+      }
+      // Evita duplicados: si ya hay una baja_contrato pendiente o aprobada, bloquea.
+      const { data: existente } = await supabase
+        .from("solicitudes_personal")
+        .select("id, estado")
+        .eq("empresa_id", empresaId)
+        .eq("user_id", user.id)
+        .eq("subtipo", "baja_contrato")
+        .in("estado", ["pendiente", "aprobada"])
+        .limit(1)
+        .maybeSingle();
+      if (existente) {
+        return {
+          ok: false,
+          error: "Ya tienes una solicitud de baja de contrato en curso.",
+        };
+      }
+      const { data, error } = await supabase
+        .from("solicitudes_personal")
+        .insert({
+          empresa_id: empresaId,
+          user_id: user.id,
+          empleado_nombre: nombre || "Sin nombre",
+          tipo: input.tipo,
+          subtipo: input.subtipo,
+          fecha_inicio: hoy,
+          fecha_fin: input.fechaFin,
+          horas: null,
+          motivo: input.motivo ?? "",
+          estado: "pendiente",
+        })
+        .select()
+        .single();
+      if (error) throw error;
+
+      // Side-effects (no bloqueantes): firma eIDAS + aviso a RRHH.
+      // Si fallan, la solicitud queda creada igual y RRHH la verá en pendientes.
+      try {
+        await onBajaContratoCreada({
+          empresaId,
+          userId: user.id,
+          fechaInicio: hoy,
+          fechaFin: input.fechaFin,
+          diasPreaviso: dias,
+          motivo: input.motivo ?? null,
+          nombreFallback: nombre || "",
+        });
+      } catch (e) {
+        console.error(
+          "[mi-panel] baja_contrato side-effects:",
+          extractErrorMessage(e),
+        );
+      }
+
+      return { ok: true, data: mapSolicitud(data as Record<string, unknown>) };
+    }
+
     if (input.tipo === "ausencia") {
-      const subtipoAus = input.subtipo as SolicitudSubtipoAusencia;
+      const subtipoAus = input.subtipo as Exclude<
+        SolicitudSubtipoAusencia,
+        "baja_contrato"
+      >;
       const keyword = SUBTIPO_AUSENCIA_KEYWORD[subtipoAus];
 
       const { data: tipoAusencia } = await supabase
@@ -790,6 +900,16 @@ export async function aprobarSolicitud(id: string, notasRevision?: string) {
   try {
     const { supabase, user } = await getContext();
     if (!user) return { ok: false, error: "No autenticado" };
+
+    // Cargamos la solicitud antes del UPDATE para decidir si hay notificación.
+    const { data: solicitud, error: fetchErr } = await supabase
+      .from("solicitudes_personal")
+      .select("id, empresa_id, user_id, empleado_nombre, subtipo, fecha_inicio, fecha_fin")
+      .eq("id", id)
+      .maybeSingle();
+    if (fetchErr) throw fetchErr;
+    if (!solicitud) return { ok: false, error: "Solicitud no encontrada" };
+
     const { error } = await supabase
       .from("solicitudes_personal")
       .update({
@@ -800,11 +920,229 @@ export async function aprobarSolicitud(id: string, notasRevision?: string) {
       })
       .eq("id", id);
     if (error) throw error;
+
+    if (solicitud.subtipo === "baja_contrato") {
+      // Notificación al empleado. No bloqueamos la aprobación si el envío falla.
+      try {
+        await notificarBajaContratoRecibida({
+          empresaId: solicitud.empresa_id as string,
+          userId: solicitud.user_id as string,
+          empleadoNombre: (solicitud.empleado_nombre as string) ?? "",
+          fechaInicio: solicitud.fecha_inicio as string,
+          fechaFin: (solicitud.fecha_fin as string | null) ?? null,
+          notasRevision: notasRevision ?? null,
+        });
+      } catch (e) {
+        console.error(
+          "[mi-panel] aprobarSolicitud → email baja_contrato:",
+          extractErrorMessage(e),
+        );
+      }
+    }
+
     return { ok: true };
   } catch (err: unknown) {
     const msg = extractErrorMessage(err);
     console.error("[mi-panel] aprobarSolicitud:", msg);
     return { ok: false, error: msg };
+  }
+}
+
+async function notificarBajaContratoRecibida(args: {
+  empresaId: string;
+  userId: string;
+  empleadoNombre: string;
+  fechaInicio: string;
+  fechaFin: string | null;
+  notasRevision: string | null;
+}): Promise<void> {
+  if (!args.fechaFin) return;
+  const supabase = await createClient();
+
+  const [empleadoRes, empresaRes] = await Promise.all([
+    supabase
+      .from("empleados")
+      .select("nombre, apellidos, email_empresa, email_personal")
+      .eq("empresa_id", args.empresaId)
+      .eq("user_id", args.userId)
+      .maybeSingle(),
+    supabase
+      .from("empresas")
+      .select("nombre")
+      .eq("id", args.empresaId)
+      .maybeSingle(),
+  ]);
+
+  const emp = empleadoRes.data as
+    | { nombre: string | null; apellidos: string | null; email_empresa: string | null; email_personal: string | null }
+    | null;
+  const destino = emp?.email_empresa || emp?.email_personal;
+  if (!destino) {
+    console.warn("[mi-panel] baja_contrato sin email destino para user", args.userId);
+    return;
+  }
+
+  const nombre =
+    (emp ? `${emp.nombre ?? ""} ${emp.apellidos ?? ""}`.trim() : "") ||
+    args.empleadoNombre ||
+    "compañero/a";
+  const empresaNombre =
+    (empresaRes.data?.nombre as string | undefined) ?? "tu empresa";
+  const diasPreaviso = diasNaturales(args.fechaInicio, args.fechaFin);
+
+  const { subject, html, text } = bajaContratoRecibidaEmail({
+    recipientName: nombre,
+    empresaNombre,
+    fechaSolicitud: formatFechaEs(args.fechaInicio),
+    fechaBaja: formatFechaEs(args.fechaFin),
+    diasPreaviso,
+    notasRevision: args.notasRevision,
+  });
+
+  await sendEmail({
+    to: destino,
+    subject,
+    html,
+    text,
+    empresaId: args.empresaId,
+  });
+}
+
+// ─── Baja de contrato: side-effects al crear la solicitud ────
+
+async function onBajaContratoCreada(args: {
+  empresaId: string;
+  userId: string;
+  fechaInicio: string;
+  fechaFin: string;
+  diasPreaviso: number;
+  motivo: string | null;
+  nombreFallback: string;
+}): Promise<void> {
+  const admin = createAdminClient();
+
+  const [empleadoRes, empresaRes] = await Promise.all([
+    admin
+      .from("empleados")
+      .select("id, nombre, apellidos, dni_nie, local_id")
+      .eq("empresa_id", args.empresaId)
+      .eq("user_id", args.userId)
+      .maybeSingle(),
+    admin
+      .from("empresas")
+      .select("nombre, email_contacto")
+      .eq("id", args.empresaId)
+      .maybeSingle(),
+  ]);
+
+  const emp = empleadoRes.data as
+    | {
+        id: string;
+        nombre: string | null;
+        apellidos: string | null;
+        dni_nie: string | null;
+        local_id: string | null;
+      }
+    | null;
+  if (!emp) {
+    console.warn(
+      "[mi-panel] baja_contrato: no se encontró empleado para user",
+      args.userId,
+    );
+    return;
+  }
+
+  const empresaNombre =
+    (empresaRes.data?.nombre as string | undefined) ?? "Tu empresa";
+  const empresaCif: string | null = null;
+
+  // Ciudad para la cabecera de la carta (best-effort).
+  let ciudad: string | null = null;
+  if (emp.local_id) {
+    const { data: local } = await admin
+      .from("locales")
+      .select("ciudad")
+      .eq("id", emp.local_id)
+      .maybeSingle();
+    if (local) {
+      ciudad = (local.ciudad as string | null) ?? null;
+    }
+  }
+
+  const empleadoNombre =
+    `${emp.nombre ?? ""} ${emp.apellidos ?? ""}`.trim() ||
+    args.nombreFallback ||
+    "Empleado/a";
+
+  // 1) Generar PDF de la carta de baja voluntaria.
+  let pdfBuffer: Buffer | null = null;
+  try {
+    pdfBuffer = await generarCartaBajaVoluntariaPDF({
+      empleadoNombre,
+      empleadoDni: emp.dni_nie,
+      empresaNombre,
+      empresaCif,
+      ciudad,
+      fechaSolicitud: formatFechaEs(args.fechaInicio),
+      fechaBaja: formatFechaEs(args.fechaFin),
+      diasPreaviso: args.diasPreaviso,
+      motivo: args.motivo,
+    });
+  } catch (e) {
+    console.error("[mi-panel] baja_contrato: PDF falló:", extractErrorMessage(e));
+  }
+
+  // 2) Crear solicitud de firma eIDAS (modalidad email_otp, más segura).
+  if (pdfBuffer) {
+    const firma = await crearFirmaInterno({
+      empresaId: args.empresaId,
+      empleadoId: emp.id,
+      pdf: pdfBuffer,
+      titulo: "Carta de baja voluntaria",
+      tipo: "baja_voluntaria",
+      modalidad: "email_otp",
+      validez: "eidas_simple",
+      plazoDias: 7,
+      observaciones: `Solicitud de baja con fecha efectiva ${formatFechaEs(args.fechaFin)} (${args.diasPreaviso} días de preaviso).`,
+      enviadoPorUserId: args.userId,
+      enviadoPorNombre: empleadoNombre,
+    });
+    if (!firma.ok) {
+      console.error("[mi-panel] baja_contrato: firma no creada:", firma.error);
+    }
+  }
+
+  // 3) Aviso por email al buzón de contacto de la empresa.
+  const destinoEmpresa =
+    (empresaRes.data?.email_contacto as string | null) ?? null;
+  if (destinoEmpresa) {
+    const appUrl =
+      process.env.NEXT_PUBLIC_APP_URL ?? "https://app.balleshosteleros.com";
+    const { bajaContratoAvisoRrhhEmail } = await import(
+      "@/lib/email/templates/baja-contrato-rrhh"
+    );
+    const { subject, html, text } = bajaContratoAvisoRrhhEmail({
+      empleadoNombre,
+      empleadoDni: emp.dni_nie,
+      empresaNombre,
+      fechaSolicitud: formatFechaEs(args.fechaInicio),
+      fechaBaja: formatFechaEs(args.fechaFin),
+      diasPreaviso: args.diasPreaviso,
+      motivo: args.motivo,
+      enlacePanel: `${appUrl}/rrhh/solicitudes`,
+    });
+    await sendEmail({
+      to: destinoEmpresa,
+      subject,
+      html,
+      text,
+      empresaId: args.empresaId,
+    });
+  } else {
+    console.warn(
+      "[mi-panel] baja_contrato: sin email_contacto configurado para empresa",
+      args.empresaId,
+    );
   }
 }
 

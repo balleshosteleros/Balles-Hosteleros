@@ -20,6 +20,7 @@ export const BLOQUE_TIPOS = [
   "footer",
   "texto_libre",
   "video",
+  "bolsa_inspectores",
 ] as const;
 
 export type BloqueTipo = (typeof BLOQUE_TIPOS)[number];
@@ -108,6 +109,12 @@ export interface VideoDatos {
   muted: boolean;
 }
 
+export interface BolsaInspectoresDatos {
+  titulo: string;
+  descripcion?: string;
+  cta_label: string;
+}
+
 export type Bloque =
   | (BloqueBase & { tipo: "hero"; datos: HeroDatos })
   | (BloqueBase & { tipo: "galeria"; datos: GaleriaDatos })
@@ -119,7 +126,8 @@ export type Bloque =
   | (BloqueBase & { tipo: "mapa"; datos: MapaDatos })
   | (BloqueBase & { tipo: "footer"; datos: FooterDatos })
   | (BloqueBase & { tipo: "texto_libre"; datos: TextoLibreDatos })
-  | (BloqueBase & { tipo: "video"; datos: VideoDatos });
+  | (BloqueBase & { tipo: "video"; datos: VideoDatos })
+  | (BloqueBase & { tipo: "bolsa_inspectores"; datos: BolsaInspectoresDatos });
 
 export type BloqueDatos<T extends BloqueTipo> = Extract<Bloque, { tipo: T }>["datos"];
 

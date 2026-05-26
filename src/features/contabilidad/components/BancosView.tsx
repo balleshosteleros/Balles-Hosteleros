@@ -27,6 +27,7 @@ import {
   sincronizarConexion,
   seedBancosBase,
 } from "@/features/contabilidad/actions/psd2-actions";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 interface BankAccount {
   id: string;
@@ -71,6 +72,7 @@ export function BancosView() {
   const [dialogPrefilter, setDialogPrefilter] = useState<string | undefined>();
   const [dialogReconnectId, setDialogReconnectId] = useState<string | undefined>();
   const [sincronizando, setSincronizando] = useState<string | null>(null);
+  useGlobalLoadingSync(loading || sincronizando !== null);
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   // `nowMs` fijo al montar para que `necesitaRenovar` sea idempotente en render.
   const [nowMs] = useState(() => Date.now());

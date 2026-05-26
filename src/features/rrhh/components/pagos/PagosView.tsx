@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { getResumenPagos, calcularTotalPago, type PagoEmpleado, type PagoArea } from "@/features/rrhh/data/pagos";
 import { listEmpleadosParaPagos } from "@/features/rrhh/actions/pagos-actions";
 import { ZONE_COLORS } from "@/features/direccion/data/direccion";
@@ -73,6 +74,8 @@ export function PagosView() {
   const [loading, setLoading] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [filtroArea, setFiltroArea] = useState<"todos" | PagoArea>("todos");
+
+  useGlobalLoadingSync(loading);
 
   const claveRango = rangoKey(calRange.range);
   const pagos = pagosPorRango[claveRango] ?? [];

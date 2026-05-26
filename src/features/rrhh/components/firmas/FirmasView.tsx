@@ -67,6 +67,7 @@ import {
   type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
 import { toast } from "sonner";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import {
   TIPOS_DOCUMENTO,
   MODALIDADES_FIRMA,
@@ -157,6 +158,7 @@ export function FirmasView() {
 
   const [nuevoOpen, setNuevoOpen] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  useGlobalLoadingSync(cargandoItems || cargandoEmpleados || enviando);
 
   const [titulo, setTitulo] = useState("");
   const [tipo, setTipo] = useState<TipoDocumento>("contrato");

@@ -37,6 +37,7 @@ import {
 } from "@/features/logistica/actions/sugerencias-actions";
 import { createPedido } from "@/features/logistica/actions/pedidos-actions";
 import { toast } from "sonner";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 type Modo = "stock" | "ventas";
 type Step = "mode" | "list";
@@ -75,6 +76,7 @@ export function SugerenciasPedidoModal({
   const [groups, setGroups] = useState<GroupState[]>([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+  useGlobalLoadingSync(loading || creating);
 
   useEffect(() => {
     if (!open) {

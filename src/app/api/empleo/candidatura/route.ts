@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import crypto from "node:crypto";
+import { normalizarNombre } from "@/shared/lib/normalizar-nombre";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -183,8 +184,8 @@ export async function POST(req: Request) {
       .insert({
         empresa_id: empresaId,
         vacante_id: vacante.id,
-        nombre,
-        apellidos,
+        nombre: normalizarNombre(nombre),
+        apellidos: normalizarNombre(apellidos),
         email,
         telefono,
         cv_url: cvUrl,

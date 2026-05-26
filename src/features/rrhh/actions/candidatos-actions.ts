@@ -3,6 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import {
+  normalizarNombre,
+  normalizarNombreOrNull,
+} from "@/shared/lib/normalizar-nombre";
 
 async function getContext() {
   const supabase = await createClient();
@@ -50,8 +54,8 @@ export async function createCandidato(input: {
     const { error } = await supabase.from("candidatos").insert({
       empresa_id: empresaId,
       vacante_id: input.vacante_id,
-      nombre: input.nombre.trim(),
-      apellidos: input.apellidos.trim() || null,
+      nombre: normalizarNombre(input.nombre),
+      apellidos: normalizarNombreOrNull(input.apellidos),
       email: input.email.trim(),
       telefono: input.telefono.trim() || null,
       origen: input.origen,

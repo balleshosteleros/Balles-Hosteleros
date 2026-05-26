@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 
 type ActionResult<T = unknown> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -25,7 +26,7 @@ async function getSession() {
   if (!user) return { supabase, user: null, empresaId: null, nombre: "", isAdmin: false };
   const { data: profile } = await supabase
     .from("profiles")
-    .select("empresa_id, full_name, nombre")
+    .select("full_name, nombre")
     .eq("user_id", user.id)
     .maybeSingle();
   const { data: roles } = await supabase
@@ -36,10 +37,11 @@ async function getSession() {
   const isAdmin = (roles ?? []).some((r: { role: string }) => adminRoles.has(r.role));
   const nombre =
     (profile?.full_name as string) || (profile?.nombre as string) || user.email || "";
+  const empresaId = await getEmpresaActivaForUser(supabase, user.id);
   return {
     supabase,
     user,
-    empresaId: (profile?.empresa_id as string) ?? null,
+    empresaId,
     nombre,
     isAdmin,
   };

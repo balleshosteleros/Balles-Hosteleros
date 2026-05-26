@@ -4,16 +4,19 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 
+import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 async function getContext() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { supabase, user: null, empresaId: null, role: null };
-  const [{ data: profile }, { data: roles }] = await Promise.all([
+  const [empresaId, { data: profile }, { data: roles }] = await Promise.all([
+    getEmpresaActivaForUser(supabase as unknown as SupabaseClient, user.id),
     supabase
       .from("profiles")
-      .select("empresa_id, role")
+      .select("role")
       .eq("user_id", user.id)
       .single(),
     supabase
@@ -29,7 +32,7 @@ async function getContext() {
   return {
     supabase,
     user,
-    empresaId: profile?.empresa_id ?? null,
+    empresaId,
     role: appRole,
   };
 }

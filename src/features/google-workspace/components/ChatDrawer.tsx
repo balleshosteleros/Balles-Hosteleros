@@ -48,6 +48,7 @@ import {
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { getOrganigrama } from "@/features/direccion/actions/organigrama-actions";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { orgChartsPorEmpresa } from "@/features/direccion/data/direccion";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
@@ -232,8 +233,9 @@ function GrupoAvatar({
 }
 
 export function ChatDrawer({ children }: { children: ReactNode }) {
-  const { empresaActual, getLogoUrl } = useEmpresa();
-  const logoUrl = getLogoUrl(empresaActual.id);
+  // Avatares de chat (md, xl) = ISOTIPO (icono sin texto). Fallback al logotipo si no hay isotipo.
+  const { empresaActual, getIsotipoUrl } = useEmpresa();
+  const logoUrl = getIsotipoUrl(empresaActual.id);
 
   const [open, setOpen] = useState(false);
   const [canales, setCanales] = useState<Canal[]>([]);
@@ -243,6 +245,7 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
   const [busqueda, setBusqueda] = useState("");
   const [cargando, setCargando] = useState(false);
   const [cargandoMsgs, setCargandoMsgs] = useState(false);
+  useGlobalLoadingSync(cargando || cargandoMsgs);
   const [prefsMap, setPrefsMap] = useState<Record<string, PrefCanal>>({});
 
   const [dlgNuevo, setDlgNuevo] = useState(false);

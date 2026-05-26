@@ -2,16 +2,24 @@
 
 import { createClient } from "@/lib/supabase/server";
 
+import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 async function getContext() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { supabase, user: null, empresaId: null, nombre: null };
+  const empresaId = await getEmpresaActivaForUser(supabase as unknown as SupabaseClient, user.id);
+
   const { data } = await supabase
+
     .from("profiles")
-    .select("empresa_id, nombre, apellidos")
+
+    .select("nombre, apellidos")
+
     .eq("user_id", user.id)
+
     .single();
-  const partes = [data?.nombre, data?.apellidos]
+const partes = [data?.nombre, data?.apellidos]
     .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
     .map((s) => s.trim());
   const nombreCompleto = partes.length > 0
@@ -20,7 +28,7 @@ async function getContext() {
   return {
     supabase,
     user,
-    empresaId: data?.empresa_id ?? null,
+    empresaId,
     nombre: nombreCompleto,
   };
 }

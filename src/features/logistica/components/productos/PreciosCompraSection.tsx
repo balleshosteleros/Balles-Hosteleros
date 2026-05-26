@@ -33,9 +33,10 @@ import {
   updatePrecioCompraFechaFin,
   type PrecioCompraRow,
 } from "@/features/logistica/actions/precios-compra-actions";
-import { IVA_OPCIONES, getFormatosPorUnidad } from "@/features/logistica/data/productos";
 import { ProveedorCombobox } from "@/features/logistica/components/productos/ProveedorCombobox";
+import { useCatalogosLogistica } from "@/features/logistica/hooks/useCatalogosLogistica";
 import { toast } from "sonner";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 interface Props {
   productoId: string;
@@ -111,6 +112,7 @@ export function PreciosCompraSection({ productoId, unidad, onCurrentChange, onIt
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  useGlobalLoadingSync(loading || saving || deletingId !== null);
 
   // Form state (nuevo precio o edición de uno existente)
   const [precio, setPrecio] = useState("");
@@ -120,9 +122,10 @@ export function PreciosCompraSection({ productoId, unidad, onCurrentChange, onIt
   const [fechaInicio, setFechaInicio] = useState(todayIso());
   const [fechaFin, setFechaFin] = useState<string>("");
 
+  const catalogos = useCatalogosLogistica();
   const formatosUnidad = useMemo(
-    () => (unidad ? getFormatosPorUnidad(unidad) : []),
-    [unidad]
+    () => (unidad ? catalogos.formatosPorUnidad[unidad] ?? [] : []),
+    [unidad, catalogos.formatosPorUnidad],
   );
 
   const cargar = async (notify = false) => {
@@ -433,7 +436,7 @@ export function PreciosCompraSection({ productoId, unidad, onCurrentChange, onIt
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={IVA_NONE}>Sin IVA</SelectItem>
-                    {IVA_OPCIONES.map((v) => (
+                    {catalogos.ivas.map((v) => (
                       <SelectItem key={v} value={v}>
                         {v}
                       </SelectItem>

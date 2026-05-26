@@ -240,12 +240,11 @@ export function SubmoduleToolbar({
       )}
     >
       <div className="flex items-center gap-2">
-        {!ocultarNuevo && (
+        {!ocultarNuevo && onNuevo && (
           <Button
             variant="primary"
             size="sm"
             onClick={onNuevo}
-            disabled={!onNuevo}
             className="gap-1.5"
           >
             <Plus className="h-4 w-4" />

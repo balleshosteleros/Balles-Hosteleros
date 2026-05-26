@@ -2,21 +2,29 @@
 
 import { createClient } from "@/lib/supabase/server";
 
+import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 async function getContext() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { supabase, user: null, empresaId: null, nombre: null };
+  const empresaId = await getEmpresaActivaForUser(supabase as unknown as SupabaseClient, user.id);
+
   const { data } = await supabase
+
     .from("profiles")
-    .select("empresa_id, nombre, apellidos")
+
+    .select("nombre, apellidos")
+
     .eq("user_id", user.id)
+
     .single();
-  return {
+return {
     supabase,
     user,
-    empresaId: data?.empresa_id ?? null,
+    empresaId,
     nombre: data ? data.nombre + " " + data.apellidos : null,
   };
 }

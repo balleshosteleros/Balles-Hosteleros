@@ -1,5 +1,5 @@
-import { CuestionariosView } from "@/features/calidad/components/cuestionarios/CuestionariosView";
+import { CuestionariosShell } from "@/features/calidad/cuestionarios/components/CuestionariosShell";
 
 export default function CuestionariosPage() {
-  return <CuestionariosView />;
+  return <CuestionariosShell />;
 }

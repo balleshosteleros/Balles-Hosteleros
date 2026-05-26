@@ -48,6 +48,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -188,6 +189,7 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
   const [sidebarAbierto, setSidebarAbierto] = useState(true);
   const [fotosContactos, setFotosContactos] = useState<Record<string, string>>({});
   const [needsReauth, setNeedsReauth] = useState(false);
+  useGlobalLoadingSync(cargando);
 
   const arbolCarpetas = useMemo(
     () => construirArbolCarpetas(carpetasUsuario),
@@ -206,6 +208,7 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
 
   const [compose, setCompose] = useState<ComposeState | null>(null);
   const [enviando, setEnviando] = useState(false);
+  useGlobalLoadingSync(enviando);
   const [firmaHtml, setFirmaHtml] = useState<string>("");
   const [incluirFirma, setIncluirFirma] = useState(true);
 

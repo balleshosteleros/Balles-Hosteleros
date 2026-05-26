@@ -1,7 +1,6 @@
 "use server";
 
 import { getAppContext } from "@/lib/supabase/get-context";
-import { getAreaForRol } from "@/features/direccion/data/cronogramaAreas";
 
 export type EmpleadoArea = "administrativa" | "operativa";
 
@@ -29,7 +28,7 @@ export async function listEmpleadosParaPagos(): Promise<{ ok: boolean; data: Emp
 
     const { data, error } = await supabase
       .from("empleados")
-      .select("id, nombre, apellidos, puesto, estado, user_id, empresa_id, departamentos(nombre)")
+      .select("id, nombre, apellidos, puesto, estado, user_id, empresa_id, departamentos(nombre, area)")
       .or(filtro)
       .eq("estado", "Activo")
       .order("nombre", { ascending: true });
@@ -60,15 +59,13 @@ export async function listEmpleadosParaPagos(): Promise<{ ok: boolean; data: Emp
 
     const rows: EmpleadoPagoRow[] = [...porUser.values(), ...sinUser].map((e) => {
       const deptoRel = e.departamentos as
-        | { nombre?: string | null }
-        | Array<{ nombre?: string | null }>
+        | { nombre?: string | null; area?: string | null }
+        | Array<{ nombre?: string | null; area?: string | null }>
         | null;
       const deptoObj = Array.isArray(deptoRel) ? deptoRel[0] : deptoRel;
-      const deptoNombre = deptoObj?.nombre ?? null;
       const puesto = (e.puesto as string | null) ?? null;
-      const areaSrc = deptoNombre || puesto || "";
       const area: EmpleadoArea =
-        getAreaForRol(areaSrc) === "OPERATIVA" ? "operativa" : "administrativa";
+        deptoObj?.area === "OPERATIVA" ? "operativa" : "administrativa";
       return {
         empleadoId: e.id as string,
         empleadoNombre: `${(e.nombre as string) ?? ""} ${(e.apellidos as string) ?? ""}`.trim(),

@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 
 export interface ProductividadFila {
   empresa_id: string;
@@ -32,9 +33,15 @@ export async function getProductividad(
 ): Promise<{ ok: true; data: ProductividadFila[] } | { ok: false; error: string }> {
   try {
     const supabase = await createServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: "Sin sesión" };
+    const empresaId = await getEmpresaActivaForUser(supabase, user.id);
+    if (!empresaId) return { ok: false, error: "Sin empresa activa" };
+
     let q = supabase
       .from("v_cronograma_productividad")
       .select("*")
+      .eq("empresa_id", empresaId)
       .gte("fecha_programada", filtros.fechaDesde)
       .lte("fecha_programada", filtros.fechaHasta);
 
@@ -63,9 +70,15 @@ export async function getEmpleadosEmpresa(): Promise<
 > {
   try {
     const supabase = await createServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: "Sin sesión" };
+    const empresaId = await getEmpresaActivaForUser(supabase, user.id);
+    if (!empresaId) return { ok: false, error: "Sin empresa activa" };
+
     const { data, error } = await supabase
       .from("profiles")
       .select("user_id, nombre, apellidos, full_name, departamento, role")
+      .eq("empresa_id", empresaId)
       .order("nombre", { ascending: true });
     if (error) return { ok: false, error: error.message };
     const rows = (data ?? [])

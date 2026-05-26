@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,8 +14,25 @@ import {
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Plus, Star, StarOff, Pencil, Trash2, Tag } from "lucide-react";
+import { Star, StarOff, Pencil, Trash2, Settings } from "lucide-react";
+import TarifaConfigView from "@/features/logistica/components/tarifas/TarifaConfigView";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  coincideBusquedaUniversal,
+  colVisible,
+  ordenarColumnas,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+  type ToolbarColumnaVisible,
+  type ToolbarColumna,
+} from "@/shared/components/SubmoduleToolbar";
+import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
+import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
+import { IOActions } from "@/shared/io";
+import { tarifasIO } from "@/features/logistica/io/tarifas.io";
 import {
   listTarifas,
   createTarifa,
@@ -34,6 +50,13 @@ export function TarifasView() {
   const [nombre, setNombre] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [activa, setActiva] = useState(true);
+
+  const [search, setSearch] = useState("");
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
+  const [showConfig, setShowConfig] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -117,105 +140,233 @@ export function TarifasView() {
     await load();
   };
 
-  return (
-    <div className="space-y-3">
-      <Card>
-        <CardHeader className="pb-2 flex-row items-center justify-between space-y-0">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Tag className="h-4 w-4" /> TARIFAS DE VENTA
-            <Badge variant="secondary" className="text-[10px]">
-              {tarifas.length}
-            </Badge>
-          </CardTitle>
-          <Button size="sm" className="gap-1" onClick={openNew}>
-            <Plus className="h-3.5 w-3.5" /> Nueva tarifa
+  const acceso = (t: Tarifa, campo: string): unknown => {
+    return (t as unknown as Record<string, unknown>)[campo];
+  };
+
+  const filtered = useMemo(() => {
+    let lista = tarifas.filter((t) => coincideBusquedaUniversal(t, search));
+    lista = aplicarFiltrosToolbar(lista, filtros, acceso);
+    lista = aplicarOrdenToolbar(lista, orden, acceso);
+    return lista;
+  }, [tarifas, search, filtros, orden]);
+
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "nombre", label: "Nombre", bloqueada: true },
+    { campo: "descripcion", label: "Descripción" },
+    { campo: "esDefault", label: "Default" },
+    { campo: "activa", label: "Activa" },
+  ];
+
+  const columnDefs: Record<string, { th: ReactNode; td: (t: Tarifa) => ReactNode }> = {
+    nombre: {
+      th: (
+        <TableColumnHeader
+          key="nombre"
+          label="Nombre"
+          campo="nombre"
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (t) => (
+        <td key="nombre" className="px-3 py-2.5 font-medium">
+          {t.nombre}
+        </td>
+      ),
+    },
+    descripcion: {
+      th: (
+        <TableColumnHeader
+          key="descripcion"
+          label="Descripción"
+          campo="descripcion"
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (t) => (
+        <td key="descripcion" className="px-3 py-2.5 text-muted-foreground">
+          {t.descripcion ?? <span className="text-muted-foreground/50">—</span>}
+        </td>
+      ),
+    },
+    esDefault: {
+      th: (
+        <TableColumnHeader
+          key="esDefault"
+          label="Default"
+          campo="esDefault"
+          filtroTipo="booleano"
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+          align="center"
+        />
+      ),
+      td: (t) => (
+        <td key="esDefault" className="px-3 py-2.5 text-center">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => handleSetDefault(t)}
+            title={t.esDefault ? "Tarifa default" : "Marcar como default"}
+          >
+            {t.esDefault ? (
+              <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
+            ) : (
+              <StarOff className="h-4 w-4 text-muted-foreground" />
+            )}
           </Button>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <LoadingSpinner className="py-6" />
-          ) : tarifas.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-6">
-              No hay tarifas. Crea la primera para empezar.
-            </p>
+        </td>
+      ),
+    },
+    activa: {
+      th: (
+        <TableColumnHeader
+          key="activa"
+          label="Activa"
+          campo="activa"
+          filtroTipo="booleano"
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+          align="center"
+        />
+      ),
+      td: (t) => (
+        <td key="activa" className="px-3 py-2.5 text-center">
+          {t.activa ? (
+            <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 border-0 text-[10px]">
+              Activa
+            </Badge>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-xs text-muted-foreground">
-                    <th className="text-left py-2 font-bold">NOMBRE</th>
-                    <th className="text-left py-2 font-bold">DESCRIPCIÓN</th>
-                    <th className="text-center py-2 font-bold">DEFAULT</th>
-                    <th className="text-center py-2 font-bold">ACTIVA</th>
-                    <th className="py-2"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tarifas.map((t) => (
-                    <tr key={t.id} className="border-b">
-                      <td className="py-2 font-medium">{t.nombre}</td>
-                      <td className="py-2 text-muted-foreground">
-                        {t.descripcion ?? <span className="text-muted-foreground/50">—</span>}
-                      </td>
-                      <td className="py-2 text-center">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => handleSetDefault(t)}
-                          title={t.esDefault ? "Tarifa default" : "Marcar como default"}
-                        >
-                          {t.esDefault ? (
-                            <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
-                          ) : (
-                            <StarOff className="h-4 w-4 text-muted-foreground" />
-                          )}
-                        </Button>
-                      </td>
-                      <td className="py-2 text-center">
-                        {t.activa ? (
-                          <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 border-0 text-[10px]">
-                            Activa
-                          </Badge>
-                        ) : (
-                          <Badge className="bg-slate-100 text-slate-600 dark:bg-slate-800/30 dark:text-slate-400 border-0 text-[10px]">
-                            Inactiva
-                          </Badge>
-                        )}
-                      </td>
-                      <td className="py-2 text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => openEdit(t)}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-destructive"
-                            onClick={() => handleDelete(t)}
-                            disabled={t.esDefault}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Badge className="bg-slate-100 text-slate-600 dark:bg-slate-800/30 dark:text-slate-400 border-0 text-[10px]">
+              Inactiva
+            </Badge>
           )}
-          <p className="mt-3 text-[11px] text-muted-foreground italic">
-            La tarifa marcada como <strong>default</strong> usa el precio de venta del producto. Las
-            demás definen un precio específico desde la ficha de cada producto de venta.
-          </p>
-        </CardContent>
-      </Card>
+        </td>
+      ),
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
+  if (showConfig) {
+    return (
+      <div className="p-4 md:p-6">
+        <TarifaConfigView onBack={() => setShowConfig(false)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4 md:p-6 space-y-5">
+      <SubmoduleToolbar
+        busqueda={search}
+        onBusquedaChange={setSearch}
+        placeholderBusqueda="Buscar"
+        onNuevo={openNew}
+        filtros={filtros}
+        onFiltrosChange={setFiltros}
+        columnas={columnasDef}
+        columnasVisibles={columnasVisibles}
+        onColumnasVisiblesChange={setColumnasVisibles}
+        columnasOrden={columnasOrden}
+        onColumnasOrdenChange={setColumnasOrden}
+        extraDerecha={
+          <>
+            <IOActions config={tarifasIO} onSuccess={load} />
+            <Button
+              size="icon"
+              variant={showConfig ? "default" : "outline"}
+              className="h-9 w-9"
+              onClick={() => setShowConfig((v) => !v)}
+              title="Configuración"
+              aria-label="Configuración"
+            >
+              <Settings className="h-4 w-4" strokeWidth={1.75} />
+            </Button>
+          </>
+        }
+      />
+
+      <ResizableColumnsProvider storageKey="logistica-tarifas">
+        <div className="bg-card rounded-lg border overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-muted/50">
+                {columnasRender.map((c) => columnDefs[c.campo]?.th)}
+                <TableColumnHeader label="" />
+              </tr>
+            </thead>
+            <tbody>
+              {loading && tarifas.length === 0 && (
+                <tr>
+                  <td colSpan={20} className="text-center py-10">
+                    <LoadingSpinner />
+                  </td>
+                </tr>
+              )}
+              {!loading && filtered.length === 0 && (
+                <tr>
+                  <td colSpan={20} className="text-center py-12 text-muted-foreground">
+                    {tarifas.length === 0
+                      ? "No hay tarifas. Crea la primera para empezar."
+                      : "Ninguna tarifa coincide con los filtros."}
+                  </td>
+                </tr>
+              )}
+              {filtered.map((t) => (
+                <tr key={t.id} className="border-b hover:bg-muted/30 transition-colors">
+                  {columnasRender.map((c) => columnDefs[c.campo]?.td(t))}
+                  <td className="px-3 py-2.5 text-right">
+                    <div className="flex justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => openEdit(t)}
+                        title="Editar"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive"
+                        onClick={() => handleDelete(t)}
+                        disabled={t.esDefault}
+                        title={t.esDefault ? "No se puede eliminar la default" : "Eliminar"}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </ResizableColumnsProvider>
+
+      <div className="text-xs text-muted-foreground text-right">
+        {filtered.length} de {tarifas.length} tarifas
+      </div>
+
+      <p className="text-[11px] text-muted-foreground italic">
+        La tarifa marcada como <strong>default</strong> usa el precio de venta del producto. Las demás
+        definen un precio específico desde la ficha de cada producto de venta.
+      </p>
 
       <Dialog open={dlgOpen} onOpenChange={setDlgOpen}>
         <DialogContent className="max-w-md">

@@ -19,6 +19,8 @@ import {
 } from "@/features/rrhh/actions/empleados-actions";
 import { getEmpresasAccesibles, type EmpresaAccesible } from "@/features/empresa/actions/empresas-accesibles-actions";
 import { listLocales } from "@/features/ajustes/actions/locales-actions";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import { normalizarNombre } from "@/shared/lib/normalizar-nombre";
 
 type CredencialesAlta = { email: string; password: string };
 type LocalOpt = { id: string; nombre: string };
@@ -46,6 +48,7 @@ export default function NuevoEmpleadoPage() {
   const [saving, setSaving] = useState(false);
   const [credenciales, setCredenciales] = useState<CredencialesAlta | null>(null);
   const [copiado, setCopiado] = useState(false);
+  useGlobalLoadingSync(saving);
 
   useEffect(() => {
     listDepartamentos().then((res) => {
@@ -201,13 +204,24 @@ export default function NuevoEmpleadoPage() {
             <Label className="text-xs uppercase tracking-wide text-muted-foreground">
               Nombre <span className="text-rose-500">*</span>
             </Label>
-            <Input name="nombre" required />
+            <Input
+              name="nombre"
+              required
+              onBlur={(e) => {
+                e.currentTarget.value = normalizarNombre(e.currentTarget.value);
+              }}
+            />
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs uppercase tracking-wide text-muted-foreground">
               Apellidos
             </Label>
-            <Input name="apellidos" />
+            <Input
+              name="apellidos"
+              onBlur={(e) => {
+                e.currentTarget.value = normalizarNombre(e.currentTarget.value);
+              }}
+            />
           </div>
         </div>
 

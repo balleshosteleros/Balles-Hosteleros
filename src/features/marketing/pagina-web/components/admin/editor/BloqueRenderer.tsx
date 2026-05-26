@@ -110,6 +110,12 @@ export function BloqueRenderer({ bloque, modo }: Props) {
           text={`Video · ${bloque.datos.proveedor} · ${bloque.datos.url.slice(0, 48)}…`}
         />
       );
+    case "bolsa_inspectores":
+      return (
+        <PlaceholderEtiqueta
+          text={`Bolsa inspectores · ${bloque.datos.titulo}`}
+        />
+      );
     default: {
       const catalogo = getCatalogo((bloque as Bloque).tipo);
       return <PlaceholderEtiqueta text={catalogo.label} />;

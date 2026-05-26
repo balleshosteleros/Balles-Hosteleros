@@ -9,6 +9,7 @@ import type { Bloque } from "../types";
 
 export interface HostnameMatch {
   empresa_id: string;
+  empresa_slug: string | null;
   pagina_id: string;
   hostname: string;
   bloques: Bloque[];
@@ -73,12 +74,13 @@ export async function resolverHostname(rawHost: string): Promise<HostnameMatch |
 
     const { data: empresaRow } = await supabase
       .from("empresas")
-      .select("id, nombre")
+      .select("id, nombre, slug")
       .eq("id", pag.empresa_id)
       .maybeSingle();
 
     return {
       empresa_id: pag.empresa_id,
+      empresa_slug: (empresaRow as { slug?: string | null } | null)?.slug ?? null,
       pagina_id: pag.id,
       hostname,
       bloques: pag.bloques ?? [],

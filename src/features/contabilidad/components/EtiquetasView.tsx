@@ -37,6 +37,7 @@ import {
   type EtiquetaRow,
   type EtiquetaTipo,
 } from "../actions/etiquetas-actions";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 const TABS: { label: string; tipo: EtiquetaTipo }[] = [
   { label: "Categorías",   tipo: "CATEGORIA" },
@@ -59,6 +60,7 @@ export function EtiquetasView() {
   const [tipoActivo, setTipoActivo] = useState<EtiquetaTipo>("CATEGORIA");
   const [filas, setFilas] = useState<EtiquetaRow[]>([]);
   const [loading, setLoading] = useState(true);
+  useGlobalLoadingSync(loading);
   const [showConfig, setShowConfig] = useState(false);
 
   const [dialogCrear, setDialogCrear] = useState<{

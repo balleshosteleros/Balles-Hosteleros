@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,13 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { type DatosGenerales, type ConfigOperativa } from "@/features/ajustes/data/ajustes";
-import { Upload, Trash2, Info, ImageIcon, Loader2 } from "lucide-react";
-import { EmailConfigCard } from "@/features/ajustes/components/EmailConfigCard";
-import { saveEmpresaAjustes } from "@/features/empresa/actions/empresas-actions";
-import { uploadLogo, deleteLogo } from "@/features/empresa/actions/logo-actions";
-import { friendlyError } from "@/shared/lib/friendly-errors";
-
-const MAX_LOGO_BYTES = 5 * 1024 * 1024;
+import {
+  saveEmpresaAjustes,
+  getEmpresaEmailContacto,
+} from "@/features/empresa/actions/empresas-actions";
 
 function Field({ label, value, onChange, type = "text", placeholder = "" }: {
   label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string;
@@ -28,59 +25,31 @@ function Field({ label, value, onChange, type = "text", placeholder = "" }: {
 }
 
 export function ConfiguracionTab() {
-  const { ajustes, setAjustes, empresaActual, getLogoUrl, setLogoUrl, updateEmpresa } = useEmpresa();
+  const { ajustes, setAjustes, empresaActual, updateEmpresa } = useEmpresa();
   const d = ajustes.datosGenerales;
   const c = ajustes.configOperativa;
-  const fileRef = useRef<HTMLInputElement>(null);
   const [savingConfig, setSavingConfig] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const [emailContacto, setEmailContacto] = useState<string>("");
 
-  const logoUrl = mounted ? getLogoUrl(empresaActual.id) : "";
+  useEffect(() => {
+    let cancelled = false;
+    if (!empresaActual.dbId) {
+      setEmailContacto("");
+      return;
+    }
+    getEmpresaEmailContacto(empresaActual.dbId).then((res) => {
+      if (!cancelled && res.ok) setEmailContacto(res.email ?? "");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [empresaActual.dbId]);
 
   const setD = (k: keyof DatosGenerales, v: string) =>
     setAjustes((prev) => ({ ...prev, datosGenerales: { ...prev.datosGenerales, [k]: v } }));
 
   const setC = (k: keyof ConfigOperativa, v: string) =>
     setAjustes((prev) => ({ ...prev, configOperativa: { ...prev.configOperativa, [k]: v } }));
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = "";
-    if (file.size > MAX_LOGO_BYTES) {
-      toast.error("El logotipo es demasiado grande. Usa una imagen de menos de 5 MB.");
-      return;
-    }
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const publicUrl = await uploadLogo(empresaActual.id, formData);
-      setLogoUrl(empresaActual.id, publicUrl);
-      toast.success("Logotipo guardado");
-    } catch (err) {
-      console.error("[ConfiguracionTab] uploadLogo:", err);
-      toast.error(friendlyError(err));
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleDeleteLogo = async () => {
-    setUploading(true);
-    try {
-      await deleteLogo(empresaActual.id);
-      setLogoUrl(empresaActual.id, "");
-      toast.success("Logotipo eliminado");
-    } catch (err) {
-      console.error("[ConfiguracionTab] deleteLogo:", err);
-      toast.error(friendlyError(err));
-    } finally {
-      setUploading(false);
-    }
-  };
 
   const handleSave = async () => {
     if (!empresaActual.dbId) {
@@ -93,6 +62,7 @@ export function ConfiguracionTab() {
         id: empresaActual.dbId,
         datosGenerales: d,
         configOperativa: c,
+        emailContacto: emailContacto.trim() || null,
       });
       if (!res.ok) throw new Error(res.error ?? "Error al guardar");
       const nombreComercial = d.nombreComercial?.trim();
@@ -136,7 +106,31 @@ export function ConfiguracionTab() {
         </CardContent>
       </Card>
 
-      <EmailConfigCard />
+      <Card>
+        <CardHeader className="px-4 pt-3 pb-2">
+          <CardTitle className="text-base">Correo de contacto</CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-3 pt-0 space-y-2">
+          <div>
+            <Label className="text-xs font-bold uppercase">
+              ¿A qué correo enviamos los avisos y las respuestas?
+            </Label>
+            <Input
+              type="email"
+              value={emailContacto}
+              onChange={(e) => setEmailContacto(e.target.value)}
+              placeholder="admin@tuempresa.com"
+              className="mt-1"
+            />
+            <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
+              Los correos del sistema (solicitudes de vacaciones, bajas,
+              firmas, etc.) salen desde la plataforma. Cuando alguien responda
+              a uno de esos correos, la respuesta llegará a esta dirección. Es
+              también el buzón al que avisamos cuando hay algo pendiente para ti.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="px-4 pt-3 pb-2"><CardTitle className="text-base">Web y redes sociales</CardTitle></CardHeader>
@@ -146,43 +140,6 @@ export function ConfiguracionTab() {
           <Field label="Instagram"        value={d.instagram} onChange={(v) => setD("instagram", v)} />
           <Field label="Facebook"         value={d.facebook}  onChange={(v) => setD("facebook", v)} />
           <Field label="TikTok"           value={d.tiktok}    onChange={(v) => setD("tiktok", v)} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="px-4 pt-3 pb-2"><CardTitle className="text-base">Logotipo de la empresa</CardTitle></CardHeader>
-        <CardContent className="space-y-3 px-4 pb-3 pt-0">
-          <div className="flex items-start gap-6">
-            <div className="shrink-0 w-32 h-32 rounded-lg border-2 border-dashed border-muted-foreground/20 bg-muted/30 flex items-center justify-center overflow-hidden">
-              {logoUrl ? (
-                <img src={logoUrl} alt="Logo" className="w-full h-full object-contain p-2" />
-              ) : (
-                <ImageIcon className="h-10 w-10 text-muted-foreground/30" />
-              )}
-            </div>
-            <div className="flex-1 space-y-3">
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => fileRef.current?.click()} disabled={uploading}>
-                  {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                  {logoUrl ? "CAMBIAR LOGOTIPO" : "SUBIR LOGOTIPO"}
-                </Button>
-                {logoUrl && (
-                  <Button variant="outline" size="sm" className="gap-1.5 text-destructive hover:text-destructive"
-                    onClick={handleDeleteLogo} disabled={uploading}>
-                    <Trash2 className="h-3.5 w-3.5" /> ELIMINAR
-                  </Button>
-                )}
-              </div>
-              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
-              <p className="text-xs text-muted-foreground">Formatos aceptados: PNG, JPG, SVG. Tamaño máximo: 5 MB.</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
-            <Info className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              <strong className="text-foreground">Recomendación:</strong> se aconseja utilizar el isotipo o una versión simple del logotipo para una mejor visualización dentro del sistema.
-            </p>
-          </div>
         </CardContent>
       </Card>
 

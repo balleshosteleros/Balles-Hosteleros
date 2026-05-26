@@ -61,6 +61,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 const TONO_KEYS: TurnoTono[] = [
   "stone",
@@ -123,6 +124,7 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
   >({});
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
+  useGlobalLoadingSync(cargando || guardando);
   const [busqueda, setBusqueda] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editandoId, setEditandoId] = useState<string | null>(null);

@@ -5,6 +5,10 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import {
+  normalizarNombre,
+  normalizarNombreOrNull,
+} from "@/shared/lib/normalizar-nombre";
 import type { DatosPersonalesInput, DatosPersonalesCompletos } from "@/features/mi-panel/actions/datos-personales-actions";
 import type { SolicitudPersonal, SolicitudSubtipo, SolicitudTipo, SolicitudEstado } from "@/features/mi-panel/types";
 
@@ -184,7 +188,9 @@ export async function createEmpleado(input: {
     try { admin = createAdminClient(); }
     catch { return { ok: false, error: "Supabase admin no configurado." }; }
 
-    const fullName = `${input.nombre} ${input.apellidos ?? ""}`.trim();
+    const nombreNorm = normalizarNombre(input.nombre);
+    const apellidosNorm = normalizarNombreOrNull(input.apellidos);
+    const fullName = `${nombreNorm} ${apellidosNorm ?? ""}`.trim();
     const tempPassword = crypto.randomUUID().slice(0, 12) + "Aa1!";
 
     // 1. Crear auth.user
@@ -203,8 +209,8 @@ export async function createEmpleado(input: {
     await admin.from("profiles").update({
       empresa_id: empresaPrincipalId,
       full_name: fullName,
-      nombre: input.nombre,
-      apellidos: input.apellidos ?? null,
+      nombre: nombreNorm,
+      apellidos: apellidosNorm,
       rol_label: "EMPLEADO",
       es_empleado: true,
       avatar_obligatorio: true,
@@ -249,8 +255,8 @@ export async function createEmpleado(input: {
     const { error: empErr } = await admin.from("empleados").insert({
       empresa_id: empresaPrincipalId,
       user_id: newUserId,
-      nombre: input.nombre,
-      apellidos: input.apellidos ?? null,
+      nombre: nombreNorm,
+      apellidos: apellidosNorm,
       departamento_id: isRealId(input.departamentoId) ? input.departamentoId : null,
       puesto: input.puesto ?? null,
       email_empresa: emailEmpresa,
@@ -350,8 +356,9 @@ export async function updateEmpleado(id: string, updates: UpdateEmpleadoInput) {
   try {
     const { supabase } = await getAppContext();
     const patch: Record<string, unknown> = {};
-    if (updates.nombre !== undefined) patch.nombre = updates.nombre;
-    if (updates.apellidos !== undefined) patch.apellidos = updates.apellidos;
+    if (updates.nombre !== undefined) patch.nombre = normalizarNombre(updates.nombre);
+    if (updates.apellidos !== undefined)
+      patch.apellidos = normalizarNombreOrNull(updates.apellidos);
     if (updates.departamentoId !== undefined) patch.departamento_id = updates.departamentoId;
     if (updates.puesto !== undefined) patch.puesto = updates.puesto;
     if (updates.emailEmpresa !== undefined) patch.email_empresa = updates.emailEmpresa;
@@ -736,8 +743,8 @@ export async function guardarPerfilEmpleado(
     const iban = trim(datos.iban)?.replace(/\s+/g, "").toUpperCase() ?? null;
 
     const payload: Record<string, unknown> = {
-      nombre: trim(datos.nombre),
-      apellidos: trim(datos.apellidos),
+      nombre: normalizarNombreOrNull(datos.nombre),
+      apellidos: normalizarNombreOrNull(datos.apellidos),
       tipo_documento: trim(datos.tipo_documento as string | null | undefined),
       dni_nie: trim(datos.dni_nie),
       fecha_nacimiento: trim(datos.fecha_nacimiento),
@@ -758,7 +765,7 @@ export async function guardarPerfilEmpleado(
       banco_codigo: trim(datos.banco_codigo),
       banco_nombre: trim(datos.banco_nombre),
       titular_cuenta: trim(datos.titular_cuenta),
-      emergencia_nombre: trim(datos.emergencia_nombre),
+      emergencia_nombre: normalizarNombreOrNull(datos.emergencia_nombre),
       emergencia_relacion: trim(datos.emergencia_relacion),
       emergencia_telefono: trim(datos.emergencia_telefono),
       talla_camiseta: trim(datos.talla_camiseta),
@@ -777,9 +784,10 @@ export async function guardarPerfilEmpleado(
     // de RRHH muestre los cambios sin tener que mirar el join. Sólo actualizamos
     // los campos que llegaron en el payload — nombre es NOT NULL en empleados.
     const empleadoPatch: Record<string, unknown> = {};
-    const nombreTrim = trim(datos.nombre);
-    if (nombreTrim) empleadoPatch.nombre = nombreTrim;
-    if (datos.apellidos !== undefined) empleadoPatch.apellidos = trim(datos.apellidos);
+    const nombreNorm = normalizarNombre(datos.nombre);
+    if (nombreNorm) empleadoPatch.nombre = nombreNorm;
+    if (datos.apellidos !== undefined)
+      empleadoPatch.apellidos = normalizarNombreOrNull(datos.apellidos);
     if (Object.keys(empleadoPatch).length > 0) {
       await admin.from("empleados").update(empleadoPatch).eq("id", empleadoId);
     }

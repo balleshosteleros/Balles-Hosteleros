@@ -32,6 +32,7 @@ import type { ContratacionRow, TipoContratacion } from "@/features/gestoria/cont
 import { MOTIVOS_BAJA, TIPOS_MODIFICACION } from "@/features/gestoria/contrataciones/data/constants";
 import { ContratacionModal } from "@/features/gestoria/contrataciones/components/ContratacionModal";
 import { AjustesContratacionesModal } from "@/features/gestoria/contrataciones/components/AjustesContratacionesModal";
+import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 const COLS_ALTA = [
   { campo: "nombre", label: "Nombre", bloqueada: true as const },
@@ -150,6 +151,7 @@ const TABS: Array<{ tipo: TipoContratacion; label: string; Icon: typeof UserPlus
 export function ContratacionesView() {
   const [rows, setRows] = useState<ContratacionRow[]>([]);
   const [loading, setLoading] = useState(true);
+  useGlobalLoadingSync(loading);
   const [tipoActivo, setTipoActivo] = useState<TipoContratacion>("alta");
   const [search, setSearch] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
