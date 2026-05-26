@@ -2,7 +2,9 @@
 
 ## Estado
 
-Pendiente.
+✅ Cerrada 2026-05-26. Resultado en [DISCOVERY_TASK004_2026-05-26.md](./DISCOVERY_TASK004_2026-05-26.md).
+
+Conclusión: el módulo está al **~95%** implementado (PRP-036 fases 1–7 todas presentes). Bloqueadores reales para runtime: **4 variables de entorno faltan en `.env.local`** (`FIRMA_TOKEN_PEPPER`, `FIRMA_OTP_PEPPER`, `RESEND_API_KEY`, `NEXT_PUBLIC_APP_URL`). Además se detectan **3 race conditions concretas** (token consumido tardío, hash chain por timestamp, OTP por created_at) y mejoras menores de robustez. Discovery deriva TASK-008 (firmas runtime hardening) con scope acotado: env vars + race fixes + smoke E2E S1–S12.
 
 ## Objetivo
 
