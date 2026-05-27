@@ -11,6 +11,7 @@ import { Building2, Plus, Trash2, Image, Info, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { ConfiguracionTab } from "@/features/ajustes/components/ConfiguracionTab";
 import { LocalesEmpresaTab } from "@/features/ajustes/components/locales/LocalesEmpresaTab";
+import { createEmpresa, deleteEmpresa as deleteEmpresaServer } from "@/features/empresa/actions/empresas-actions";
 
 interface EmpresaFormData {
   nombre: string;
@@ -29,6 +30,8 @@ export function EmpresasTab() {
   const { empresas, empresaActual, addEmpresa, deleteEmpresa, getIsotipoUrl, setEmpresaId } = useEmpresa();
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<EmpresaFormData>(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Empresa | null>(null);
   const [editTarget, setEditTarget] = useState<Empresa | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -44,7 +47,7 @@ export function EmpresasTab() {
     setModalOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.nombre.trim()) {
       toast.error("El nombre de la empresa es obligatorio");
       return;
@@ -54,27 +57,59 @@ export function EmpresasTab() {
       return;
     }
 
-    const id = form.nombre.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-    addEmpresa({
-      id,
-      nombre: form.nombre.toUpperCase(),
-      iniciales: form.iniciales.toUpperCase().slice(0, 2),
-      color: form.color,
-    });
-    toast.success("Nueva empresa creada. Se ha generado toda la estructura base.");
-    setModalOpen(false);
+    setSaving(true);
+    try {
+      const res = await createEmpresa({
+        nombre: form.nombre.toUpperCase(),
+        iniciales: form.iniciales.toUpperCase().slice(0, 2),
+        color: form.color,
+      });
+      if (!res.ok || !res.data) {
+        toast.error(res.error ?? "No se pudo crear la empresa");
+        return;
+      }
+      addEmpresa({
+        id: res.data.slug,
+        dbId: res.data.id,
+        nombre: res.data.nombre,
+        iniciales: res.data.iniciales ?? form.iniciales.toUpperCase().slice(0, 2),
+        color: res.data.color ?? form.color,
+      });
+      toast.success("Nueva empresa creada. Se ha generado la estructura base.");
+      setEmpresaId(res.data.slug);
+      setModalOpen(false);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!deleteTarget) return;
     if (deleteTarget.id === empresaActual.id) {
       toast.error("No puedes borrar la empresa activa");
       setDeleteTarget(null);
       return;
     }
-    deleteEmpresa(deleteTarget.id);
-    toast.success(`Empresa "${deleteTarget.nombre}" eliminada`);
-    setDeleteTarget(null);
+    if (!deleteTarget.dbId) {
+      // Empresa solo en estado local (legado / no persistida). Limpia el contexto.
+      deleteEmpresa(deleteTarget.id);
+      toast.success(`Empresa "${deleteTarget.nombre}" eliminada`);
+      setDeleteTarget(null);
+      return;
+    }
+    setDeleting(true);
+    try {
+      const res = await deleteEmpresaServer(deleteTarget.dbId);
+      if (!res.ok) {
+        toast.error(res.error ?? "No se pudo borrar la empresa");
+        return;
+      }
+      deleteEmpresa(deleteTarget.id);
+      toast.success(`Empresa "${deleteTarget.nombre}" eliminada`);
+      setDeleteTarget(null);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -199,8 +234,10 @@ export function EmpresasTab() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave}>Crear empresa</Button>
+            <Button variant="outline" onClick={() => setModalOpen(false)} disabled={saving}>Cancelar</Button>
+            <Button onClick={handleSave} disabled={saving}>
+              {saving ? "Creando…" : "Crear empresa"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -233,9 +270,16 @@ export function EmpresasTab() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Borrar
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(ev) => {
+                ev.preventDefault();
+                handleDelete();
+              }}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? "Borrando…" : "Borrar"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

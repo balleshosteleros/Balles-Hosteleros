@@ -40,13 +40,13 @@ function resolverPlaceholders(s: string, nombreEmpresa: string): string {
 }
 
 const DEFAULTS = {
-  bienvenida_titulo: "Bienvenidos a {nombre_empresa}",
+  bienvenida_titulo: "Desbloquea la carta y nuestros secretos.",
   bienvenida_subtitulo:
-    "Disfruta de nuestra carta y déjanos darte recomendaciones a medida",
-  popup_titulo: "🎁 Solo para nuestros comensales",
+    "La carta completa con fotos\nLos 3 platos secretos del chef\n10% en tu próxima visita",
+  popup_titulo: "Un último paso para abrir la carta",
   popup_subtitulo:
-    "Suscríbete y recibe las recomendaciones del chef + un detalle en tu próxima visita",
-  popup_boton_texto: "Suscribirme",
+    "Te mandamos los 3 platos secretos y un 10% para la próxima. Sin spam.",
+  popup_boton_texto: "Ver carta + secretos",
 };
 
 export async function fetchVisitaPorSlug(
@@ -86,10 +86,9 @@ export async function fetchVisitaPorSlug(
         nombre,
         slug: empresa.carta_slug as string,
         logoUrl: (empresa.logo_url as string | null) ?? null,
-        heroUrl:
-          (cfg?.hero_url as string | null) ??
-          (empresa.carta_hero_url as string | null) ??
-          null,
+        // Solo usamos hero específico de la landing. NUNCA caemos al
+        // `carta_hero_url` porque suele ser el logo y queda raro como fondo.
+        heroUrl: (cfg?.hero_url as string | null) ?? null,
         colorPrimario: (empresa.color as string | null) ?? null,
         colorSecundario: (empresa.color_secundario as string | null) ?? null,
         descripcion: (empresa.carta_descripcion as string | null) ?? null,

@@ -138,6 +138,12 @@ export async function createEmpresa(input: {
   color: string;
 }): Promise<{ ok: boolean; data?: EmpresaIdentidad; error?: string }> {
   try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: "No autenticado" };
+
     const admin = createAdminClient();
     const slug = slugify(input.nombre);
     const { data, error } = await admin
@@ -161,6 +167,16 @@ export async function createEmpresa(input: {
       color: data.color as string,
       estado: data.estado as string,
     };
+
+    // Vincula al creador a la nueva empresa para que el selector la muestre
+    // y pueda activarla (sin esto la cookie no cambia y se sirve la empresa
+    // anterior — apariencia de fuga de datos entre empresas).
+    const { error: linkErr } = await admin
+      .from("user_empresas")
+      .insert({ user_id: user.id, empresa_id: nueva.id });
+    if (linkErr && linkErr.code !== "23505") {
+      console.error("[empresas] link user_empresas:", linkErr.message);
+    }
 
     // Siembra desde el manifiesto canónico del software (src/lib/seeds).
     // Si falla, NO revertimos la empresa — el dueño puede re-ejecutar el sync.

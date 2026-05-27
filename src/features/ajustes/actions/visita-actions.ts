@@ -46,13 +46,13 @@ export type VisitaConfigData = VisitaConfigInput & {
 const DEFAULTS: VisitaConfigInput = {
   activado: false,
   hero_url: null,
-  bienvenida_titulo: "Bienvenidos a {nombre_empresa}",
+  bienvenida_titulo: "Desbloquea la carta y nuestros secretos.",
   bienvenida_subtitulo:
-    "Disfruta de nuestra carta y déjanos darte recomendaciones a medida",
-  popup_titulo: "🎁 Solo para nuestros comensales",
+    "La carta completa con fotos\nLos 3 platos secretos del chef\n10% en tu próxima visita",
+  popup_titulo: "Un último paso para abrir la carta",
   popup_subtitulo:
-    "Suscríbete y recibe las recomendaciones del chef + un detalle en tu próxima visita",
-  popup_boton_texto: "Suscribirme",
+    "Te mandamos los 3 platos secretos y un 10% para la próxima. Sin spam.",
+  popup_boton_texto: "Ver carta + secretos",
   email_asunto: "¿Qué tal lo pasaste en {nombre_empresa}? 🌟",
   email_cuerpo:
     "Hola {nombre},\n\nEsperamos que lo hayas pasado en grande con nosotros. ¿Nos cuentas qué te ha parecido?\n\nUn abrazo,\nEl equipo de {nombre_empresa}",

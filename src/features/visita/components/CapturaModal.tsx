@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Loader2, Check, X } from "lucide-react";
 
 type Props = {
@@ -35,6 +36,7 @@ export function CapturaModal({
   subtitulo,
   botonTexto,
 }: Props) {
+  const router = useRouter();
   const [abierto, setAbierto] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [exito, setExito] = useState(false);
@@ -110,6 +112,12 @@ export function CapturaModal({
       if (typeof window !== "undefined") {
         window.localStorage.setItem(lsKey(empresaSlug), "enviado");
       }
+      // Tras 1.1s mostrando el "Listo!", redirigir suave a la carta —
+      // se siente como una app: el cliente nota que su acción "desbloqueó"
+      // la siguiente pantalla sin tener que pulsar nada.
+      setTimeout(() => {
+        router.push(`/carta/${empresaSlug}`);
+      }, 1100);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo enviar");
     } finally {
@@ -122,11 +130,31 @@ export function CapturaModal({
   const color = colorPrimario || "#0ea5e9";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-3 backdrop-blur-sm sm:items-center motion-safe:animate-[fadeIn_0.25s_ease-out]">
       <div
-        className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
+        className="relative w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl motion-safe:animate-[slideUp_0.32s_cubic-bezier(0.32,0.72,0,1)]"
         style={{ borderTop: `4px solid ${color}` }}
       >
+        <style jsx>{`
+          @keyframes slideUp {
+            from {
+              opacity: 0;
+              transform: translateY(40px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+          @keyframes fadeIn {
+            from {
+              opacity: 0;
+            }
+            to {
+              opacity: 1;
+            }
+          }
+        `}</style>
         <button
           onClick={cerrar}
           aria-label="Cerrar"
@@ -136,24 +164,20 @@ export function CapturaModal({
         </button>
 
         {exito ? (
-          <div className="py-4 text-center">
+          <div className="py-6 text-center">
             <div
-              className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full text-white"
+              className="mx-auto mb-3 inline-flex h-14 w-14 items-center justify-center rounded-full text-white"
               style={{ background: color }}
             >
-              <Check className="h-6 w-6" />
+              <Check className="h-7 w-7" strokeWidth={3} />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900">¡Listo!</h3>
+            <h3 className="text-lg font-semibold text-gray-900">¡Desbloqueado!</h3>
             <p className="mt-1 text-sm text-gray-600">
-              Te escribiremos en breve con nuestras recomendaciones. ¡Que aproveche!
+              Abriendo la carta…
             </p>
-            <button
-              onClick={cerrar}
-              className="mt-4 w-full rounded-lg px-4 py-2 text-sm font-semibold text-white"
-              style={{ background: color }}
-            >
-              Volver a la carta
-            </button>
+            <div className="mt-4 flex justify-center">
+              <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+            </div>
           </div>
         ) : (
           <>
@@ -169,7 +193,7 @@ export function CapturaModal({
                   name="nombre"
                   required
                   maxLength={80}
-                  className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2"
+                  className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-base focus:outline-none focus:ring-2"
                   style={{ outlineColor: color }}
                   placeholder="Tu nombre"
                 />
@@ -183,7 +207,7 @@ export function CapturaModal({
                   name="email"
                   type="email"
                   maxLength={180}
-                  className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2"
+                  className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-base focus:outline-none focus:ring-2"
                   style={{ outlineColor: color }}
                   placeholder="tu@email.com"
                 />
@@ -197,7 +221,7 @@ export function CapturaModal({
                   name="telefono"
                   type="tel"
                   maxLength={30}
-                  className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2"
+                  className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-base focus:outline-none focus:ring-2"
                   style={{ outlineColor: color }}
                   placeholder="+34 600 00 00 00"
                 />

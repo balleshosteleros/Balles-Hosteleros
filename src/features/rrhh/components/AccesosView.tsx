@@ -1,3 +1,6 @@
+// @deprecated PRP-043: sustituido por src/features/accesos/components/AccesosView.tsx
+// (modelo 3-tablas con cifrado AES-256 y permisos por rol).
+// Conservado temporalmente hasta confirmar la migración completa de accesos_apps → apps_externas.
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";

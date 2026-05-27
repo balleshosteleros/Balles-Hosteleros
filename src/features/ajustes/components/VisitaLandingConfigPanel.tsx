@@ -207,37 +207,45 @@ export function VisitaLandingConfigPanel() {
       {/* Bienvenida */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm">Bienvenida</CardTitle>
+          <CardTitle className="text-sm">Pantalla de bienvenida</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div>
             <Label className="text-[10px] font-bold uppercase text-muted-foreground">
-              Título grande
+              Frase persuasiva (grande)
             </Label>
             <Input
               value={cfg.bienvenida_titulo}
               onChange={(e) => set("bienvenida_titulo", e.target.value)}
               className="mt-1 h-9 text-sm"
+              placeholder="Antes de pedir, déjate sorprender."
             />
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              Funciona mejor algo intrigante que un &laquo;Bienvenido&raquo;.
+            </p>
           </div>
           <div>
             <Label className="text-[10px] font-bold uppercase text-muted-foreground">
-              Subtítulo
+              Beneficios (una línea = un punto)
             </Label>
             <Textarea
               value={cfg.bienvenida_subtitulo}
               onChange={(e) => set("bienvenida_subtitulo", e.target.value)}
-              rows={2}
-              className="mt-1 text-sm"
+              rows={4}
+              className="mt-1 text-sm font-mono"
+              placeholder={
+                "Los 3 platos secretos del chef\n10% en tu próxima visita\nAcceso anticipado a nuestros eventos"
+              }
             />
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              Cada línea aparece como bullet con un check. Recomendado 2-3 puntos.
+              Usa{" "}
+              <code className="rounded bg-muted px-1 py-0.5 font-mono text-[10px]">
+                {"{nombre_empresa}"}
+              </code>{" "}
+              si quieres mencionar tu nombre.
+            </p>
           </div>
-          <p className="text-[10px] text-muted-foreground">
-            Puedes usar{" "}
-            <code className="rounded bg-muted px-1 py-0.5 font-mono text-[10px]">
-              {"{nombre_empresa}"}
-            </code>{" "}
-            — se sustituye automáticamente.
-          </p>
         </CardContent>
       </Card>
 
