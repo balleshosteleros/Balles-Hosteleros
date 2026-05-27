@@ -75,6 +75,9 @@ export function FirmaPublicaView({
   const [acepto, setAcepto] = useState(false);
   const [enviandoOtp, setEnviandoOtp] = useState(false);
   const [destinoOtp, setDestinoOtp] = useState<string | null>(null);
+  // R3 (TASK-008): guardamos el otpId devuelto por solicitarOTP para pasarlo
+  // al validar y evitar la race del "último OTP por created_at".
+  const [otpId, setOtpId] = useState<string | null>(null);
   const [codigo, setCodigo] = useState("");
   const [validando, setValidando] = useState(false);
   const [firmando, setFirmando] = useState(false);
@@ -170,13 +173,14 @@ export function FirmaPublicaView({
       return;
     }
     setDestinoOtp(res.destinoEnmascarado);
+    setOtpId(res.otpId);
     setEtapa("otp");
     toast.success(`Código enviado a ${res.destinoEnmascarado}`);
   }
 
   async function comprobarOTP() {
     setValidando(true);
-    const res = await validarOTP(token, codigo);
+    const res = await validarOTP(token, codigo, otpId ?? undefined);
     setValidando(false);
     if (!res.ok) {
       toast.error(res.error);

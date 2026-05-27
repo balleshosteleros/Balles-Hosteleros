@@ -171,7 +171,7 @@ export async function abrirDocumento(token: string): Promise<AbrirDocumentoResul
 }
 
 export type SolicitarOtpResult =
-  | { ok: true; destinoEnmascarado: string; expiraMin: number }
+  | { ok: true; otpId: string; destinoEnmascarado: string; expiraMin: number }
   | { ok: false; error: string };
 
 export async function solicitarOTP(token: string): Promise<SolicitarOtpResult> {
@@ -224,14 +224,22 @@ export async function solicitarOTP(token: string): Promise<SolicitarOtpResult> {
     const codigoHash = hashOTP(codigo, documentoId);
     const expiraEn = new Date(Date.now() + OTP_TTL_MIN * 60_000).toISOString();
 
-    const { error: insErr } = await admin.from("firmas_otps").insert({
-      documento_id: documentoId,
-      codigo_hash: codigoHash,
-      canal: "email",
-      destino,
-      expira_en: expiraEn,
-    });
-    if (insErr) return { ok: false, error: insErr.message };
+    // R3 (TASK-008): devolvemos el otpId al cliente para que pueda referenciar
+    // este OTP exacto en validarOTP. Evita race si el usuario pidió varios
+    // códigos seguidos (el último "order by created_at desc" ya no es la única
+    // forma de seleccionarlo).
+    const { data: otpIns, error: insErr } = await admin
+      .from("firmas_otps")
+      .insert({
+        documento_id: documentoId,
+        codigo_hash: codigoHash,
+        canal: "email",
+        destino,
+        expira_en: expiraEn,
+      })
+      .select("id")
+      .single();
+    if (insErr || !otpIns) return { ok: false, error: insErr?.message ?? "No se pudo crear OTP" };
 
     const empleadoNombre = `${emp?.nombre ?? ""} ${emp?.apellidos ?? ""}`.trim() || "Empleado";
     const send = await enviarCodigoOTP({
@@ -255,6 +263,7 @@ export async function solicitarOTP(token: string): Promise<SolicitarOtpResult> {
 
     return {
       ok: true,
+      otpId: otpIns.id as string,
       destinoEnmascarado: enmascararEmail(destino) ?? destino,
       expiraMin: OTP_TTL_MIN,
     };
@@ -269,7 +278,16 @@ export type ValidarOtpResult =
   | { ok: true }
   | { ok: false; error: string; bloqueado?: boolean };
 
-export async function validarOTP(token: string, codigo: string): Promise<ValidarOtpResult> {
+/**
+ * Valida el OTP. Si se pasa `otpId` (R3, TASK-008) se usa ese OTP exacto;
+ * sin él se cae al comportamiento legacy (último OTP del documento por
+ * created_at desc), retrocompatible para callers no actualizados.
+ */
+export async function validarOTP(
+  token: string,
+  codigo: string,
+  otpId?: string,
+): Promise<ValidarOtpResult> {
   try {
     const limpio = (codigo ?? "").trim();
     if (!/^\d{6}$/.test(limpio)) return { ok: false, error: "El código debe tener 6 dígitos" };
@@ -281,13 +299,15 @@ export async function validarOTP(token: string, codigo: string): Promise<Validar
     const documentoId = res.tokenRow.documento_id as string;
     const meta = await getMeta();
 
-    const { data: otp } = await admin
+    // R3: si el caller pasó otpId, lo usamos exacto; si no, fallback al
+    // último OTP del documento (legacy).
+    const otpQuery = admin
       .from("firmas_otps")
       .select("id, codigo_hash, expira_en, intentos, validado_en, bloqueado_hasta")
-      .eq("documento_id", documentoId)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .eq("documento_id", documentoId);
+    const { data: otp } = otpId
+      ? await otpQuery.eq("id", otpId).maybeSingle()
+      : await otpQuery.order("created_at", { ascending: false }).limit(1).maybeSingle();
     if (!otp) return { ok: false, error: "No hay OTP activo. Solicita un nuevo código." };
     if (otp.validado_en) return { ok: false, error: "Este código ya se usó. Solicita uno nuevo." };
     if (otp.bloqueado_hasta && new Date(otp.bloqueado_hasta as string).getTime() > Date.now()) {
@@ -377,6 +397,28 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
       .maybeSingle();
     if (!otpRow?.validado_en) {
       return { ok: false, error: "Verifica el código OTP antes de firmar" };
+    }
+
+    // R1 (TASK-008): compare-and-swap atómico del token para impedir doble firma
+    // concurrente. Si dos requests entran a la vez, solo una marca consumido_en
+    // y avanza; la otra recibe error claro y la UI debe recargar.
+    // Si algún paso posterior falla, el token queda consumido — recovery manual
+    // desde admin (preferible a un rollback que pueda introducir otra race).
+    const { data: tokenClaim, error: tokenClaimErr } = await admin
+      .from("firmas_tokens")
+      .update({ consumido_en: new Date().toISOString() })
+      .eq("id", res.tokenRow.id)
+      .is("consumido_en", null)
+      .select("id")
+      .maybeSingle();
+    if (tokenClaimErr) {
+      return { ok: false, error: tokenClaimErr.message };
+    }
+    if (!tokenClaim) {
+      return {
+        ok: false,
+        error: "Este enlace ya se está usando para firmar. Recarga la página.",
+      };
     }
 
     const { data: doc } = await admin
@@ -494,11 +536,7 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
       })
       .eq("id", documentoId);
 
-    await admin
-      .from("firmas_tokens")
-      .update({ consumido_en: new Date().toISOString() })
-      .eq("id", res.tokenRow.id);
-
+    // Token ya marcado consumido_en al inicio (R1).
     void firmadoEvento;
 
     const signed = await admin.storage

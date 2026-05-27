@@ -33,48 +33,62 @@ export async function registrarEvento(
   input: RegistrarEventoInput,
 ): Promise<EventoRegistrado> {
   const admin = createAdminClient();
+  // R2 (TASK-008): orden determinista por `seq` (no por ocurrido_en) para
+  // evitar bifurcación de la hash chain bajo concurrencia con timestamps
+  // idénticos al microsegundo. El trigger BD calcula seq automáticamente
+  // si va NULL. UNIQUE (documento_id, seq) detecta carreras → reintentamos
+  // una vez recomputando prevHash con el nuevo último evento.
+  const MAX_RETRIES = 2;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const { data: prev, error: prevErr } = await admin
+      .from("firmas_eventos")
+      .select("hash")
+      .eq("documento_id", input.documentoId)
+      .order("seq", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (prevErr) throw prevErr;
+    const prevHash = prev?.hash ?? null;
 
-  const { data: prev, error: prevErr } = await admin
-    .from("firmas_eventos")
-    .select("hash")
-    .eq("documento_id", input.documentoId)
-    .order("ocurrido_en", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (prevErr) throw prevErr;
-  const prevHash = prev?.hash ?? null;
-
-  const ocurridoEn = new Date().toISOString();
-  const payloadCanonico = canonicalStringify({
-    documentoId: input.documentoId,
-    tipo: input.tipo,
-    actorUserId: input.actorUserId ?? null,
-    ip: input.ip ?? null,
-    userAgent: input.userAgent ?? null,
-    metadata: input.metadata ?? {},
-    prevHash,
-    ocurridoEn,
-  });
-  const hash = sha256(payloadCanonico);
-
-  const { data: inserted, error } = await admin
-    .from("firmas_eventos")
-    .insert({
-      documento_id: input.documentoId,
+    const ocurridoEn = new Date().toISOString();
+    const payloadCanonico = canonicalStringify({
+      documentoId: input.documentoId,
       tipo: input.tipo,
-      actor_user_id: input.actorUserId ?? null,
+      actorUserId: input.actorUserId ?? null,
       ip: input.ip ?? null,
-      user_agent: input.userAgent ?? null,
+      userAgent: input.userAgent ?? null,
       metadata: input.metadata ?? {},
-      prev_hash: prevHash,
-      hash,
-      ocurrido_en: ocurridoEn,
-    })
-    .select("id")
-    .single();
-  if (error) throw error;
+      prevHash,
+      ocurridoEn,
+    });
+    const hash = sha256(payloadCanonico);
 
-  return { id: inserted.id as string, hash, prevHash };
+    const { data: inserted, error } = await admin
+      .from("firmas_eventos")
+      .insert({
+        documento_id: input.documentoId,
+        tipo: input.tipo,
+        actor_user_id: input.actorUserId ?? null,
+        ip: input.ip ?? null,
+        user_agent: input.userAgent ?? null,
+        metadata: input.metadata ?? {},
+        prev_hash: prevHash,
+        hash,
+        ocurrido_en: ocurridoEn,
+      })
+      .select("id")
+      .single();
+
+    // PostgreSQL 23505 = unique_violation (otro evento concurrente ganó el seq).
+    // El error de Supabase tiene `code: '23505'`.
+    if (error && (error as { code?: string }).code === "23505" && attempt < MAX_RETRIES - 1) {
+      continue;
+    }
+    if (error) throw error;
+    return { id: inserted!.id as string, hash, prevHash };
+  }
+  // Inalcanzable salvo doble carrera, en cuyo caso el último intento ya lanzó.
+  throw new Error("registrarEvento: agotados los reintentos por colisión de seq");
 }
 
 export type EventoAuditoria = {
@@ -91,11 +105,14 @@ export type EventoAuditoria = {
 
 export async function listarEventos(documentoId: string): Promise<EventoAuditoria[]> {
   const admin = createAdminClient();
+  // R2 (TASK-008): orden por `seq` para que verificarCadena reproduzca el
+  // mismo orden que registrarEvento usó al calcular prev_hash, incluso si
+  // dos eventos tienen idéntico ocurrido_en.
   const { data, error } = await admin
     .from("firmas_eventos")
     .select("id, tipo, actor_user_id, ip, user_agent, metadata, prev_hash, hash, ocurrido_en")
     .eq("documento_id", documentoId)
-    .order("ocurrido_en", { ascending: true });
+    .order("seq", { ascending: true });
   if (error) throw error;
   return (data ?? []).map((r) => ({
     id: r.id as string,
