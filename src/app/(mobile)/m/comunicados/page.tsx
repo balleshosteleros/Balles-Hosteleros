@@ -1,5 +1,5 @@
 import { MobilePageHeader } from "@/features/mi-panel/mobile/components/MobilePageHeader";
-import { MisComunicadosView } from "@/features/mi-panel/components/MisComunicadosView";
+import { MisComunicadosMobile } from "@/features/mi-panel/mobile/components/MisComunicadosMobile";
 
 export const dynamic = "force-dynamic";
 
@@ -7,8 +7,8 @@ export default function MobileComunicadosPage() {
   return (
     <>
       <MobilePageHeader title="Comunicados" />
-      <div className="px-3 py-4">
-        <MisComunicadosView />
+      <div className="px-4 py-4">
+        <MisComunicadosMobile />
       </div>
     </>
   );

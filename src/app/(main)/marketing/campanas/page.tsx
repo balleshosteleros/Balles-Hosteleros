@@ -1,5 +1,5 @@
-import { CampanasDashboardView } from "@/features/marketing/components/campanas/CampanasDashboardView";
+import { CampanasHubView } from "@/features/marketing/components/campanas/CampanasHubView";
 
 export default function CampanasPage() {
-  return <CampanasDashboardView />;
+  return <CampanasHubView />;
 }

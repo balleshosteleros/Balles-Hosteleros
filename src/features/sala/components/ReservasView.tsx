@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { Plus, Search, Users, ChevronLeft, ChevronRight, Eye, ListPlus } from "lucide-react";
+import { Plus, Search, Users, ChevronLeft, ChevronRight, Eye, ListPlus, Link2 } from "lucide-react";
+import NextLink from "next/link";
 import {
   SAMPLE_MESAS, SAMPLE_LISTA_ESPERA,
   Mesa, Reserva, ListaEspera, EstadoReserva, ZonaSala, TurnoReserva,
@@ -217,9 +218,9 @@ function mapDbToReserva(row: Record<string, unknown>): Reserva {
   return {
     id: row.id as string,
     cliente: (row.cliente_nombre as string) ?? "",
-    apellidos: (row.apellidos as string) ?? "",
+    apellidos: (row.cliente_apellidos as string) ?? (row.apellidos as string) ?? "",
     telefono: (row.cliente_telefono as string) ?? "",
-    email: (row.email as string) ?? "",
+    email: (row.cliente_email as string) ?? (row.email as string) ?? "",
     fecha: (row.fecha as string) ?? "",
     hora: (row.hora as string) ?? "",
     turno: (row.turno as TurnoReserva) ?? "COMIDA",
@@ -228,6 +229,7 @@ function mapDbToReserva(row: Record<string, unknown>): Reserva {
     mesaId: (row.mesa as string) ?? (row.mesa_id as string) ?? "",
     estado: (row.estado as EstadoReserva) ?? "PENDIENTE",
     observaciones: (row.notas as string) ?? (row.observaciones as string) ?? "",
+    origen: (row.origen as string | null) ?? null,
   };
 }
 
@@ -242,6 +244,7 @@ export function ReservasView() {
   const [busqueda, setBusqueda] = useState("");
   const [filtroZona, setFiltroZona] = useState<ZonaSala | "TODAS">("TODAS");
   const [filtroEstado, setFiltroEstado] = useState<EstadoReserva | "TODOS">("TODOS");
+  const [filtroOrigen, setFiltroOrigen] = useState<string>("TODOS");
   const [selectedMesa, setSelectedMesa] = useState<Mesa | null>(null);
   const [showNueva, setShowNueva] = useState(false);
   const [showListaEspera, setShowListaEspera] = useState(false);
@@ -276,9 +279,18 @@ export function ReservasView() {
       const matchQ = !q || r.cliente.toLowerCase().includes(q) || r.apellidos.toLowerCase().includes(q) || r.telefono.includes(q);
       const matchZ = filtroZona === "TODAS" || r.zona === filtroZona;
       const matchE = filtroEstado === "TODOS" || r.estado === filtroEstado;
-      return matchQ && matchZ && matchE;
+      const matchO = filtroOrigen === "TODOS"
+        || (filtroOrigen === "SIN_ORIGEN" && !r.origen)
+        || r.origen === filtroOrigen;
+      return matchQ && matchZ && matchE && matchO;
     }).sort((a, b) => a.hora.localeCompare(b.hora));
-  }, [reservasTurno, busqueda, filtroZona, filtroEstado]);
+  }, [reservasTurno, busqueda, filtroZona, filtroEstado, filtroOrigen]);
+
+  const origenesPresentes = useMemo(() => {
+    const set = new Set<string>();
+    reservasDia.forEach(r => { if (r.origen) set.add(r.origen); });
+    return Array.from(set).sort();
+  }, [reservasDia]);
 
   const mesasActivas = mesas.filter(m => m.activa);
   const capacidadTotal = mesasActivas.reduce((s, m) => s + m.capacidad, 0);
@@ -337,6 +349,13 @@ export function ReservasView() {
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setFecha(addDays(fecha, 1))}><ChevronRight className="h-4 w-4" /></Button>
           </div>
           <Button variant="outline" size="sm" className="text-xs h-7" onClick={() => setFecha(new Date().toISOString().split("T")[0])}>HOY</Button>
+          <div className="h-6 w-px bg-border mx-1" />
+          <NextLink href="/sala/reservas/links">
+            <Button variant="outline" size="sm" className="text-xs h-7 gap-1.5">
+              <Link2 className="h-3.5 w-3.5" />
+              Links
+            </Button>
+          </NextLink>
         </div>
       </div>
 
@@ -393,6 +412,22 @@ export function ReservasView() {
                 </button>
               ))}
             </div>
+            {(origenesPresentes.length > 0 || filtroOrigen !== "TODOS") && (
+              <div className="flex items-center gap-1.5 text-[10px]">
+                <span className="text-muted-foreground">Origen:</span>
+                <select
+                  value={filtroOrigen}
+                  onChange={(e) => setFiltroOrigen(e.target.value)}
+                  className="h-6 text-[10px] rounded border bg-background px-1.5"
+                >
+                  <option value="TODOS">Todos</option>
+                  <option value="SIN_ORIGEN">Sin origen (manual)</option>
+                  {origenesPresentes.map((o) => (
+                    <option key={o} value={o}>{o}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input placeholder="Buscar..." className="pl-8 h-8 text-xs" value={busqueda} onChange={e => setBusqueda(e.target.value)} />
@@ -410,7 +445,14 @@ export function ReservasView() {
                   className={cn("w-full grid grid-cols-[50px_50px_1fr_40px_70px_90px] gap-1 px-3 py-2.5 text-xs border-b hover:bg-muted/40 text-left transition-colors", selectedReserva?.id === r.id && "bg-primary/10")}>
                   <span className="font-mono font-bold">{mesa?.codigo ?? "—"}</span>
                   <span className="tabular-nums">{r.hora}</span>
-                  <span className="truncate font-medium">{r.cliente || "WALK IN"} {r.apellidos}</span>
+                  <span className="truncate font-medium flex items-center gap-1.5">
+                    <span className="truncate">{r.cliente || "WALK IN"} {r.apellidos}</span>
+                    {r.origen && (
+                      <span className="shrink-0 text-[9px] font-mono uppercase bg-sky-600/15 text-sky-700 dark:text-sky-400 border border-sky-600/30 rounded px-1 py-px" title={`Origen: ${r.origen}`}>
+                        {r.origen}
+                      </span>
+                    )}
+                  </span>
                   <span className="text-center">{r.comensales}</span>
                   <StatusDot estado={r.estado} />
                   <span className="truncate text-muted-foreground">{r.zona ? ZONAS_LABELS[r.zona] : "—"}</span>

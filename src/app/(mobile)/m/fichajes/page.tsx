@@ -1,14 +1,14 @@
 import { MobilePageHeader } from "@/features/mi-panel/mobile/components/MobilePageHeader";
-import { MisFichajesView } from "@/features/mi-panel/components/MisFichajesView";
+import { MisFichajesMobile } from "@/features/mi-panel/mobile/components/MisFichajesMobile";
 
 export const dynamic = "force-dynamic";
 
 export default function MobileFichajesPage() {
   return (
     <>
-      <MobilePageHeader title="Mis fichajes" />
-      <div className="px-3 py-4">
-        <MisFichajesView />
+      <MobilePageHeader title="Mis fichajes" subtitle="Últimos 60 días" />
+      <div className="px-4 py-4">
+        <MisFichajesMobile />
       </div>
     </>
   );

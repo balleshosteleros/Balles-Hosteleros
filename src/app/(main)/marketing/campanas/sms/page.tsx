@@ -1,5 +1,5 @@
 import { CampanasListadoView } from "@/features/marketing/components/campanas/CampanasListadoView";
 
-export default function CampanasEmailPage() {
-  return <CampanasListadoView canal="email" />;
+export default function CampanasSmsPage() {
+  return <CampanasListadoView canal="sms" />;
 }

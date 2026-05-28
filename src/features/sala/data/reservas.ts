@@ -62,6 +62,7 @@ export interface Reserva {
   estado: EstadoReserva;
   observaciones: string;
   empleadoId?: string;
+  origen?: string | null;
 }
 
 export interface ListaEspera {

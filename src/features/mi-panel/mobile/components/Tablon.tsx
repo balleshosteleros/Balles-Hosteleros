@@ -93,9 +93,15 @@ export function Tablon({ data }: Props) {
         <Section title="Tu equipo" icon={Users}>
           <ul className="space-y-1.5 text-sm">
             {cumpleEstaSemana.map((c) => (
-              <li key={c.nombre} className="flex items-center justify-between">
-                <span>🎂 {c.nombre}</span>
-                <span className="text-xs text-muted-foreground">{c.fecha}</span>
+              <li key={c.nombre} className="flex items-center justify-between gap-3">
+                <span className="truncate">🎂 {c.nombre}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {c.diasRestantes === 0
+                    ? "hoy"
+                    : c.diasRestantes === 1
+                      ? "mañana"
+                      : `${c.fechaTexto} · en ${c.diasRestantes}d`}
+                </span>
               </li>
             ))}
           </ul>

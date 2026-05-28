@@ -1,5 +1,5 @@
-import { CampanasWhatsAppView } from "@/features/marketing/components/campanas/CampanasWhatsAppView";
+import { CampanasListadoView } from "@/features/marketing/components/campanas/CampanasListadoView";
 
 export default function CampanasWhatsAppPage() {
-  return <CampanasWhatsAppView />;
+  return <CampanasListadoView canal="whatsapp" />;
 }

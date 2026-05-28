@@ -108,9 +108,41 @@ export async function updateTareaMultiEmpresa(payload: {
     .update(safePatch)
     .eq("clave_tarea", claveTarea)
     .in("empresa_id", empresaIds)
-    .select("id");
+    .select("id, empresa_id, tarea, empleados_asignados");
 
   if (error) return { ok: false, error: error.message };
+
+  // PRP-045 Fase 6: push "cronograma_cambiado" a los empleados asignados.
+  // Best-effort: no bloqueamos la respuesta si el envío falla.
+  try {
+    const { sendPushToUser } = await import(
+      "@/features/mi-panel/mobile/lib/push-server"
+    );
+    const enviados = new Set<string>();
+    for (const row of data ?? []) {
+      const userIds = (row.empleados_asignados as string[] | null) ?? [];
+      for (const userId of userIds) {
+        if (!userId || enviados.has(`${userId}:${row.empresa_id}`)) continue;
+        enviados.add(`${userId}:${row.empresa_id}`);
+        await sendPushToUser({
+          userId,
+          empresaId: row.empresa_id as string,
+          eventType: "cronograma_cambiado",
+          payload: {
+            title: "Tu cronograma ha cambiado",
+            body: row.tarea
+              ? `Cambios en "${row.tarea}". Revisa tu cronograma.`
+              : "Hay cambios en tu cronograma de tareas.",
+            url: "/m/cronograma",
+            tag: `cronograma-${row.id}`,
+            data: { url: "/m/cronograma" },
+          },
+        });
+      }
+    }
+  } catch (e) {
+    console.error("[cronograma] push cronograma_cambiado:", e);
+  }
 
   revalidatePath("/direccion/cronogramas");
   return { ok: true, data: { updated: (data ?? []).length } };
