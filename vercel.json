@@ -30,7 +30,7 @@
     },
     {
       "path": "/api/cron/visita-emails",
-      "schedule": "* * * * *"
+      "schedule": "0 8 * * *"
     }
   ]
 }
