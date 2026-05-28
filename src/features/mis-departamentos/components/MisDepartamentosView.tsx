@@ -89,6 +89,11 @@ export function MisDepartamentosView() {
     return ALL_DEPARTAMENTOS.filter((d) => puedeVer(d.modulo));
   }, [hasRole, permisosLoaded, puedeVer]);
 
+  // Loading hasta que (a) el componente esté montado y (b) los permisos hayan
+  // resuelto. admin/director cortocircuitan en `tiles` sin esperar permisos.
+  const isLoading =
+    !mounted || (!permisosLoaded && !hasRole("director") && !hasRole("admin"));
+
   const userName = profile?.nombre
     ? profile.apellidos
       ? `${profile.nombre} ${profile.apellidos}`
@@ -118,10 +123,15 @@ export function MisDepartamentosView() {
         ) : null}
       </div>
 
-      {!mounted ? (
-        // Placeholder neutro durante SSR/primer render para evitar hydration mismatch:
-        // las tiles dependen de useAuth() que resuelve distinto en server vs client.
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" />
+      {isLoading ? (
+        // Skeleton mientras montamos y resolvemos permisos. Evita el flash de
+        // "No tienes departamentos asignados todavía" antes de que el contexto
+        // de auth termine de cargar.
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Card key={i} className="p-5 h-[92px] animate-pulse bg-muted/40 border-muted" />
+          ))}
+        </div>
       ) : tiles.length === 0 ? (
         <Card className="p-8 text-center text-sm text-muted-foreground">
           No tienes departamentos asignados todavía.

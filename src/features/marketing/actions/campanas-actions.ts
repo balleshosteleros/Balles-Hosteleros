@@ -14,12 +14,16 @@ import type {
   Campana,
   CampanaEmail,
   CampanaMeta,
+  CampanaSms,
   CampanaWhatsApp,
+  SegmentoJson,
 } from "@/features/marketing/data/campanas";
 
 // ─── Row ↔ Campana ──────────────────────────────────────────────
 
 type Row = Record<string, unknown>;
+
+const SEGMENTO_VACIO: SegmentoJson = { operador: "AND", condiciones: [] };
 
 function rowToCampana(row: Row): Campana {
   const canal = row.canal as Campana["canal"];
@@ -31,6 +35,13 @@ function rowToCampana(row: Row): Campana {
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
     estadisticas: (row.estadisticas as Campana["estadisticas"]) ?? {},
+    // PRP-046 campos comunes
+    reservaLinkId: (row.reserva_link_id as string | null) ?? null,
+    recurrenciaCron: (row.recurrencia_cron as string | null) ?? null,
+    segmentoJson: (row.segmento_json as SegmentoJson) ?? SEGMENTO_VACIO,
+    mediaUrls: (row.media_urls as string[]) ?? [],
+    ultimaEjecucion: (row.ultima_ejecucion as string | null) ?? null,
+    demoMode: (row.demo_mode as boolean) ?? true,
   };
   const payload = (row.payload as Record<string, unknown>) ?? {};
 
@@ -58,7 +69,17 @@ function rowToCampana(row: Row): Campana {
       fechaEnvio: (row.fecha_envio as string | null) ?? null,
     } as CampanaWhatsApp;
   }
-  // meta
+  if (canal === "sms") {
+    return {
+      ...base,
+      canal: "sms",
+      cuerpo: (payload.cuerpo as string) ?? "",
+      remitente: (payload.remitente as string) ?? "",
+      segmento: (row.segmento as string) ?? "todos",
+      fechaEnvio: (row.fecha_envio as string | null) ?? null,
+    } as CampanaSms;
+  }
+  // meta (canal === "meta" || "google" → "google" se mapea a meta hasta que se implemente)
   return {
     ...base,
     canal: "meta",
@@ -92,6 +113,13 @@ function campanaToRow(c: Campana, empresaId: string): Record<string, unknown> {
     estado: c.estado,
     estadisticas: c.estadisticas,
     updated_at: new Date().toISOString(),
+    // PRP-046 columnas top-level
+    reserva_link_id: c.reservaLinkId,
+    recurrencia_cron: c.recurrenciaCron,
+    segmento_json: c.segmentoJson,
+    media_urls: c.mediaUrls,
+    ultima_ejecucion: c.ultimaEjecucion,
+    demo_mode: c.demoMode,
   };
 
   if (c.canal === "email") {
@@ -117,6 +145,17 @@ function campanaToRow(c: Campana, empresaId: string): Record<string, unknown> {
         idioma: c.idioma,
         cuerpo: c.cuerpo,
         variables: c.variables,
+      },
+    };
+  }
+  if (c.canal === "sms") {
+    return {
+      ...base,
+      segmento: c.segmento,
+      fecha_envio: c.fechaEnvio,
+      payload: {
+        cuerpo: c.cuerpo,
+        remitente: c.remitente,
       },
     };
   }

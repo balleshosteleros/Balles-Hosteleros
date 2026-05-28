@@ -1,6 +1,6 @@
 // ─── Tipos de campañas ──────────────────────────────────────────
 
-export type CanalCampana = "email" | "whatsapp" | "meta";
+export type CanalCampana = "email" | "whatsapp" | "sms" | "meta" | "google";
 export type EstadoCampana =
   | "borrador"
   | "programada"
@@ -18,8 +18,51 @@ export const ESTADOS_CAMPANA: { value: EstadoCampana; label: string; color: stri
   { value: "fallida", label: "Fallida", color: "red" },
 ];
 
+// ─── Tipos compartidos PRP-046 ──────────────────────────────────
+
+export type RecurrenciaCampana = "una_vez" | "diaria" | "semanal" | "mensual";
+
+// AST del segmento dinámico. Se rellenará el builder en Fase 8.
+export type SegmentoOperador = "AND" | "OR";
+export type SegmentoCondicion =
+  | { tipo: "ultima_visita_hace_dias"; max: 7 | 30 | 90 | 365 }
+  | { tipo: "sin_visitar_desde_dias"; min: number }
+  | { tipo: "clasificacion"; valores: Array<"REGULAR" | "VIP" | "FRECUENTE" | "NUEVO" | "INACTIVO"> }
+  | { tipo: "visitas_min"; min: number };
+export interface SegmentoJson {
+  operador: SegmentoOperador;
+  condiciones: SegmentoCondicion[];
+}
+
+export interface CamposComunesPRP046 {
+  // Atribución
+  reservaLinkId: string | null;
+  // Recurrencia (null = una vez)
+  recurrenciaCron: string | null;
+  // Segmento dinámico
+  segmentoJson: SegmentoJson;
+  // Adjuntos
+  mediaUrls: string[];
+  // Tracking
+  ultimaEjecucion: string | null;
+  demoMode: boolean;
+}
+
+const SEGMENTO_VACIO: SegmentoJson = { operador: "AND", condiciones: [] };
+
+function camposComunesVacios(): CamposComunesPRP046 {
+  return {
+    reservaLinkId: null,
+    recurrenciaCron: null,
+    segmentoJson: SEGMENTO_VACIO,
+    mediaUrls: [],
+    ultimaEjecucion: null,
+    demoMode: true,
+  };
+}
+
 // ─── Campaña Email ──────────────────────────────────────────────
-export interface CampanaEmail {
+export interface CampanaEmail extends CamposComunesPRP046 {
   id: string;
   canal: "email";
   empresaId: string;
@@ -28,7 +71,7 @@ export interface CampanaEmail {
   remitenteNombre: string;
   remitenteEmail: string;
   cuerpoHtml: string;
-  segmento: string; // "todos" | "vip" | "inactivos" | custom
+  segmento: string; // legacy string (compat con UI previa)
   fechaEnvio: string | null;
   estado: EstadoCampana;
   estadisticas: {
@@ -44,15 +87,15 @@ export interface CampanaEmail {
 }
 
 // ─── Campaña WhatsApp ───────────────────────────────────────────
-export interface CampanaWhatsApp {
+export interface CampanaWhatsApp extends CamposComunesPRP046 {
   id: string;
   canal: "whatsapp";
   empresaId: string;
   nombre: string;
-  plantilla: string; // nombre de la plantilla aprobada por WhatsApp
-  idioma: string; // "es", "en"...
+  plantilla: string;
+  idioma: string;
   cuerpo: string;
-  variables: Record<string, string>; // mapeo {{1}} → valor
+  variables: Record<string, string>;
   segmento: string;
   fechaEnvio: string | null;
   estado: EstadoCampana;
@@ -62,6 +105,27 @@ export interface CampanaWhatsApp {
     leidos: number;
     respuestas: number;
     fallidos: number;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ─── Campaña SMS ────────────────────────────────────────────────
+export interface CampanaSms extends CamposComunesPRP046 {
+  id: string;
+  canal: "sms";
+  empresaId: string;
+  nombre: string;
+  cuerpo: string; // máx 160 caracteres recomendado
+  remitente: string; // sender ID (alfanumérico hasta 11 car. en España)
+  segmento: string;
+  fechaEnvio: string | null;
+  estado: EstadoCampana;
+  estadisticas: {
+    enviados: number;
+    entregados: number;
+    fallidos: number;
+    clicks: number;
   };
   createdAt: string;
   updatedAt: string;
@@ -85,20 +149,20 @@ export const OBJETIVOS_META: { value: ObjetivoMeta; label: string; descripcion: 
   { value: "APP_PROMOTION", label: "Promoción de app", descripcion: "Instalaciones de app móvil" },
 ];
 
-export interface CampanaMeta {
+export interface CampanaMeta extends CamposComunesPRP046 {
   id: string;
   canal: "meta";
   empresaId: string;
   nombre: string;
   objetivo: ObjetivoMeta;
   plataformas: ("facebook" | "instagram")[];
-  presupuestoDiario: number; // en euros
+  presupuestoDiario: number;
   duracionDias: number;
   publicoObjetivo: {
     edadMin: number;
     edadMax: number;
     genero: "todos" | "hombre" | "mujer";
-    ubicaciones: string[]; // ciudades / códigos postales
+    ubicaciones: string[];
     intereses: string[];
   };
   creatividad: {
@@ -112,7 +176,6 @@ export interface CampanaMeta {
   fechaInicio: string | null;
   fechaFin: string | null;
   estado: EstadoCampana;
-  // Meta API refs
   metaCampaignId: string | null;
   metaAdSetId: string | null;
   metaAdId: string | null;
@@ -131,7 +194,7 @@ export interface CampanaMeta {
   updatedAt: string;
 }
 
-export type Campana = CampanaEmail | CampanaWhatsApp | CampanaMeta;
+export type Campana = CampanaEmail | CampanaWhatsApp | CampanaSms | CampanaMeta;
 
 // ─── Helpers ────────────────────────────────────────────────────
 
@@ -168,6 +231,7 @@ export function crearCampanaEmailVacia(empresaId: string): CampanaEmail {
     estadisticas: { enviados: 0, entregados: 0, abiertos: 0, clicks: 0, rebotes: 0, bajas: 0 },
     createdAt: now,
     updatedAt: now,
+    ...camposComunesVacios(),
   };
 }
 
@@ -188,6 +252,26 @@ export function crearCampanaWhatsAppVacia(empresaId: string): CampanaWhatsApp {
     estadisticas: { enviados: 0, entregados: 0, leidos: 0, respuestas: 0, fallidos: 0 },
     createdAt: now,
     updatedAt: now,
+    ...camposComunesVacios(),
+  };
+}
+
+export function crearCampanaSmsVacia(empresaId: string): CampanaSms {
+  const now = new Date().toISOString();
+  return {
+    id: `sms-${Date.now()}`,
+    canal: "sms",
+    empresaId,
+    nombre: "",
+    cuerpo: "",
+    remitente: "",
+    segmento: "todos",
+    fechaEnvio: null,
+    estado: "borrador",
+    estadisticas: { enviados: 0, entregados: 0, fallidos: 0, clicks: 0 },
+    createdAt: now,
+    updatedAt: now,
+    ...camposComunesVacios(),
   };
 }
 
@@ -236,5 +320,6 @@ export function crearCampanaMetaVacia(empresaId: string): CampanaMeta {
     },
     createdAt: now,
     updatedAt: now,
+    ...camposComunesVacios(),
   };
 }
