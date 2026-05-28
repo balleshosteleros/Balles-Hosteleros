@@ -1,6 +1,5 @@
 import Link from "next/link";
 import {
-  CheckCircle2,
   ClipboardList,
   ClipboardCheck,
   MessageSquare,
@@ -165,18 +164,8 @@ export default async function CalidadDashboardPage() {
   const ratingResenas = dashboard.resenas.ratingMedio;
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <CheckCircle2 className="h-6 w-6 text-muted-foreground" />
-          <div>
-            <h1 className="text-xl font-bold tracking-tight">Cuadro de mando</h1>
-            <p className="text-sm text-muted-foreground">
-              {dashboard.empresaNombre ?? "Sin empresa activa"} · {dashboard.trimestre.label}
-            </p>
-          </div>
-        </div>
+    <div className="p-4 md:p-6 space-y-4">
+      <div className="flex justify-end">
         <CalidadKpiConfigDialog initialThresholds={t} />
       </div>
 
