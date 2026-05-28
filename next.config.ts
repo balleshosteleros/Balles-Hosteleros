@@ -26,18 +26,36 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
-      // PRP-045: redirect móvil → /m a nivel de routing Vercel (antes del cache).
-      // Excluye rutas que sí pueden verse en móvil: /m, auth, públicas, api, estáticos.
+      // PRP-045: redirect móvil → /m para la home raíz, aplicado a nivel de
+      // routing Vercel (antes de cache y middleware). El resto de rutas
+      // privadas las protege el proxy.ts que sí se ejecuta una vez la home
+      // pública deja de cachearse estáticamente.
       {
-        source:
-          '/((?!m($|/)|login|signup|forgot-password|update-password|check-email|callback|acceso-demo|primer-acceso|carta|empleo|inspectores|firmar|r/|p/|v/|api/|__site|auth|_next|manifest\\.webmanifest|sw\\.js|robots\\.txt|sitemap\\.xml|favicon\\.ico|icons/|apple-icon|.*\\.(?:png|jpg|jpeg|svg|webp|ico|gif|woff2?|ttf|otf|js|css|map)).*)',
+        source: '/',
         has: [{ type: 'header', key: 'user-agent', value: MOBILE_UA_REGEX }],
         destination: '/m',
         permanent: false,
       },
-      // Root explícito: cuando un móvil entra a "/", siempre va a /m.
       {
-        source: '/',
+        source: '/mi-panel',
+        has: [{ type: 'header', key: 'user-agent', value: MOBILE_UA_REGEX }],
+        destination: '/m',
+        permanent: false,
+      },
+      {
+        source: '/mi-panel/:path*',
+        has: [{ type: 'header', key: 'user-agent', value: MOBILE_UA_REGEX }],
+        destination: '/m',
+        permanent: false,
+      },
+      {
+        source: '/mis-departamentos',
+        has: [{ type: 'header', key: 'user-agent', value: MOBILE_UA_REGEX }],
+        destination: '/m',
+        permanent: false,
+      },
+      {
+        source: '/mis-departamentos/:path*',
         has: [{ type: 'header', key: 'user-agent', value: MOBILE_UA_REGEX }],
         destination: '/m',
         permanent: false,
