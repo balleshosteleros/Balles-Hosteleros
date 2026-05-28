@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
   getReglaModulo,
@@ -8,6 +8,7 @@ import {
 } from "@/features/ajustes/actions/reglas-submodulo-actions";
 import {
   camposExigidos,
+  esSubmoduloMigrable,
   getSubmodulo,
   type ModoReglas,
   type ReglaSubmoduloRow,
@@ -85,6 +86,28 @@ export function useReglasSubmodulo(moduloKey: string, submoduloKey: string) {
     [moduloKey, submoduloKey, modoEfectivo, camposPersonalizados],
   );
 
+  /** Keys de los campos requeridos según el modo efectivo. Vacío mientras carga. */
+  const keysRequeridos = useMemo<string[]>(() => {
+    const submodulo = getSubmodulo(moduloKey, submoduloKey);
+    if (!submodulo) return [];
+    return camposExigidos(submodulo, modoEfectivo, camposPersonalizados);
+  }, [moduloKey, submoduloKey, modoEfectivo, camposPersonalizados]);
+
+  /** Indica si un campo concreto es obligatorio en el modo efectivo. */
+  const esRequerido = useCallback(
+    (key: string): boolean => keysRequeridos.includes(key),
+    [keysRequeridos],
+  );
+
+  /**
+   * Indica si este submódulo admite estado "Borrador" (Migración con IA).
+   * El resto del software NO permite registros incompletos.
+   */
+  const admiteBorrador = useMemo(
+    () => esSubmoduloMigrable(moduloKey, submoduloKey),
+    [moduloKey, submoduloKey],
+  );
+
   return {
     modoModulo,
     modoSub,
@@ -92,5 +115,11 @@ export function useReglasSubmodulo(moduloKey: string, submoduloKey: string) {
     camposPersonalizados,
     loading,
     validar,
+    /** Nuevo — útil para componentes UI que necesitan saber si pintar `*`. */
+    esRequerido,
+    /** Nuevo — array con todas las keys requeridas (para mostrar contador, etc.). */
+    keysRequeridos,
+    /** Nuevo — true solo para las 5 entidades migrables. */
+    admiteBorrador,
   };
 }

@@ -14,18 +14,28 @@ export const UNIDADES_PRODUCTO = [
   { value: "ud", label: "Ud" },
 ] as const;
 
-export const PREPARACION_OPCIONES = ["Barra", "Cocina"] as const;
-export type PreparacionVenta = typeof PREPARACION_OPCIONES[number];
+// 14 alérgenos oficiales del Reglamento UE 1169/2011.
+// Único catálogo del proyecto — no duplicar en ningún sitio.
+// Los valores se guardan literales (case-sensitive) en productos.alergenos,
+// elaboraciones.alergenos y escandallos.alergenos.
+export const ALERGENOS_UE_14 = [
+  "Gluten",
+  "Crustáceos",
+  "Huevos",
+  "Pescado",
+  "Cacahuetes",
+  "Soja",
+  "Lácteos",
+  "Frutos con cáscara",
+  "Apio",
+  "Mostaza",
+  "Sésamo",
+  "Sulfitos",
+  "Altramuces",
+  "Moluscos",
+] as const;
 
-export const PARTIDAS_POR_PREPARACION: Record<PreparacionVenta, string[]> = {
-  Barra: ["Cafetería", "Coctelería", "Refrescos y cervezas", "Vinos", "Postres barra"],
-  Cocina: ["FRÍO + POSTRES", "FUEGOS + HORNOS", "FREIDORA + PLANCHA", "Pase / Emplatado"],
-};
-
-export function getPartidasPorPreparacion(p: PreparacionVenta | "" | null | undefined): string[] {
-  if (!p) return [];
-  return PARTIDAS_POR_PREPARACION[p] ?? [];
-}
+export type AlergenoUE = typeof ALERGENOS_UE_14[number];
 
 export interface Producto {
   id: string;
@@ -46,7 +56,6 @@ export interface Producto {
   createdAt?: string;
   observaciones?: string;
   conservacion?: Conservacion | null;
-  preparacion?: PreparacionVenta | null;
   partida?: string | null;
   estiloColor?: string | null;
   estiloImagenUrl?: string | null;
@@ -54,6 +63,7 @@ export interface Producto {
   textoComanda?: string;
   cartaNombre?: string | null;
   cartaTexto?: string | null;
+  alergenos: string[];
 }
 
 // ─── Estilo POS (solo productos de venta) ─────────────────────

@@ -82,7 +82,7 @@ export function EstiloProductoVenta({
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">Estilo en POS</CardTitle>
+        <CardTitle className="text-base">Texto para Punto de Venta</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-6">

@@ -24,7 +24,6 @@ import {
   createUnidadMedida,
   createIva,
   createConservacion,
-  createPreparacion,
 } from "@/features/logistica/actions/catalogos-estandar-actions";
 import type { ProveedorImport } from "@/features/logistica/types/import";
 
@@ -552,28 +551,6 @@ export async function guardarConservacionesIA(rows: Array<Record<string, string 
     const nombre = (r.nombre ?? "").trim();
     if (!nombre) return null;
     return createConservacion({ nombre, rangoTemp: r.rangoTemp?.trim() || undefined });
-  });
-}
-
-/* ═══════════════════════════════════════════════════════════════════
-   PREPARACIONES  (campo: nombre)
-   ═════════════════════════════════════════════════════════════════ */
-
-export async function analizarPreparacionesIA(payload: PayloadExtraido) {
-  return analizarCatalogoSimple(payload, {
-    schema: SCHEMA_CATEGORIAS_NOMBRE,
-    contexto:
-      "Estás extrayendo MODOS DE PREPARACIÓN de cocina (Barra, Cocina, Plancha, Horno, Freidora, etc.). " +
-      "Cada uno como una sola palabra o frase corta.",
-    deduplicarPorKey: "nombre",
-  });
-}
-
-export async function guardarPreparacionesIA(rows: Array<Record<string, string | null>>) {
-  return bulkCreate(rows, (r) => {
-    const nombre = (r.nombre ?? "").trim();
-    if (!nombre) return null;
-    return createPreparacion({ nombre });
   });
 }
 

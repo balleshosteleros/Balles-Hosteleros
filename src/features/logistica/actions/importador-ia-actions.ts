@@ -6,14 +6,12 @@ import {
   UNIDADES_PRODUCTO,
   IVA_OPCIONES,
   CONSERVACION_OPCIONES,
-  PREPARACION_OPCIONES,
   type TipoProducto,
 } from "@/features/logistica/data/productos";
 import {
   listUnidadesMedida,
   listIvas,
   listConservaciones,
-  listPreparaciones,
 } from "@/features/logistica/actions/catalogos-estandar-actions";
 import type {
   AnalisisIAResultado,
@@ -26,7 +24,6 @@ const UNIDADES_FALLBACK = UNIDADES_PRODUCTO.map((u) => u.value);
 const ESTADOS_VALIDOS = ["Activo", "Inactivo"] as const;
 const IVAS_FALLBACK = [...IVA_OPCIONES];
 const CONSERVACIONES_FALLBACK = [...CONSERVACION_OPCIONES];
-const PREPARACIONES_FALLBACK = [...PREPARACION_OPCIONES];
 
 /** Límite defensivo: si el modelo intenta devolver más de esto, cortamos. */
 const MAX_FILAS_POR_ANALISIS = 200;
@@ -40,7 +37,6 @@ function buildResponseSchema(catalogos: {
   unidades: string[];
   ivas: string[];
   conservaciones: string[];
-  preparaciones: string[];
 }): Schema {
   return {
   type: SchemaType.OBJECT,
@@ -107,13 +103,6 @@ function buildResponseSchema(catalogos: {
                 format: "enum",
                 description: "Solo uno del enum. Null si no se infiere del documento.",
               },
-              preparacion: {
-                type: SchemaType.STRING,
-                nullable: true,
-                enum: catalogos.preparaciones,
-                format: "enum",
-                description: "Solo uno del enum. Aplica a productos de venta.",
-              },
             },
           },
           confianza: {
@@ -132,7 +121,6 @@ function buildResponseSchema(catalogos: {
               formato: { type: SchemaType.NUMBER, nullable: true },
               observaciones: { type: SchemaType.NUMBER, nullable: true },
               conservacion: { type: SchemaType.NUMBER, nullable: true },
-              preparacion: { type: SchemaType.NUMBER, nullable: true },
             },
           },
         },
@@ -178,7 +166,6 @@ function buildInstruccionBase(catalogos: {
   unidades: string[];
   ivas: string[];
   conservaciones: string[];
-  preparaciones: string[];
 }): string {
   return `
 Eres un extractor de datos especializado en escandallos y fichas de producto de un restaurante en España.
@@ -198,7 +185,6 @@ Reglas:
 - Para 'iva': SOLO ${catalogos.ivas.join(", ")}. Si en el documento aparece "general" → "21%", "reducido" → "10%", "superreducido" → "4%". Si no consta, null.
 - Para 'estado': SOLO 'Activo' o 'Inactivo'. Default 'Activo'.
 - Para 'conservacion': SOLO ${catalogos.conservaciones.join(", ")}. Solo si el documento lo indica explícitamente.
-- Para 'preparacion': SOLO ${catalogos.preparaciones.join(", ")}. Solo si aplica (productos de venta).
 - Para 'proveedor': SOLO valores de la lista que te paso en el prompt (proveedores ya dados de alta).
   No inventes proveedores nuevos: si no coincide con ninguno, devuelve null.
 - Confianza: usa 1.0 si el valor viene literal del documento; 0.7-0.9 si lo has normalizado;
@@ -232,11 +218,10 @@ export async function analizarImportacionIA(
     // Cargar catálogos vivos de la empresa. Si la BD aún no tiene catálogos
     // (empresa recién creada antes de que el trigger termine, o BD caída),
     // caemos a las constantes estáticas — la UI no se queda muda.
-    const [uRes, ivaRes, conRes, prepRes] = await Promise.all([
+    const [uRes, ivaRes, conRes] = await Promise.all([
       listUnidadesMedida(),
       listIvas(),
       listConservaciones(),
-      listPreparaciones(),
     ]);
     const unidadesValidas = uRes.ok && uRes.data.length > 0
       ? uRes.data.map((u) => u.codigo)
@@ -247,15 +232,11 @@ export async function analizarImportacionIA(
     const conservacionesValidas = conRes.ok && conRes.data.length > 0
       ? conRes.data.map((c) => c.nombre)
       : [...CONSERVACIONES_FALLBACK];
-    const preparacionesValidas = prepRes.ok && prepRes.data.length > 0
-      ? prepRes.data.map((p) => p.nombre)
-      : [...PREPARACIONES_FALLBACK];
 
     const catalogosDinamicos = {
       unidades: unidadesValidas,
       ivas: ivasValidos,
       conservaciones: conservacionesValidas,
-      preparaciones: preparacionesValidas,
     };
 
     const instruccionTipo = instruccionSegunTipo(tipo);
@@ -403,7 +384,7 @@ function sanearValores(
   v: Record<string, string | null>,
   proveedoresValidos: string[],
   categoriasValidas: string[],
-  catalogosDinamicos: { unidades: string[]; ivas: string[]; conservaciones: string[]; preparaciones: string[] },
+  catalogosDinamicos: { unidades: string[]; ivas: string[]; conservaciones: string[] },
 ): FilaSugerida["valores"] {
   const out: FilaSugerida["valores"] = { ...v };
 
@@ -411,7 +392,6 @@ function sanearValores(
   out.iva = filtrarEnum(v.iva, catalogosDinamicos.ivas);
   out.estado = filtrarEnum(v.estado, ESTADOS_VALIDOS);
   out.conservacion = filtrarEnum(v.conservacion, catalogosDinamicos.conservaciones);
-  out.preparacion = filtrarEnum(v.preparacion, catalogosDinamicos.preparaciones);
 
   // Proveedor: match insensible a mayúsculas contra la lista de la empresa.
   out.proveedor = filtrarCatalogoDinamico(v.proveedor, proveedoresValidos);

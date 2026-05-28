@@ -1,19 +1,15 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
-import { useTabQuery } from "@/shared/hooks/use-tab-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { Plus, Thermometer, AlertTriangle, CheckCircle, Settings, Settings2, BarChart3 } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+import { Plus, AlertTriangle, CheckCircle, Settings } from "lucide-react";
 import {
   EquipoFrio, RegistroTemperatura, TipoEquipo, EstadoEquipo, AreaTemp,
   evaluarEstado,
@@ -79,11 +75,6 @@ interface Props {
 }
 
 export default function TemperaturasView({ area, equiposIniciales, registrosIniciales }: Props) {
-  const { empresaActual } = useEmpresa();
-  const [tempTab, setTempTab] = useTabQuery(
-    ["registros", "equipos", "historico"] as const,
-    "registros",
-  );
   const [equipos, setEquipos] = useState<EquipoFrio[]>(equiposIniciales ?? []);
   const [registros, setRegistros] = useState<RegistroTemperatura[]>(registrosIniciales ?? []);
   const [loading, setLoading] = useState(true);
@@ -133,7 +124,6 @@ export default function TemperaturasView({ area, equiposIniciales, registrosInic
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
 
-  const hoy = new Date().toISOString().split("T")[0];
   const equiposNombres = useMemo(() => equipos.map(e => e.nombre).sort(), [equipos]);
 
   const registrosFiltrados = useMemo(() => {
@@ -154,10 +144,6 @@ export default function TemperaturasView({ area, equiposIniciales, registrosInic
     });
     return orden ? lista : lista.sort((a, b) => `${b.fecha}${b.hora}`.localeCompare(`${a.fecha}${a.hora}`));
   }, [registros, equipos, busqueda, filtros, orden]);
-
-  const alertasHoy = registros.filter(r => r.fecha === hoy && r.estado === "ALERTA").length;
-  const okHoy = registros.filter(r => r.fecha === hoy && r.estado === "OK").length;
-  const equiposActivos = equipos.filter(e => e.estado === "ACTIVO").length;
 
   // --- Server-wired handlers ---
   const handleCreateEquipo = async (eq: EquipoFrio) => {
@@ -354,106 +340,27 @@ export default function TemperaturasView({ area, equiposIniciales, registrosInic
         </DialogContent>
       </Dialog>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold">{equiposActivos}</p><p className="text-xs text-muted-foreground">Equipos activos</p></CardContent></Card>
-        <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold">{okHoy + alertasHoy}</p><p className="text-xs text-muted-foreground">Registros hoy</p></CardContent></Card>
-        <Card><CardContent className="p-4 text-center"><div className="flex items-center justify-center gap-1"><CheckCircle className="h-4 w-4 text-green-600" /><p className="text-2xl font-bold text-green-600">{okHoy}</p></div><p className="text-xs text-muted-foreground">OK hoy</p></CardContent></Card>
-        <Card><CardContent className="p-4 text-center"><div className="flex items-center justify-center gap-1"><AlertTriangle className="h-4 w-4 text-red-600" /><p className="text-2xl font-bold text-red-600">{alertasHoy}</p></div><p className="text-xs text-muted-foreground">Alertas hoy</p></CardContent></Card>
-      </div>
-
-      <Tabs value={tempTab} onValueChange={(v) => setTempTab(v as "registros" | "equipos" | "historico")}>
-        <TabsList>
-          <TabsTrigger value="registros"><Thermometer className="h-4 w-4 mr-1" />Registros</TabsTrigger>
-          <TabsTrigger value="equipos"><Settings2 className="h-4 w-4 mr-1" />Equipos</TabsTrigger>
-          <TabsTrigger value="historico"><BarChart3 className="h-4 w-4 mr-1" />Histórico</TabsTrigger>
-        </TabsList>
-
-        {/* REGISTROS */}
-        <TabsContent value="registros">
-          <ResizableColumnsProvider storageKey="cocina-temperaturas">
-            <Card>
-              <CardContent className="p-0">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-muted/40">
-                      {columnasRender.map((c) => columnDefs[c.campo]?.th)}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {registrosFiltrados.map(r => (
-                      <tr key={r.id} className="border-b hover:bg-muted/20">
-                        {columnasRender.map((c) => columnDefs[c.campo]?.td(r))}
-                      </tr>
-                    ))}
-                    {registrosFiltrados.length === 0 && <tr><td colSpan={8} className="p-6 text-center text-muted-foreground">Sin registros</td></tr>}
-                  </tbody>
-                </table>
-              </CardContent>
-            </Card>
-          </ResizableColumnsProvider>
-        </TabsContent>
-
-        {/* EQUIPOS */}
-        <TabsContent value="equipos">
-          <div className="flex justify-end mb-3">
-            <Button variant="outline" onClick={() => setShowNuevoEquipo(true)}>
-              <Plus className="h-4 w-4 mr-2" />Nuevo equipo
-            </Button>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {equipos.map(eq => {
-              const ultimoReg = registros.filter(r => r.equipoId === eq.id).sort((a, b) => `${b.fecha}${b.hora}`.localeCompare(`${a.fecha}${a.hora}`))[0];
-              return (
-                <Card key={eq.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelectedEquipo(eq)}>
-                  <CardContent className="p-4 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-semibold">{eq.nombre}</h3>
-                      <Badge variant={eq.estado === "ACTIVO" ? "default" : "secondary"}>{eq.estado}</Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground">{eq.tipo} — {eq.ubicacion}</p>
-                    <p className="text-xs">Rango: <span className="font-mono">{eq.rangoMin}°C — {eq.rangoMax}°C</span></p>
-                    {ultimoReg && (
-                      <div className="flex items-center gap-2 text-xs pt-1 border-t">
-                        <span>Último: <strong className="font-mono">{ultimoReg.temperatura}°C</strong></span>
-                        <Badge variant="outline" className={ultimoReg.estado === "OK" ? "bg-green-50 text-green-700 border-green-300" : "bg-red-50 text-red-700 border-red-300"}>{ultimoReg.estado}</Badge>
-                        <span className="text-muted-foreground">{ultimoReg.fecha}</span>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </TabsContent>
-
-        {/* HISTÓRICO */}
-        <TabsContent value="historico" className="space-y-6">
-          {equipos.filter(e => e.estado === "ACTIVO").map(eq => {
-            const regs = registros.filter(r => r.equipoId === eq.id).sort((a, b) => `${a.fecha}${a.hora}`.localeCompare(`${b.fecha}${b.hora}`));
-            if (regs.length === 0) return null;
-            const chartData = regs.map(r => ({ label: `${r.fecha.slice(5)} ${r.hora}`, temp: r.temperatura }));
-            return (
-              <Card key={eq.id}>
-                <CardHeader className="pb-2"><CardTitle className="text-sm">{eq.nombre} — Histórico</CardTitle></CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <LineChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-                      <YAxis tick={{ fontSize: 11 }} unit="°" />
-                      <Tooltip formatter={(v: number) => `${v}°C`} />
-                      <ReferenceLine y={eq.rangoMax} stroke="hsl(0 70% 55%)" strokeDasharray="4 4" label={{ value: `Max ${eq.rangoMax}°`, fontSize: 10, fill: "hsl(0 70% 55%)" }} />
-                      <ReferenceLine y={eq.rangoMin} stroke="hsl(210 70% 55%)" strokeDasharray="4 4" label={{ value: `Min ${eq.rangoMin}°`, fontSize: 10, fill: "hsl(210 70% 55%)" }} />
-                      <Line type="monotone" dataKey="temp" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </TabsContent>
-      </Tabs>
+      <ResizableColumnsProvider storageKey="cocina-temperaturas">
+        <Card>
+          <CardContent className="p-0">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/40">
+                  {columnasRender.map((c) => columnDefs[c.campo]?.th)}
+                </tr>
+              </thead>
+              <tbody>
+                {registrosFiltrados.map(r => (
+                  <tr key={r.id} className="border-b hover:bg-muted/20">
+                    {columnasRender.map((c) => columnDefs[c.campo]?.td(r))}
+                  </tr>
+                ))}
+                {registrosFiltrados.length === 0 && <tr><td colSpan={8} className="p-6 text-center text-muted-foreground">Sin registros</td></tr>}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      </ResizableColumnsProvider>
 
       {/* Detalle equipo */}
       <Dialog open={!!selectedEquipo} onOpenChange={() => setSelectedEquipo(null)}>

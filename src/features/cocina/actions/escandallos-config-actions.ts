@@ -5,7 +5,6 @@ import { getAppContext } from "@/lib/supabase/get-context";
 export type GrupoCodigo =
   | "categorias"
   | "alergenos"
-  | "partidas"
   | "menaje"
   | "recomendaciones";
 

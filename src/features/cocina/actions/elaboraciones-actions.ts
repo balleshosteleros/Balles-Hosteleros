@@ -7,8 +7,8 @@ export async function listElaboraciones() {
     const { supabase, empresaId } = await getAppContext();
     const query = supabase
       .from("elaboraciones")
-      .select("*")
-      .order("created_at", { ascending: false });
+      .select("*, productos!elaboraciones_producto_elaboracion_id_fkey(id, nombre, unidad)")
+      .order("fecha", { ascending: false });
     if (empresaId) query.eq("empresa_id", empresaId);
     const { data, error } = await query;
     if (error) throw error;
@@ -19,25 +19,60 @@ export async function listElaboraciones() {
   }
 }
 
+export async function listProductosElaboracion() {
+  try {
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false, data: [] };
+    const { data, error } = await supabase
+      .from("productos")
+      .select("id, nombre, unidad, categoria, conservacion")
+      .eq("empresa_id", empresaId)
+      .eq("tipo", "elaboracion")
+      .eq("estado", "Activo")
+      .order("nombre", { ascending: true });
+    if (error) throw error;
+    return { ok: true, data: data ?? [] };
+  } catch (err) {
+    console.error("[elaboraciones] listProductosElaboracion:", err);
+    return { ok: false, data: [] };
+  }
+}
+
 export async function createElaboracion(input: {
-  nombre: string;
-  tipo?: string;
+  productoElaboracionId: string;
+  cantidadProducida: number;
+  unidad: string;
+  fecha: string;
+  fechaCaducidad?: string | null;
+  almacen: "COCINA" | "BARRA";
   descripcion?: string;
-  tiempo_estimado?: number;
   responsable?: string;
 }) {
   try {
-    const { supabase, empresaId } = await getAppContext();
+    const { supabase, empresaId, userId } = await getAppContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    // Nombre derivado del producto
+    const { data: prod } = await supabase
+      .from("productos")
+      .select("nombre")
+      .eq("id", input.productoElaboracionId)
+      .single();
 
     const { data, error } = await supabase
       .from("elaboraciones")
       .insert({
         empresa_id: empresaId,
-        nombre: input.nombre,
-        categoria: input.tipo ?? null,          // tipo → categoria
+        nombre: prod?.nombre ?? "Elaboración",
+        producto_elaboracion_id: input.productoElaboracionId,
+        cantidad_producida: input.cantidadProducida,
+        unidad: input.unidad,
+        fecha: input.fecha,
+        fecha_caducidad: input.fechaCaducidad ?? null,
+        almacen: input.almacen,
+        responsable: input.responsable ?? userId ?? null,
         descripcion: input.descripcion ?? null,
-        tiempo: input.tiempo_estimado ? String(input.tiempo_estimado) + " min" : null,
+        estado: "borrador",
       })
       .select()
       .single();
@@ -53,21 +88,26 @@ export async function createElaboracion(input: {
 export async function updateElaboracion(
   id: string,
   input: {
-    nombre?: string;
-    tipo?: string;
+    productoElaboracionId?: string;
+    cantidadProducida?: number;
+    unidad?: string;
+    fecha?: string;
+    fechaCaducidad?: string | null;
+    almacen?: "COCINA" | "BARRA";
     descripcion?: string;
-    tiempo_estimado?: number;
-    responsable?: string;
     estado?: string;
   }
 ) {
   try {
     const { supabase } = await getAppContext();
     const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
-    if (input.nombre !== undefined) payload.nombre = input.nombre;
-    if (input.tipo !== undefined) payload.categoria = input.tipo;
+    if (input.productoElaboracionId !== undefined) payload.producto_elaboracion_id = input.productoElaboracionId;
+    if (input.cantidadProducida !== undefined) payload.cantidad_producida = input.cantidadProducida;
+    if (input.unidad !== undefined) payload.unidad = input.unidad;
+    if (input.fecha !== undefined) payload.fecha = input.fecha;
+    if (input.fechaCaducidad !== undefined) payload.fecha_caducidad = input.fechaCaducidad;
+    if (input.almacen !== undefined) payload.almacen = input.almacen;
     if (input.descripcion !== undefined) payload.descripcion = input.descripcion;
-    if (input.tiempo_estimado !== undefined) payload.tiempo = String(input.tiempo_estimado) + " min";
     if (input.estado !== undefined) payload.estado = input.estado;
 
     const { error } = await supabase
@@ -79,6 +119,32 @@ export async function updateElaboracion(
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[elaboraciones] updateElaboracion:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+export async function confirmarElaboracion(id: string) {
+  try {
+    const { supabase } = await getAppContext();
+    const { error } = await supabase.rpc("confirmar_elaboracion", { p_elab_id: id });
+    if (error) throw error;
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[elaboraciones] confirmarElaboracion:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+export async function revertirElaboracion(id: string) {
+  try {
+    const { supabase } = await getAppContext();
+    const { error } = await supabase.rpc("revertir_elaboracion", { p_elab_id: id });
+    if (error) throw error;
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[elaboraciones] revertirElaboracion:", msg);
     return { ok: false, error: msg };
   }
 }

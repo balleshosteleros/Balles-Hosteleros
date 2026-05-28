@@ -3,14 +3,15 @@
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
-  calcularCosteElaboracion,
-  CATEGORIAS_ELABORACION, ESTADO_ELABORACION_COLOR, ESTADO_ELABORACION_LABEL,
-  type Elaboracion, type ProductoElaboracion, type EstadoElaboracion, type ComponenteElaboracion,
-} from "@/features/logistica/data/elaboraciones";
-import { type ProductoStock } from "@/features/logistica/data/stock";
-import {
-  listElaboraciones, createElaboracion, updateElaboracion, deleteElaboracion,
+  listElaboraciones,
+  listProductosElaboracion,
+  createElaboracion,
+  updateElaboracion,
+  deleteElaboracion,
+  confirmarElaboracion,
+  revertirElaboracion,
 } from "@/features/cocina/actions/elaboraciones-actions";
+import { ESTADO_ELABORACION_COLOR, ESTADO_ELABORACION_LABEL, type EstadoElaboracion } from "@/features/logistica/data/elaboraciones";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,11 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
-import {
-  Search, Plus, Eye, Pencil, Trash2, Check, ArrowLeft,
-  ChevronDown, Package, AlertTriangle, Table2, LayoutGrid, Settings,
-} from "lucide-react";
+import { Pencil, Trash2, Check } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import {
@@ -37,121 +34,132 @@ import {
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 
-const ALL = "__ALL__";
+type ProductoElab = { id: string; nombre: string; unidad: string };
+
+type ElaboracionRow = {
+  id: string;
+  productoElaboracionId: string;
+  productoNombre: string;
+  productoUnidad: string;
+  cantidadProducida: number;
+  unidad: string;
+  fecha: string;
+  fechaCaducidad: string | null;
+  almacen: "COCINA" | "BARRA";
+  estado: EstadoElaboracion;
+  descripcion: string;
+};
+
+function mapRow(r: Record<string, unknown>): ElaboracionRow {
+  const p = r.productos as { nombre?: string; unidad?: string } | null;
+  return {
+    id: r.id as string,
+    productoElaboracionId: (r.producto_elaboracion_id as string) ?? "",
+    productoNombre: p?.nombre ?? (r.nombre as string) ?? "—",
+    productoUnidad: p?.unidad ?? "",
+    cantidadProducida: Number(r.cantidad_producida ?? 0),
+    unidad: (r.unidad as string) ?? "",
+    fecha: ((r.fecha as string) ?? "").slice(0, 10),
+    fechaCaducidad: r.fecha_caducidad ? String(r.fecha_caducidad).slice(0, 10) : null,
+    almacen: ((r.almacen as string) ?? "COCINA") as "COCINA" | "BARRA",
+    estado: ((r.estado as string) ?? "borrador") as EstadoElaboracion,
+    descripcion: (r.descripcion as string) ?? "",
+  };
+}
 
 /* ════════════════════════════════════════════════════════════
-   MODAL: CREAR / EDITAR ELABORACIÓN
+   MODAL: NUEVA / EDITAR ELABORACIÓN (registro de producción)
    ════════════════════════════════════════════════════════════ */
 function ElaboracionModal({
-  open, onClose, onSave, productosElab, stockItems, productosElabList, existing,
+  open, onClose, onSaved, productos, existing,
 }: {
   open: boolean;
   onClose: () => void;
-  onSave: (e: Elaboracion) => void;
-  productosElab: ProductoElaboracion[];
-  stockItems: ProductoStock[];
-  productosElabList: ProductoElaboracion[];
-  existing?: Elaboracion | null;
+  onSaved: () => void;
+  productos: ProductoElab[];
+  existing?: ElaboracionRow | null;
 }) {
-  const [nombre, setNombre] = useState(existing?.nombre || "");
-  const [productoElabId, setProductoElabId] = useState(existing?.productoElaboracionId || "");
-  const [fecha, setFecha] = useState(existing?.fecha || new Date().toISOString().slice(0, 10));
+  const today = new Date().toISOString().slice(0, 10);
+  const [productoId, setProductoId] = useState(existing?.productoElaboracionId || "");
   const [cantidad, setCantidad] = useState(existing?.cantidadProducida?.toString() || "");
   const [unidad, setUnidad] = useState(existing?.unidad || "kg");
+  const [fecha, setFecha] = useState(existing?.fecha || today);
+  const [fechaCaducidad, setFechaCaducidad] = useState(existing?.fechaCaducidad || "");
   const [almacen, setAlmacen] = useState<"COCINA" | "BARRA">(existing?.almacen || "COCINA");
-  const [observaciones, setObservaciones] = useState(existing?.observaciones || "");
-  const [componentes, setComponentes] = useState<ComponenteElaboracion[]>(existing?.componentes || []);
+  const [descripcion, setDescripcion] = useState(existing?.descripcion || "");
+  const [saving, setSaving] = useState(false);
 
-  // Add component
-  const [addType, setAddType] = useState<"compra" | "elaboracion">("compra");
-  const [addProdId, setAddProdId] = useState("");
-  const [addCantidad, setAddCantidad] = useState("");
-
-  const availableCompra = stockItems;
-  const availableElab = productosElabList;
-
-  const handleAddComponente = () => {
-    if (!addProdId || !addCantidad) return;
-    const cant = parseFloat(addCantidad);
-    if (isNaN(cant) || cant <= 0) return;
-
-    let nombre = "";
-    let unidad = "";
-    let coste = 0;
-    if (addType === "compra") {
-      const p = stockItems.find(s => s.id === addProdId);
-      if (!p) return;
-      nombre = p.nombre; unidad = p.unidad; coste = 0; // coste from productos would need linking
-    } else {
-      const p = productosElabList.find(e => e.id === addProdId);
-      if (!p) return;
-      nombre = p.nombre; unidad = p.unidad; coste = p.costeEstimado;
+  // Cuando se selecciona producto, hereda su unidad y propone caducidad +5 días
+  useEffect(() => {
+    if (!productoId || existing) return;
+    const p = productos.find(x => x.id === productoId);
+    if (p?.unidad) setUnidad(p.unidad);
+    if (!fechaCaducidad) {
+      const d = new Date(); d.setDate(d.getDate() + 5);
+      setFechaCaducidad(d.toISOString().slice(0, 10));
     }
+  }, [productoId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    setComponentes(prev => [...prev, {
-      productoId: addProdId, nombre, tipo: addType, cantidad: cant, unidad, costeUnitario: coste,
-    }]);
-    setAddProdId("");
-    setAddCantidad("");
-  };
-
-  const removeComponente = (idx: number) => setComponentes(prev => prev.filter((_, i) => i !== idx));
-
-  const handleSave = () => {
-    if (!nombre.trim() || !productoElabId || !cantidad) {
-      toast.error("Completa nombre, producto y cantidad");
+  const handleSave = async () => {
+    if (!productoId || !cantidad || !fecha || !fechaCaducidad) {
+      toast.error("Completa producto, cantidad, fecha y caducidad");
       return;
     }
-    const elab: Elaboracion = {
-      id: existing?.id || `el-${Date.now()}`,
-      nombre: nombre.trim(),
-      productoElaboracionId: productoElabId,
-      fecha,
-      cantidadProducida: parseFloat(cantidad),
-      unidad,
-      componentes,
-      estado: existing?.estado || "borrador",
-      creador: existing?.creador || "Usuario actual",
-      almacen,
-      observaciones,
-      empresaId: existing?.empresaId || "",
-    };
-    onSave(elab);
-  };
+    const cant = parseFloat(cantidad);
+    if (isNaN(cant) || cant <= 0) { toast.error("Cantidad no válida"); return; }
+    if (fechaCaducidad < fecha) { toast.error("La caducidad no puede ser anterior a la producción"); return; }
 
-  const costeTotal = calcularCosteElaboracion(componentes);
+    setSaving(true);
+    const res = existing
+      ? await updateElaboracion(existing.id, {
+          productoElaboracionId: productoId,
+          cantidadProducida: cant,
+          unidad,
+          fecha,
+          fechaCaducidad,
+          almacen,
+          descripcion,
+        })
+      : await createElaboracion({
+          productoElaboracionId: productoId,
+          cantidadProducida: cant,
+          unidad,
+          fecha,
+          fechaCaducidad,
+          almacen,
+          descripcion,
+        });
+    setSaving(false);
+    if (res.ok) {
+      toast.success(existing ? "Elaboración actualizada" : "Elaboración registrada");
+      onSaved();
+    } else {
+      toast.error("Error al guardar");
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle>{existing ? "Editar elaboración" : "Nueva elaboración"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label className="text-xs font-bold">Nombre</Label>
-              <Input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Ej: Salsa chimichurri" />
-            </div>
-            <div>
-              <Label className="text-xs font-bold">Producto elaboración</Label>
-              <Select value={productoElabId} onValueChange={setProductoElabId}>
-                <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
-                <SelectContent>
-                  {productosElab.map(p => (
-                    <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div>
+            <Label className="text-xs font-bold">Elaboración a preparar</Label>
+            <Select value={productoId} onValueChange={setProductoId}>
+              <SelectTrigger><SelectValue placeholder="Seleccionar elaboración..." /></SelectTrigger>
+              <SelectContent>
+                {productos.map(p => (
+                  <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          <div className="grid grid-cols-4 gap-4">
+
+          <div className="grid grid-cols-3 gap-3">
             <div>
-              <Label className="text-xs font-bold">Fecha</Label>
-              <Input type="date" value={fecha} onChange={e => setFecha(e.target.value)} />
-            </div>
-            <div>
-              <Label className="text-xs font-bold">Cantidad</Label>
+              <Label className="text-xs font-bold">Cantidad producida</Label>
               <Input type="number" step="0.01" value={cantidad} onChange={e => setCantidad(e.target.value)} />
             </div>
             <div>
@@ -159,7 +167,7 @@ function ElaboracionModal({
               <Select value={unidad} onValueChange={setUnidad}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {["kg", "L", "ud", "bot", "caja", "pack"].map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                  {["kg", "L", "ud"].map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -175,91 +183,25 @@ function ElaboracionModal({
             </div>
           </div>
 
-          <Separator />
-
-          {/* Componentes */}
-          <div>
-            <h4 className="text-sm font-bold text-foreground mb-2">COMPONENTES / INGREDIENTES</h4>
-            {componentes.length > 0 && (
-              <div className="bg-muted/30 rounded-lg border overflow-x-auto mb-3">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-muted/50">
-                      {["Producto", "Tipo", "Cantidad", "Unidad", "Coste unit.", ""].map(h => (
-                        <th key={h} className="text-left px-3 py-2 text-xs font-bold text-muted-foreground">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {componentes.map((c, i) => (
-                      <tr key={i} className="border-b">
-                        <td className="px-3 py-2 font-medium text-foreground">{c.nombre}</td>
-                        <td className="px-3 py-2">
-                          <Badge variant="outline" className="text-[10px]">
-                            {c.tipo === "compra" ? "Compra" : "Elaboración"}
-                          </Badge>
-                        </td>
-                        <td className="px-3 py-2">{c.cantidad}</td>
-                        <td className="px-3 py-2 text-muted-foreground">{c.unidad}</td>
-                        <td className="px-3 py-2">{c.costeUnitario.toFixed(2)} €</td>
-                        <td className="px-3 py-2">
-                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => removeComponente(i)}>
-                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            <div className="flex flex-wrap items-end gap-2 bg-card border rounded-lg p-3">
-              <div>
-                <Label className="text-[10px] font-bold">Tipo</Label>
-                <Select value={addType} onValueChange={(v) => { setAddType(v as "compra" | "elaboracion"); setAddProdId(""); }}>
-                  <SelectTrigger className="w-[130px] h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="compra">Compra</SelectItem>
-                    <SelectItem value="elaboracion">Elaboración</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex-1 min-w-[180px]">
-                <Label className="text-[10px] font-bold">Producto</Label>
-                <Select value={addProdId} onValueChange={setAddProdId}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
-                  <SelectContent>
-                    {addType === "compra"
-                      ? availableCompra.map(p => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)
-                      : availableElab.map(p => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="w-20">
-                <Label className="text-[10px] font-bold">Cantidad</Label>
-                <Input type="number" step="0.01" className="h-8 text-xs" value={addCantidad} onChange={e => setAddCantidad(e.target.value)} />
-              </div>
-              <Button size="sm" className="h-8 gap-1" onClick={handleAddComponente}>
-                <Plus className="h-3 w-3" /> Añadir
-              </Button>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs font-bold">Fecha producción</Label>
+              <Input type="date" value={fecha} onChange={e => setFecha(e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-xs font-bold">Fecha caducidad</Label>
+              <Input type="date" value={fechaCaducidad} onChange={e => setFechaCaducidad(e.target.value)} />
             </div>
           </div>
-
-          {costeTotal > 0 && (
-            <div className="text-sm font-semibold text-foreground">
-              Coste total estimado: <span className="text-primary">{costeTotal.toFixed(2)} €</span>
-            </div>
-          )}
 
           <div>
             <Label className="text-xs font-bold">Observaciones</Label>
-            <Textarea value={observaciones} onChange={e => setObservaciones(e.target.value)} rows={2} />
+            <Textarea value={descripcion} onChange={e => setDescripcion(e.target.value)} rows={2} />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSave}>{existing ? "Guardar cambios" : "Crear elaboración"}</Button>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
+          <Button onClick={handleSave} disabled={saving}>{existing ? "Guardar cambios" : "Registrar"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -267,374 +209,104 @@ function ElaboracionModal({
 }
 
 /* ════════════════════════════════════════════════════════════
-   DETALLE DE ELABORACIÓN
+   PÁGINA PRINCIPAL — registros de producción
    ════════════════════════════════════════════════════════════ */
-function DetalleElaboracion({
-  elaboracion, productosElab, onBack, onConfirm, onRevert, onEdit,
-}: {
-  elaboracion: Elaboracion;
-  productosElab: ProductoElaboracion[];
-  onBack: () => void;
-  onConfirm: (id: string) => void;
-  onRevert: (id: string) => void;
-  onEdit: (e: Elaboracion) => void;
-}) {
-  const productoElab = productosElab.find(p => p.id === elaboracion.productoElaboracionId);
-  const costeTotal = calcularCosteElaboracion(elaboracion.componentes);
-  const isConfirmado = elaboracion.estado === "confirmado";
-  const isArchivado = elaboracion.estado === "archivado";
-
-  return (
-    <div className="space-y-5">
-      <Button variant="ghost" size="sm" className="gap-1.5" onClick={onBack}>
-        <ArrowLeft className="h-4 w-4" /> Volver al listado
-      </Button>
-
-      <div className="bg-card border rounded-lg p-5 space-y-4">
-        <div className="flex items-start justify-between">
-          <div>
-            <h2 className="text-xl font-bold text-foreground">{elaboracion.nombre}</h2>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {elaboracion.fecha} · {elaboracion.almacen} · Creado por {elaboracion.creador}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className={`font-bold ${ESTADO_ELABORACION_COLOR[elaboracion.estado]}`}>
-              {ESTADO_ELABORACION_LABEL[elaboracion.estado]}
-            </Badge>
-            {!isConfirmado && !isArchivado && (
-              <Button size="sm" variant="outline" className="gap-1" onClick={() => onEdit(elaboracion)}>
-                <Pencil className="h-3.5 w-3.5" /> Editar
-              </Button>
-            )}
-            {!isConfirmado && !isArchivado && (
-              <Button size="sm" className="gap-1" onClick={() => onConfirm(elaboracion.id)}>
-                <Check className="h-3.5 w-3.5" /> Confirmar
-              </Button>
-            )}
-            {isConfirmado && (
-              <Button size="sm" variant="outline" className="gap-1" onClick={() => onRevert(elaboracion.id)}>
-                Deshacer confirmación
-              </Button>
-            )}
-          </div>
-        </div>
-
-        <Separator />
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div>
-            <p className="text-xs text-muted-foreground font-medium">PRODUCTO</p>
-            <p className="text-sm font-semibold text-foreground">{productoElab?.nombre || "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground font-medium">CANTIDAD PRODUCIDA</p>
-            <p className="text-sm font-semibold text-foreground">{elaboracion.cantidadProducida} {elaboracion.unidad}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground font-medium">COSTE TOTAL</p>
-            <p className="text-sm font-semibold text-primary">{costeTotal.toFixed(2)} €</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground font-medium">COSTE UNITARIO</p>
-            <p className="text-sm font-semibold text-foreground">
-              {elaboracion.cantidadProducida > 0 ? (costeTotal / elaboracion.cantidadProducida).toFixed(2) : "0.00"} €/{elaboracion.unidad}
-            </p>
-          </div>
-        </div>
-
-        {elaboracion.observaciones && (
-          <div>
-            <p className="text-xs text-muted-foreground font-medium">OBSERVACIONES</p>
-            <p className="text-sm text-foreground">{elaboracion.observaciones}</p>
-          </div>
-        )}
-      </div>
-
-      {/* Componentes */}
-      <div className="bg-card border rounded-lg">
-        <div className="px-4 py-3 border-b">
-          <h3 className="text-sm font-bold text-foreground">COMPONENTES UTILIZADOS</h3>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/50">
-                {["Producto", "Tipo", "Cantidad", "Unidad", "Coste unit.", "Coste total"].map(h => (
-                  <th key={h} className="text-left px-4 py-2.5 text-xs font-bold text-muted-foreground">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {elaboracion.componentes.map((c, i) => (
-                <tr key={i} className="border-b hover:bg-muted/30">
-                  <td className="px-4 py-2.5 font-medium text-foreground">{c.nombre}</td>
-                  <td className="px-4 py-2.5">
-                    <Badge variant="outline" className="text-[10px]">
-                      {c.tipo === "compra" ? "Compra" : "Elaboración"}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-2.5">{c.cantidad}</td>
-                  <td className="px-4 py-2.5 text-muted-foreground">{c.unidad}</td>
-                  <td className="px-4 py-2.5">{c.costeUnitario.toFixed(2)} €</td>
-                  <td className="px-4 py-2.5 font-semibold">{(c.cantidad * c.costeUnitario).toFixed(2)} €</td>
-                </tr>
-              ))}
-              {elaboracion.componentes.length === 0 && (
-                <tr><td colSpan={6} className="text-center py-8 text-muted-foreground">Sin componentes registrados</td></tr>
-              )}
-            </tbody>
-            {elaboracion.componentes.length > 0 && (
-              <tfoot>
-                <tr className="bg-muted/50">
-                  <td colSpan={5} className="px-4 py-2.5 text-right text-xs font-bold text-muted-foreground">TOTAL</td>
-                  <td className="px-4 py-2.5 font-bold text-primary">{costeTotal.toFixed(2)} €</td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
-      </div>
-
-      {/* Trazabilidad */}
-      {isConfirmado && (
-        <div className="bg-card border rounded-lg p-4 space-y-2">
-          <h3 className="text-sm font-bold text-foreground">TRAZABILIDAD DE STOCK</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-lg p-3">
-              <p className="text-xs font-bold text-red-700 dark:text-red-400 mb-1">↓ CONSUMIDO (salida de stock)</p>
-              {elaboracion.componentes.map((c, i) => (
-                <p key={i} className="text-sm text-foreground">{c.nombre}: -{c.cantidad} {c.unidad}</p>
-              ))}
-            </div>
-            <div className="bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800 rounded-lg p-3">
-              <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400 mb-1">↑ PRODUCIDO (entrada a stock)</p>
-              <p className="text-sm text-foreground">{productoElab?.nombre || elaboracion.nombre}: +{elaboracion.cantidadProducida} {elaboracion.unidad}</p>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ════════════════════════════════════════════════════════════
-   PÁGINA PRINCIPAL
-   ════════════════════════════════════════════════════════════ */
-// --- Helper: map DB row → Elaboracion ---
-function mapDbToElaboracion(row: Record<string, unknown>): Elaboracion {
-  return {
-    id: row.id as string,
-    nombre: (row.nombre as string) ?? "",
-    productoElaboracionId: (row.producto_elaboracion_id as string) ?? "",
-    fecha: ((row.fecha as string) ?? (row.created_at as string))?.slice(0, 10) ?? "",
-    cantidadProducida: (row.cantidad_producida as number) ?? 0,
-    unidad: (row.unidad as string) ?? "kg",
-    componentes: Array.isArray(row.componentes) ? row.componentes : [],
-    estado: ((row.estado as string) ?? "borrador") as EstadoElaboracion,
-    creador: (row.responsable as string) ?? (row.created_by as string) ?? "",
-    almacen: ((row.almacen as string) ?? "COCINA") as "COCINA" | "BARRA",
-    observaciones: (row.descripcion as string) ?? (row.observaciones as string) ?? "",
-    empresaId: (row.empresa_id as string) ?? "",
-  };
-}
-
 export function ElaboracionesView() {
-  const { empresaActual } = useEmpresa();
-  const [elaboraciones, setElaboraciones] = useState<Elaboracion[]>([]);
-  const [productosElab, setProductosElab] = useState<ProductoElaboracion[]>([]);
-  const [stock] = useState<ProductoStock[]>([]);
+  useEmpresa();
+  const [rows, setRows] = useState<ElaboracionRow[]>([]);
+  const [productos, setProductos] = useState<ProductoElab[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const loadElaboraciones = useCallback(async () => {
+  const load = useCallback(async () => {
     setLoading(true);
-    try {
-      const res = await listElaboraciones();
-      if (res.ok) {
-        setElaboraciones((res.data as Record<string, unknown>[]).map(mapDbToElaboracion));
-      } else {
-        toast.error("Error al cargar elaboraciones");
-      }
-    } catch {
-      toast.error("Error de conexión al cargar elaboraciones");
-    } finally {
-      setLoading(false);
-    }
+    const [elabRes, prodRes] = await Promise.all([listElaboraciones(), listProductosElaboracion()]);
+    if (elabRes.ok) setRows((elabRes.data as Record<string, unknown>[]).map(mapRow));
+    if (prodRes.ok) setProductos((prodRes.data as Record<string, unknown>[]).map(p => ({
+      id: p.id as string, nombre: p.nombre as string, unidad: (p.unidad as string) ?? "kg",
+    })));
+    setLoading(false);
   }, []);
 
-  useEffect(() => {
-    loadElaboraciones();
-  }, [loadElaboraciones]);
+  useEffect(() => { load(); }, [load]);
 
   const [search, setSearch] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingElab, setEditingElab] = useState<Elaboracion | null>(null);
-  const [vistaActiva, setVistaActiva] = useState<"tabla" | "pipeline">("tabla");
-  const [showConfig, setShowConfig] = useState(false);
+  const [editing, setEditing] = useState<ElaboracionRow | null>(null);
 
   const filtered = useMemo(() => {
-    let lista = elaboraciones.filter(e => {
-      if (!search) return true;
-      const s = search.toLowerCase();
-      return e.nombre.toLowerCase().includes(s) || e.creador.toLowerCase().includes(s);
-    });
-    lista = aplicarFiltrosToolbar(lista, filtros, (e, campo) => {
-      if (campo === "estado") return ESTADO_ELABORACION_LABEL[e.estado];
-      return (e as unknown as Record<string, unknown>)[campo];
+    let lista = rows.filter(r => !search || r.productoNombre.toLowerCase().includes(search.toLowerCase()));
+    lista = aplicarFiltrosToolbar(lista, filtros, (r, campo) => {
+      if (campo === "estado") return ESTADO_ELABORACION_LABEL[r.estado];
+      if (campo === "almacen") return r.almacen;
+      return (r as unknown as Record<string, unknown>)[campo];
     });
     return lista;
-  }, [elaboraciones, search, filtros]);
-
-  const selectedElab = elaboraciones.find(e => e.id === selectedId) || null;
-
-  // Stats
-  const total = elaboraciones.length;
-  const borradores = elaboraciones.filter(e => e.estado === "borrador").length;
-  const confirmados = elaboraciones.filter(e => e.estado === "confirmado").length;
-
-  const handleSave = async (elab: Elaboracion) => {
-    elab.empresaId = empresaActual.id;
-    const isNew = !editingElab;
-    // Optimistic update
-    if (editingElab) {
-      setElaboraciones(prev => prev.map(e => e.id === elab.id ? elab : e));
-      toast.success("Elaboración actualizada");
-    } else {
-      setElaboraciones(prev => [...prev, elab]);
-      toast.success("Elaboración creada");
-    }
-    setModalOpen(false);
-    setEditingElab(null);
-    // Persist to server
-    try {
-      if (isNew) {
-        const res = await createElaboracion({
-          nombre: elab.nombre,
-          tipo: elab.almacen,
-          descripcion: elab.observaciones || undefined,
-          responsable: elab.creador || undefined,
-        });
-        if (!res.ok) { toast.error("Error al crear elaboración en servidor"); loadElaboraciones(); }
-      } else {
-        const res = await updateElaboracion(elab.id, {
-          nombre: elab.nombre,
-          tipo: elab.almacen,
-          descripcion: elab.observaciones || undefined,
-          responsable: elab.creador || undefined,
-          estado: elab.estado,
-        });
-        if (!res.ok) { toast.error("Error al actualizar elaboración en servidor"); loadElaboraciones(); }
-      }
-    } catch {
-      toast.error("Error de conexión al guardar elaboración");
-      loadElaboraciones();
-    }
-  };
+  }, [rows, search, filtros]);
 
   const handleConfirm = async (id: string) => {
-    const elab = elaboraciones.find(e => e.id === id);
-    if (!elab) return;
-    if (elab.componentes.length === 0) {
-      toast.error("Añade al menos un componente antes de confirmar");
-      return;
-    }
-    // Update elaboracion stock
-    setProductosElab(prev => prev.map(p => {
-      if (p.id !== elab.productoElaboracionId) return p;
-      return { ...p, stockActual: p.stockActual + elab.cantidadProducida };
-    }));
-    // Mark confirmed
-    setElaboraciones(prev => prev.map(e => e.id === id ? { ...e, estado: "confirmado" as EstadoElaboracion } : e));
-    toast.success("Elaboración confirmada — stock actualizado");
-    try {
-      const res = await updateElaboracion(id, { estado: "confirmado" });
-      if (!res.ok) loadElaboraciones();
-    } catch { loadElaboraciones(); }
+    const res = await confirmarElaboracion(id);
+    if (res.ok) { toast.success("Confirmada — sumada al stock"); load(); }
+    else toast.error(res.error ?? "Error al confirmar");
   };
 
   const handleRevert = async (id: string) => {
-    const elab = elaboraciones.find(e => e.id === id);
-    if (!elab) return;
-    // Revert stock
-    setProductosElab(prev => prev.map(p => {
-      if (p.id !== elab.productoElaboracionId) return p;
-      return { ...p, stockActual: Math.max(0, p.stockActual - elab.cantidadProducida) };
-    }));
-    setElaboraciones(prev => prev.map(e => e.id === id ? { ...e, estado: "borrador" as EstadoElaboracion } : e));
-    toast.info("Confirmación revertida");
-    try {
-      const res = await updateElaboracion(id, { estado: "borrador" });
-      if (!res.ok) loadElaboraciones();
-    } catch { loadElaboraciones(); }
-  };
-
-  const handleEdit = (elab: Elaboracion) => {
-    setEditingElab(elab);
-    setModalOpen(true);
-    setSelectedId(null);
+    const res = await revertirElaboracion(id);
+    if (res.ok) { toast.success("Reversión hecha — descontada del stock"); load(); }
+    else toast.error(res.error ?? "Error al revertir");
   };
 
   const handleDelete = async (id: string) => {
-    const elab = elaboraciones.find(e => e.id === id);
-    if (!elab || elab.estado === "confirmado") return;
-    setElaboraciones(prev => prev.filter(e => e.id !== id));
-    toast.success("Elaboración eliminada");
-    try {
-      const res = await deleteElaboracion(id);
-      if (!res.ok) { toast.error("Error al eliminar elaboración en servidor"); loadElaboraciones(); }
-    } catch {
-      toast.error("Error de conexión al eliminar elaboración");
-      loadElaboraciones();
-    }
+    const r = rows.find(x => x.id === id);
+    if (!r || r.estado === "confirmado") { toast.error("No se puede borrar una confirmada"); return; }
+    const res = await deleteElaboracion(id);
+    if (res.ok) { toast.success("Eliminada"); load(); }
+    else toast.error("Error al eliminar");
   };
 
-  // Loading state
-  if (loading) {
-    return <LoadingSpinner className="p-4 md:p-6 min-h-[300px]" size="lg" />;
-  }
+  if (loading) return <LoadingSpinner className="p-4 md:p-6 min-h-[300px]" size="lg" />;
 
-  // Detail view
-  if (selectedElab) {
-    return (
-      <div className="p-4 md:p-6">
-        <DetalleElaboracion
-          elaboracion={selectedElab}
-          productosElab={productosElab}
-          onBack={() => setSelectedId(null)}
-          onConfirm={handleConfirm}
-          onRevert={handleRevert}
-          onEdit={handleEdit}
-        />
-      </div>
-    );
-  }
+  const today = new Date().toISOString().slice(0, 10);
+  const dosDias = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
 
   const columnasDef: ToolbarColumna[] = [
-    { campo: "nombre", label: "Nombre", bloqueada: true },
-    { campo: "fecha", label: "Fecha" },
+    { campo: "producto", label: "Elaboración", bloqueada: true },
     { campo: "cantidad", label: "Cantidad" },
+    { campo: "fecha", label: "Producción" },
+    { campo: "caducidad", label: "Caducidad" },
     { campo: "almacen", label: "Almacén" },
     { campo: "estado", label: "Estado" },
-    { campo: "creador", label: "Creador" },
-    { campo: "coste", label: "Coste" },
   ];
 
-  const columnDefs: Record<string, { th: ReactNode; td: (e: Elaboracion) => ReactNode }> = {
-    nombre: {
-      th: <TableColumnHeader key="nombre" label="Nombre" />,
-      td: (e) => <td key="nombre" className="px-4 py-3 font-semibold text-foreground">{e.nombre}</td>,
-    },
-    fecha: {
-      th: <TableColumnHeader key="fecha" label="Fecha" />,
-      td: (e) => <td key="fecha" className="px-4 py-3 text-muted-foreground">{e.fecha}</td>,
+  const columnDefs: Record<string, { th: ReactNode; td: (r: ElaboracionRow) => ReactNode }> = {
+    producto: {
+      th: <TableColumnHeader key="producto" label="Elaboración" />,
+      td: (r) => <td key="producto" className="px-4 py-3 font-semibold text-foreground">{r.productoNombre}</td>,
     },
     cantidad: {
       th: <TableColumnHeader key="cantidad" label="Cantidad" />,
-      td: (e) => <td key="cantidad" className="px-4 py-3">{e.cantidadProducida} {e.unidad}</td>,
+      td: (r) => <td key="cantidad" className="px-4 py-3">{r.cantidadProducida} {r.unidad}</td>,
+    },
+    fecha: {
+      th: <TableColumnHeader key="fecha" label="Producción" />,
+      td: (r) => <td key="fecha" className="px-4 py-3 text-muted-foreground">{r.fecha}</td>,
+    },
+    caducidad: {
+      th: <TableColumnHeader key="caducidad" label="Caducidad" />,
+      td: (r) => {
+        if (!r.fechaCaducidad) return <td key="caducidad" className="px-4 py-3 text-muted-foreground">—</td>;
+        const vencida = r.fechaCaducidad < today;
+        const pronto = !vencida && r.fechaCaducidad <= dosDias;
+        return (
+          <td key="caducidad" className="px-4 py-3">
+            <span className={vencida ? "text-destructive font-semibold" : pronto ? "text-amber-600 font-semibold" : "text-foreground"}>
+              {r.fechaCaducidad}
+            </span>
+          </td>
+        );
+      },
     },
     almacen: {
       th: (
@@ -648,7 +320,7 @@ export function ElaboracionesView() {
           onFiltrosChange={setFiltros}
         />
       ),
-      td: (e) => <td key="almacen" className="px-4 py-3"><Badge variant="outline" className="text-[10px]">{e.almacen}</Badge></td>,
+      td: (r) => <td key="almacen" className="px-4 py-3"><Badge variant="outline" className="text-[10px]">{r.almacen}</Badge></td>,
     },
     estado: {
       th: (
@@ -662,24 +334,13 @@ export function ElaboracionesView() {
           onFiltrosChange={setFiltros}
         />
       ),
-      td: (e) => (
+      td: (r) => (
         <td key="estado" className="px-4 py-3">
-          <Badge variant="outline" className={`text-[10px] font-bold ${ESTADO_ELABORACION_COLOR[e.estado]}`}>
-            {ESTADO_ELABORACION_LABEL[e.estado]}
+          <Badge variant="outline" className={`text-[10px] font-bold ${ESTADO_ELABORACION_COLOR[r.estado]}`}>
+            {ESTADO_ELABORACION_LABEL[r.estado]}
           </Badge>
         </td>
       ),
-    },
-    creador: {
-      th: <TableColumnHeader key="creador" label="Creador" />,
-      td: (e) => <td key="creador" className="px-4 py-3 text-muted-foreground">{e.creador}</td>,
-    },
-    coste: {
-      th: <TableColumnHeader key="coste" label="Coste" />,
-      td: (e) => {
-        const coste = calcularCosteElaboracion(e.componentes);
-        return <td key="coste" className="px-4 py-3 font-medium">{coste > 0 ? `${coste.toFixed(2)} €` : "—"}</td>;
-      },
     },
   };
 
@@ -689,32 +350,12 @@ export function ElaboracionesView() {
 
   return (
     <div className="p-4 md:p-6 space-y-5">
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="rounded-lg border bg-card p-3 text-center">
-          <div className="text-2xl font-black text-foreground">{total}</div>
-          <div className="text-xs text-muted-foreground font-medium">TOTAL</div>
-        </div>
-        <div className="rounded-lg border bg-card p-3 text-center">
-          <div className="text-2xl font-black text-amber-600 dark:text-amber-400">{borradores}</div>
-          <div className="text-xs text-muted-foreground font-medium">BORRADORES</div>
-        </div>
-        <div className="rounded-lg border bg-card p-3 text-center">
-          <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{confirmados}</div>
-          <div className="text-xs text-muted-foreground font-medium">CONFIRMADOS</div>
-        </div>
-        <div className="rounded-lg border bg-card p-3 text-center">
-          <div className="text-2xl font-black text-foreground">{productosElab.length}</div>
-          <div className="text-xs text-muted-foreground font-medium">PRODUCTOS ELAB.</div>
-        </div>
-      </div>
-
-      {/* Toolbar estándar (BARRA HORIZONTAL 1) */}
       <SubmoduleToolbar
         busqueda={search}
         onBusquedaChange={setSearch}
         placeholderBusqueda="Buscar"
-        onNuevo={() => { setEditingElab(null); setModalOpen(true); }}
+        textoNuevo="Nuevo"
+        onNuevo={() => { setEditing(null); setModalOpen(true); }}
         filtros={filtros}
         onFiltrosChange={setFiltros}
         columnas={columnasDef}
@@ -722,35 +363,9 @@ export function ElaboracionesView() {
         onColumnasVisiblesChange={setColumnasVisibles}
         columnasOrden={columnasOrden}
         onColumnasOrdenChange={setColumnasOrden}
-        extraDerecha={
-          <Button
-            size="icon"
-            variant={showConfig ? "default" : "outline"}
-            className="h-9 w-9"
-            onClick={() => setShowConfig((v) => !v)}
-            title="Configuración"
-            aria-label="Configuración"
-          >
-            <Settings className="h-4 w-4" strokeWidth={1.75} />
-          </Button>
-        }
       />
 
-      {/* Toggle vista (fuera de la toolbar) */}
-      <div className="flex justify-end">
-        <div className="flex items-center gap-1 bg-muted/50 rounded-md p-0.5">
-          <Button variant={vistaActiva === "tabla" ? "secondary" : "ghost"} size="sm" className="gap-1.5 h-8" onClick={() => setVistaActiva("tabla")}>
-            <Table2 className="h-3.5 w-3.5" /> Tabla
-          </Button>
-          <Button variant={vistaActiva === "pipeline" ? "secondary" : "ghost"} size="sm" className="gap-1.5 h-8" onClick={() => setVistaActiva("pipeline")}>
-            <LayoutGrid className="h-3.5 w-3.5" /> Pipeline
-          </Button>
-        </div>
-      </div>
-
-      {/* Content */}
-      {vistaActiva === "tabla" ? (
-        <ResizableColumnsProvider storageKey="cocina-elaboraciones">
+      <ResizableColumnsProvider storageKey="cocina-elaboraciones">
         <div className="bg-card rounded-lg border overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -760,79 +375,48 @@ export function ElaboracionesView() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((e) => (
-                <tr key={e.id} className="border-b hover:bg-muted/30 cursor-pointer transition-colors" onClick={() => setSelectedId(e.id)}>
-                  {columnasRender.map((c) => columnDefs[c.campo]?.td(e))}
-                  <td className="px-4 py-3" onClick={ev => ev.stopPropagation()}>
+              {filtered.map((r) => (
+                <tr key={r.id} className="border-b hover:bg-muted/30 transition-colors">
+                  {columnasRender.map((c) => columnDefs[c.campo]?.td(r))}
+                  <td className="px-4 py-3">
                     <div className="flex gap-1">
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setSelectedId(e.id)}><Eye className="h-3.5 w-3.5" /></Button>
-                      {e.estado !== "confirmado" && e.estado !== "archivado" && (
+                      {r.estado !== "confirmado" && r.estado !== "archivado" && (
                         <>
-                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleEdit(e)}><Pencil className="h-3.5 w-3.5" /></Button>
-                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleDelete(e.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleConfirm(r.id)} title="Confirmar y sumar a stock">
+                            <Check className="h-3.5 w-3.5 text-emerald-600" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditing(r); setModalOpen(true); }} title="Editar">
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleDelete(r.id)} title="Eliminar">
+                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          </Button>
                         </>
+                      )}
+                      {r.estado === "confirmado" && (
+                        <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => handleRevert(r.id)} title="Revertir y descontar del stock">
+                          Deshacer
+                        </Button>
                       )}
                     </div>
                   </td>
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={20} className="text-center py-12 text-muted-foreground">No se encontraron elaboraciones.</td></tr>
+                <tr><td colSpan={20} className="text-center py-12 text-muted-foreground">Sin elaboraciones registradas. Pulsa <strong>+ Nuevo</strong> para añadir la primera.</td></tr>
               )}
             </tbody>
           </table>
         </div>
-        </ResizableColumnsProvider>
-      ) : (
-        <div className="flex gap-4 overflow-x-auto pb-4">
-          {(["borrador", "en_proceso", "confirmado", "archivado"] as EstadoElaboracion[]).map(estado => {
-            const items = filtered.filter(e => e.estado === estado);
-            return (
-              <div key={estado} className="min-w-[280px] max-w-[320px] shrink-0">
-                <div className="flex items-center justify-between mb-3 px-1">
-                  <h4 className="text-xs font-bold text-foreground tracking-wide uppercase">{ESTADO_ELABORACION_LABEL[estado]}</h4>
-                  <Badge variant="secondary" className="text-[10px]">{items.length}</Badge>
-                </div>
-                <div className="space-y-2">
-                  {items.map(e => {
-                    const coste = calcularCosteElaboracion(e.componentes);
-                    return (
-                      <div key={e.id} className="bg-card border rounded-lg p-3 hover:shadow-sm transition-shadow cursor-pointer" onClick={() => setSelectedId(e.id)}>
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm font-semibold text-foreground leading-tight">{e.nombre}</p>
-                          <Badge variant="outline" className="text-[10px] shrink-0">{e.almacen}</Badge>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1">{e.fecha} · {e.creador}</p>
-                        <div className="flex items-center justify-between mt-2">
-                          <span className="text-xs font-semibold text-foreground">{e.cantidadProducida} {e.unidad}</span>
-                          {coste > 0 && <span className="text-[10px] text-muted-foreground">{coste.toFixed(2)} €</span>}
-                        </div>
-                        <div className="mt-2">
-                          <span className="text-[10px] text-muted-foreground">{e.componentes.length} componente(s)</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {items.length === 0 && (
-                    <div className="text-center py-8 text-xs text-muted-foreground border border-dashed rounded-lg">Sin elaboraciones</div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      </ResizableColumnsProvider>
 
-      {/* Modal */}
       {modalOpen && (
         <ElaboracionModal
           open={modalOpen}
-          onClose={() => { setModalOpen(false); setEditingElab(null); }}
-          onSave={handleSave}
-          productosElab={productosElab}
-          stockItems={stock}
-          productosElabList={productosElab}
-          existing={editingElab}
+          onClose={() => { setModalOpen(false); setEditing(null); }}
+          onSaved={() => { setModalOpen(false); setEditing(null); load(); }}
+          productos={productos}
+          existing={editing}
         />
       )}
     </div>

@@ -27,6 +27,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { LabelConRegla } from "@/components/forms/LabelConRegla";
+import { BotonesGuardarBorrador } from "@/components/forms/BotonesGuardarBorrador";
 import { Mail, AlertTriangle, Settings, Pencil, Trash2, Plus, Sparkles, X } from "lucide-react";
 import {
   SubmoduleToolbar,
@@ -593,37 +595,50 @@ function ProveedorModal({ open, onClose, onSave, item, empresaId, categorias }: 
   }), [empresaId, opcionesCategoria]);
   const [form, setForm] = useState<Proveedor>(() => item || blankFactory());
   const [faltantes, setFaltantes] = useState<string[]>([]);
-  const { validar } = useReglasSubmodulo("logistica", "proveedores");
+  const { validar, admiteBorrador } = useReglasSubmodulo("logistica", "proveedores");
 
   useEffect(() => { setForm(item || blankFactory()); }, [item, open, blankFactory]);
 
   const upd = (key: keyof Proveedor, val: unknown) => setForm((prev) => ({ ...prev, [key]: val }));
 
+  const formValues = {
+    nombreComercial: form.nombreComercial,
+    razonSocial: form.razonSocial,
+    cifNif: form.cifNif,
+    categoria: form.categoria,
+    personaContacto: form.personaContacto,
+    telefonoPrincipal: form.telefonoPrincipal,
+    emailPrincipal: form.emailPrincipal,
+    emailPedidos: form.emailPedidos,
+    direccion: form.direccion,
+    ciudad: form.ciudad,
+    codigoPostal: form.codigoPostal,
+    viaPago: form.viaPago,
+    plazoPago: form.plazoPago,
+  };
+  const { labelsFaltantes } = validar(formValues);
+
   const handleSubmit = () => {
-    // Solo validamos al CREAR (al editar dejamos pasar; el registro ya existe).
-    if (!isEdit) {
-      const { labelsFaltantes } = validar({
-        nombreComercial: form.nombreComercial,
-        razonSocial: form.razonSocial,
-        cifNif: form.cifNif,
-        categoria: form.categoria,
-        personaContacto: form.personaContacto,
-        telefonoPrincipal: form.telefonoPrincipal,
-        emailPrincipal: form.emailPrincipal,
-        emailPedidos: form.emailPedidos,
-        direccion: form.direccion,
-        ciudad: form.ciudad,
-        codigoPostal: form.codigoPostal,
-        viaPago: form.viaPago,
-        plazoPago: form.plazoPago,
-      });
-      if (labelsFaltantes.length > 0) {
-        setFaltantes(labelsFaltantes);
-        return;
-      }
+    // Al editar dejamos pasar (el registro ya existe).
+    if (!isEdit && labelsFaltantes.length > 0) {
+      setFaltantes(labelsFaltantes);
+      return;
     }
-    onSave({ ...form, ultimaActualizacion: new Date().toISOString().slice(0, 10) });
+    // Si veníamos de borrador y ahora está completo → pasar a Activo.
+    const estadoFinal: EstadoProveedor = form.estado === "Borrador" ? "Activo" : form.estado;
+    onSave({ ...form, estado: estadoFinal, ultimaActualizacion: new Date().toISOString().slice(0, 10) });
     toast.success(isEdit ? "Proveedor actualizado" : "Proveedor creado");
+    onClose();
+  };
+
+  const handleGuardarBorrador = () => {
+    // Borrador siempre se puede guardar — solo exigimos nombre comercial mínimo para identificarlo.
+    if (!form.nombreComercial.trim()) {
+      toast.error("Necesitas al menos el nombre comercial para guardar el borrador");
+      return;
+    }
+    onSave({ ...form, estado: "Borrador", ultimaActualizacion: new Date().toISOString().slice(0, 10) });
+    toast.info("Proveedor guardado como borrador");
     onClose();
   };
 
@@ -643,11 +658,11 @@ function ProveedorModal({ open, onClose, onSave, item, empresaId, categorias }: 
           <div>
             <h3 className="text-sm font-bold text-foreground mb-3">Datos generales</h3>
             <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2"><Label>Nombre comercial *</Label><Input className="uppercase" value={form.nombreComercial} onChange={(e) => upd("nombreComercial", e.target.value.toUpperCase())} /></div>
-              <div><Label>Razón social</Label><Input value={form.razonSocial} onChange={(e) => upd("razonSocial", e.target.value)} /></div>
-              <div><Label>CIF/NIF</Label><Input value={form.cifNif} onChange={(e) => upd("cifNif", e.target.value)} /></div>
+              <div className="col-span-2"><LabelConRegla moduloKey="logistica" submoduloKey="proveedores" campoKey="nombreComercial">Nombre comercial</LabelConRegla><Input className="uppercase" value={form.nombreComercial} onChange={(e) => upd("nombreComercial", e.target.value.toUpperCase())} /></div>
+              <div><LabelConRegla moduloKey="logistica" submoduloKey="proveedores" campoKey="razonSocial">Razón social</LabelConRegla><Input value={form.razonSocial} onChange={(e) => upd("razonSocial", e.target.value)} /></div>
+              <div><LabelConRegla moduloKey="logistica" submoduloKey="proveedores" campoKey="cifNif">CIF/NIF</LabelConRegla><Input value={form.cifNif} onChange={(e) => upd("cifNif", e.target.value)} /></div>
               <div>
-                <Label>Categoría</Label>
+                <LabelConRegla moduloKey="logistica" submoduloKey="proveedores" campoKey="categoria">Categoría</LabelConRegla>
                 <Select value={form.categoria || opcionesCategoria[0]} onValueChange={(v) => upd("categoria", v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>{opcionesCategoria.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
@@ -668,8 +683,8 @@ function ProveedorModal({ open, onClose, onSave, item, empresaId, categorias }: 
           <div>
             <h3 className="text-sm font-bold text-foreground mb-3">Contacto de la empresa</h3>
             <div className="grid grid-cols-3 gap-3">
-              <div><Label>Teléfono</Label><Input value={form.telefonoPrincipal} onChange={(e) => upd("telefonoPrincipal", e.target.value)} /></div>
-              <div><Label>Email</Label><Input type="email" value={form.emailPrincipal} onChange={(e) => upd("emailPrincipal", e.target.value)} /></div>
+              <div><LabelConRegla moduloKey="logistica" submoduloKey="proveedores" campoKey="telefonoPrincipal">Teléfono</LabelConRegla><Input value={form.telefonoPrincipal} onChange={(e) => upd("telefonoPrincipal", e.target.value)} /></div>
+              <div><LabelConRegla moduloKey="logistica" submoduloKey="proveedores" campoKey="emailPrincipal">Email</LabelConRegla><Input type="email" value={form.emailPrincipal} onChange={(e) => upd("emailPrincipal", e.target.value)} /></div>
               <div><Label>Web</Label><Input value={form.web} onChange={(e) => upd("web", e.target.value)} /></div>
             </div>
           </div>
@@ -678,7 +693,7 @@ function ProveedorModal({ open, onClose, onSave, item, empresaId, categorias }: 
           <div>
             <h3 className="text-sm font-bold text-foreground mb-3">Comercial asignado</h3>
             <div className="grid grid-cols-3 gap-3">
-              <div><Label>Nombre</Label><Input value={form.personaContacto} onChange={(e) => upd("personaContacto", e.target.value)} /></div>
+              <div><LabelConRegla moduloKey="logistica" submoduloKey="proveedores" campoKey="personaContacto">Nombre</LabelConRegla><Input value={form.personaContacto} onChange={(e) => upd("personaContacto", e.target.value)} /></div>
               <div><Label>Teléfono</Label><Input value={form.telefonoComercial} onChange={(e) => upd("telefonoComercial", e.target.value)} /></div>
               <div><Label>Email</Label><Input type="email" value={form.emailComercial} onChange={(e) => upd("emailComercial", e.target.value)} /></div>
             </div>
@@ -688,7 +703,7 @@ function ProveedorModal({ open, onClose, onSave, item, empresaId, categorias }: 
           <div>
             <h3 className="text-sm font-bold text-foreground mb-3">Otros correos</h3>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Email para pedidos</Label><Input type="email" value={form.emailPedidos} onChange={(e) => upd("emailPedidos", e.target.value)} placeholder="Obligatorio para enviar pedidos" /></div>
+              <div><LabelConRegla moduloKey="logistica" submoduloKey="proveedores" campoKey="emailPedidos">Email para pedidos</LabelConRegla><Input type="email" value={form.emailPedidos} onChange={(e) => upd("emailPedidos", e.target.value)} placeholder="Obligatorio para enviar pedidos" /></div>
               <div><Label>Email contabilidad</Label><Input type="email" value={form.emailContabilidad} onChange={(e) => upd("emailContabilidad", e.target.value)} /></div>
             </div>
           </div>
@@ -697,11 +712,11 @@ function ProveedorModal({ open, onClose, onSave, item, empresaId, categorias }: 
           <div>
             <h3 className="text-sm font-bold text-foreground mb-3">Dirección</h3>
             <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2"><Label>Dirección</Label><Input value={form.direccion} onChange={(e) => upd("direccion", e.target.value)} /></div>
-              <div><Label>Ciudad</Label><Input value={form.ciudad} onChange={(e) => upd("ciudad", e.target.value)} /></div>
+              <div className="col-span-2"><LabelConRegla moduloKey="logistica" submoduloKey="proveedores" campoKey="direccion">Dirección</LabelConRegla><Input value={form.direccion} onChange={(e) => upd("direccion", e.target.value)} /></div>
+              <div><LabelConRegla moduloKey="logistica" submoduloKey="proveedores" campoKey="ciudad">Ciudad</LabelConRegla><Input value={form.ciudad} onChange={(e) => upd("ciudad", e.target.value)} /></div>
               <div><Label>Provincia</Label><Input value={form.provincia} onChange={(e) => upd("provincia", e.target.value)} /></div>
               <div><Label>País</Label><Input value={form.pais} onChange={(e) => upd("pais", e.target.value)} /></div>
-              <div><Label>Código postal</Label><Input value={form.codigoPostal} onChange={(e) => upd("codigoPostal", e.target.value)} /></div>
+              <div><LabelConRegla moduloKey="logistica" submoduloKey="proveedores" campoKey="codigoPostal">Código postal</LabelConRegla><Input value={form.codigoPostal} onChange={(e) => upd("codigoPostal", e.target.value)} /></div>
             </div>
           </div>
           <Separator />
@@ -711,14 +726,14 @@ function ProveedorModal({ open, onClose, onSave, item, empresaId, categorias }: 
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Vía de pago</Label>
+                  <LabelConRegla moduloKey="logistica" submoduloKey="proveedores" campoKey="viaPago">Vía de pago</LabelConRegla>
                   <Select value={form.viaPago || ""} onValueChange={(v) => upd("viaPago", v)}>
                     <SelectTrigger><SelectValue placeholder="Seleccionar vía…" /></SelectTrigger>
                     <SelectContent>{VIAS_PAGO.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label>Plazo de pago</Label>
+                  <LabelConRegla moduloKey="logistica" submoduloKey="proveedores" campoKey="plazoPago">Plazo de pago</LabelConRegla>
                   <Select value={form.plazoPago || ""} onValueChange={(v) => upd("plazoPago", v)}>
                     <SelectTrigger><SelectValue placeholder="Seleccionar plazo…" /></SelectTrigger>
                     <SelectContent>{PLAZOS_PAGO.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
@@ -756,9 +771,19 @@ function ProveedorModal({ open, onClose, onSave, item, empresaId, categorias }: 
             </div>
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSubmit}>{isEdit ? "Guardar cambios" : "Crear proveedor"}</Button>
+        <DialogFooter className="flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+          {isEdit ? (
+            <Button onClick={handleSubmit}>Guardar cambios</Button>
+          ) : (
+            <BotonesGuardarBorrador
+              onGuardar={handleSubmit}
+              onGuardarBorrador={handleGuardarBorrador}
+              faltantes={labelsFaltantes}
+              labelGuardar="Crear proveedor"
+              admiteBorrador={admiteBorrador}
+            />
+          )}
         </DialogFooter>
       </DialogContent>
 

@@ -129,12 +129,35 @@ const CAMPOS_INVENTARIOS: CampoSubmodulo[] = [
 
 const CAMPOS_ESCANDALLOS: CampoSubmodulo[] = [
   { key: "nombre", label: "Nombre del plato" },
+  { key: "categoria", label: "Categoría" },
   { key: "destino", label: "Destino (cocina/sala)" },
   { key: "descripcion", label: "Descripción" },
   { key: "tiempo", label: "Tiempo de preparación" },
   { key: "pvp", label: "PVP" },
   { key: "elaboracion", label: "Elaboración" },
   { key: "ingredientes", label: "Ingredientes (al menos 1)" },
+];
+
+const CAMPOS_PRODUCTOS: CampoSubmodulo[] = [
+  { key: "nombre", label: "Nombre del producto" },
+  { key: "tipo", label: "Tipo (compra/venta/elaboración)" },
+  { key: "categoria", label: "Categoría" },
+  { key: "unidad", label: "Unidad de medida" },
+  { key: "proveedor", label: "Proveedor" },
+  { key: "precioCompra", label: "Precio de compra" },
+  { key: "precioVenta", label: "Precio de venta" },
+  { key: "iva", label: "IVA" },
+  { key: "formato", label: "Formato" },
+  { key: "conservacion", label: "Conservación" },
+];
+
+const CAMPOS_CONTACTOS: CampoSubmodulo[] = [
+  { key: "nombre", label: "Nombre o razón social" },
+  { key: "tipo", label: "Tipo (cliente / acreedor)" },
+  { key: "nif", label: "NIF / CIF" },
+  { key: "email", label: "Email" },
+  { key: "telefono", label: "Teléfono" },
+  { key: "direccion", label: "Dirección fiscal" },
 ];
 
 const CAMPOS_NUEVAS_RECETAS: CampoSubmodulo[] = [
@@ -207,6 +230,7 @@ export const CATALOGO: ModuloDef[] = [
     label: "SALA",
     submodulos: [
       placeholder("pos", "Punto de Venta"),
+      placeholder("tarifas", "Tarifas"),
       placeholder("reservas", "Reservas"),
       placeholder("clientes", "Clientes"),
     ],
@@ -233,8 +257,8 @@ export const CATALOGO: ModuloDef[] = [
         label: "Escandallos",
         campos: CAMPOS_ESCANDALLOS,
         presets: {
-          basico: ["nombre"],
-          estandar: ["nombre", "destino", "pvp"],
+          basico: ["nombre", "categoria", "ingredientes"],
+          estandar: ["nombre", "categoria", "ingredientes", "destino", "pvp"],
           avanzado: todos(CAMPOS_ESCANDALLOS),
         },
       },
@@ -259,7 +283,16 @@ export const CATALOGO: ModuloDef[] = [
           avanzado: todos(CAMPOS_PROVEEDORES),
         },
       },
-      placeholder("productos", "Productos"),
+      {
+        key: "productos",
+        label: "Productos",
+        campos: CAMPOS_PRODUCTOS,
+        presets: {
+          basico: ["nombre", "tipo", "categoria"],
+          estandar: ["nombre", "tipo", "categoria", "unidad", "iva"],
+          avanzado: todos(CAMPOS_PRODUCTOS),
+        },
+      },
       {
         key: "pedidos",
         label: "Pedidos",
@@ -281,7 +314,6 @@ export const CATALOGO: ModuloDef[] = [
           avanzado: todos(CAMPOS_INVENTARIOS),
         },
       },
-      placeholder("tarifas", "Tarifas"),
     ],
   },
 
@@ -368,7 +400,16 @@ export const CATALOGO: ModuloDef[] = [
     key: "contabilidad",
     label: "CONTABILIDAD",
     submodulos: [
-      placeholder("contactos", "Contactos"),
+      {
+        key: "contactos",
+        label: "Contactos",
+        campos: CAMPOS_CONTACTOS,
+        presets: {
+          basico: ["nombre", "tipo"],
+          estandar: ["nombre", "tipo", "nif", "email"],
+          avanzado: todos(CAMPOS_CONTACTOS),
+        },
+      },
       placeholder("facturas", "Facturas"),
       placeholder("impuestos", "Impuestos"),
       placeholder("transacciones", "Transacciones"),
@@ -462,4 +503,23 @@ export function camposExigidos(
 ): string[] {
   if (modo === "personalizado") return camposPersonalizados;
   return submodulo.presets[modo];
+}
+
+/**
+ * Submódulos que admiten estado "Borrador" porque son objetivo de la
+ * Migración con IA del onboarding. El resto del software NO permite
+ * registros incompletos: o se crean con TODO o no se crean.
+ */
+export const SUBMODULOS_MIGRABLES: ReadonlyArray<{ modulo: string; submodulo: string }> = [
+  { modulo: "logistica", submodulo: "productos" },
+  { modulo: "logistica", submodulo: "proveedores" },
+  { modulo: "rrhh", submodulo: "empleados" },
+  { modulo: "contabilidad", submodulo: "contactos" },
+  { modulo: "cocina", submodulo: "escandallos" },
+];
+
+export function esSubmoduloMigrable(moduloKey: string, submoduloKey: string): boolean {
+  return SUBMODULOS_MIGRABLES.some(
+    (s) => s.modulo === moduloKey && s.submodulo === submoduloKey,
+  );
 }

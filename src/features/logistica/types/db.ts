@@ -9,8 +9,8 @@
 // ─── ENUMS ────────────────────────────────────────────────
 
 export type ProductoTipo = "compra" | "venta" | "elaboracion";
-export type ProductoEstado = "Activo" | "Inactivo";
-export type ProveedorEstado = "Activo" | "Inactivo" | "Archivado";
+export type ProductoEstado = "Activo" | "Inactivo" | "Borrador";
+export type ProveedorEstado = "Activo" | "Inactivo" | "Archivado" | "Borrador";
 export type AlbaranEstado = "Pendiente" | "Confirmado" | "Recibido" | "Facturado" | "Archivado";
 
 // ─── PRODUCTOS ────────────────────────────────────────────
@@ -34,6 +34,7 @@ export interface ProductoRow {
   agora_id: string | null;
   ventas_dia_promedio: number;
   observaciones: string | null;
+  alergenos: string[];
   created_by: string | null;
   created_at: string;
   updated_at: string;

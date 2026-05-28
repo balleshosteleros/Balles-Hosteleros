@@ -5,98 +5,28 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/features/layout/components/app-sidebar";
 import { AuthContext } from "@/features/auth/contexts/auth-context";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
-  GraduationCap,
   LogOut,
   UserCircle,
   Mail,
   Calendar as CalendarIcon,
-  CalendarDays,
-  Crown,
-  UtensilsCrossed,
-  ChefHat,
-  Briefcase,
   CheckCircle2,
-  User,
-  Camera,
-  Cctv,
-  Truck,
-  Calculator,
-  FileText,
-  Scale,
   Settings,
-  MessageSquareWarning,
-  ContactRound,
   Video,
   CheckSquare2,
   Phone,
   Notebook,
-  MessageSquare,
   MessageCircle,
-  ClipboardList,
-  ClipboardCheck,
-  Clock,
-  Timer,
-  UserRoundSearch,
-  Package,
-  Heart,
-  UserPlus,
-  Globe,
-  AlertTriangle,
-  Sparkles,
-  KeyRound,
   Eye,
   EyeOff,
   Copy,
   Check,
-  LayoutDashboard,
-  HelpCircle,
-  Fingerprint,
-  Inbox,
-  Carrot,
-  ShoppingCart,
-  Warehouse,
-  Apple,
-  FileSearch,
-  Gavel,
-  Wallet,
-  Network,
-  FileArchive,
-  Files,
-  TrendingUp,
-  Presentation,
-  Utensils,
-  Thermometer,
-  FlaskConical,
-  BookOpen,
-  Contact,
-  CreditCard,
-  Wrench,
-  PercentDiamond,
-  Megaphone,
-  UsersRound,
-  UserCheck,
-  Gift,
-  Banknote,
-  HandCoins,
-  FolderOpen,
-  Send,
-  QrCode,
-  Tag,
-  Zap,
-  Landmark,
-  BarChart3,
-  PenLine,
-  FileUp,
-  Trophy,
+  Cctv,
   Building2,
   Rocket,
-  FileSignature,
-  FileQuestion,
-  type LucideIcon,
 } from "lucide-react";
+import { getRouteMeta } from "@/features/layout/data/nav-routes";
 import { useEffect, useState, useContext } from "react";
 import {
   DropdownMenu,
@@ -134,290 +64,6 @@ import { listAccesosApps } from "@/features/rrhh/actions/accesos-apps-actions";
 import { ExternalLink } from "lucide-react";
 import { useViewMode } from "@/features/layout/contexts/view-mode-context";
 
-const ROUTE_TITLES: Record<string, string> = {
-  "/mi-panel": "MIS PANELES",
-  "/mi-panel/equipo": "EQUIPO",
-  "/mi-panel/calendario": "CALENDARIO",
-  "/mi-panel/horario": "HORARIO",
-  "/mi-panel/condiciones": "CONDICIONES",
-  "/mi-panel/cuestionarios": "CUESTIONARIOS",
-  "/mi-panel/fichajes": "FICHAJES",
-  "/mi-panel/ausencias": "SOLICITUDES",
-  "/mi-panel/comunicados": "COMUNICADOS",
-  "/mi-panel/documentos": "DOCUMENTOS",
-  "/mi-panel/formacion": "FORMACIÓN",
-  "/mi-panel/formacion/curso": "CURSO",
-  "/mi-panel/points": "POINTS",
-  "/mi-panel/datos-personales": "DATOS PERSONALES",
-  "/mis-departamentos": "MIS DEPARTAMENTOS",
-  "/gerencia": "GERENCIA",
-  "/direccion/estructura": "ORGANIGRAMA",
-  "/direccion/cronogramas": "CRONOGRAMAS",
-  "/direccion/cronogramas/productividad": "PRODUCTIVIDAD",
-  "/direccion/presentaciones": "PRESENTACIONES",
-  "/direccion/presentaciones/branding": "BRANDING",
-  "/gerencia/mantenimiento": "MANTENIMIENTO",
-  "/contabilidad": "CONTABILIDAD",
-  "/gestoria": "GESTORÍA",
-  "/juridico": "JURÍDICO",
-  "/rrhh": "RECURSOS HUMANOS",
-  "/rrhh/empleados": "EMPLEADOS",
-  "/rrhh/fichajes": "FICHAJES",
-  "/rrhh/solicitudes": "SOLICITUDES",
-  "/rrhh/calendarios": "CALENDARIOS",
-  "/rrhh/horarios": "HORARIOS",
-  "/rrhh/reclutamiento": "RECLUTAMIENTO",
-  "/rrhh/firmas": "FIRMAS",
-  "/rrhh/comunicados": "COMUNICADOS",
-  "/logistica": "LOGÍSTICA",
-  "/logistica/fichas-tecnicas": "FICHAS TÉCNICAS",
-  "/logistica/partidas": "PARTIDAS",
-  "/logistica/productos": "PRODUCTOS",
-  "/marketing": "MARKETING",
-  "/marketing/calendario": "CALENDARIO",
-  "/marketing/contenido": "CONTENIDO",
-  "/marketing/carta-digital": "CARTA DIGITAL",
-  "/marketing/pagina-web": "PÁGINA WEB",
-  "/marketing/fidelizacion": "FIDELIZACIÓN",
-  "/marketing/captacion": "CAPTACIÓN",
-  "/marketing/campanas": "CAMPAÑAS",
-  "/marketing/campanas/email": "CAMPAÑAS — EMAIL",
-  "/marketing/campanas/meta": "CAMPAÑAS — META",
-  "/marketing/campanas/whatsapp": "CAMPAÑAS — WHATSAPP",
-  "/logistica/incidencias": "INCIDENCIAS",
-  "/ajustes": "AJUSTES",
-  "/ayuda": "AYUDA",
-  "/accesos": "ACCESOS",
-  "/consultas-pendientes": "CONSULTAS PENDIENTES",
-  "/formacion": "ONBOARDING",
-  "/comunicacion": "COMUNICACIÓN",
-  "/reuniones": "REUNIONES",
-  "/agenda": "AGENDA",
-  "/cocina": "COCINA",
-  "/cocina/comandas": "COMANDAS",
-  "/cocina/nuevas-recetas": "NUEVAS RECETAS",
-  "/cocina/fichas-tecnicas": "FICHAS TÉCNICAS",
-  "/cocina/elaboraciones": "ELABORACIONES",
-  "/cocina/partidas": "PARTIDAS",
-  "/cocina/temperaturas": "TEMPERATURAS",
-  "/sala": "SALA",
-  "/sala/reservas": "RESERVAS",
-  "/sala/clientes": "CLIENTES",
-  "/sala/pos": "POS",
-  "/direccion": "DIRECCIÓN",
-  "/direccion/documentacion": "DOCUMENTACIÓN",
-  "/direccion/aperturas": "APERTURAS",
-  "/calidad": "CALIDAD",
-  "/calidad/auditorias": "AUDITORÍAS",
-  "/calidad/cuestionarios": "CUESTIONARIOS",
-  "/calidad/resenas": "RESEÑAS",
-  "/calidad/inspecciones": "INSPECCIONES",
-  "/gerencia/cierres": "CIERRES",
-  "/gerencia/descuentos": "DESCUENTOS",
-  "/gerencia/ratios": "RATIOS",
-  "/gerencia/comunicados": "COMUNICADOS",
-  "/gerencia/encuestas": "ENCUESTAS",
-  "/gerencia/vencimientos": "REVISIONES",
-  "/rrhh/boarding": "BOARDING",
-  "/rrhh/bonus": "BONUS",
-  "/rrhh/points": "POINTS",
-  "/rrhh/salarios": "SALARIOS",
-  "/rrhh/pagos": "PAGOS",
-  "/rrhh/formacion": "FORMACIÓN",
-  "/logistica/proveedores": "PROVEEDORES",
-  "/logistica/pedidos": "PEDIDOS",
-  "/logistica/stock": "STOCK",
-  "/logistica/inventarios": "INVENTARIOS",
-  "/logistica/tarifas": "TARIFAS",
-  "/contabilidad/contactos": "CONTACTOS",
-  "/contabilidad/facturas": "FACTURAS",
-  "/contabilidad/impuestos": "IMPUESTOS",
-  "/contabilidad/transacciones": "TRANSACCIONES",
-  "/contabilidad/conciliacion": "CONCILIACIÓN",
-  "/contabilidad/calendario": "CALENDARIO",
-  "/contabilidad/escenarios": "ESCENARIOS",
-  "/contabilidad/bancos": "BANCOS",
-  "/contabilidad/etiquetas": "ETIQUETAS",
-  "/contabilidad/reglas": "REGLAS AUTOMÁTICAS",
-  "/gestoria/presentaciones": "PRESENTACIONES",
-  "/gestoria/modelos": "MODELOS",
-  "/juridico/procesos": "PROCESOS",
-};
-
-const MODULE_LABELS: Record<string, string> = {
-  "/mi-panel": "MIS PANELES",
-  "/direccion": "DIRECCIÓN",
-  "/sala": "SALA",
-  "/cocina": "COCINA",
-  "/gerencia": "GERENCIA",
-  "/calidad": "CALIDAD",
-  "/rrhh": "RRHH",
-  "/marketing": "MARKETING",
-  "/logistica": "LOGÍSTICA",
-  "/contabilidad": "CONTABILIDAD",
-  "/gestoria": "GESTORÍA",
-  "/juridico": "JURÍDICO",
-  "/ajustes": "AJUSTES",
-  "/ayuda": "AYUDA",
-  "/accesos": "ACCESOS",
-  "/consultas-pendientes": "CONSULTAS",
-  "/formacion": "FORMACIÓN",
-  "/comunicacion": "COMUNICACIÓN",
-  "/reuniones": "REUNIONES",
-  "/agenda": "AGENDA",
-};
-
-function getModulePath(pathname: string): string {
-  if (pathname === "/") return "/";
-  const segments = pathname.split("/").filter(Boolean);
-  return segments.length > 0 ? `/${segments[0]}` : "/";
-}
-
-function getDynamicTitle(pathname: string): string {
-  if (pathname.startsWith("/rrhh/empleados/")) return "FICHA EMPLEADO";
-  if (pathname.startsWith("/gestoria/modelos/")) return "MODELO";
-  if (pathname.startsWith("/direccion/presentaciones/")) {
-    if (pathname.endsWith("/present")) return "PRESENTAR";
-    if (pathname.endsWith("/print")) return "IMPRIMIR";
-    return "PRESENTACIÓN";
-  }
-  if (pathname.startsWith("/marketing/pagina-web/")) {
-    if (pathname.endsWith("/preview")) return "PREVIEW";
-    if (pathname.endsWith("/dominios")) return "DOMINIOS";
-    return "PÁGINA WEB";
-  }
-  return "";
-}
-
-const ROUTE_ICONS: Record<string, LucideIcon> = {
-  "/": LayoutDashboard,
-  "/mi-panel": UserCircle,
-  "/mis-departamentos": Building2,
-  "/mi-panel/equipo": Network,
-  "/mi-panel/calendario": CalendarDays,
-  "/mi-panel/horario": Timer,
-  "/mi-panel/condiciones": ClipboardCheck,
-  "/mi-panel/cuestionarios": ClipboardList,
-  "/mi-panel/fichajes": Clock,
-  "/mi-panel/ausencias": ClipboardList,
-  "/mi-panel/comunicados": Megaphone,
-  "/mi-panel/documentos": Files,
-  "/mi-panel/formacion": GraduationCap,
-  "/mi-panel/formacion/curso": GraduationCap,
-  "/mi-panel/points": Trophy,
-  "/mi-panel/datos-personales": UserCircle,
-
-  // DIRECCIÓN
-  "/direccion": Crown,
-  "/direccion/estructura": Network,
-  "/direccion/cronogramas": CalendarDays,
-  "/direccion/documentacion": FileArchive,
-  "/direccion/aperturas": TrendingUp,
-  "/direccion/presentaciones": Presentation,
-
-  // SALA
-  "/sala": UtensilsCrossed,
-  "/sala/pos": CreditCard,
-  "/sala/reservas": BookOpen,
-  "/sala/clientes": Contact,
-
-  // COCINA
-  "/cocina": ChefHat,
-  "/cocina/comandas": Timer,
-  "/cocina/nuevas-recetas": Sparkles,
-  "/cocina/fichas-tecnicas": Utensils,
-  "/cocina/elaboraciones": FlaskConical,
-  "/cocina/partidas": ChefHat,
-  "/cocina/temperaturas": Thermometer,
-
-  // GERENCIA
-  "/gerencia": Briefcase,
-  "/gerencia/mantenimiento": Wrench,
-  "/gerencia/vencimientos": CalendarDays,
-  "/gerencia/cierres": Wallet,
-  "/gerencia/descuentos": PercentDiamond,
-  "/gerencia/ratios": TrendingUp,
-  "/gerencia/comunicados": Megaphone,
-  "/gerencia/encuestas": ClipboardList,
-
-  // CALIDAD
-  "/calidad": CheckCircle2,
-  "/calidad/auditorias": ClipboardList,
-  "/calidad/cuestionarios": FileQuestion,
-  "/calidad/resenas": ContactRound,
-  "/calidad/inspecciones": FileSearch,
-
-  // RRHH
-  "/rrhh": User,
-  "/rrhh/empleados": UsersRound,
-  "/rrhh/fichajes": Clock,
-  "/rrhh/solicitudes": ClipboardList,
-  "/rrhh/calendarios": CalendarIcon,
-  "/rrhh/horarios": Timer,
-  "/rrhh/reclutamiento": UserRoundSearch,
-  "/rrhh/firmas": FileSignature,
-  "/rrhh/boarding": UserCheck,
-  "/rrhh/bonus": Gift,
-  "/rrhh/points": Trophy,
-  "/rrhh/salarios": Banknote,
-  "/rrhh/pagos": HandCoins,
-  "/rrhh/formacion": GraduationCap,
-  "/rrhh/comunicados": Megaphone,
-
-  // MARKETING
-  "/marketing": Camera,
-  "/marketing/calendario": CalendarDays,
-  "/marketing/contenido": FolderOpen,
-  "/marketing/campanas": Send,
-  "/marketing/campanas/email": Mail,
-  "/marketing/campanas/meta": Send,
-  "/marketing/campanas/whatsapp": MessageSquare,
-  "/marketing/carta-digital": QrCode,
-  "/marketing/pagina-web": Globe,
-  "/marketing/fidelizacion": Heart,
-  "/marketing/captacion": UserPlus,
-
-  // LOGÍSTICA
-  "/logistica": Package,
-  "/logistica/proveedores": Truck,
-  "/logistica/productos": Apple,
-  "/logistica/pedidos": ShoppingCart,
-  "/logistica/stock": Warehouse,
-  "/logistica/inventarios": ClipboardList,
-  "/logistica/incidencias": AlertTriangle,
-
-  // CONTABILIDAD
-  "/contabilidad": Calculator,
-  "/contabilidad/contactos": ContactRound,
-  "/contabilidad/facturas": FileText,
-  "/contabilidad/impuestos": FileSearch,
-  "/contabilidad/transacciones": PenLine,
-  "/contabilidad/conciliacion": CheckCircle2,
-  "/contabilidad/calendario": CalendarDays,
-  "/contabilidad/escenarios": BarChart3,
-  "/contabilidad/bancos": Landmark,
-  "/contabilidad/etiquetas": Tag,
-  "/contabilidad/reglas": Zap,
-
-  // GESTORÍA
-  "/gestoria": FileText,
-  "/gestoria/modelos": FileSearch,
-  "/gestoria/presentaciones": FileUp,
-
-  // JURÍDICO
-  "/juridico": Scale,
-  "/juridico/procesos": Gavel,
-
-  // OTROS
-  "/ajustes": Settings,
-  "/ayuda": HelpCircle,
-  "/accesos": KeyRound,
-  "/consultas-pendientes": MessageSquareWarning,
-  "/formacion": GraduationCap,
-  "/comunicacion": MessageSquareWarning,
-  "/reuniones": Video,
-  "/agenda": ContactRound,
-};
 
 function NavBadge({ count, color = "blue" }: { count: number; color?: string }) {
   if (count === 0) return null;
@@ -461,13 +107,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const showUi = !!user || devBypass || isDemoHost;
   const counts = useDailyCounts();
 
-  const modulePath = getModulePath(pathname);
-  const ModuleIcon: LucideIcon | null =
-    ROUTE_ICONS[pathname] ?? ROUTE_ICONS[modulePath] ?? null;
-  const moduleShort = MODULE_LABELS[modulePath] ?? ROUTE_TITLES[modulePath] ?? "";
-  let submoduleTitle = ROUTE_TITLES[pathname] ?? "";
-  if (!submoduleTitle) submoduleTitle = getDynamicTitle(pathname);
-  const headerLabel = submoduleTitle || moduleShort;
+  const { title: headerLabel, icon: ModuleIcon } = getRouteMeta(pathname);
 
   const rolLabel =
     roles.length > 0

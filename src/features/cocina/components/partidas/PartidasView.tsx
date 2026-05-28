@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
+import { toast } from "sonner";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useTabQuery } from "@/shared/hooks/use-tab-query";
-import { Partida, ProductoPartida, MisePlaceItem, ESTADO_PARTIDA_LABELS, EstadoPartida, type ConfigPartidas, type AreaPrincipal, getPartidasByEmpresa } from "@/features/cocina/data/partidas";
+import { Partida, ProductoPartida, MisePlaceItem, ESTADO_PARTIDA_LABELS, EstadoPartida, type ConfigPartidas, type AreaPrincipal, getConfigPartidas } from "@/features/cocina/data/partidas";
+import { listPartidas, createPartida, updatePartida, deletePartida, type PartidaRow } from "@/features/cocina/actions/partidas-actions";
 import { getEmpleadosPorEmpresa } from "@/features/rrhh/data/rrhh";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,8 +16,17 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, List, LayoutGrid, ArrowLeft, Pencil, Trash2, ChefHat, Settings2 } from "lucide-react";
-import { SubmoduleToolbar } from "@/shared/components/SubmoduleToolbar";
+import { Plus, ArrowLeft, Pencil, Trash2, ChefHat, Settings } from "lucide-react";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  colVisible,
+  ordenarColumnas,
+  type ToolbarColumna,
+  type ToolbarColumnaVisible,
+  type ToolbarFiltroActivo,
+} from "@/shared/components/SubmoduleToolbar";
+import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 
 // ─── Config list editor (reused pattern) ────────────────────────
 function ConfigListEditor({ title, items, onAdd, onRemove }: { title: string; items: string[]; onAdd: (v: string) => void; onRemove: (i: number) => void }) {
@@ -106,10 +117,46 @@ function PartidaDetail({ partida, onBack, empleados, config }: {
 
       {/* Two main blocks */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* CATEGORÍAS Y PRODUCTOS */}
+        {/* MISE EN PLACE — Antes del servicio */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
-            <CardTitle className="text-lg">Categorías y Productos</CardTitle>
+          <CardHeader className="flex flex-row items-start justify-between pb-3">
+            <div className="space-y-0.5">
+              <CardTitle className="text-lg">Mise en Place</CardTitle>
+              <p className="text-xs font-medium text-muted-foreground">Antes del servicio</p>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => setAddMiseOpen(true)}><Plus className="h-4 w-4 mr-1" />Elemento</Button>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {config.gruposMise.map(grupo => {
+              const items = miseByGrupo[grupo];
+              if (!items || items.length === 0) return null;
+              return (
+                <div key={grupo} className="space-y-2">
+                  <h4 className="text-xs font-bold tracking-widest text-muted-foreground uppercase">{grupo}</h4>
+                  <div className="grid gap-1.5">
+                    {items.map(m => (
+                      <div key={m.id} className="flex items-center justify-between rounded-md border bg-card px-3 py-2 text-sm">
+                        <span>{m.nombre}</span>
+                        <button onClick={() => setMise(prev => prev.filter(x => x.id !== m.id))} className="text-muted-foreground hover:text-destructive">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            {mise.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Sin elementos de mise en place</p>}
+          </CardContent>
+        </Card>
+
+        {/* CATEGORÍAS Y PRODUCTOS — Durante el servicio */}
+        <Card>
+          <CardHeader className="flex flex-row items-start justify-between pb-3">
+            <div className="space-y-0.5">
+              <CardTitle className="text-lg">Categorías y Productos</CardTitle>
+              <p className="text-xs font-medium text-muted-foreground">Durante el servicio</p>
+            </div>
             <Button size="sm" variant="outline" onClick={() => setAddProdOpen(true)}><Plus className="h-4 w-4 mr-1" />Producto</Button>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -136,36 +183,6 @@ function PartidaDetail({ partida, onBack, empleados, config }: {
               );
             })}
             {productos.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Sin productos asignados</p>}
-          </CardContent>
-        </Card>
-
-        {/* MISE EN PLACE */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
-            <CardTitle className="text-lg">Mise en Place</CardTitle>
-            <Button size="sm" variant="outline" onClick={() => setAddMiseOpen(true)}><Plus className="h-4 w-4 mr-1" />Elemento</Button>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {config.gruposMise.map(grupo => {
-              const items = miseByGrupo[grupo];
-              if (!items || items.length === 0) return null;
-              return (
-                <div key={grupo} className="space-y-2">
-                  <h4 className="text-xs font-bold tracking-widest text-muted-foreground uppercase">{grupo}</h4>
-                  <div className="grid gap-1.5">
-                    {items.map(m => (
-                      <div key={m.id} className="flex items-center justify-between rounded-md border bg-card px-3 py-2 text-sm">
-                        <span>{m.nombre}</span>
-                        <button onClick={() => setMise(prev => prev.filter(x => x.id !== m.id))} className="text-muted-foreground hover:text-destructive">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-            {mise.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Sin elementos de mise en place</p>}
           </CardContent>
         </Card>
       </div>
@@ -238,27 +255,17 @@ const defaultConfig: ConfigPartidas = {
   estados: ["activa", "inactiva", "en_revision"],
 };
 
-const SEED_PARTIDAS: { nombre: string; area: AreaPrincipal }[] = [
-  { nombre: "FRIO + POSTRES", area: "COCINA" },
-  { nombre: "FUEGOS + HORNO", area: "COCINA" },
-  { nombre: "PLANCHA + FREIDORA", area: "COCINA" },
-];
-
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function buildSeedPartidas(): Partida[] {
-  return SEED_PARTIDAS.map((s, idx) => ({
-    id: `seed-${idx}-${Date.now()}`,
-    nombre: s.nombre,
-    area: s.area,
-    estado: "activa",
-    creador: "",
-    fechaActualizacion: todayISO(),
+function mapRowToPartida(r: PartidaRow): Partida {
+  return {
+    id: r.id,
+    nombre: r.nombre,
+    area: (r.area as AreaPrincipal) ?? "COCINA",
+    estado: (r.estado as EstadoPartida) ?? "activa",
+    creador: r.responsable ?? "",
+    fechaActualizacion: (r.created_at ?? "").slice(0, 10),
     productos: [],
     misEnPlace: [],
-  }));
+  };
 }
 
 // ─── Main page ──────────────────────────────────────────────────
@@ -266,18 +273,32 @@ export function PartidasView() {
   const { empresaActual } = useEmpresa();
   const empresaId = empresaActual?.id || "habana";
   const empleados = getEmpleadosPorEmpresa(empresaId);
-  const config = defaultConfig;
+  const config = useMemo(() => getConfigPartidas(empresaId), [empresaId]);
 
   const [partidas, setPartidas] = useState<Partida[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const recargar = useCallback(async () => {
+    setLoading(true);
+    const res = await listPartidas();
+    if (res.ok) {
+      setPartidas(res.data.map(mapRowToPartida));
+    } else {
+      toast.error("Error al cargar partidas");
+      setPartidas([]);
+    }
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
-    const existentes = getPartidasByEmpresa(empresaId);
-    setPartidas(existentes.length > 0 ? existentes : buildSeedPartidas());
-  }, [empresaId]);
+    recargar();
+  }, [recargar, empresaId]);
 
-  const [mainTab, setMainTab] = useTabQuery(["lista", "pipeline", "config"] as const, "lista");
+  const [tab, setTab] = useTabQuery(["lista", "config"] as const, "lista");
   const [search, setSearch] = useState("");
-  const [filtroEstado, setFiltroEstado] = useState("todos");
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [selectedPartida, setSelectedPartida] = useState<Partida | null>(null);
 
   // Crear/editar partida
@@ -301,35 +322,28 @@ export function PartidasView() {
     setEditorOpen(true);
   };
 
-  const guardar = () => {
+  const guardar = async () => {
     const nombre = form.nombre.trim();
     if (!nombre) return;
-    if (editingId) {
-      setPartidas(prev => prev.map(p =>
-        p.id === editingId
-          ? { ...p, nombre, area: form.area, estado: form.estado, fechaActualizacion: todayISO() }
-          : p,
-      ));
-    } else {
-      setPartidas(prev => [
-        ...prev,
-        {
-          id: `new-${Date.now()}`,
-          nombre,
-          area: form.area,
-          estado: form.estado,
-          creador: "",
-          fechaActualizacion: todayISO(),
-          productos: [],
-          misEnPlace: [],
-        },
-      ]);
+    const res = editingId
+      ? await updatePartida(editingId, { nombre, area: form.area, estado: form.estado })
+      : await createPartida({ nombre, area: form.area, estado: form.estado });
+    if (!res.ok) {
+      toast.error(("error" in res && res.error) || "No se pudo guardar la partida");
+      return;
     }
+    toast.success(editingId ? "Partida actualizada" : "Partida creada");
     setEditorOpen(false);
+    await recargar();
   };
 
-  const eliminar = (id: string) => {
-    setPartidas(prev => prev.filter(p => p.id !== id));
+  const eliminar = async (id: string) => {
+    const res = await deletePartida(id);
+    if (!res.ok) {
+      toast.error(("error" in res && res.error) || "No se pudo eliminar la partida");
+      return;
+    }
+    await recargar();
   };
 
   // Config state
@@ -338,156 +352,161 @@ export function PartidasView() {
   const [cfgCategorias, setCfgCategorias] = useState(config.categorias);
   const [cfgGruposMise, setCfgGruposMise] = useState(config.gruposMise);
 
-  const filtered = partidas.filter(p => {
-    const matchSearch = p.nombre.toLowerCase().includes(search.toLowerCase());
-    const matchEstado = filtroEstado === "todos" || p.estado === filtroEstado;
-    return matchSearch && matchEstado;
-  });
+  const filtered = useMemo(() => {
+    let list = partidas;
+    if (search) {
+      const s = search.toLowerCase();
+      list = list.filter((p) => p.nombre.toLowerCase().includes(s));
+    }
+    list = aplicarFiltrosToolbar(list, filtros, (p, campo) => {
+      if (campo === "estado") return ESTADO_PARTIDA_LABELS[p.estado];
+      if (campo === "area") return p.area;
+      return (p as unknown as Record<string, unknown>)[campo];
+    });
+    return list;
+  }, [partidas, search, filtros]);
 
   if (selectedPartida) {
     return <PartidaDetail partida={selectedPartida} onBack={() => setSelectedPartida(null)} empleados={empleados} config={config} />;
   }
 
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "partida", label: "Partida", bloqueada: true },
+    { campo: "area", label: "Área" },
+    { campo: "estado", label: "Estado" },
+    { campo: "productos", label: "Productos" },
+    { campo: "mise", label: "Mise en Place" },
+    { campo: "creador", label: "Creador" },
+    { campo: "actualizacion", label: "Actualización" },
+  ];
+
+  const columnDefs: Record<string, { th: ReactNode; td: (p: Partida) => ReactNode }> = {
+    partida: {
+      th: <TableHead key="partida" className="text-xs min-w-[200px]">Partida</TableHead>,
+      td: (p) => <TableCell key="partida" className="font-semibold">{p.nombre}</TableCell>,
+    },
+    area: {
+      th: (
+        <TableColumnHeader
+          key="area"
+          label="Área"
+          campo="area"
+          filtroTipo="lista"
+          opciones={config.areas}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+        />
+      ),
+      td: (p) => <TableCell key="area"><Badge variant="outline" className="text-[10px]">{p.area}</Badge></TableCell>,
+    },
+    estado: {
+      th: (
+        <TableColumnHeader
+          key="estado"
+          label="Estado"
+          campo="estado"
+          filtroTipo="lista"
+          opciones={(Object.keys(ESTADO_PARTIDA_LABELS) as EstadoPartida[]).map((e) => ESTADO_PARTIDA_LABELS[e])}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+        />
+      ),
+      td: (p) => <TableCell key="estado"><EstadoBadge estado={p.estado} /></TableCell>,
+    },
+    productos: {
+      th: <TableHead key="productos" className="text-xs text-center">Productos</TableHead>,
+      td: (p) => <TableCell key="productos" className="text-center text-sm">{p.productos.length}</TableCell>,
+    },
+    mise: {
+      th: <TableHead key="mise" className="text-xs text-center">Mise en Place</TableHead>,
+      td: (p) => <TableCell key="mise" className="text-center text-sm">{p.misEnPlace.length}</TableCell>,
+    },
+    creador: {
+      th: <TableHead key="creador" className="text-xs">Creador</TableHead>,
+      td: (p) => {
+        const emp = empleados.find((e) => e.id === p.creador);
+        return <TableCell key="creador" className="text-sm text-muted-foreground">{emp ? `${emp.nombre} ${emp.apellidos}` : "—"}</TableCell>;
+      },
+    },
+    actualizacion: {
+      th: <TableHead key="actualizacion" className="text-xs">Actualización</TableHead>,
+      td: (p) => <TableCell key="actualizacion" className="text-sm text-muted-foreground">{p.fechaActualizacion}</TableCell>,
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
   return (
-    <div className="p-6 space-y-6">
-      {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card><CardContent className="pt-4 pb-3 text-center"><p className="text-2xl font-bold">{partidas.length}</p><p className="text-xs text-muted-foreground">Total partidas</p></CardContent></Card>
-        <Card><CardContent className="pt-4 pb-3 text-center"><p className="text-2xl font-bold">{partidas.filter(p => p.estado === "activa").length}</p><p className="text-xs text-muted-foreground">Activas</p></CardContent></Card>
-        <Card><CardContent className="pt-4 pb-3 text-center"><p className="text-2xl font-bold">{partidas.reduce((s, p) => s + p.productos.length, 0)}</p><p className="text-xs text-muted-foreground">Productos</p></CardContent></Card>
-        <Card><CardContent className="pt-4 pb-3 text-center"><p className="text-2xl font-bold">{partidas.reduce((s, p) => s + p.misEnPlace.length, 0)}</p><p className="text-xs text-muted-foreground">Mise en Place</p></CardContent></Card>
-      </div>
-
+    <div className="p-4 md:p-6 space-y-5">
       {/* Toolbar estándar (BARRA HORIZONTAL 1) */}
-      {mainTab !== "config" && (
-        <div className="space-y-3">
-          <SubmoduleToolbar
-            busqueda={search}
-            onBusquedaChange={setSearch}
-            placeholderBusqueda="Buscar"
-            textoNuevo="Nueva partida"
-            onNuevo={abrirNuevo}
-          />
-          {/* Filtro de estado (fuera de la toolbar) */}
-          <div className="flex justify-end">
-            <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-              <SelectTrigger className="h-9 w-36"><SelectValue placeholder="Estado" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                <SelectItem value="activa">Activa</SelectItem>
-                <SelectItem value="inactiva">Inactiva</SelectItem>
-                <SelectItem value="en_revision">En revisión</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      )}
+      <SubmoduleToolbar
+        busqueda={search}
+        onBusquedaChange={setSearch}
+        placeholderBusqueda="Buscar"
+        textoNuevo="Nueva"
+        onNuevo={abrirNuevo}
+        filtros={filtros}
+        onFiltrosChange={setFiltros}
+        columnas={columnasDef}
+        columnasVisibles={columnasVisibles}
+        onColumnasVisiblesChange={setColumnasVisibles}
+        columnasOrden={columnasOrden}
+        onColumnasOrdenChange={setColumnasOrden}
+        extraDerecha={
+          <Button
+            size="icon"
+            variant={tab === "config" ? "default" : "outline"}
+            className="h-9 w-9"
+            onClick={() => setTab(tab === "config" ? "lista" : "config")}
+            title="Configuración"
+            aria-label="Configuración"
+          >
+            <Settings className="h-4 w-4" strokeWidth={1.75} />
+          </Button>
+        }
+      />
 
-      {/* Tabs */}
-      <Tabs value={mainTab} onValueChange={v => setMainTab(v as "lista" | "pipeline" | "config")}>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <TabsList>
-            <TabsTrigger value="lista"><List className="h-4 w-4 mr-1" />Lista</TabsTrigger>
-            <TabsTrigger value="pipeline"><LayoutGrid className="h-4 w-4 mr-1" />Pipeline</TabsTrigger>
-            <TabsTrigger value="config" aria-label="Configuración" className="ml-auto"><Settings2 className="h-4 w-4" strokeWidth={1.75} /></TabsTrigger>
-          </TabsList>
-        </div>
-
-        {/* LIST VIEW */}
-        <TabsContent value="lista">
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "lista" | "config")}>
+        <TabsContent value="lista" className="space-y-4 mt-4">
           <Card>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Partida</TableHead>
-                  <TableHead>Área</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead className="text-center">Productos</TableHead>
-                  <TableHead className="text-center">Mise en Place</TableHead>
-                  <TableHead>Creador</TableHead>
-                  <TableHead>Actualización</TableHead>
-                  <TableHead></TableHead>
+                  {columnasRender.map((c) => columnDefs[c.campo]?.th)}
+                  <TableHead className="text-xs w-24" />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map(p => {
-                  const emp = empleados.find((e) => e.id === p.creador);
-                  return (
-                    <TableRow key={p.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedPartida(p)}>
-                      <TableCell className="font-semibold">{p.nombre}</TableCell>
-                      <TableCell><Badge variant="outline">{p.area}</Badge></TableCell>
-                      <TableCell><EstadoBadge estado={p.estado} /></TableCell>
-                      <TableCell className="text-center">{p.productos.length}</TableCell>
-                      <TableCell className="text-center">{p.misEnPlace.length}</TableCell>
-                      <TableCell className="text-sm">{emp ? `${emp.nombre} ${emp.apellidos}` : "—"}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{p.fechaActualizacion}</TableCell>
-                      <TableCell onClick={e => e.stopPropagation()}>
-                        <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => abrirEditar(p)} aria-label="Editar"><Pencil className="h-4 w-4" /></Button>
-                          <Button variant="ghost" size="icon" onClick={() => eliminar(p.id)} aria-label="Eliminar"><Trash2 className="h-4 w-4" /></Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
                 {filtered.length === 0 && (
-                  <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No se encontraron partidas</TableCell></TableRow>
+                  <TableRow>
+                    <TableCell colSpan={20} className="text-center py-12 text-muted-foreground">
+                      {loading ? "Cargando partidas..." : "No se encontraron partidas."}
+                    </TableCell>
+                  </TableRow>
                 )}
+                {filtered.map((p) => (
+                  <TableRow key={p.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedPartida(p)}>
+                    {columnasRender.map((c) => columnDefs[c.campo]?.td(p))}
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => abrirEditar(p)} aria-label="Editar">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => eliminar(p.id)} aria-label="Eliminar">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           </Card>
         </TabsContent>
 
-        {/* PIPELINE VIEW */}
-        <TabsContent value="pipeline">
-          {/* Navigation tabs for quick access */}
-          <div className="flex gap-2 mb-4 flex-wrap">
-            {filtered.map(p => (
-              <Button key={p.id} variant="outline" size="sm" className="gap-1" onClick={() => setSelectedPartida(p)}>
-                <ChefHat className="h-3.5 w-3.5" />{p.nombre}
-              </Button>
-            ))}
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {filtered.map(p => {
-              const emp = empleados.find((e) => e.id === p.creador);
-              return (
-                <Card key={p.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelectedPartida(p)}>
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-base">{p.nombre}</CardTitle>
-                      <EstadoBadge estado={p.estado} />
-                    </div>
-                    <p className="text-xs text-muted-foreground">{p.area} · {emp ? `${emp.nombre} ${emp.apellidos}` : ""}</p>
-                  </CardHeader>
-                  <CardContent className="space-y-3 pb-4">
-                    <div>
-                      <p className="text-xs font-semibold text-muted-foreground mb-1">PRODUCTOS ({p.productos.length})</p>
-                      <div className="flex flex-wrap gap-1">
-                        {p.productos.slice(0, 5).map(pr => (
-                          <Badge key={pr.id} variant="secondary" className="text-[11px]">{pr.nombre}</Badge>
-                        ))}
-                        {p.productos.length > 5 && <Badge variant="outline" className="text-[11px]">+{p.productos.length - 5}</Badge>}
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-muted-foreground mb-1">MISE EN PLACE ({p.misEnPlace.length})</p>
-                      <div className="flex flex-wrap gap-1">
-                        {p.misEnPlace.slice(0, 4).map(m => (
-                          <Badge key={m.id} variant="outline" className="text-[11px]">{m.nombre}</Badge>
-                        ))}
-                        {p.misEnPlace.length > 4 && <Badge variant="outline" className="text-[11px]">+{p.misEnPlace.length - 4}</Badge>}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </TabsContent>
-
-        {/* CONFIG */}
-        <TabsContent value="config">
+        <TabsContent value="config" className="mt-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <ConfigListEditor title="Áreas principales" items={cfgAreas} onAdd={v => setCfgAreas(p => [...p, v])} onRemove={i => setCfgAreas(p => p.filter((_, idx) => idx !== i))} />
             <ConfigListEditor title="Partidas" items={cfgPartidas} onAdd={v => setCfgPartidas(p => [...p, v])} onRemove={i => setCfgPartidas(p => p.filter((_, idx) => idx !== i))} />

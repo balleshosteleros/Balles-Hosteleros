@@ -11,14 +11,40 @@ export interface ComponenteElaboracion {
   costeUnitario: number; // €
 }
 
+export interface IngredienteElaboracion {
+  id?: string;
+  productoId: string | null;
+  nombre: string;
+  cantidad: number | null;
+  unidad: string | null;
+  orden: number;
+  // Alérgenos hidratados desde el producto de compra vinculado (vía JOIN).
+  // Vacío si el ingrediente no está vinculado a un producto registrado.
+  alergenos?: string[];
+}
+
+export interface ProductoVentaVinculado {
+  productoId: string;
+  nombre: string;
+  categoria?: string | null;
+  unidad?: string | null;
+}
+
 export interface Elaboracion {
   id: string;
   nombre: string;
-  productoElaboracionId: string; // links to ProductoElaboracion
+  productoElaboracionId: string; // legacy, links to ProductoElaboracion (puede quedar vacío)
+  categoria: string;
   fecha: string;
   cantidadProducida: number;
   unidad: string;
-  componentes: ComponenteElaboracion[];
+  componentes: ComponenteElaboracion[]; // legacy (no persistido)
+  ingredientes?: IngredienteElaboracion[]; // productos de compra
+  productosVenta?: ProductoVentaVinculado[]; // productos venta vinculados
+  productosVentaLegacy?: string[]; // nombres de productos venta sin match
+  alergenos: string[];
+  raciones?: number | null;
+  instrucciones?: string;
   estado: EstadoElaboracion;
   creador: string;
   almacen: "COCINA" | "BARRA";

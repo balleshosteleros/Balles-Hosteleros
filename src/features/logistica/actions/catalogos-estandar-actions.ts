@@ -52,16 +52,6 @@ export interface ConservacionRow {
   updated_at: string;
 }
 
-export interface PreparacionRow {
-  id: string;
-  empresa_id: string;
-  nombre: string;
-  orden: number;
-  activa: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
 /* =====================================================================
    UNIDADES DE MEDIDA
    ===================================================================== */
@@ -474,104 +464,6 @@ export async function deleteConservacion(id: string) {
     }
 
     const { error } = await supabase.from("conservaciones").delete()
-      .eq("id", id).eq("empresa_id", empresaId);
-    if (error) throw error;
-    revalidatePath("/logistica/productos");
-    return { ok: true as const };
-  } catch (err) {
-    return { ok: false as const, error: err instanceof Error ? err.message : "Error desconocido" };
-  }
-}
-
-/* =====================================================================
-   PREPARACIONES
-   ===================================================================== */
-
-export async function listPreparaciones() {
-  try {
-    const { supabase, empresaId } = await getLogisticaContext();
-    if (!empresaId) return { ok: false as const, data: [] as PreparacionRow[], error: "Sin empresa activa" };
-    const { data, error } = await supabase.from("preparaciones").select("*")
-      .eq("empresa_id", empresaId).order("orden", { ascending: true });
-    if (error) throw error;
-    return { ok: true as const, data: (data ?? []) as PreparacionRow[] };
-  } catch (err) {
-    return { ok: false as const, data: [] as PreparacionRow[], error: err instanceof Error ? err.message : "Error desconocido" };
-  }
-}
-
-export async function createPreparacion(input: { nombre: string }) {
-  try {
-    const { supabase, empresaId } = await getLogisticaContext();
-    if (!empresaId) return { ok: false as const, error: "No autenticado" };
-    const nombre = input.nombre.trim();
-    if (!nombre) return { ok: false as const, error: "El nombre es obligatorio" };
-
-    const nextOrden = await getNextOrden(supabase, "preparaciones", empresaId);
-
-    const { data, error } = await supabase.from("preparaciones").insert({
-      empresa_id: empresaId, nombre, orden: nextOrden, activa: true,
-    }).select("*").single();
-    if (error) {
-      if (error.code === "23505") return { ok: false as const, error: `Ya existe la preparación "${nombre}".` };
-      throw error;
-    }
-    revalidatePath("/logistica/productos");
-    return { ok: true as const, data: data as PreparacionRow };
-  } catch (err) {
-    return { ok: false as const, error: err instanceof Error ? err.message : "Error desconocido" };
-  }
-}
-
-export async function updatePreparacion(id: string, patch: Partial<{ nombre: string; orden: number; activa: boolean }>) {
-  try {
-    const { supabase, empresaId } = await getLogisticaContext();
-    if (!empresaId) return { ok: false as const, error: "Sin empresa activa" };
-
-    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
-    if (patch.nombre !== undefined) updates.nombre = patch.nombre.trim();
-    if (patch.orden !== undefined) updates.orden = patch.orden;
-    if (patch.activa !== undefined) updates.activa = patch.activa;
-
-    const { data: before } = await supabase.from("preparaciones").select("nombre")
-      .eq("id", id).eq("empresa_id", empresaId).maybeSingle();
-
-    const { data, error } = await supabase.from("preparaciones").update(updates)
-      .eq("id", id).eq("empresa_id", empresaId).select("*").single();
-    if (error) {
-      if (error.code === "23505") return { ok: false as const, error: "Ya existe una preparación con ese nombre." };
-      throw error;
-    }
-
-    if (before?.nombre && patch.nombre !== undefined && patch.nombre.trim() && patch.nombre.trim() !== before.nombre) {
-      await supabase.from("productos").update({ preparacion: patch.nombre.trim() })
-        .eq("empresa_id", empresaId).eq("preparacion", before.nombre as string);
-    }
-
-    revalidatePath("/logistica/productos");
-    return { ok: true as const, data: data as PreparacionRow };
-  } catch (err) {
-    return { ok: false as const, error: err instanceof Error ? err.message : "Error desconocido" };
-  }
-}
-
-export async function deletePreparacion(id: string) {
-  try {
-    const { supabase, empresaId } = await getLogisticaContext();
-    if (!empresaId) return { ok: false as const, error: "Sin empresa activa" };
-
-    const { data: row } = await supabase.from("preparaciones").select("nombre")
-      .eq("id", id).eq("empresa_id", empresaId).maybeSingle();
-
-    if (row?.nombre) {
-      const { count } = await supabase.from("productos").select("id", { count: "exact", head: true })
-        .eq("empresa_id", empresaId).eq("preparacion", row.nombre as string);
-      if ((count ?? 0) > 0) {
-        return { ok: false as const, error: `No se puede borrar: ${count} producto(s) usan la preparación "${row.nombre}".` };
-      }
-    }
-
-    const { error } = await supabase.from("preparaciones").delete()
       .eq("id", id).eq("empresa_id", empresaId);
     if (error) throw error;
     revalidatePath("/logistica/productos");

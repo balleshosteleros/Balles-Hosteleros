@@ -55,6 +55,26 @@ export interface IngredienteEscandallo {
   ingrediente: string;
   unidad: string;
   cantidad: number;
+  // Vinculación opcional con un producto/elaboración de logística.
+  // Se rellena al seleccionar del picker; permanece vacío si el
+  // usuario escribe a mano.
+  tipo?: "compra" | "elaboracion";
+  productoId?: string;
+  formato?: string;
+  precio?: number;
+  // Alérgenos hidratados desde productos.alergenos (vía JOIN).
+  // Permite a la UI derivar los alérgenos del escandallo automáticamente
+  // mostrando de qué ingrediente viene cada uno.
+  alergenos?: string[];
+}
+
+export interface PasoElaboracion {
+  id: string;
+  titulo: string;
+  instrucciones: string;
+  // Data URL o URL pública del vídeo opcional del paso.
+  // Pequeño (~140 px) para no saturar la vista.
+  videoUrl?: string;
 }
 
 export interface DesgloseEconomico {
@@ -81,11 +101,13 @@ export interface Escandallo {
   responsable: string;
   ingredientes: IngredienteEscandallo[];
   partida: string;
-  elaboracion: string;
+  elaboracion: string;            // Legacy: texto libre. Si hay `pasos`, no se muestra.
+  pasos?: PasoElaboracion[];      // Elaboración estructurada por pasos.
   guarnicion: string;
   decoracion: string;
   menaje: string;
   presentacionMesa: string;
+  presentacionFoto?: string;      // Foto opcional del emplatado (data-url o URL).
   alergenos: string[];
   recomendaciones: string[];
   pvp: number;

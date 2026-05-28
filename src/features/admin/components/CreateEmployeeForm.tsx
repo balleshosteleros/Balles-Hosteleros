@@ -4,6 +4,16 @@ import { useState, FormEvent } from 'react'
 import { createEmployee } from '@/actions/admin'
 import { useReglasSubmodulo } from '@/features/ajustes/hooks/use-reglas-submodulo'
 import { ValidacionFaltantesDialog } from '@/features/ajustes/components/ValidacionFaltantesDialog'
+import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { LabelConRegla } from '@/components/forms/LabelConRegla'
+import { BotonesGuardarBorrador } from '@/components/forms/BotonesGuardarBorrador'
 
 const ROLES = ['empleado', 'cocinero', 'camarero', 'gerente', 'admin']
 
@@ -19,16 +29,15 @@ export function CreateEmployeeForm({ onSuccess }: { onSuccess?: () => void }) {
   const [faltantes, setFaltantes] = useState<string[]>([])
 
   const { validar } = useReglasSubmodulo('rrhh', 'empleados')
+  // Admin crea USUARIO con auth (email+password obligatorios para login),
+  // no admite borrador aunque "empleados" como entidad sí sea migrable.
+  const admiteBorrador = false
 
-  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
+  const formValues = { full_name: fullName, email, password, role }
+  const { labelsFaltantes } = validar(formValues)
 
-    const { labelsFaltantes } = validar({
-      full_name: fullName,
-      email,
-      password,
-      role,
-    })
+  async function handleSubmit(e?: FormEvent<HTMLFormElement>) {
+    e?.preventDefault()
     if (labelsFaltantes.length > 0) {
       setFaltantes(labelsFaltantes)
       return
@@ -61,81 +70,102 @@ export function CreateEmployeeForm({ onSuccess }: { onSuccess?: () => void }) {
 
   return (
     <>
-      <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border border-gray-200 bg-white p-6">
+      <form
+        onSubmit={handleSubmit}
+        className="space-y-4 rounded-lg border bg-card p-6"
+      >
         <h2 className="text-lg font-semibold">Nuevo empleado</h2>
 
-        <div>
-          <label htmlFor="full_name" className="block text-sm font-medium">
+        <div className="space-y-1.5">
+          <LabelConRegla
+            moduloKey="rrhh"
+            submoduloKey="empleados"
+            campoKey="full_name"
+            htmlFor="full_name"
+          >
             Nombre completo
-          </label>
-          <input
+          </LabelConRegla>
+          <Input
             id="full_name"
             name="full_name"
             type="text"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
 
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium">
+        <div className="space-y-1.5">
+          <LabelConRegla
+            moduloKey="rrhh"
+            submoduloKey="empleados"
+            campoKey="email"
+            htmlFor="email"
+          >
             Email
-          </label>
-          <input
+          </LabelConRegla>
+          <Input
             id="email"
             name="email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
 
-        <div>
-          <label htmlFor="password" className="block text-sm font-medium">
+        <div className="space-y-1.5">
+          <LabelConRegla
+            moduloKey="rrhh"
+            submoduloKey="empleados"
+            campoKey="password"
+            htmlFor="password"
+          >
             Contraseña
-          </label>
-          <input
+          </LabelConRegla>
+          <Input
             id="password"
             name="password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             minLength={6}
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
 
-        <div>
-          <label htmlFor="role" className="block text-sm font-medium">
-            Rol
-          </label>
-          <select
-            id="role"
-            name="role"
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        <div className="space-y-1.5">
+          <LabelConRegla
+            moduloKey="rrhh"
+            submoduloKey="empleados"
+            campoKey="role"
+            htmlFor="role"
           >
-            {ROLES.map((r) => (
-              <option key={r} value={r}>
-                {r.charAt(0).toUpperCase() + r.slice(1)}
-              </option>
-            ))}
-          </select>
+            Rol
+          </LabelConRegla>
+          <Select value={role} onValueChange={setRole}>
+            <SelectTrigger id="role">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ROLES.map((r) => (
+                <SelectItem key={r} value={r}>
+                  {r.charAt(0).toUpperCase() + r.slice(1)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        {success && <p className="text-sm text-green-600">Empleado creado correctamente</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        {success && (
+          <p className="text-sm text-green-600">Empleado creado correctamente</p>
+        )}
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
-        >
-          {loading ? 'Creando...' : 'Crear empleado'}
-        </button>
+        <BotonesGuardarBorrador
+          onGuardar={() => void handleSubmit()}
+          faltantes={labelsFaltantes}
+          loading={loading}
+          labelGuardar="Crear empleado"
+          admiteBorrador={admiteBorrador}
+        />
       </form>
 
       <ValidacionFaltantesDialog

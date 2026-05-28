@@ -10,6 +10,27 @@ import {
   PROFILE_GUARD_MESSAGES,
 } from '@/features/auth/lib/profile-guard'
 
+function translateAuthError(message: string | undefined): string {
+  if (!message) return 'No se pudo iniciar sesión.'
+  const m = message.toLowerCase()
+  if (m.includes('invalid login credentials') || m.includes('invalid credentials')) {
+    return 'Usuario o contraseña incorrectos.'
+  }
+  if (m.includes('email not confirmed')) {
+    return 'El correo aún no ha sido confirmado.'
+  }
+  if (m.includes('rate limit') || m.includes('too many requests')) {
+    return 'Demasiados intentos. Inténtalo de nuevo en unos minutos.'
+  }
+  if (m.includes('user not found')) {
+    return 'Usuario o contraseña incorrectos.'
+  }
+  if (m.includes('network') || m.includes('fetch')) {
+    return 'No hay conexión con el servidor. Inténtalo de nuevo.'
+  }
+  return 'No se pudo iniciar sesión.'
+}
+
 export async function login(formData: FormData) {
   const supabase = await createClient()
 
@@ -19,7 +40,7 @@ export async function login(formData: FormData) {
   })
 
   if (error || !data.user) {
-    return { error: error?.message ?? 'No se pudo iniciar sesión.' }
+    return { error: translateAuthError(error?.message) }
   }
 
   const guard = await checkProfileGuard(supabase, data.user.id)
@@ -96,7 +117,7 @@ export async function resetPassword(formData: FormData) {
   })
 
   if (error) {
-    return { error: error.message }
+    return { error: translateAuthError(error.message) }
   }
 
   return { success: true }
@@ -109,7 +130,7 @@ export async function updatePassword(formData: FormData) {
   const { error } = await supabase.auth.updateUser({ password })
 
   if (error) {
-    return { error: error.message }
+    return { error: translateAuthError(error.message) }
   }
 
   const { data: { user } } = await supabase.auth.getUser()

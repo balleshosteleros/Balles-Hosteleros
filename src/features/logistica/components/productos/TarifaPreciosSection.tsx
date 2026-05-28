@@ -25,16 +25,10 @@ function parseImporte(s: string | number | null | undefined): number {
   return Number.isFinite(n) ? n : NaN;
 }
 
-function fmt(n: number): string {
-  return n.toFixed(2);
-}
-
 export function TarifaPreciosSection({
   productoId,
-  precioVentaProducto,
 }: {
   productoId: string;
-  precioVentaProducto?: string | null;
 }) {
   const [tarifas, setTarifas] = useState<Tarifa[]>([]);
   const [precios, setPrecios] = useState<ProductoTarifaPrecio[]>([]);
@@ -57,13 +51,14 @@ export function TarifaPreciosSection({
     load();
   }, [load]);
 
-  const precioBase = parseImporte(precioVentaProducto);
-
   const precioMap = useMemo(() => {
     const m = new Map<string, number>();
     for (const p of precios) m.set(p.tarifaId, p.precio);
     return m;
   }, [precios]);
+
+  const tarifaDefault = useMemo(() => tarifas.find((t) => t.esDefault), [tarifas]);
+  const precioBase = tarifaDefault ? precioMap.get(tarifaDefault.id) ?? NaN : NaN;
 
   const handleSave = async (tarifa: Tarifa) => {
     const raw = (draft[tarifa.id] ?? "").trim();
@@ -128,7 +123,7 @@ export function TarifaPreciosSection({
           </Badge>
         </CardTitle>
         <Link
-          href="/logistica/tarifas"
+          href="/sala/tarifas"
           className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
         >
           Configurar tarifas <ExternalLink className="h-3 w-3" />
@@ -140,7 +135,7 @@ export function TarifaPreciosSection({
         ) : tarifas.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-6">
             No hay tarifas activas.{" "}
-            <Link href="/logistica/tarifas" className="underline">
+            <Link href="/sala/tarifas" className="underline">
               Crear la primera
             </Link>
             .
@@ -158,15 +153,11 @@ export function TarifaPreciosSection({
               </thead>
               <tbody>
                 {tarifas.map((t) => {
-                  const efectivo = t.esDefault
-                    ? Number.isFinite(precioBase)
-                      ? precioBase
-                      : null
-                    : precioMap.get(t.id) ?? null;
-                  const tieneEspecifico = !t.esDefault && precioMap.has(t.id);
+                  const efectivo = precioMap.get(t.id) ?? null;
+                  const tieneEspecifico = precioMap.has(t.id);
                   const draftVal = draft[t.id];
                   const delta =
-                    efectivo !== null && efectivo !== undefined
+                    !t.esDefault && efectivo !== null
                       ? margenDelta(efectivo)
                       : null;
                   return (
@@ -185,34 +176,25 @@ export function TarifaPreciosSection({
                         )}
                       </td>
                       <td className="py-2 text-right">
-                        {t.esDefault ? (
-                          <span className="text-muted-foreground">
-                            {Number.isFinite(precioBase)
-                              ? `${fmt(precioBase)} €`
-                              : "—"}{" "}
-                            <span className="text-[10px] uppercase ml-1">(base)</span>
-                          </span>
-                        ) : (
-                          <div className="flex items-center justify-end gap-1">
-                            <Input
-                              value={
-                                draftVal ??
-                                (precioMap.has(t.id) ? String(precioMap.get(t.id)) : "")
-                              }
-                              onChange={(e) =>
-                                setDraft((d) => ({ ...d, [t.id]: e.target.value }))
-                              }
-                              placeholder={
-                                Number.isFinite(precioBase) ? fmt(precioBase) : "0,00"
-                              }
-                              className="h-8 w-24 text-right"
-                            />
-                            <span className="text-xs text-muted-foreground">€</span>
-                          </div>
-                        )}
+                        <div className="flex items-center justify-end gap-1">
+                          <Input
+                            value={
+                              draftVal ??
+                              (precioMap.has(t.id) ? String(precioMap.get(t.id)) : "")
+                            }
+                            onChange={(e) =>
+                              setDraft((d) => ({ ...d, [t.id]: e.target.value }))
+                            }
+                            placeholder="0,00"
+                            className="h-8 w-24 text-right"
+                          />
+                          <span className="text-xs text-muted-foreground">€</span>
+                        </div>
                       </td>
                       <td className="py-2 text-right">
-                        {delta === null ? (
+                        {t.esDefault ? (
+                          <span className="text-[10px] uppercase text-muted-foreground">base</span>
+                        ) : delta === null ? (
                           <span className="text-muted-foreground/50">—</span>
                         ) : Math.abs(delta) < 0.01 ? (
                           <span className="text-muted-foreground">0%</span>
@@ -231,31 +213,29 @@ export function TarifaPreciosSection({
                         )}
                       </td>
                       <td className="py-2 text-right">
-                        {!t.esDefault && (
-                          <div className="flex justify-end gap-1">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={() => handleSave(t)}
+                            disabled={savingId === t.id || draftVal === undefined}
+                          >
+                            {savingId === t.id ? "..." : "Guardar"}
+                          </Button>
+                          {tieneEspecifico && (
                             <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-xs"
-                              onClick={() => handleSave(t)}
-                              disabled={savingId === t.id || draftVal === undefined}
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive"
+                              onClick={() => handleClear(t)}
+                              disabled={savingId === t.id}
+                              title="Eliminar precio"
                             >
-                              {savingId === t.id ? "..." : "Guardar"}
+                              <Trash2 className="h-3.5 w-3.5" />
                             </Button>
-                            {tieneEspecifico && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-destructive"
-                                onClick={() => handleClear(t)}
-                                disabled={savingId === t.id}
-                                title="Quitar precio específico (volverá a usar el base)"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            )}
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -265,8 +245,7 @@ export function TarifaPreciosSection({
           </div>
         )}
         <p className="mt-3 text-[11px] text-muted-foreground italic">
-          La tarifa default usa el precio de venta del producto. Las demás tarifas pueden definir un
-          precio específico aquí; si se deja vacío, también caerá al precio base.
+          Cada tarifa tiene su propio precio de venta. La marcada como base sirve de referencia para calcular el Δ del resto.
         </p>
       </CardContent>
     </Card>

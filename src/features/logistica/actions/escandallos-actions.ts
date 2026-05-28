@@ -66,6 +66,50 @@ export async function removeEscandallo(id: string) {
 }
 
 /**
+ * Devuelve alérgenos derivados (UNION) del producto y de todos los ingredientes
+ * de su escandallo, recursivamente. Pensado para elaboraciones y productos venta.
+ */
+export async function getAlergenosDerivados(productoId: string) {
+  try {
+    const { supabase } = await getContext();
+    const { data, error } = await supabase.rpc("alergenos_derivados", { p_producto_id: productoId });
+    if (error) throw error;
+    return { ok: true as const, data: (data as string[] | null) ?? [] };
+  } catch (err) {
+    console.error("[escandallos] getAlergenosDerivados:", err);
+    return { ok: false as const, data: [] };
+  }
+}
+
+export type AlergenoOrigen = {
+  alergeno: string;
+  origenId: string;
+  origenNombre: string;
+  origenTipo: "compra" | "venta" | "elaboracion";
+};
+
+export async function getAlergenosDerivadosOrigen(productoId: string) {
+  try {
+    const { supabase } = await getContext();
+    const { data, error } = await supabase.rpc("alergenos_derivados_origen", { p_producto_id: productoId });
+    if (error) throw error;
+    const rows = (data as Array<{ alergeno: string; origen_id: string; origen_nombre: string; origen_tipo: string }> | null) ?? [];
+    return {
+      ok: true as const,
+      data: rows.map<AlergenoOrigen>((r) => ({
+        alergeno: r.alergeno,
+        origenId: r.origen_id,
+        origenNombre: r.origen_nombre,
+        origenTipo: r.origen_tipo as AlergenoOrigen["origenTipo"],
+      })),
+    };
+  } catch (err) {
+    console.error("[escandallos] getAlergenosDerivadosOrigen:", err);
+    return { ok: false as const, data: [] as AlergenoOrigen[] };
+  }
+}
+
+/**
  * Importación masiva de escandallos.
  * Resuelve nombres → IDs contra la BD (productos de venta + ingredientes).
  */

@@ -15,7 +15,6 @@ import type {
 const ESTADOS = ["Activo", "Inactivo"] as const;
 const TIPOS = ["compra", "venta", "elaboracion"] as const;
 const CONSERVACIONES = ["Frigorífico", "Congelador", "Seco"] as const;
-const PREPARACIONES = ["Barra", "Cocina"] as const;
 
 const productoInputSchema = z.object({
   nombre: z.string().min(1, "El nombre es obligatorio").transform(capitalizeText),
@@ -33,7 +32,6 @@ const productoInputSchema = z.object({
   formato: z.string().nullable().optional(),
   observaciones: z.string().nullable().optional(),
   conservacion: z.enum(CONSERVACIONES).nullable().optional(),
-  preparacion: z.enum(PREPARACIONES).nullable().optional(),
   partida: z.string().nullable().optional(),
   estiloColor: z.string().nullable().optional(),
   estiloImagenUrl: z.string().nullable().optional(),
@@ -41,6 +39,7 @@ const productoInputSchema = z.object({
   textoComanda: z.string().nullable().optional(),
   cartaNombre: z.string().nullable().optional(),
   cartaTexto: z.string().nullable().optional(),
+  alergenos: z.array(z.string()).optional(),
 });
 
 export type ProductoInput = z.infer<typeof productoInputSchema>;
@@ -62,7 +61,6 @@ type ProductoRow = {
   formato: string | null;
   observaciones: string | null;
   conservacion: Conservacion | null;
-  preparacion: "Barra" | "Cocina" | null;
   partida: string | null;
   estilo_color: string | null;
   estilo_imagen_url: string | null;
@@ -70,6 +68,7 @@ type ProductoRow = {
   texto_comanda: string | null;
   carta_nombre: string | null;
   carta_texto: string | null;
+  alergenos: string[] | null;
   created_at: string;
   updated_at: string;
 };
@@ -90,7 +89,6 @@ function rowToProducto(r: ProductoRow): Producto {
     formato: r.formato ?? undefined,
     observaciones: r.observaciones ?? undefined,
     conservacion: r.conservacion ?? null,
-    preparacion: r.preparacion ?? null,
     partida: r.partida ?? null,
     estiloColor: r.estilo_color ?? null,
     estiloImagenUrl: r.estilo_imagen_url ?? null,
@@ -98,6 +96,7 @@ function rowToProducto(r: ProductoRow): Producto {
     textoComanda: r.texto_comanda ?? undefined,
     cartaNombre: r.carta_nombre ?? null,
     cartaTexto: r.carta_texto ?? null,
+    alergenos: Array.isArray(r.alergenos) ? r.alergenos : [],
     createdAt: r.created_at ?? undefined,
     ultimaActualizacion: r.updated_at?.slice(0, 10) ?? "",
   };
@@ -138,10 +137,54 @@ async function getUserEmpresaId(userId: string): Promise<string | null> {
   return (data as { empresa_id: string | null } | null)?.empresa_id ?? null;
 }
 
+// Cada producto de venta debe tener su escandallo (1:1 por nombre + empresa).
+// Si ya existe uno con el mismo nombre, no duplica. Si la creación falla, NO
+// rompemos el alta del producto: el escandallo se puede crear manualmente luego.
+type SupabaseLike = Awaited<ReturnType<typeof createClient>>;
+async function ensureEscandalloForProductoVenta(
+  supabase: SupabaseLike,
+  params: { empresaId: string; nombre: string; categoria: string; createdBy: string },
+): Promise<void> {
+  try {
+    const { data: existing } = await supabase
+      .from("escandallos")
+      .select("id")
+      .eq("empresa_id", params.empresaId)
+      .eq("nombre", params.nombre)
+      .limit(1)
+      .maybeSingle();
+    if (existing) return;
+
+    await supabase.from("escandallos").insert({
+      empresa_id: params.empresaId,
+      nombre: params.nombre,
+      categoria: params.categoria,
+      estado: "Borrador",
+      created_by: params.createdBy,
+    });
+  } catch (err) {
+    console.error("[productos] ensureEscandalloForProductoVenta:", err);
+  }
+}
+
 /**
  * Lista productos del usuario autenticado filtrados por tipo.
  * RLS de Supabase se encarga del filtrado por empresa.
  */
+export async function getProductoById(id: string): Promise<Producto | null> {
+  try {
+    const { supabase, empresaId } = await getLogisticaContext();
+    let query = supabase.from("productos").select("*").eq("id", id);
+    if (empresaId) query = query.eq("empresa_id", empresaId) as typeof query;
+    const { data, error } = await query.maybeSingle();
+    if (error || !data) return null;
+    return rowToProducto(data as ProductoRow);
+  } catch (err) {
+    console.error("[productos] getProductoById:", err);
+    return null;
+  }
+}
+
 export async function listProductos(tipo?: TipoProducto): Promise<Producto[]> {
   try {
     const { supabase, empresaId } = await getLogisticaContext();
@@ -228,7 +271,6 @@ export async function createProducto(
         formato: parsed.data.formato ?? null,
         observaciones: parsed.data.observaciones,
         conservacion: parsed.data.conservacion ?? null,
-        preparacion: parsed.data.preparacion ?? null,
         partida: parsed.data.partida ?? null,
         estilo_color: parsed.data.estiloColor ?? null,
         estilo_imagen_url: parsed.data.estiloImagenUrl ?? null,
@@ -236,12 +278,25 @@ export async function createProducto(
         texto_comanda: parsed.data.textoComanda ?? null,
         carta_nombre: parsed.data.cartaNombre ?? null,
         carta_texto: parsed.data.cartaTexto ?? null,
+        alergenos: parsed.data.alergenos ?? [],
         created_by: user.id,
       })
       .select("*")
       .single();
 
     if (error) return { error: error.message };
+
+    // Productos de venta: cada uno debe tener su escandallo asociado (1:1 por nombre).
+    // Lo creamos en borrador para que aparezca como PENDIENTE hasta que se rellenen
+    // ingredientes. Idempotente: si ya existe uno con el mismo nombre, no duplica.
+    if (parsed.data.tipo === "venta" && inserted?.id) {
+      await ensureEscandalloForProductoVenta(supabase, {
+        empresaId,
+        nombre: parsed.data.nombre,
+        categoria: parsed.data.categoria,
+        createdBy: user.id,
+      });
+    }
 
     // Productos de compra: si vinieron precio + iva en el alta, abrimos la primera
     // entrada del histórico para que sean la fuente de verdad desde el día 1.
@@ -330,7 +385,6 @@ export async function bulkImportProductos(
       formato: p.formato ?? null,
       observaciones: p.observaciones ?? null,
       conservacion: p.conservacion ?? null,
-      preparacion: p.preparacion ?? null,
       partida: p.partida ?? null,
       estilo_color: p.estiloColor ?? null,
       estilo_imagen_url: p.estiloImagenUrl ?? null,
@@ -338,12 +392,26 @@ export async function bulkImportProductos(
       texto_comanda: p.textoComanda ?? null,
       carta_nombre: p.cartaNombre ?? null,
       carta_texto: p.cartaTexto ?? null,
+      alergenos: p.alergenos ?? [],
       created_by: user.id,
     }));
 
     const { error } = await supabase.from("productos").insert(rows);
 
     if (error) return { error: error.message };
+
+    // Auto-crear escandallo (borrador) por cada producto de venta importado.
+    // Secuencial a propósito: volumen normal de imports es bajo y queremos
+    // que un fallo aislado no rompa el resto (ensureEscandallo... ya lo absorbe).
+    const ventas = valid.filter((p) => p.tipo === "venta");
+    for (const p of ventas) {
+      await ensureEscandalloForProductoVenta(supabase, {
+        empresaId,
+        nombre: p.nombre,
+        categoria: p.categoria,
+        createdBy: user.id,
+      });
+    }
 
     revalidatePath("/logistica/productos");
     return { imported: valid.length };
@@ -389,7 +457,6 @@ export async function updateProducto(
     if (input.formato !== undefined) updates.formato = input.formato;
     if (input.observaciones !== undefined) updates.observaciones = input.observaciones;
     if (input.conservacion !== undefined) updates.conservacion = input.conservacion;
-    if (input.preparacion !== undefined) updates.preparacion = input.preparacion;
     if (input.partida !== undefined) updates.partida = input.partida;
     if (input.estiloColor !== undefined) updates.estilo_color = input.estiloColor;
     if (input.estiloImagenUrl !== undefined) updates.estilo_imagen_url = input.estiloImagenUrl;
@@ -397,6 +464,7 @@ export async function updateProducto(
     if (input.textoComanda !== undefined) updates.texto_comanda = input.textoComanda;
     if (input.cartaNombre !== undefined) updates.carta_nombre = input.cartaNombre;
     if (input.cartaTexto !== undefined) updates.carta_texto = input.cartaTexto;
+    if (input.alergenos !== undefined) updates.alergenos = input.alergenos ?? [];
 
     const { error } = await supabase.from("productos").update(updates).eq("id", id);
     if (error) return { error: error.message };

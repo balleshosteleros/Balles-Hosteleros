@@ -10,7 +10,6 @@ import type { TipoProducto } from "@/features/logistica/data/productos";
 const ESTADOS = ["Activo", "Inactivo"] as const;
 const TIPOS = ["compra", "venta", "elaboracion"] as const;
 const CONSERVACIONES = ["Frigorífico", "Congelador", "Seco"] as const;
-const PREPARACIONES = ["Barra", "Cocina"] as const;
 
 const productoIOSchema = z.object({
   nombre: z.string().min(1, "El nombre es obligatorio"),
@@ -26,7 +25,6 @@ const productoIOSchema = z.object({
   formato: z.string().nullable().optional(),
   observaciones: z.string().nullable().optional(),
   conservacion: z.enum(CONSERVACIONES).nullable().optional(),
-  preparacion: z.enum(PREPARACIONES).nullable().optional(),
   partida: z.string().nullable().optional(),
   estiloColor: z.string().nullable().optional(),
   estiloImagenUrl: z.string().nullable().optional(),
@@ -80,16 +78,6 @@ function makeConfig(variant: TipoProducto): ModuleIO<ProductoInput> {
         hideInImport: !showConservacion,
         hideInExport: !showConservacion,
         example: "Frigorífico",
-      },
-      {
-        key: "preparacion",
-        label: "Preparación",
-        type: "enum",
-        values: PREPARACIONES,
-        aliases: ["zona preparacion", "prep zone", "area"],
-        hideInImport: !isVenta,
-        hideInExport: !isVenta,
-        example: "Cocina",
       },
       {
         key: "partida",
@@ -181,7 +169,6 @@ function makeConfig(variant: TipoProducto): ModuleIO<ProductoInput> {
         formato: p.formato ?? null,
         observaciones: p.observaciones ?? null,
         conservacion: p.conservacion ?? null,
-        preparacion: p.preparacion ?? null,
         partida: p.partida ?? null,
         estiloColor: p.estiloColor ?? null,
         estiloImagenUrl: p.estiloImagenUrl ?? null,

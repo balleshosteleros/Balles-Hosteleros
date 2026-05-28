@@ -24,6 +24,7 @@ import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 import { IOActions } from "@/shared/io";
 import { contactosContablesIO } from "@/features/contabilidad/io/contactos.io";
 import { ImportadorIAContactosDialog } from "@/features/contabilidad/components/ImportadorIAContactosDialog";
+import { NuevoContactoDialog } from "@/features/contabilidad/components/NuevoContactoDialog";
 import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
@@ -61,6 +62,7 @@ export function ContactosView() {
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [showConfig, setShowConfig] = useState(false);
   const [importadorAbierto, setImportadorAbierto] = useState(false);
+  const [nuevoAbierto, setNuevoAbierto] = useState(false);
 
   const loadContactos = useCallback(async () => {
     setLoading(true);
@@ -239,7 +241,7 @@ export function ContactosView() {
           busqueda={busqueda}
           onBusquedaChange={setBusqueda}
           placeholderBusqueda="Buscar"
-          onNuevo={() => { /* nuevo */ }}
+          onNuevo={() => setNuevoAbierto(true)}
           filtros={filtros}
           onFiltrosChange={setFiltros}
           orden={orden}
@@ -314,6 +316,12 @@ export function ContactosView() {
         open={importadorAbierto}
         onOpenChange={setImportadorAbierto}
         onImportSuccess={loadContactos}
+      />
+
+      <NuevoContactoDialog
+        open={nuevoAbierto}
+        onOpenChange={setNuevoAbierto}
+        onCreated={loadContactos}
       />
     </div>
   );

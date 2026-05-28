@@ -1,21 +1,23 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
   TipoProducto,
   ESTADOS_PRODUCTO, ESTADO_COLOR, EstadoProducto, type Producto, type Conservacion,
-  type PreparacionVenta,
   getUnidadDeFormato,
-  getPartidasPorPreparacion,
+  ALERGENOS_UE_14,
 } from "@/features/logistica/data/productos";
 import {
-  listProductos, createProducto, updateProducto, deleteProducto,
+  listProductos, createProducto, updateProducto, deleteProducto, getProductoById,
 } from "@/features/logistica/actions/producto-actions";
+import { listPartidas } from "@/features/cocina/actions/partidas-actions";
 import {
   getProductoConfigSection, saveProductoConfigSection,
 } from "@/features/logistica/actions/config-actions";
 import { EscandalloEditor } from "@/features/logistica/components/EscandalloEditor";
+import { getAlergenosDerivados, getAlergenosDerivadosOrigen, getCosteEscandallo, type AlergenoOrigen } from "@/features/logistica/actions/escandallos-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,10 +55,6 @@ import {
   createConservacion,
   updateConservacion,
   deleteConservacion,
-  listPreparaciones,
-  createPreparacion,
-  updatePreparacion,
-  deletePreparacion,
 } from "@/features/logistica/actions/catalogos-estandar-actions";
 import {
   analizarUnidadesIA,
@@ -65,8 +63,6 @@ import {
   guardarIvasIA,
   analizarConservacionesIA,
   guardarConservacionesIA,
-  analizarPreparacionesIA,
-  guardarPreparacionesIA,
 } from "@/features/logistica/actions/importador-catalogos-ia-actions";
 import { useCatalogosLogistica } from "@/features/logistica/hooks/useCatalogosLogistica";
 import {
@@ -147,10 +143,22 @@ function ProductoDetalle({
   const mostrarConservacion = !esVenta;
   const mostrarIva = !esElaboracion;
   const mostrarFormato = esCompra || esElaboracion;
-  const categorias = categoriasOpts ?? [];
   const estadosList = estadosOpts ?? [...ESTADOS_PRODUCTO];
   const { empresaActual } = useEmpresa();
   const catalogos = useCatalogosLogistica();
+
+  // Cargamos las categorías directamente en el detalle (no a través del padre)
+  // para evitar la carrera al abrir un producto antes de que el padre haya cargado.
+  const [categoriasLocal, setCategoriasLocal] = useState<string[]>(categoriasOpts ?? []);
+  useEffect(() => {
+    let cancelled = false;
+    listCategoriasProducto(tipo).then((res) => {
+      if (cancelled) return;
+      setCategoriasLocal(res.ok ? res.data.map((c) => c.nombre) : []);
+    });
+    return () => { cancelled = true; };
+  }, [tipo]);
+  const categorias = categoriasLocal;
 
   const [nombre, setNombre] = useState(producto?.nombre ?? "");
   const [categoria, setCategoria] = useState(producto?.categoria ?? "");
@@ -163,14 +171,21 @@ function ProductoDetalle({
   const [iva, setIva] = useState(producto?.iva ?? "");
   const [formato, setFormato] = useState(producto?.formato ?? "");
   const [conservacion, setConservacion] = useState<Conservacion | "">(producto?.conservacion ?? "");
-  const [preparacion, setPreparacion] = useState<PreparacionVenta | "">(producto?.preparacion ?? "");
   const [partida, setPartida] = useState(producto?.partida ?? "");
+  const [partidasOpts, setPartidasOpts] = useState<string[]>([]);
+  const [costeCalc, setCosteCalc] = useState<number | null>(null);
   const [textoTicket, setTextoTicket] = useState(producto?.textoTicket ?? "");
   const [textoComanda, setTextoComanda] = useState(producto?.textoComanda ?? "");
   const [estiloColor, setEstiloColor] = useState<string | null>(producto?.estiloColor ?? null);
   const [estiloImagenUrl, setEstiloImagenUrl] = useState<string | null>(producto?.estiloImagenUrl ?? null);
   const [cartaNombre, setCartaNombre] = useState<string>(producto?.cartaNombre ?? "");
   const [cartaTexto, setCartaTexto] = useState<string>(producto?.cartaTexto ?? "");
+  const [alergenos, setAlergenos] = useState<string[]>(producto?.alergenos ?? []);
+  const [alergenosDerivados, setAlergenosDerivados] = useState<string[]>([]);
+  const [alergenosOrigenes, setAlergenosOrigenes] = useState<AlergenoOrigen[]>([]);
+  const [alergenosLoading, setAlergenosLoading] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [preciosVersion, setPreciosVersion] = useState(0);
@@ -214,7 +229,6 @@ function ProductoDetalle({
   }, [esCompra, usarVigente, vigenteSnapshot, vigenteLoaded]);
 
   const formatosUnidad = catalogos.formatosPorUnidad[unidad] ?? [];
-  const partidasOpts = getPartidasPorPreparacion(preparacion);
 
   // Reset formato when unidad changes if current formato is not valid for new unidad.
   useEffect(() => {
@@ -223,12 +237,46 @@ function ProductoDetalle({
     }
   }, [unidad]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Reset partida cuando cambia preparacion si la actual ya no aplica.
+  // Cargar partidas reales (de cocina/partidas) — solo productos de venta.
   useEffect(() => {
-    if (partida && partidasOpts.length > 0 && !partidasOpts.includes(partida)) {
-      setPartida("");
-    }
-  }, [preparacion]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!esVenta) return;
+    let cancelled = false;
+    listPartidas().then((res) => {
+      if (cancelled) return;
+      const nombres = res.ok ? res.data.map((p) => p.nombre).sort((a, b) => a.localeCompare(b)) : [];
+      setPartidasOpts(nombres);
+    });
+    return () => { cancelled = true; };
+  }, [esVenta]);
+
+  // Coste calculado desde el escandallo (productos de venta ya creados).
+  useEffect(() => {
+    if (!esVenta || isNew || !producto?.id) return;
+    let cancelled = false;
+    getCosteEscandallo(producto.id).then((res) => {
+      if (cancelled) return;
+      setCosteCalc(res.ok ? res.coste : null);
+    });
+    return () => { cancelled = true; };
+  }, [esVenta, isNew, producto?.id, preciosVersion]);
+
+  // Alérgenos derivados: para elaboraciones se calculan recursivamente desde el escandallo.
+  // Cada ingrediente (producto compra o sub-elaboración) aporta sus alérgenos.
+  useEffect(() => {
+    if (!esElaboracion || isNew || !producto?.id) return;
+    let cancelled = false;
+    setAlergenosLoading(true);
+    Promise.all([
+      getAlergenosDerivados(producto.id),
+      getAlergenosDerivadosOrigen(producto.id),
+    ]).then(([resA, resO]) => {
+      if (cancelled) return;
+      setAlergenosDerivados(resA.ok ? resA.data : []);
+      setAlergenosOrigenes(resO.ok ? resO.data : []);
+      setAlergenosLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [esElaboracion, isNew, producto?.id, preciosVersion]);
 
   const handleSave = async () => {
     const errs: string[] = [];
@@ -246,12 +294,11 @@ function ProductoDetalle({
       categoria,
       estado,
       proveedor: esCompra ? (proveedor || null) : null,
-      precioVenta: !esCompra ? (precioVenta || null) : null,
-      coste: !esCompra ? (coste || null) : null,
+      precioVenta: esElaboracion ? (precioVenta || null) : null,
+      coste: esElaboracion ? (coste || null) : null,
       unidad,
       formato: mostrarFormato ? (formato || null) : null,
       conservacion: mostrarConservacion ? (conservacion || null) : null,
-      preparacion: esVenta ? (preparacion || null) : null,
       partida: esVenta ? (partida.trim() || null) : null,
       textoTicket: esVenta ? (textoTicket || null) : null,
       textoComanda: esVenta ? (textoComanda || null) : null,
@@ -259,6 +306,7 @@ function ProductoDetalle({
       estiloImagenUrl: esVenta ? estiloImagenUrl : null,
       cartaNombre: esVenta ? (cartaNombre.trim() || null) : null,
       cartaTexto: esVenta ? (cartaTexto.trim() || null) : null,
+      alergenos: !esVenta ? alergenos : [],
     };
     if (!esCompra) {
       payload.iva = mostrarIva && iva && iva !== "none" ? iva : null;
@@ -366,7 +414,11 @@ function ProductoDetalle({
               <Select value={categoria} onValueChange={setCategoria}>
                 <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                 <SelectContent>
-                  {categorias.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  {/* Si la categoría actual no está en el catálogo, la incluimos para no perderla. */}
+                  {(categoria && !categorias.includes(categoria)
+                    ? [categoria, ...categorias]
+                    : categorias
+                  ).map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -383,34 +435,21 @@ function ProductoDetalle({
               </div>
             )}
             {esVenta && (
-              <>
-                <div>
-                  <Label className="text-xs text-muted-foreground block mb-1">Preparación</Label>
-                  <Select value={preparacion || "none"} onValueChange={(v) => setPreparacion(v === "none" ? "" : (v as PreparacionVenta))}>
-                    <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Sin especificar</SelectItem>
-                      {catalogos.preparaciones.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground block mb-1">Partida</Label>
-                  <Select
-                    value={partida || "none"}
-                    onValueChange={(v) => setPartida(v === "none" ? "" : v)}
-                    disabled={!preparacion}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={!preparacion ? "Elige preparación" : "Seleccionar"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Sin especificar</SelectItem>
-                      {partidasOpts.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </>
+              <div>
+                <Label className="text-xs text-muted-foreground block mb-1">Partida</Label>
+                <Select
+                  value={partida || "none"}
+                  onValueChange={(v) => setPartida(v === "none" ? "" : v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={partidasOpts.length === 0 ? "Sin partidas" : "Seleccionar"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin especificar</SelectItem>
+                    {partidasOpts.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             )}
             <div>
               <Label className="text-xs text-muted-foreground block mb-1">Estado</Label>
@@ -465,17 +504,20 @@ function ProductoDetalle({
                   <ProveedorCombobox value={proveedor} onChange={setProveedor} />
                 )}
               </div>
-            ) : esCompra && isNew ? null : (
-              <>
-                <div>
-                  <Label className="text-xs text-muted-foreground block mb-1">Precio venta</Label>
-                  <Input value={precioVenta} onChange={(e) => setPrecioVenta(e.target.value)} placeholder="Ej: 18,00 €" />
+            ) : esCompra && isNew ? null : esElaboracion ? (
+              <div>
+                <Label className="text-xs text-muted-foreground block mb-1">Coste</Label>
+                <Input value={coste} onChange={(e) => setCoste(e.target.value)} placeholder="Ej: 6,20 €" />
+              </div>
+            ) : (
+              <div>
+                <Label className="text-xs text-muted-foreground block mb-1">Coste (escandallo)</Label>
+                <div className="flex h-9 w-full items-center rounded-md border border-input bg-muted/30 px-3 text-sm text-muted-foreground">
+                  {costeCalc !== null && costeCalc > 0
+                    ? `${costeCalc.toFixed(2)} €`
+                    : <span className="italic">Sin escandallo</span>}
                 </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground block mb-1">Coste</Label>
-                  <Input value={coste} onChange={(e) => setCoste(e.target.value)} placeholder="Ej: 6,20 €" />
-                </div>
-              </>
+              </div>
             )}
             {mostrarIva && !esCompra && (
               <div>
@@ -624,7 +666,7 @@ function ProductoDetalle({
         </Card>
       )}
 
-      {/* Estilo POS — solo productos de venta ya creados */}
+      {/* Texto para Punto de Venta — solo productos de venta ya creados */}
       {esVenta && !isNew && (
         <EstiloProductoVenta
           productoId={producto!.id}
@@ -637,6 +679,124 @@ function ProductoDetalle({
             setEstiloImagenUrl(u);
           }}
         />
+      )}
+
+      {/* Alérgenos — Compra: fuente de verdad editable. Elaboración: derivados del escandallo (readonly). */}
+      {esCompra && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Alérgenos</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-xs text-muted-foreground mb-3">
+              Marca los alérgenos UE que contiene este producto. Se propagan automáticamente a las elaboraciones y escandallos que lo usen como ingrediente.
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+              {ALERGENOS_UE_14.map((a) => {
+                const checked = alergenos.includes(a);
+                return (
+                  <label
+                    key={a}
+                    className="flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs cursor-pointer hover:bg-muted/50"
+                  >
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={(v) => {
+                        setAlergenos((prev) =>
+                          v === true
+                            ? Array.from(new Set([...prev, a]))
+                            : prev.filter((x) => x !== a),
+                        );
+                      }}
+                    />
+                    <span className="select-none">{a}</span>
+                  </label>
+                );
+              })}
+            </div>
+            {alergenos.length === 0 && (
+              <p className="mt-3 text-[11px] text-muted-foreground italic">
+                Sin alérgenos marcados. Si el producto no contiene ninguno, déjalo así.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {esElaboracion && !isNew && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Alérgenos</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-xs text-muted-foreground">
+              Se derivan automáticamente del escandallo: unión de los alérgenos de los ingredientes (compra) y de cualquier sub-elaboración. Para modificarlos, edita los alérgenos del producto de compra origen.
+            </p>
+            {alergenosLoading ? (
+              <p className="text-xs text-muted-foreground italic">Calculando…</p>
+            ) : alergenosDerivados.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">
+                Sin alérgenos detectados en los ingredientes del escandallo.
+              </p>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-1.5">
+                  {alergenosDerivados.map((a) => (
+                    <Badge key={a} variant="outline" className="text-[11px] bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-900/20 dark:text-amber-200 dark:border-amber-800/40">
+                      {a}
+                    </Badge>
+                  ))}
+                </div>
+
+                {alergenosOrigenes.length > 0 && (
+                  <div className="rounded-md border overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-muted/50">
+                          <th className="text-left px-3 py-2 text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Alérgeno</th>
+                          <th className="text-left px-3 py-2 text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Origen</th>
+                          <th className="text-left px-3 py-2 text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Tipo</th>
+                          <th className="px-3 py-2 w-12" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {alergenosOrigenes.map((o, i) => {
+                          const tipoLabel = o.origenTipo === "compra" ? "Compra" : o.origenTipo === "elaboracion" ? "Elaboración" : "Venta";
+                          return (
+                            <tr key={`${o.alergeno}-${o.origenId}-${i}`} className="border-b last:border-0 hover:bg-muted/30">
+                              <td className="px-3 py-2 font-medium">{o.alergeno}</td>
+                              <td className="px-3 py-2">
+                                <button
+                                  type="button"
+                                  onClick={() => router.push(`${pathname}?p=${o.origenId}`)}
+                                  className="text-primary hover:underline text-left"
+                                >
+                                  {o.origenNombre}
+                                </button>
+                              </td>
+                              <td className="px-3 py-2 text-muted-foreground">{tipoLabel}</td>
+                              <td className="px-3 py-2 text-right">
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6 w-6"
+                                  onClick={() => router.push(`${pathname}?p=${o.origenId}`)}
+                                  title="Abrir ficha del producto"
+                                >
+                                  <ArrowLeft className="h-3.5 w-3.5 rotate-180" />
+                                </Button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {/* Carta Digital — solo productos de venta */}
@@ -677,10 +837,7 @@ function ProductoDetalle({
 
       {/* Tarifas — solo productos de venta ya creados */}
       {!isNew && esVenta && (
-        <TarifaPreciosSection
-          productoId={producto!.id}
-          precioVentaProducto={producto!.precioVenta ?? null}
-        />
+        <TarifaPreciosSection productoId={producto!.id} />
       )}
 
       {!isNew && (
@@ -792,7 +949,6 @@ function TablaProductos({
     { campo: "numero", label: "ID", bloqueada: true },
     { campo: "nombre", label: "Nombre", bloqueada: true },
     { campo: "categoria", label: "Categoría" },
-    ...(esVenta ? [{ campo: "preparacion", label: "Preparación" }] : []),
     ...(mostrarConservacion ? [{ campo: "conservacion", label: "Conservación" }] : []),
     ...(esVenta ? [{ campo: "partida", label: "Partida" }] : []),
     { campo: "estado", label: "Estado" },
@@ -877,27 +1033,6 @@ function TablaProductos({
       td: (p) => (
         <td key="conservacion" className="px-3 py-1.5 text-muted-foreground">
           {p.conservacion ?? "—"}
-        </td>
-      ),
-    },
-    preparacion: {
-      th: (
-        <TableColumnHeader
-          key="preparacion"
-          label="Preparación"
-          campo="preparacion"
-          filtroTipo="lista"
-          opciones={catalogos.preparaciones}
-          filtros={filtros}
-          onFiltrosChange={setFiltros}
-          ordenable
-          orden={orden}
-          onOrdenChange={setOrden}
-        />
-      ),
-      td: (p) => (
-        <td key="preparacion" className="px-3 py-1.5 text-muted-foreground">
-          {p.preparacion ?? "—"}
         </td>
       ),
     },
@@ -1578,24 +1713,6 @@ function ConfigProductos({
         }}
       />
 
-      <GestorCatalogoEstandar
-        titulo="Preparación"
-        hint="Zonas de preparación del establecimiento (Barra, Cocina…)."
-        campos={[{ key: "nombre", label: "Nombre", obligatorio: true }]}
-        itemPrincipal={(it) => it.nombre}
-        itemAPatch={(it) => ({ nombre: it.nombre })}
-        list={listPreparaciones}
-        create={(input) => createPreparacion({ nombre: input.nombre })}
-        update={(id, patch) => updatePreparacion(id, { nombre: patch.nombre })}
-        remove={deletePreparacion}
-        iaConfig={{
-          titulo: "Importar modos de preparación con IA",
-          campos: [{ key: "nombre", label: "Nombre", obligatorio: true, tipo: "texto" }],
-          analyze: analizarPreparacionesIA,
-          save: guardarPreparacionesIA,
-        }}
-      />
-
       {mostrarUmbralCoste && onUmbralesChange && (
         <UmbralCosteEditor
           umbralVerde={umbralVerde}
@@ -1652,6 +1769,24 @@ export function ProductosView() {
     listProductos("venta").then((d) => setCountVenta(d.length));
     listProductos("elaboracion").then((d) => setCountElab(d.length));
   }, [reloadKey]);
+
+  // Deep-link: ?p=<id> abre la ficha del producto. Usado por enlaces desde Alérgenos origen.
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  useEffect(() => {
+    const pid = searchParams.get("p");
+    if (!pid || detalle?.id === pid) return;
+    (async () => {
+      const p = await getProductoById(pid);
+      if (p) {
+        setTipoActivo(p.tipo);
+        setDetalle(p);
+        setShowConfig(false);
+        setNuevoModo(false);
+      }
+    })();
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const triggerReload = () => setReloadKey((k) => k + 1);
 

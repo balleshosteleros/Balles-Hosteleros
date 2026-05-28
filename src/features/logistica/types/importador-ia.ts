@@ -18,8 +18,7 @@ export type CampoProducto =
   | "unidad"
   | "formato"
   | "observaciones"
-  | "conservacion"
-  | "preparacion";
+  | "conservacion";
 
 export const CAMPOS_OBLIGATORIOS_POR_TIPO: Record<TipoProducto, CampoProducto[]> = {
   compra: ["nombre", "categoria", "precioCompra"],
@@ -40,7 +39,6 @@ export const ETIQUETAS_CAMPOS: Record<CampoProducto, string> = {
   formato: "Formato",
   observaciones: "Observaciones",
   conservacion: "Conservación",
-  preparacion: "Preparación",
 };
 
 /**
@@ -111,6 +109,5 @@ export function filaToProductoInput(
     formato: v.formato ?? null,
     observaciones: v.observaciones ?? null,
     conservacion: (v.conservacion ?? null) as ProductoInput["conservacion"],
-    preparacion: (v.preparacion ?? null) as ProductoInput["preparacion"],
   };
 }

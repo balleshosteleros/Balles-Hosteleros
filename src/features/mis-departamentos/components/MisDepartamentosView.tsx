@@ -118,7 +118,11 @@ export function MisDepartamentosView() {
         ) : null}
       </div>
 
-      {tiles.length === 0 ? (
+      {!mounted ? (
+        // Placeholder neutro durante SSR/primer render para evitar hydration mismatch:
+        // las tiles dependen de useAuth() que resuelve distinto en server vs client.
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" />
+      ) : tiles.length === 0 ? (
         <Card className="p-8 text-center text-sm text-muted-foreground">
           No tienes departamentos asignados todavía.
         </Card>
