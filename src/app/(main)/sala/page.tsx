@@ -1,3 +1,7 @@
+import { AnaliticaOrigenView } from "@/features/sala/components/AnaliticaOrigenView";
+
+export const dynamic = "force-dynamic";
+
 export default function SalaPage() {
-  return <div className="p-4 md:p-6" />;
+  return <AnaliticaOrigenView />;
 }

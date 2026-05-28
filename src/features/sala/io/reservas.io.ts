@@ -2,8 +2,9 @@ import { z } from "zod";
 import type { ModuleIO, RowSchema } from "@/shared/io";
 import { listReservas } from "@/features/sala/actions/reservas-actions";
 import type { Reserva } from "@/features/sala/data/reservas";
+import { ESTADOS_RESERVA } from "@/features/sala/data/reservas";
 
-const ESTADOS = ["CONFIRMADA", "PENDIENTE", "RECONFIRMADA", "LISTA_ESPERA", "WALK_IN", "LLEGADA", "NO SHOW", "COMPLETADA", "CANCELADA"] as const;
+const ESTADOS = ESTADOS_RESERVA;
 const TURNOS = ["COMIDA", "CENA", "DIA_COMPLETO"] as const;
 const ZONAS = ["SALA", "BARRA", "TERRAZA_INTERIOR", "TERRAZA_EXTERIOR", "PRIVADO", ""] as const;
 
@@ -19,7 +20,7 @@ const reservaSchema = z.object({
   comensales: z.number(),
   zona: z.enum(ZONAS),
   mesaId: z.string(),
-  estado: z.enum(ESTADOS),
+  estado: z.enum(ESTADOS as unknown as [string, ...string[]]),
 }).passthrough();
 
 const schema = reservaSchema as unknown as RowSchema<Reserva>;

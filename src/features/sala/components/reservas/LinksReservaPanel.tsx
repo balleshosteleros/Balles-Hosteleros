@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { Plus, Copy, Check, Power, Trash2, Link2, ArrowLeft } from "lucide-react";
+import { Copy, Check, Power, Trash2, Link2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -32,7 +32,7 @@ function formatFecha(iso: string) {
   return new Date(iso).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-export function LinksReservaPanel() {
+export function LinksReservaPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const [links, setLinks] = useState<ReservaLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
@@ -111,13 +111,15 @@ export function LinksReservaPanel() {
   const ordenVisible = columnasOrden.filter((c) => columnasVisibles[c] ?? true);
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
-      <div className="flex items-center gap-3">
-        <Link href="/sala/reservas" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-4 w-4" />
-          Volver a Reservas
-        </Link>
-      </div>
+    <div className={embedded ? "space-y-4" : "p-4 md:p-6 space-y-4"}>
+      {!embedded && (
+        <div className="flex items-center gap-3">
+          <Link href="/sala/reservas" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="h-4 w-4" />
+            Volver a Reservas
+          </Link>
+        </div>
+      )}
 
       <SubmoduleToolbar
         busqueda={busqueda}

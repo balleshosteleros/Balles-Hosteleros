@@ -1,6 +1,27 @@
 export type EstadoMesa = "LIBRE" | "OCUPADA" | "RESERVADA" | "BLOQUEADA";
-export type EstadoReserva = "CONFIRMADA" | "PENDIENTE" | "RECONFIRMADA" | "LISTA_ESPERA" | "WALK_IN" | "LLEGADA" | "NO SHOW" | "COMPLETADA" | "CANCELADA";
+
+/**
+ * 17 estados posibles de una reserva.
+ * Los 9 primeros son los originales; los 8 últimos son la operativa de servicio
+ * (estilo CoverManager). NO_SHOW se escribe con guion bajo (BD); la app traduce
+ * el label "No Show".
+ */
+export type EstadoReserva =
+  | "CONFIRMADA" | "PENDIENTE" | "RECONFIRMADA" | "LISTA_ESPERA" | "WALK_IN"
+  | "LLEGADA" | "NO_SHOW" | "COMPLETADA" | "CANCELADA"
+  | "TARJETA_NO_INTRODUCIDA" | "LLEGADA_BARRA" | "SENTADA" | "POSTRE"
+  | "CUENTA_SOLICITADA" | "LIMPIAR" | "LIBERADA" | "A_REVISAR";
+
+export const ESTADOS_RESERVA: EstadoReserva[] = [
+  "CONFIRMADA","PENDIENTE","RECONFIRMADA","LISTA_ESPERA","WALK_IN",
+  "LLEGADA","NO_SHOW","COMPLETADA","CANCELADA",
+  "TARJETA_NO_INTRODUCIDA","LLEGADA_BARRA","SENTADA","POSTRE",
+  "CUENTA_SOLICITADA","LIMPIAR","LIBERADA","A_REVISAR",
+];
+
 export type ZonaSala = "SALA" | "BARRA" | "TERRAZA_INTERIOR" | "TERRAZA_EXTERIOR" | "PRIVADO";
+
+export const ZONAS_SALA: ZonaSala[] = ["SALA", "BARRA", "TERRAZA_INTERIOR", "TERRAZA_EXTERIOR", "PRIVADO"];
 export type TurnoReserva = "COMIDA" | "CENA" | "DIA_COMPLETO";
 export type TipoMesa = "MESA" | "BARRA" | "RESERVADO" | "TABURETE";
 
@@ -13,15 +34,23 @@ export const ZONAS_LABELS: Record<ZonaSala, string> = {
 };
 
 export const ESTADO_RESERVA_LABELS: Record<EstadoReserva, string> = {
-  CONFIRMADA: "Confirmada",
-  PENDIENTE: "Pendiente",
+  CONFIRMADA: "Reserva confirmada",
+  PENDIENTE: "Pendiente de confirmación",
   RECONFIRMADA: "Reconfirmada",
-  LISTA_ESPERA: "Lista espera",
+  LISTA_ESPERA: "Lista de espera",
   WALK_IN: "Walk In",
   LLEGADA: "Llegada",
-  "NO SHOW": "No Show",
+  NO_SHOW: "No Show",
   COMPLETADA: "Completada",
-  CANCELADA: "Cancelada",
+  CANCELADA: "Reserva cancelada",
+  TARJETA_NO_INTRODUCIDA: "Tarjeta no introducida",
+  LLEGADA_BARRA: "Llegada Barra",
+  SENTADA: "Sentada",
+  POSTRE: "Postre",
+  CUENTA_SOLICITADA: "Cuenta solicitada",
+  LIMPIAR: "Limpiar",
+  LIBERADA: "Reserva liberada",
+  A_REVISAR: "Reserva a revisar",
 };
 
 export const ESTADO_MESA_LABELS: Record<EstadoMesa, string> = {
@@ -62,7 +91,149 @@ export interface Reserva {
   estado: EstadoReserva;
   observaciones: string;
   empleadoId?: string;
+  clienteId?: string | null;
   origen?: string | null;
+  // Flags acumulables (PRP-047)
+  tarjetaIntroducida?: boolean;
+  esTicket?: boolean;
+  politicaCancelacionId?: string | null;
+  garantiaImporte?: number | null;
+  bloqueada?: boolean;
+  grupoId?: string | null;
+  tipoId?: string | null;
+  codigoId?: string | null;
+  codigoNombre?: string | null;
+  reconfirmadaAt?: string | null;
+}
+
+// --- POLÍTICAS DE CANCELACIÓN ---
+export interface PoliticaCancelacion {
+  id: string;
+  empresaId: string;
+  nombre: string;
+  descripcion: string | null;
+  horasAntes: number | null;
+  penalizacionPct: number | null;
+  activa: boolean;
+  orden: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// --- INSIGHTS DE CLIENTE (computados al abrir detalle de reserva) ---
+export interface ClienteInsights {
+  clienteId: string | null;
+  visitasTotal: number;
+  visitasConValoracion: number;
+  visitasSinValoracion: number;
+  otrosLocalesGrupo: number;
+}
+
+/** Convención para detectar reservas creadas por un Channel Manager. */
+export const CHANNEL_MANAGER_ORIGEN_PREFIX = "channel-";
+export function esOrigenChannelManager(origen: string | null | undefined): boolean {
+  if (!origen) return false;
+  const o = origen.toLowerCase();
+  return o.startsWith(CHANNEL_MANAGER_ORIGEN_PREFIX) || o === "channelmanager" || o === "channel manager";
+}
+
+// --- TIPOS DE RESERVA (etiqueta visual editable por empresa) ---
+export interface ReservaTipo {
+  id: string;
+  empresaId: string;
+  nombre: string;
+  emoji: string | null;
+  color: string;
+  orden: number;
+  activo: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// --- CÓDIGOS PROMOCIONALES DE RESERVA ---
+export type ReservaCodigoTipoPromocion = "restaurante_contador" | "grupo" | "descuento";
+export type ReservaCodigoTurnos = "comida" | "cena" | "comida_cena";
+
+export const RESERVA_CODIGO_TIPO_LABELS: Record<ReservaCodigoTipoPromocion, string> = {
+  restaurante_contador: "Código sólo para este restaurante (contador personas)",
+  grupo: "Código para el grupo (personas)",
+  descuento: "Código de descuento",
+};
+
+export const RESERVA_CODIGO_TURNOS_LABELS: Record<ReservaCodigoTurnos, string> = {
+  comida: "Sólo comida",
+  cena: "Sólo cena",
+  comida_cena: "Comida y Cena",
+};
+
+export interface ReservaCodigo {
+  id: string;
+  empresaId: string;
+  nombre: string;
+  descripcion: string | null;
+  tipoPromocion: ReservaCodigoTipoPromocion;
+  minPersonas: number;
+  maxPersonas: number; // -1 = sin límite
+  fechaInicio: string; // YYYY-MM-DD
+  fechaFin: string;    // YYYY-MM-DD
+  stockTotal: number;
+  stockConsumido: number;
+  turnos: ReservaCodigoTurnos;
+  restriccionEspecial: boolean;
+  esDescuento: boolean;
+  porcentajeDescuento: number | null;
+  diasSemana: DiaSemanaKey[];
+  activo: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// --- CONFIGURACIÓN DE RESERVAS POR EMPRESA ---
+export type DiaSemanaKey = "lun" | "mar" | "mie" | "jue" | "vie" | "sab" | "dom";
+export type TurnoKey = "comida" | "cena";
+export type MetricaLimite = "cupo" | "maxpax";
+
+/** Mapea Date.getDay() (0=domingo) a la clave del día usada en la config. */
+export const DIA_SEMANA_KEY: DiaSemanaKey[] = ["dom","lun","mar","mie","jue","vie","sab"];
+
+/** Claves planas por día (lun..dom × cupo|maxpax × comida|cena). */
+export type SemanaLimitesKey = `${DiaSemanaKey}_${MetricaLimite}_${TurnoKey}`;
+export type SemanaLimites = { [K in SemanaLimitesKey]: number | null };
+
+export type EmpresaReservasConfig = SemanaLimites & {
+  empresaId: string;
+  generalCupoComida: number | null;
+  generalCupoCena: number | null;
+  generalMaxpaxComida: number | null;
+  generalMaxpaxCena: number | null;
+  antelacionMinHoras: number;
+  antelacionMaxDias: number;
+};
+
+export interface EmpresaReservasExcepcion {
+  id: string;
+  empresaId: string;
+  fecha: string; // YYYY-MM-DD
+  motivo: string | null;
+  cupoComida: number | null;
+  cupoCena: number | null;
+  maxpaxComida: number | null;
+  maxpaxCena: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// --- ADJUNTOS ---
+export interface ReservaAdjunto {
+  id: string;
+  empresaId: string;
+  reservaId: string;
+  storagePath: string;
+  nombreOriginal: string;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  uploadedBy: string | null;
+  createdAt: string;
 }
 
 export interface ListaEspera {

@@ -4,9 +4,26 @@ import { useState, useTransition, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CalendarCheck, Users, Mail, Phone, Calendar, Clock } from "lucide-react";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { CalendarCheck, Users, Mail, Phone, Calendar, Clock, Ticket, Info } from "lucide-react";
 import { crearReservaPublicaAction } from "@/features/reservar-publica/actions/crear-reserva-publica";
+import { comprobarClientePublicoAction } from "@/features/reservar-publica/actions/comprobar-cliente-publico";
 import { toast } from "sonner";
+
+interface AvisoDatosOriginales {
+  nombre: string;
+  apellidos: string | null;
+  email: string | null;
+  telefono: string | null;
+}
+
+interface MatchCliente {
+  nombre: string;
+  apellidos: string | null;
+  email: string | null;
+  telefono: string | null;
+  matchPor: "email" | "telefono";
+}
 
 interface Props {
   empresaSlug: string;
@@ -36,8 +53,12 @@ export function ReservaPublicaForm({
   const [fecha, setFecha] = useState(new Date().toISOString().split("T")[0]);
   const [hora, setHora] = useState("21:00");
   const [personas, setPersonas] = useState(2);
+  const [codigo, setCodigo] = useState("");
+  const [mostrarCodigo, setMostrarCodigo] = useState(false);
   const [enviando, startTransition] = useTransition();
   const [exito, setExito] = useState(false);
+  const [avisoDatos, setAvisoDatos] = useState<AvisoDatosOriginales | null>(null);
+  const [match, setMatch] = useState<MatchCliente | null>(null);
 
   const accent = isHexColor(colorPrimario) ? colorPrimario : "#0a0a0a";
   const onAccent = isHexColor(colorTexto) ? colorTexto : "#ffffff";
@@ -49,26 +70,60 @@ export function ReservaPublicaForm({
     [accent, onAccent],
   );
 
+  async function enviarReserva() {
+    const r = await crearReservaPublicaAction({
+      empresaSlug,
+      origen,
+      nombre: nombre.trim(),
+      apellidos: apellidos.trim() || null,
+      telefono: telefono.trim(),
+      email: email.trim() || null,
+      fecha,
+      hora,
+      personas,
+      codigo: codigo.trim() ? codigo.trim().toUpperCase().replace(/\s+/g, "") : null,
+    });
+    if (!r.ok) {
+      toast.error(r.error);
+      return;
+    }
+    if (r.clienteExistente && r.camposDistintos.length > 0) {
+      setAvisoDatos(r.datosCliente);
+    } else {
+      setAvisoDatos(null);
+    }
+    setExito(true);
+  }
+
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!valido) return;
     startTransition(async () => {
-      const r = await crearReservaPublicaAction({
+      // 1) Comprobar si ya hay ficha con ese email o teléfono.
+      const check = await comprobarClientePublicoAction({
         empresaSlug,
-        origen,
-        nombre: nombre.trim(),
-        apellidos: apellidos.trim() || null,
-        telefono: telefono.trim(),
         email: email.trim() || null,
-        fecha,
-        hora,
-        personas,
+        telefono: telefono.trim() || null,
       });
-      if (!r.ok) {
-        toast.error(r.error);
-        return;
+      if (check.ok && check.match) {
+        const m = check.match;
+        const formNombre = `${nombre.trim()} ${apellidos.trim()}`.trim().toLowerCase();
+        const dbNombre = `${m.nombre} ${m.apellidos ?? ""}`.trim().toLowerCase();
+        // Si el nombre no coincide, mostrar modal de confirmación.
+        if (formNombre !== dbNombre) {
+          setMatch(m);
+          return;
+        }
       }
-      setExito(true);
+      // 2) Sin match (o nombre idéntico): enviar directamente.
+      await enviarReserva();
+    });
+  }
+
+  function continuarConDatosGuardados() {
+    setMatch(null);
+    startTransition(async () => {
+      await enviarReserva();
     });
   }
 
@@ -89,6 +144,35 @@ export function ReservaPublicaForm({
             <h1 className="text-2xl font-bold tracking-tight">¡Reserva recibida!</h1>
             <p className="text-zinc-600">Te confirmamos en breve por teléfono.</p>
           </div>
+          {avisoDatos ? (
+            <div className="text-left rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
+              <div className="flex items-start gap-2">
+                <Info className="h-4 w-4 mt-0.5 text-amber-700 shrink-0" />
+                <p className="text-sm text-amber-900">
+                  Detectamos que ya tienes una ficha con nosotros. Tu reserva se ha vinculado a ella y hemos
+                  mantenido los datos originales:
+                </p>
+              </div>
+              <ul className="text-sm text-amber-900 pl-6 list-disc space-y-0.5">
+                <li>
+                  Nombre: <strong>{avisoDatos.nombre}{avisoDatos.apellidos ? ` ${avisoDatos.apellidos}` : ""}</strong>
+                </li>
+                {avisoDatos.email ? (
+                  <li>
+                    Email: <strong>{avisoDatos.email}</strong>
+                  </li>
+                ) : null}
+                {avisoDatos.telefono ? (
+                  <li>
+                    Teléfono: <strong>{avisoDatos.telefono}</strong>
+                  </li>
+                ) : null}
+              </ul>
+              <p className="text-xs text-amber-800">
+                Si necesitas actualizar tus datos, díselo al restaurante al confirmar.
+              </p>
+            </div>
+          ) : null}
           <div className="pt-4 border-t border-zinc-100">
             <p className="text-sm text-zinc-500">Gracias por reservar en</p>
             <p className="text-lg font-semibold mt-1">{empresaNombre}</p>
@@ -262,6 +346,39 @@ export function ReservaPublicaForm({
             </div>
           </div>
 
+          <div className="pt-1">
+            {mostrarCodigo ? (
+              <div className="space-y-1.5">
+                <Label htmlFor="codigo" className="text-zinc-700 flex items-center gap-1.5">
+                  <Ticket className="h-3.5 w-3.5" />
+                  Código promocional
+                </Label>
+                <Input
+                  id="codigo"
+                  value={codigo}
+                  onChange={(e) =>
+                    setCodigo(e.target.value.toUpperCase().replace(/\s+/g, ""))
+                  }
+                  placeholder="EJEMPLO2025"
+                  autoCapitalize="characters"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  maxLength={64}
+                  className="mt-1 h-12 sm:h-10 text-base sm:text-sm font-mono tracking-wide"
+                />
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setMostrarCodigo(true)}
+                className="text-sm text-zinc-500 hover:text-zinc-700 underline underline-offset-4 inline-flex items-center gap-1.5"
+              >
+                <Ticket className="h-3.5 w-3.5" />
+                ¿Tienes un código promocional?
+              </button>
+            )}
+          </div>
+
           <Button
             type="submit"
             size="lg"
@@ -277,6 +394,56 @@ export function ReservaPublicaForm({
           <p>Reserva sujeta a confirmación · {empresaNombre}</p>
         </footer>
       </div>
+
+      <Dialog open={!!match} onOpenChange={(o) => !o && setMatch(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Info className="h-4 w-4 text-amber-600" />
+              Ya estás en nuestra base
+            </DialogTitle>
+          </DialogHeader>
+          {match && (
+            <div className="space-y-3 text-sm">
+              <p className="text-zinc-700">
+                Este {match.matchPor === "email" ? "email" : "teléfono"} pertenece a:
+              </p>
+              <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 space-y-0.5 text-zinc-900">
+                <p className="font-semibold">
+                  {match.nombre}
+                  {match.apellidos ? ` ${match.apellidos}` : ""}
+                </p>
+                {match.email && <p className="text-xs text-zinc-600">{match.email}</p>}
+                {match.telefono && <p className="text-xs text-zinc-600">{match.telefono}</p>}
+              </div>
+              <p className="text-xs text-zinc-600">
+                No se pueden repetir email ni teléfono. Reserva con estos datos o cambia los del
+                formulario.
+              </p>
+            </div>
+          )}
+          <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => setMatch(null)}
+              disabled={enviando}
+            >
+              Cambiar datos
+            </Button>
+            <Button
+              type="button"
+              className="w-full sm:w-auto"
+              style={{ background: accent, color: onAccent }}
+              onClick={continuarConDatosGuardados}
+              disabled={enviando}
+            >
+              {enviando ? "Enviando..." : "Reservar con estos datos"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

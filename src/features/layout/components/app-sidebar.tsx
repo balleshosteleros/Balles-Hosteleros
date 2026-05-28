@@ -1,7 +1,7 @@
 "use client";
 
-import { ChevronDown, LayoutDashboard, PanelLeft } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ChevronDown, LayoutDashboard, PanelLeft, Pin, PinOff } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { NavLink } from "@/features/layout/components/nav-link";
 import { useAuth } from "@/features/auth/contexts/auth-context";
@@ -100,8 +100,10 @@ function CollapsibleSection({
   );
 }
 
+const SIDEBAR_PINNED_STORAGE_KEY = "sidebar:pinned";
+
 export function AppSidebar() {
-  const { state, toggleSidebar } = useSidebar();
+  const { state, setOpen, isMobile } = useSidebar();
   const collapsed = state === "collapsed";
   const pathname = usePathname();
   const { mode } = useViewMode();
@@ -129,29 +131,162 @@ export function AppSidebar() {
     setMounted(true);
   }, []);
 
+  // En las páginas hub (Mis Paneles / Mis Departamentos) el sidebar queda fijo
+  // expandido — no se auto-colapsa ni se cierra al salir el cursor. Al pulsar
+  // un módulo o submódulo se navega fuera de la hub y el auto-collapse arranca.
+  const isHubRoute = pathname === "/mi-panel" || pathname === "/mis-departamentos";
+
+  // Modo "fijado": el usuario pulsa el botón del header y el sidebar queda
+  // siempre abierto, sin auto-collapse ni hover-leave-close. Persiste entre
+  // sesiones. Por defecto está desactivado (modo automático).
+  const [isPinned, setIsPinned] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (localStorage.getItem(SIDEBAR_PINNED_STORAGE_KEY) === "true") {
+      setIsPinned(true);
+      setOpen(true);
+    }
+  }, [setOpen]);
+
+  const isLocked = isPinned || isHubRoute;
+
+  // Auto-collapse: tras pulsar un módulo/submódulo se encoge a los 3s.
+  // Hover-to-expand: al pasar el ratón sobre la barra colapsada se expande al
+  // instante; al salir el cursor (sin haber pulsado nada) se cierra al instante.
+  const autoCollapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // True solo cuando la expansión actual la abrió el hover (no un toggle manual
+  // ni un click). Si es true, mouseleave cierra inmediatamente.
+  const openedByHoverRef = useRef(false);
+  // True desde que el usuario pulsa un link hasta que el sidebar realmente se
+  // colapsa. Permite reanudar el timer si el cursor entra y vuelve a salir.
+  const pendingPostClickRef = useRef(false);
+
+  const clearAutoCollapseTimer = useCallback(() => {
+    if (autoCollapseTimerRef.current) {
+      clearTimeout(autoCollapseTimerRef.current);
+      autoCollapseTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => () => clearAutoCollapseTimer(), [clearAutoCollapseTimer]);
+
+  const scheduleAutoCollapse = useCallback(() => {
+    if (isMobile || isPinned) return;
+    clearAutoCollapseTimer();
+    autoCollapseTimerRef.current = setTimeout(() => {
+      autoCollapseTimerRef.current = null;
+      openedByHoverRef.current = false;
+      pendingPostClickRef.current = false;
+      setOpen(false);
+    }, 3000);
+  }, [isMobile, isPinned, clearAutoCollapseTimer, setOpen]);
+
+  const handleSidebarMouseEnter = useCallback(() => {
+    if (isMobile || isPinned) return;
+    clearAutoCollapseTimer();
+    if (collapsed) {
+      // En hub el sidebar queda fijo abierto tras el hover, así que no
+      // marcamos la expansión como "por hover" (para no cerrarla al salir).
+      openedByHoverRef.current = !isLocked;
+      setOpen(true);
+    }
+  }, [isMobile, isPinned, isLocked, collapsed, clearAutoCollapseTimer, setOpen]);
+
+  const handleSidebarMouseLeave = useCallback(() => {
+    if (isMobile || isPinned) return;
+    if (isLocked) {
+      // En la hub el sidebar queda fijo abierto hasta que se pulse algo.
+      clearAutoCollapseTimer();
+      openedByHoverRef.current = false;
+      pendingPostClickRef.current = false;
+      return;
+    }
+    if (openedByHoverRef.current) {
+      // Expandido solo por hover sin click → cerrar al instante.
+      clearAutoCollapseTimer();
+      openedByHoverRef.current = false;
+      setOpen(false);
+      return;
+    }
+    if (pendingPostClickRef.current && !autoCollapseTimerRef.current) {
+      // Hubo click pero el timer se canceló al re-entrar; reanudar 3s.
+      scheduleAutoCollapse();
+    }
+  }, [isMobile, isPinned, isLocked, clearAutoCollapseTimer, scheduleAutoCollapse, setOpen]);
+
+  const handleContentClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (isMobile || isPinned) return;
+      const target = e.target as HTMLElement;
+      // Solo navegaciones reales (anchor con href) cuentan; expandir una sección
+      // colapsable sin navegar no debe disparar el cierre automático.
+      if (!target.closest("a[href]")) return;
+      openedByHoverRef.current = false;
+      pendingPostClickRef.current = true;
+      scheduleAutoCollapse();
+    },
+    [isMobile, isPinned, scheduleAutoCollapse],
+  );
+
+  const togglePin = useCallback(() => {
+    setIsPinned((prev) => {
+      const next = !prev;
+      if (typeof window !== "undefined") {
+        localStorage.setItem(SIDEBAR_PINNED_STORAGE_KEY, String(next));
+      }
+      if (next) {
+        clearAutoCollapseTimer();
+        openedByHoverRef.current = false;
+        pendingPostClickRef.current = false;
+        setOpen(true);
+      }
+      return next;
+    });
+  }, [clearAutoCollapseTimer, setOpen]);
+
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar
+      collapsible="icon"
+      onMouseEnter={handleSidebarMouseEnter}
+      onMouseLeave={handleSidebarMouseLeave}
+    >
       <SidebarHeader className="px-3 py-3">
         {collapsed ? (
           <div className="flex items-center justify-center">
             <button
               type="button"
-              onClick={toggleSidebar}
-              className="flex items-center justify-center rounded hover:bg-sidebar-accent/40 transition-colors py-1 px-1"
-              title="Expandir menú"
+              onClick={togglePin}
+              className={
+                "flex items-center justify-center rounded transition-colors py-1 px-1 " +
+                (isPinned
+                  ? "bg-sidebar-accent/60 text-sidebar-primary hover:bg-sidebar-accent/80"
+                  : "hover:bg-sidebar-accent/40 text-sidebar-foreground/80")
+              }
+              title={isPinned ? "Desfijar menú (volver a modo automático)" : "Fijar menú abierto"}
+              aria-pressed={isPinned}
             >
-              <PanelLeft className="h-5 w-5 text-sidebar-foreground/80" />
+              {isPinned ? <Pin className="h-5 w-5" /> : <PanelLeft className="h-5 w-5" />}
             </button>
           </div>
         ) : (
           <div className="relative flex flex-col items-center gap-1.5">
             <button
               type="button"
-              onClick={toggleSidebar}
-              className="absolute right-0 top-0 flex h-7 w-7 items-center justify-center rounded hover:bg-sidebar-accent/40 transition-colors"
-              title="Colapsar menú"
+              onClick={togglePin}
+              className={
+                "absolute right-0 top-0 flex h-7 w-7 items-center justify-center rounded transition-colors " +
+                (isPinned
+                  ? "bg-sidebar-accent/60 text-sidebar-primary hover:bg-sidebar-accent/80"
+                  : "hover:bg-sidebar-accent/40")
+              }
+              title={isPinned ? "Desfijar menú (volver a modo automático)" : "Fijar menú abierto"}
+              aria-pressed={isPinned}
             >
-              <PanelLeft className="h-4 w-4 text-sidebar-foreground/60" />
+              {isPinned ? (
+                <Pin className="h-4 w-4" />
+              ) : (
+                <PinOff className="h-4 w-4 text-sidebar-foreground/60" />
+              )}
             </button>
             <img
               src="/logo-balles.png"
@@ -165,7 +300,7 @@ export function AppSidebar() {
         )}
       </SidebarHeader>
 
-      <SidebarContent>
+      <SidebarContent onClick={handleContentClick}>
         {!mounted ? null : mode === "paneles" ? (
           <SidebarGroup>
             <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs tracking-widest">

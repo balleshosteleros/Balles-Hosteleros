@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { findOrLinkClienteSala, type CampoDistinto } from "@/features/sala/lib/cliente-link";
 
 const inputSchema = z.object({
   empresaSlug: z.string().min(1).max(120),
@@ -14,14 +15,31 @@ const inputSchema = z.object({
   hora: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/),
   personas: z.number().int().min(1).max(50),
   notas: z.string().max(500).optional().nullable(),
+  codigo: z.string().min(1).max(64).optional().nullable(),
 });
 
 export type CrearReservaPublicaInput = z.infer<typeof inputSchema>;
 
-export async function crearReservaPublicaAction(input: CrearReservaPublicaInput) {
+export type CrearReservaPublicaResult =
+  | {
+      ok: true;
+      clienteExistente: boolean;
+      camposDistintos: CampoDistinto[];
+      datosCliente: {
+        nombre: string;
+        apellidos: string | null;
+        email: string | null;
+        telefono: string | null;
+      };
+    }
+  | { ok: false; error: string };
+
+export async function crearReservaPublicaAction(
+  input: CrearReservaPublicaInput,
+): Promise<CrearReservaPublicaResult> {
   const parsed = inputSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false as const, error: "Datos inválidos" };
+    return { ok: false, error: "Datos inválidos" };
   }
   const data = parsed.data;
   const admin = createAdminClient();
@@ -32,15 +50,51 @@ export async function crearReservaPublicaAction(input: CrearReservaPublicaInput)
     .eq("slug", data.empresaSlug)
     .maybeSingle();
   if (errEmpresa || !empresa) {
-    return { ok: false as const, error: "Restaurante no encontrado" };
+    return { ok: false, error: "Restaurante no encontrado" };
   }
+
+  // Código → solo aviso. No se valida vigencia/stock/personas/turno/día,
+  // ni se consume stock. Si el código existe en la empresa lo enlazamos por id
+  // para futura integración con el POS; si no, guardamos el texto tal cual.
+  let codigoId: string | null = null;
+  let codigoNombre: string | null = null;
+  if (data.codigo) {
+    const nombreNorm = data.codigo.toUpperCase().replace(/\s+/g, "");
+    codigoNombre = nombreNorm;
+    const { data: match } = await admin
+      .from("reserva_codigos")
+      .select("id, nombre")
+      .eq("empresa_id", empresa.id)
+      .eq("nombre", nombreNorm)
+      .maybeSingle();
+    if (match) {
+      codigoId = match.id as string;
+      codigoNombre = (match.nombre as string) ?? nombreNorm;
+    }
+  }
+
+  // Vincular o crear ficha de cliente (match por email O teléfono normalizado dentro de la empresa).
+  const link = await findOrLinkClienteSala(admin, {
+    empresaId: empresa.id,
+    nombre: data.nombre,
+    apellidos: data.apellidos,
+    email: data.email,
+    telefono: data.telefono,
+  });
+  if (!link.ok) {
+    console.error("[reservar-publica] vincular cliente:", link.error);
+    return { ok: false, error: "No pudimos vincular tu ficha de cliente" };
+  }
+  const cliente = link.result.cliente;
 
   const { error } = await admin.from("reservas").insert({
     empresa_id: empresa.id,
-    cliente_nombre: data.nombre,
-    cliente_apellidos: data.apellidos ?? null,
-    cliente_telefono: data.telefono,
-    cliente_email: data.email ?? null,
+    cliente_id: cliente.id,
+    // Snapshot de la reserva = datos canónicos de la ficha (los originales mandan).
+    cliente_nombre: cliente.nombre,
+    cliente_apellidos: cliente.apellidos,
+    cliente_telefono: cliente.telefono,
+    cliente_email: cliente.email,
     fecha: data.fecha,
     hora: data.hora,
     personas: data.personas,
@@ -48,10 +102,28 @@ export async function crearReservaPublicaAction(input: CrearReservaPublicaInput)
     origen: data.origen ?? null,
     estado: "PENDIENTE",
     turno: "COMIDA",
+    codigo_id: codigoId,
+    codigo_nombre: codigoNombre,
   });
   if (error) {
     console.error("[reservar-publica] insert error:", error);
-    return { ok: false as const, error: "No pudimos crear la reserva" };
+    return { ok: false, error: "No pudimos crear la reserva" };
   }
-  return { ok: true as const };
+
+  await admin.rpc("registrar_visita_cliente_sala", {
+    p_cliente_id: cliente.id,
+    p_fecha: data.fecha,
+  });
+
+  return {
+    ok: true,
+    clienteExistente: link.result.existed,
+    camposDistintos: link.result.camposDistintos,
+    datosCliente: {
+      nombre: cliente.nombre,
+      apellidos: cliente.apellidos,
+      email: cliente.email,
+      telefono: cliente.telefono,
+    },
+  };
 }

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { EtiquetasPanel } from "@/features/sala/components/reservas/EtiquetasPanel";
 import { Label } from "@/components/ui/label";
 import { Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -270,6 +271,10 @@ export function ClientesView() {
               {selectedCliente.observaciones && <div><Label className="text-muted-foreground">Observaciones</Label><p>{selectedCliente.observaciones}</p></div>}
               {selectedCliente.preferencias && <div><Label className="text-muted-foreground">Preferencias</Label><p>{selectedCliente.preferencias}</p></div>}
               {selectedCliente.notasInternas && <div><Label className="text-muted-foreground">Notas internas</Label><p>{selectedCliente.notasInternas}</p></div>}
+              <div className="pt-2 border-t space-y-1.5">
+                <Label className="text-muted-foreground">Etiquetas</Label>
+                <EtiquetasPanel scope="cliente" entityId={selectedCliente.id} />
+              </div>
             </div>
           )}
         </DialogContent>

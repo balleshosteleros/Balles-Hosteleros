@@ -17,6 +17,8 @@ import { ROLES_SEED, normalizeRolNombre } from "./roles";
 import { ORGANIGRAMA_SEED } from "./organigrama";
 import { INSPECTOR_EMAIL_PLANTILLAS_SEED } from "./inspector-email-plantillas";
 import { INSPECCION_PRESENTACION_SEED } from "./inspeccion-presentacion";
+import { RESERVA_TIPOS_SEED, normalizeTipoNombre } from "./reserva-tipos";
+import { SALA_ETIQUETAS_SEED, normalizeEtiquetaNombre } from "./sala-etiquetas";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -256,6 +258,155 @@ export async function syncInspeccionPresentacionAEmpresa(
 }
 
 /**
+ * Sincroniza los tipos canónicos de reserva a una empresa (aditivo).
+ * Solo inserta los nombres del seed que aún no existen; respeta cualquier
+ * tipo personalizado por el cliente.
+ */
+export async function syncReservaTiposAEmpresa(
+  admin: Admin,
+  empresaId: string,
+): Promise<{ creados: number }> {
+  const { data: existentes } = await admin
+    .from("empresa_reserva_tipos")
+    .select("nombre")
+    .eq("empresa_id", empresaId);
+  const setExistentes = new Set(
+    (existentes ?? []).map((t) => normalizeTipoNombre(t.nombre as string)),
+  );
+
+  const aCrear = RESERVA_TIPOS_SEED
+    .filter((t) => !setExistentes.has(normalizeTipoNombre(t.nombre)))
+    .map((t) => ({
+      empresa_id: empresaId,
+      nombre: t.nombre,
+      emoji: t.emoji,
+      color: t.color,
+      orden: t.orden,
+      activo: true,
+    }));
+
+  if (aCrear.length === 0) return { creados: 0 };
+  const { error } = await admin.from("empresa_reserva_tipos").insert(aCrear);
+  if (error) throw error;
+  return { creados: aCrear.length };
+}
+
+/**
+ * Sincroniza categorías + etiquetas canónicas de Sala (Reservas y Clientes)
+ * a una empresa concreta. Aditivo: solo crea categorías y etiquetas (por
+ * nombre dentro de su scope) que aún no existan; nunca renombra ni borra.
+ * Las creadas por seed quedan marcadas con `sistema=true` para que la UI
+ * impida borrarlas.
+ */
+export async function syncSalaEtiquetasAEmpresa(
+  admin: Admin,
+  empresaId: string,
+): Promise<{ categoriasCreadas: number; etiquetasCreadas: number }> {
+  // 1) Categorías existentes (clave: scope|nombre normalizado).
+  const { data: catsExistentes } = await admin
+    .from("sala_etiqueta_categorias")
+    .select("id, scope, nombre")
+    .eq("empresa_id", empresaId);
+  const catIdPorClave = new Map<string, string>();
+  for (const c of catsExistentes ?? []) {
+    const key = `${c.scope as string}|${normalizeEtiquetaNombre(c.nombre as string)}`;
+    catIdPorClave.set(key, c.id as string);
+  }
+
+  // 2) Crear categorías que falten.
+  const catsACrear = SALA_ETIQUETAS_SEED.filter(
+    (c) => !catIdPorClave.has(`${c.scope}|${normalizeEtiquetaNombre(c.nombre)}`),
+  ).map((c) => ({
+    empresa_id: empresaId,
+    scope: c.scope,
+    nombre: c.nombre,
+    orden: c.orden,
+    sistema: true,
+    activo: true,
+  }));
+
+  let categoriasCreadas = 0;
+  if (catsACrear.length > 0) {
+    const { data: insertadas, error } = await admin
+      .from("sala_etiqueta_categorias")
+      .insert(catsACrear)
+      .select("id, scope, nombre");
+    if (error) throw error;
+    categoriasCreadas = insertadas?.length ?? 0;
+    for (const c of insertadas ?? []) {
+      const key = `${c.scope as string}|${normalizeEtiquetaNombre(c.nombre as string)}`;
+      catIdPorClave.set(key, c.id as string);
+    }
+  }
+
+  // 3) Etiquetas existentes (clave: scope|nombre).
+  const { data: etiqExistentes } = await admin
+    .from("sala_etiquetas")
+    .select("scope, nombre")
+    .eq("empresa_id", empresaId);
+  const setEtiqExistentes = new Set(
+    (etiqExistentes ?? []).map(
+      (e) => `${e.scope as string}|${normalizeEtiquetaNombre(e.nombre as string)}`,
+    ),
+  );
+
+  // 4) Construir filas de etiquetas a crear (resolviendo categoria_id).
+  const etiqACrear: Array<Record<string, unknown>> = [];
+  for (const cat of SALA_ETIQUETAS_SEED) {
+    const catKey = `${cat.scope}|${normalizeEtiquetaNombre(cat.nombre)}`;
+    const categoriaId = catIdPorClave.get(catKey);
+    if (!categoriaId) continue;
+    cat.etiquetas.forEach((e, idx) => {
+      const etiqKey = `${cat.scope}|${normalizeEtiquetaNombre(e.nombre)}`;
+      if (setEtiqExistentes.has(etiqKey)) return;
+      etiqACrear.push({
+        empresa_id: empresaId,
+        categoria_id: categoriaId,
+        scope: cat.scope,
+        nombre: e.nombre,
+        emoji: e.emoji ?? null,
+        color: e.color ?? "#64748b",
+        orden: idx + 1,
+        sistema: true,
+        activo: true,
+      });
+    });
+  }
+
+  let etiquetasCreadas = 0;
+  if (etiqACrear.length > 0) {
+    const { error } = await admin.from("sala_etiquetas").insert(etiqACrear);
+    if (error) throw error;
+    etiquetasCreadas = etiqACrear.length;
+  }
+
+  return { categoriasCreadas, etiquetasCreadas };
+}
+
+/**
+ * Asegura que existe la fila base de `empresa_reservas_config` para la
+ * empresa (1 fila por empresa). No establece valores numéricos — el dueño
+ * los configura desde el Sheet ⚙️ → Reservas.
+ */
+export async function ensureReservasConfigEmpresa(
+  admin: Admin,
+  empresaId: string,
+): Promise<{ creada: boolean }> {
+  const { data: existente } = await admin
+    .from("empresa_reservas_config")
+    .select("empresa_id")
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+  if (existente) return { creada: false };
+
+  const { error } = await admin
+    .from("empresa_reservas_config")
+    .insert({ empresa_id: empresaId });
+  if (error) throw error;
+  return { creada: true };
+}
+
+/**
  * Siembra una empresa nueva con todos los pilares canónicos.
  * Llamar desde `createEmpresa()` justo después del INSERT en `empresas`.
  */
@@ -270,6 +421,9 @@ export async function seedEmpresaDefaults(
   await syncVacantesAEmpresa(admin, empresaId, empresaSlug);
   await syncInspectorEmailPlantillasAEmpresa(admin, empresaId);
   await syncInspeccionPresentacionAEmpresa(admin, empresaId);
+  await syncReservaTiposAEmpresa(admin, empresaId);
+  await syncSalaEtiquetasAEmpresa(admin, empresaId);
+  await ensureReservasConfigEmpresa(admin, empresaId);
 }
 
 /**
@@ -287,6 +441,8 @@ export async function syncSeedsToAllEmpresas(): Promise<{
     vacantesCreadas: number;
     inspectorEmailsCreadas: number;
     inspeccionPresentacionCreada: boolean;
+    reservaTiposCreados: number;
+    reservasConfigCreada: boolean;
   }>;
   error?: string;
 }> {
@@ -306,6 +462,10 @@ export async function syncSeedsToAllEmpresas(): Promise<{
       vacantesCreadas: number;
       inspectorEmailsCreadas: number;
       inspeccionPresentacionCreada: boolean;
+      reservaTiposCreados: number;
+      salaEtiquetasCategoriasCreadas: number;
+      salaEtiquetasCreadas: number;
+      reservasConfigCreada: boolean;
     }> = [];
 
     for (const e of empresas ?? []) {
@@ -318,6 +478,9 @@ export async function syncSeedsToAllEmpresas(): Promise<{
       const v = await syncVacantesAEmpresa(admin, empresaId, empresaSlug);
       const iep = await syncInspectorEmailPlantillasAEmpresa(admin, empresaId);
       const ipres = await syncInspeccionPresentacionAEmpresa(admin, empresaId);
+      const rt = await syncReservaTiposAEmpresa(admin, empresaId);
+      const se = await syncSalaEtiquetasAEmpresa(admin, empresaId);
+      const rcfg = await ensureReservasConfigEmpresa(admin, empresaId);
       resumen.push({
         empresa: empresaNombre,
         deptosCreados: d.creados,
@@ -326,6 +489,10 @@ export async function syncSeedsToAllEmpresas(): Promise<{
         vacantesCreadas: v.creadas,
         inspectorEmailsCreadas: iep.creadas,
         inspeccionPresentacionCreada: ipres.creada,
+        reservaTiposCreados: rt.creados,
+        salaEtiquetasCategoriasCreadas: se.categoriasCreadas,
+        salaEtiquetasCreadas: se.etiquetasCreadas,
+        reservasConfigCreada: rcfg.creada,
       });
     }
 
