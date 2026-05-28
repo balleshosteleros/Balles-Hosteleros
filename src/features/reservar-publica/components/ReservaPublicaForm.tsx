@@ -4,8 +4,7 @@ import { useState, useTransition, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { CalendarCheck, Users, Mail, Phone, Calendar, Clock, Utensils } from "lucide-react";
+import { CalendarCheck, Users, Mail, Phone, Calendar, Clock } from "lucide-react";
 import { crearReservaPublicaAction } from "@/features/reservar-publica/actions/crear-reserva-publica";
 import { toast } from "sonner";
 
@@ -37,7 +36,6 @@ export function ReservaPublicaForm({
   const [fecha, setFecha] = useState(new Date().toISOString().split("T")[0]);
   const [hora, setHora] = useState("21:00");
   const [personas, setPersonas] = useState(2);
-  const [notas, setNotas] = useState("");
   const [enviando, startTransition] = useTransition();
   const [exito, setExito] = useState(false);
 
@@ -46,12 +44,8 @@ export function ReservaPublicaForm({
 
   const valido = nombre.trim().length > 0 && telefono.trim().length >= 5 && personas > 0 && fecha && hora;
 
-  // Variables CSS para acento corporativo
   const styleVars = useMemo(
-    () => ({
-      "--brand": accent,
-      "--brand-fg": onAccent,
-    } as React.CSSProperties),
+    () => ({ ["--brand" as string]: accent, ["--brand-fg" as string]: onAccent }) as React.CSSProperties,
     [accent, onAccent],
   );
 
@@ -69,7 +63,6 @@ export function ReservaPublicaForm({
         fecha,
         hora,
         personas,
-        notas: notas.trim() || null,
       });
       if (!r.ok) {
         toast.error(r.error);
@@ -82,12 +75,10 @@ export function ReservaPublicaForm({
   if (exito) {
     return (
       <main
-        className="min-h-screen flex flex-col items-center justify-center px-6 py-12 bg-gradient-to-b from-zinc-50 to-zinc-100"
+        className="min-h-[100dvh] flex flex-col items-center justify-center px-6 py-12 bg-gradient-to-b from-zinc-50 to-zinc-100"
         style={styleVars}
       >
-        <div
-          className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-zinc-100 p-10 text-center space-y-5"
-        >
+        <div className="max-w-md w-full bg-white sm:rounded-2xl sm:shadow-xl sm:border sm:border-zinc-100 p-8 sm:p-10 text-center space-y-5">
           <div
             className="mx-auto h-20 w-20 rounded-full flex items-center justify-center"
             style={{ background: `${accent}15` }}
@@ -96,9 +87,7 @@ export function ReservaPublicaForm({
           </div>
           <div className="space-y-1">
             <h1 className="text-2xl font-bold tracking-tight">¡Reserva recibida!</h1>
-            <p className="text-zinc-600">
-              Te confirmamos en breve por teléfono.
-            </p>
+            <p className="text-zinc-600">Te confirmamos en breve por teléfono.</p>
           </div>
           <div className="pt-4 border-t border-zinc-100">
             <p className="text-sm text-zinc-500">Gracias por reservar en</p>
@@ -111,14 +100,14 @@ export function ReservaPublicaForm({
 
   return (
     <main
-      className="min-h-screen bg-gradient-to-b from-zinc-50 to-zinc-100 py-8 px-4 sm:px-6"
+      className="min-h-[100dvh] bg-white sm:bg-gradient-to-b sm:from-zinc-50 sm:to-zinc-100 sm:py-8 sm:px-6"
       style={styleVars}
     >
-      <div className="max-w-md mx-auto">
+      <div className="max-w-md mx-auto pb-[max(env(safe-area-inset-bottom),1.5rem)]">
         {/* HERO con logo */}
-        <header className="text-center mb-6">
+        <header className="text-center pt-[max(env(safe-area-inset-top),1.5rem)] sm:pt-0 pb-4">
           {logoUrl ? (
-            <div className="mx-auto mb-4 w-32 h-32 sm:w-36 sm:h-36 flex items-center justify-center">
+            <div className="mx-auto w-32 h-32 sm:w-44 sm:h-44 flex items-center justify-center">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={logoUrl}
@@ -127,30 +116,24 @@ export function ReservaPublicaForm({
               />
             </div>
           ) : (
-            <div
-              className="mx-auto mb-4 w-24 h-24 rounded-2xl flex items-center justify-center text-3xl font-black"
-              style={{ background: accent, color: onAccent }}
-            >
-              {empresaNombre.charAt(0).toUpperCase()}
-            </div>
+            <>
+              <div
+                className="mx-auto w-24 h-24 sm:w-28 sm:h-28 rounded-2xl flex items-center justify-center text-3xl sm:text-4xl font-black"
+                style={{ background: accent, color: onAccent }}
+              >
+                {empresaNombre.charAt(0).toUpperCase()}
+              </div>
+              <h1 className="mt-4 text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900">
+                {empresaNombre}
+              </h1>
+            </>
           )}
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900">
-            {empresaNombre}
-          </h1>
-          <div className="flex items-center justify-center gap-2 mt-2 text-zinc-500">
-            <Utensils className="h-3.5 w-3.5" />
-            <span className="text-sm font-medium uppercase tracking-wider">Reserva tu mesa</span>
-          </div>
-          <div
-            className="mx-auto mt-4 h-1 w-12 rounded-full"
-            style={{ background: accent }}
-          />
         </header>
 
-        {/* FORM CARD */}
+        {/* FORM CARD — full-bleed en móvil, card en sm+ */}
         <form
           onSubmit={onSubmit}
-          className="bg-white rounded-2xl shadow-xl border border-zinc-100 p-6 sm:p-7 space-y-5"
+          className="bg-white sm:rounded-2xl sm:shadow-xl sm:border sm:border-zinc-100 px-5 sm:px-7 pt-2 pb-6 sm:pt-7 sm:pb-7 space-y-5"
         >
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -161,8 +144,8 @@ export function ReservaPublicaForm({
                 onChange={(e) => setNombre(e.target.value)}
                 required
                 autoFocus
-                className="mt-1 focus-visible:ring-2"
-                style={{ ["--tw-ring-color" as string]: accent } as React.CSSProperties}
+                autoComplete="given-name"
+                className="mt-1 h-12 sm:h-10 text-base sm:text-sm"
               />
             </div>
             <div>
@@ -171,7 +154,8 @@ export function ReservaPublicaForm({
                 id="apellidos"
                 value={apellidos}
                 onChange={(e) => setApellidos(e.target.value)}
-                className="mt-1"
+                autoComplete="family-name"
+                className="mt-1 h-12 sm:h-10 text-base sm:text-sm"
               />
             </div>
           </div>
@@ -185,11 +169,12 @@ export function ReservaPublicaForm({
               id="telefono"
               type="tel"
               inputMode="tel"
+              autoComplete="tel"
               value={telefono}
               onChange={(e) => setTelefono(e.target.value)}
               required
               placeholder="612 345 678"
-              className="mt-1"
+              className="mt-1 h-12 sm:h-10 text-base sm:text-sm"
             />
           </div>
 
@@ -202,10 +187,11 @@ export function ReservaPublicaForm({
               id="email"
               type="email"
               inputMode="email"
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="tu@email.com"
-              className="mt-1"
+              className="mt-1 h-12 sm:h-10 text-base sm:text-sm"
             />
           </div>
 
@@ -222,7 +208,7 @@ export function ReservaPublicaForm({
                 onChange={(e) => setFecha(e.target.value)}
                 min={new Date().toISOString().split("T")[0]}
                 required
-                className="mt-1"
+                className="mt-1 h-12 sm:h-10 text-base sm:text-sm"
               />
             </div>
             <div>
@@ -236,7 +222,7 @@ export function ReservaPublicaForm({
                 value={hora}
                 onChange={(e) => setHora(e.target.value)}
                 required
-                className="mt-1"
+                className="mt-1 h-12 sm:h-10 text-base sm:text-sm"
               />
             </div>
           </div>
@@ -251,11 +237,11 @@ export function ReservaPublicaForm({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-9 w-9 rounded-md hover:bg-white"
+                className="h-11 w-11 sm:h-9 sm:w-9 rounded-md hover:bg-white text-xl"
                 onClick={() => setPersonas((n) => Math.max(1, n - 1))}
                 aria-label="Restar persona"
               >
-                <span className="text-lg leading-none">−</span>
+                <span className="leading-none">−</span>
               </Button>
               <div className="flex-1 flex items-center justify-center gap-2 text-xl font-bold text-zinc-900 tabular-nums">
                 {personas}
@@ -267,43 +253,26 @@ export function ReservaPublicaForm({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-9 w-9 rounded-md hover:bg-white"
+                className="h-11 w-11 sm:h-9 sm:w-9 rounded-md hover:bg-white text-xl"
                 onClick={() => setPersonas((n) => Math.min(50, n + 1))}
                 aria-label="Sumar persona"
               >
-                <span className="text-lg leading-none">+</span>
+                <span className="leading-none">+</span>
               </Button>
             </div>
-          </div>
-
-          <div>
-            <Label htmlFor="notas" className="text-zinc-700">
-              Notas <span className="text-zinc-400 font-normal">(alergias, ocasión...)</span>
-            </Label>
-            <Textarea
-              id="notas"
-              value={notas}
-              onChange={(e) => setNotas(e.target.value)}
-              rows={2}
-              className="mt-1 resize-none"
-            />
           </div>
 
           <Button
             type="submit"
             size="lg"
-            className="w-full font-semibold text-base h-12 shadow-md hover:shadow-lg transition-shadow"
+            className="w-full font-semibold text-base h-14 sm:h-12 shadow-md hover:shadow-lg transition-shadow mt-2"
             disabled={!valido || enviando}
-            style={{
-              background: accent,
-              color: onAccent,
-            }}
+            style={{ background: accent, color: onAccent }}
           >
             {enviando ? "Enviando..." : "Reservar mesa"}
           </Button>
         </form>
 
-        {/* Footer corporativo (sin mencionar origen) */}
         <footer className="text-center mt-6 text-xs text-zinc-400">
           <p>Reserva sujeta a confirmación · {empresaNombre}</p>
         </footer>
