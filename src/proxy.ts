@@ -2,6 +2,52 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { updateSession } from '@/lib/supabase/proxy'
+import { shouldServeMobileUI } from '@/shared/lib/device'
+
+// Rutas que NUNCA se redirigen desde móvil (públicas, auth, archivos, APIs, rutas móviles).
+const ALLOWED_ON_MOBILE_PREFIXES = [
+  '/m',
+  '/login',
+  '/signup',
+  '/forgot-password',
+  '/update-password',
+  '/check-email',
+  '/callback',
+  '/acceso-demo',
+  '/primer-acceso',
+  '/carta',
+  '/empleo',
+  '/inspectores',
+  '/firmar',
+  '/r',
+  '/p',
+  '/v',
+  '/api',
+  '/__site',
+  '/auth',
+]
+
+function isAllowedOnMobile(pathname: string): boolean {
+  if (pathname === '/m') return true
+  return ALLOWED_ON_MOBILE_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  )
+}
+
+const STATIC_FILE_RE = /\.(png|jpg|jpeg|svg|webp|ico|gif|woff2?|ttf|otf|js|css|map|json|txt|xml)$/
+
+function isStaticAsset(pathname: string): boolean {
+  return (
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/static') ||
+    pathname === '/favicon.ico' ||
+    pathname === '/robots.txt' ||
+    pathname === '/sitemap.xml' ||
+    pathname === '/manifest.webmanifest' ||
+    pathname === '/sw.js' ||
+    STATIC_FILE_RE.test(pathname)
+  )
+}
 
 const MODULO_POR_PREFIJO: Array<[string, string]> = [
   ['/direccion', 'DIRECCIÓN'],
@@ -42,6 +88,22 @@ function moduloRequerido(pathname: string): string | null {
 }
 
 export async function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl
+
+  // Paso 0: redirect móvil → /m (excepto rutas públicas/estáticas).
+  // Mover esto antes de cualquier llamada a Supabase ahorra trabajo en cada hit móvil.
+  if (!isStaticAsset(pathname)) {
+    const userAgent = request.headers.get('user-agent')
+    const forceView = request.cookies.get('bh_force_view')?.value
+    const isMobile = shouldServeMobileUI(userAgent, forceView)
+    if (isMobile && !isAllowedOnMobile(pathname)) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/m'
+      url.search = ''
+      return NextResponse.redirect(url)
+    }
+  }
+
   // Paso 1: refresco de sesión + rewrite de hostnames custom + redirect
   // de "/" hacia el módulo del usuario logueado.
   const sessionResponse = await updateSession(request)
@@ -52,7 +114,6 @@ export async function proxy(request: NextRequest) {
   }
 
   // Paso 2: autorización por módulo (solo para prefijos protegidos).
-  const pathname = request.nextUrl.pathname
   const moduloReq = moduloRequerido(pathname)
   if (!moduloReq) return sessionResponse
 

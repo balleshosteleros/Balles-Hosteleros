@@ -940,6 +940,27 @@ export async function aprobarSolicitud(id: string, notasRevision?: string) {
       }
     }
 
+    // Push PWA al solicitante. No bloqueamos si el envío falla.
+    try {
+      const { sendPushToUser } = await import(
+        "@/features/mi-panel/mobile/lib/push-server"
+      );
+      await sendPushToUser({
+        userId: solicitud.user_id as string,
+        empresaId: solicitud.empresa_id as string,
+        eventType: "solicitud_resuelta",
+        payload: {
+          title: "Solicitud aprobada",
+          body: `Tu solicitud (${solicitud.subtipo ?? "petición"}) ha sido aprobada.`,
+          url: "/m/solicitudes",
+          tag: `solicitud-${solicitud.id}`,
+          data: { url: "/m/solicitudes" },
+        },
+      });
+    } catch (e) {
+      console.error("[mi-panel] aprobarSolicitud → push:", extractErrorMessage(e));
+    }
+
     return { ok: true };
   } catch (err: unknown) {
     const msg = extractErrorMessage(err);
@@ -1150,6 +1171,12 @@ export async function rechazarSolicitud(id: string, notasRevision?: string) {
   try {
     const { supabase, user } = await getContext();
     if (!user) return { ok: false, error: "No autenticado" };
+    const { data: solicitud } = await supabase
+      .from("solicitudes_personal")
+      .select("id, empresa_id, user_id, subtipo")
+      .eq("id", id)
+      .maybeSingle();
+
     const { error } = await supabase
       .from("solicitudes_personal")
       .update({
@@ -1160,6 +1187,29 @@ export async function rechazarSolicitud(id: string, notasRevision?: string) {
       })
       .eq("id", id);
     if (error) throw error;
+
+    if (solicitud) {
+      try {
+        const { sendPushToUser } = await import(
+          "@/features/mi-panel/mobile/lib/push-server"
+        );
+        await sendPushToUser({
+          userId: solicitud.user_id as string,
+          empresaId: solicitud.empresa_id as string,
+          eventType: "solicitud_resuelta",
+          payload: {
+            title: "Solicitud rechazada",
+            body: `Tu solicitud (${solicitud.subtipo ?? "petición"}) no ha sido aprobada.`,
+            url: "/m/solicitudes",
+            tag: `solicitud-${solicitud.id}`,
+            data: { url: "/m/solicitudes" },
+          },
+        });
+      } catch (e) {
+        console.error("[mi-panel] rechazarSolicitud → push:", extractErrorMessage(e));
+      }
+    }
+
     return { ok: true };
   } catch (err: unknown) {
     const msg = extractErrorMessage(err);

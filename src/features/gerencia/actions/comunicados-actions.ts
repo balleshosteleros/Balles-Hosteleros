@@ -118,6 +118,18 @@ export async function createComunicado(input: ComunicadoInput) {
       .select()
       .single();
     if (error) throw error;
+
+    if (data?.id && data?.estado === "publicado") {
+      try {
+        const { notificarComunicadoNuevo } = await import(
+          "@/features/mi-panel/mobile/lib/push-comunicado"
+        );
+        await notificarComunicadoNuevo(data.id as string);
+      } catch (e) {
+        console.error("[comunicados] push:", e);
+      }
+    }
+
     return { ok: true, data };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
@@ -129,11 +141,33 @@ export async function createComunicado(input: ComunicadoInput) {
 export async function updateComunicado(id: string, input: ComunicadoInput) {
   try {
     const { supabase } = await getContext();
+    const { data: anterior } = await supabase
+      .from("comunicados")
+      .select("estado")
+      .eq("id", id)
+      .maybeSingle();
+
     const { error } = await supabase
       .from("comunicados")
       .update({ ...toRow(input), updated_at: new Date().toISOString() })
       .eq("id", id);
     if (error) throw error;
+
+    // Solo notificamos al pasar de borrador → publicado para evitar spam de pushes
+    // en ediciones menores de un comunicado ya publicado.
+    const eraBorrador = anterior?.estado !== "publicado";
+    const ahoraPublicado = (input.estado ?? "borrador") === "publicado";
+    if (eraBorrador && ahoraPublicado) {
+      try {
+        const { notificarComunicadoNuevo } = await import(
+          "@/features/mi-panel/mobile/lib/push-comunicado"
+        );
+        await notificarComunicadoNuevo(id);
+      } catch (e) {
+        console.error("[comunicados] push update:", e);
+      }
+    }
+
     return { ok: true };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
