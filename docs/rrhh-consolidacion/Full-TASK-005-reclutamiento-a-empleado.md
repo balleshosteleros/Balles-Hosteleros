@@ -2,7 +2,7 @@
 
 ## Estado
 
-Pendiente condicionado.
+Implementado (commit `e94b897`, en `main`, 2026-05-29). typecheck + build verdes. Pendiente: smoke candidato → empleado en BACANAL (núcleo testeable ya; entrega del magic link por email espera credenciales SMTP de SiteGround). Detalle de ejecución y desglose del smoke en `TASK-005-reclutamiento-a-empleado.md`.
 
 ## Objetivo
 
@@ -107,12 +107,14 @@ Un candidato seleccionado puede convertirse en empleado siguiendo el contrato ca
 
 ## Checklist de cierre
 
-- Promocion idempotente.
-- Duplicados manejados.
-- `user_empresas` coherente.
-- `user_roles` coherente.
-- Candidato queda enlazado a empleado.
-- Notificacion y magic link fallan sin romper alta.
+Código implementado (commit `e94b897`); cada punto queda **por verificar en el smoke**:
+
+- Promocion idempotente. (código ✓ — lock CAS sobre `promovido_at`)
+- Duplicados manejados. (código ✓ — email/DNI → reactivación)
+- `user_empresas` coherente. (código ✓ — upsert en alta nueva y reactivación)
+- `user_roles` coherente. (código ✓ — rol `empleado` vía núcleo)
+- Candidato queda enlazado a empleado. (código ✓ — `candidatos.empleado_id`)
+- Notificacion y magic link fallan sin romper alta. (código ✓ — try/catch; el alta ya usa `tempPassword`)
 
 ## Modelo de datos propuesto
 
@@ -147,6 +149,7 @@ Cerrar reclutamiento como submodulo integrado o abrir task de onboarding si se d
 
 ## Resultado validado
 
+Implementado y validado en estático (typecheck + build verdes, commit `e94b897`). Smoke runtime candidato → empleado pendiente en BACANAL.
 
 ## Duracion real
 
