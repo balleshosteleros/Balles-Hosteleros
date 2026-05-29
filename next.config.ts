@@ -7,6 +7,10 @@ const MOBILE_UA_REGEX =
   '.*(iPhone|iPod|Android.*Mobile|BlackBerry|IEMobile|Opera Mini|webOS|Windows Phone).*'
 
 const nextConfig: NextConfig = {
+  // Módulos nativos (bindings .node) que Turbopack no puede empaquetar en
+  // chunks ESM: se cargan en runtime desde node_modules. `ssh2` lo arrastra
+  // `ssh2-sftp-client`, usado solo en el cron server-only de canales-google-rwg.
+  serverExternalPackages: ['ssh2', 'ssh2-sftp-client'],
   // Activa el MCP server en /_next/mcp (Next.js 16+)
   experimental: {
     mcpServer: true,
