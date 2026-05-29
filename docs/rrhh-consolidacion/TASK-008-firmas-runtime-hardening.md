@@ -2,7 +2,40 @@
 
 ## Estado
 
-Pendiente. Derivada de [DISCOVERY_TASK004_2026-05-26.md](./DISCOVERY_TASK004_2026-05-26.md).
+En curso (2026-05-29). Código de hardening + migraciones en prod (`fe01494`); transporte de email migrado de Resend a SMTP nodemailer (`ce7f0ea`). Solo falta cargar credenciales SMTP de SiteGround para correr los smokes de email. Derivada de [DISCOVERY_TASK004_2026-05-26.md](./DISCOVERY_TASK004_2026-05-26.md).
+
+## Estado de ejecución (2026-05-29)
+
+### Hecho
+- Race fixes **R1** (token CAS), **R2** (eventos `seq`), **R3** (`otp_id`) + UNIQUE en `firmas_tokens.token_hash` — commiteados (`fe01494`), migraciones aplicadas a prod.
+- Env vars: 2 peppers + `NEXT_PUBLIC_APP_URL` en `.env.local`. **Se abandona Resend** para email transaccional: `RESEND_API_KEY`/`EMAIL_FROM` ya no se usan (el `resend-service.ts` de marketing es independiente y sigue en Resend).
+- Transporte de email reescrito a **SMTP global (nodemailer)** en `src/lib/email/send.ts` (`ce7f0ea`). Conserva Reply-To por empresa (`empresas.email_contacto`) y override `replyTo`. Sin credenciales devuelve `{ ok:false, configured:false }` (no rompe). Detalle: [HALLAZGO_EMAIL_TRANSPORTE_2026-05-28.md](./HALLAZGO_EMAIL_TRANSPORTE_2026-05-28.md).
+- `npm run typecheck` ✅ + `npm run build` ✅.
+
+### Pendiente bloqueante
+- **Credenciales SMTP de SiteGround** en `.env.local`: `SMTP_HOST`, `SMTP_PORT` (465 SSL / 587 STARTTLS), `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM` (opcional). Placeholders vacíos ya añadidos. **Sin esto el email no se entrega.**
+
+### Smokes S1-S12 — estado de bloqueo
+| Smoke | ¿Email? | Estado sin credenciales |
+|---|---|---|
+| S1 crear firma + envío | Sí (recepción) | 🔶 Parcial: DB/bucket/eventos verificables; recepción de email BLOQUEADA |
+| S2 abrir `/firmar/<token>` | No (token de BD) | ✅ Ejecutable |
+| S3 solicitar OTP | Sí (código llega por email) | 🔶 Parcial: evento `otp_enviado` + `codigo_hash` verificables; código BLOQUEADO |
+| S4 OTP correcto | Sí (necesita el código de S3) | ⛔ Bloqueado |
+| S5 OTP incorrecto 3× (bloqueo 30 min) | No (se envían códigos falsos) | ✅ Ejecutable |
+| S6 firmar (click_to_sign) | Sí (cadena OTP + email descarga) | ⛔ Bloqueado |
+| S7 reusar token tras firmar | Sí (requiere S6 previo) | ⛔ Bloqueado |
+| S8 rechazar doc | No | ✅ Ejecutable |
+| S9 reenviar pendiente | Sí (confirmación por email) | 🔶 Parcial: rotación de tokens verificable; email BLOQUEADO |
+| S10 cron expirar (curl + CRON_SECRET) | No | ✅ Ejecutable |
+| S11 verificar hash chain (`audit.verificarCadena`) | No | ✅ Ejecutable |
+| S12 multitenant RLS | No | ✅ Ejecutable |
+
+- **Ejecutables ya (sin credenciales):** S2, S5, S8, S10, S11, S12 (+ partes verificables de S1/S3/S9 vía BD).
+- **Bloqueados hasta credenciales SMTP:** S1 (recepción), S3 (código), S4, S6, S7, S9 (confirmación).
+
+### Siguiente paso
+Pegar credenciales SMTP de SiteGround → correr S1-S12 completos → escribir `HANDOFF_TASK008_FIRMAS_RUNTIME_<fecha>.md` → cerrar PRP-036.
 
 ## Objetivo
 
