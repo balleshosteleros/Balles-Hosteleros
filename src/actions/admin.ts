@@ -242,10 +242,10 @@ export async function resetEmployeePassword(userId: string, newPassword: string)
  *
  * Flujo:
  *   1. Generamos un magic link de tipo "recovery" con admin.generateLink.
- *   2. Si RESEND_API_KEY + EMAIL_FROM están en .env, lo enviamos nosotros con
- *      Resend (gratis hasta 3.000 mails/mes, sin límite de 3/h).
+ *   2. Si el SMTP global está configurado (SMTP_HOST/USER/PASS en .env), lo
+ *      enviamos nosotros vía nodemailer.
  *   3. Si no, caemos al envío automático de Supabase (sandbox o el SMTP que
- *      tenga el proyecto), para no romper en entornos sin Resend configurado.
+ *      tenga el proyecto), para no romper en entornos sin SMTP configurado.
  *
  * El enlace lleva a /update-password donde el usuario define su nueva clave.
  */
@@ -293,7 +293,7 @@ export async function sendPasswordResetEmail(profileId: string) {
     profile.full_name ||
     undefined
 
-  // 2) Intentamos enviar con Resend (configurado por el dueño del software).
+  // 2) Intentamos enviar con el SMTP global (configurado por el dueño del software).
   const { subject, html, text } = passwordResetEmail({
     recipientName,
     actionUrl,
@@ -311,7 +311,7 @@ export async function sendPasswordResetEmail(profileId: string) {
     return { success: true, email: profile.email, transport: sendResult.transport }
   }
 
-  // Si Resend devolvió error explícito, lo reportamos.
+  // Si el SMTP devolvió error explícito, lo reportamos.
   if (sendResult.configured) {
     return { error: `No se pudo enviar el correo: ${sendResult.error}` }
   }
