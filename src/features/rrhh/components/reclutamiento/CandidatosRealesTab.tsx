@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition, useCallback, useMemo } from "react"
 import { toast } from "sonner";
 import {
   Loader2, Mail, Phone, FileText, ArrowRight, Sparkles,
-  AlertTriangle, ExternalLink, Inbox,
+  AlertTriangle, ExternalLink, Inbox, Copy, Check, KeyRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -30,6 +30,7 @@ import { promoverCandidato } from "@/features/rrhh/actions/promocion-actions";
 import {
   listPuestosCatalogo, listDepartamentosCatalogo,
 } from "@/features/rrhh/actions/vacantes-actions";
+import { listLocales } from "@/features/ajustes/actions/locales-actions";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 
 type Fase = "nuevo" | "en_progreso" | "oferta" | "seleccionado" | "descartado";
@@ -107,6 +108,12 @@ export function CandidatosRealesTab() {
   const [promoverCand, setPromoverCand] = useState<CandidatoReal | null>(null);
   const [promoverDepto, setPromoverDepto] = useState<string>("");
   const [promoverPuesto, setPromoverPuesto] = useState<string>("");
+  const [promoverLocal, setPromoverLocal] = useState<string>("");
+  const [locales, setLocales] = useState<Array<{ id: string; nombre: string }>>([]);
+
+  // Credenciales temporales tras alta nueva (no reactivación)
+  const [credenciales, setCredenciales] = useState<{ email: string; password: string } | null>(null);
+  const [copiado, setCopiado] = useState(false);
 
   // Aviso post-promoción → offboarding
   const [offboardingDe, setOffboardingDe] = useState<{ empleadoId: string; nombre: string } | null>(null);
@@ -114,14 +121,21 @@ export function CandidatosRealesTab() {
   // Toast informativo de "ya es empleado, movimiento solo organizativo"
   const cargar = useCallback(async () => {
     setLoading(true);
-    const [c, p, d] = await Promise.all([
+    const [c, p, d, l] = await Promise.all([
       listCandidatosReales(),
       listPuestosCatalogo(),
       listDepartamentosCatalogo(),
+      listLocales(),
     ]);
     setItems(((c.data ?? []) as unknown) as CandidatoReal[]);
     setPuestos((p.data ?? []) as PuestoRef[]);
     setDepartamentos((d.data ?? []) as DepartamentoRef[]);
+    setLocales(
+      ((l.data ?? []) as Array<{ id: string; nombre: string }>).map((x) => ({
+        id: x.id,
+        nombre: x.nombre,
+      })),
+    );
     setLoading(false);
   }, []);
 
@@ -158,30 +172,54 @@ export function CandidatosRealesTab() {
     setPromoverCand(c);
     setPromoverDepto(c.vacantes?.departamento_id ?? "");
     setPromoverPuesto(c.vacantes?.puesto_id ?? "");
+    // Si solo hay un local, lo pre-seleccionamos.
+    setPromoverLocal(locales.length === 1 ? locales[0].id : "");
   }
 
   function ejecutarPromover() {
     if (!promoverCand) return;
+    if (!promoverLocal) {
+      toast.error("Selecciona el local del nuevo empleado");
+      return;
+    }
+    const emailCand = promoverCand.email;
     startTransition(async () => {
       const res = await promoverCandidato({
         candidatoId: promoverCand.id,
         departamentoId: promoverDepto || null,
         puestoId: promoverPuesto || null,
+        localId: promoverLocal,
       });
       if (res.ok) {
-        toast.success(
-          res.reactivado
-            ? "Empleado reactivado (re-contratación)"
-            : res.magicLinkSent
-            ? "Empleado creado y enlace de acceso enviado por email"
-            : "Empleado creado (sin email enviado — revisa configuración SMTP)"
-        );
         setPromoverCand(null);
+        if (res.tempPassword) {
+          // Alta nueva: mostramos credenciales temporales para el primer acceso.
+          setCredenciales({ email: emailCand, password: res.tempPassword });
+        } else {
+          toast.success(
+            res.reactivado
+              ? "Empleado reactivado (re-contratación)"
+              : "Empleado creado",
+          );
+        }
         void cargar();
       } else {
         toast.error(res.error ?? "Error al promover");
       }
     });
+  }
+
+  async function copiarCredenciales() {
+    if (!credenciales) return;
+    try {
+      await navigator.clipboard.writeText(
+        `Email: ${credenciales.email}\nContraseña: ${credenciales.password}`,
+      );
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2000);
+    } catch {
+      toast.error("No se pudo copiar al portapapeles");
+    }
   }
 
   function ejecutarOffboarding() {
@@ -359,7 +397,7 @@ export function CandidatosRealesTab() {
               Crear empleado en el sistema
             </DialogTitle>
             <DialogDescription>
-              Vas a contratar a <b>{promoverCand?.nombre} {promoverCand?.apellidos}</b>. Se creará una cuenta y se enviará un enlace de acceso por email para que complete sus datos personales en el primer login.
+              Vas a contratar a <b>{promoverCand?.nombre} {promoverCand?.apellidos}</b>. Se creará su cuenta y se te mostrará una <b>contraseña temporal</b> para el primer acceso. Si hay SMTP configurado, además recibirá un enlace por email.
             </DialogDescription>
           </DialogHeader>
 
@@ -392,6 +430,26 @@ export function CandidatosRealesTab() {
               </Select>
             </div>
 
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">
+                Local <span className="text-rose-500">*</span>
+              </label>
+              <Select value={promoverLocal} onValueChange={setPromoverLocal}>
+                <SelectTrigger>
+                  <SelectValue placeholder={locales.length === 0 ? "Sin locales disponibles" : "Selecciona…"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {locales.length === 0 ? (
+                    <SelectItem value="__none__" disabled>Esta empresa no tiene locales</SelectItem>
+                  ) : (
+                    locales.map((l) => (
+                      <SelectItem key={l.id} value={l.id}>{l.nombre}</SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="rounded-md bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-800 flex gap-2 items-start">
               <ArrowRight className="h-4 w-4 mt-0.5 shrink-0" />
               <span>
@@ -408,6 +466,33 @@ export function CandidatosRealesTab() {
               {pending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Confirmar y crear
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Credenciales temporales (alta nueva) ──────────────────── */}
+      <Dialog open={credenciales !== null} onOpenChange={(o) => { if (!o) setCredenciales(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5 text-emerald-600" />
+              Empleado creado
+            </DialogTitle>
+            <DialogDescription>
+              Credenciales temporales para el primer acceso al portal. Se le pedirá cambiar la contraseña al iniciar sesión. Entrégaselas tú: el email solo sale si hay SMTP configurado.
+            </DialogDescription>
+          </DialogHeader>
+          {credenciales && (
+            <div className="rounded-lg border bg-muted/40 p-4 space-y-2 font-mono text-sm">
+              <div><span className="text-muted-foreground">Email: </span>{credenciales.email}</div>
+              <div><span className="text-muted-foreground">Contraseña: </span>{credenciales.password}</div>
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={copiarCredenciales} className="gap-2">
+              {copiado ? <><Check className="h-4 w-4" />Copiado</> : <><Copy className="h-4 w-4" />Copiar</>}
+            </Button>
+            <Button onClick={() => setCredenciales(null)}>Hecho</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

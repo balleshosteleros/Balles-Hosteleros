@@ -18,11 +18,16 @@ import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { sendEmail } from "@/lib/email/send";
 import { bienvenidaEmpleadoEmail } from "@/lib/email/templates/bienvenida-empleado";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import {
+  requireAdminUser,
+  altaUsuarioEmpleado,
+} from "@/features/rrhh/services/empleados-core";
 
 interface PromoverInput {
   candidatoId: string;
   departamentoId?: string | null;
   puestoId?: string | null;
+  localId: string;
 }
 
 interface PromoverResult {
@@ -31,6 +36,7 @@ interface PromoverResult {
   empleadoId?: string;
   reactivado?: boolean;
   magicLinkSent?: boolean;
+  tempPassword?: string;
 }
 
 interface CandidatoRow {
@@ -148,6 +154,14 @@ export async function promoverCandidato(input: PromoverInput): Promise<PromoverR
   const { user, empresaId, actorEmail, actorName } = await getActor();
   if (!user || !empresaId) return { ok: false, error: "No autenticado" };
 
+  // Autorización: solo admin/director con acceso a la empresa (GAP authz —
+  // antes la promoción usaba service-role sin verificar rol).
+  try {
+    await requireAdminUser({ empresaIds: [empresaId] });
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Sin permisos" };
+  }
+
   let admin: ReturnType<typeof createAdminClient>;
   try {
     admin = createAdminClient();
@@ -236,6 +250,17 @@ export async function promoverCandidato(input: PromoverInput): Promise<PromoverR
       })
       .eq("id", empleadoExistente.id);
 
+    // Garantizar pertenencia canónica: el alta antigua pudo no escribir
+    // user_empresas (gap histórico de la promoción). Idempotente.
+    if (empleadoExistente.user_id) {
+      await admin
+        .from("user_empresas")
+        .upsert(
+          { user_id: empleadoExistente.user_id, empresa_id: empresaId },
+          { onConflict: "user_id,empresa_id" },
+        );
+    }
+
     await admin
       .from("candidatos")
       .update({ empleado_id: empleadoExistente.id, fase: "seleccionado", estado: "empleado" })
@@ -254,75 +279,46 @@ export async function promoverCandidato(input: PromoverInput): Promise<PromoverR
     return { ok: true, empleadoId: empleadoExistente.id, reactivado: true };
   }
 
-  // 4b. Crear nuevo: auth.users → profile (trigger) → empleado
-  const fullName = `${cand.nombre} ${cand.apellidos ?? ""}`.trim();
-  const tempPassword = crypto.randomUUID() + "Aa1!";
-
-  const { data: created, error: createErr } = await admin.auth.admin.createUser({
-    email: emailLower,
-    password: tempPassword,
-    email_confirm: true,
-    user_metadata: { full_name: fullName },
-  });
-
-  if (createErr || !created?.user) {
-    // Rollback el lock
+  // 4b. Crear nuevo empleado vía el núcleo canónico (compartido con createEmpleado):
+  // auth.user → profile → user_roles → user_empresas → empleado (con local + rollback).
+  if (!input.localId) {
     await admin.from("candidatos").update({ promovido_at: null, promovido_por: null }).eq("id", cand.id);
-    return { ok: false, error: createErr ? friendlyError(createErr) : "No se pudo crear el usuario" };
+    return { ok: false, error: "Debes asignar un local al nuevo empleado." };
   }
 
-  const newUserId = created.user.id;
+  const fullName = `${cand.nombre} ${cand.apellidos ?? ""}`.trim();
+  const alta = await altaUsuarioEmpleado({
+    admin,
+    loginEmail: emailLower,
+    emailPersonal: emailLower,
+    emailEmpresa: null,
+    fullName,
+    nombre: cand.nombre,
+    apellidos: cand.apellidos,
+    telefono: cand.telefono,
+    dniNie: dniNorm,
+    departamentoId: input.departamentoId ?? null,
+    puesto: puestoNombre,
+    empresaPrincipalId: empresaId,
+    empresasAcceso: [empresaId],
+    localPrincipalId: input.localId,
+  });
 
-  // Actualizar profile con datos de empresa + nombre
-  // avatar_obligatorio=true → AvatarRequiredGuard pedirá foto en el primer login.
-  await admin
-    .from("profiles")
-    .update({
-      empresa_id: empresaId,
-      full_name: fullName,
-      nombre: cand.nombre,
-      apellidos: cand.apellidos,
-      es_empleado: true,
-      avatar_obligatorio: true,
-    })
-    .eq("user_id", newUserId);
-
-  // Insertar rol RBAC empleado
-  await admin.from("user_roles").insert({ user_id: newUserId, role: "empleado" });
-
-  // Crear empleado
-  const { data: empleado, error: empErr } = await admin
-    .from("empleados")
-    .insert({
-      empresa_id: empresaId,
-      user_id: newUserId,
-      departamento_id: input.departamentoId ?? null,
-      puesto: puestoNombre,
-      nombre: cand.nombre,
-      apellidos: cand.apellidos,
-      dni_nie: dniNorm,
-      telefono: cand.telefono,
-      email_personal: emailLower,
-      fecha_alta: nowIso.slice(0, 10),
-      estado: "Activo",
-      tipo_jornada: "Completa",
-      perfil_completado: false,
-    })
-    .select("id")
-    .single();
-
-  if (empErr || !empleado) {
-    return { ok: false, error: empErr ? friendlyError(empErr) : "No se pudo crear el empleado" };
+  if (!alta.ok) {
+    // Rollback del lock optimista: el candidato vuelve a ser promocionable.
+    await admin.from("candidatos").update({ promovido_at: null, promovido_por: null }).eq("id", cand.id);
+    return { ok: false, error: alta.error };
   }
 
   // Linkar candidato → empleado
   await admin
     .from("candidatos")
-    .update({ empleado_id: empleado.id, fase: "seleccionado", estado: "empleado" })
+    .update({ empleado_id: alta.empleadoId, fase: "seleccionado", estado: "empleado" })
     .eq("id", cand.id);
 
-  // 5. Magic link de invitación
+  // 5. Magic link de invitación (extra: la cuenta ya es usable con tempPassword).
   const siteUrl =
+    process.env.NEXT_PUBLIC_APP_URL ??
     process.env.NEXT_PUBLIC_SITE_URL ??
     (process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : null) ??
     "http://localhost:3000";
@@ -369,8 +365,14 @@ export async function promoverCandidato(input: PromoverInput): Promise<PromoverR
     vacanteTitulo = vac?.titulo ?? null;
   }
 
-  await registrarAuditoria(admin, empresaId, cand, empleado.id, false, user.id, actorEmail);
-  await notificarRRHH(admin, empresaId, empleado.id, fullName, vacanteTitulo);
+  await registrarAuditoria(admin, empresaId, cand, alta.empleadoId, false, user.id, actorEmail);
+  await notificarRRHH(admin, empresaId, alta.empleadoId, fullName, vacanteTitulo);
 
-  return { ok: true, empleadoId: empleado.id, reactivado: false, magicLinkSent };
+  return {
+    ok: true,
+    empleadoId: alta.empleadoId,
+    reactivado: false,
+    magicLinkSent,
+    tempPassword: alta.tempPassword,
+  };
 }

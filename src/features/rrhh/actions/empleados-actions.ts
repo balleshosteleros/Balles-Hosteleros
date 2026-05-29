@@ -1,8 +1,11 @@
 "use server";
 
 import { getAppContext } from "@/lib/supabase/get-context";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  requireAdminUser,
+  altaUsuarioEmpleado,
+} from "@/features/rrhh/services/empleados-core";
 import { revalidatePath } from "next/cache";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 import {
@@ -11,8 +14,6 @@ import {
 } from "@/shared/lib/normalizar-nombre";
 import type { DatosPersonalesInput, DatosPersonalesCompletos } from "@/features/mi-panel/actions/datos-personales-actions";
 import type { SolicitudPersonal, SolicitudSubtipo, SolicitudTipo, SolicitudEstado } from "@/features/mi-panel/types";
-
-const ROLES_ADMIN = ["admin", "director"] as const;
 
 export type EstadoEmpleado = "Activo" | "Baja temporal" | "Baja definitiva";
 
@@ -191,92 +192,36 @@ export async function createEmpleado(input: {
     const nombreNorm = normalizarNombre(input.nombre);
     const apellidosNorm = normalizarNombreOrNull(input.apellidos);
     const fullName = `${nombreNorm} ${apellidosNorm ?? ""}`.trim();
-    const tempPassword = crypto.randomUUID().slice(0, 12) + "Aa1!";
-
-    // 1. Crear auth.user
-    const { data: created, error: createErr } = await admin.auth.admin.createUser({
-      email,
-      password: tempPassword,
-      email_confirm: true,
-      user_metadata: { full_name: fullName },
-    });
-    if (createErr || !created?.user) {
-      return { ok: false, error: createErr ? friendlyError(createErr) : "No se pudo crear el usuario" };
-    }
-    const newUserId = created.user.id;
-
-    // 2. Completar profile (el trigger handle_new_user crea la fila base)
-    await admin.from("profiles").update({
-      empresa_id: empresaPrincipalId,
-      full_name: fullName,
-      nombre: nombreNorm,
-      apellidos: apellidosNorm,
-      rol_label: "EMPLEADO",
-      es_empleado: true,
-      avatar_obligatorio: true,
-    }).eq("id", newUserId);
-
-    // 3. Asignar rol RBAC base
-    await admin.from("user_roles").insert({ user_id: newUserId, role: "empleado" });
-
-    // 4. Acceso multi-empresa: insertar en user_empresas para cada empresa marcada.
-    const accesosRows = empresasAcceso.map((eid) => ({
-      user_id: newUserId,
-      empresa_id: eid,
-    }));
-    const { error: accesoErr } = await admin
-      .from("user_empresas")
-      .upsert(accesosRows, { onConflict: "user_id,empresa_id" });
-    if (accesoErr) {
-      await admin.auth.admin.deleteUser(newUserId);
-      return { ok: false, error: `Error asignando acceso a empresas: ${friendlyError(accesoErr)}` };
-    }
-
-    // 5. Crear empleado vinculado (en la empresa principal).
+    // Local de la empresa principal: obligatorio en el modelo actual.
     const isRealId = (id?: string) => !!id && !id.startsWith("mock-");
-    const localPrincipal =
-      input.localPorEmpresa?.[empresaPrincipalId] ?? null;
+    const localPrincipal = input.localPorEmpresa?.[empresaPrincipalId] ?? null;
     if (!localPrincipal) {
-      await admin.auth.admin.deleteUser(newUserId);
       return { ok: false, error: "La empresa principal debe tener un local asignado." };
     }
-    const { data: localRow, error: localErr } = await admin
-      .from("locales")
-      .select("id, empresa_id")
-      .eq("id", localPrincipal)
-      .maybeSingle();
-    if (localErr || !localRow || localRow.empresa_id !== empresaPrincipalId) {
-      await admin.auth.admin.deleteUser(newUserId);
-      return {
-        ok: false,
-        error: "El local asignado debe pertenecer a la empresa principal.",
-      };
-    }
-    const { error: empErr } = await admin.from("empleados").insert({
-      empresa_id: empresaPrincipalId,
-      user_id: newUserId,
+
+    // Alta en cascada (auth.user → profile → roles → user_empresas → empleado),
+    // núcleo canónico compartido con la promoción de candidatos.
+    const alta = await altaUsuarioEmpleado({
+      admin,
+      loginEmail: email,
+      emailPersonal,
+      emailEmpresa,
+      fullName,
       nombre: nombreNorm,
       apellidos: apellidosNorm,
-      departamento_id: isRealId(input.departamentoId) ? input.departamentoId : null,
-      puesto: input.puesto ?? null,
-      email_empresa: emailEmpresa,
-      email_personal: emailPersonal,
       telefono: input.telefono ?? null,
-      fecha_alta: new Date().toISOString().slice(0, 10),
-      estado: "Activo",
-      tipo_jornada: "Completa",
-      perfil_completado: false,
-      local_id: localPrincipal,
+      departamentoId: isRealId(input.departamentoId) ? input.departamentoId : null,
+      puesto: input.puesto ?? null,
+      empresaPrincipalId,
+      empresasAcceso,
+      localPrincipalId: localPrincipal,
     });
-
-    if (empErr) {
-      // Rollback: borrar el auth.user (CASCADE limpia profile, user_empresas, user_roles).
-      await admin.auth.admin.deleteUser(newUserId);
-      return { ok: false, error: friendlyError(empErr) };
+    if (!alta.ok) {
+      return { ok: false, error: alta.error };
     }
 
     revalidatePath("/rrhh/empleados");
-    return { ok: true, tempPassword, email };
+    return { ok: true, tempPassword: alta.tempPassword, email };
   } catch (err: unknown) {
     console.error("[rrhh] createEmpleado:", err);
     return { ok: false, error: friendlyError(err) };
@@ -449,64 +394,6 @@ export async function listDepartamentos() {
   } catch {
     return { ok: true, data: FALLBACK_DEPARTAMENTOS };
   }
-}
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/**
- * Verifica que el invocador tenga rol admin o director y, opcionalmente,
- * que sea miembro de TODAS las empresas indicadas en `opts.empresaIds`.
- *
- * - `director` es un rol de plataforma (Doc 4 §6) y conserva bypass total
- *   sobre el scope por empresa: un director puede operar cross-tenant.
- * - `admin` es rol tenant: debe pertenecer (vía user_empresas) a cada una
- *   de las empresas sobre las que opera. Si se pasa una empresa a la que
- *   no pertenece, se rechaza con error.
- *
- * Doc 4 P0 — gap B del audit 2026-05-15.
- */
-async function requireAdminUser(opts?: { empresaIds?: string[] }) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("No autenticado");
-
-  const { data: rolesRows } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", user.id);
-  const roles = (rolesRows ?? []).map((r: { role: string }) => r.role);
-  const isAdmin = roles.some((r) =>
-    (ROLES_ADMIN as readonly string[]).includes(r),
-  );
-  if (!isAdmin) {
-    throw new Error("Sin permisos: solo admin o director pueden modificar empleados");
-  }
-
-  // director (rol plataforma) opera cross-tenant; salta el scope por empresa.
-  if (opts?.empresaIds && opts.empresaIds.length > 0 && !roles.includes("director")) {
-    const empresasReq = Array.from(
-      new Set(opts.empresaIds.filter((id) => typeof id === "string" && UUID_RE.test(id))),
-    );
-    if (empresasReq.length === 0) {
-      throw new Error("Sin permisos: empresas no válidas");
-    }
-    const { data: rels } = await supabase
-      .from("user_empresas")
-      .select("empresa_id")
-      .eq("user_id", user.id)
-      .in("empresa_id", empresasReq);
-    const accesibles = new Set((rels ?? []).map((r: { empresa_id: string }) => r.empresa_id));
-    const sinAcceso = empresasReq.filter((id) => !accesibles.has(id));
-    if (sinAcceso.length > 0) {
-      throw new Error(
-        sinAcceso.length === 1
-          ? "Sin permisos: no tienes acceso a esa empresa"
-          : `Sin permisos: no tienes acceso a ${sinAcceso.length} de las empresas seleccionadas`,
-      );
-    }
-  }
-
-  return user;
 }
 
 /**
