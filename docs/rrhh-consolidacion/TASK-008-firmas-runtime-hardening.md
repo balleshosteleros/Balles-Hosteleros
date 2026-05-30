@@ -2,7 +2,7 @@
 
 ## Estado
 
-En curso (2026-05-29). Código de hardening + migraciones en prod (`fe01494`); transporte de email migrado de Resend a SMTP nodemailer (`ce7f0ea`). Solo falta cargar credenciales SMTP de SiteGround para correr los smokes de email. Derivada de [DISCOVERY_TASK004_2026-05-26.md](./DISCOVERY_TASK004_2026-05-26.md).
+Hardening validado (2026-05-30). **Smoke E2E ejecutado: 10/12 sub-smokes PASAN** vía la UI pública real `/firmar/<token>` (Playwright headless) + verificación en BD. Los race-fixes R1/R2/R3 confirmados en runtime. Solo quedan los 2 sub-smokes de **entrega real de email** (residual, espera SMTP de SiteGround). Código + migraciones en prod (`fe01494`); transporte de email migrado a SMTP nodemailer (`ce7f0ea`). Derivada de [DISCOVERY_TASK004_2026-05-26.md](./DISCOVERY_TASK004_2026-05-26.md).
 
 ## Estado de ejecución (2026-05-29)
 
@@ -15,27 +15,33 @@ En curso (2026-05-29). Código de hardening + migraciones en prod (`fe01494`); t
 ### Pendiente bloqueante
 - **Credenciales SMTP de SiteGround** en `.env.local`: `SMTP_HOST`, `SMTP_PORT` (465 SSL / 587 STARTTLS), `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM` (opcional). Placeholders vacíos ya añadidos. **Sin esto el email no se entrega.**
 
-### Smokes S1-S12 — estado de bloqueo
-| Smoke | ¿Email? | Estado sin credenciales |
-|---|---|---|
-| S1 crear firma + envío | Sí (recepción) | 🔶 Parcial: DB/bucket/eventos verificables; recepción de email BLOQUEADA |
-| S2 abrir `/firmar/<token>` | No (token de BD) | ✅ Ejecutable |
-| S3 solicitar OTP | Sí (código llega por email) | 🔶 Parcial: evento `otp_enviado` + `codigo_hash` verificables; código BLOQUEADO |
-| S4 OTP correcto | Sí (necesita el código de S3) | ⛔ Bloqueado |
-| S5 OTP incorrecto 3× (bloqueo 30 min) | No (se envían códigos falsos) | ✅ Ejecutable |
-| S6 firmar (click_to_sign) | Sí (cadena OTP + email descarga) | ⛔ Bloqueado |
-| S7 reusar token tras firmar | Sí (requiere S6 previo) | ⛔ Bloqueado |
-| S8 rechazar doc | No | ✅ Ejecutable |
-| S9 reenviar pendiente | Sí (confirmación por email) | 🔶 Parcial: rotación de tokens verificable; email BLOQUEADO |
-| S10 cron expirar (curl + CRON_SECRET) | No | ✅ Ejecutable |
-| S11 verificar hash chain (`audit.verificarCadena`) | No | ✅ Ejecutable |
-| S12 multitenant RLS | No | ✅ Ejecutable |
+### Smoke ejecutado (2026-05-30) — UI pública real `/firmar/<token>` (Playwright headless) + verificación BD (Management API)
 
-- **Ejecutables ya (sin credenciales):** S2, S5, S8, S10, S11, S12 (+ partes verificables de S1/S3/S9 vía BD).
-- **Bloqueados hasta credenciales SMTP:** S1 (recepción), S3 (código), S4, S6, S7, S9 (confirmación).
+Setup: 4 documentos sembrados en BACANAL (empleado de smoke TASK-005, modalidad `email_otp`), PDFs reales en bucket `firmas`, tokens hasheados con el pepper real. El **OTP se fijó con `FIRMA_OTP_PEPPER`** (secreto legítimo de `.env.local`) entre `solicitarOTP` y `validarOTP` — equivale a "leer el código del email"; `validarOTP` lo comprueba por el camino real. No se falsea ninguna validación.
+
+| Smoke | Resultado | Evidencia |
+|---|---|---|
+| S2 abrir `/firmar/<token>` | ✅ PASA | Doc A: visor + datos del envío; evento `abierto` |
+| S3 solicitar OTP | ✅ PASA | pantalla código + evento `otp_enviado` + fila `firmas_otps` |
+| S4 OTP correcto | ✅ PASA | evento `otp_validado`; avanza a "Firmar" |
+| S5 OTP incorrecto 3× → bloqueo | ✅ PASA | Doc B: `intentos=3`, `bloqueado_hasta` futuro; eventos `otp_fallido×2 → otp_bloqueado` |
+| S6 firmar | ✅ PASA | Doc A: `estado=firmado`, `pdf_firmado_path` + `sha256_acta`; evento `firmado` |
+| S7 reusar token tras firmar | ✅ PASA | reabrir token → "ya no admite firma" (token CAS R1) |
+| S8 rechazar doc | ✅ PASA | Doc C: `estado=rechazado` + `motivo_rechazo` |
+| S10 cron expirar | ✅ PASA | Doc D (`expira_en` pasado) → `estado=expirado` + evento `expirado`; sin `CRON_SECRET` → 401 |
+| S11 hash chain (R2 `seq`) | ✅ PASA | Doc A: 4 eventos `abierto→otp_enviado→otp_validado→firmado`, recomputo `sha256(canonicalStringify)` = `hash` almacenado, `prev_hash` encadena. (Nota: el hash usa `ocurrido_en` en formato `toISOString()` `…Z`, no el `+00:00` de PostgREST). |
+| S12 multitenant RLS | ✅ PASA | anon (clave pública) lee **0 filas** en las 4 tablas `firmas_*`; service role sí |
+| S1 crear firma + **envío email** | 🔶 Parcial | DB/bucket/token/eventos OK (vía `crearFirmaInterno` en el seed); **entrega del email no verificable sin SMTP** |
+| S9 reenviar + **email** | ⛔ Residual | rotación de token verificable por código; confirmación por email espera SMTP |
+
+**Veredicto: 10/12 PASAN.** Los 2 residuales (S1 recepción, S9 confirmación) dependen exclusivamente de la **entrega real de los 3 correos** (invitación/OTP/copia firmada), bloqueada hasta tener SMTP de SiteGround. La lógica de negocio de firma está **validada en runtime**.
+
+### Pendiente (no bloqueante)
+- Credenciales SMTP de SiteGround → verificar entrega real de los 3 emails (S1/S9) → `HANDOFF_TASK008_FIRMAS_RUNTIME_<fecha>.md` → cerrar PRP-036.
+- Limpiar datos de smoke en BACANAL (4 docs `tipo='smoke'` + tokens/otps/eventos + objetos de storage) cuando convenga.
 
 ### Siguiente paso
-Pegar credenciales SMTP de SiteGround → correr S1-S12 completos → escribir `HANDOFF_TASK008_FIRMAS_RUNTIME_<fecha>.md` → cerrar PRP-036.
+Cerrable salvo la verificación de entrega de email. Pegar credenciales SMTP → correr S1/S9 de entrega → handoff → cerrar PRP-036.
 
 ## Objetivo
 
