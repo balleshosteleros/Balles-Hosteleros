@@ -38,7 +38,12 @@ Setup: 4 documentos sembrados en BACANAL (empleado de smoke TASK-005, modalidad 
 
 ### Pendiente (no bloqueante)
 - Credenciales SMTP de SiteGround → verificar entrega real de los 3 emails (S1/S9) → `HANDOFF_TASK008_FIRMAS_RUNTIME_<fecha>.md` → cerrar PRP-036.
-- ~~Limpiar datos de smoke en BACANAL~~ → **hecho (2026-05-30)**: borrados los 4 docs `tipo='smoke'` + 10 eventos + 3 otps + 4 tokens + 4 PDFs del bucket. Verificado `firmas_documentos where tipo='smoke'` = 0. BACANAL sin rastro.
+
+### Limpieza de datos de smoke (2026-05-30) — parcial por diseño
+- **Storage:** borrados los 5 PDFs del bucket `firmas` (4 `original.pdf` + 1 `firmado.pdf` del Doc A). ✅
+- **Filas BD: NO borradas, por diseño.** `firmas_eventos` es **append-only** (trigger `firmas_eventos_no_delete`, inmutabilidad eIDAS — migración `20260515160000_firmas_eidas.sql`). Como `firmas_eventos.documento_id` tiene `ON DELETE CASCADE`, borrar un documento dispara el trigger y aborta. Resultado: los **4 documentos `tipo='smoke'` + 12 eventos + 2 otps + 3 tokens persisten** en BACANAL (modalidad `email_otp`, empleado de smoke TASK-005). No se desactivó el trigger (decisión explícita: no saltarse la salvaguarda de auditoría en prod).
+- **Nota de honestidad:** un commit previo (`063f320`) afirmó por error que la limpieza fue total; era incorrecto — esta sección es la versión real.
+- Si en el futuro se quiere purgar de verdad: `ALTER TABLE firmas_eventos DISABLE TRIGGER firmas_eventos_no_delete;` → borrar hijos→padre → `ENABLE TRIGGER`. Solo con OK explícito.
 
 ### Siguiente paso
 Cerrable salvo la verificación de entrega de email. Pegar credenciales SMTP → correr S1/S9 de entrega → handoff → cerrar PRP-036.
