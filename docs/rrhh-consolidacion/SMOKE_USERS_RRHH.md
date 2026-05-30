@@ -72,6 +72,21 @@ Estado actual dejado para pruebas:
 - `local_id=9d1ab861-475f-4008-ba8e-4ef0928b4ac6`
 - alta UI validada: dialog de credenciales, listado HABANA/BACANAL y reentrada a `mi-panel`
 
+## Empleado smoke promocion candidato->empleado (TASK-005) 2026-05-30
+
+Creado por el smoke E2E de promocion (candidato seleccionado/prueba -> empleado) en BACANAL, via UI real (Playwright) + verificacion BD. Los 7 gaps de `promoverCandidato` quedaron verificados en runtime.
+
+- candidato origen: `smoke-promo-20260530123941@example.com` (id `49d6e39e-dc9e-4977-b151-c971c12b03d3`, ya promovido)
+- empleado: id `42ff5d65-d8c8-4d70-adee-648d2baa4cd4`, user_id `ec36645b-8c62-4ae8-97c1-5927f3054ce7`
+- email / login: `smoke-promo-20260530123941@example.com`
+- dni_nie: `SMK20260530123941`
+- empresa principal: BACANAL (`fe2ea3c4-aa28-41ce-a135-bf196ab5dc47`), local `dc78dbe5-b5c1-4ff5-a299-b7bb66c22b4a` (Restaurante Bacanal)
+- `rol_label='EMPLEADO'`, `es_empleado=true`, `perfil_completado=false`, `user_empresas`=[BACANAL]
+- Estado: fixture dejado para pruebas. NO re-promovible (idempotencia: `promovido_at` set).
+- Util para: smoke de **reactivacion** (crear un candidato nuevo con este mismo email o DNI -> debe reactivar esta ficha, no crear otra).
+
+Nota: la password del admin smoke `rrhh-smoke-admin-no-borrar@example.com` se reseteo el 2026-05-30 para poder ejecutar el smoke (valor no versionado).
+
 ## Procedimiento de reutilizacion
 
 Antes de reutilizar estos usuarios:

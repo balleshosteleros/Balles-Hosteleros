@@ -2,7 +2,7 @@
 
 ## Estado
 
-Implementado (commit `e94b897`, en `main`, 2026-05-29). `npm run typecheck` y `npm run build` verdes. **Pendiente: smoke candidato → empleado en BACANAL** (el núcleo es testeable ya; solo la entrega real del magic link por email espera credenciales SMTP de SiteGround). Ver "Estado de ejecución" abajo.
+Implementado (commit `e94b897`, en `main`, 2026-05-29) y **smoke E2E ejecutado OK** (2026-05-30, vía UI real + verificación en BD): los 7 gaps cerrados confirmados en runtime. typecheck + build verdes. Único residual no bloqueante: entrega real del email (magic link) por SMTP de SiteGround. Ver "Estado de ejecución" abajo.
 
 ## Estado de ejecución (2026-05-29)
 
@@ -12,19 +12,27 @@ Implementado (commit `e94b897`, en `main`, 2026-05-29). `npm run typecheck` y `n
 - **`promoverCandidato`** alineado con el alta canónica — 7 gaps cerrados: authz (`requireAdminUser`), `user_empresas` (alta nueva + reactivación), `local_id` obligatorio, `rol_label`, rollback completo, devuelve `tempPassword`, redirect del magic link a `NEXT_PUBLIC_APP_URL`. El magic link por email queda como extra no bloqueante.
 - **UI** `CandidatosRealesTab`: selector de local obligatorio + diálogo de credenciales temporales tras el alta nueva.
 
-### Pendiente — smoke candidato → empleado (BACANAL)
-| Smoke | ¿Email/SMTP? | Estado sin credenciales |
-|---|---|---|
-| Alta nueva candidato → empleado (+ `tempPassword` visible) | No | ✅ Ejecutable |
-| Idempotencia (candidato ya promovido / doble click) | No | ✅ Ejecutable |
-| Duplicado por email/DNI → reactivación (+ backfill `user_empresas`) | No | ✅ Ejecutable |
-| Coherencia `user_empresas` / `user_roles` / `empleados.user_id` / `local_id` | No | ✅ Ejecutable |
-| Authz: usuario no admin/director no puede promover | No | ✅ Ejecutable |
-| Login del empleado con `tempPassword` | No | ✅ Ejecutable |
-| Entrega real del magic link por email | Sí | ⛔ Bloqueado hasta credenciales SMTP SiteGround |
+### Smoke ejecutado (2026-05-30) — UI real (Playwright headless) + verificación en BD (Management API)
+Empresa BACANAL. Admin `rrhh-smoke-admin-no-borrar@example.com` (login real). Candidato `smoke-promo-20260530123941@example.com` → empleado `42ff5d65-d8c8-4d70-adee-648d2baa4cd4` (user `ec36645b-8c62-4ae8-97c1-5927f3054ce7`).
+
+| Verificación | Resultado |
+|---|---|
+| Alta nueva candidato → empleado (login → "Crear en sistema" → confirmar) | ✅ OK |
+| `tempPassword` mostrado en UI (login sin depender del email) | ✅ |
+| GAP1 `user_empresas` (BACANAL) | ✅ 1 fila (era el bug original) |
+| GAP2 `empleados.local_id` | ✅ `dc78dbe5-…` (Restaurante Bacanal) |
+| GAP3 authz (`promovido_por` = admin) | ✅ |
+| GAP4 `user_roles`=empleado + `profiles.rol_label`=EMPLEADO | ✅ |
+| GAP5 cascada (empresa/user_id/email/dni/estado=Activo) | ✅ |
+| GAP6 link `candidato.empleado_id` | ✅ |
+| Idempotencia (`promovido_at` set, `estado`=empleado, botón desaparece) | ✅ |
+| auth.user confirmado (puede entrar) | ✅ |
+| Entrega real del magic link por email | ⛔ Pendiente (sin SMTP SiteGround) — no bloqueante |
+
+Residuales de smoke (no bloqueantes, cubiertos por código): reactivación por email/DNI (el empleado de smoke creado lo habilita como fixture — ver `SMOKE_USERS_RRHH.md`) y rechazo de authz a usuario no-admin.
 
 ### Siguiente paso
-Correr el smoke en BACANAL (cuentas de `SMOKE_USERS_RRHH.md`) → escribir handoff → cerrar TASK-005 (o abrir task de onboarding si el smoke revela gap, según "Siguiente paso sugerido" del Full-TASK).
+TASK-005 cerrable: smoke principal OK. Residuales no bloqueantes: smoke de reactivación cuando convenga + entrega de email al configurar SMTP de SiteGround.
 
 ## Objetivo
 
