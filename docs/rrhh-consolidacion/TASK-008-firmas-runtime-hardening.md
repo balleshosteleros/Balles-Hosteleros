@@ -38,7 +38,7 @@ Setup: 4 documentos sembrados en BACANAL (empleado de smoke TASK-005, modalidad 
 
 ### Pendiente (no bloqueante)
 - Credenciales SMTP de SiteGround → verificar entrega real de los 3 emails (S1/S9) → `HANDOFF_TASK008_FIRMAS_RUNTIME_<fecha>.md` → cerrar PRP-036.
-- Limpiar datos de smoke en BACANAL (4 docs `tipo='smoke'` + tokens/otps/eventos + objetos de storage) cuando convenga.
+- ~~Limpiar datos de smoke en BACANAL~~ → **hecho (2026-05-30)**: borrados los 4 docs `tipo='smoke'` + 10 eventos + 3 otps + 4 tokens + 4 PDFs del bucket. Verificado `firmas_documentos where tipo='smoke'` = 0. BACANAL sin rastro.
 
 ### Siguiente paso
 Cerrable salvo la verificación de entrega de email. Pegar credenciales SMTP → correr S1/S9 de entrega → handoff → cerrar PRP-036.
