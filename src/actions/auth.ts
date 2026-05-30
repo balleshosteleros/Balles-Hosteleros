@@ -112,8 +112,19 @@ export async function resetPassword(formData: FormData) {
   const supabase = await createClient()
   const email = formData.get('email') as string
 
+  // URL base: preferimos NEXT_PUBLIC_APP_URL (la que está en .env.local), con
+  // fallback a SITE_URL / VERCEL_URL / localhost. Sin esto, si SITE_URL no está
+  // definida el link salía como "undefined/update-password".
+  const siteUrl =
+    process.env.NEXT_PUBLIC_APP_URL ??
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    (process.env.NEXT_PUBLIC_VERCEL_URL
+      ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
+      : null) ??
+    'http://localhost:3000'
+
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/update-password`,
+    redirectTo: `${siteUrl.replace(/\/$/, '')}/update-password`,
   })
 
   if (error) {

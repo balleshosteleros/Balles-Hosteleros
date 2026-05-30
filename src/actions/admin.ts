@@ -269,6 +269,7 @@ export async function sendPasswordResetEmail(profileId: string) {
   if (!profile?.email) return { error: 'El usuario no tiene email asociado.' }
 
   const siteUrl =
+    process.env.NEXT_PUBLIC_APP_URL ??
     process.env.NEXT_PUBLIC_SITE_URL ??
     (process.env.NEXT_PUBLIC_VERCEL_URL
       ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
