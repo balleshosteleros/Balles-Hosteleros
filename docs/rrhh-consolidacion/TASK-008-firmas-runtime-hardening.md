@@ -2,7 +2,7 @@
 
 ## Estado
 
-Hardening validado (2026-05-30). **Smoke E2E ejecutado: 10/12 sub-smokes PASAN** vía la UI pública real `/firmar/<token>` (Playwright headless) + verificación en BD. Los race-fixes R1/R2/R3 confirmados en runtime. Solo quedan los 2 sub-smokes de **entrega real de email** (residual, espera SMTP de SiteGround). Código + migraciones en prod (`fe01494`); transporte de email migrado a SMTP nodemailer (`ce7f0ea`). Derivada de [DISCOVERY_TASK004_2026-05-26.md](./DISCOVERY_TASK004_2026-05-26.md).
+**CERRADA 2026-05-31.** Smoke 12/12 ejecutado al 100% con SMTP real (Gmail como placeholder temporal). Los 4 caminos de email (`enviarInvitacionFirma`, `enviarCodigoOTP`, `enviarCopiaFirmada`, reenvío) confirmados en runtime end-to-end. PRP-036 marcado CERRADO. Detalle completo en [HANDOFF_TASK008_FIRMAS_RUNTIME_2026-05-31.md](./HANDOFF_TASK008_FIRMAS_RUNTIME_2026-05-31.md). Código + migraciones en prod (`fe01494`); transporte de email migrado a SMTP nodemailer (`ce7f0ea`). Derivada de [DISCOVERY_TASK004_2026-05-26.md](./DISCOVERY_TASK004_2026-05-26.md).
 
 ## Estado de ejecución (2026-05-29)
 

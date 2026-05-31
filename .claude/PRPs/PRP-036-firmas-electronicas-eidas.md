@@ -1,8 +1,10 @@
 # PRP-036: Firmas Electrónicas con Validez Legal eIDAS
 
-> **Estado**: PENDIENTE
+> **Estado**: CERRADO 2026-05-31
 > **Fecha**: 2026-05-15
 > **Proyecto**: Balles-Hosteleros — Módulo RRHH → Firmas electrónicas
+>
+> **Cierre**: smoke S1-S12 ejecutado al 100% con SMTP real (Gmail). Ver `docs/rrhh-consolidacion/HANDOFF_TASK008_FIRMAS_RUNTIME_2026-05-31.md`. Cuando se configure SiteGround como SMTP definitivo, basta sustituir 5 variables en `.env.local` — sin cambios de código.
 
 ---
 

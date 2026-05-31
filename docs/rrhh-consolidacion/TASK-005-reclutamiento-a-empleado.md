@@ -2,7 +2,7 @@
 
 ## Estado
 
-Implementado (commit `e94b897`, en `main`, 2026-05-29) y **smoke E2E ejecutado OK** (2026-05-30, vía UI real + verificación en BD): los 7 gaps cerrados confirmados en runtime. typecheck + build verdes. Único residual no bloqueante: entrega real del email (magic link) por SMTP de SiteGround. Ver "Estado de ejecución" abajo.
+**CERRADA 2026-05-31.** Implementado (`e94b897`) + smoke E2E sin email (`eb7cd40`, los 7 gaps verificados) + smoke residual del magic link ejecutado el 2026-05-31 con SMTP real (Gmail temporal). El empleado promovido recibió el email "Bienvenido/a" con magic link de Supabase Auth y `redirect_to` correcto a `/primer-acceso` — confirma también que el chip `f328cad` (NEXT_PUBLIC_APP_URL) funciona. Detalle del cierre en [HANDOFF_TASK008_FIRMAS_RUNTIME_2026-05-31.md](./HANDOFF_TASK008_FIRMAS_RUNTIME_2026-05-31.md). Ver "Estado de ejecución" abajo.
 
 ## Estado de ejecución (2026-05-29)
 
