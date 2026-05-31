@@ -88,6 +88,10 @@ middleware.ts
 *.crdownload
 Sin confirmar*
 
+# Artefactos de Playwright (logs y outputs de tests locales)
+.playwright-cli/
+output/
+
 # Videos de referencia (Banktrack, demos, etc.)
 Bancktrack/
 *.webm
