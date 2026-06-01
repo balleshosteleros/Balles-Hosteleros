@@ -183,7 +183,7 @@ export async function deleteMesa(id: string) {
       .select("id", { count: "exact", head: true })
       .eq("mesa", codigo)
       .gte("fecha", today)
-      .not("estado", "in", "(cancelada,no_show)");
+      .not("estado", "in", "(CANCELADA,NO_SHOW,COMPLETADA,LIBERADA)");
     if ((reservasFuturas ?? 0) > 0) {
       return {
         ok: false,

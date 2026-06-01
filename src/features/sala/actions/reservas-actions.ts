@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { findOrLinkClienteSala, type CampoDistinto } from "@/features/sala/lib/cliente-link";
+import { asignarMesaAutomatica } from "@/features/sala/planos/lib/asignacion-mesa";
+import type { TipoMesa } from "@/features/sala/planos/data/planos";
 async function getContext() {
   const supabase = await createClient();
   const {
@@ -94,6 +96,15 @@ export async function createReserva(input: {
   bloqueada?: boolean;
   grupoId?: string | null;
   tipoId?: string | null;
+  // Asignación automática de mesa (PRP-048). Si `asignarAuto=true` y la
+  // reserva llega sin `mesa`, el sistema busca la primera libre del plano
+  // activo del local con capacidad para los comensales. `localId` es
+  // obligatorio cuando se activa.
+  asignarAuto?: boolean;
+  localId?: string | null;
+  salaIdFiltro?: string | null;
+  zonaIdFiltro?: string | null;
+  tipoMesaFiltro?: TipoMesa | null;
 }) {
   try {
     const { supabase, user, empresaId } = await getContext();
@@ -136,6 +147,28 @@ export async function createReserva(input: {
     // Walk-in siempre marca origen = WALKIN (el cliente no vino por canal digital).
     const origenFinal = estadoFinal === "WALK_IN" ? "WALKIN" : (input.origen ?? null);
 
+    // Asignación automática de mesa (PRP-048): solo si el llamador lo pide,
+    // hay `localId` y la reserva llega sin mesa explícita. Si no encuentra
+    // libre, la reserva se guarda sin mesa (bandeja "pendiente de asignar").
+    let mesaFinal = input.mesa ?? null;
+    let zonaFinal = input.zona ?? null;
+    if (input.asignarAuto && input.localId && !mesaFinal) {
+      const asign = await asignarMesaAutomatica({
+        localId: input.localId,
+        empresaId,
+        fecha: input.fecha,
+        hora: input.hora,
+        personas: input.personas,
+        salaId: input.salaIdFiltro ?? null,
+        zonaId: input.zonaIdFiltro ?? null,
+        tipo: input.tipoMesaFiltro ?? null,
+      });
+      if (asign.ok && asign.mesa) {
+        mesaFinal = asign.mesa.codigo;
+        zonaFinal = zonaFinal ?? asign.mesa.zonaNombre ?? null;
+      }
+    }
+
     const { data, error } = await supabase.from("reservas").insert({
       empresa_id: empresaId,
       cliente_id: clienteId,
@@ -146,8 +179,8 @@ export async function createReserva(input: {
       fecha: input.fecha,
       hora: input.hora,
       personas: input.personas,
-      mesa: input.mesa ?? null,
-      zona: input.zona ?? null,
+      mesa: mesaFinal,
+      zona: zonaFinal,
       turno: input.turno ?? "COMIDA",
       estado: estadoFinal,
       notas: input.notas ?? null,
