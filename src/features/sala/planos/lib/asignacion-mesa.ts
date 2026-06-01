@@ -1,6 +1,4 @@
-"use server";
-
-import { createClient } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { TipoMesa } from "@/features/sala/planos/data/planos";
 
 // Estados de reserva que liberan la mesa.
@@ -51,6 +49,9 @@ function parteNumericaCodigo(codigo: string): number {
 
 /**
  * Asigna automáticamente una mesa a unos comensales en (local, fecha, hora).
+ * Recibe el cliente Supabase explícitamente para poder ejecutarse tanto con
+ * el cliente autenticado (sala / panel interno) como con el admin (form
+ * público anónimo que ya bypasea RLS por su naturaleza pública).
  *
  * Algoritmo (PRP-048):
  *   1. Resolver plano principal activo del local.
@@ -63,11 +64,10 @@ function parteNumericaCodigo(codigo: string): number {
  *   6. Si ninguna libre → mesa=null, razón=SIN_MESAS_LIBRES.
  */
 export async function asignarMesaAutomatica(
+  supabase: SupabaseClient,
   input: AsignacionInput,
 ): Promise<AsignacionResultado> {
   try {
-    const supabase = await createClient();
-
     // 1. Plano principal activo del local.
     const { data: plano, error: errPlano } = await supabase
       .from("planos")

@@ -3,6 +3,8 @@
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { findOrLinkClienteSala, type CampoDistinto } from "@/features/sala/lib/cliente-link";
+import { asignarMesaAutomatica } from "@/features/sala/planos/lib/asignacion-mesa";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 const inputSchema = z.object({
   empresaSlug: z.string().min(1).max(120),
@@ -87,6 +89,34 @@ export async function crearReservaPublicaAction(
   }
   const cliente = link.result.cliente;
 
+  // Asignación automática de mesa (PRP-048): coge el primer local de la
+  // empresa (las empresas hoy tienen 1 local; cuando aparezcan multi-local
+  // habrá que añadir selector en el form público). Si no hay plano activo
+  // o ninguna mesa libre, la reserva queda sin mesa y aparece en la bandeja
+  // "Pendiente de asignar" para que el jefe de sala la coloque.
+  let mesaFinal: string | null = null;
+  let zonaFinal: string | null = null;
+  const { data: local } = await admin
+    .from("locales")
+    .select("id")
+    .eq("empresa_id", empresa.id)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (local) {
+    const asign = await asignarMesaAutomatica(admin as unknown as SupabaseClient, {
+      localId: local.id as string,
+      empresaId: empresa.id,
+      fecha: data.fecha,
+      hora: data.hora,
+      personas: data.personas,
+    });
+    if (asign.ok && asign.mesa) {
+      mesaFinal = asign.mesa.codigo;
+      zonaFinal = asign.mesa.zonaNombre || null;
+    }
+  }
+
   const { error } = await admin.from("reservas").insert({
     empresa_id: empresa.id,
     cliente_id: cliente.id,
@@ -98,6 +128,8 @@ export async function crearReservaPublicaAction(
     fecha: data.fecha,
     hora: data.hora,
     personas: data.personas,
+    mesa: mesaFinal,
+    zona: zonaFinal,
     notas: data.notas ?? null,
     origen: data.origen ?? null,
     estado: "PENDIENTE",

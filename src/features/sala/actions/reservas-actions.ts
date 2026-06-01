@@ -153,7 +153,7 @@ export async function createReserva(input: {
     let mesaFinal = input.mesa ?? null;
     let zonaFinal = input.zona ?? null;
     if (input.asignarAuto && input.localId && !mesaFinal) {
-      const asign = await asignarMesaAutomatica({
+      const asign = await asignarMesaAutomatica(supabase as unknown as SupabaseClient, {
         localId: input.localId,
         empresaId,
         fecha: input.fecha,
