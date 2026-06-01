@@ -42,6 +42,54 @@ export async function listClientes() {
   }
 }
 
+export type ClienteSugerencia = {
+  id: string;
+  nombre: string;
+  apellidos: string | null;
+  telefono: string | null;
+  email: string | null;
+  visitas: number | null;
+  clasificacion: string | null;
+};
+
+export async function searchClientes(
+  query: string,
+  limit = 8,
+): Promise<{ ok: boolean; data: ClienteSugerencia[] }> {
+  try {
+    const q = (query ?? "").trim();
+    if (q.length < 3) return { ok: true, data: [] };
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: true, data: [] };
+
+    const esTel = /^[\d+\s().-]+$/.test(q);
+    const telDigits = q.replace(/\D/g, "");
+    const like = `%${q}%`;
+    const filters: string[] = [
+      `nombre.ilike.${like}`,
+      `apellidos.ilike.${like}`,
+      `email.ilike.${like}`,
+    ];
+    if (esTel && telDigits.length >= 3) {
+      filters.push(`telefono_normalizado.ilike.%${telDigits}%`);
+      filters.push(`telefono.ilike.%${telDigits}%`);
+    }
+
+    const { data, error } = await supabase
+      .from("clientes_sala")
+      .select("id, nombre, apellidos, telefono, email, visitas, clasificacion")
+      .eq("empresa_id", empresaId)
+      .or(filters.join(","))
+      .order("visitas", { ascending: false, nullsFirst: false })
+      .limit(limit);
+    if (error) throw error;
+    return { ok: true, data: (data ?? []) as ClienteSugerencia[] };
+  } catch (err) {
+    console.error("[clientes] searchClientes:", err);
+    return { ok: false, data: [] };
+  }
+}
+
 export async function createCliente(input: {
   nombre: string;
   apellidos?: string;

@@ -17,7 +17,7 @@ import { ROLES_SEED, normalizeRolNombre } from "./roles";
 import { ORGANIGRAMA_SEED } from "./organigrama";
 import { INSPECTOR_EMAIL_PLANTILLAS_SEED } from "./inspector-email-plantillas";
 import { INSPECCION_PRESENTACION_SEED } from "./inspeccion-presentacion";
-import { RESERVA_TIPOS_SEED, normalizeTipoNombre } from "./reserva-tipos";
+import { RESERVA_ETIQUETAS_SEED, normalizeReservaEtiquetaNombre } from "./reserva-etiquetas";
 import { SALA_ETIQUETAS_SEED, normalizeEtiquetaNombre } from "./sala-etiquetas";
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -258,24 +258,24 @@ export async function syncInspeccionPresentacionAEmpresa(
 }
 
 /**
- * Sincroniza los tipos canónicos de reserva a una empresa (aditivo).
+ * Sincroniza las etiquetas canónicas de reserva a una empresa (aditivo).
  * Solo inserta los nombres del seed que aún no existen; respeta cualquier
- * tipo personalizado por el cliente.
+ * etiqueta personalizada por el cliente.
  */
-export async function syncReservaTiposAEmpresa(
+export async function syncReservaEtiquetasAEmpresa(
   admin: Admin,
   empresaId: string,
 ): Promise<{ creados: number }> {
   const { data: existentes } = await admin
-    .from("empresa_reserva_tipos")
+    .from("empresa_reserva_etiquetas")
     .select("nombre")
     .eq("empresa_id", empresaId);
   const setExistentes = new Set(
-    (existentes ?? []).map((t) => normalizeTipoNombre(t.nombre as string)),
+    (existentes ?? []).map((t) => normalizeReservaEtiquetaNombre(t.nombre as string)),
   );
 
-  const aCrear = RESERVA_TIPOS_SEED
-    .filter((t) => !setExistentes.has(normalizeTipoNombre(t.nombre)))
+  const aCrear = RESERVA_ETIQUETAS_SEED
+    .filter((t) => !setExistentes.has(normalizeReservaEtiquetaNombre(t.nombre)))
     .map((t) => ({
       empresa_id: empresaId,
       nombre: t.nombre,
@@ -286,7 +286,7 @@ export async function syncReservaTiposAEmpresa(
     }));
 
   if (aCrear.length === 0) return { creados: 0 };
-  const { error } = await admin.from("empresa_reserva_tipos").insert(aCrear);
+  const { error } = await admin.from("empresa_reserva_etiquetas").insert(aCrear);
   if (error) throw error;
   return { creados: aCrear.length };
 }
@@ -421,7 +421,7 @@ export async function seedEmpresaDefaults(
   await syncVacantesAEmpresa(admin, empresaId, empresaSlug);
   await syncInspectorEmailPlantillasAEmpresa(admin, empresaId);
   await syncInspeccionPresentacionAEmpresa(admin, empresaId);
-  await syncReservaTiposAEmpresa(admin, empresaId);
+  await syncReservaEtiquetasAEmpresa(admin, empresaId);
   await syncSalaEtiquetasAEmpresa(admin, empresaId);
   await ensureReservasConfigEmpresa(admin, empresaId);
 }
@@ -441,7 +441,7 @@ export async function syncSeedsToAllEmpresas(): Promise<{
     vacantesCreadas: number;
     inspectorEmailsCreadas: number;
     inspeccionPresentacionCreada: boolean;
-    reservaTiposCreados: number;
+    reservaEtiquetasCreadas: number;
     reservasConfigCreada: boolean;
   }>;
   error?: string;
@@ -462,7 +462,7 @@ export async function syncSeedsToAllEmpresas(): Promise<{
       vacantesCreadas: number;
       inspectorEmailsCreadas: number;
       inspeccionPresentacionCreada: boolean;
-      reservaTiposCreados: number;
+      reservaEtiquetasCreadas: number;
       salaEtiquetasCategoriasCreadas: number;
       salaEtiquetasCreadas: number;
       reservasConfigCreada: boolean;
@@ -478,7 +478,7 @@ export async function syncSeedsToAllEmpresas(): Promise<{
       const v = await syncVacantesAEmpresa(admin, empresaId, empresaSlug);
       const iep = await syncInspectorEmailPlantillasAEmpresa(admin, empresaId);
       const ipres = await syncInspeccionPresentacionAEmpresa(admin, empresaId);
-      const rt = await syncReservaTiposAEmpresa(admin, empresaId);
+      const re = await syncReservaEtiquetasAEmpresa(admin, empresaId);
       const se = await syncSalaEtiquetasAEmpresa(admin, empresaId);
       const rcfg = await ensureReservasConfigEmpresa(admin, empresaId);
       resumen.push({
@@ -489,7 +489,7 @@ export async function syncSeedsToAllEmpresas(): Promise<{
         vacantesCreadas: v.creadas,
         inspectorEmailsCreadas: iep.creadas,
         inspeccionPresentacionCreada: ipres.creada,
-        reservaTiposCreados: rt.creados,
+        reservaEtiquetasCreadas: re.creados,
         salaEtiquetasCategoriasCreadas: se.categoriasCreadas,
         salaEtiquetasCreadas: se.etiquetasCreadas,
         reservasConfigCreada: rcfg.creada,

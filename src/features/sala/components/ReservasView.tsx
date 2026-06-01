@@ -31,12 +31,8 @@ import {
 } from "@/features/sala/data/reservas";
 import { ReservaEstadoBadge, ReservaEstadoDot } from "@/features/sala/components/reservas/ReservaEstadoBadge";
 import { listReservas, createReserva, updateReserva, deleteReserva } from "@/features/sala/actions/reservas-actions";
-import { listReservaTipos } from "@/features/sala/actions/reserva-tipos-actions";
-import { listLocalesEmpresa } from "@/features/sala/planos/actions/locales-actions";
-import { listSalas } from "@/features/sala/planos/actions/salas-actions";
-import { listZonas } from "@/features/sala/planos/actions/zonas-actions";
-import { listMesas } from "@/features/sala/planos/actions/mesas-actions";
-import { getPlanoActivoConPosiciones, listPlanos } from "@/features/sala/planos/actions/planos-actions";
+import { listReservaEtiquetas } from "@/features/sala/actions/reserva-etiquetas-actions";
+import { loadReservasModuleContext } from "@/features/sala/actions/reservas-module-context";
 import type {
   Sala as SalaConfig,
   LocalMin,
@@ -49,9 +45,10 @@ import { getReservasConfig } from "@/features/sala/actions/reservas-config-actio
 import { listReservasExcepciones } from "@/features/sala/actions/reservas-excepciones-actions";
 import { listPoliticasCancelacion } from "@/features/sala/actions/politicas-cancelacion-actions";
 import { getClienteInsights } from "@/features/sala/actions/cliente-insights-actions";
+import { searchClientes, type ClienteSugerencia } from "@/features/sala/actions/clientes-actions";
 import { maxpaxEfectivo } from "@/features/sala/lib/reserva-limites";
 import type {
-  ReservaTipo,
+  ReservaEtiqueta,
   EmpresaReservasConfig,
   EmpresaReservasExcepcion,
   PoliticaCancelacion,
@@ -184,10 +181,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave }: {
   fecha: string; turno: TurnoReserva;
   onClose: () => void;
   onSave: (r: Reserva & {
-    tipoId?: string | null;
-    esGrupo?: boolean;
-    tarjetaIntroducida?: boolean;
-    esTicket?: boolean;
+    etiquetaId?: string | null;
     politicaCancelacionId?: string | null;
     garantiaImporte?: number | null;
   }) => void;
@@ -196,33 +190,66 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave }: {
     cliente: "", apellidos: "", telefono: "", email: "",
     fecha, hora: "", turno, comensales: 2,
     zona: "" as ZonaSala | "", observaciones: "", esWalkIn: false,
-    tipoId: "" as string,
-    esGrupo: false,
-    tarjetaIntroducida: false,
-    esTicket: false,
+    etiquetaId: "" as string,
     politicaCancelacionId: "" as string,
     garantiaImporte: "" as string,
   });
-  const [tipos, setTipos] = useState<ReservaTipo[]>([]);
+  const [etiquetas, setEtiquetas] = useState<ReservaEtiqueta[]>([]);
   const [politicas, setPoliticas] = useState<PoliticaCancelacion[]>([]);
   const [config, setConfig] = useState<EmpresaReservasConfig | null>(null);
   const [excepciones, setExcepciones] = useState<EmpresaReservasExcepcion[]>([]);
   const [paxTouched, setPaxTouched] = useState(false);
 
+  // Autocompletado de clientes por nombre, apellidos o teléfono (4+ chars).
+  type CampoBusqueda = "cliente" | "apellidos" | "telefono";
+  const [campoActivo, setCampoActivo] = useState<CampoBusqueda | null>(null);
+  const [sugerencias, setSugerencias] = useState<ClienteSugerencia[]>([]);
+  const [buscando, setBuscando] = useState(false);
+
   useEffect(() => {
     (async () => {
       const [t, p, c, e] = await Promise.all([
-        listReservaTipos({ soloActivos: true }),
+        listReservaEtiquetas({ soloActivos: true }),
         listPoliticasCancelacion({ soloActivas: true }),
         getReservasConfig(),
         listReservasExcepciones({ desde: form.fecha, hasta: form.fecha }),
       ]);
-      if (t.ok) setTipos(t.data);
+      if (t.ok) setEtiquetas(t.data);
       if (p.ok) setPoliticas(p.data);
       if (c.ok) setConfig(c.data);
       if (e.ok) setExcepciones(e.data);
     })();
   }, [form.fecha]);
+
+  useEffect(() => {
+    if (form.esWalkIn || !campoActivo) {
+      setSugerencias([]);
+      return;
+    }
+    const valor =
+      campoActivo === "cliente"
+        ? form.cliente
+        : campoActivo === "apellidos"
+          ? form.apellidos
+          : form.telefono;
+    const minimo = campoActivo === "telefono" ? 4 : 4;
+    if ((valor ?? "").trim().length < minimo) {
+      setSugerencias([]);
+      return;
+    }
+    let cancelado = false;
+    setBuscando(true);
+    const handle = setTimeout(async () => {
+      const res = await searchClientes(valor.trim(), 8);
+      if (cancelado) return;
+      setSugerencias(res.ok ? res.data : []);
+      setBuscando(false);
+    }, 200);
+    return () => {
+      cancelado = true;
+      clearTimeout(handle);
+    };
+  }, [form.cliente, form.apellidos, form.telefono, form.esWalkIn, campoActivo]);
 
   const maxPax = useMemo(
     () => maxpaxEfectivo(config, excepciones, form.fecha, form.turno),
@@ -230,11 +257,23 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave }: {
   );
 
   const excedeMaxPax = maxPax != null && form.comensales > maxPax;
-  const muestraAvisoPax = paxTouched && excedeMaxPax && !form.esGrupo;
+  const muestraAvisoPax = paxTouched && excedeMaxPax;
   const guardarBloqueado =
     (!form.esWalkIn && !form.cliente) ||
     !form.hora ||
-    (excedeMaxPax && !form.esGrupo);
+    excedeMaxPax;
+
+  const seleccionarCliente = (c: ClienteSugerencia) => {
+    setForm((p) => ({
+      ...p,
+      cliente: c.nombre ?? "",
+      apellidos: c.apellidos ?? "",
+      telefono: c.telefono ?? "",
+      email: c.email ?? "",
+    }));
+    setSugerencias([]);
+    setCampoActivo(null);
+  };
 
   const handleSave = () => {
     if (guardarBloqueado) return;
@@ -242,33 +281,117 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave }: {
       id: `r-${Date.now()}`,
       cliente: form.esWalkIn ? "" : form.cliente,
       apellidos: form.esWalkIn ? "" : form.apellidos,
-      telefono: form.telefono, email: form.email,
+      telefono: form.esWalkIn ? "" : form.telefono,
+      email: form.esWalkIn ? "" : form.email,
       fecha: form.fecha, hora: form.hora, turno: form.turno,
       comensales: form.comensales, zona: form.zona, mesaId: "",
       estado: form.esWalkIn ? "WALK_IN" : "PENDIENTE",
       observaciones: form.observaciones,
-      tipoId: form.tipoId || null,
-      esGrupo: form.esGrupo,
-      tarjetaIntroducida: form.tarjetaIntroducida,
-      esTicket: form.esTicket,
+      etiquetaId: form.etiquetaId || null,
       politicaCancelacionId: form.politicaCancelacionId || null,
       garantiaImporte: form.garantiaImporte ? Number(form.garantiaImporte) : null,
     });
   };
 
+  const renderSugerencias = (campo: CampoBusqueda) => {
+    if (campoActivo !== campo || form.esWalkIn) return null;
+    if (sugerencias.length === 0 && !buscando) return null;
+    return (
+      <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-56 overflow-y-auto rounded-md border bg-popover text-popover-foreground shadow-md">
+        {buscando && (
+          <div className="px-2 py-1.5 text-[11px] text-muted-foreground">Buscando…</div>
+        )}
+        {!buscando && sugerencias.length === 0 && (
+          <div className="px-2 py-1.5 text-[11px] text-muted-foreground">Sin coincidencias</div>
+        )}
+        {sugerencias.map((c) => (
+          <button
+            type="button"
+            key={c.id}
+            onMouseDown={(ev) => ev.preventDefault()}
+            onClick={() => seleccionarCliente(c)}
+            className="flex w-full items-start gap-2 px-2 py-1.5 text-left text-xs hover:bg-muted"
+          >
+            <div className="flex-1 min-w-0">
+              <div className="truncate font-medium">
+                {[c.nombre, c.apellidos].filter(Boolean).join(" ")}
+              </div>
+              <div className="truncate text-[10px] text-muted-foreground">
+                {[c.telefono, c.email].filter(Boolean).join(" · ") || "Sin contacto"}
+              </div>
+            </div>
+            {typeof c.visitas === "number" && c.visitas > 0 && (
+              <Badge variant="outline" className="text-[9px] h-4 shrink-0">
+                {c.visitas} visitas
+              </Badge>
+            )}
+          </button>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-3">
-      <Button size="sm" variant={form.esWalkIn ? "default" : "outline"} className="text-xs h-7"
-        onClick={() => setForm(p => ({ ...p, esWalkIn: !p.esWalkIn }))}>WALK IN</Button>
+      <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
+        <div className="text-xs">
+          <p className="font-medium">
+            {form.esWalkIn ? "Reserva Walk-in" : "Reserva con cliente"}
+          </p>
+          <p className="text-[10px] text-muted-foreground">
+            {form.esWalkIn
+              ? "Se guardará sin nombre, teléfono ni email."
+              : "Escribe nombre, apellidos o teléfono para buscar fichas existentes."}
+          </p>
+        </div>
+        <Button
+          size="sm"
+          variant={form.esWalkIn ? "default" : "outline"}
+          className="text-xs h-7"
+          onClick={() => setForm((p) => ({ ...p, esWalkIn: !p.esWalkIn }))}
+        >
+          {form.esWalkIn ? "Walk-in activado" : "Walk-in"}
+        </Button>
+      </div>
       <div className="grid grid-cols-2 gap-3">
         {!form.esWalkIn && (
           <>
-            <div><Label className="text-xs">Nombre *</Label><Input className="h-8 text-xs" value={form.cliente} onChange={e => setForm(p => ({ ...p, cliente: e.target.value }))} /></div>
-            <div><Label className="text-xs">Apellidos</Label><Input className="h-8 text-xs" value={form.apellidos} onChange={e => setForm(p => ({ ...p, apellidos: e.target.value }))} /></div>
+            <div className="relative">
+              <Label className="text-xs">Nombre *</Label>
+              <Input
+                className="h-8 text-xs"
+                value={form.cliente}
+                onFocus={() => setCampoActivo("cliente")}
+                onBlur={() => setTimeout(() => setCampoActivo((c) => (c === "cliente" ? null : c)), 150)}
+                onChange={e => setForm(p => ({ ...p, cliente: e.target.value }))}
+              />
+              {renderSugerencias("cliente")}
+            </div>
+            <div className="relative">
+              <Label className="text-xs">Apellidos</Label>
+              <Input
+                className="h-8 text-xs"
+                value={form.apellidos}
+                onFocus={() => setCampoActivo("apellidos")}
+                onBlur={() => setTimeout(() => setCampoActivo((c) => (c === "apellidos" ? null : c)), 150)}
+                onChange={e => setForm(p => ({ ...p, apellidos: e.target.value }))}
+              />
+              {renderSugerencias("apellidos")}
+            </div>
+            <div className="relative">
+              <Label className="text-xs">Teléfono</Label>
+              <Input
+                className="h-8 text-xs"
+                value={form.telefono}
+                onFocus={() => setCampoActivo("telefono")}
+                onBlur={() => setTimeout(() => setCampoActivo((c) => (c === "telefono" ? null : c)), 150)}
+                onChange={e => setForm(p => ({ ...p, telefono: e.target.value }))}
+              />
+              {renderSugerencias("telefono")}
+            </div>
+            <div><Label className="text-xs">Email</Label><Input className="h-8 text-xs" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} /></div>
           </>
         )}
-        <div><Label className="text-xs">Teléfono</Label><Input className="h-8 text-xs" value={form.telefono} onChange={e => setForm(p => ({ ...p, telefono: e.target.value }))} /></div>
-        <div><Label className="text-xs">Email</Label><Input className="h-8 text-xs" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} /></div>
         <div><Label className="text-xs">Fecha *</Label><Input type="date" className="h-8 text-xs" value={form.fecha} onChange={e => setForm(p => ({ ...p, fecha: e.target.value }))} /></div>
         <div><Label className="text-xs">Hora *</Label><Input type="time" className="h-8 text-xs" value={form.hora} onChange={e => setForm(p => ({ ...p, hora: e.target.value }))} /></div>
         <div><Label className="text-xs">Turno</Label>
@@ -298,15 +421,15 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave }: {
           </Select>
         </div>
         <div className="col-span-2">
-          <Label className="text-xs">Tipo de reserva</Label>
+          <Label className="text-xs">Etiqueta de reserva</Label>
           {/* Select nativo: evitar Popover+cmdk dentro de Dialog (MEMORY: combobox_dentro_dialog). */}
           <select
-            value={form.tipoId}
-            onChange={(e) => setForm((p) => ({ ...p, tipoId: e.target.value }))}
+            value={form.etiquetaId}
+            onChange={(e) => setForm((p) => ({ ...p, etiquetaId: e.target.value }))}
             className="h-8 text-xs w-full rounded-md border border-input bg-background px-2"
           >
-            <option value="">— Sin tipo —</option>
-            {tipos.map((t) => (
+            <option value="">— Sin etiqueta —</option>
+            {etiquetas.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.emoji ? `${t.emoji} ` : ""}{t.nombre}
               </option>
@@ -343,39 +466,8 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave }: {
       {muestraAvisoPax && (
         <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
           Supera el máximo de {maxPax} pax del turno {form.turno.toLowerCase()} del {form.fecha}.
-          Marca <strong>&quot;Es de grupo&quot;</strong> si la reserva es correcta.
         </div>
       )}
-
-      <div className="border rounded-md p-3 bg-muted/30 space-y-2">
-        <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Flags</Label>
-        <div className="grid grid-cols-2 gap-2 text-xs">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={form.esGrupo}
-              onChange={(e) => setForm((p) => ({ ...p, esGrupo: e.target.checked }))}
-            />
-            <span>Es reserva de grupo</span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={form.tarjetaIntroducida}
-              onChange={(e) => setForm((p) => ({ ...p, tarjetaIntroducida: e.target.checked }))}
-            />
-            <span>Tarjeta introducida</span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={form.esTicket}
-              onChange={(e) => setForm((p) => ({ ...p, esTicket: e.target.checked }))}
-            />
-            <span>Reserva tipo Ticket</span>
-          </label>
-        </div>
-      </div>
 
       <div><Label className="text-xs">Observaciones</Label><Textarea className="text-xs" value={form.observaciones} onChange={e => setForm(p => ({ ...p, observaciones: e.target.value }))} /></div>
       <div className="flex justify-end gap-2">
@@ -613,7 +705,7 @@ function mapDbToReserva(row: Record<string, unknown>): Reserva {
     garantiaImporte: (row.garantia_importe as number | null) ?? null,
     bloqueada: (row.bloqueada as boolean) ?? false,
     grupoId: (row.grupo_id as string | null) ?? null,
-    tipoId: (row.tipo_id as string | null) ?? null,
+    etiquetaId: (row.etiqueta_id as string | null) ?? null,
     codigoId: (row.codigo_id as string | null) ?? null,
     codigoNombre: (row.codigo_nombre as string | null) ?? null,
     reconfirmadaAt: (row.reconfirmada_at as string | null) ?? null,
@@ -942,6 +1034,7 @@ function PlanoCanvas({
   mesas,
   posiciones,
   zonas,
+  salaTieneZonas,
   selectedMesaId,
   onSelectMesa,
   getEstadoMesa,
@@ -952,6 +1045,7 @@ function PlanoCanvas({
   mesas: Mesa[];
   posiciones: Map<string, PlanoMesaPosicion>;
   zonas: ZonaReal[];
+  salaTieneZonas: boolean;
   selectedMesaId: string | null;
   onSelectMesa: (m: Mesa | null) => void;
   getEstadoMesa: (m: Mesa) => string;
@@ -959,13 +1053,15 @@ function PlanoCanvas({
   onAsignar: (m: Mesa) => void;
   onCambiarEstado: (id: string, e: EstadoReserva) => void;
 }) {
-  // Mesas con posición x/y conocida y zona pasada por filtro
+  // Mesas con posición x/y conocida.
+  // Si la sala tiene zonas en BD: filtra estrictamente por las seleccionadas (zonas=[] => no muestra nada, como espera el usuario al pulsar "Ninguna").
+  // Si la sala no tiene zonas en BD (legacy): muestra todas las mesas posicionadas.
   const mesasConPos = useMemo(() => {
     const zonaNombres = new Set(zonas.map((z) => z.nombre.toUpperCase()));
     return mesas
       .filter((m) => posiciones.has(m.id))
-      .filter((m) => !zonas.length || zonaNombres.has((m.zona as unknown as string) ?? ""));
-  }, [mesas, posiciones, zonas]);
+      .filter((m) => !salaTieneZonas || zonaNombres.has((m.zona as unknown as string) ?? ""));
+  }, [mesas, posiciones, zonas, salaTieneZonas]);
 
   // Autoescala el lienzo 1200x640 para caber siempre completo y centrado en el contenedor visible.
   // Mismo patrón que SalaPlanoEditor para que lo que ves al editar coincida con el board.
@@ -1136,7 +1232,7 @@ export function ReservasView() {
   const [selectedInsights, setSelectedInsights] = useState<ClienteInsights | null>(null);
   const [vista, setVista] = useState<"dia" | "mes">("dia");
   const [showDayPicker, setShowDayPicker] = useState(false);
-  const [tiposReserva, setTiposReserva] = useState<ReservaTipo[]>([]);
+  const [etiquetasReserva, setEtiquetasReserva] = useState<ReservaEtiqueta[]>([]);
   const [showConfig, setShowConfig] = useState(false);
   const [totalesMes, setTotalesMes] = useState<{ personas: number; reservas: number }>({ personas: 0, reservas: 0 });
   const [locales, setLocales] = useState<LocalMin[]>([]);
@@ -1153,82 +1249,29 @@ export function ReservasView() {
   // Permite ocultar el listado de reservas o el mapa para que el otro ocupe todo el ancho.
   const [panelOculto, setPanelOculto] = useState<"ninguno" | "lista" | "mapa">("ninguno");
 
+  // Bulk load: TODO el contexto inicial (locales, salas, planos, zonas, mesas,
+  // posiciones del plano activo, etiquetas de reserva) en una sola server action
+  // que internamente paraleliza con Promise.all. Reemplaza 6 useEffects en
+  // cascada por uno solo: ~6 round-trips secuenciales → ~1 RTT efectivo.
   useEffect(() => {
+    let cancelled = false;
     (async () => {
-      const r = await listReservaTipos({ soloActivos: true });
-      if (r.ok) setTiposReserva(r.data);
-    })();
-  }, []);
-
-  // Carga locales de la empresa activa
-  useEffect(() => {
-    (async () => {
-      const r = await listLocalesEmpresa();
-      if (r.ok && r.data.length > 0) {
-        setLocales(r.data);
-        setLocalId((prev) => prev || r.data[0].id);
-      } else {
-        setLocales([]);
-        setLocalId("");
-      }
-    })();
-  }, [empresaActual.id]);
-
-  // Carga salas del local activo y selecciona la principal
-  useEffect(() => {
-    if (!localId) { setSalasLocal([]); setSalaActualId(""); return; }
-    (async () => {
-      const r = await listSalas(localId);
-      if (r.ok) {
-        setSalasLocal(r.data);
-        const principal = r.data.find((s) => s.esPrincipal) ?? r.data[0];
-        setSalaActualId(principal?.id ?? "");
-      } else {
-        setSalasLocal([]);
-        setSalaActualId("");
-      }
-    })();
-  }, [localId]);
-
-  // Carga planos del local activo y selecciona el principal
-  useEffect(() => {
-    if (!localId) { setPlanosLocal([]); setPlanoActualId(""); return; }
-    (async () => {
-      const r = await listPlanos(localId);
-      if (r.ok) {
-        setPlanosLocal(r.data);
-        const principal = r.data.find((p) => p.esPrincipal) ?? r.data[0];
-        setPlanoActualId(principal?.id ?? "");
-      } else {
-        setPlanosLocal([]);
-        setPlanoActualId("");
-      }
-    })();
-  }, [localId]);
-
-  // Carga zonas reales del local (todas; luego se filtran por sala activa)
-  useEffect(() => {
-    if (!localId) { setZonasReales([]); return; }
-    (async () => {
-      const r = await listZonas(localId);
-      setZonasReales(r.ok ? r.data : []);
-    })();
-  }, [localId]);
-
-  // Carga mesas reales del local: si hay, sustituyen las SAMPLE_MESAS.
-  useEffect(() => {
-    if (!localId) return;
-    (async () => {
-      const [r, zonasRes] = await Promise.all([listMesas(localId), listZonas(localId)]);
-      if (!r.ok) {
-        console.warn("[ReservasView] listMesas falló, conservando estado anterior");
-        return;
-      }
+      const ctx = await loadReservasModuleContext();
+      if (cancelled) return;
+      const d = ctx.data;
+      setLocales(d.locales);
+      setLocalId(d.localId);
+      setSalasLocal(d.salas);
+      const salaPrincipal = d.salas.find((s) => s.esPrincipal) ?? d.salas[0];
+      setSalaActualId(salaPrincipal?.id ?? "");
+      setPlanosLocal(d.planos);
+      const planoPrincipal = d.planos.find((p) => p.esPrincipal) ?? d.planos[0];
+      setPlanoActualId(planoPrincipal?.id ?? "");
+      setZonasReales(d.zonas);
+      setEtiquetasReserva(d.etiquetas);
       const zonaNombrePorId = new Map<string, string>();
-      if (zonasRes.ok) {
-        zonasRes.data.forEach((z) => zonaNombrePorId.set(z.id, z.nombre.toUpperCase()));
-      }
-      const adaptadas: Mesa[] = r.data
+      d.zonas.forEach((z) => zonaNombrePorId.set(z.id, z.nombre.toUpperCase()));
+      const adaptadas: Mesa[] = d.mesas
         .filter((m) => m.activa)
         .map((m, idx) => ({
           id: m.id,
@@ -1243,22 +1286,12 @@ export function ReservasView() {
           activa: true,
         }));
       setMesas(adaptadas);
-    })();
-  }, [localId, salaActualId]);
-
-  // Carga el plano principal activo del local + sus posiciones x/y de mesa.
-  // Se refresca al cambiar de local o al volver del panel de configuración (posicionesRefresh).
-  useEffect(() => {
-    if (!localId) { setPosicionesPlano(new Map()); return; }
-    (async () => {
-      const r = await getPlanoActivoConPosiciones(localId);
       const next = new Map<string, PlanoMesaPosicion>();
-      if (r.ok && r.data) {
-        for (const p of r.data.posiciones) next.set(p.mesaId, p);
-      }
+      for (const p of d.posiciones) next.set(p.mesaId, p);
       setPosicionesPlano(next);
     })();
-  }, [localId, posicionesRefresh]);
+    return () => { cancelled = true; };
+  }, [empresaActual.id, posicionesRefresh]);
 
   const salaActual = useMemo(
     () => salasLocal.find((s) => s.id === salaActualId) ?? null,
@@ -1455,10 +1488,7 @@ export function ReservasView() {
                     turno: r.turno,
                     estado: r.estado,
                     notas: r.observaciones || undefined,
-                    tipoId: r.tipoId ?? null,
-                    grupoId: r.esGrupo ? crypto.randomUUID() : null,
-                    tarjetaIntroducida: r.tarjetaIntroducida ?? false,
-                    esTicket: r.esTicket ?? false,
+                    etiquetaId: r.etiquetaId ?? null,
                     politicaCancelacionId: r.politicaCancelacionId ?? null,
                     garantiaImporte: r.garantiaImporte ?? null,
                   });
@@ -1691,7 +1721,7 @@ export function ReservasView() {
                         🎟 {r.codigoNombre}
                       </span>
                     )}
-                    <ReservaFlagsChips reserva={r} tipos={tiposReserva} className="shrink-0" />
+                    <ReservaFlagsChips reserva={r} etiquetas={etiquetasReserva} className="shrink-0" />
                   </span>
                   <span className="text-center">{r.comensales}</span>
                   <StatusDot estado={r.estado} />
@@ -1773,6 +1803,7 @@ export function ReservasView() {
               mesas={mesasActivas}
               posiciones={posicionesPlano}
               zonas={zonasSalaActual.filter((z) => zonaIdsSel.includes(z.id))}
+              salaTieneZonas={zonasSalaActual.length > 0}
               selectedMesaId={selectedMesa?.id ?? null}
               onSelectMesa={setSelectedMesa}
               getEstadoMesa={getMesaEstadoTurno}
@@ -1886,7 +1917,7 @@ export function ReservasView() {
               </div>
               {selectedReserva.observaciones && <Field label="Observaciones">{selectedReserva.observaciones}</Field>}
               <div className="flex flex-wrap items-center gap-2">
-                <ReservaFlagsChips reserva={selectedReserva} tipos={tiposReserva} insights={selectedInsights} size="md" />
+                <ReservaFlagsChips reserva={selectedReserva} etiquetas={etiquetasReserva} insights={selectedInsights} size="md" />
                 <ReservaExternalBadge reserva={selectedReserva} />
               </div>
               <div className="pt-2 border-t space-y-1.5">

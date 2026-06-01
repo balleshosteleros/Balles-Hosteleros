@@ -18,13 +18,13 @@ import { cn } from "@/lib/utils";
 import {
   esOrigenChannelManager,
   type Reserva,
-  type ReservaTipo,
+  type ReservaEtiqueta,
   type ClienteInsights,
 } from "@/features/sala/data/reservas";
 
 interface Props {
   reserva: Reserva;
-  tipos?: ReservaTipo[];
+  etiquetas?: ReservaEtiqueta[];
   insights?: ClienteInsights | null;
   className?: string;
   size?: "sm" | "md";
@@ -36,12 +36,12 @@ interface Props {
  */
 export function ReservaFlagsChips({
   reserva,
-  tipos,
+  etiquetas,
   insights,
   className,
   size = "sm",
 }: Props) {
-  const tipo = reserva.tipoId ? tipos?.find((t) => t.id === reserva.tipoId) : null;
+  const etiqueta = reserva.etiquetaId ? etiquetas?.find((t) => t.id === reserva.etiquetaId) : null;
   const iconSize = size === "sm" ? "h-3.5 w-3.5" : "h-4 w-4";
   const chipSize = size === "sm" ? "h-5 px-1.5" : "h-6 px-2";
   const origen = reserva.origen ?? "";
@@ -52,11 +52,11 @@ export function ReservaFlagsChips({
 
   const chips: Array<{ key: string; label: string; icon: React.ReactNode; cls: string; extra?: string }> = [];
 
-  if (tipo) {
+  if (etiqueta) {
     chips.push({
-      key: "tipo",
-      label: tipo.nombre,
-      icon: <span className="leading-none">{tipo.emoji ?? "📌"}</span>,
+      key: "etiqueta",
+      label: etiqueta.nombre,
+      icon: <span className="leading-none">{etiqueta.emoji ?? "📌"}</span>,
       cls: "border",
     });
   }
@@ -133,7 +133,7 @@ export function ReservaFlagsChips({
                 )}
               >
                 {c.icon}
-                {c.key === "tipo" && <span>{(c as { label: string }).label}</span>}
+                {c.key === "etiqueta" && <span>{(c as { label: string }).label}</span>}
                 {c.key === "garantia" && <span>{reserva.garantiaImporte}€</span>}
                 {c.extra && <span>{c.extra}</span>}
               </span>

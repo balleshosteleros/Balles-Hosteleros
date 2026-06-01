@@ -75,6 +75,16 @@ export interface Zona {
   createdAt: string;
 }
 
+export type FormaMesa = "cuadrada" | "redonda" | "rectangular";
+
+export const FORMAS_MESA: FormaMesa[] = ["cuadrada", "redonda", "rectangular"];
+
+export const FORMA_MESA_LABELS: Record<FormaMesa, string> = {
+  cuadrada: "Cuadrada",
+  redonda: "Redonda",
+  rectangular: "Rectangular",
+};
+
 export interface Mesa {
   id: string;
   localId: string;
@@ -83,6 +93,7 @@ export interface Mesa {
   capacidadMin: number;
   capacidadMax: number;
   tipo: TipoMesa;
+  forma: FormaMesa;
   activa: boolean;
   createdAt: string;
   updatedAt: string;
@@ -158,4 +169,54 @@ export interface LocalMin {
   id: string;
   empresaId: string;
   nombre: string;
+}
+
+/** Decoración visual del editor de plano (no es una mesa). */
+export type TipoDecoracion =
+  | "maceta"
+  | "planta_grande"
+  | "pasillo"
+  | "pared"
+  | "puerta"
+  | "escaleras"
+  | "barra"
+  | "columna"
+  | "ventana"
+  | "wc";
+
+export const TIPOS_DECORACION: TipoDecoracion[] = [
+  "maceta",
+  "planta_grande",
+  "pasillo",
+  "pared",
+  "puerta",
+  "escaleras",
+  "barra",
+  "columna",
+  "ventana",
+  "wc",
+];
+
+export const TIPO_DECORACION_LABELS: Record<TipoDecoracion, string> = {
+  maceta: "Maceta",
+  planta_grande: "Planta grande",
+  pasillo: "Pasillo",
+  pared: "Pared",
+  puerta: "Puerta",
+  escaleras: "Escaleras",
+  barra: "Barra",
+  columna: "Columna",
+  ventana: "Ventana",
+  wc: "WC",
+};
+
+export interface SalaDecoracion {
+  id: string;
+  salaId: string;
+  tipo: TipoDecoracion;
+  x: number;
+  y: number;
+  rotation: number;
+  width: number;
+  height: number;
 }

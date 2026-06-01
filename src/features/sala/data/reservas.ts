@@ -100,7 +100,7 @@ export interface Reserva {
   garantiaImporte?: number | null;
   bloqueada?: boolean;
   grupoId?: string | null;
-  tipoId?: string | null;
+  etiquetaId?: string | null;
   codigoId?: string | null;
   codigoNombre?: string | null;
   reconfirmadaAt?: string | null;
@@ -139,8 +139,8 @@ export function esOrigenChannelManager(origen: string | null | undefined): boole
   return o.startsWith(CHANNEL_MANAGER_ORIGEN_PREFIX) || o === "channelmanager" || o === "channel manager";
 }
 
-// --- TIPOS DE RESERVA (etiqueta visual editable por empresa) ---
-export interface ReservaTipo {
+// --- ETIQUETAS DE RESERVA (categoría visual editable por empresa: cumpleaños, evento, romántica…) ---
+export interface ReservaEtiqueta {
   id: string;
   empresaId: string;
   nombre: string;

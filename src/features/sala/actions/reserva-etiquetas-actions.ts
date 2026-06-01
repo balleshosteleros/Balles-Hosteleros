@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ReservaTipo } from "@/features/sala/data/reservas";
+import type { ReservaEtiqueta } from "@/features/sala/data/reservas";
 
 async function getCtx() {
   const supabase = await createClient();
@@ -13,7 +13,7 @@ async function getCtx() {
   return { supabase, user, empresaId };
 }
 
-function rowToTipo(row: Record<string, unknown>): ReservaTipo {
+function rowToEtiqueta(row: Record<string, unknown>): ReservaEtiqueta {
   return {
     id: row.id as string,
     empresaId: row.empresa_id as string,
@@ -27,12 +27,12 @@ function rowToTipo(row: Record<string, unknown>): ReservaTipo {
   };
 }
 
-export async function listReservaTipos(opts?: { soloActivos?: boolean }) {
+export async function listReservaEtiquetas(opts?: { soloActivos?: boolean }) {
   try {
     const { supabase, empresaId } = await getCtx();
-    if (!empresaId) return { ok: false, data: [] as ReservaTipo[] };
+    if (!empresaId) return { ok: false, data: [] as ReservaEtiqueta[] };
     const q = supabase
-      .from("empresa_reserva_tipos")
+      .from("empresa_reserva_etiquetas")
       .select("*")
       .eq("empresa_id", empresaId)
       .order("orden", { ascending: true })
@@ -40,14 +40,14 @@ export async function listReservaTipos(opts?: { soloActivos?: boolean }) {
     if (opts?.soloActivos) q.eq("activo", true);
     const { data, error } = await q;
     if (error) throw error;
-    return { ok: true, data: (data ?? []).map(rowToTipo) };
+    return { ok: true, data: (data ?? []).map(rowToEtiqueta) };
   } catch (err) {
-    console.error("[reserva-tipos] list:", err);
-    return { ok: false, data: [] as ReservaTipo[] };
+    console.error("[reserva-etiquetas] list:", err);
+    return { ok: false, data: [] as ReservaEtiqueta[] };
   }
 }
 
-export async function createReservaTipo(input: {
+export async function createReservaEtiqueta(input: {
   nombre: string;
   emoji?: string | null;
   color?: string;
@@ -58,7 +58,7 @@ export async function createReservaTipo(input: {
     if (!empresaId) return { ok: false, error: "No autenticado" };
     if (!input.nombre.trim()) return { ok: false, error: "El nombre es obligatorio" };
     const { data, error } = await supabase
-      .from("empresa_reserva_tipos")
+      .from("empresa_reserva_etiquetas")
       .insert({
         empresa_id: empresaId,
         nombre: input.nombre.trim(),
@@ -70,15 +70,15 @@ export async function createReservaTipo(input: {
       .select("*")
       .single();
     if (error) throw error;
-    return { ok: true, data: data ? rowToTipo(data) : null };
+    return { ok: true, data: data ? rowToEtiqueta(data) : null };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[reserva-tipos] create:", msg);
+    console.error("[reserva-etiquetas] create:", msg);
     return { ok: false, error: msg };
   }
 }
 
-export async function updateReservaTipo(id: string, updates: {
+export async function updateReservaEtiqueta(id: string, updates: {
   nombre?: string;
   emoji?: string | null;
   color?: string;
@@ -94,30 +94,30 @@ export async function updateReservaTipo(id: string, updates: {
     if (updates.orden !== undefined) dbUpdates.orden = updates.orden;
     if (updates.activo !== undefined) dbUpdates.activo = updates.activo;
     const { error } = await supabase
-      .from("empresa_reserva_tipos")
+      .from("empresa_reserva_etiquetas")
       .update(dbUpdates)
       .eq("id", id);
     if (error) throw error;
     return { ok: true };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[reserva-tipos] update:", msg);
+    console.error("[reserva-etiquetas] update:", msg);
     return { ok: false, error: msg };
   }
 }
 
-export async function deleteReservaTipo(id: string) {
+export async function deleteReservaEtiqueta(id: string) {
   try {
     const { supabase } = await getCtx();
     const { error } = await supabase
-      .from("empresa_reserva_tipos")
+      .from("empresa_reserva_etiquetas")
       .delete()
       .eq("id", id);
     if (error) throw error;
     return { ok: true };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[reserva-tipos] delete:", msg);
+    console.error("[reserva-etiquetas] delete:", msg);
     return { ok: false, error: msg };
   }
 }

@@ -18,12 +18,12 @@ import {
 } from "@/components/ui/popover";
 import { ChevronDown, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import type { ReservaTipo } from "@/features/sala/data/reservas";
+import type { ReservaEtiqueta } from "@/features/sala/data/reservas";
 import {
-  createReservaTipo,
-  updateReservaTipo,
-  deleteReservaTipo,
-} from "@/features/sala/actions/reserva-tipos-actions";
+  createReservaEtiqueta,
+  updateReservaEtiqueta,
+  deleteReservaEtiqueta,
+} from "@/features/sala/actions/reserva-etiquetas-actions";
 
 const EMOJI_CATALOG: string[] = [
   "🎂", "🎉", "🎈", "🎁", "🥂", "🍾", "🍰", "🍽️",
@@ -34,11 +34,11 @@ const EMOJI_CATALOG: string[] = [
 ];
 
 interface Props {
-  tipos: ReservaTipo[];
+  etiquetas: ReservaEtiqueta[];
   onChange: () => void;
 }
 
-export function TiposReservaList({ tipos, onChange }: Props) {
+export function EtiquetasReservaList({ etiquetas, onChange }: Props) {
   const [modalOpen, setModalOpen] = useState(false);
   const [nuevoNombre, setNuevoNombre] = useState("");
   const [nuevoEmoji, setNuevoEmoji] = useState<string>("🎉");
@@ -57,35 +57,35 @@ export function TiposReservaList({ tipos, onChange }: Props) {
       return;
     }
     setCreando(true);
-    const res = await createReservaTipo({
+    const res = await createReservaEtiqueta({
       nombre: nuevoNombre,
       emoji: nuevoEmoji || null,
       color: nuevoColor,
-      orden: tipos.length + 1,
+      orden: etiquetas.length + 1,
     });
     setCreando(false);
     if (!res.ok) {
       toast.error(res.error ?? "No se pudo crear");
       return;
     }
-    toast.success("Tipo añadido");
+    toast.success("Etiqueta añadida");
     resetForm();
     setModalOpen(false);
     onChange();
   }
 
-  async function patch(id: string, patch: Parameters<typeof updateReservaTipo>[1]) {
-    const res = await updateReservaTipo(id, patch);
+  async function patch(id: string, patch: Parameters<typeof updateReservaEtiqueta>[1]) {
+    const res = await updateReservaEtiqueta(id, patch);
     if (!res.ok) toast.error(res.error ?? "No se pudo guardar");
     else onChange();
   }
 
   async function handleDelete(id: string, nombre: string) {
-    if (!confirm(`¿Borrar el tipo "${nombre}"?`)) return;
-    const res = await deleteReservaTipo(id);
+    if (!confirm(`¿Borrar la etiqueta "${nombre}"?`)) return;
+    const res = await deleteReservaEtiqueta(id);
     if (!res.ok) toast.error(res.error ?? "No se pudo borrar");
     else {
-      toast.success("Tipo borrado");
+      toast.success("Etiqueta borrada");
       onChange();
     }
   }
@@ -94,11 +94,11 @@ export function TiposReservaList({ tipos, onChange }: Props) {
     <div className="space-y-3">
       <header className="flex items-center justify-between">
         <div>
-          <h4 className="text-sm font-semibold">Tipos de reserva</h4>
+          <h4 className="text-sm font-semibold">Etiquetas de reserva</h4>
           <p className="text-xs text-muted-foreground mt-1">
-            Etiquetas visuales para clasificar reservas (Cumpleaños, Evento, …).
-            No vinculan con políticas ni cupos — solo sirven para filtrar y pintar
-            un chip de color.
+            Categorías visuales rápidas para clasificar una reserva (Cumpleaños,
+            Evento, …). No vinculan con políticas ni cupos — solo sirven para
+            filtrar y pintar un chip de color.
           </p>
         </div>
         <Button
@@ -109,12 +109,12 @@ export function TiposReservaList({ tipos, onChange }: Props) {
             setModalOpen(true);
           }}
         >
-          <Plus className="h-4 w-4 mr-1" />Nuevo tipo
+          <Plus className="h-4 w-4 mr-1" />Nueva etiqueta
         </Button>
       </header>
 
       <div className="border rounded-md divide-y">
-        {tipos.map((t) => (
+        {etiquetas.map((t) => (
           <div key={t.id} className="flex items-center gap-2 p-2">
             <EmojiPicker
               value={t.emoji ?? ""}
@@ -142,7 +142,7 @@ export function TiposReservaList({ tipos, onChange }: Props) {
                 checked={t.activo}
                 onCheckedChange={(v) => patch(t.id, { activo: v })}
               />
-              <span>{t.activo ? "Activo" : "Inactivo"}</span>
+              <span>{t.activo ? "Activa" : "Inactiva"}</span>
             </div>
             <Button
               variant="ghost"
@@ -154,9 +154,9 @@ export function TiposReservaList({ tipos, onChange }: Props) {
             </Button>
           </div>
         ))}
-        {tipos.length === 0 && (
+        {etiquetas.length === 0 && (
           <div className="p-3 text-center text-muted-foreground text-xs">
-            Sin tipos. Crea el primero con &quot;Nuevo tipo&quot;.
+            Sin etiquetas. Crea la primera con &quot;Nueva etiqueta&quot;.
           </div>
         )}
       </div>
@@ -164,7 +164,7 @@ export function TiposReservaList({ tipos, onChange }: Props) {
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Nuevo tipo</DialogTitle>
+            <DialogTitle>Nueva etiqueta</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">

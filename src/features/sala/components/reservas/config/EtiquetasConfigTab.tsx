@@ -8,10 +8,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 import { CategoriaEtiquetasCard } from "./CategoriaEtiquetasCard";
-import { TiposReservaList } from "./TiposReservaList";
+import { EtiquetasReservaList } from "./EtiquetasReservaList";
 import { Separator } from "@/components/ui/separator";
-import { listReservaTipos } from "@/features/sala/actions/reserva-tipos-actions";
-import type { ReservaTipo } from "@/features/sala/data/reservas";
+import { listReservaEtiquetas } from "@/features/sala/actions/reserva-etiquetas-actions";
+import type { ReservaEtiqueta } from "@/features/sala/data/reservas";
 import {
   createEtiquetaCategoria,
   listEtiquetaCategorias,
@@ -38,7 +38,7 @@ export function EtiquetasConfigTab() {
   const [scope, setScope] = useState<EtiquetaScope>("reserva");
   const [categorias, setCategorias] = useState<EtiquetaCategoria[]>([]);
   const [etiquetas, setEtiquetas] = useState<Etiqueta[]>([]);
-  const [tipos, setTipos] = useState<ReservaTipo[]>([]);
+  const [etiquetasReserva, setEtiquetasReserva] = useState<ReservaEtiqueta[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
 
@@ -46,11 +46,11 @@ export function EtiquetasConfigTab() {
     const [c, e, t] = await Promise.all([
       listEtiquetaCategorias(),
       listEtiquetas(),
-      listReservaTipos(),
+      listReservaEtiquetas(),
     ]);
     if (c.ok) setCategorias(c.data);
     if (e.ok) setEtiquetas(e.data);
-    if (t.ok) setTipos(t.data);
+    if (t.ok) setEtiquetasReserva(t.data);
     setLoading(false);
   }, []);
 
@@ -166,7 +166,7 @@ export function EtiquetasConfigTab() {
 
       <Separator />
 
-      <TiposReservaList tipos={tipos} onChange={cargar} />
+      <EtiquetasReservaList etiquetas={etiquetasReserva} onChange={cargar} />
     </div>
   );
 }
