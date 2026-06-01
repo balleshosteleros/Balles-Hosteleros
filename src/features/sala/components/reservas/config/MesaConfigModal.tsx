@@ -134,7 +134,7 @@ export function MesaConfigModal({
               value={codigo}
               onChange={(e) => setCodigo(e.target.value.toUpperCase())}
               onBlur={() => setCodigoBlur(true)}
-              placeholder="Ej: T-5, EX-12"
+              placeholder="Ej: A5, TE12, CR3"
               className={
                 muestraErrorCodigo || muestraErrorTyping
                   ? "border-red-500 focus-visible:ring-red-500"
@@ -142,11 +142,11 @@ export function MesaConfigModal({
               }
             />
             <p className="text-[11px] text-muted-foreground">
-              1-2 letras + guion + número del 1 al 99.
+              Empieza por letra; solo letras y números, hasta 6 caracteres.
             </p>
             {muestraErrorCodigo && (
               <p className="text-[11px] text-red-500">
-                Formato inválido. Ejemplo válido: T-5, A1 NO, EX-12 SÍ.
+                Formato inválido. Ejemplos válidos: A5, TE12, CR3, BARRA1.
               </p>
             )}
           </div>
