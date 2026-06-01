@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -967,6 +967,26 @@ function PlanoCanvas({
       .filter((m) => !zonas.length || zonaNombres.has((m.zona as unknown as string) ?? ""));
   }, [mesas, posiciones, zonas]);
 
+  // Autoescala el lienzo 1200x640 para caber siempre completo y centrado en el contenedor visible.
+  // Mismo patrón que SalaPlanoEditor para que lo que ves al editar coincida con el board.
+  const outerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  useEffect(() => {
+    const el = outerRef.current;
+    if (!el) return;
+    const update = () => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      if (w <= 0 || h <= 0) return;
+      const s = Math.min(w / PLANO_CANVAS_W, h / PLANO_CANVAS_H, 1);
+      setScale(s > 0 ? s : 1);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   // Encuadra una posición dentro del lienzo estándar (mismas bounds que el editor).
   const clampPos = (x: number, y: number) => ({
     x: Math.max(0, Math.min(PLANO_CANVAS_W - PLANO_MESA_SIZE, x)),
@@ -1002,10 +1022,29 @@ function PlanoCanvas({
   }
 
   return (
-    <div className="flex-1 overflow-x-auto overflow-y-hidden p-3 bg-white dark:bg-white">
+    <div className="flex-1 flex flex-col overflow-hidden p-3 bg-white dark:bg-white min-h-0">
+      <div
+        ref={outerRef}
+        className="flex-1 flex items-center justify-center overflow-hidden min-h-0"
+      >
+      <div
+        style={{
+          width: PLANO_CANVAS_W * scale,
+          height: PLANO_CANVAS_H * scale,
+          position: "relative",
+        }}
+      >
       <div
         className="relative bg-white rounded-lg"
-        style={{ width: PLANO_CANVAS_W, height: PLANO_CANVAS_H }}
+        style={{
+          width: PLANO_CANVAS_W,
+          height: PLANO_CANVAS_H,
+          position: "absolute",
+          top: 0,
+          left: 0,
+          transform: `scale(${scale})`,
+          transformOrigin: "0 0",
+        }}
       >
         {labelsZonas.map((l) => (
           <span
@@ -1067,6 +1106,8 @@ function PlanoCanvas({
           );
         })}
       </div>
+      </div>
+      </div>
       <div className="flex items-center gap-4 pt-3 text-[10px] text-muted-foreground justify-center flex-wrap">
         {Object.entries(mesaBg).map(([k, cls]) => (
           <span key={k} className="flex items-center gap-1.5">
@@ -1107,7 +1148,10 @@ export function ReservasView() {
   const [planoActualId, setPlanoActualId] = useState<string>("");
   const [zonasReales, setZonasReales] = useState<ZonaReal[]>([]);
   const [posicionesPlano, setPosicionesPlano] = useState<Map<string, PlanoMesaPosicion>>(new Map());
+  const [posicionesRefresh, setPosicionesRefresh] = useState(0);
   const [zonaIdsSel, setZonaIdsSel] = useState<string[]>(ZONAS_SALA);
+  // Permite ocultar el listado de reservas o el mapa para que el otro ocupe todo el ancho.
+  const [panelOculto, setPanelOculto] = useState<"ninguno" | "lista" | "mapa">("ninguno");
 
   useEffect(() => {
     (async () => {
@@ -1203,6 +1247,7 @@ export function ReservasView() {
   }, [localId, salaActualId]);
 
   // Carga el plano principal activo del local + sus posiciones x/y de mesa.
+  // Se refresca al cambiar de local o al volver del panel de configuración (posicionesRefresh).
   useEffect(() => {
     if (!localId) { setPosicionesPlano(new Map()); return; }
     (async () => {
@@ -1213,7 +1258,7 @@ export function ReservasView() {
       }
       setPosicionesPlano(next);
     })();
-  }, [localId]);
+  }, [localId, posicionesRefresh]);
 
   const salaActual = useMemo(
     () => salasLocal.find((s) => s.id === salaActualId) ?? null,
@@ -1372,7 +1417,12 @@ export function ReservasView() {
   if (showConfig) {
     return (
       <div className="flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden">
-        <ConfigReservasView onBack={() => setShowConfig(false)} />
+        <ConfigReservasView
+          onBack={() => {
+            setShowConfig(false);
+            setPosicionesRefresh((n) => n + 1);
+          }}
+        />
       </div>
     );
   }
@@ -1566,16 +1616,17 @@ export function ReservasView() {
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setFecha(addDays(fecha, 1))}><ChevronRight className="h-4 w-4" /></Button>
             </div>
           )}
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setShowConfig(true)}
-            title="Configuración de reservas"
-          >
-            <Settings className="h-4 w-4" />
-          </Button>
         </div>
+
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-8 w-8 ml-auto"
+          onClick={() => setShowConfig(true)}
+          title="Configuración de reservas"
+        >
+          <Settings className="h-4 w-4" />
+        </Button>
       </div>
 
       {vista === "mes" ? (
@@ -1592,9 +1643,13 @@ export function ReservasView() {
         />
       ) : (
       <>
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
         {/* LEFT PANEL */}
-        <div className="w-[420px] shrink-0 border-r flex flex-col bg-card overflow-hidden">
+        {panelOculto !== "lista" && (
+        <div className={cn(
+          "border-r flex flex-col bg-card overflow-hidden",
+          panelOculto === "ninguno" ? "w-[420px] shrink-0" : "flex-1",
+        )}>
           {(origenesPresentes.length > 0 || filtroOrigen !== "TODOS") && (
             <div className="px-3 py-1.5 border-b flex items-center gap-1.5 text-[10px]">
               <span className="text-muted-foreground">Origen:</span>
@@ -1645,8 +1700,58 @@ export function ReservasView() {
             })}
           </div>
         </div>
+        )}
+
+        {/* DIVISOR con botones para ocultar lista o mapa (solo visible con ambos paneles) */}
+        {panelOculto === "ninguno" && (
+          <div className="relative flex flex-col items-center justify-center w-0 z-30">
+            <div className="absolute top-1/2 -translate-y-1/2 flex flex-col gap-1 -translate-x-1/2">
+              <button
+                type="button"
+                onClick={() => setPanelOculto("lista")}
+                title="Ocultar listado"
+                className="h-7 w-5 rounded bg-background border shadow-sm hover:bg-muted flex items-center justify-center"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setPanelOculto("mapa")}
+                title="Ocultar mapa"
+                className="h-7 w-5 rounded bg-background border shadow-sm hover:bg-muted flex items-center justify-center"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Botón flotante para restaurar la lista cuando está oculta */}
+        {panelOculto === "lista" && (
+          <button
+            type="button"
+            onClick={() => setPanelOculto("ninguno")}
+            title="Mostrar listado"
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-40 h-9 w-6 rounded-r bg-background border border-l-0 shadow-md hover:bg-muted flex items-center justify-center"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        )}
+
+        {/* Botón flotante para restaurar el mapa cuando está oculto */}
+        {panelOculto === "mapa" && (
+          <button
+            type="button"
+            onClick={() => setPanelOculto("ninguno")}
+            title="Mostrar mapa"
+            className="absolute right-0 top-1/2 -translate-y-1/2 z-40 h-9 w-6 rounded-l bg-background border border-r-0 shadow-md hover:bg-muted flex items-center justify-center"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+        )}
 
         {/* RIGHT PANEL — CANVAS PLANO si hay intersección posiciones↔mesasActivas; sino, GRID agrupado por zona */}
+        {panelOculto !== "mapa" && (
         <div className="relative flex-1 flex flex-col overflow-hidden bg-white">
           {salasLocal.length >= 2 && siguienteSala && (
             <button
@@ -1754,6 +1859,7 @@ export function ReservasView() {
             </div>
           )}
         </div>
+        )}
 
       </div>
       </>

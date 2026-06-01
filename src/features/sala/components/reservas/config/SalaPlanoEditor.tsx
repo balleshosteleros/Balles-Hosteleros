@@ -48,7 +48,25 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
   const [loading, setLoading] = useState(true);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [mesaSeleccionada, setMesaSeleccionada] = useState<string | null>(null);
+  const [scale, setScale] = useState(1);
+  const outerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = outerRef.current;
+    if (!el) return;
+    const update = () => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      if (w <= 0 || h <= 0) return;
+      const s = Math.min(w / CANVAS_W, h / CANVAS_H, 1);
+      setScale(s > 0 ? s : 1);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const zonasSala = useMemo(
     () => zonas.filter((z) => z.salaId === sala.id),
@@ -102,8 +120,8 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
     if (!rect) return;
     const pos = posiciones.get(mesaId);
     if (!pos) return;
-    const mouseX = e.clientX - rect.left + (canvasRef.current?.scrollLeft ?? 0);
-    const mouseY = e.clientY - rect.top + (canvasRef.current?.scrollTop ?? 0);
+    const mouseX = (e.clientX - rect.left) / scale;
+    const mouseY = (e.clientY - rect.top) / scale;
     setDrag({
       mesaId,
       offsetX: mouseX - pos.x,
@@ -116,8 +134,8 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
     if (!drag) return;
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const x = e.clientX - rect.left + (canvasRef.current?.scrollLeft ?? 0) - drag.offsetX;
-    const y = e.clientY - rect.top + (canvasRef.current?.scrollTop ?? 0) - drag.offsetY;
+    const x = (e.clientX - rect.left) / scale - drag.offsetX;
+    const y = (e.clientY - rect.top) / scale - drag.offsetY;
     setPosiciones((prev) => {
       const next = new Map(prev);
       const actual = prev.get(drag.mesaId);
@@ -283,10 +301,10 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
           )}
         </aside>
 
-        {/* Lienzo — alto fijo (sin scroll vertical), scroll horizontal solo si la ventana es estrecha */}
+        {/* Lienzo — autoescala para caber completo y centrado, sin scroll. */}
         <div
-          ref={canvasRef}
-          className="border rounded-md overflow-x-auto overflow-y-hidden bg-muted/20 relative"
+          ref={outerRef}
+          className="border rounded-md overflow-hidden bg-muted/20 relative flex items-center justify-center"
           style={{ height: CANVAS_H }}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
@@ -294,10 +312,23 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
           onClick={() => setMesaSeleccionada(null)}
         >
           <div
+            style={{
+              width: CANVAS_W * scale,
+              height: CANVAS_H * scale,
+              position: "relative",
+            }}
+          >
+          <div
+            ref={canvasRef}
             className="relative"
             style={{
               width: CANVAS_W,
               height: CANVAS_H,
+              position: "absolute",
+              top: 0,
+              left: 0,
+              transform: `scale(${scale})`,
+              transformOrigin: "0 0",
               backgroundImage:
                 "linear-gradient(rgba(0,0,0,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.06) 1px, transparent 1px)",
               backgroundSize: "40px 40px",
@@ -337,6 +368,7 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
                 </div>
               );
             })}
+          </div>
           </div>
         </div>
       </div>
