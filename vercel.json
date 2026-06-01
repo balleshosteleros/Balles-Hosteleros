@@ -38,11 +38,11 @@
     },
     {
       "path": "/api/cron/google-rwg-availability-delta",
-      "schedule": "*/5 * * * *"
+      "schedule": "5 4 * * *"
     },
     {
       "path": "/api/cron/google-rwg-notify-pending",
-      "schedule": "* * * * *"
+      "schedule": "10 4 * * *"
     }
   ]
 }
