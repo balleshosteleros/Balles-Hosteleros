@@ -95,7 +95,7 @@ export async function createReserva(input: {
   garantiaImporte?: number | null;
   bloqueada?: boolean;
   grupoId?: string | null;
-  tipoId?: string | null;
+  etiquetaId?: string | null;
   // Asignación automática de mesa (PRP-048). Si `asignarAuto=true` y la
   // reserva llega sin `mesa`, el sistema busca la primera libre del plano
   // activo del local con capacidad para los comensales. `localId` es
@@ -148,8 +148,8 @@ export async function createReserva(input: {
     const origenFinal = estadoFinal === "WALK_IN" ? "WALKIN" : (input.origen ?? null);
 
     // Asignación automática de mesa (PRP-048): solo si el llamador lo pide,
-    // hay `localId` y la reserva llega sin mesa explícita. Si no encuentra
-    // libre, la reserva se guarda sin mesa (bandeja "pendiente de asignar").
+    // hay `localId` y la reserva llega sin mesa explícita. Regla de negocio:
+    // o hay mesa libre, o no se acepta la reserva.
     let mesaFinal = input.mesa ?? null;
     let zonaFinal = input.zona ?? null;
     if (input.asignarAuto && input.localId && !mesaFinal) {
@@ -163,10 +163,20 @@ export async function createReserva(input: {
         zonaId: input.zonaIdFiltro ?? null,
         tipo: input.tipoMesaFiltro ?? null,
       });
-      if (asign.ok && asign.mesa) {
-        mesaFinal = asign.mesa.codigo;
-        zonaFinal = zonaFinal ?? asign.mesa.zonaNombre ?? null;
+      if (!asign.ok || !asign.mesa) {
+        if (!asign.ok && asign.razon === "SIN_PLANO_ACTIVO") {
+          return { ok: false, error: "No hay plano activo configurado para este local." };
+        }
+        if (!asign.ok) {
+          return { ok: false, error: "No se pudo asignar mesa. Inténtalo de nuevo." };
+        }
+        return {
+          ok: false,
+          error: `No quedan mesas libres para ${input.personas} ${input.personas === 1 ? "persona" : "personas"} a las ${input.hora.slice(0, 5)}.`,
+        };
       }
+      mesaFinal = asign.mesa.codigo;
+      zonaFinal = zonaFinal ?? asign.mesa.zonaNombre ?? null;
     }
 
     const { data, error } = await supabase.from("reservas").insert({
@@ -191,7 +201,7 @@ export async function createReserva(input: {
       garantia_importe: input.garantiaImporte ?? null,
       bloqueada: input.bloqueada ?? false,
       grupo_id: input.grupoId ?? null,
-      tipo_id: input.tipoId ?? null,
+      etiqueta_id: input.etiquetaId ?? null,
       created_by: user?.id ?? null,
     }).select("id").single();
     if (error) throw error;
@@ -240,7 +250,7 @@ export async function updateReserva(
     garantiaImporte?: number | null;
     bloqueada?: boolean;
     grupoId?: string | null;
-    tipoId?: string | null;
+    etiquetaId?: string | null;
     reconfirmadaAt?: string | null;
   }
 ) {
@@ -325,7 +335,7 @@ export async function updateReserva(
     if (updates.garantiaImporte !== undefined) dbUpdates.garantia_importe = updates.garantiaImporte;
     if (updates.bloqueada !== undefined) dbUpdates.bloqueada = updates.bloqueada;
     if (updates.grupoId !== undefined) dbUpdates.grupo_id = updates.grupoId;
-    if (updates.tipoId !== undefined) dbUpdates.tipo_id = updates.tipoId;
+    if (updates.etiquetaId !== undefined) dbUpdates.etiqueta_id = updates.etiquetaId;
     if (updates.reconfirmadaAt !== undefined) {
       dbUpdates.reconfirmada_at = updates.reconfirmadaAt;
     } else if (updates.estado === "RECONFIRMADA") {
