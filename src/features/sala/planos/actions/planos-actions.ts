@@ -3,8 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type {
+  MesaPosicion,
   Plano,
-  PlanoMesaPosicion,
 } from "@/features/sala/planos/data/planos";
 
 function rowToPlano(r: Record<string, unknown>): Plano {
@@ -116,6 +116,31 @@ export async function updatePlano(
 export async function deletePlano(id: string) {
   try {
     const supabase = await createClient();
+    // Bloquear si tiene salas asociadas (las salas deben pertenecer a algún plano).
+    const { count, error: errCnt } = await supabase
+      .from("plano_salas")
+      .select("sala_id", { count: "exact", head: true })
+      .eq("plano_id", id);
+    if (errCnt) throw errCnt;
+    if ((count ?? 0) > 0) {
+      return {
+        ok: false,
+        error: `No se puede borrar: el plano tiene ${count} sala${count === 1 ? "" : "s"} asociada${count === 1 ? "" : "s"}. Mueve las salas a otro plano antes.`,
+      };
+    }
+    // Bloquear si es el plano principal (sería dejar el local sin plano principal).
+    const { data: planoRow, error: errSel } = await supabase
+      .from("planos")
+      .select("es_principal")
+      .eq("id", id)
+      .maybeSingle();
+    if (errSel) throw errSel;
+    if (planoRow?.es_principal) {
+      return {
+        ok: false,
+        error: "No se puede borrar el plano principal. Marca otro como principal antes.",
+      };
+    }
     const { error } = await supabase.from("planos").delete().eq("id", id);
     if (error) throw error;
     revalidatePath("/sala/reservas");
@@ -153,7 +178,6 @@ export async function togglePlanoSala(planoId: string, salaId: string, activar: 
         .upsert({ plano_id: planoId, sala_id: salaId }, { onConflict: "plano_id,sala_id" });
       if (error) throw error;
     } else {
-      // Al desactivar la sala, todas las mesas de esa sala colocadas en este plano se borran (cascade vía trigger)
       const { error } = await supabase
         .from("plano_salas")
         .delete()
@@ -170,77 +194,52 @@ export async function togglePlanoSala(planoId: string, salaId: string, activar: 
   }
 }
 
-// ---- PLANO_MESAS (posiciones de mesa en el plano) ----
-
-export async function listPlanoMesas(planoId: string) {
+/**
+ * Devuelve el plano principal activo del local + las posiciones de las mesas
+ * de sus salas asociadas. Las posiciones viven en `mesas.x/y/rotation` —
+ * el diseño es propiedad de la sala, no del plano.
+ */
+export async function getPlanoActivoConPosiciones(localId: string) {
   try {
     const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("plano_mesas")
-      .select("plano_id, mesa_id, x, y, rotation")
-      .eq("plano_id", planoId);
-    if (error) throw error;
-    return {
-      ok: true,
-      data: (data ?? []).map((r) => ({
-        planoId: r.plano_id as string,
-        mesaId: r.mesa_id as string,
-        x: Number(r.x),
-        y: Number(r.y),
-        rotation: Number(r.rotation),
-      })) as PlanoMesaPosicion[],
-    };
+    const { data: planoRow, error: errP } = await supabase
+      .from("planos")
+      .select("*")
+      .eq("local_id", localId)
+      .eq("es_principal", true)
+      .eq("activo", true)
+      .maybeSingle();
+    if (errP) throw errP;
+    if (!planoRow) return { ok: true, data: null as null | { plano: Plano; posiciones: MesaPosicion[] } };
+
+    // Salas asociadas al plano.
+    const { data: psRows, error: errPS } = await supabase
+      .from("plano_salas")
+      .select("sala_id")
+      .eq("plano_id", planoRow.id);
+    if (errPS) throw errPS;
+    const salaIds = (psRows ?? []).map((r) => r.sala_id as string);
+    if (salaIds.length === 0) {
+      return { ok: true, data: { plano: rowToPlano(planoRow), posiciones: [] as MesaPosicion[] } };
+    }
+
+    // Mesas con posición de esas salas (vía zonas).
+    const { data: mesaRows, error: errM } = await supabase
+      .from("mesas")
+      .select("id, x, y, rotation, zonas!inner(sala_id)")
+      .in("zonas.sala_id", salaIds)
+      .not("x", "is", null)
+      .not("y", "is", null);
+    if (errM) throw errM;
+    const posiciones: MesaPosicion[] = (mesaRows ?? []).map((r) => ({
+      mesaId: r.id as string,
+      x: Number(r.x),
+      y: Number(r.y),
+      rotation: Number(r.rotation),
+    }));
+    return { ok: true, data: { plano: rowToPlano(planoRow), posiciones } };
   } catch (err) {
-    console.error("[plano_mesas] list:", err);
-    return { ok: false, data: [] as PlanoMesaPosicion[] };
-  }
-}
-
-export async function upsertPlanoMesa(input: {
-  planoId: string;
-  mesaId: string;
-  x: number;
-  y: number;
-  rotation?: number;
-}) {
-  try {
-    const supabase = await createClient();
-    const { error } = await supabase
-      .from("plano_mesas")
-      .upsert(
-        {
-          plano_id: input.planoId,
-          mesa_id: input.mesaId,
-          x: input.x,
-          y: input.y,
-          rotation: input.rotation ?? 0,
-        },
-        { onConflict: "plano_id,mesa_id" },
-      );
-    if (error) throw error;
-    revalidatePath("/sala/reservas");
-    return { ok: true };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[plano_mesas] upsert:", msg);
-    return { ok: false, error: msg };
-  }
-}
-
-export async function removePlanoMesa(planoId: string, mesaId: string) {
-  try {
-    const supabase = await createClient();
-    const { error } = await supabase
-      .from("plano_mesas")
-      .delete()
-      .eq("plano_id", planoId)
-      .eq("mesa_id", mesaId);
-    if (error) throw error;
-    revalidatePath("/sala/reservas");
-    return { ok: true };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[plano_mesas] remove:", msg);
-    return { ok: false, error: msg };
+    console.error("[planos] getPlanoActivoConPosiciones:", err);
+    return { ok: false, data: null as null | { plano: Plano; posiciones: MesaPosicion[] } };
   }
 }

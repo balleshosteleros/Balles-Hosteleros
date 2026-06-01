@@ -29,8 +29,8 @@ function rowToConfig(row: Record<string, unknown>): EmpresaReservasConfig {
     generalCupoCena:     row.general_cupo_cena     ?? null,
     generalMaxpaxComida: row.general_maxpax_comida ?? null,
     generalMaxpaxCena:   row.general_maxpax_cena   ?? null,
-    antelacionMinHoras: (row.antelacion_min_horas as number) ?? 0,
-    antelacionMaxDias:  (row.antelacion_max_dias as number)  ?? 90,
+    antelacionMinMinutos: (row.antelacion_min_minutos as number) ?? 0,
+    antelacionMaxDias:    (row.antelacion_max_dias as number)    ?? 90,
   };
   for (const d of DIAS) {
     for (const m of METRICAS) {
@@ -88,8 +88,8 @@ export async function upsertReservasConfig(updates: Partial<EmpresaReservasConfi
     if ("generalCupoCena"     in updates) db.general_cupo_cena     = updates.generalCupoCena;
     if ("generalMaxpaxComida" in updates) db.general_maxpax_comida = updates.generalMaxpaxComida;
     if ("generalMaxpaxCena"   in updates) db.general_maxpax_cena   = updates.generalMaxpaxCena;
-    if ("antelacionMinHoras"  in updates) db.antelacion_min_horas  = updates.antelacionMinHoras;
-    if ("antelacionMaxDias"   in updates) db.antelacion_max_dias   = updates.antelacionMaxDias;
+    if ("antelacionMinMinutos" in updates) db.antelacion_min_minutos = updates.antelacionMinMinutos;
+    if ("antelacionMaxDias"    in updates) db.antelacion_max_dias    = updates.antelacionMaxDias;
     for (const d of DIAS) {
       for (const m of METRICAS) {
         for (const t of TURNOS) {

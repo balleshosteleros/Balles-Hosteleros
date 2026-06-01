@@ -107,9 +107,9 @@ export function dentroDeAntelacion(
   if (!config) return { ok: true };
   const target = new Date(`${fechaISO}T${horaHHMM.length === 5 ? horaHHMM : horaHHMM.slice(0, 5)}:00`);
   const diffMs = target.getTime() - ahora.getTime();
-  const diffH = diffMs / 36e5;
+  const diffMin = diffMs / 6e4;
   const diffD = diffMs / 864e5;
-  if (diffH < (config.antelacionMinHoras ?? 0)) return { ok: false, motivo: "antelacion_min" };
+  if (diffMin < (config.antelacionMinMinutos ?? 0)) return { ok: false, motivo: "antelacion_min" };
   if (diffD > (config.antelacionMaxDias ?? 365)) return { ok: false, motivo: "antelacion_max" };
   return { ok: true };
 }

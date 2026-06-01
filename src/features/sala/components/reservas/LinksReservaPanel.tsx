@@ -235,7 +235,7 @@ export function LinksReservaPanel({ embedded = false }: { embedded?: boolean } =
               )}
               {palabraValidacion?.ok && (
                 <p className="text-xs text-muted-foreground mt-2 break-all">
-                  URL: <code className="text-foreground">.../reservar/&lt;empresa&gt;?o={palabraValidacion.valor}</code>
+                  URL: <code className="text-foreground">.../r/&lt;empresa&gt;/{palabraValidacion.valor.toLowerCase()}</code>
                 </p>
               )}
             </div>

@@ -37,6 +37,9 @@ yarn-error.log*
 .env*.local
 !.env.example
 
+# Handoff notes (contienen secretos, no commitear)
+HANDOFF_*.md
+
 # Vercel
 .vercel
 

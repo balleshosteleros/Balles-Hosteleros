@@ -22,5 +22,5 @@ export function validarPalabraClave(raw: string): { ok: true; valor: string } | 
 
 export function buildReservaUrl(empresaSlug: string, palabraClave: string): string {
   const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://sistema.balleshosteleros.com";
-  return `${base.replace(/\/$/, "")}/reservar/${empresaSlug}?o=${palabraClave}`;
+  return `${base.replace(/\/$/, "")}/reservar/${empresaSlug}/${palabraClave.toLowerCase()}`;
 }

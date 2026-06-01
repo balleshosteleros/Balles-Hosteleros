@@ -25,12 +25,13 @@ async function getCtx() {
 
 type Row = Record<string, unknown>;
 
-function rowToLink(row: Row): ReservaLink {
+function rowToLink(row: Row, empresaSlug: string | null = null): ReservaLink {
+  const palabraClave = row.palabra_clave as string;
   return {
     id: row.id as string,
     empresaId: row.empresa_id as string,
-    palabraClave: row.palabra_clave as string,
-    urlGenerada: row.url_generada as string,
+    palabraClave,
+    urlGenerada: empresaSlug ? buildReservaUrl(empresaSlug, palabraClave) : (row.url_generada as string),
     activo: row.activo as boolean,
     creadoPor: (row.creado_por as string | null) ?? null,
     createdAt: row.created_at as string,
@@ -40,7 +41,7 @@ function rowToLink(row: Row): ReservaLink {
 
 export async function listReservaLinks() {
   try {
-    const { supabase, empresaId } = await getCtx();
+    const { supabase, empresaId, empresaSlug } = await getCtx();
     if (!empresaId) return { ok: false, data: [] as ReservaLink[], error: "Sin empresa" };
     const { data, error } = await supabase
       .from("reserva_links")
@@ -48,7 +49,7 @@ export async function listReservaLinks() {
       .eq("empresa_id", empresaId)
       .order("created_at", { ascending: false });
     if (error) throw error;
-    return { ok: true, data: (data ?? []).map(rowToLink) };
+    return { ok: true, data: (data ?? []).map((row) => rowToLink(row, empresaSlug)) };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error";
     return { ok: false, data: [] as ReservaLink[], error: msg };

@@ -2,34 +2,30 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, RotateCcw, RotateCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type {
   Mesa,
-  Plano,
-  PlanoMesaPosicion,
+  MesaPosicion,
   Sala,
   Zona,
 } from "@/features/sala/planos/data/planos";
 import {
-  listPlanoMesas,
-  listPlanoSalas,
-  removePlanoMesa,
-  togglePlanoSala,
-  upsertPlanoMesa,
-} from "@/features/sala/planos/actions/planos-actions";
+  listMesaPosicionesSala,
+  removeMesaPosicion,
+  upsertMesaPosicion,
+} from "@/features/sala/planos/actions/mesa-posiciones-actions";
 
 const MESA_SIZE = 60;
-const CANVAS_W = 2000;
-const CANVAS_H = 1200;
+// Tamaño estándar del lienzo de una sala. Ajustado para que entre en la pantalla
+// sin scroll vertical. Si hace falta más espacio, el usuario debe crear otra sala.
+const CANVAS_W = 1200;
+const CANVAS_H = 640;
 
 interface Props {
-  plano: Plano;
-  salas: Sala[];
+  sala: Sala;
   zonas: Zona[];
   mesas: Mesa[];
   onBack: () => void;
@@ -42,73 +38,57 @@ interface DragState {
   esNueva: boolean;
 }
 
-export function PlanoEditor({ plano, salas, zonas, mesas, onBack }: Props) {
-  const [salasActivas, setSalasActivas] = useState<Set<string>>(new Set());
-  const [posiciones, setPosiciones] = useState<Map<string, PlanoMesaPosicion>>(new Map());
+/**
+ * Editor visual del plano de UNA sala.
+ * Las posiciones viven en `mesas.x/y/rotation` — son propiedad de la sala
+ * a través de sus zonas/mesas; cualquier plano que use esta sala las reutiliza.
+ */
+export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
+  const [posiciones, setPosiciones] = useState<Map<string, MesaPosicion>>(new Map());
   const [loading, setLoading] = useState(true);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [mesaSeleccionada, setMesaSeleccionada] = useState<string | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
 
+  const zonasSala = useMemo(
+    () => zonas.filter((z) => z.salaId === sala.id),
+    [zonas, sala.id],
+  );
+  const mesasSala = useMemo(() => {
+    const zonaIds = new Set(zonasSala.map((z) => z.id));
+    return mesas.filter((m) => zonaIds.has(m.zonaId));
+  }, [mesas, zonasSala]);
+
   const cargar = useCallback(async () => {
     setLoading(true);
-    const [ps, pm] = await Promise.all([listPlanoSalas(plano.id), listPlanoMesas(plano.id)]);
-    if (ps.ok) setSalasActivas(new Set(ps.data));
-    if (pm.ok) {
-      const map = new Map<string, PlanoMesaPosicion>();
-      for (const p of pm.data) map.set(p.mesaId, p);
+    const r = await listMesaPosicionesSala(sala.id);
+    if (r.ok) {
+      const map = new Map<string, MesaPosicion>();
+      for (const p of r.data) map.set(p.mesaId, p);
       setPosiciones(map);
     }
     setLoading(false);
-  }, [plano.id]);
+  }, [sala.id]);
 
   useEffect(() => {
     cargar();
   }, [cargar]);
 
-  const zonasPorSala = useMemo(() => {
-    const map = new Map<string, Zona[]>();
-    for (const z of zonas) {
-      const arr = map.get(z.salaId) ?? [];
-      arr.push(z);
-      map.set(z.salaId, arr);
-    }
-    return map;
-  }, [zonas]);
-
   const mesasPorZona = useMemo(() => {
     const map = new Map<string, Mesa[]>();
-    for (const m of mesas) {
+    for (const m of mesasSala) {
       const arr = map.get(m.zonaId) ?? [];
       arr.push(m);
       map.set(m.zonaId, arr);
     }
     return map;
-  }, [mesas]);
+  }, [mesasSala]);
 
-  const zonaPorId = useMemo(() => new Map(zonas.map((z) => [z.id, z])), [zonas]);
-  const mesaPorId = useMemo(() => new Map(mesas.map((m) => [m.id, m])), [mesas]);
+  const zonaPorId = useMemo(() => new Map(zonasSala.map((z) => [z.id, z])), [zonasSala]);
+  const mesaPorId = useMemo(() => new Map(mesasSala.map((m) => [m.id, m])), [mesasSala]);
 
   function mesaEstaColocada(mesaId: string): boolean {
     return posiciones.has(mesaId);
-  }
-
-  async function handleToggleSala(salaId: string, activar: boolean) {
-    const prev = new Set(salasActivas);
-    setSalasActivas((s) => {
-      const next = new Set(s);
-      if (activar) next.add(salaId);
-      else next.delete(salaId);
-      return next;
-    });
-    const res = await togglePlanoSala(plano.id, salaId, activar);
-    if (!res.ok) {
-      setSalasActivas(prev);
-      toast.error(res.error ?? "No se pudo guardar");
-      return;
-    }
-    // Si se desactiva, recargar posiciones (cascade)
-    if (!activar) cargar();
   }
 
   function startDragNueva(e: React.PointerEvent, mesaId: string) {
@@ -142,7 +122,6 @@ export function PlanoEditor({ plano, salas, zonas, mesas, onBack }: Props) {
       const next = new Map(prev);
       const actual = prev.get(drag.mesaId);
       next.set(drag.mesaId, {
-        planoId: plano.id,
         mesaId: drag.mesaId,
         x: Math.max(0, Math.min(CANVAS_W - MESA_SIZE, x)),
         y: Math.max(0, Math.min(CANVAS_H - MESA_SIZE, y)),
@@ -157,8 +136,7 @@ export function PlanoEditor({ plano, salas, zonas, mesas, onBack }: Props) {
     const pos = posiciones.get(drag.mesaId);
     setDrag(null);
     if (!pos) return;
-    const res = await upsertPlanoMesa({
-      planoId: plano.id,
+    const res = await upsertMesaPosicion({
       mesaId: drag.mesaId,
       x: pos.x,
       y: pos.y,
@@ -166,7 +144,6 @@ export function PlanoEditor({ plano, salas, zonas, mesas, onBack }: Props) {
     });
     if (!res.ok) {
       toast.error(res.error ?? "No se pudo guardar");
-      // recargar para revertir
       cargar();
     }
   }
@@ -178,7 +155,7 @@ export function PlanoEditor({ plano, salas, zonas, mesas, onBack }: Props) {
       return next;
     });
     setMesaSeleccionada(null);
-    const res = await removePlanoMesa(plano.id, mesaId);
+    const res = await removeMesaPosicion(mesaId);
     if (!res.ok) {
       toast.error(res.error ?? "No se pudo quitar");
       cargar();
@@ -194,8 +171,7 @@ export function PlanoEditor({ plano, salas, zonas, mesas, onBack }: Props) {
       next.set(mesaId, { ...pos, rotation: nuevaRotacion });
       return next;
     });
-    const res = await upsertPlanoMesa({
-      planoId: plano.id,
+    const res = await upsertMesaPosicion({
       mesaId,
       x: pos.x,
       y: pos.y,
@@ -218,97 +194,68 @@ export function PlanoEditor({ plano, salas, zonas, mesas, onBack }: Props) {
       <header className="flex items-center justify-between">
         <Button variant="ghost" size="sm" onClick={onBack}>
           <ArrowLeft className="h-4 w-4 mr-1.5" />
-          Volver
+          Volver a salas
         </Button>
         <div className="text-sm">
-          <span className="font-semibold">{plano.nombre}</span>
-          {plano.esPrincipal && (
-            <span className="ml-2 text-[10px] uppercase bg-primary/15 text-primary px-1.5 py-0.5 rounded">
+          <span className="text-muted-foreground">Plano de</span>{" "}
+          <span className="font-semibold">{sala.nombre}</span>
+          {sala.esPrincipal && (
+            <span className="ml-2 text-[10px] bg-primary/15 text-primary px-1.5 py-0.5 rounded">
               Principal
             </span>
           )}
         </div>
       </header>
 
-      <div className="grid grid-cols-[260px_1fr] gap-3" style={{ height: "60vh" }}>
-        {/* Panel lateral */}
+      <div className="grid grid-cols-[260px_1fr] gap-3" style={{ height: CANVAS_H }}>
+        {/* Panel lateral: mesas disponibles de esta sala */}
         <aside className="border rounded-md overflow-y-auto p-3 space-y-3 bg-card">
-          <div>
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">
-              Salas activas en el plano
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+            Mesas disponibles (arrastra al lienzo)
+          </p>
+          {zonasSala.length === 0 ? (
+            <p className="text-xs text-muted-foreground italic">
+              Esta sala aún no tiene zonas.
             </p>
-            <div className="space-y-1.5">
-              {salas.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic">Crea salas en Estructura.</p>
-              ) : (
-                salas.map((s) => (
-                  <label key={s.id} className="flex items-center justify-between text-xs">
-                    <span>{s.nombre}</span>
-                    <Switch
-                      checked={salasActivas.has(s.id)}
-                      onCheckedChange={(v) => handleToggleSala(s.id, v)}
-                    />
-                  </label>
-                ))
+          ) : (
+            <div className="space-y-2">
+              {zonasSala.map((zona) => {
+                const ms = (mesasPorZona.get(zona.id) ?? []).filter(
+                  (m) => !mesaEstaColocada(m.id),
+                );
+                if (ms.length === 0) return null;
+                return (
+                  <div key={zona.id} className="space-y-1">
+                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                      <span
+                        className="inline-block h-2.5 w-2.5 rounded"
+                        style={{ backgroundColor: zona.colorPastel }}
+                      />
+                      {zona.nombre}
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {ms.map((m) => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onPointerDown={(e) => startDragNueva(e, m.id)}
+                          className="text-[11px] font-semibold border rounded px-2 py-1 cursor-grab active:cursor-grabbing hover:border-foreground"
+                          style={{ backgroundColor: `${zona.colorPastel}66` }}
+                        >
+                          {m.codigo}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+              {mesasSala.every((m) => mesaEstaColocada(m.id)) && (
+                <p className="text-[11px] text-muted-foreground italic">
+                  Todas las mesas de esta sala ya están en el lienzo.
+                </p>
               )}
             </div>
-          </div>
-
-          <div className="pt-2 border-t">
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">
-              Mesas disponibles (arrastra al lienzo)
-            </p>
-            {salasActivas.size === 0 ? (
-              <p className="text-xs text-muted-foreground italic">
-                Activa al menos una sala arriba.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {salas
-                  .filter((s) => salasActivas.has(s.id))
-                  .map((sala) => {
-                    const zs = zonasPorSala.get(sala.id) ?? [];
-                    return (
-                      <div key={sala.id} className="space-y-1">
-                        <p className="text-[10px] font-semibold uppercase text-muted-foreground">
-                          {sala.nombre}
-                        </p>
-                        {zs.map((zona) => {
-                          const ms = (mesasPorZona.get(zona.id) ?? []).filter(
-                            (m) => !mesaEstaColocada(m.id),
-                          );
-                          if (ms.length === 0) return null;
-                          return (
-                            <div key={zona.id} className="space-y-1">
-                              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                                <span
-                                  className="inline-block h-2.5 w-2.5 rounded"
-                                  style={{ backgroundColor: zona.colorPastel }}
-                                />
-                                {zona.nombre}
-                              </div>
-                              <div className="flex flex-wrap gap-1">
-                                {ms.map((m) => (
-                                  <button
-                                    key={m.id}
-                                    type="button"
-                                    onPointerDown={(e) => startDragNueva(e, m.id)}
-                                    className="text-[11px] font-semibold border rounded px-2 py-1 cursor-grab active:cursor-grabbing hover:border-foreground"
-                                    style={{ backgroundColor: `${zona.colorPastel}66` }}
-                                  >
-                                    {m.codigo}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
-              </div>
-            )}
-          </div>
+          )}
 
           {mesaSeleccionada && (
             <div className="pt-2 border-t space-y-2">
@@ -336,10 +283,11 @@ export function PlanoEditor({ plano, salas, zonas, mesas, onBack }: Props) {
           )}
         </aside>
 
-        {/* Lienzo */}
+        {/* Lienzo — alto fijo (sin scroll vertical), scroll horizontal solo si la ventana es estrecha */}
         <div
           ref={canvasRef}
-          className="border rounded-md overflow-auto bg-muted/20 relative"
+          className="border rounded-md overflow-x-auto overflow-y-hidden bg-muted/20 relative"
+          style={{ height: CANVAS_H }}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerLeave={handlePointerUp}
@@ -374,8 +322,8 @@ export function PlanoEditor({ plano, salas, zonas, mesas, onBack }: Props) {
                     seleccionada ? "border-primary shadow-lg" : "border-foreground/40",
                   )}
                   style={{
-                    left: pos.x,
-                    top: pos.y,
+                    left: Math.max(0, Math.min(CANVAS_W - MESA_SIZE, pos.x)),
+                    top: Math.max(0, Math.min(CANVAS_H - MESA_SIZE, pos.y)),
                     width: MESA_SIZE,
                     height: MESA_SIZE,
                     backgroundColor: zona?.colorPastel ?? "#FDE68A",
@@ -394,7 +342,7 @@ export function PlanoEditor({ plano, salas, zonas, mesas, onBack }: Props) {
       </div>
 
       <p className="text-[11px] text-muted-foreground">
-        Arrastra mesas desde el panel al lienzo. Click para seleccionar y rotar/quitar. Las posiciones se guardan automáticamente.
+        Arrastra mesas desde el panel al lienzo. Click para seleccionar y rotar o quitar. El lienzo tiene un tamaño estándar — si necesitas más espacio, crea otra sala. Las posiciones se guardan automáticamente.
       </p>
     </div>
   );

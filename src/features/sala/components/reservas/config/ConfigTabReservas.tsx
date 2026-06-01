@@ -9,34 +9,28 @@ import { toast } from "sonner";
 import type {
   EmpresaReservasConfig,
   EmpresaReservasExcepcion,
-  ReservaTipo,
 } from "@/features/sala/data/reservas";
 import {
   getReservasConfig,
   upsertReservasConfig,
 } from "@/features/sala/actions/reservas-config-actions";
 import { listReservasExcepciones } from "@/features/sala/actions/reservas-excepciones-actions";
-import { listReservaTipos } from "@/features/sala/actions/reserva-tipos-actions";
 import { LimitesMatriz } from "./LimitesMatriz";
 import { ExcepcionesTabla } from "./ExcepcionesTabla";
-import { TiposReservaList } from "./TiposReservaList";
 
 export function ConfigTabReservas() {
   const [config, setConfig] = useState<EmpresaReservasConfig | null>(null);
   const [excepciones, setExcepciones] = useState<EmpresaReservasExcepcion[]>([]);
-  const [tipos, setTipos] = useState<ReservaTipo[]>([]);
   const [loading, setLoading] = useState(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const cargar = useCallback(async () => {
-    const [c, e, t] = await Promise.all([
+    const [c, e] = await Promise.all([
       getReservasConfig(),
       listReservasExcepciones(),
-      listReservaTipos(),
     ]);
     if (c.ok) setConfig(c.data);
     if (e.ok) setExcepciones(e.data);
-    if (t.ok) setTipos(t.data);
     setLoading(false);
   }, []);
 
@@ -76,35 +70,41 @@ export function ConfigTabReservas() {
         </p>
         <div className="grid grid-cols-2 gap-3 max-w-md">
           <div className="space-y-1.5">
-            <Label className="text-xs">Antelación mínima (horas)</Label>
+            <Label className="text-xs">Antelación mínima (minutos)</Label>
             <Input
               type="number"
               min={0}
-              value={config.antelacionMinHoras}
-              onChange={(e) =>
-                handleConfigChange({ antelacionMinHoras: Number(e.target.value) || 0 })
-              }
+              max={1440}
+              value={config.antelacionMinMinutos}
+              onChange={(e) => {
+                const n = Math.min(1440, Math.max(0, Number(e.target.value) || 0));
+                handleConfigChange({ antelacionMinMinutos: n });
+              }}
               className="h-8"
             />
+            <p className="text-[10px] text-muted-foreground">
+              Máximo 1.440 min (24 h). Ej.: 15, 30, 60, 120.
+            </p>
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Antelación máxima (días)</Label>
             <Input
               type="number"
               min={1}
+              max={365}
               value={config.antelacionMaxDias}
-              onChange={(e) =>
-                handleConfigChange({ antelacionMaxDias: Number(e.target.value) || 90 })
-              }
+              onChange={(e) => {
+                const n = Math.min(365, Math.max(1, Number(e.target.value) || 90));
+                handleConfigChange({ antelacionMaxDias: n });
+              }}
               className="h-8"
             />
+            <p className="text-[10px] text-muted-foreground">
+              Máximo 365 días (1 año).
+            </p>
           </div>
         </div>
       </div>
-
-      <Separator />
-
-      <TiposReservaList tipos={tipos} onChange={cargar} />
 
       <Separator />
 

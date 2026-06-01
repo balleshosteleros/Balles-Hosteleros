@@ -88,6 +88,19 @@ export interface Mesa {
   updatedAt: string;
 }
 
+/**
+ * Posición física de la mesa en el plano visual.
+ * Vive directamente en `mesas.x/y/rotation` — el diseño es propiedad de la sala
+ * (a través de la zona/mesa), no del plano. Un plano que use varias salas
+ * combina los lienzos de cada sala usando estas mismas coordenadas.
+ */
+export interface MesaPosicion {
+  mesaId: string;
+  x: number;
+  y: number;
+  rotation: number;
+}
+
 export interface TipoMesaConfig {
   id: string;
   localId: string;
@@ -116,13 +129,8 @@ export interface Plano {
   updatedAt: string;
 }
 
-export interface PlanoMesaPosicion {
-  planoId: string;
-  mesaId: string;
-  x: number;
-  y: number;
-  rotation: number;
-}
+/** @deprecated usar `MesaPosicion`. Mantenido como alias para no romper imports. */
+export type PlanoMesaPosicion = MesaPosicion;
 
 export interface MesaCombinacion {
   id: string;

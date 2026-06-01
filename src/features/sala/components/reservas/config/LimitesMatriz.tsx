@@ -47,98 +47,111 @@ function NumCell({
   );
 }
 
+type MetricaUI = "cupo" | "maxpax";
+
+function MatrizMetrica({
+  config,
+  onChange,
+  metrica,
+}: Props & { metrica: MetricaUI }) {
+  const generalComidaKey = metrica === "cupo" ? "generalCupoComida" : "generalMaxpaxComida";
+  const generalCenaKey = metrica === "cupo" ? "generalCupoCena" : "generalMaxpaxCena";
+  const sufijoComida = metrica === "cupo" ? "cupo_comida" : "maxpax_comida";
+  const sufijoCena = metrica === "cupo" ? "cupo_cena" : "maxpax_cena";
+
+  const genComida = config[generalComidaKey];
+  const genCena = config[generalCenaKey];
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs">
+        <thead className="bg-muted/50">
+          <tr>
+            <th className="text-left p-2 font-medium">Día</th>
+            <th className="p-2 font-medium">☀️ Comida</th>
+            <th className="p-2 font-medium">🌙 Cena</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr className={cn("border-b", "bg-amber-50/30 dark:bg-amber-950/10")}>
+            <td className="p-2 font-semibold">General</td>
+            <td className="p-1">
+              <NumCell
+                value={genComida}
+                onChange={(v) => onChange({ [generalComidaKey]: v } as Partial<EmpresaReservasConfig>)}
+              />
+            </td>
+            <td className="p-1">
+              <NumCell
+                value={genCena}
+                onChange={(v) => onChange({ [generalCenaKey]: v } as Partial<EmpresaReservasConfig>)}
+              />
+            </td>
+          </tr>
+          {DIAS.map(({ key, label }) => {
+            const comidaKey = `${key}_${sufijoComida}` as keyof EmpresaReservasConfig;
+            const cenaKey = `${key}_${sufijoCena}` as keyof EmpresaReservasConfig;
+            const vComida = config[comidaKey] as number | null;
+            const vCena = config[cenaKey] as number | null;
+            return (
+              <tr key={key} className="border-b">
+                <td className="p-2 text-muted-foreground">{label}</td>
+                <td className="p-1">
+                  <NumCell
+                    value={vComida}
+                    placeholder={genComida?.toString() ?? "—"}
+                    onChange={(v) => onChange({ [comidaKey]: v } as Partial<EmpresaReservasConfig>)}
+                  />
+                </td>
+                <td className="p-1">
+                  <NumCell
+                    value={vCena}
+                    placeholder={genCena?.toString() ?? "—"}
+                    onChange={(v) => onChange({ [cenaKey]: v } as Partial<EmpresaReservasConfig>)}
+                  />
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function LimitesMatriz({ config, onChange }: Props) {
   return (
-    <div className="space-y-4">
-      <div>
-        <h4 className="text-sm font-semibold mb-2">Cupos y máximos por turno</h4>
-        <p className="text-xs text-muted-foreground mb-3">
-          La prioridad es: <strong>excepción por fecha</strong> &gt; <strong>día de la semana</strong> &gt; <strong>general</strong>.
-          Deja un campo vacío para que herede del nivel superior.
+    <div className="space-y-6">
+      <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground space-y-1">
+        <p>
+          Estos límites aplican a <strong>todo el restaurante</strong> (sumando todas las salas) y se separan por turno: <strong>Comida</strong> y <strong>Cena</strong>.
         </p>
+        <p>
+          <strong>Cómo se aplica cada fila:</strong>{" "}
+          <strong>General</strong> vale para cualquier día sin valor propio. Si rellenas un día concreto (ej. Viernes), ese valor se usa <strong>siempre</strong> los viernes. Solo las <strong>excepciones por fecha</strong> (otra pestaña) pueden anularlo, y solo en el día indicado.
+        </p>
+        <p>Deja un campo vacío para que herede del nivel superior.</p>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead className="bg-muted/50">
-            <tr>
-              <th className="text-left p-2 font-medium">Día</th>
-              <th className="p-2 font-medium">☀️ Cupo Comida</th>
-              <th className="p-2 font-medium">🌙 Cupo Cena</th>
-              <th className="p-2 font-medium">☀️ Máx pax Comida</th>
-              <th className="p-2 font-medium">🌙 Máx pax Cena</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr className={cn("border-b", "bg-amber-50/30 dark:bg-amber-950/10")}>
-              <td className="p-2 font-semibold">General</td>
-              <td className="p-1">
-                <NumCell
-                  value={config.generalCupoComida}
-                  onChange={(v) => onChange({ generalCupoComida: v })}
-                />
-              </td>
-              <td className="p-1">
-                <NumCell
-                  value={config.generalCupoCena}
-                  onChange={(v) => onChange({ generalCupoCena: v })}
-                />
-              </td>
-              <td className="p-1">
-                <NumCell
-                  value={config.generalMaxpaxComida}
-                  onChange={(v) => onChange({ generalMaxpaxComida: v })}
-                />
-              </td>
-              <td className="p-1">
-                <NumCell
-                  value={config.generalMaxpaxCena}
-                  onChange={(v) => onChange({ generalMaxpaxCena: v })}
-                />
-              </td>
-            </tr>
-            {DIAS.map(({ key, label }) => {
-              const cc = config[`${key}_cupo_comida`];
-              const ce = config[`${key}_cupo_cena`];
-              const mc = config[`${key}_maxpax_comida`];
-              const me = config[`${key}_maxpax_cena`];
-              return (
-                <tr key={key} className="border-b">
-                  <td className="p-2 text-muted-foreground">{label}</td>
-                  <td className="p-1">
-                    <NumCell
-                      value={cc}
-                      placeholder={config.generalCupoComida?.toString() ?? "—"}
-                      onChange={(v) => onChange({ [`${key}_cupo_comida`]: v } as Partial<EmpresaReservasConfig>)}
-                    />
-                  </td>
-                  <td className="p-1">
-                    <NumCell
-                      value={ce}
-                      placeholder={config.generalCupoCena?.toString() ?? "—"}
-                      onChange={(v) => onChange({ [`${key}_cupo_cena`]: v } as Partial<EmpresaReservasConfig>)}
-                    />
-                  </td>
-                  <td className="p-1">
-                    <NumCell
-                      value={mc}
-                      placeholder={config.generalMaxpaxComida?.toString() ?? "—"}
-                      onChange={(v) => onChange({ [`${key}_maxpax_comida`]: v } as Partial<EmpresaReservasConfig>)}
-                    />
-                  </td>
-                  <td className="p-1">
-                    <NumCell
-                      value={me}
-                      placeholder={config.generalMaxpaxCena?.toString() ?? "—"}
-                      onChange={(v) => onChange({ [`${key}_maxpax_cena`]: v } as Partial<EmpresaReservasConfig>)}
-                    />
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <section className="space-y-2">
+        <div>
+          <h4 className="text-sm font-semibold">Aforo total del turno</h4>
+          <p className="text-xs text-muted-foreground">
+            Número máximo de personas que aceptas en total durante el turno (sumando todas las reservas). Al alcanzar el tope, el turno se cierra a nuevas reservas.
+          </p>
+        </div>
+        <MatrizMetrica config={config} onChange={onChange} metrica="cupo" />
+      </section>
+
+      <section className="space-y-2">
+        <div>
+          <h4 className="text-sm font-semibold">Tamaño máximo por reserva</h4>
+          <p className="text-xs text-muted-foreground">
+            Personas máximas en una sola reserva (una mesa o combinación de mesas). Si alguien pide más, debe gestionarse como reserva de Grupo.
+          </p>
+        </div>
+        <MatrizMetrica config={config} onChange={onChange} metrica="maxpax" />
+      </section>
     </div>
   );
 }
