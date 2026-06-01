@@ -104,6 +104,8 @@ export interface Reserva {
   codigoId?: string | null;
   codigoNombre?: string | null;
   reconfirmadaAt?: string | null;
+  externalId?: string | null;
+  externalOrigen?: string | null;
 }
 
 // --- POLÍTICAS DE CANCELACIÓN ---
@@ -206,7 +208,7 @@ export type EmpresaReservasConfig = SemanaLimites & {
   generalCupoCena: number | null;
   generalMaxpaxComida: number | null;
   generalMaxpaxCena: number | null;
-  antelacionMinHoras: number;
+  antelacionMinMinutos: number;
   antelacionMaxDias: number;
 };
 

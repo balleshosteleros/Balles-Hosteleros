@@ -36,11 +36,14 @@ import { listLocalesEmpresa } from "@/features/sala/planos/actions/locales-actio
 import { listSalas } from "@/features/sala/planos/actions/salas-actions";
 import { listZonas } from "@/features/sala/planos/actions/zonas-actions";
 import { listMesas } from "@/features/sala/planos/actions/mesas-actions";
+import { getPlanoActivoConPosiciones, listPlanos } from "@/features/sala/planos/actions/planos-actions";
 import type {
   Sala as SalaConfig,
   LocalMin,
   Zona as ZonaReal,
   Mesa as MesaConfig,
+  Plano as PlanoConfig,
+  PlanoMesaPosicion,
 } from "@/features/sala/planos/data/planos";
 import { getReservasConfig } from "@/features/sala/actions/reservas-config-actions";
 import { listReservasExcepciones } from "@/features/sala/actions/reservas-excepciones-actions";
@@ -55,6 +58,7 @@ import type {
   ClienteInsights,
 } from "@/features/sala/data/reservas";
 import { ReservaFlagsChips } from "@/features/sala/components/reservas/ReservaFlagsChips";
+import { ReservaExternalBadge } from "@/features/sala/components/reservas/ReservaExternalBadge";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -613,6 +617,8 @@ function mapDbToReserva(row: Record<string, unknown>): Reserva {
     codigoId: (row.codigo_id as string | null) ?? null,
     codigoNombre: (row.codigo_nombre as string | null) ?? null,
     reconfirmadaAt: (row.reconfirmada_at as string | null) ?? null,
+    externalId: (row.external_id as string | null) ?? null,
+    externalOrigen: (row.external_origen as string | null) ?? null,
   };
 }
 
@@ -761,6 +767,71 @@ function FiltroSalasDropdown({
   );
 }
 
+function FiltroPlanosDropdown({
+  planos,
+  planoActualId,
+  onSelect,
+}: {
+  planos: PlanoConfig[];
+  planoActualId: string;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button size="sm" variant="outline" className="text-xs h-8 gap-1.5 px-2.5">
+          <ListFilter className="h-3.5 w-3.5" />
+          Planos
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-2" align="start">
+        <div className="flex items-center justify-between px-1 pb-1.5 mb-1.5 border-b">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Planos
+          </span>
+        </div>
+        <div className="max-h-[300px] overflow-y-auto space-y-0.5">
+          {planos.length === 0 ? (
+            <p className="px-2 py-3 text-xs text-muted-foreground italic text-center">
+              No hay planos creados
+            </p>
+          ) : (
+            planos.map((p) => {
+              const checked = p.id === planoActualId;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => onSelect(p.id)}
+                  className={cn(
+                    "w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-muted transition-colors text-left",
+                    checked && "bg-muted/60",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "w-4 h-4 rounded border flex items-center justify-center shrink-0",
+                      checked
+                        ? "bg-primary border-primary text-primary-foreground"
+                        : "border-border",
+                    )}
+                  >
+                    {checked && <Check className="h-3 w-3" />}
+                  </span>
+                  <span className="truncate flex-1">{p.nombre}</span>
+                  {p.esPrincipal && (
+                    <span className="text-amber-500 shrink-0" title="Plano principal">★</span>
+                  )}
+                </button>
+              );
+            })
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 interface ZonaItem {
   id: string;
   label: string;
@@ -861,6 +932,152 @@ function FiltroZonasDropdown({
   );
 }
 
+const PLANO_MESA_SIZE = 60;
+// Tamaño estándar del lienzo de una sala — debe coincidir con el editor (SalaPlanoEditor).
+// No se expande para "encajar" mesas: si quedan fuera por coordenadas viejas se clampean al borde.
+const PLANO_CANVAS_W = 1200;
+const PLANO_CANVAS_H = 640;
+
+function PlanoCanvas({
+  mesas,
+  posiciones,
+  zonas,
+  selectedMesaId,
+  onSelectMesa,
+  getEstadoMesa,
+  getReservasMesa,
+  onAsignar,
+  onCambiarEstado,
+}: {
+  mesas: Mesa[];
+  posiciones: Map<string, PlanoMesaPosicion>;
+  zonas: ZonaReal[];
+  selectedMesaId: string | null;
+  onSelectMesa: (m: Mesa | null) => void;
+  getEstadoMesa: (m: Mesa) => string;
+  getReservasMesa: (mesaId: string) => Reserva[];
+  onAsignar: (m: Mesa) => void;
+  onCambiarEstado: (id: string, e: EstadoReserva) => void;
+}) {
+  // Mesas con posición x/y conocida y zona pasada por filtro
+  const mesasConPos = useMemo(() => {
+    const zonaNombres = new Set(zonas.map((z) => z.nombre.toUpperCase()));
+    return mesas
+      .filter((m) => posiciones.has(m.id))
+      .filter((m) => !zonas.length || zonaNombres.has((m.zona as unknown as string) ?? ""));
+  }, [mesas, posiciones, zonas]);
+
+  // Encuadra una posición dentro del lienzo estándar (mismas bounds que el editor).
+  const clampPos = (x: number, y: number) => ({
+    x: Math.max(0, Math.min(PLANO_CANVAS_W - PLANO_MESA_SIZE, x)),
+    y: Math.max(0, Math.min(PLANO_CANVAS_H - PLANO_MESA_SIZE, y)),
+  });
+
+  // Etiquetas de zona: posicionadas encima de la mesa más arriba-izquierda de cada zona
+  const labelsZonas = useMemo(() => {
+    const labels: { id: string; nombre: string; color: string; x: number; y: number }[] = [];
+    for (const z of zonas) {
+      const mesasZona = mesasConPos.filter(
+        (m) => (m.zona as unknown as string)?.toUpperCase() === z.nombre.toUpperCase(),
+      );
+      if (mesasZona.length === 0) continue;
+      let minX = Infinity, minY = Infinity;
+      for (const m of mesasZona) {
+        const pos = posiciones.get(m.id)!;
+        const c = clampPos(pos.x, pos.y);
+        if (c.x < minX) minX = c.x;
+        if (c.y < minY) minY = c.y;
+      }
+      labels.push({ id: z.id, nombre: z.nombre, color: z.colorPastel, x: minX, y: minY - 30 });
+    }
+    return labels;
+  }, [zonas, mesasConPos, posiciones]);
+
+  if (mesasConPos.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground italic p-4 text-center">
+        No hay mesas posicionadas para mostrar. Entra a Configuración → Estructura → Editar layout.
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 overflow-x-auto overflow-y-hidden p-3 bg-white dark:bg-white">
+      <div
+        className="relative bg-white rounded-lg"
+        style={{ width: PLANO_CANVAS_W, height: PLANO_CANVAS_H }}
+      >
+        {labelsZonas.map((l) => (
+          <span
+            key={l.id}
+            className="absolute px-2 py-0.5 rounded text-[11px] font-bold tracking-wide text-zinc-800 shadow-sm pointer-events-none"
+            style={{ left: l.x, top: Math.max(8, l.y), backgroundColor: l.color }}
+          >
+            {l.nombre}
+          </span>
+        ))}
+        {mesasConPos.map((m) => {
+          const pos = posiciones.get(m.id)!;
+          const c = clampPos(pos.x, pos.y);
+          const estado = getEstadoMesa(m);
+          const rs = getReservasMesa(m.id);
+          const firstR = rs[0];
+          const isWalkIn = firstR?.estado === "WALK_IN";
+          return (
+            <Popover key={m.id}>
+              <PopoverTrigger asChild>
+                <button
+                  className={cn(
+                    "absolute rounded-md flex flex-col items-center justify-center text-white text-[10px] font-bold shadow-md border border-white/10 transition-all cursor-pointer px-1",
+                    mesaBg[estado] ?? mesaBg.LIBRE,
+                    selectedMesaId === m.id && "ring-2 ring-primary",
+                  )}
+                  style={{
+                    left: c.x,
+                    top: c.y,
+                    width: PLANO_MESA_SIZE,
+                    height: PLANO_MESA_SIZE,
+                    transform: pos.rotation ? `rotate(${pos.rotation}deg)` : undefined,
+                  }}
+                  onClick={() => onSelectMesa(m)}
+                >
+                  <span className="leading-none">{m.codigo}</span>
+                  <span className="text-[8px] font-normal opacity-80 mt-0.5">({m.capacidad}p)</span>
+                  {firstR && (
+                    <span className="text-[8px] font-normal mt-0.5 opacity-90 truncate max-w-full">
+                      {firstR.hora}
+                    </span>
+                  )}
+                  {firstR && (
+                    <span className="text-[8px] font-normal opacity-90 truncate max-w-full">
+                      {isWalkIn ? "WALK IN" : firstR.cliente}
+                    </span>
+                  )}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-72 p-3">
+                <MesaPopover
+                  mesa={m}
+                  reservas={rs}
+                  onAsignar={() => onAsignar(m)}
+                  onCambiarEstado={onCambiarEstado}
+                />
+              </PopoverContent>
+            </Popover>
+          );
+        })}
+      </div>
+      <div className="flex items-center gap-4 pt-3 text-[10px] text-muted-foreground justify-center flex-wrap">
+        {Object.entries(mesaBg).map(([k, cls]) => (
+          <span key={k} className="flex items-center gap-1.5">
+            <span className={cn("w-3 h-3 rounded", cls)} />{ESTADO_MESA_LABELS[k as keyof typeof ESTADO_MESA_LABELS]}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function ReservasView() {
   const { empresaActual } = useEmpresa();
   const [mesas, setMesas] = useState<Mesa[]>(SAMPLE_MESAS);
@@ -885,7 +1102,11 @@ export function ReservasView() {
   const [localId, setLocalId] = useState<string>("");
   const [salasLocal, setSalasLocal] = useState<SalaConfig[]>([]);
   const [salaActualId, setSalaActualId] = useState<string>("");
+  const [navDirSala, setNavDirSala] = useState<1 | -1>(1);
+  const [planosLocal, setPlanosLocal] = useState<PlanoConfig[]>([]);
+  const [planoActualId, setPlanoActualId] = useState<string>("");
   const [zonasReales, setZonasReales] = useState<ZonaReal[]>([]);
+  const [posicionesPlano, setPosicionesPlano] = useState<Map<string, PlanoMesaPosicion>>(new Map());
   const [zonaIdsSel, setZonaIdsSel] = useState<string[]>(ZONAS_SALA);
 
   useEffect(() => {
@@ -925,6 +1146,22 @@ export function ReservasView() {
     })();
   }, [localId]);
 
+  // Carga planos del local activo y selecciona el principal
+  useEffect(() => {
+    if (!localId) { setPlanosLocal([]); setPlanoActualId(""); return; }
+    (async () => {
+      const r = await listPlanos(localId);
+      if (r.ok) {
+        setPlanosLocal(r.data);
+        const principal = r.data.find((p) => p.esPrincipal) ?? r.data[0];
+        setPlanoActualId(principal?.id ?? "");
+      } else {
+        setPlanosLocal([]);
+        setPlanoActualId("");
+      }
+    })();
+  }, [localId]);
+
   // Carga zonas reales del local (todas; luego se filtran por sala activa)
   useEffect(() => {
     if (!localId) { setZonasReales([]); return; }
@@ -938,10 +1175,12 @@ export function ReservasView() {
   useEffect(() => {
     if (!localId) return;
     (async () => {
-      const r = await listMesas(localId);
-      if (!r.ok || r.data.length === 0) return;
+      const [r, zonasRes] = await Promise.all([listMesas(localId), listZonas(localId)]);
+      if (!r.ok) {
+        console.warn("[ReservasView] listMesas falló, conservando estado anterior");
+        return;
+      }
       const zonaNombrePorId = new Map<string, string>();
-      const zonasRes = await listZonas(localId);
       if (zonasRes.ok) {
         zonasRes.data.forEach((z) => zonaNombrePorId.set(z.id, z.nombre.toUpperCase()));
       }
@@ -963,10 +1202,48 @@ export function ReservasView() {
     })();
   }, [localId, salaActualId]);
 
+  // Carga el plano principal activo del local + sus posiciones x/y de mesa.
+  useEffect(() => {
+    if (!localId) { setPosicionesPlano(new Map()); return; }
+    (async () => {
+      const r = await getPlanoActivoConPosiciones(localId);
+      const next = new Map<string, PlanoMesaPosicion>();
+      if (r.ok && r.data) {
+        for (const p of r.data.posiciones) next.set(p.mesaId, p);
+      }
+      setPosicionesPlano(next);
+    })();
+  }, [localId]);
+
   const salaActual = useMemo(
     () => salasLocal.find((s) => s.id === salaActualId) ?? null,
     [salasLocal, salaActualId],
   );
+
+  // Índice de la sala activa + siguiente sala en la dirección actual.
+  // Cuando estamos en un extremo, la flecha invierte su sentido para indicar el final.
+  const salaActualIdx = useMemo(
+    () => salasLocal.findIndex((s) => s.id === salaActualId),
+    [salasLocal, salaActualId],
+  );
+
+  useEffect(() => {
+    if (salasLocal.length < 2 || salaActualIdx < 0) return;
+    if (salaActualIdx === salasLocal.length - 1 && navDirSala === 1) setNavDirSala(-1);
+    else if (salaActualIdx === 0 && navDirSala === -1) setNavDirSala(1);
+  }, [salaActualIdx, salasLocal.length, navDirSala]);
+
+  const siguienteSala = useMemo(() => {
+    if (salasLocal.length < 2 || salaActualIdx < 0) return null;
+    const nextIdx = salaActualIdx + navDirSala;
+    if (nextIdx < 0 || nextIdx >= salasLocal.length) return null;
+    return salasLocal[nextIdx] ?? null;
+  }, [salasLocal, salaActualIdx, navDirSala]);
+
+  const irSiguienteSala = () => {
+    if (!siguienteSala) return;
+    setSalaActualId(siguienteSala.id);
+  };
 
   const zonasSalaActual = useMemo(
     () => zonasReales.filter((z) => z.salaId === salaActualId),
@@ -1229,8 +1506,9 @@ export function ReservasView() {
           </div>
         </div>
 
-        {/* Selector de Sala + filtro de Zonas */}
+        {/* Selector de Plano + Sala + filtro de Zonas */}
         <div className="flex items-center gap-1.5">
+          <FiltroPlanosDropdown planos={planosLocal} planoActualId={planoActualId} onSelect={setPlanoActualId} />
           <FiltroSalasDropdown salas={salasLocal} salaActualId={salaActualId} onSelect={setSalaActualId} />
           <FiltroZonasDropdown items={zonaItems} seleccionados={zonaIdsSel} onChange={setZonaIdsSel} />
         </div>
@@ -1368,84 +1646,113 @@ export function ReservasView() {
           </div>
         </div>
 
-        {/* RIGHT PANEL — GRID DE MESAS AGRUPADO POR ZONA */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-muted/10">
-          <div className="flex-1 overflow-auto p-4 space-y-4">
-            {zonasSalaActual.length === 0 ? (
-              <div className="flex items-center justify-center h-full text-xs text-muted-foreground italic">
-                Esta sala todavía no tiene zonas. Créalas en Configuración → Estructura.
+        {/* RIGHT PANEL — CANVAS PLANO si hay intersección posiciones↔mesasActivas; sino, GRID agrupado por zona */}
+        <div className="relative flex-1 flex flex-col overflow-hidden bg-white">
+          {salasLocal.length >= 2 && siguienteSala && (
+            <button
+              type="button"
+              onClick={irSiguienteSala}
+              title={`Ir a sala "${siguienteSala.nombre}"`}
+              className="absolute right-3 top-1/2 -translate-y-1/2 z-20 h-10 w-10 rounded-full border bg-background/90 backdrop-blur shadow-md flex items-center justify-center text-foreground hover:bg-background hover:shadow-lg transition-all"
+              aria-label={`Cambiar a sala ${siguienteSala.nombre}`}
+            >
+              {navDirSala === 1 ? (
+                <ChevronRight className="h-5 w-5" />
+              ) : (
+                <ChevronLeft className="h-5 w-5" />
+              )}
+            </button>
+          )}
+          {posicionesPlano.size > 0 && mesasActivas.some((m) => posicionesPlano.has(m.id)) ? (
+            <PlanoCanvas
+              mesas={mesasActivas}
+              posiciones={posicionesPlano}
+              zonas={zonasSalaActual.filter((z) => zonaIdsSel.includes(z.id))}
+              selectedMesaId={selectedMesa?.id ?? null}
+              onSelectMesa={setSelectedMesa}
+              getEstadoMesa={getMesaEstadoTurno}
+              getReservasMesa={getReservasMesa}
+              onAsignar={(m) => { setSelectedMesa(m); setShowNueva(true); }}
+              onCambiarEstado={cambiarEstadoReserva}
+            />
+          ) : (
+            <div className="flex-1 overflow-auto p-4 space-y-4">
+              {zonasSalaActual.length === 0 ? (
+                <div className="flex items-center justify-center h-full text-xs text-muted-foreground italic">
+                  Esta sala todavía no tiene zonas. Créalas en Configuración → Estructura.
+                </div>
+              ) : (
+                zonasSalaActual
+                  .filter((z) => zonaIdsSel.includes(z.id))
+                  .map((zona) => {
+                    const mesasZona = mesasActivas
+                      .filter((m) => (m.zona as unknown as string) === zona.nombre.toUpperCase())
+                      .sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true }));
+                    if (mesasZona.length === 0) return null;
+                    return (
+                      <section key={zona.id} className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="inline-block px-2.5 py-1 rounded-md text-[11px] font-bold tracking-wide text-zinc-800"
+                            style={{ backgroundColor: zona.colorPastel }}
+                          >
+                            {zona.nombre}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {mesasZona.length} mesa{mesasZona.length === 1 ? "" : "s"}
+                          </span>
+                        </div>
+                        <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))" }}>
+                          {mesasZona.map((m) => {
+                            const estado = getMesaEstadoTurno(m);
+                            const rs = getReservasMesa(m.id);
+                            const firstR = rs[0];
+                            const isWalkIn = firstR?.estado === "WALK_IN";
+                            return (
+                              <Popover key={m.id}>
+                                <PopoverTrigger asChild>
+                                  <button
+                                    className={cn(
+                                      "h-20 rounded-md flex flex-col items-center justify-center text-white text-[11px] font-bold shadow-sm border border-white/10 transition-all cursor-pointer px-1",
+                                      mesaBg[estado] ?? mesaBg.LIBRE,
+                                      selectedMesa?.id === m.id && "ring-2 ring-primary"
+                                    )}
+                                    onClick={() => setSelectedMesa(m)}
+                                  >
+                                    <span className="leading-none">{m.codigo}</span>
+                                    <span className="text-[9px] font-normal opacity-80 mt-0.5">({m.capacidad}p)</span>
+                                    {firstR && (
+                                      <span className="text-[9px] font-normal mt-1 opacity-90 truncate max-w-full">
+                                        {firstR.hora} {isWalkIn ? "WALK IN" : firstR.cliente}
+                                      </span>
+                                    )}
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-72 p-3">
+                                  <MesaPopover
+                                    mesa={m}
+                                    reservas={rs}
+                                    onAsignar={() => { setSelectedMesa(m); setShowNueva(true); }}
+                                    onCambiarEstado={(id, e) => cambiarEstadoReserva(id, e)}
+                                  />
+                                </PopoverContent>
+                              </Popover>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    );
+                  })
+              )}
+              <div className="flex items-center gap-4 pt-2 text-[10px] text-muted-foreground justify-center flex-wrap border-t">
+                {Object.entries(mesaBg).map(([k, cls]) => (
+                  <span key={k} className="flex items-center gap-1.5">
+                    <span className={cn("w-3 h-3 rounded", cls)} />{ESTADO_MESA_LABELS[k as keyof typeof ESTADO_MESA_LABELS]}
+                  </span>
+                ))}
               </div>
-            ) : (
-              zonasSalaActual
-                .filter((z) => zonaIdsSel.includes(z.id))
-                .map((zona) => {
-                  const mesasZona = mesasActivas
-                    .filter((m) => (m.zona as unknown as string) === zona.nombre.toUpperCase())
-                    .sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true }));
-                  if (mesasZona.length === 0) return null;
-                  return (
-                    <section key={zona.id} className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="inline-block px-2.5 py-1 rounded-md text-[11px] font-bold tracking-wide text-zinc-800"
-                          style={{ backgroundColor: zona.colorPastel }}
-                        >
-                          {zona.nombre}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground">
-                          {mesasZona.length} mesa{mesasZona.length === 1 ? "" : "s"}
-                        </span>
-                      </div>
-                      <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))" }}>
-                        {mesasZona.map((m) => {
-                          const estado = getMesaEstadoTurno(m);
-                          const rs = getReservasMesa(m.id);
-                          const firstR = rs[0];
-                          const isWalkIn = firstR?.estado === "WALK_IN";
-                          return (
-                            <Popover key={m.id}>
-                              <PopoverTrigger asChild>
-                                <button
-                                  className={cn(
-                                    "h-20 rounded-md flex flex-col items-center justify-center text-white text-[11px] font-bold shadow-sm border border-white/10 transition-all cursor-pointer px-1",
-                                    mesaBg[estado] ?? mesaBg.LIBRE,
-                                    selectedMesa?.id === m.id && "ring-2 ring-primary"
-                                  )}
-                                  onClick={() => setSelectedMesa(m)}
-                                >
-                                  <span className="leading-none">{m.codigo}</span>
-                                  <span className="text-[9px] font-normal opacity-80 mt-0.5">({m.capacidad}p)</span>
-                                  {firstR && (
-                                    <span className="text-[9px] font-normal mt-1 opacity-90 truncate max-w-full">
-                                      {firstR.hora} {isWalkIn ? "WALK IN" : firstR.cliente}
-                                    </span>
-                                  )}
-                                </button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-72 p-3">
-                                <MesaPopover
-                                  mesa={m}
-                                  reservas={rs}
-                                  onAsignar={() => { setSelectedMesa(m); setShowNueva(true); }}
-                                  onCambiarEstado={(id, e) => cambiarEstadoReserva(id, e)}
-                                />
-                              </PopoverContent>
-                            </Popover>
-                          );
-                        })}
-                      </div>
-                    </section>
-                  );
-                })
-            )}
-            <div className="flex items-center gap-4 pt-2 text-[10px] text-muted-foreground justify-center flex-wrap border-t">
-              {Object.entries(mesaBg).map(([k, cls]) => (
-                <span key={k} className="flex items-center gap-1.5">
-                  <span className={cn("w-3 h-3 rounded", cls)} />{ESTADO_MESA_LABELS[k as keyof typeof ESTADO_MESA_LABELS]}
-                </span>
-              ))}
             </div>
-          </div>
+          )}
         </div>
 
       </div>
@@ -1472,7 +1779,10 @@ export function ReservasView() {
                 <ReservaEstadoBadge estado={selectedReserva.estado} />
               </div>
               {selectedReserva.observaciones && <Field label="Observaciones">{selectedReserva.observaciones}</Field>}
-              <ReservaFlagsChips reserva={selectedReserva} tipos={tiposReserva} insights={selectedInsights} size="md" />
+              <div className="flex flex-wrap items-center gap-2">
+                <ReservaFlagsChips reserva={selectedReserva} tipos={tiposReserva} insights={selectedInsights} size="md" />
+                <ReservaExternalBadge reserva={selectedReserva} />
+              </div>
               <div className="pt-2 border-t space-y-1.5">
                 <Label className="text-muted-foreground text-xs">Etiquetas</Label>
                 <EtiquetasPanel
