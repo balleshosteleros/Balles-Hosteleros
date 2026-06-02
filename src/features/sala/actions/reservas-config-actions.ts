@@ -31,6 +31,12 @@ function rowToConfig(row: Record<string, unknown>): EmpresaReservasConfig {
     generalMaxpaxCena:   row.general_maxpax_cena   ?? null,
     antelacionMinMinutos: (row.antelacion_min_minutos as number) ?? 0,
     antelacionMaxDias:    (row.antelacion_max_dias as number)    ?? 90,
+    generalInicioComida:  (row.general_inicio_comida as string | null) ?? null,
+    generalFinComida:     (row.general_fin_comida    as string | null) ?? null,
+    generalInicioCena:    (row.general_inicio_cena   as string | null) ?? null,
+    generalFinCena:       (row.general_fin_cena      as string | null) ?? null,
+    generalCerradoComida: Boolean(row.general_cerrado_comida ?? false),
+    generalCerradoCena:   Boolean(row.general_cerrado_cena   ?? false),
   };
   for (const d of DIAS) {
     for (const m of METRICAS) {
@@ -39,6 +45,11 @@ function rowToConfig(row: Record<string, unknown>): EmpresaReservasConfig {
         const objKey = `${d}_${m}_${t}` as const;
         out[objKey] = (row[dbKey] as number | null) ?? null;
       }
+    }
+    for (const t of TURNOS) {
+      out[`${d}_inicio_${t}`]  = (row[`${d}_inicio_${t}`]  as string | null) ?? null;
+      out[`${d}_fin_${t}`]     = (row[`${d}_fin_${t}`]     as string | null) ?? null;
+      out[`${d}_cerrado_${t}`] = (row[`${d}_cerrado_${t}`] as boolean | null) ?? null;
     }
   }
   return out as unknown as EmpresaReservasConfig;
@@ -90,12 +101,26 @@ export async function upsertReservasConfig(updates: Partial<EmpresaReservasConfi
     if ("generalMaxpaxCena"   in updates) db.general_maxpax_cena   = updates.generalMaxpaxCena;
     if ("antelacionMinMinutos" in updates) db.antelacion_min_minutos = updates.antelacionMinMinutos;
     if ("antelacionMaxDias"    in updates) db.antelacion_max_dias    = updates.antelacionMaxDias;
+    if ("generalInicioComida"  in updates) db.general_inicio_comida  = updates.generalInicioComida;
+    if ("generalFinComida"     in updates) db.general_fin_comida     = updates.generalFinComida;
+    if ("generalInicioCena"    in updates) db.general_inicio_cena    = updates.generalInicioCena;
+    if ("generalFinCena"       in updates) db.general_fin_cena       = updates.generalFinCena;
+    if ("generalCerradoComida" in updates) db.general_cerrado_comida = updates.generalCerradoComida;
+    if ("generalCerradoCena"   in updates) db.general_cerrado_cena   = updates.generalCerradoCena;
     for (const d of DIAS) {
       for (const m of METRICAS) {
         for (const t of TURNOS) {
           const k = `${d}_${m}_${t}` as const;
           if (k in updates) db[k] = (updates as Record<string, unknown>)[k];
         }
+      }
+      for (const t of TURNOS) {
+        const kIni = `${d}_inicio_${t}` as const;
+        const kFin = `${d}_fin_${t}` as const;
+        const kCer = `${d}_cerrado_${t}` as const;
+        if (kIni in updates) db[kIni] = (updates as Record<string, unknown>)[kIni];
+        if (kFin in updates) db[kFin] = (updates as Record<string, unknown>)[kFin];
+        if (kCer in updates) db[kCer] = (updates as Record<string, unknown>)[kCer];
       }
     }
     const { error } = await supabase

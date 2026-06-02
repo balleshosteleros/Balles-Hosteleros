@@ -67,6 +67,21 @@ export async function createPlano(input: {
       if (error.code === "23505") return { ok: false, error: "Ya existe un plano con ese nombre." };
       throw error;
     }
+    // Asociar todas las salas del local al nuevo plano — un plano nunca puede
+    // quedarse sin salas. El usuario podrá ajustar la composición después.
+    const { data: salasRows } = await supabase
+      .from("salas")
+      .select("id")
+      .eq("local_id", input.localId);
+    const salaIds = (salasRows ?? []).map((r) => r.id as string);
+    if (salaIds.length > 0) {
+      await supabase
+        .from("plano_salas")
+        .upsert(
+          salaIds.map((salaId) => ({ plano_id: data.id, sala_id: salaId })),
+          { onConflict: "plano_id,sala_id" },
+        );
+    }
     revalidatePath("/sala/reservas");
     return { ok: true, data: rowToPlano(data) };
   } catch (err: unknown) {
@@ -226,7 +241,7 @@ export async function getPlanoActivoConPosiciones(localId: string) {
     // Mesas con posición de esas salas (vía zonas).
     const { data: mesaRows, error: errM } = await supabase
       .from("mesas")
-      .select("id, x, y, rotation, zonas!inner(sala_id)")
+      .select("id, x, y, rotation, width, height, zonas!inner(sala_id)")
       .in("zonas.sala_id", salaIds)
       .not("x", "is", null)
       .not("y", "is", null);
@@ -236,6 +251,8 @@ export async function getPlanoActivoConPosiciones(localId: string) {
       x: Number(r.x),
       y: Number(r.y),
       rotation: Number(r.rotation),
+      width: r.width == null ? null : Number(r.width),
+      height: r.height == null ? null : Number(r.height),
     }));
     return { ok: true, data: { plano: rowToPlano(planoRow), posiciones } };
   } catch (err) {

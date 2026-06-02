@@ -91,8 +91,10 @@ export async function createReserva(input: {
   // Flags acumulables (PRP-047)
   tarjetaIntroducida?: boolean;
   esTicket?: boolean;
+  tipoCategoria?: "gratis" | "politica" | "cupon" | null;
   politicaCancelacionId?: string | null;
   garantiaImporte?: number | null;
+  importePagado?: number | null;
   bloqueada?: boolean;
   grupoId?: string | null;
   etiquetaId?: string | null;
@@ -197,8 +199,10 @@ export async function createReserva(input: {
       origen: origenFinal,
       tarjeta_introducida: input.tarjetaIntroducida ?? false,
       es_ticket: input.esTicket ?? false,
-      politica_cancelacion_id: input.politicaCancelacionId ?? null,
-      garantia_importe: input.garantiaImporte ?? null,
+      tipo_categoria: input.tipoCategoria ?? null,
+      politica_cancelacion_id: input.tipoCategoria === "politica" ? (input.politicaCancelacionId ?? null) : null,
+      garantia_importe: input.tipoCategoria === "politica" ? (input.garantiaImporte ?? null) : null,
+      importe_pagado: input.tipoCategoria === "cupon" ? (input.importePagado ?? null) : null,
       bloqueada: input.bloqueada ?? false,
       grupo_id: input.grupoId ?? null,
       etiqueta_id: input.etiquetaId ?? null,
@@ -246,8 +250,10 @@ export async function updateReserva(
     // Flags acumulables (PRP-047)
     tarjetaIntroducida?: boolean;
     esTicket?: boolean;
+    tipoCategoria?: "gratis" | "politica" | "cupon" | null;
     politicaCancelacionId?: string | null;
     garantiaImporte?: number | null;
+    importePagado?: number | null;
     bloqueada?: boolean;
     grupoId?: string | null;
     etiquetaId?: string | null;
@@ -331,8 +337,22 @@ export async function updateReserva(
     if (updates.estado === "WALK_IN") dbUpdates.origen = "WALKIN";
     if (updates.tarjetaIntroducida !== undefined) dbUpdates.tarjeta_introducida = updates.tarjetaIntroducida;
     if (updates.esTicket !== undefined) dbUpdates.es_ticket = updates.esTicket;
+    // tipoCategoria gobierna política/garantía/importe pagado: al cambiar de
+    // categoría limpiamos los campos que dejan de aplicar para evitar datos
+    // huérfanos (p. ej. politica + garantía en una reserva GRATIS).
+    if (updates.tipoCategoria !== undefined) {
+      dbUpdates.tipo_categoria = updates.tipoCategoria;
+      if (updates.tipoCategoria !== "politica") {
+        dbUpdates.politica_cancelacion_id = null;
+        dbUpdates.garantia_importe = null;
+      }
+      if (updates.tipoCategoria !== "cupon") {
+        dbUpdates.importe_pagado = null;
+      }
+    }
     if (updates.politicaCancelacionId !== undefined) dbUpdates.politica_cancelacion_id = updates.politicaCancelacionId;
     if (updates.garantiaImporte !== undefined) dbUpdates.garantia_importe = updates.garantiaImporte;
+    if (updates.importePagado !== undefined) dbUpdates.importe_pagado = updates.importePagado;
     if (updates.bloqueada !== undefined) dbUpdates.bloqueada = updates.bloqueada;
     if (updates.grupoId !== undefined) dbUpdates.grupo_id = updates.grupoId;
     if (updates.etiquetaId !== undefined) dbUpdates.etiqueta_id = updates.etiquetaId;

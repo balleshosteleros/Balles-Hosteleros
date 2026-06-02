@@ -70,7 +70,13 @@ export function ReservaFlagsChips({
     chips.push({ key: "politica", label: "Política de cancelación", icon: <ShieldAlert className={iconSize} />, cls: "text-sky-500 border-sky-500/40 bg-sky-500/10" });
   }
   if (reserva.garantiaImporte != null && reserva.garantiaImporte > 0) {
-    chips.push({ key: "garantia", label: `Garantía ${reserva.garantiaImporte}€`, icon: <Wallet className={iconSize} />, cls: "text-amber-600 border-amber-500/40 bg-amber-500/10" });
+    chips.push({ key: "garantia", label: `Importe retenido ${reserva.garantiaImporte}€`, icon: <Wallet className={iconSize} />, cls: "text-amber-600 border-amber-500/40 bg-amber-500/10" });
+  }
+  if (reserva.tipoCategoria === "cupon" && reserva.importePagado != null && reserva.importePagado > 0) {
+    chips.push({ key: "cupon", label: `Cupón pagado ${reserva.importePagado}€`, icon: <Ticket className={iconSize} />, cls: "text-emerald-600 border-emerald-500/40 bg-emerald-500/10" });
+  }
+  if (reserva.tipoCategoria === "gratis") {
+    chips.push({ key: "gratis", label: "Reserva gratis", icon: <span className="leading-none">🆓</span>, cls: "text-zinc-600 border-zinc-400/40 bg-zinc-200/40" });
   }
   if (reserva.bloqueada) {
     chips.push({ key: "bloqueada", label: "Reserva bloqueada", icon: <Lock className={iconSize} />, cls: "text-zinc-500 border-zinc-500/40 bg-zinc-500/10" });
@@ -135,6 +141,7 @@ export function ReservaFlagsChips({
                 {c.icon}
                 {c.key === "etiqueta" && <span>{(c as { label: string }).label}</span>}
                 {c.key === "garantia" && <span>{reserva.garantiaImporte}€</span>}
+                {c.key === "cupon" && <span>{reserva.importePagado}€</span>}
                 {c.extra && <span>{c.extra}</span>}
               </span>
             </TooltipTrigger>

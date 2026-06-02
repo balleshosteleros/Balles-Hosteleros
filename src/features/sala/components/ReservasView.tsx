@@ -28,6 +28,7 @@ import {
   SAMPLE_MESAS,
   Mesa, Reserva, EstadoReserva, ZonaSala, TurnoReserva,
   ZONAS_LABELS, ZONAS_SALA, ESTADO_RESERVA_LABELS, ESTADO_MESA_LABELS, ESTADOS_RESERVA,
+  TIPO_RESERVA_CATEGORIA_LABELS,
 } from "@/features/sala/data/reservas";
 import { ReservaEstadoBadge, ReservaEstadoDot } from "@/features/sala/components/reservas/ReservaEstadoBadge";
 import { listReservas, createReserva, updateReserva, deleteReserva } from "@/features/sala/actions/reservas-actions";
@@ -49,6 +50,7 @@ import { searchClientes, type ClienteSugerencia } from "@/features/sala/actions/
 import { maxpaxEfectivo } from "@/features/sala/lib/reserva-limites";
 import type {
   ReservaEtiqueta,
+  TipoReservaCategoria,
   EmpresaReservasConfig,
   EmpresaReservasExcepcion,
   PoliticaCancelacion,
@@ -182,8 +184,10 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave }: {
   onClose: () => void;
   onSave: (r: Reserva & {
     etiquetaId?: string | null;
+    tipoCategoria?: TipoReservaCategoria | null;
     politicaCancelacionId?: string | null;
     garantiaImporte?: number | null;
+    importePagado?: number | null;
   }) => void;
 }) {
   const [form, setForm] = useState({
@@ -191,8 +195,10 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave }: {
     fecha, hora: "", turno, comensales: 2,
     zona: "" as ZonaSala | "", observaciones: "", esWalkIn: false,
     etiquetaId: "" as string,
+    tipoCategoria: "" as TipoReservaCategoria | "",
     politicaCancelacionId: "" as string,
     garantiaImporte: "" as string,
+    importePagado: "" as string,
   });
   const [etiquetas, setEtiquetas] = useState<ReservaEtiqueta[]>([]);
   const [politicas, setPoliticas] = useState<PoliticaCancelacion[]>([]);
@@ -288,8 +294,10 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave }: {
       estado: form.esWalkIn ? "WALK_IN" : "PENDIENTE",
       observaciones: form.observaciones,
       etiquetaId: form.etiquetaId || null,
-      politicaCancelacionId: form.politicaCancelacionId || null,
-      garantiaImporte: form.garantiaImporte ? Number(form.garantiaImporte) : null,
+      tipoCategoria: (form.tipoCategoria || null) as TipoReservaCategoria | null,
+      politicaCancelacionId: form.tipoCategoria === "politica" ? (form.politicaCancelacionId || null) : null,
+      garantiaImporte: form.tipoCategoria === "politica" && form.garantiaImporte ? Number(form.garantiaImporte) : null,
+      importePagado: form.tipoCategoria === "cupon" && form.importePagado ? Number(form.importePagado) : null,
     });
   };
 
@@ -436,31 +444,71 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave }: {
             ))}
           </select>
         </div>
-        <div>
-          <Label className="text-xs">Política de cancelación</Label>
+        <div className="col-span-2">
+          <Label className="text-xs">Tipo de reserva</Label>
           <select
-            value={form.politicaCancelacionId}
-            onChange={(e) => setForm((p) => ({ ...p, politicaCancelacionId: e.target.value }))}
+            value={form.tipoCategoria}
+            onChange={(e) =>
+              setForm((p) => ({
+                ...p,
+                tipoCategoria: e.target.value as TipoReservaCategoria | "",
+                // Limpia los campos que dejan de aplicar al cambiar de tipo.
+                politicaCancelacionId: e.target.value === "politica" ? p.politicaCancelacionId : "",
+                garantiaImporte: e.target.value === "politica" ? p.garantiaImporte : "",
+                importePagado: e.target.value === "cupon" ? p.importePagado : "",
+              }))
+            }
             className="h-8 text-xs w-full rounded-md border border-input bg-background px-2"
           >
-            <option value="">— Sin política —</option>
-            {politicas.map((p) => (
-              <option key={p.id} value={p.id}>{p.nombre}</option>
-            ))}
+            <option value="">— Sin tipo —</option>
+            <option value="gratis">{TIPO_RESERVA_CATEGORIA_LABELS.gratis}</option>
+            <option value="politica">{TIPO_RESERVA_CATEGORIA_LABELS.politica}</option>
+            <option value="cupon">{TIPO_RESERVA_CATEGORIA_LABELS.cupon}</option>
           </select>
         </div>
-        <div>
-          <Label className="text-xs">Garantía retención (€)</Label>
-          <Input
-            type="number"
-            min={0}
-            step="0.01"
-            className="h-8 text-xs"
-            placeholder="0,00"
-            value={form.garantiaImporte}
-            onChange={(e) => setForm((p) => ({ ...p, garantiaImporte: e.target.value }))}
-          />
-        </div>
+        {form.tipoCategoria === "politica" && (
+          <>
+            <div>
+              <Label className="text-xs">Política de cancelación</Label>
+              <select
+                value={form.politicaCancelacionId}
+                onChange={(e) => setForm((p) => ({ ...p, politicaCancelacionId: e.target.value }))}
+                className="h-8 text-xs w-full rounded-md border border-input bg-background px-2"
+              >
+                <option value="">— Sin política —</option>
+                {politicas.map((p) => (
+                  <option key={p.id} value={p.id}>{p.nombre}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label className="text-xs">Importe retenido (€)</Label>
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                className="h-8 text-xs"
+                placeholder="0,00"
+                value={form.garantiaImporte}
+                onChange={(e) => setForm((p) => ({ ...p, garantiaImporte: e.target.value }))}
+              />
+            </div>
+          </>
+        )}
+        {form.tipoCategoria === "cupon" && (
+          <div className="col-span-2">
+            <Label className="text-xs">Importe pagado por adelantado (€)</Label>
+            <Input
+              type="number"
+              min={0}
+              step="0.01"
+              className="h-8 text-xs"
+              placeholder="0,00"
+              value={form.importePagado}
+              onChange={(e) => setForm((p) => ({ ...p, importePagado: e.target.value }))}
+            />
+          </div>
+        )}
       </div>
 
       {muestraAvisoPax && (
@@ -701,8 +749,10 @@ function mapDbToReserva(row: Record<string, unknown>): Reserva {
     origen: (row.origen as string | null) ?? null,
     tarjetaIntroducida: (row.tarjeta_introducida as boolean) ?? false,
     esTicket: (row.es_ticket as boolean) ?? false,
+    tipoCategoria: (row.tipo_categoria as TipoReservaCategoria | null) ?? null,
     politicaCancelacionId: (row.politica_cancelacion_id as string | null) ?? null,
     garantiaImporte: (row.garantia_importe as number | null) ?? null,
+    importePagado: (row.importe_pagado as number | null) ?? null,
     bloqueada: (row.bloqueada as boolean) ?? false,
     grupoId: (row.grupo_id as string | null) ?? null,
     etiquetaId: (row.etiqueta_id as string | null) ?? null,
@@ -1553,8 +1603,10 @@ export function ReservasView() {
                     estado: r.estado,
                     notas: r.observaciones || undefined,
                     etiquetaId: r.etiquetaId ?? null,
+                    tipoCategoria: r.tipoCategoria ?? null,
                     politicaCancelacionId: r.politicaCancelacionId ?? null,
                     garantiaImporte: r.garantiaImporte ?? null,
+                    importePagado: r.importePagado ?? null,
                   });
                   if (res.ok) { toast.success("Reserva creada"); loadReservas(fecha); }
                   else { toast.error(res.error ?? "Error al crear reserva"); }

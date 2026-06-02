@@ -21,6 +21,22 @@ export const ESTADOS_RESERVA: EstadoReserva[] = [
 
 export type ZonaSala = "SALA" | "BARRA" | "TERRAZA_INTERIOR" | "TERRAZA_EXTERIOR" | "PRIVADO";
 
+/**
+ * Categoría económica de la reserva (campo "Tipo de reserva" en el formulario).
+ * - gratis: sin compromiso económico, ningún campo extra
+ * - politica: aplica una política de cancelación con importe retenido si cancela
+ * - cupon: el cliente ya ha pagado por adelantado (se guarda el importe pagado)
+ */
+export type TipoReservaCategoria = "gratis" | "politica" | "cupon";
+
+export const TIPO_RESERVA_CATEGORIAS: TipoReservaCategoria[] = ["gratis", "politica", "cupon"];
+
+export const TIPO_RESERVA_CATEGORIA_LABELS: Record<TipoReservaCategoria, string> = {
+  gratis: "Gratis",
+  politica: "Política de cancelación",
+  cupon: "Cupón",
+};
+
 export const ZONAS_SALA: ZonaSala[] = ["SALA", "BARRA", "TERRAZA_INTERIOR", "TERRAZA_EXTERIOR", "PRIVADO"];
 export type TurnoReserva = "COMIDA" | "CENA" | "DIA_COMPLETO";
 export type TipoMesa = "MESA" | "BARRA" | "RESERVADO" | "TABURETE";
@@ -96,8 +112,10 @@ export interface Reserva {
   // Flags acumulables (PRP-047)
   tarjetaIntroducida?: boolean;
   esTicket?: boolean;
+  tipoCategoria?: TipoReservaCategoria | null;
   politicaCancelacionId?: string | null;
   garantiaImporte?: number | null;
+  importePagado?: number | null;
   bloqueada?: boolean;
   grupoId?: string | null;
   etiquetaId?: string | null;
@@ -202,7 +220,16 @@ export const DIA_SEMANA_KEY: DiaSemanaKey[] = ["dom","lun","mar","mie","jue","vi
 export type SemanaLimitesKey = `${DiaSemanaKey}_${MetricaLimite}_${TurnoKey}`;
 export type SemanaLimites = { [K in SemanaLimitesKey]: number | null };
 
-export type EmpresaReservasConfig = SemanaLimites & {
+/** Claves planas de horario por día × turno (inicio, fin, cerrado). */
+export type SemanaHorarioInicioKey  = `${DiaSemanaKey}_inicio_${TurnoKey}`;
+export type SemanaHorarioFinKey     = `${DiaSemanaKey}_fin_${TurnoKey}`;
+export type SemanaHorarioCerradoKey = `${DiaSemanaKey}_cerrado_${TurnoKey}`;
+export type SemanaHorarios =
+  & { [K in SemanaHorarioInicioKey]:  string | null }
+  & { [K in SemanaHorarioFinKey]:     string | null }
+  & { [K in SemanaHorarioCerradoKey]: boolean | null };
+
+export type EmpresaReservasConfig = SemanaLimites & SemanaHorarios & {
   empresaId: string;
   generalCupoComida: number | null;
   generalCupoCena: number | null;
@@ -210,7 +237,34 @@ export type EmpresaReservasConfig = SemanaLimites & {
   generalMaxpaxCena: number | null;
   antelacionMinMinutos: number;
   antelacionMaxDias: number;
+  // Horario general (heredable por días sin valor propio)
+  generalInicioComida: string | null;
+  generalFinComida:    string | null;
+  generalInicioCena:   string | null;
+  generalFinCena:      string | null;
+  generalCerradoComida: boolean;
+  generalCerradoCena:   boolean;
 };
+
+// --- EXCEPCIONES DE HORARIO POR ÁMBITO ---
+export type HorarioAmbito = "fecha" | "rango" | "dias_especificos";
+
+export interface EmpresaReservasHorarioExcepcion {
+  id: string;
+  empresaId: string;
+  turno: TurnoKey;
+  ambito: HorarioAmbito;
+  fecha: string | null;        // ambito = 'fecha'
+  fechaInicio: string | null;  // ambito = 'rango'
+  fechaFin: string | null;     // ambito = 'rango'
+  fechas: string[] | null;     // ambito = 'dias_especificos'
+  inicio: string | null;       // null si cerrado
+  fin: string | null;          // null si cerrado
+  cerrado: boolean;
+  motivo: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface EmpresaReservasExcepcion {
   id: string;

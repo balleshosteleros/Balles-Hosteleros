@@ -10,6 +10,8 @@ function rowToPos(r: Record<string, unknown>): MesaPosicion {
     x: Number(r.x),
     y: Number(r.y),
     rotation: Number(r.rotation),
+    width: r.width == null ? null : Number(r.width),
+    height: r.height == null ? null : Number(r.height),
   };
 }
 
@@ -19,7 +21,7 @@ export async function listMesaPosicionesLocal(localId: string) {
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("mesas")
-      .select("id, x, y, rotation")
+      .select("id, x, y, rotation, width, height")
       .eq("local_id", localId)
       .not("x", "is", null)
       .not("y", "is", null);
@@ -37,7 +39,7 @@ export async function listMesaPosicionesSala(salaId: string) {
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("mesas")
-      .select("id, x, y, rotation, zonas!inner(sala_id)")
+      .select("id, x, y, rotation, width, height, zonas!inner(sala_id)")
       .eq("zonas.sala_id", salaId)
       .not("x", "is", null)
       .not("y", "is", null);
@@ -54,17 +56,22 @@ export async function upsertMesaPosicion(input: {
   x: number;
   y: number;
   rotation?: number;
+  width?: number | null;
+  height?: number | null;
 }) {
   try {
     const supabase = await createClient();
+    const patch: Record<string, unknown> = {
+      x: input.x,
+      y: input.y,
+      rotation: input.rotation ?? 0,
+      updated_at: new Date().toISOString(),
+    };
+    if (input.width !== undefined) patch.width = input.width;
+    if (input.height !== undefined) patch.height = input.height;
     const { error } = await supabase
       .from("mesas")
-      .update({
-        x: input.x,
-        y: input.y,
-        rotation: input.rotation ?? 0,
-        updated_at: new Date().toISOString(),
-      })
+      .update(patch)
       .eq("id", input.mesaId);
     if (error) throw error;
     revalidatePath("/sala/reservas");
@@ -85,6 +92,8 @@ export async function removeMesaPosicion(mesaId: string) {
         x: null,
         y: null,
         rotation: 0,
+        width: null,
+        height: null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", mesaId);

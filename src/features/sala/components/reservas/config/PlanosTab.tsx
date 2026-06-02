@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Layers, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   type LocalMin,
@@ -49,6 +49,7 @@ export function PlanosTab({ localId: localIdProp, embedded }: PlanosTabProps = {
 
   const [nuevoOpen, setNuevoOpen] = useState(false);
   const [editandoNombre, setEditandoNombre] = useState<Plano | null>(null);
+  const [editandoSalas, setEditandoSalas] = useState<Plano | null>(null);
 
   const cargar = useCallback(async (id: string) => {
     setLoading(true);
@@ -91,19 +92,6 @@ export function PlanosTab({ localId: localIdProp, embedded }: PlanosTabProps = {
     }
     toast.success("Plano borrado");
     cargar(localId);
-  }
-
-  async function handleToggleSala(planoId: string, salaId: string, activar: boolean) {
-    const prev = salasPorPlano.get(planoId) ?? new Set<string>();
-    const next = new Set(prev);
-    if (activar) next.add(salaId);
-    else next.delete(salaId);
-    setSalasPorPlano((m) => new Map(m).set(planoId, next));
-    const res = await togglePlanoSala(planoId, salaId, activar);
-    if (!res.ok) {
-      setSalasPorPlano((m) => new Map(m).set(planoId, prev));
-      toast.error(res.error ?? "No se pudo guardar");
-    }
   }
 
   return (
@@ -150,6 +138,7 @@ export function PlanosTab({ localId: localIdProp, embedded }: PlanosTabProps = {
         <ul className="space-y-2">
           {planos.map((p) => {
             const salasActivas = salasPorPlano.get(p.id) ?? new Set<string>();
+            const salasDelPlano = salas.filter((s) => salasActivas.has(s.id));
             return (
               <li key={p.id} className="border rounded-md px-3 py-2 text-sm space-y-2">
                 <div className="flex items-center justify-between">
@@ -162,6 +151,15 @@ export function PlanosTab({ localId: localIdProp, embedded }: PlanosTabProps = {
                     )}
                   </div>
                   <div className="flex gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => setEditandoSalas(p)}
+                      title="Editar salas"
+                    >
+                      <Layers className="h-3.5 w-3.5" />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -181,24 +179,27 @@ export function PlanosTab({ localId: localIdProp, embedded }: PlanosTabProps = {
                     </Button>
                   </div>
                 </div>
-                {salas.length > 0 && (
-                  <div className="border-t pt-2 space-y-1">
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      Salas asociadas
+                <div className="border-t pt-2 space-y-1">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Salas asociadas
+                  </p>
+                  {salasDelPlano.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic">
+                      Ninguna sala asociada todavía.
                     </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
-                      {salas.map((s) => (
-                        <label key={s.id} className="flex items-center justify-between text-xs gap-3 py-0.5">
-                          <span className="truncate">{s.nombre}</span>
-                          <Switch
-                            checked={salasActivas.has(s.id)}
-                            onCheckedChange={(v) => handleToggleSala(p.id, s.id, v)}
-                          />
-                        </label>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {salasDelPlano.map((s) => (
+                        <span
+                          key={s.id}
+                          className="text-xs bg-muted px-2 py-0.5 rounded"
+                        >
+                          {s.nombre}
+                        </span>
                       ))}
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </li>
             );
           })}
@@ -214,6 +215,15 @@ export function PlanosTab({ localId: localIdProp, embedded }: PlanosTabProps = {
       <RenombrarPlanoModal
         plano={editandoNombre}
         onClose={() => setEditandoNombre(null)}
+        onSaved={() => cargar(localId)}
+      />
+      <EditarSalasPlanoModal
+        plano={editandoSalas}
+        salas={salas}
+        salasActivasIniciales={
+          editandoSalas ? salasPorPlano.get(editandoSalas.id) ?? new Set<string>() : new Set<string>()
+        }
+        onClose={() => setEditandoSalas(null)}
         onSaved={() => cargar(localId)}
       />
     </div>
@@ -371,6 +381,109 @@ function RenombrarPlanoModal({
               Cancelar
             </Button>
             <Button size="sm" onClick={handleGuardar} disabled={!nombre.trim() || saving}>
+              Guardar
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditarSalasPlanoModal({
+  plano,
+  salas,
+  salasActivasIniciales,
+  onClose,
+  onSaved,
+}: {
+  plano: Plano | null;
+  salas: Sala[];
+  salasActivasIniciales: Set<string>;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (plano) setSeleccion(new Set(salasActivasIniciales));
+  }, [plano, salasActivasIniciales]);
+
+  if (!plano) return null;
+
+  function toggle(salaId: string, activar: boolean) {
+    setSeleccion((prev) => {
+      const next = new Set(prev);
+      if (activar) next.add(salaId);
+      else next.delete(salaId);
+      return next;
+    });
+  }
+
+  async function handleGuardar() {
+    if (!plano) return;
+    if (seleccion.size === 0) {
+      toast.error("El plano debe tener al menos una sala.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const inicial = salasActivasIniciales;
+      const aAnadir = [...seleccion].filter((id) => !inicial.has(id));
+      const aQuitar = [...inicial].filter((id) => !seleccion.has(id));
+      const resultados = await Promise.all([
+        ...aAnadir.map((salaId) => togglePlanoSala(plano.id, salaId, true)),
+        ...aQuitar.map((salaId) => togglePlanoSala(plano.id, salaId, false)),
+      ]);
+      const fallo = resultados.find((r) => !r.ok);
+      if (fallo) {
+        toast.error(fallo.error ?? "No se pudo guardar");
+        return;
+      }
+      toast.success("Composición actualizada");
+      onClose();
+      onSaved();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Salas del plano · {plano.nombre}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Activa las salas que forman parte de este plano. Debe haber al menos una.
+          </p>
+          {salas.length === 0 ? (
+            <p className="text-xs text-muted-foreground italic">
+              No hay salas en este local todavía.
+            </p>
+          ) : (
+            <div className="space-y-1">
+              {salas.map((s) => (
+                <label
+                  key={s.id}
+                  className="flex items-center justify-between gap-3 py-1.5 px-2 rounded hover:bg-muted/50 cursor-pointer text-sm"
+                >
+                  <span className="truncate">{s.nombre}</span>
+                  <Switch
+                    checked={seleccion.has(s.id)}
+                    onCheckedChange={(v) => toggle(s.id, v)}
+                  />
+                </label>
+              ))}
+            </div>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" size="sm" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button size="sm" onClick={handleGuardar} disabled={saving || seleccion.size === 0}>
               Guardar
             </Button>
           </div>

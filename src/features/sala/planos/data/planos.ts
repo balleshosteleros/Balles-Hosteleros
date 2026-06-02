@@ -72,6 +72,9 @@ export interface Zona {
   zonaPublicaId: string | null;
   ocultaTotal: boolean;
   orden: number;
+  /** Posición del badge "nombre de zona" en el plano. NULL = no colocada en el lienzo. */
+  etiquetaX: number | null;
+  etiquetaY: number | null;
   createdAt: string;
 }
 
@@ -110,6 +113,8 @@ export interface MesaPosicion {
   x: number;
   y: number;
   rotation: number;
+  width: number | null;
+  height: number | null;
 }
 
 export interface TipoMesaConfig {

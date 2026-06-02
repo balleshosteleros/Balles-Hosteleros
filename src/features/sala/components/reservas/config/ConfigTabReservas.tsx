@@ -17,6 +17,7 @@ import {
 import { listReservasExcepciones } from "@/features/sala/actions/reservas-excepciones-actions";
 import { LimitesMatriz } from "./LimitesMatriz";
 import { ExcepcionesTabla } from "./ExcepcionesTabla";
+import { HorariosAperturaPanel } from "./HorariosAperturaPanel";
 
 export function ConfigTabReservas() {
   const [config, setConfig] = useState<EmpresaReservasConfig | null>(null);
@@ -59,6 +60,10 @@ export function ConfigTabReservas() {
 
   return (
     <div className="space-y-6">
+      <HorariosAperturaPanel config={config} onChange={handleConfigChange} />
+
+      <Separator />
+
       <LimitesMatriz config={config} onChange={handleConfigChange} />
 
       <Separator />

@@ -15,6 +15,8 @@ function rowToZona(r: Record<string, unknown>): Zona {
     zonaPublicaId: (r.zona_publica_id as string | null) ?? null,
     ocultaTotal: (r.oculta_total as boolean) ?? false,
     orden: (r.orden as number) ?? 0,
+    etiquetaX: r.etiqueta_x === null || r.etiqueta_x === undefined ? null : Number(r.etiqueta_x),
+    etiquetaY: r.etiqueta_y === null || r.etiqueta_y === undefined ? null : Number(r.etiqueta_y),
     createdAt: r.created_at as string,
   };
 }
@@ -79,6 +81,8 @@ export async function updateZona(
     zonaPublicaId?: string | null;
     ocultaTotal?: boolean;
     orden?: number;
+    etiquetaX?: number | null;
+    etiquetaY?: number | null;
   },
 ) {
   try {
@@ -94,6 +98,9 @@ export async function updateZona(
     if (updates.zonaPublicaId !== undefined) patch.zona_publica_id = updates.zonaPublicaId;
     if (updates.ocultaTotal !== undefined) patch.oculta_total = updates.ocultaTotal;
     if (updates.orden !== undefined) patch.orden = updates.orden;
+    if (updates.etiquetaX !== undefined) patch.etiqueta_x = updates.etiquetaX;
+    if (updates.etiquetaY !== undefined) patch.etiqueta_y = updates.etiquetaY;
+    if (Object.keys(patch).length === 0) return { ok: true };
     const supabase = await createClient();
     const { error } = await supabase.from("zonas").update(patch).eq("id", id);
     if (error) throw error;

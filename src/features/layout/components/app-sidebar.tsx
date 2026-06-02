@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { NavLink } from "@/features/layout/components/nav-link";
 import { useAuth } from "@/features/auth/contexts/auth-context";
-import { useViewMode } from "@/features/layout/contexts/view-mode-context";
+import { useViewMode, type ViewMode } from "@/features/layout/contexts/view-mode-context";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarMenuSub, SidebarMenuSubItem,
@@ -15,8 +15,22 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import {
   allSections,
   miPanelSubs,
+  type Section,
   type SubItem,
 } from "@/features/layout/data/nav-routes";
+
+// El sidebar debe reflejar SIEMPRE el área en la que está el usuario:
+// rutas bajo /mi-panel → menú Paneles; rutas bajo /mis-departamentos o cualquier
+// prefijo de departamento (/sala, /cocina, /rrhh, …) → menú Departamentos.
+// Solo en rutas ambiguas (/ajustes, /accesos, /) caemos al modo guardado.
+function deriveModeFromPath(pathname: string, sectionsForPrefix: Section[]): ViewMode | null {
+  if (pathname === "/mi-panel" || pathname.startsWith("/mi-panel/")) return "paneles";
+  if (pathname === "/mis-departamentos" || pathname.startsWith("/mis-departamentos/")) return "departamentos";
+  for (const s of sectionsForPrefix) {
+    if (pathname === s.prefix || pathname.startsWith(`${s.prefix}/`)) return "departamentos";
+  }
+  return null;
+}
 
 function SubMenu({ items, collapsed }: { items: SubItem[]; collapsed: boolean }) {
   return (
@@ -106,7 +120,7 @@ export function AppSidebar() {
   const { state, setOpen, isMobile } = useSidebar();
   const collapsed = state === "collapsed";
   const pathname = usePathname();
-  const { mode } = useViewMode();
+  const { mode, setMode } = useViewMode();
   const { puedeVer, permisosLoaded, hasRole } = useAuth();
 
   // 'director' tiene bypass total → mostramos todos los módulos sin esperar a permisos.
@@ -117,6 +131,18 @@ export function AppSidebar() {
     : permisosLoaded
       ? allSections.filter((s) => puedeVer(s.modulo))
       : [];
+
+  // La URL manda: si el usuario está dentro de un módulo de departamento o de
+  // Mi Panel, el sidebar muestra ese menú. El modo guardado solo decide en
+  // rutas ambiguas (ajustes, accesos, raíz).
+  const derivedMode = deriveModeFromPath(pathname, allSections);
+  const effectiveMode: ViewMode = derivedMode ?? mode;
+
+  // Resincronizar el modo persistido cuando la ruta tiene un área clara, así
+  // al volver a una ruta ambigua respetamos la última vista visitada.
+  useEffect(() => {
+    if (derivedMode && derivedMode !== mode) setMode(derivedMode);
+  }, [derivedMode, mode, setMode]);
 
   const activeKey = sections.find((s) => pathname.startsWith(s.prefix))?.key ?? null;
   const [openKey, setOpenKey] = useState<string | null>(activeKey);
@@ -301,7 +327,7 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent onClick={handleContentClick}>
-        {!mounted ? null : mode === "paneles" ? (
+        {!mounted ? null : effectiveMode === "paneles" ? (
           <SidebarGroup>
             <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs tracking-widest">
               {!collapsed && "MIS PANELES"}

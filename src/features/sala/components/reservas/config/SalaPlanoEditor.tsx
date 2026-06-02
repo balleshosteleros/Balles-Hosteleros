@@ -14,6 +14,7 @@ import {
   RotateCw,
   Square,
   StretchHorizontal,
+  Tag,
   Trash2,
   Trees,
 } from "lucide-react";
@@ -44,12 +45,15 @@ import {
   listSalaDecoraciones,
   updateSalaDecoracion,
 } from "@/features/sala/planos/actions/sala-decoraciones-actions";
+import { updateZona } from "@/features/sala/planos/actions/zonas-actions";
 
 const MESA_SIZE = 60;
 const MESA_RECT_W = 84;
 const MESA_RECT_H = 48;
 const CANVAS_W = 1200;
 const CANVAS_H = 640;
+/** Alto fijo del badge "etiqueta de zona" en px del canvas. */
+const ZONA_LABEL_H = 22;
 
 interface Props {
   sala: Sala;
@@ -79,7 +83,46 @@ type DragState =
       id: string;
       offsetX: number;
       offsetY: number;
+    }
+  | {
+      kind: "mesa-resize";
+      mesaId: string;
+      startMouseX: number;
+      startMouseY: number;
+      startX: number;
+      startY: number;
+      startW: number;
+      startH: number;
+      rotation: number;
+      lockAspect: boolean;
+    }
+  | {
+      kind: "deco-resize";
+      id: string;
+      startMouseX: number;
+      startMouseY: number;
+      startX: number;
+      startY: number;
+      startW: number;
+      startH: number;
+      rotation: number;
+    }
+  | {
+      kind: "zona-nueva";
+      zonaId: string;
+      width: number;
+      offsetX: number;
+      offsetY: number;
+    }
+  | {
+      kind: "zona";
+      zonaId: string;
+      offsetX: number;
+      offsetY: number;
     };
+
+const MIN_MESA_SIZE = 36;
+const MIN_DECO_SIZE = 16;
 
 /** Tamaños por defecto de cada decoración (en px del canvas). */
 const DECO_DEFAULTS: Record<TipoDecoracion, { width: number; height: number }> = {
@@ -97,14 +140,34 @@ const DECO_DEFAULTS: Record<TipoDecoracion, { width: number; height: number }> =
 
 /** Decoraciones agrupadas para la paleta. */
 const DECO_GRUPOS: { titulo: string; tipos: TipoDecoracion[] }[] = [
-  { titulo: "Plantas", tipos: ["maceta", "planta_grande"] },
-  { titulo: "Estructura", tipos: ["pared", "columna", "ventana", "puerta", "escaleras"] },
-  { titulo: "Mobiliario", tipos: ["barra", "pasillo", "wc"] },
+  {
+    titulo: "Decoración",
+    tipos: [
+      "maceta",
+      "planta_grande",
+      "pared",
+      "columna",
+      "ventana",
+      "puerta",
+      "escaleras",
+      "barra",
+      "pasillo",
+      "wc",
+    ],
+  },
 ];
 
-function getMesaDims(forma: FormaMesa) {
+function getMesaDimsDefault(forma: FormaMesa) {
   if (forma === "rectangular") return { w: MESA_RECT_W, h: MESA_RECT_H };
   return { w: MESA_SIZE, h: MESA_SIZE };
+}
+
+function getMesaDims(forma: FormaMesa, pos?: MesaPosicion | null) {
+  const def = getMesaDimsDefault(forma);
+  return {
+    w: pos?.width != null ? Number(pos.width) : def.w,
+    h: pos?.height != null ? Number(pos.height) : def.h,
+  };
 }
 
 /** Render del thumbnail de una mesa en la paleta lateral. */
@@ -141,10 +204,13 @@ function DecoBody({
   tipo,
   width,
   height,
+  counterRotation = 0,
 }: {
   tipo: TipoDecoracion;
   width: number;
   height: number;
+  /** Para tipos con texto, contra-rota la etiqueta para mantenerla legible. */
+  counterRotation?: number;
 }) {
   const baseStyle = { width, height } as const;
   switch (tipo) {
@@ -228,7 +294,7 @@ function DecoBody({
           className="flex items-center justify-center rounded-md bg-amber-900/80 border border-amber-950 text-amber-50 text-[11px] font-semibold uppercase tracking-wider"
           style={baseStyle}
         >
-          Barra
+          <span style={{ transform: `rotate(${-counterRotation}deg)` }}>Barra</span>
         </div>
       );
     case "wc":
@@ -237,10 +303,43 @@ function DecoBody({
           className="flex items-center justify-center rounded-md bg-slate-100 border border-slate-500 text-slate-700 text-[11px] font-bold"
           style={baseStyle}
         >
-          WC
+          <span style={{ transform: `rotate(${-counterRotation}deg)` }}>WC</span>
         </div>
       );
   }
+}
+
+/**
+ * Tirador de redimensión visible al seleccionar una mesa/decoración.
+ * - Anclado en la esquina inferior-derecha en el marco LOCAL del elemento.
+ * - En mesas redondas se renderiza como anillo para sugerir resize uniforme.
+ */
+function ResizeHandle({
+  onPointerDown,
+  round = false,
+}: {
+  onPointerDown: (e: React.PointerEvent) => void;
+  round?: boolean;
+}) {
+  return (
+    <div
+      onPointerDown={onPointerDown}
+      onClick={(e) => e.stopPropagation()}
+      className={cn(
+        "absolute bg-white border-2 border-primary shadow-sm",
+        round ? "rounded-full" : "rounded-sm",
+      )}
+      style={{
+        right: -7,
+        bottom: -7,
+        width: 14,
+        height: 14,
+        cursor: "nwse-resize",
+        zIndex: 10,
+      }}
+      aria-label="Redimensionar"
+    />
+  );
 }
 
 /** Mini-icono para el botón de paleta de cada tipo. */
@@ -273,10 +372,20 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
   const [posiciones, setPosiciones] = useState<Map<string, MesaPosicion>>(new Map());
   const [decoraciones, setDecoraciones] = useState<Map<string, SalaDecoracion>>(new Map());
   const [formas, setFormas] = useState<Map<string, FormaMesa>>(new Map());
+  /**
+   * Overrides locales para la posición del badge de cada zona (drag en curso o post-guardado).
+   * - `null` = etiqueta NO colocada (quitada manualmente).
+   * - `{x,y}` = colocada en esa posición.
+   * Si no hay entrada, se usa el valor que llega por props (`zonas[].etiquetaX/Y`).
+   */
+  const [zonaLabelPos, setZonaLabelPos] = useState<
+    Map<string, { x: number; y: number } | null>
+  >(new Map());
   const [loading, setLoading] = useState(true);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [mesaSeleccionada, setMesaSeleccionada] = useState<string | null>(null);
   const [decoSeleccionada, setDecoSeleccionada] = useState<string | null>(null);
+  const [zonaLabelSeleccionada, setZonaLabelSeleccionada] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
   const outerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -350,6 +459,27 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
     return posiciones.has(mesaId);
   }
 
+  /** Ancho aproximado del badge por longitud del nombre (sin medir DOM). */
+  function zonaLabelWidth(nombre: string): number {
+    // ~7px por carácter + 16px de padding lateral, mínimo 48.
+    return Math.max(48, nombre.length * 7 + 16);
+  }
+
+  /** Posición efectiva de la etiqueta de la zona: override local → prop → null. */
+  function getZonaLabelPos(zonaId: string): { x: number; y: number } | null {
+    if (zonaLabelPos.has(zonaId)) return zonaLabelPos.get(zonaId) ?? null;
+    const z = zonaPorId.get(zonaId);
+    if (!z) return null;
+    if (z.etiquetaX == null || z.etiquetaY == null) return null;
+    return { x: z.etiquetaX, y: z.etiquetaY };
+  }
+
+  /** ¿Hay al menos una mesa de esta zona colocada en el plano? Bloquea el "Quitar". */
+  function zonaTieneMesasColocadas(zonaId: string): boolean {
+    const ms = mesasPorZona.get(zonaId) ?? [];
+    return ms.some((m) => posiciones.has(m.id));
+  }
+
   function startDragNueva(e: React.PointerEvent, mesaId: string) {
     e.preventDefault();
     const dims = getMesaDims(formaDe(mesaId));
@@ -412,6 +542,39 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
     });
   }
 
+  function startDragZonaLabelNueva(e: React.PointerEvent, zonaId: string) {
+    e.preventDefault();
+    const z = zonaPorId.get(zonaId);
+    if (!z) return;
+    const w = zonaLabelWidth(z.nombre);
+    setMesaSeleccionada(null);
+    setDecoSeleccionada(null);
+    setZonaLabelSeleccionada(null);
+    setDrag({
+      kind: "zona-nueva",
+      zonaId,
+      width: w,
+      offsetX: w / 2,
+      offsetY: ZONA_LABEL_H / 2,
+    });
+  }
+
+  function startDragZonaLabelExistente(e: React.PointerEvent, zonaId: string) {
+    e.stopPropagation();
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const pos = getZonaLabelPos(zonaId);
+    if (!pos) return;
+    const mouseX = (e.clientX - rect.left) / scale;
+    const mouseY = (e.clientY - rect.top) / scale;
+    setDrag({
+      kind: "zona",
+      zonaId,
+      offsetX: mouseX - pos.x,
+      offsetY: mouseY - pos.y,
+    });
+  }
+
   function handlePointerMove(e: React.PointerEvent) {
     if (!drag) return;
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -420,17 +583,100 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
     const mouseY = (e.clientY - rect.top) / scale;
 
     if (drag.kind === "mesa") {
-      const dims = getMesaDims(formaDe(drag.mesaId));
       const x = mouseX - drag.offsetX;
       const y = mouseY - drag.offsetY;
       setPosiciones((prev) => {
         const next = new Map(prev);
         const actual = prev.get(drag.mesaId);
+        const dims = getMesaDims(formaDe(drag.mesaId), actual);
         next.set(drag.mesaId, {
           mesaId: drag.mesaId,
           x: Math.max(0, Math.min(CANVAS_W - dims.w, x)),
           y: Math.max(0, Math.min(CANVAS_H - dims.h, y)),
           rotation: actual?.rotation ?? 0,
+          width: actual?.width ?? null,
+          height: actual?.height ?? null,
+        });
+        return next;
+      });
+      return;
+    }
+
+    if (drag.kind === "mesa-resize") {
+      const dx = mouseX - drag.startMouseX;
+      const dy = mouseY - drag.startMouseY;
+      const rad = (drag.rotation * Math.PI) / 180;
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+      // Delta del puntero en el marco local (sin rotación).
+      const localDx = cos * dx + sin * dy;
+      const localDy = -sin * dx + cos * dy;
+      let newW = drag.startW + localDx;
+      let newH = drag.startH + localDy;
+      if (drag.lockAspect) {
+        const s = Math.max(newW, newH);
+        newW = s;
+        newH = s;
+      }
+      newW = Math.max(MIN_MESA_SIZE, newW);
+      newH = Math.max(MIN_MESA_SIZE, newH);
+      // Anclar la esquina superior-izquierda en coordenadas del mundo.
+      const cx0 = drag.startX + drag.startW / 2;
+      const cy0 = drag.startY + drag.startH / 2;
+      const tlX = cx0 + cos * (-drag.startW / 2) - sin * (-drag.startH / 2);
+      const tlY = cy0 + sin * (-drag.startW / 2) + cos * (-drag.startH / 2);
+      const newCx = tlX + (cos * newW) / 2 - (sin * newH) / 2;
+      const newCy = tlY + (sin * newW) / 2 + (cos * newH) / 2;
+      let newX = newCx - newW / 2;
+      let newY = newCy - newH / 2;
+      newX = Math.max(0, Math.min(CANVAS_W - newW, newX));
+      newY = Math.max(0, Math.min(CANVAS_H - newH, newY));
+      setPosiciones((prev) => {
+        const next = new Map(prev);
+        const actual = prev.get(drag.mesaId);
+        if (!actual) return prev;
+        next.set(drag.mesaId, {
+          ...actual,
+          x: newX,
+          y: newY,
+          width: newW,
+          height: newH,
+        });
+        return next;
+      });
+      return;
+    }
+
+    if (drag.kind === "deco-resize") {
+      const dx = mouseX - drag.startMouseX;
+      const dy = mouseY - drag.startMouseY;
+      const rad = (drag.rotation * Math.PI) / 180;
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+      const localDx = cos * dx + sin * dy;
+      const localDy = -sin * dx + cos * dy;
+      let newW = Math.max(MIN_DECO_SIZE, drag.startW + localDx);
+      let newH = Math.max(MIN_DECO_SIZE, drag.startH + localDy);
+      const cx0 = drag.startX + drag.startW / 2;
+      const cy0 = drag.startY + drag.startH / 2;
+      const tlX = cx0 + cos * (-drag.startW / 2) - sin * (-drag.startH / 2);
+      const tlY = cy0 + sin * (-drag.startW / 2) + cos * (-drag.startH / 2);
+      const newCx = tlX + (cos * newW) / 2 - (sin * newH) / 2;
+      const newCy = tlY + (sin * newW) / 2 + (cos * newH) / 2;
+      let newX = newCx - newW / 2;
+      let newY = newCy - newH / 2;
+      newX = Math.max(0, Math.min(CANVAS_W - newW, newX));
+      newY = Math.max(0, Math.min(CANVAS_H - newH, newY));
+      setDecoraciones((prev) => {
+        const next = new Map(prev);
+        const actual = prev.get(drag.id);
+        if (!actual) return prev;
+        next.set(drag.id, {
+          ...actual,
+          x: newX,
+          y: newY,
+          width: newW,
+          height: newH,
         });
         return next;
       });
@@ -454,7 +700,24 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
       return;
     }
 
-    // deco-nueva: solo previsualizamos en estado de drag (no creamos hasta soltar).
+    if (drag.kind === "zona") {
+      const z = zonaPorId.get(drag.zonaId);
+      if (!z) return;
+      const w = zonaLabelWidth(z.nombre);
+      const x = mouseX - drag.offsetX;
+      const y = mouseY - drag.offsetY;
+      setZonaLabelPos((prev) => {
+        const next = new Map(prev);
+        next.set(drag.zonaId, {
+          x: Math.max(0, Math.min(CANVAS_W - w, x)),
+          y: Math.max(0, Math.min(CANVAS_H - ZONA_LABEL_H, y)),
+        });
+        return next;
+      });
+      return;
+    }
+
+    // deco-nueva / zona-nueva: solo previsualizamos en estado de drag (no creamos hasta soltar).
     // El render del fantasma sale a partir del puntero + drag.tipo/width/height.
   }
 
@@ -475,6 +738,27 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
         x: pos.x,
         y: pos.y,
         rotation: pos.rotation,
+        width: pos.width,
+        height: pos.height,
+      });
+      if (!res.ok) {
+        toast.error(res.error ?? "No se pudo guardar");
+        cargar();
+      }
+      return;
+    }
+
+    if (drag.kind === "mesa-resize") {
+      const pos = posiciones.get(drag.mesaId);
+      setDrag(null);
+      if (!pos) return;
+      const res = await upsertMesaPosicion({
+        mesaId: drag.mesaId,
+        x: pos.x,
+        y: pos.y,
+        rotation: pos.rotation,
+        width: pos.width,
+        height: pos.height,
       });
       if (!res.ok) {
         toast.error(res.error ?? "No se pudo guardar");
@@ -491,6 +775,83 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
       if (!res.ok) {
         toast.error(res.error ?? "No se pudo guardar");
         cargar();
+      }
+      return;
+    }
+
+    if (drag.kind === "deco-resize") {
+      const deco = decoraciones.get(drag.id);
+      setDrag(null);
+      if (!deco) return;
+      const res = await updateSalaDecoracion(deco.id, {
+        x: deco.x,
+        y: deco.y,
+        width: deco.width,
+        height: deco.height,
+      });
+      if (!res.ok) {
+        toast.error(res.error ?? "No se pudo guardar");
+        cargar();
+      }
+      return;
+    }
+
+    if (drag.kind === "zona") {
+      const pos = getZonaLabelPos(drag.zonaId);
+      setDrag(null);
+      if (!pos) return;
+      const res = await updateZona(drag.zonaId, {
+        etiquetaX: Math.round(pos.x),
+        etiquetaY: Math.round(pos.y),
+      });
+      if (!res.ok) toast.error(res.error ?? "No se pudo guardar");
+      return;
+    }
+
+    if (drag.kind === "zona-nueva") {
+      const inside =
+        e.clientX >= rect.left &&
+        e.clientX <= rect.right &&
+        e.clientY >= rect.top &&
+        e.clientY <= rect.bottom;
+      if (!inside) {
+        setDrag(null);
+        return;
+      }
+      const z = zonaPorId.get(drag.zonaId);
+      if (!z) {
+        setDrag(null);
+        return;
+      }
+      const w = zonaLabelWidth(z.nombre);
+      const x = Math.max(
+        0,
+        Math.min(CANVAS_W - w, (e.clientX - rect.left) / scale - drag.offsetX),
+      );
+      const y = Math.max(
+        0,
+        Math.min(CANVAS_H - ZONA_LABEL_H, (e.clientY - rect.top) / scale - drag.offsetY),
+      );
+      const zonaId = drag.zonaId;
+      setDrag(null);
+      setZonaLabelPos((prev) => {
+        const next = new Map(prev);
+        next.set(zonaId, { x, y });
+        return next;
+      });
+      setZonaLabelSeleccionada(zonaId);
+      const res = await updateZona(zonaId, {
+        etiquetaX: Math.round(x),
+        etiquetaY: Math.round(y),
+      });
+      if (!res.ok) {
+        toast.error(res.error ?? "No se pudo colocar la etiqueta");
+        // Revertir override local si falla.
+        setZonaLabelPos((prev) => {
+          const next = new Map(prev);
+          next.delete(zonaId);
+          return next;
+        });
       }
       return;
     }
@@ -567,6 +928,8 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
       x: pos.x,
       y: pos.y,
       rotation: nuevaRotacion,
+      width: pos.width,
+      height: pos.height,
     });
     if (!res.ok) toast.error(res.error ?? "No se pudo guardar");
   }
@@ -609,6 +972,23 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
       toast.error(res.error ?? "No se pudo quitar");
       cargar();
     }
+  }
+
+  async function handleQuitarEtiquetaZona(zonaId: string) {
+    if (zonaTieneMesasColocadas(zonaId)) {
+      toast.error(
+        "No se puede quitar: la zona tiene mesas en el plano. Quita las mesas primero.",
+      );
+      return;
+    }
+    setZonaLabelPos((prev) => {
+      const next = new Map(prev);
+      next.set(zonaId, null);
+      return next;
+    });
+    setZonaLabelSeleccionada(null);
+    const res = await updateZona(zonaId, { etiquetaX: null, etiquetaY: null });
+    if (!res.ok) toast.error(res.error ?? "No se pudo quitar");
   }
 
   if (loading) {
@@ -690,6 +1070,40 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
                 {mesasSala.every((m) => mesaEstaColocada(m.id)) && (
                   <p className="text-[11px] text-muted-foreground italic">
                     Todas las mesas de esta sala ya están en el lienzo.
+                  </p>
+                )}
+              </div>
+            )}
+          </section>
+
+          <section className="space-y-2 border-t pt-3">
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+              Etiquetas de zona (arrastra al lienzo)
+            </p>
+            {zonasSala.length === 0 ? (
+              <p className="text-[11px] text-muted-foreground italic">
+                Esta sala aún no tiene zonas.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-1">
+                {zonasSala
+                  .filter((z) => getZonaLabelPos(z.id) === null)
+                  .map((z) => (
+                    <button
+                      key={z.id}
+                      type="button"
+                      onPointerDown={(e) => startDragZonaLabelNueva(e, z.id)}
+                      className="flex items-center gap-1.5 text-[11px] font-semibold border rounded px-2 py-1 cursor-grab active:cursor-grabbing hover:border-foreground"
+                      style={{ backgroundColor: z.colorPastel }}
+                      title={`Colocar etiqueta "${z.nombre}"`}
+                    >
+                      <Tag className="h-3 w-3 opacity-70" />
+                      {z.nombre}
+                    </button>
+                  ))}
+                {zonasSala.every((z) => getZonaLabelPos(z.id) !== null) && (
+                  <p className="text-[11px] text-muted-foreground italic">
+                    Todas las etiquetas ya están en el lienzo.
                   </p>
                 )}
               </div>
@@ -815,6 +1229,55 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
               </div>
             </section>
           )}
+
+          {zonaLabelSeleccionada && zonaPorId.get(zonaLabelSeleccionada) && (
+            <section className="space-y-2 border-t pt-3">
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                Etiqueta de zona
+              </p>
+              <div className="flex items-center gap-2">
+                <span
+                  className="inline-block h-3.5 w-3.5 rounded-sm border border-foreground/20"
+                  style={{
+                    backgroundColor: zonaPorId.get(zonaLabelSeleccionada)!.colorPastel,
+                  }}
+                />
+                <span className="text-sm font-semibold">
+                  {zonaPorId.get(zonaLabelSeleccionada)!.nombre}
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Tamaño fijo. Color heredado de la zona. Arrastra para mover.
+              </p>
+              {zonaTieneMesasColocadas(zonaLabelSeleccionada) ? (
+                <div className="space-y-1">
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="w-full opacity-50 cursor-not-allowed"
+                    disabled
+                    title="La zona tiene mesas en el plano. Quita primero todas las mesas."
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1" />
+                    Quitar
+                  </Button>
+                  <p className="text-[10px] text-muted-foreground italic">
+                    No se puede quitar mientras haya al menos una mesa de esta zona en el plano.
+                  </p>
+                </div>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="w-full"
+                  onClick={() => handleQuitarEtiquetaZona(zonaLabelSeleccionada)}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1" />
+                  Quitar
+                </Button>
+              )}
+            </section>
+          )}
         </aside>
 
         <div
@@ -827,6 +1290,7 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
           onClick={() => {
             setMesaSeleccionada(null);
             setDecoSeleccionada(null);
+            setZonaLabelSeleccionada(null);
           }}
         >
           <div
@@ -872,11 +1336,73 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
                     style={{
                       left: Math.max(0, Math.min(CANVAS_W - d.width, d.x)),
                       top: Math.max(0, Math.min(CANVAS_H - d.height, d.y)),
+                      width: d.width,
+                      height: d.height,
                       transform: `rotate(${d.rotation}deg)`,
                       transformOrigin: "center",
                     }}
                   >
-                    <DecoBody tipo={d.tipo} width={d.width} height={d.height} />
+                    <DecoBody
+                      tipo={d.tipo}
+                      width={d.width}
+                      height={d.height}
+                      counterRotation={d.rotation}
+                    />
+                    {sel && (
+                      <ResizeHandle
+                        onPointerDown={(e) => {
+                          e.stopPropagation();
+                          const rect = canvasRef.current?.getBoundingClientRect();
+                          if (!rect) return;
+                          setDrag({
+                            kind: "deco-resize",
+                            id: d.id,
+                            startMouseX: (e.clientX - rect.left) / scale,
+                            startMouseY: (e.clientY - rect.top) / scale,
+                            startX: d.x,
+                            startY: d.y,
+                            startW: d.width,
+                            startH: d.height,
+                            rotation: d.rotation,
+                          });
+                        }}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Etiquetas de zona — encima de la decoración, debajo de las mesas */}
+              {zonasSala.map((z) => {
+                const pos = getZonaLabelPos(z.id);
+                if (!pos) return null;
+                const w = zonaLabelWidth(z.nombre);
+                const sel = zonaLabelSeleccionada === z.id;
+                return (
+                  <div
+                    key={`zlabel-${z.id}`}
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      setZonaLabelSeleccionada(z.id);
+                      setMesaSeleccionada(null);
+                      setDecoSeleccionada(null);
+                      startDragZonaLabelExistente(e, z.id);
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    className={cn(
+                      "absolute flex items-center justify-center text-[11px] font-bold tracking-wide text-zinc-800 rounded shadow-sm cursor-grab active:cursor-grabbing select-none border border-foreground/15",
+                      sel && "outline outline-2 outline-primary outline-offset-2",
+                    )}
+                    style={{
+                      left: Math.max(0, Math.min(CANVAS_W - w, pos.x)),
+                      top: Math.max(0, Math.min(CANVAS_H - ZONA_LABEL_H, pos.y)),
+                      width: w,
+                      height: ZONA_LABEL_H,
+                      backgroundColor: z.colorPastel,
+                    }}
+                    title={z.nombre}
+                  >
+                    {z.nombre}
                   </div>
                 );
               })}
@@ -888,7 +1414,7 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
                 const zona = zonaPorId.get(mesa.zonaId);
                 const seleccionada = mesaSeleccionada === pos.mesaId;
                 const forma = formaDe(pos.mesaId);
-                const dims = getMesaDims(forma);
+                const dims = getMesaDims(forma, pos);
                 const radius =
                   forma === "redonda" ? 9999 : forma === "rectangular" ? 6 : 6;
                 return (
@@ -915,10 +1441,38 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
                       transform: `rotate(${pos.rotation}deg)`,
                     }}
                   >
-                    <span>{mesa.codigo}</span>
-                    <span className="text-[10px] text-muted-foreground font-normal">
-                      {mesa.capacidadMin}-{mesa.capacidadMax}
-                    </span>
+                    {/* Etiquetas siempre legibles: counter-rotación del texto. */}
+                    <div
+                      className="flex flex-col items-center justify-center pointer-events-none"
+                      style={{ transform: `rotate(${-pos.rotation}deg)` }}
+                    >
+                      <span>{mesa.codigo}</span>
+                      <span className="text-[10px] text-muted-foreground font-normal">
+                        {mesa.capacidadMin}-{mesa.capacidadMax}
+                      </span>
+                    </div>
+                    {seleccionada && (
+                      <ResizeHandle
+                        round={forma === "redonda"}
+                        onPointerDown={(e) => {
+                          e.stopPropagation();
+                          const rect = canvasRef.current?.getBoundingClientRect();
+                          if (!rect) return;
+                          setDrag({
+                            kind: "mesa-resize",
+                            mesaId: pos.mesaId,
+                            startMouseX: (e.clientX - rect.left) / scale,
+                            startMouseY: (e.clientY - rect.top) / scale,
+                            startX: pos.x,
+                            startY: pos.y,
+                            startW: dims.w,
+                            startH: dims.h,
+                            rotation: pos.rotation,
+                            lockAspect: forma !== "rectangular",
+                          });
+                        }}
+                      />
+                    )}
                   </div>
                 );
               })}
