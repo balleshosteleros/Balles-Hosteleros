@@ -6,7 +6,7 @@ import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useTabQuery } from "@/shared/hooks/use-tab-query";
 import { Partida, ProductoPartida, MisePlaceItem, ESTADO_PARTIDA_LABELS, EstadoPartida, type ConfigPartidas, type AreaPrincipal, getConfigPartidas } from "@/features/cocina/data/partidas";
 import { listPartidas, createPartida, updatePartida, deletePartida, type PartidaRow } from "@/features/cocina/actions/partidas-actions";
-import { getEmpleadosPorEmpresa } from "@/features/rrhh/data/rrhh";
+import { getEmpleadosActivos, type EmpleadoActivo } from "@/features/rrhh/actions/empleados-actions";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -66,7 +66,7 @@ function EstadoBadge({ estado }: { estado: EstadoPartida }) {
 function PartidaDetail({ partida, onBack, empleados, config }: {
   partida: Partida;
   onBack: () => void;
-  empleados: { id: string; nombre: string; apellidos: string }[];
+  empleados: EmpleadoActivo[];
   config: ConfigPartidas;
 }) {
   const [productos, setProductos] = useState<ProductoPartida[]>(partida.productos);
@@ -94,7 +94,7 @@ function PartidaDetail({ partida, onBack, empleados, config }: {
     return map;
   }, [mise]);
 
-  const creadorName = empleados.find(e => e.id === partida.creador);
+  const creadorName = empleados.find(e => e.empleadoId === partida.creador);
 
   return (
     <div className="space-y-6 p-6">
@@ -272,7 +272,17 @@ function mapRowToPartida(r: PartidaRow): Partida {
 export function PartidasView() {
   const { empresaActual } = useEmpresa();
   const empresaId = empresaActual?.id || "habana";
-  const empleados = getEmpleadosPorEmpresa(empresaId);
+  // OLA2-01: empleados reales (fuente única) para resolver el nombre del creador.
+  const [empleados, setEmpleados] = useState<EmpleadoActivo[]>([]);
+  useEffect(() => {
+    let alive = true;
+    getEmpleadosActivos(empresaActual?.dbId).then((r) => {
+      if (alive) setEmpleados(r.ok ? r.data : []);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [empresaActual?.dbId]);
   const config = useMemo(() => getConfigPartidas(empresaId), [empresaId]);
 
   const [partidas, setPartidas] = useState<Partida[]>([]);
@@ -424,7 +434,7 @@ export function PartidasView() {
     creador: {
       th: <TableHead key="creador" className="text-xs">Creador</TableHead>,
       td: (p) => {
-        const emp = empleados.find((e) => e.id === p.creador);
+        const emp = empleados.find((e) => e.empleadoId === p.creador);
         return <TableCell key="creador" className="text-sm text-muted-foreground">{emp ? `${emp.nombre} ${emp.apellidos}` : "—"}</TableCell>;
       },
     },

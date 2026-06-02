@@ -7,13 +7,13 @@
 //
 // KPIs y tablas derivadas SIEMPRE de datos reales:
 //   - Cursos / secciones / lecciones / novedades del store.
-//   - Empleados de la empresa desde rrhh/data/rrhh.ts.
+//   - Empleados de la empresa desde getEmpleadosActivos (empleados reales).
 // No se inventan notas, evaluaciones ni progreso por empleado: el modelo del
 // store sólo registra "lección completada por usuario logueado". Cuando exista
 // una tabla `formacion_progreso` por empleado en Supabase, esta vista cruzará
 // los datos reales.
 
-import { useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   BookOpen,
   GraduationCap,
@@ -29,7 +29,7 @@ import {
   leccionesOrdenadas,
 } from "@/features/formacion/store/use-formacion-store";
 import { PUESTOS, type Puesto } from "@/features/formacion/types";
-import { getEmpleadosPorEmpresa } from "@/features/rrhh/data/rrhh";
+import { getEmpleadosActivos, type EmpleadoActivo } from "@/features/rrhh/actions/empleados-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -71,10 +71,17 @@ export function FormacionView() {
   const lecciones = useFormacionStore((s) => s.lecciones);
   const novedades = useFormacionStore((s) => s.novedades);
 
-  const empleados = useMemo(
-    () => getEmpleadosPorEmpresa(empresaActual.id),
-    [empresaActual.id],
-  );
+  // OLA2-01: empleados reales (fuente única). Antes venían del mock data/rrhh.ts.
+  const [empleados, setEmpleados] = useState<EmpleadoActivo[]>([]);
+  useEffect(() => {
+    let alive = true;
+    getEmpleadosActivos(empresaActual.dbId).then((r) => {
+      if (alive) setEmpleados(r.ok ? r.data : []);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [empresaActual.dbId]);
 
   const cursosEmpresa = useMemo(
     () => cursos.filter((c) => c.empresaId === empresaActual.id),
@@ -122,7 +129,7 @@ export function FormacionView() {
         0,
       );
       const empleadosPuesto = empleados.filter(
-        (e) => DEPARTAMENTO_A_PUESTO[e.departamento] === puesto,
+        (e) => DEPARTAMENTO_A_PUESTO[e.departamento ?? ""] === puesto,
       ).length;
 
       return {
@@ -157,7 +164,7 @@ export function FormacionView() {
 
   // ─── Empleados sin puesto reconocido ────────────────────────
   const empleadosSinPuesto = empleados.filter(
-    (e) => !DEPARTAMENTO_A_PUESTO[e.departamento],
+    (e) => !DEPARTAMENTO_A_PUESTO[e.departamento ?? ""],
   ).length;
 
   return (

@@ -130,6 +130,117 @@ export async function listEmpleados() {
   }
 }
 
+export type EmpleadoActivoArea = "administrativa" | "operativa";
+
+export interface EmpleadoActivo {
+  empleadoId: string; // empleados.id (uuid real)
+  userId: string | null;
+  nombre: string;
+  apellidos: string;
+  nombreCompleto: string;
+  departamento: string | null;
+  area: EmpleadoActivoArea;
+  puesto: string | null;
+  avatarUrl: string | null;
+  estado: string; // ciclo de vida (la action filtra "Activo")
+}
+
+/**
+ * Fuente ÚNICA de empleados activos de la empresa activa (OLA2-01).
+ *
+ * Reemplaza al antiguo getter mock de empleados de `data/rrhh.ts`. Es una
+ * generalización de `listEmpleadosParaPagos`: resuelve la empresa activa
+ * server-side vía `getAppContext()`, o usa el UUID (dbId) que se le pase
+ * (NUNCA el slug), filtrando por
+ * `empresa_id` (uuid) respetando RLS, aplica el mismo OR (empresa principal +
+ * acceso secundario vía `user_empresas`), deduplica por `user_id` y deriva el
+ * área operativa/administrativa del departamento. Amplía el shape para cubrir a
+ * los consumidores de RRHH (departamento, avatar, puesto, estado).
+ */
+export async function getEmpleadosActivos(
+  empresaDbId?: string,
+): Promise<{ ok: boolean; data: EmpleadoActivo[] }> {
+  try {
+    const { supabase, empresaId: empresaActivaId } = await getAppContext();
+    // Preferimos el UUID explícito del cliente (empresaActual.dbId) para evitar
+    // la carrera con la cookie de empresa activa al cambiar de empresa; si no se
+    // pasa, caemos a la empresa activa resuelta server-side. RLS protege en
+    // ambos casos (un dbId fuera de las empresas del usuario devuelve []).
+    const empresaId = empresaDbId ?? empresaActivaId;
+    if (!empresaId) return { ok: false, data: [] };
+
+    const { data: accesosUE } = await supabase
+      .from("user_empresas")
+      .select("user_id")
+      .eq("empresa_id", empresaId);
+    const userIdsConAcceso = (accesosUE ?? []).map((r) => r.user_id as string);
+
+    const filtro = userIdsConAcceso.length > 0
+      ? `empresa_id.eq.${empresaId},user_id.in.(${userIdsConAcceso.join(",")})`
+      : `empresa_id.eq.${empresaId}`;
+
+    const { data, error } = await supabase
+      .from("empleados")
+      .select("id, nombre, apellidos, puesto, estado, user_id, empresa_id, avatar_url, departamentos(nombre, area)")
+      .or(filtro)
+      .eq("estado", "Activo")
+      .order("nombre", { ascending: true });
+
+    if (error) throw error;
+
+    // Dedup por user_id (mismo patrón que listEmpleados/listEmpleadosParaPagos):
+    // el OR puede traer 2 veces a un usuario multiempresa; preferimos su ficha
+    // en la empresa activa.
+    const porUser = new Map<string, typeof data[number]>();
+    const sinUser: typeof data = [];
+    for (const e of data ?? []) {
+      const uid = e.user_id as string | null;
+      if (!uid) {
+        sinUser.push(e);
+        continue;
+      }
+      const prev = porUser.get(uid);
+      if (!prev) {
+        porUser.set(uid, e);
+        continue;
+      }
+      const prevPrincipal = prev.empresa_id === empresaId;
+      const currPrincipal = e.empresa_id === empresaId;
+      if (currPrincipal && !prevPrincipal) porUser.set(uid, e);
+    }
+
+    const rows: EmpleadoActivo[] = [...porUser.values(), ...sinUser].map((e) => {
+      const deptoRel = e.departamentos as
+        | { nombre?: string | null; area?: string | null }
+        | Array<{ nombre?: string | null; area?: string | null }>
+        | null;
+      const deptoObj = Array.isArray(deptoRel) ? deptoRel[0] : deptoRel;
+      const nombre = (e.nombre as string) ?? "";
+      const apellidos = (e.apellidos as string | null) ?? "";
+      const area: EmpleadoActivoArea =
+        deptoObj?.area === "OPERATIVA" ? "operativa" : "administrativa";
+      return {
+        empleadoId: e.id as string,
+        userId: (e.user_id as string | null) ?? null,
+        nombre,
+        apellidos,
+        nombreCompleto: `${nombre} ${apellidos}`.trim(),
+        departamento: (deptoObj?.nombre as string | null) ?? null,
+        area,
+        puesto: (e.puesto as string | null) ?? null,
+        avatarUrl: (e.avatar_url as string | null) ?? null,
+        estado: (e.estado as string) ?? "Activo",
+      };
+    });
+    rows.sort((a, b) => a.nombreCompleto.localeCompare(b.nombreCompleto, "es"));
+
+    return { ok: true, data: rows };
+  } catch (err) {
+    console.error("[rrhh] getEmpleadosActivos:", err);
+    return { ok: false, data: [] };
+  }
+}
+
 // Regla de negocio: todo empleado DEBE tener un usuario. createEmpleado crea
 // el auth.user + profile + user_role + empleado en cascada. Devuelve la
 // contraseña temporal para que el admin la entregue al empleado en su primer

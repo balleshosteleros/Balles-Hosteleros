@@ -1,52 +1,48 @@
 import { z } from "zod";
 import type { ModuleIO, RowSchema } from "@/shared/io";
 import {
-  getEmpleadosPorEmpresa,
-  type Empleado,
-} from "@/features/rrhh/data/rrhh";
+  getEmpleadosActivos,
+  type EmpleadoActivo,
+} from "@/features/rrhh/actions/empleados-actions";
 
+// OLA2-01: el IO de empleados exporta la fuente real (getEmpleadosActivos), no el
+// mock de data/rrhh.ts. El alta de empleados tiene su propio flujo real
+// (createEmpleado en empleados-actions), por lo que este IO queda como export de
+// la plantilla real por empresa. Schema/columnas recortados a los campos reales.
 const empleadoSchema = z.object({
-  id: z.string(),
+  empleadoId: z.string(),
   nombre: z.string().min(1, "El nombre es obligatorio"),
   apellidos: z.string(),
+  nombreCompleto: z.string(),
+  departamento: z.string().nullable(),
+  area: z.string(),
+  puesto: z.string().nullable(),
   estado: z.string(),
-  horarioTipo: z.string(),
-  horarioSemanal: z.string(),
-  horasHoy: z.string(),
-  departamento: z.string(),
-  telefono: z.string(),
-  fichajes: z.number(),
-  emailEmpresa: z.string(),
-  emailPersonal: z.string(),
-  validadorFichajes: z.string(),
 });
 
-const schema = empleadoSchema as unknown as RowSchema<Empleado>;
+const schema = empleadoSchema as unknown as RowSchema<EmpleadoActivo>;
 
-export const empleadosIO: ModuleIO<Empleado> = {
+export const empleadosIO: ModuleIO<EmpleadoActivo> = {
   module: "rrhh",
   submodule: "empleados",
   label: "Empleados",
-  description: "Plantilla de empleados con datos personales, contacto y estado.",
+  description: "Plantilla de empleados (datos reales por empresa).",
   schema,
-  uniqueBy: "emailEmpresa",
+  uniqueBy: "empleadoId",
   columns: [
-    { key: "id", label: "ID", hideInImport: true },
+    { key: "empleadoId", label: "ID", hideInImport: true },
+    { key: "nombreCompleto", label: "Empleado", hideInImport: true },
     { key: "nombre", label: "Nombre", required: true, example: "María" },
     { key: "apellidos", label: "Apellidos", example: "García López" },
     { key: "departamento", label: "Departamento", example: "COCINA" },
-    { key: "estado", label: "Estado" },
-    { key: "horarioTipo", label: "Tipo de horario" },
-    { key: "horarioSemanal", label: "Horas/semana" },
-    { key: "horasHoy", label: "Horas hoy", hideInImport: true },
-    { key: "telefono", label: "Teléfono", example: "612345678" },
-    { key: "emailEmpresa", label: "Email empresa", aliases: ["correo empresa"], unique: true },
-    { key: "emailPersonal", label: "Email personal" },
-    { key: "validadorFichajes", label: "Validador fichajes" },
-    { key: "fichajes", label: "Fichajes hoy", type: "number", hideInImport: true },
+    { key: "area", label: "Área", hideInImport: true },
+    { key: "puesto", label: "Puesto", example: "Camarera" },
+    { key: "estado", label: "Estado", hideInImport: true },
   ],
-  fetchAll: async (ctx) => {
-    const empresaId = (ctx.empresaId as string) ?? "";
-    return getEmpleadosPorEmpresa(empresaId);
+  // Export de la empresa activa (resuelta server-side). Import deshabilitado:
+  // el alta real vive en createEmpleado.
+  fetchAll: async () => {
+    const res = await getEmpleadosActivos();
+    return res.ok ? res.data : [];
   },
 };

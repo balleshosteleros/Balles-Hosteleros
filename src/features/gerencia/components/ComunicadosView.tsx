@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { getComunicadosByEmpresa, type Comunicado, ESTADO_COMUNICADO_LABELS, RECURRENCIA_LABELS, type EstadoComunicado, type Recurrencia } from "@/features/rrhh/data/comunicados";
-import { getEmpleadosPorEmpresa, DEPARTAMENTOS } from "@/features/rrhh/data/rrhh";
+import { DEPARTAMENTOS } from "@/features/rrhh/data/rrhh";
 import {
   listComunicados,
   createComunicado,
@@ -130,11 +130,10 @@ function formFromComunicado(c: Comunicado): EditorForm {
   };
 }
 
-function ComunicadoEditor({ comunicado, onBack, onSave, empleados, empleadosReales, empresaNombre }: {
+function ComunicadoEditor({ comunicado, onBack, onSave, empleadosReales, empresaNombre }: {
   comunicado: Comunicado | null;
   onBack: () => void;
   onSave: (form: EditorForm) => void | Promise<void>;
-  empleados: ReturnType<typeof getEmpleadosPorEmpresa>;
   empleadosReales: EmpleadoSelector[];
   empresaNombre: string;
 }) {
@@ -433,7 +432,7 @@ function ComunicadoEditor({ comunicado, onBack, onSave, empleados, empleadosReal
                 <Label className="text-xs">Creador</Label>
                 <Select value={form.creadorId} onValueChange={v => u({ creadorId: v })}>
                   <SelectTrigger className="mt-1"><SelectValue placeholder="Seleccionar empleado..." /></SelectTrigger>
-                  <SelectContent>{empleados.map(e => <SelectItem key={e.id} value={e.id}>{e.nombre} {e.apellidos}</SelectItem>)}</SelectContent>
+                  <SelectContent>{empleadosReales.map(e => <SelectItem key={e.userId} value={e.userId}>{e.nombre} {e.apellidos}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             </div>
@@ -599,7 +598,6 @@ export function ComunicadosView() {
   const [comunicados, setComunicados] = useState<Comunicado[]>([]);
   const [empleadosReales, setEmpleadosReales] = useState<EmpleadoSelector[]>([]);
   const [loading, setLoading] = useState(true);
-  const empleados = getEmpleadosPorEmpresa(empresaId);
 
   const loadComunicados = useCallback(async () => {
     setLoading(true);
@@ -734,7 +732,6 @@ export function ComunicadosView() {
           comunicado={editingComunicado}
           onBack={closeEditor}
           onSave={saveEditor}
-          empleados={empleados}
           empleadosReales={empleadosReales}
           empresaNombre={empresaActual?.nombre || ""}
         />

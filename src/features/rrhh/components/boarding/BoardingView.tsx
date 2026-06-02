@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { getEmpleadosPorEmpresa } from "@/features/rrhh/data/rrhh";
+import { getEmpleadosActivos, type EmpleadoActivo } from "@/features/rrhh/actions/empleados-actions";
 import {
   getProcesosPorEmpresa,
   getPlantillasPorEmpresa,
@@ -75,7 +75,18 @@ const hoy = () => new Date().toISOString().slice(0, 10);
 
 export function BoardingView() {
   const { empresaActual } = useEmpresa();
-  const empleados = getEmpleadosPorEmpresa(empresaActual.id);
+  // OLA2-01: empleados reales (fuente única) para el selector y la resolución
+  // de nombres. Procesos y plantillas siguen siendo mock hasta OLA2-04.
+  const [empleados, setEmpleados] = useState<EmpleadoActivo[]>([]);
+  useEffect(() => {
+    let alive = true;
+    getEmpleadosActivos(empresaActual.dbId).then((r) => {
+      if (alive) setEmpleados(r.ok ? r.data : []);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [empresaActual.dbId]);
 
   const [procesos, setProcesos] = useState<ProcesoBoarding[]>([]);
   const [plantillas, setPlantillas] = useState<PlantillaBoarding[]>([]);
@@ -138,7 +149,7 @@ export function BoardingView() {
     if (campo === "plantilla") return p.plantillaNombre;
     if (campo === "fechaInicio") return p.fechaInicio;
     if (campo === "empleado") {
-      const emp = empleados.find((e) => e.id === p.empleadoId);
+      const emp = empleados.find((e) => e.empleadoId === p.empleadoId);
       return emp ? `${emp.nombre} ${emp.apellidos}` : "";
     }
     return (p as unknown as Record<string, unknown>)[campo];
@@ -148,7 +159,7 @@ export function BoardingView() {
     let list = procesos.filter((p) => {
       if (buscar.trim()) {
         const q = buscar.toLowerCase();
-        const emp = empleados.find((e) => e.id === p.empleadoId);
+        const emp = empleados.find((e) => e.empleadoId === p.empleadoId);
         const nombre = emp ? `${emp.nombre} ${emp.apellidos}`.toLowerCase() : "";
         if (!nombre.includes(q) && !p.plantillaNombre.toLowerCase().includes(q)) return false;
       }
@@ -163,7 +174,7 @@ export function BoardingView() {
     if (!newEmpleadoId || !newPlantillaId) { toast.error("Selecciona empleado y plantilla"); return; }
     const plt = plantillas.find((p) => p.id === newPlantillaId);
     if (!plt) return;
-    const emp = empleados.find((e) => e.id === newEmpleadoId);
+    const emp = empleados.find((e) => e.empleadoId === newEmpleadoId);
     const nuevo: ProcesoBoarding = {
       id: `proc-${Date.now()}`,
       empleadoId: newEmpleadoId,
@@ -266,7 +277,7 @@ export function BoardingView() {
 
   // ─── DETALLE view ───────────────────────────────────────────
   if (vista === "detalle" && procesoActivo) {
-    const emp = empleados.find((e) => e.id === procesoActivo.empleadoId);
+    const emp = empleados.find((e) => e.empleadoId === procesoActivo.empleadoId);
     const pct = progreso(procesoActivo.tareas);
     const completadas = procesoActivo.tareas.filter((t) => t.completada).length;
 
@@ -467,7 +478,7 @@ export function BoardingView() {
     empleado: {
       th: <TableHead key="empleado">Empleado</TableHead>,
       td: (proc) => {
-        const emp = empleados.find((e) => e.id === proc.empleadoId);
+        const emp = empleados.find((e) => e.empleadoId === proc.empleadoId);
         return (
           <TableCell key="empleado">
             <div className="flex items-center gap-3">
@@ -627,7 +638,7 @@ export function BoardingView() {
                 <SelectTrigger><SelectValue placeholder="Seleccionar empleado" /></SelectTrigger>
                 <SelectContent>
                   {empleados.map((e) => (
-                    <SelectItem key={e.id} value={e.id}>{e.nombre} {e.apellidos}</SelectItem>
+                    <SelectItem key={e.empleadoId} value={e.empleadoId}>{e.nombre} {e.apellidos}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

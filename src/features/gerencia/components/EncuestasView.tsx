@@ -2,7 +2,8 @@
 
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { getEmpleadosPorEmpresa, DEPARTAMENTOS } from "@/features/rrhh/data/rrhh";
+import { DEPARTAMENTOS } from "@/features/rrhh/data/rrhh";
+import { getEmpleadosActivos, type EmpleadoActivo } from "@/features/rrhh/actions/empleados-actions";
 import {
   type Encuesta, type GrupoPreguntas, type PreguntaEncuesta, type OpcionRespuesta,
   type TipoPregunta, type EstadoEncuesta,
@@ -42,7 +43,7 @@ function ListadoEncuestas({
   encuestas, empleados, onSelect, onCrear,
 }: {
   encuestas: Encuesta[];
-  empleados: { id: string; nombre: string; apellidos: string }[];
+  empleados: EmpleadoActivo[];
   onSelect: (e: Encuesta) => void;
   onCrear: () => void;
 }) {
@@ -112,7 +113,7 @@ function ListadoEncuestas({
                     <TableCell>
                       <div className="flex -space-x-1">
                         {empleados.slice(0, Math.min(destTotal, 4)).map((em) => (
-                          <div key={em.id} className="h-7 w-7 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[10px] font-semibold border-2 border-background">
+                          <div key={em.empleadoId} className="h-7 w-7 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[10px] font-semibold border-2 border-background">
                             {em.nombre[0]}{em.apellidos[0]}
                           </div>
                         ))}
@@ -157,7 +158,7 @@ function DetalleEncuesta({
   encuesta: initial, empleados, onBack,
 }: {
   encuesta: Encuesta;
-  empleados: { id: string; nombre: string; apellidos: string; departamento: string }[];
+  empleados: EmpleadoActivo[];
   onBack: () => void;
 }) {
   const [enc, setEnc] = useState<Encuesta>({ ...initial, grupos: initial.grupos.map((g) => ({ ...g, preguntas: g.preguntas.map((p) => ({ ...p, opciones: [...p.opciones] })) })) });
@@ -351,9 +352,9 @@ function DetalleEncuesta({
               {enc.destinatarios.tipo === "empleados" && (
                 <div className="grid grid-cols-2 gap-2 max-h-[300px] overflow-y-auto">
                   {empleados.map((em) => (
-                    <label key={em.id} className="flex items-center gap-2 text-sm p-2 rounded hover:bg-muted cursor-pointer">
-                      <Checkbox checked={enc.destinatarios.ids.includes(em.id)} onCheckedChange={(c) => {
-                        const ids = c ? [...enc.destinatarios.ids, em.id] : enc.destinatarios.ids.filter((x) => x !== em.id);
+                    <label key={em.empleadoId} className="flex items-center gap-2 text-sm p-2 rounded hover:bg-muted cursor-pointer">
+                      <Checkbox checked={enc.destinatarios.ids.includes(em.empleadoId)} onCheckedChange={(c) => {
+                        const ids = c ? [...enc.destinatarios.ids, em.empleadoId] : enc.destinatarios.ids.filter((x) => x !== em.empleadoId);
                         update({ destinatarios: { ...enc.destinatarios, ids } });
                       }} />
                       <div className="h-7 w-7 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[10px] font-semibold shrink-0">{em.nombre[0]}{em.apellidos[0]}</div>
@@ -430,7 +431,7 @@ function DetalleEncuesta({
 
 const CHART_COLORS = ["hsl(var(--primary))", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316"];
 
-function ResultadosTab({ encuesta, empleados }: { encuesta: Encuesta; empleados: { id: string; nombre: string; apellidos: string }[] }) {
+function ResultadosTab({ encuesta, empleados }: { encuesta: Encuesta; empleados: EmpleadoActivo[] }) {
   const totalDest = encuesta.destinatarios.tipo === "todos" ? empleados.length : (encuesta.destinatarios.ids.length || empleados.length);
   const totalResp = encuesta.respuestas.length;
   const pct = totalDest > 0 ? Math.round((totalResp / totalDest) * 100) : 0;
@@ -573,7 +574,17 @@ function PreguntaResultado({ pregunta, respuestas }: { pregunta: PreguntaEncuest
 export function EncuestasView() {
   const { empresaActual } = useEmpresa();
   const eId = empresaActual.id;
-  const empleados = getEmpleadosPorEmpresa(eId);
+  // OLA2-01: empleados reales (fuente única). Antes venían del mock data/rrhh.ts.
+  const [empleados, setEmpleados] = useState<EmpleadoActivo[]>([]);
+  useEffect(() => {
+    let alive = true;
+    getEmpleadosActivos(empresaActual.dbId).then((r) => {
+      if (alive) setEmpleados(r.ok ? r.data : []);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [empresaActual.dbId]);
   const [encuestas, setEncuestas] = useState<Encuesta[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Encuesta | null>(null);
@@ -601,7 +612,7 @@ export function EncuestasView() {
 
   const handleCrear = async () => {
     const primera = empleados[0];
-    const nueva = crearEncuestaVacia(eId, primera?.id || "", primera ? `${primera.nombre} ${primera.apellidos}` : "Sistema");
+    const nueva = crearEncuestaVacia(eId, primera?.empleadoId || "", primera ? `${primera.nombre} ${primera.apellidos}` : "Sistema");
     setEncuestas((prev) => [nueva, ...prev]);
     setSelected(nueva);
     const res = await createEncuesta({ titulo: nueva.nombre || "Nueva encuesta", descripcion: "" });

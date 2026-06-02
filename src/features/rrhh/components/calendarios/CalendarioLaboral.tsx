@@ -1,6 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { getTurnosPorEmpresa, getFestivoEnFecha } from "@/features/rrhh/data/calendarios";
-import { getEmpleadosPorEmpresa } from "@/features/rrhh/data/rrhh";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { getEmpleadosActivos, type EmpleadoActivo } from "@/features/rrhh/actions/empleados-actions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,15 +51,28 @@ function rangeMonths(mode: CalendarRangeMode, anchor: Date): { year: number; mon
 }
 
 export function CalendarioLaboral({ empresaId }: { empresaId: string }) {
+  const { empresaActual } = useEmpresa();
   const turnos = getTurnosPorEmpresa(empresaId);
-  const empleados = getEmpleadosPorEmpresa(empresaId);
+  // OLA2-01: empleados reales (fuente única). Turnos y festivos siguen siendo
+  // mock (indexados por slug) hasta OLA2-05, por eso conservamos el prop
+  // empresaId para ellos y usamos empresaActual.dbId (uuid) para los empleados.
+  const [empleados, setEmpleados] = useState<EmpleadoActivo[]>([]);
+  useEffect(() => {
+    let alive = true;
+    getEmpleadosActivos(empresaActual.dbId).then((r) => {
+      if (alive) setEmpleados(r.ok ? r.data : []);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [empresaActual.dbId]);
   const rango = useCalendarRange("MENSUAL");
   const [busqueda, setBusqueda] = useState("");
   const [filtroDpto, setFiltroDpto] = useState("todos");
   const [filtroVista, setFiltroVista] = useState("todos");
   const [showConfig, setShowConfig] = useState(false);
 
-  const dptos = useMemo(() => [...new Set(empleados.map(e => e.departamento))].sort(), [empleados]);
+  const dptos = useMemo(() => [...new Set(empleados.map(e => e.departamento).filter((d): d is string => !!d))].sort(), [empleados]);
 
   const fechaISO = toISODate(rango.anchor);
   const turnosDia = useMemo(() => turnos.filter(t => t.fecha === fechaISO), [turnos, fechaISO]);
@@ -77,8 +91,8 @@ export function CalendarioLaboral({ empresaId }: { empresaId: string }) {
     return empleados.filter(e => {
       if (busqueda && !`${e.nombre} ${e.apellidos}`.toLowerCase().includes(busqueda.toLowerCase())) return false;
       if (filtroDpto !== "todos" && e.departamento !== filtroDpto) return false;
-      if (filtroVista === "con_horario" && !empleadosConTurno.has(e.id)) return false;
-      if (filtroVista === "sin_horario" && empleadosConTurno.has(e.id)) return false;
+      if (filtroVista === "con_horario" && !empleadosConTurno.has(e.empleadoId)) return false;
+      if (filtroVista === "sin_horario" && empleadosConTurno.has(e.empleadoId)) return false;
       return true;
     });
   }, [empleados, busqueda, filtroDpto, filtroVista, empleadosConTurno]);
@@ -166,9 +180,9 @@ export function CalendarioLaboral({ empresaId }: { empresaId: string }) {
                   </div>
                 </div>
                 {empleadosFiltrados.map(emp => {
-                  const turnosEmp = turnosDia.filter(t => t.empleadoId === emp.id);
+                  const turnosEmp = turnosDia.filter(t => t.empleadoId === emp.empleadoId);
                   return (
-                    <div key={emp.id} className="flex border-b last:border-b-0 hover:bg-muted/30 transition-colors">
+                    <div key={emp.empleadoId} className="flex border-b last:border-b-0 hover:bg-muted/30 transition-colors">
                       <div className="w-[200px] shrink-0 px-4 py-3 border-r">
                         <p className="text-sm font-medium truncate">{emp.nombre} {emp.apellidos}</p>
                         <p className="text-[10px] text-muted-foreground">{emp.departamento}</p>
