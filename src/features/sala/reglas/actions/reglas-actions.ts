@@ -174,5 +174,3 @@ export async function resolverValorEfectivoServer(
   }
 }
 
-// Tipos re-exportados como conveniencia
-export type { EmpresaReservasRegla, ReglaInput, TurnoRegla, MetricaRegla };

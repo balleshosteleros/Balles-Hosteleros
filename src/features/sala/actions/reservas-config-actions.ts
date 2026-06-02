@@ -6,7 +6,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   EmpresaReservasConfig,
   DiaSemanaKey,
-  MetricaLimite,
   TurnoKey,
 } from "@/features/sala/data/reservas";
 
@@ -19,16 +18,11 @@ async function getCtx() {
 }
 
 const DIAS: DiaSemanaKey[] = ["lun","mar","mie","jue","vie","sab","dom"];
-const METRICAS: MetricaLimite[] = ["cupo","maxpax"];
 const TURNOS: TurnoKey[] = ["comida","cena"];
 
 function rowToConfig(row: Record<string, unknown>): EmpresaReservasConfig {
   const out: Record<string, unknown> = {
     empresaId: row.empresa_id,
-    generalCupoComida:   row.general_cupo_comida   ?? null,
-    generalCupoCena:     row.general_cupo_cena     ?? null,
-    generalMaxpaxComida: row.general_maxpax_comida ?? null,
-    generalMaxpaxCena:   row.general_maxpax_cena   ?? null,
     antelacionMinMinutos: (row.antelacion_min_minutos as number) ?? 0,
     antelacionMaxDias:    (row.antelacion_max_dias as number)    ?? 90,
     generalInicioComida:  (row.general_inicio_comida as string | null) ?? null,
@@ -39,13 +33,6 @@ function rowToConfig(row: Record<string, unknown>): EmpresaReservasConfig {
     generalCerradoCena:   Boolean(row.general_cerrado_cena   ?? false),
   };
   for (const d of DIAS) {
-    for (const m of METRICAS) {
-      for (const t of TURNOS) {
-        const dbKey = `${d}_${m}_${t}`;
-        const objKey = `${d}_${m}_${t}` as const;
-        out[objKey] = (row[dbKey] as number | null) ?? null;
-      }
-    }
     for (const t of TURNOS) {
       out[`${d}_inicio_${t}`]  = (row[`${d}_inicio_${t}`]  as string | null) ?? null;
       out[`${d}_fin_${t}`]     = (row[`${d}_fin_${t}`]     as string | null) ?? null;
@@ -95,10 +82,6 @@ export async function upsertReservasConfig(updates: Partial<EmpresaReservasConfi
     const { supabase, empresaId } = await getCtx();
     if (!empresaId) return { ok: false, error: "No autenticado" };
     const db: Record<string, unknown> = { empresa_id: empresaId };
-    if ("generalCupoComida"   in updates) db.general_cupo_comida   = updates.generalCupoComida;
-    if ("generalCupoCena"     in updates) db.general_cupo_cena     = updates.generalCupoCena;
-    if ("generalMaxpaxComida" in updates) db.general_maxpax_comida = updates.generalMaxpaxComida;
-    if ("generalMaxpaxCena"   in updates) db.general_maxpax_cena   = updates.generalMaxpaxCena;
     if ("antelacionMinMinutos" in updates) db.antelacion_min_minutos = updates.antelacionMinMinutos;
     if ("antelacionMaxDias"    in updates) db.antelacion_max_dias    = updates.antelacionMaxDias;
     if ("generalInicioComida"  in updates) db.general_inicio_comida  = updates.generalInicioComida;
@@ -108,12 +91,6 @@ export async function upsertReservasConfig(updates: Partial<EmpresaReservasConfi
     if ("generalCerradoComida" in updates) db.general_cerrado_comida = updates.generalCerradoComida;
     if ("generalCerradoCena"   in updates) db.general_cerrado_cena   = updates.generalCerradoCena;
     for (const d of DIAS) {
-      for (const m of METRICAS) {
-        for (const t of TURNOS) {
-          const k = `${d}_${m}_${t}` as const;
-          if (k in updates) db[k] = (updates as Record<string, unknown>)[k];
-        }
-      }
       for (const t of TURNOS) {
         const kIni = `${d}_inicio_${t}` as const;
         const kFin = `${d}_fin_${t}` as const;

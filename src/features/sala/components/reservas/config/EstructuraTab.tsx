@@ -58,23 +58,13 @@ export function EstructuraTab() {
 
   const cargarTodo = useCallback(async (id: string) => {
     setLoading(true);
-    const t0 = performance.now();
-    const time = async <T,>(label: string, p: Promise<T>): Promise<T> => {
-      const t = performance.now();
-      const r = await p;
-      // eslint-disable-next-line no-console
-      console.log(`[EstructuraTab] ${label}: ${Math.round(performance.now() - t)}ms`);
-      return r;
-    };
     const [s, z, m, c, pcs] = await Promise.all([
-      time("listSalas", listSalas(id)),
-      time("listZonas", listZonas(id)),
-      time("listMesas", listMesas(id)),
-      time("listCombinaciones", listCombinaciones(id)),
-      time("listPlanosConSalas", listPlanosConSalas(id)),
+      listSalas(id),
+      listZonas(id),
+      listMesas(id),
+      listCombinaciones(id),
+      listPlanosConSalas(id),
     ]);
-    // eslint-disable-next-line no-console
-    console.log(`[EstructuraTab] cargarTodo total: ${Math.round(performance.now() - t0)}ms`);
     if (s.ok) setSalas(s.data);
     if (z.ok) setZonas(z.data);
     if (m.ok) setMesas(m.data);

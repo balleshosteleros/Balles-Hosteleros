@@ -209,16 +209,13 @@ export interface ReservaCodigo {
 }
 
 // --- CONFIGURACIÓN DE RESERVAS POR EMPRESA ---
+// Aforo y máximo por reserva viven en `empresa_reservas_reglas` (PRP-050).
+// Esta config persiste solo horario y antelación.
 export type DiaSemanaKey = "lun" | "mar" | "mie" | "jue" | "vie" | "sab" | "dom";
 export type TurnoKey = "comida" | "cena";
-export type MetricaLimite = "cupo" | "maxpax";
 
 /** Mapea Date.getDay() (0=domingo) a la clave del día usada en la config. */
 export const DIA_SEMANA_KEY: DiaSemanaKey[] = ["dom","lun","mar","mie","jue","vie","sab"];
-
-/** Claves planas por día (lun..dom × cupo|maxpax × comida|cena). */
-export type SemanaLimitesKey = `${DiaSemanaKey}_${MetricaLimite}_${TurnoKey}`;
-export type SemanaLimites = { [K in SemanaLimitesKey]: number | null };
 
 /** Claves planas de horario por día × turno (inicio, fin, cerrado). */
 export type SemanaHorarioInicioKey  = `${DiaSemanaKey}_inicio_${TurnoKey}`;
@@ -229,12 +226,8 @@ export type SemanaHorarios =
   & { [K in SemanaHorarioFinKey]:     string | null }
   & { [K in SemanaHorarioCerradoKey]: boolean | null };
 
-export type EmpresaReservasConfig = SemanaLimites & SemanaHorarios & {
+export type EmpresaReservasConfig = SemanaHorarios & {
   empresaId: string;
-  generalCupoComida: number | null;
-  generalCupoCena: number | null;
-  generalMaxpaxComida: number | null;
-  generalMaxpaxCena: number | null;
   antelacionMinMinutos: number;
   antelacionMaxDias: number;
   // Horario general (heredable por días sin valor propio)
@@ -262,19 +255,6 @@ export interface EmpresaReservasHorarioExcepcion {
   fin: string | null;          // null si cerrado
   cerrado: boolean;
   motivo: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface EmpresaReservasExcepcion {
-  id: string;
-  empresaId: string;
-  fecha: string; // YYYY-MM-DD
-  motivo: string | null;
-  cupoComida: number | null;
-  cupoCena: number | null;
-  maxpaxComida: number | null;
-  maxpaxCena: number | null;
   createdAt: string;
   updatedAt: string;
 }
