@@ -6,32 +6,22 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import type {
-  EmpresaReservasConfig,
-  EmpresaReservasExcepcion,
-} from "@/features/sala/data/reservas";
+import type { EmpresaReservasConfig } from "@/features/sala/data/reservas";
 import {
   getReservasConfig,
   upsertReservasConfig,
 } from "@/features/sala/actions/reservas-config-actions";
-import { listReservasExcepciones } from "@/features/sala/actions/reservas-excepciones-actions";
-import { LimitesMatriz } from "./LimitesMatriz";
-import { ExcepcionesTabla } from "./ExcepcionesTabla";
+import { LimitesReglas } from "./LimitesReglas";
 import { HorariosAperturaPanel } from "./HorariosAperturaPanel";
 
 export function ConfigTabReservas() {
   const [config, setConfig] = useState<EmpresaReservasConfig | null>(null);
-  const [excepciones, setExcepciones] = useState<EmpresaReservasExcepcion[]>([]);
   const [loading, setLoading] = useState(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const cargar = useCallback(async () => {
-    const [c, e] = await Promise.all([
-      getReservasConfig(),
-      listReservasExcepciones(),
-    ]);
+    const c = await getReservasConfig();
     if (c.ok) setConfig(c.data);
-    if (e.ok) setExcepciones(e.data);
     setLoading(false);
   }, []);
 
@@ -64,7 +54,7 @@ export function ConfigTabReservas() {
 
       <Separator />
 
-      <LimitesMatriz config={config} onChange={handleConfigChange} />
+      <LimitesReglas />
 
       <Separator />
 
@@ -111,9 +101,6 @@ export function ConfigTabReservas() {
         </div>
       </div>
 
-      <Separator />
-
-      <ExcepcionesTabla excepciones={excepciones} onChange={cargar} />
     </div>
   );
 }

@@ -24,49 +24,106 @@ import { listSalas } from "@/features/sala/planos/actions/salas-actions";
 import {
   createPlano,
   deletePlano,
-  listPlanoSalas,
-  listPlanos,
+  listPlanosConSalas,
   togglePlanoSala,
   updatePlano,
 } from "@/features/sala/planos/actions/planos-actions";
+import {
+  type TurnoRegla,
+  type VigenciaSpec,
+  vigenciaToCampos,
+} from "@/features/sala/reglas/data/reglas";
+import { TurnoToggle } from "@/features/sala/reglas/components/TurnoToggle";
+import { VigenciaSelector } from "@/features/sala/reglas/components/VigenciaSelector";
+import { VigenciaBadge } from "@/features/sala/reglas/components/VigenciaBadge";
+
+/** Deriva el turno (COMIDA/CENA/AMBOS) a partir de los flags del plano. */
+function planoToTurno(p: Plano): TurnoRegla {
+  if (p.cubreComidas && p.cubreCenas) return "AMBOS";
+  if (p.cubreComidas) return "COMIDA";
+  if (p.cubreCenas) return "CENA";
+  return "AMBOS";
+}
+
+/** Deriva la VigenciaSpec a partir de los campos del plano persistido. */
+function planoToVigencia(p: Plano): VigenciaSpec {
+  if (p.fechasExtra && p.fechasExtra.length > 0) {
+    return { modo: "fechas", fechas: p.fechasExtra };
+  }
+  if (p.fechaDesde && p.fechaHasta) {
+    return { modo: "rango", fechaDesde: p.fechaDesde, fechaHasta: p.fechaHasta };
+  }
+  if (p.diasSemana && p.diasSemana.length === 7) {
+    return { modo: "todos_los_dias" };
+  }
+  if (p.diasSemana && p.diasSemana.length === 1) {
+    return { modo: "todos_los_dia", diaSemana: p.diasSemana[0] as 1 | 2 | 3 | 4 | 5 | 6 | 7 };
+  }
+  return { modo: "siempre" };
+}
 
 interface PlanosTabProps {
   /** Si viene seteado, omite la carga de locales y usa este localId directamente. */
   localId?: string;
   /** En modo embebido oculta el selector de local. */
   embedded?: boolean;
+  /**
+   * Cuando se pasan estos datos (modo embebido), `PlanosTab` NO hace fetch
+   * propio: usa los del padre y le pide recargar mediante `onReload`. Esto
+   * evita duplicar `listPlanosConSalas` + `listSalas` que ya hace el padre.
+   */
+  planos?: Plano[];
+  salas?: Sala[];
+  salasPorPlano?: Map<string, Set<string>>;
+  /** En modo controlado, refleja el estado de carga del padre para alinear el skeleton. */
+  loading?: boolean;
+  onReload?: () => void;
 }
 
-export function PlanosTab({ localId: localIdProp, embedded }: PlanosTabProps = {}) {
+export function PlanosTab({
+  localId: localIdProp,
+  embedded,
+  planos: planosProp,
+  salas: salasProp,
+  salasPorPlano: salasPorPlanoProp,
+  loading: loadingProp,
+  onReload,
+}: PlanosTabProps = {}) {
+  const datosControlados = planosProp !== undefined;
   const [locales, setLocales] = useState<LocalMin[]>([]);
   const [localIdInterno, setLocalIdInterno] = useState<string>("");
   const localId = localIdProp ?? localIdInterno;
-  const [planos, setPlanos] = useState<Plano[]>([]);
-  const [salas, setSalas] = useState<Sala[]>([]);
+  const [planosInterno, setPlanosInterno] = useState<Plano[]>([]);
+  const [salasInterno, setSalasInterno] = useState<Sala[]>([]);
   /** plano_id → set de sala_id asociadas */
-  const [salasPorPlano, setSalasPorPlano] = useState<Map<string, Set<string>>>(new Map());
-  const [loading, setLoading] = useState(true);
+  const [salasPorPlanoInterno, setSalasPorPlanoInterno] = useState<Map<string, Set<string>>>(new Map());
+  const [loadingInterno, setLoadingInterno] = useState(!datosControlados);
+
+  const planos = datosControlados ? (planosProp ?? []) : planosInterno;
+  const salas = datosControlados ? (salasProp ?? []) : salasInterno;
+  const salasPorPlano = datosControlados ? (salasPorPlanoProp ?? new Map()) : salasPorPlanoInterno;
+  const loading = datosControlados ? (loadingProp ?? false) : loadingInterno;
 
   const [nuevoOpen, setNuevoOpen] = useState(false);
   const [editandoNombre, setEditandoNombre] = useState<Plano | null>(null);
   const [editandoSalas, setEditandoSalas] = useState<Plano | null>(null);
 
   const cargar = useCallback(async (id: string) => {
-    setLoading(true);
-    const [p, s] = await Promise.all([listPlanos(id), listSalas(id)]);
-    const planosArr = p.ok ? p.data : [];
-    setPlanos(planosArr);
-    setSalas(s.ok ? s.data : []);
-    // Cargar las salas asociadas a cada plano.
-    const entries = await Promise.all(
-      planosArr.map(async (pl) => {
-        const ps = await listPlanoSalas(pl.id);
-        return [pl.id, new Set(ps.ok ? ps.data : [])] as const;
-      }),
-    );
-    setSalasPorPlano(new Map(entries));
-    setLoading(false);
-  }, []);
+    if (datosControlados) {
+      onReload?.();
+      return;
+    }
+    setLoadingInterno(true);
+    const [pcs, s] = await Promise.all([listPlanosConSalas(id), listSalas(id)]);
+    setPlanosInterno(pcs.data.planos);
+    setSalasInterno(s.ok ? s.data : []);
+    const mapa = new Map<string, Set<string>>();
+    for (const [pid, sids] of pcs.data.salasPorPlano) {
+      mapa.set(pid, new Set(sids));
+    }
+    setSalasPorPlanoInterno(mapa);
+    setLoadingInterno(false);
+  }, [datosControlados, onReload]);
 
   useEffect(() => {
     if (localIdProp !== undefined) return;
@@ -80,8 +137,9 @@ export function PlanosTab({ localId: localIdProp, embedded }: PlanosTabProps = {
   }, [localIdProp]);
 
   useEffect(() => {
+    if (datosControlados) return;
     if (localId) cargar(localId);
-  }, [localId, cargar]);
+  }, [localId, cargar, datosControlados]);
 
   async function handleBorrar(p: Plano) {
     if (!confirm(`¿Borrar el plano "${p.nombre}"?`)) return;
@@ -141,14 +199,22 @@ export function PlanosTab({ localId: localIdProp, embedded }: PlanosTabProps = {
             const salasDelPlano = salas.filter((s) => salasActivas.has(s.id));
             return (
               <li key={p.id} className="border rounded-md px-3 py-2 text-sm space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2 min-w-0">
                     <span className="font-medium">{p.nombre}</span>
                     {p.esPrincipal && (
                       <span className="text-[10px] bg-primary/15 text-primary px-1.5 py-0.5 rounded">
                         Principal
                       </span>
                     )}
+                    <span className="text-[11px] text-muted-foreground">
+                      {planoToTurno(p) === "AMBOS"
+                        ? "Comida y cena"
+                        : planoToTurno(p) === "COMIDA"
+                          ? "Comida"
+                          : "Cena"}
+                    </span>
+                    <VigenciaBadge value={planoToVigencia(p)} />
                   </div>
                   <div className="flex gap-1">
                     <Button
@@ -318,12 +384,16 @@ function RenombrarPlanoModal({
 }) {
   const [nombre, setNombre] = useState("");
   const [esPrincipal, setEsPrincipal] = useState(false);
+  const [turno, setTurno] = useState<TurnoRegla>("AMBOS");
+  const [vigencia, setVigencia] = useState<VigenciaSpec>({ modo: "siempre" });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (plano) {
       setNombre(plano.nombre);
       setEsPrincipal(plano.esPrincipal);
+      setTurno(planoToTurno(plano));
+      setVigencia(planoToVigencia(plano));
     }
   }, [plano]);
 
@@ -334,7 +404,16 @@ function RenombrarPlanoModal({
     if (!nombre.trim()) return;
     setSaving(true);
     try {
-      const patch: { nombre: string; esPrincipal?: boolean } = { nombre };
+      const campos = vigenciaToCampos(vigencia);
+      const patch: Parameters<typeof updatePlano>[1] = {
+        nombre,
+        cubreComidas: turno === "COMIDA" || turno === "AMBOS",
+        cubreCenas: turno === "CENA" || turno === "AMBOS",
+        fechaDesde: campos.fechaDesde,
+        fechaHasta: campos.fechaHasta,
+        diasSemana: campos.diasSemana,
+        fechasExtra: campos.fechasExtra,
+      };
       if (!plano.esPrincipal && esPrincipal) patch.esPrincipal = true;
       const res = await updatePlano(plano.id, patch);
       if (!res.ok) {
@@ -351,16 +430,24 @@ function RenombrarPlanoModal({
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Editar plano</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3">
-          <Input
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleGuardar()}
-          />
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Nombre</Label>
+            <Input
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              placeholder="Ej: Verano 2026"
+            />
+          </div>
+
+          <TurnoToggle value={turno} onChange={setTurno} label="Aplicar a" />
+
+          <VigenciaSelector value={vigencia} onChange={setVigencia} hideHoy />
+
           {!plano.esPrincipal && (
             <label className="flex items-center gap-2 text-xs cursor-pointer">
               <input
@@ -368,7 +455,7 @@ function RenombrarPlanoModal({
                 checked={esPrincipal}
                 onChange={(e) => setEsPrincipal(e.target.checked)}
               />
-              <span>Marcar como principal</span>
+              <span>Marcar como principal (se usa cuando ningún otro aplica)</span>
             </label>
           )}
           {plano.esPrincipal && (
@@ -376,7 +463,7 @@ function RenombrarPlanoModal({
               Este es el plano principal. Marca otro como principal para reemplazarlo.
             </p>
           )}
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" size="sm" onClick={onClose}>
               Cancelar
             </Button>

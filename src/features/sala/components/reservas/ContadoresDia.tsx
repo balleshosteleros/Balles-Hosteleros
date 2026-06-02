@@ -3,14 +3,10 @@
 import { useEffect, useState } from "react";
 import { Users, Utensils } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getReservasConfig } from "@/features/sala/actions/reservas-config-actions";
-import { listReservasExcepciones } from "@/features/sala/actions/reservas-excepciones-actions";
-import { cupoEfectivo } from "@/features/sala/lib/reserva-limites";
-import type {
-  EmpresaReservasConfig,
-  EmpresaReservasExcepcion,
-  Reserva,
-} from "@/features/sala/data/reservas";
+import { listReglasReservas } from "@/features/sala/reglas/actions/reglas-actions";
+import { cupoEfectivoDesdeReglas } from "@/features/sala/lib/reserva-limites";
+import type { EmpresaReservasRegla } from "@/features/sala/reglas/data/reglas";
+import type { Reserva } from "@/features/sala/data/reservas";
 
 interface Props {
   fecha: string;
@@ -21,19 +17,14 @@ interface Props {
 const EXCLUIDOS = new Set(["CANCELADA", "NO_SHOW", "LIBERADA"]);
 
 export function ContadoresDia({ fecha, aforo, reservas }: Props) {
-  const [config, setConfig] = useState<EmpresaReservasConfig | null>(null);
-  const [excepciones, setExcepciones] = useState<EmpresaReservasExcepcion[]>([]);
+  const [reglas, setReglas] = useState<EmpresaReservasRegla[]>([]);
 
   useEffect(() => {
     (async () => {
-      const [c, e] = await Promise.all([
-        getReservasConfig(),
-        listReservasExcepciones({ desde: fecha, hasta: fecha }),
-      ]);
-      if (c.ok) setConfig(c.data);
-      if (e.ok) setExcepciones(e.data);
+      const r = await listReglasReservas();
+      if (r.ok) setReglas(r.data);
     })();
-  }, [fecha]);
+  }, []);
 
   const reservasDia = reservas.filter((r) => r.fecha === fecha && !EXCLUIDOS.has(r.estado));
 
@@ -44,12 +35,12 @@ export function ContadoresDia({ fecha, aforo, reservas }: Props) {
     comida: {
       personas: comida.reduce((s, r) => s + (r.comensales ?? 0), 0),
       reservas: comida.length,
-      cupo: cupoEfectivo(config, excepciones, fecha, "COMIDA"),
+      cupo: cupoEfectivoDesdeReglas(reglas, fecha, "COMIDA"),
     },
     cena: {
       personas: cena.reduce((s, r) => s + (r.comensales ?? 0), 0),
       reservas: cena.length,
-      cupo: cupoEfectivo(config, excepciones, fecha, "CENA"),
+      cupo: cupoEfectivoDesdeReglas(reglas, fecha, "CENA"),
     },
   };
 

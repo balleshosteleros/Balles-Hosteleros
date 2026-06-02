@@ -184,6 +184,47 @@ export async function listPlanoSalas(planoId: string) {
   }
 }
 
+/**
+ * Devuelve todos los planos del local + sus sala_ids asociadas en UNA sola
+ * llamada (evita el N+1 que causaba 5-10s de espera en `Estructura` cuando
+ * había varios planos). El mapa devuelto es `plano_id → sala_id[]`.
+ */
+export async function listPlanosConSalas(localId: string) {
+  try {
+    const supabase = await createClient();
+    const [planosRes, psRes] = await Promise.all([
+      supabase
+        .from("planos")
+        .select("*")
+        .eq("local_id", localId)
+        .order("es_principal", { ascending: false })
+        .order("nombre", { ascending: true }),
+      supabase
+        .from("plano_salas")
+        .select("plano_id, sala_id, planos!inner(local_id)")
+        .eq("planos.local_id", localId),
+    ]);
+    if (planosRes.error) throw planosRes.error;
+    if (psRes.error) throw psRes.error;
+    const planos = (planosRes.data ?? []).map(rowToPlano);
+    const salasPorPlano = new Map<string, string[]>();
+    for (const r of psRes.data ?? []) {
+      const pid = r.plano_id as string;
+      const sid = r.sala_id as string;
+      const arr = salasPorPlano.get(pid);
+      if (arr) arr.push(sid);
+      else salasPorPlano.set(pid, [sid]);
+    }
+    return { ok: true, data: { planos, salasPorPlano } };
+  } catch (err) {
+    console.error("[planos] listConSalas:", err);
+    return {
+      ok: false,
+      data: { planos: [] as Plano[], salasPorPlano: new Map<string, string[]>() },
+    };
+  }
+}
+
 export async function togglePlanoSala(planoId: string, salaId: string, activar: boolean) {
   try {
     const supabase = await createClient();
@@ -214,17 +255,76 @@ export async function togglePlanoSala(planoId: string, salaId: string, activar: 
  * de sus salas asociadas. Las posiciones viven en `mesas.x/y/rotation` —
  * el diseño es propiedad de la sala, no del plano.
  */
-export async function getPlanoActivoConPosiciones(localId: string) {
+/**
+ * Cascada de prioridad equivalente al resolver de reglas (PRP-050):
+ *   1. plano con fecha en fechas_extra y que cubra el turno
+ *   2. plano con [fecha_desde, fecha_hasta] que incluya la fecha y cubra turno
+ *   3. plano con dias_semana que incluya el ISODOW del día y cubra turno
+ *   4. plano principal (fallback)
+ * Devuelve null si ninguno aplica.
+ */
+function pickPlanoVigente(
+  planos: Plano[],
+  fechaISO: string,
+  turno: "COMIDA" | "CENA",
+): Plano | null {
+  const cubre = (p: Plano) =>
+    turno === "COMIDA" ? p.cubreComidas !== false : p.cubreCenas !== false;
+  const isoDow = (() => {
+    const d = new Date(fechaISO + "T00:00:00").getDay();
+    return d === 0 ? 7 : d;
+  })();
+  const candidatos = planos.filter((p) => p.activo !== false && cubre(p));
+
+  const conFechaExtra = candidatos.find((p) => p.fechasExtra && p.fechasExtra.includes(fechaISO));
+  if (conFechaExtra) return conFechaExtra;
+
+  const conRango = candidatos.find(
+    (p) => p.fechaDesde && p.fechaHasta && fechaISO >= p.fechaDesde && fechaISO <= p.fechaHasta,
+  );
+  if (conRango) return conRango;
+
+  const conDia = candidatos.find((p) => p.diasSemana && p.diasSemana.includes(isoDow));
+  if (conDia) return conDia;
+
+  return candidatos.find((p) => p.esPrincipal) ?? null;
+}
+
+export async function getPlanoActivoConPosiciones(
+  localId: string,
+  fechaISO?: string,
+  turno?: "COMIDA" | "CENA",
+) {
   try {
     const supabase = await createClient();
-    const { data: planoRow, error: errP } = await supabase
-      .from("planos")
-      .select("*")
-      .eq("local_id", localId)
-      .eq("es_principal", true)
-      .eq("activo", true)
-      .maybeSingle();
-    if (errP) throw errP;
+    let planoRow: Record<string, unknown> | null = null;
+
+    if (fechaISO && turno) {
+      // Modo vigencia: cargo todos los planos activos del local y aplico cascada.
+      const { data: rows, error: errPs } = await supabase
+        .from("planos")
+        .select("*")
+        .eq("local_id", localId)
+        .eq("activo", true);
+      if (errPs) throw errPs;
+      const planos = (rows ?? []).map(rowToPlano);
+      const elegido = pickPlanoVigente(planos, fechaISO, turno);
+      planoRow = elegido
+        ? (rows ?? []).find((r) => (r.id as string) === elegido.id) ?? null
+        : null;
+    } else {
+      // Modo legacy: solo plano principal.
+      const { data, error: errP } = await supabase
+        .from("planos")
+        .select("*")
+        .eq("local_id", localId)
+        .eq("es_principal", true)
+        .eq("activo", true)
+        .maybeSingle();
+      if (errP) throw errP;
+      planoRow = data;
+    }
+
     if (!planoRow) return { ok: true, data: null as null | { plano: Plano; posiciones: MesaPosicion[] } };
 
     // Salas asociadas al plano.

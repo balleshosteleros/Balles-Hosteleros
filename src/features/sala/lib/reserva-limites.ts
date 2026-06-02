@@ -22,6 +22,8 @@ import {
   type TurnoKey,
   DIA_SEMANA_KEY,
 } from "@/features/sala/data/reservas";
+import type { EmpresaReservasRegla } from "@/features/sala/reglas/data/reglas";
+import { resolverValorEfectivo as resolverDesdeReglas } from "@/features/sala/reglas/lib/resolver";
 
 /** Devuelve la clave del día (lun..dom) para una fecha YYYY-MM-DD. */
 export function diaSemanaKey(fechaISO: string): DiaSemanaKey {
@@ -95,6 +97,30 @@ export function maxpaxEfectivo(
   turno: TurnoReserva,
 ): number | null {
   return valorEfectivo(config, excepciones, fechaISO, turno, "maxpax");
+}
+
+// ---------------------------------------------------------------------------
+// Variantes basadas en reglas (PRP-050) — preferidas sobre las viejas.
+// ---------------------------------------------------------------------------
+
+/** Cupo efectivo a partir del array de reglas hidratado para la empresa. */
+export function cupoEfectivoDesdeReglas(
+  reglas: EmpresaReservasRegla[],
+  fechaISO: string,
+  turno: TurnoReserva,
+): number | null {
+  if (turno !== "COMIDA" && turno !== "CENA") return null;
+  return resolverDesdeReglas(reglas, fechaISO, turno, "cupo");
+}
+
+/** Máximo de personas por reserva a partir del array de reglas. */
+export function maxpaxEfectivoDesdeReglas(
+  reglas: EmpresaReservasRegla[],
+  fechaISO: string,
+  turno: TurnoReserva,
+): number | null {
+  if (turno !== "COMIDA" && turno !== "CENA") return null;
+  return resolverDesdeReglas(reglas, fechaISO, turno, "maxpax");
 }
 
 /** Verifica si una fecha cumple las reglas de antelación (min/max). */

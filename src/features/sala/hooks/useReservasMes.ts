@@ -3,15 +3,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { listReservasRango } from "@/features/sala/actions/reservas-actions";
 import { getReservasConfig } from "@/features/sala/actions/reservas-config-actions";
-import { listReservasExcepciones } from "@/features/sala/actions/reservas-excepciones-actions";
+import { listReglasReservas } from "@/features/sala/reglas/actions/reglas-actions";
 import {
-  cupoEfectivo,
+  cupoEfectivoDesdeReglas,
 } from "@/features/sala/lib/reserva-limites";
 import type {
   EmpresaReservasConfig,
-  EmpresaReservasExcepcion,
   TurnoReserva,
 } from "@/features/sala/data/reservas";
+import type { EmpresaReservasRegla } from "@/features/sala/reglas/data/reglas";
 
 export interface MetricasTurno {
   personas: number;
@@ -59,7 +59,7 @@ export function gridFechasMes(anio: number, mes0: number): string[] {
 export function useReservasMes(anio: number, mes0: number, aforoPorTurno: number) {
   const [reservas, setReservas] = useState<Array<{ fecha: string; turno: string; personas: number; estado: string }>>([]);
   const [config, setConfig] = useState<EmpresaReservasConfig | null>(null);
-  const [excepciones, setExcepciones] = useState<EmpresaReservasExcepcion[]>([]);
+  const [reglas, setReglas] = useState<EmpresaReservasRegla[]>([]);
   const [loading, setLoading] = useState(true);
   const { desde, hasta } = useMemo(() => rangoMes(anio, mes0), [anio, mes0]);
 
@@ -67,15 +67,15 @@ export function useReservasMes(anio: number, mes0: number, aforoPorTurno: number
     let cancelado = false;
     setLoading(true);
     (async () => {
-      const [r, c, e] = await Promise.all([
+      const [r, c, rs] = await Promise.all([
         listReservasRango(desde, hasta),
         getReservasConfig(),
-        listReservasExcepciones({ desde, hasta }),
+        listReglasReservas(),
       ]);
       if (cancelado) return;
       if (r.ok) setReservas(r.data as typeof reservas);
       if (c.ok) setConfig(c.data);
-      if (e.ok) setExcepciones(e.data);
+      if (rs.ok) setReglas(rs.data);
       setLoading(false);
     })();
     return () => {
@@ -96,12 +96,12 @@ export function useReservasMes(anio: number, mes0: number, aforoPorTurno: number
           comida: {
             personas: 0,
             reservas: 0,
-            cupo: cupoEfectivo(config, excepciones, key, "COMIDA" as TurnoReserva),
+            cupo: cupoEfectivoDesdeReglas(reglas, key, "COMIDA" as TurnoReserva),
           },
           cena: {
             personas: 0,
             reservas: 0,
-            cupo: cupoEfectivo(config, excepciones, key, "CENA" as TurnoReserva),
+            cupo: cupoEfectivoDesdeReglas(reglas, key, "CENA" as TurnoReserva),
           },
         };
       }
@@ -114,7 +114,7 @@ export function useReservasMes(anio: number, mes0: number, aforoPorTurno: number
       }
     }
     return out;
-  }, [reservas, config, excepciones]);
+  }, [reservas, reglas]);
 
   /** Devuelve métricas para una fecha (con valores 0 si no hay reservas). */
   function metricasFecha(fecha: string): MetricasDia {
@@ -124,12 +124,12 @@ export function useReservasMes(anio: number, mes0: number, aforoPorTurno: number
         comida: {
           personas: 0,
           reservas: 0,
-          cupo: cupoEfectivo(config, excepciones, fecha, "COMIDA"),
+          cupo: cupoEfectivoDesdeReglas(reglas, fecha, "COMIDA"),
         },
         cena: {
           personas: 0,
           reservas: 0,
-          cupo: cupoEfectivo(config, excepciones, fecha, "CENA"),
+          cupo: cupoEfectivoDesdeReglas(reglas, fecha, "CENA"),
         },
       }
     );
@@ -149,7 +149,7 @@ export function useReservasMes(anio: number, mes0: number, aforoPorTurno: number
   return {
     loading,
     config,
-    excepciones,
+    reglas,
     metricasFecha,
     totales,
     aforoPorTurno,

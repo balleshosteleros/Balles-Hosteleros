@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +20,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Plus, Search, ChevronLeft, ChevronRight, ListPlus, ListFilter, Check, ChevronDown } from "lucide-react";
-import { ConfigReservasView } from "@/features/sala/components/reservas/config/ConfigReservasView";
+// Configuración solo se carga cuando el usuario pulsa "Configuración" — fuera del bundle inicial.
+const ConfigReservasView = dynamic(
+  () =>
+    import("@/features/sala/components/reservas/config/ConfigReservasView").then(
+      (m) => m.ConfigReservasView,
+    ),
+  { ssr: false },
+);
 import { Settings } from "lucide-react";
 import { EtiquetasPanel } from "@/features/sala/components/reservas/EtiquetasPanel";
 import { CalendarioMes } from "@/features/sala/components/reservas/CalendarioMes";
@@ -43,16 +51,16 @@ import type {
   PlanoMesaPosicion,
 } from "@/features/sala/planos/data/planos";
 import { getReservasConfig } from "@/features/sala/actions/reservas-config-actions";
-import { listReservasExcepciones } from "@/features/sala/actions/reservas-excepciones-actions";
+import { listReglasReservas } from "@/features/sala/reglas/actions/reglas-actions";
 import { listPoliticasCancelacion } from "@/features/sala/actions/politicas-cancelacion-actions";
 import { getClienteInsights } from "@/features/sala/actions/cliente-insights-actions";
 import { searchClientes, type ClienteSugerencia } from "@/features/sala/actions/clientes-actions";
-import { maxpaxEfectivo } from "@/features/sala/lib/reserva-limites";
+import { maxpaxEfectivoDesdeReglas } from "@/features/sala/lib/reserva-limites";
+import type { EmpresaReservasRegla } from "@/features/sala/reglas/data/reglas";
 import type {
   ReservaEtiqueta,
   TipoReservaCategoria,
   EmpresaReservasConfig,
-  EmpresaReservasExcepcion,
   PoliticaCancelacion,
   ClienteInsights,
 } from "@/features/sala/data/reservas";
@@ -203,7 +211,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave }: {
   const [etiquetas, setEtiquetas] = useState<ReservaEtiqueta[]>([]);
   const [politicas, setPoliticas] = useState<PoliticaCancelacion[]>([]);
   const [config, setConfig] = useState<EmpresaReservasConfig | null>(null);
-  const [excepciones, setExcepciones] = useState<EmpresaReservasExcepcion[]>([]);
+  const [reglas, setReglas] = useState<EmpresaReservasRegla[]>([]);
   const [paxTouched, setPaxTouched] = useState(false);
 
   // Autocompletado de clientes por nombre, apellidos o teléfono (4+ chars).
@@ -218,12 +226,12 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave }: {
         listReservaEtiquetas({ soloActivos: true }),
         listPoliticasCancelacion({ soloActivas: true }),
         getReservasConfig(),
-        listReservasExcepciones({ desde: form.fecha, hasta: form.fecha }),
+        listReglasReservas(),
       ]);
       if (t.ok) setEtiquetas(t.data);
       if (p.ok) setPoliticas(p.data);
       if (c.ok) setConfig(c.data);
-      if (e.ok) setExcepciones(e.data);
+      if (e.ok) setReglas(e.data);
     })();
   }, [form.fecha]);
 
@@ -258,8 +266,8 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave }: {
   }, [form.cliente, form.apellidos, form.telefono, form.esWalkIn, campoActivo]);
 
   const maxPax = useMemo(
-    () => maxpaxEfectivo(config, excepciones, form.fecha, form.turno),
-    [config, excepciones, form.fecha, form.turno],
+    () => maxpaxEfectivoDesdeReglas(reglas, form.fecha, form.turno),
+    [reglas, form.fecha, form.turno],
   );
 
   const excedeMaxPax = maxPax != null && form.comensales > maxPax;
@@ -1201,7 +1209,11 @@ function PlanoCanvas({
     y: Math.max(0, Math.min(PLANO_CANVAS_H - PLANO_MESA_SIZE, y)),
   });
 
-  // Etiquetas de zona: posicionadas encima de la mesa más arriba-izquierda de cada zona
+  // Etiquetas de zona:
+  // - Si la zona tiene posición guardada en BD (etiquetaX/etiquetaY) y al menos una mesa
+  //   de esa zona está colocada → se usa esa posición exacta del editor.
+  // - Si no hay posición guardada (planos antiguos) → fallback al cálculo automático
+  //   sobre la mesa más arriba-izquierda.
   const labelsZonas = useMemo(() => {
     const labels: { id: string; nombre: string; color: string; x: number; y: number }[] = [];
     for (const z of zonas) {
@@ -1209,6 +1221,16 @@ function PlanoCanvas({
         (m) => (m.zona as unknown as string)?.toUpperCase() === z.nombre.toUpperCase(),
       );
       if (mesasZona.length === 0) continue;
+      if (z.etiquetaX != null && z.etiquetaY != null) {
+        labels.push({
+          id: z.id,
+          nombre: z.nombre,
+          color: z.colorPastel,
+          x: z.etiquetaX,
+          y: z.etiquetaY,
+        });
+        continue;
+      }
       let minX = Infinity, minY = Infinity;
       for (const m of mesasZona) {
         const pos = posiciones.get(m.id)!;
@@ -1539,15 +1561,29 @@ export function ReservasView() {
   const cubiertosReservados = reservasTurno.reduce((s, r) => s + r.comensales, 0);
   const mesasOcupadas = new Set(reservasTurno.filter(r => r.mesaId && !["CANCELADA", "NO_SHOW", "COMPLETADA"].includes(r.estado)).map(r => r.mesaId)).size;
 
+  // Índice mesaId → reservas activas del turno. Se rehace solo si cambia `reservasTurno`,
+  // evitando un O(N×M) en cada render (antes hacíamos un `.filter()` por cada mesa).
+  const reservasActivasPorMesa = useMemo(() => {
+    const map = new Map<string, Reserva[]>();
+    for (const r of reservasTurno) {
+      if (!r.mesaId) continue;
+      if (r.estado === "CANCELADA" || r.estado === "NO_SHOW" || r.estado === "COMPLETADA") continue;
+      const arr = map.get(r.mesaId);
+      if (arr) arr.push(r);
+      else map.set(r.mesaId, [r]);
+    }
+    return map;
+  }, [reservasTurno]);
+
   const getMesaEstadoTurno = (m: Mesa): string => {
-    const rs = reservasTurno.filter(r => r.mesaId === m.id && !["CANCELADA", "NO_SHOW", "COMPLETADA"].includes(r.estado));
-    if (rs.length === 0) return "LIBRE";
-    if (rs.find(r => r.estado === "WALK_IN")) return "OCUPADA";
+    const rs = reservasActivasPorMesa.get(m.id);
+    if (!rs || rs.length === 0) return "LIBRE";
+    if (rs.some(r => r.estado === "WALK_IN")) return "OCUPADA";
     return "RESERVADA";
   };
 
-  const getReservasMesa = (mesaId: string) =>
-    reservasTurno.filter(r => r.mesaId === mesaId && !["CANCELADA", "NO_SHOW", "COMPLETADA"].includes(r.estado));
+  const getReservasMesa = (mesaId: string): Reserva[] =>
+    reservasActivasPorMesa.get(mesaId) ?? [];
 
   const cambiarEstadoReserva = async (id: string, estado: EstadoReserva) => {
     setReservas(prev => prev.map(r => r.id === id ? { ...r, estado } : r));
