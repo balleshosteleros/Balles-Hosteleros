@@ -188,7 +188,19 @@ export async function updateLocal(id: string, input: Partial<LocalInput>) {
 
 export async function deleteLocal(id: string) {
   try {
-    const { supabase } = await getContext();
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    // Regla de negocio: la empresa debe conservar al menos 1 local en todo
+    // momento (los planos, mesas, empleados y fichajes apuntan a un local).
+    const { count } = await supabase
+      .from("locales")
+      .select("id", { count: "exact", head: true })
+      .eq("empresa_id", empresaId);
+    if ((count ?? 0) <= 1) {
+      return { ok: false, error: "Cada empresa debe tener al menos un local. Crea otro antes de borrar este." };
+    }
+
     const { error } = await supabase.from("locales").delete().eq("id", id);
     if (error) throw error;
     return { ok: true };

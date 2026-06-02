@@ -859,6 +859,68 @@ function FiltroSalasDropdown({
   );
 }
 
+function FiltroLocalesDropdown({
+  locales,
+  localActualId,
+  onSelect,
+}: {
+  locales: LocalMin[];
+  localActualId: string;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button size="sm" variant="outline" className="text-xs h-8 gap-1.5 px-2.5">
+          <ListFilter className="h-3.5 w-3.5" />
+          Locales
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-2" align="start">
+        <div className="flex items-center justify-between px-1 pb-1.5 mb-1.5 border-b">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Locales
+          </span>
+        </div>
+        <div className="max-h-[300px] overflow-y-auto space-y-0.5">
+          {locales.length === 0 ? (
+            <p className="px-2 py-3 text-xs text-muted-foreground italic text-center">
+              No hay locales
+            </p>
+          ) : (
+            locales.map((l) => {
+              const checked = l.id === localActualId;
+              return (
+                <button
+                  key={l.id}
+                  type="button"
+                  onClick={() => onSelect(l.id)}
+                  className={cn(
+                    "w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-muted transition-colors text-left",
+                    checked && "bg-muted/60",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "w-4 h-4 rounded border flex items-center justify-center shrink-0",
+                      checked
+                        ? "bg-primary border-primary text-primary-foreground"
+                        : "border-border",
+                    )}
+                  >
+                    {checked && <Check className="h-3 w-3" />}
+                  </span>
+                  <span className="truncate flex-1">{l.nombre}</span>
+                </button>
+              );
+            })
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function FiltroPlanosDropdown({
   planos,
   planoActualId,
@@ -1256,11 +1318,13 @@ export function ReservasView() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const ctx = await loadReservasModuleContext();
+      // Si ya hay localId seleccionado (el usuario cambió de local en el
+      // dropdown), lo pasamos como override; si no, se elige el primero.
+      const ctx = await loadReservasModuleContext(localId || undefined);
       if (cancelled) return;
       const d = ctx.data;
       setLocales(d.locales);
-      setLocalId(d.localId);
+      if (!localId) setLocalId(d.localId);
       setSalasLocal(d.salas);
       const salaPrincipal = d.salas.find((s) => s.esPrincipal) ?? d.salas[0];
       setSalaActualId(salaPrincipal?.id ?? "");
@@ -1291,7 +1355,7 @@ export function ReservasView() {
       setPosicionesPlano(next);
     })();
     return () => { cancelled = true; };
-  }, [empresaActual.id, posicionesRefresh]);
+  }, [empresaActual.id, localId, posicionesRefresh]);
 
   const salaActual = useMemo(
     () => salasLocal.find((s) => s.id === salaActualId) ?? null,
@@ -1586,8 +1650,9 @@ export function ReservasView() {
           </div>
         </div>
 
-        {/* Selector de Plano + Sala + filtro de Zonas */}
+        {/* Selector de Local + Plano + Sala + filtro de Zonas */}
         <div className="flex items-center gap-1.5">
+          <FiltroLocalesDropdown locales={locales} localActualId={localId} onSelect={setLocalId} />
           <FiltroPlanosDropdown planos={planosLocal} planoActualId={planoActualId} onSelect={setPlanoActualId} />
           <FiltroSalasDropdown salas={salasLocal} salaActualId={salaActualId} onSelect={setSalaActualId} />
           <FiltroZonasDropdown items={zonaItems} seleccionados={zonaIdsSel} onChange={setZonaIdsSel} />
