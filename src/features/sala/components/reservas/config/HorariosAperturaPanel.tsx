@@ -8,7 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { ChevronRight, Plus, Trash2, X } from "lucide-react";
+import { ChevronRight, DoorClosed, DoorOpen, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type {
@@ -197,7 +197,7 @@ export function HorariosAperturaPanel({ config, onChange }: Props) {
       {/* Fila 1: turno + cierre + horario */}
       <div className="flex flex-wrap items-end gap-4">
         <div className="space-y-1.5">
-          <Label className="text-xs">Turno</Label>
+          <Label className="block text-xs">Turno</Label>
           <div className="inline-flex rounded-md border bg-background p-0.5">
             {(["comida","cena"] as TurnoKey[]).map((t) => (
               <button
@@ -218,16 +218,28 @@ export function HorariosAperturaPanel({ config, onChange }: Props) {
         </div>
 
         <div className="space-y-1.5">
-          <Label className="text-xs">Apertura / cierre</Label>
-          <Button
-            type="button"
-            variant={cerrado ? "default" : "outline"}
-            size="sm"
-            onClick={() => setCerrado((v) => !v)}
-            className="h-8 text-xs"
-          >
-            {cerrado ? "Reabrir establecimiento" : "Cerrar establecimiento"}
-          </Button>
+          <Label className="block text-xs">Estado</Label>
+          <div className="inline-flex rounded-md border bg-background p-0.5">
+            {([
+              { value: false, label: "Abierto", Icon: DoorOpen },
+              { value: true,  label: "Cerrado", Icon: DoorClosed },
+            ] as { value: boolean; label: string; Icon: typeof DoorOpen }[]).map(({ value, label, Icon }) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setCerrado(value)}
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-3 h-8 rounded text-xs font-medium transition-colors",
+                  cerrado === value
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="space-y-1.5">
@@ -279,21 +291,6 @@ export function HorariosAperturaPanel({ config, onChange }: Props) {
               {opt.label}
             </button>
           ))}
-
-          {ambito === "dia_semana" && (
-            <Select value={diaSemanaSel} onValueChange={(v) => setDiaSemanaSel(v as DiaSemanaKey)}>
-              <SelectTrigger className="h-8 w-40 text-xs">
-                <SelectValue placeholder="Elige día" />
-              </SelectTrigger>
-              <SelectContent>
-                {DIAS_ORDEN.map((d) => (
-                  <SelectItem key={d} value={d} className="text-xs">
-                    {DIAS_LABELS[d].charAt(0).toUpperCase() + DIAS_LABELS[d].slice(1)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
         </div>
 
         <p className="text-[11px] text-muted-foreground leading-relaxed">
@@ -307,6 +304,24 @@ export function HorariosAperturaPanel({ config, onChange }: Props) {
       </div>
 
       {/* Sub-controles según ámbito */}
+      {ambito === "dia_semana" && (
+        <div className="space-y-1.5">
+          <Label className="text-xs">Día de la semana</Label>
+          <Select value={diaSemanaSel} onValueChange={(v) => setDiaSemanaSel(v as DiaSemanaKey)}>
+            <SelectTrigger className="h-8 w-40 text-xs">
+              <SelectValue placeholder="Elige día" />
+            </SelectTrigger>
+            <SelectContent>
+              {DIAS_ORDEN.map((d) => (
+                <SelectItem key={d} value={d} className="text-xs">
+                  {DIAS_LABELS[d].charAt(0).toUpperCase() + DIAS_LABELS[d].slice(1)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       {ambito === "rango" && (
         <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-1.5">

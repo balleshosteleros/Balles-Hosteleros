@@ -28,7 +28,7 @@ import {
 import { listZonas } from "@/features/sala/planos/actions/zonas-actions";
 import { listMesas } from "@/features/sala/planos/actions/mesas-actions";
 import { listCombinaciones } from "@/features/sala/planos/actions/combinaciones-actions";
-import { listPlanos } from "@/features/sala/planos/actions/planos-actions";
+import { listPlanosConSalas } from "@/features/sala/planos/actions/planos-actions";
 import { ZonaConfigModal } from "./ZonaConfigModal";
 import { MesaConfigModal } from "./MesaConfigModal";
 import { CombinacionConfigModal } from "./CombinacionConfigModal";
@@ -42,6 +42,7 @@ export function EstructuraTab() {
   const [zonas, setZonas] = useState<Zona[]>([]);
   const [mesas, setMesas] = useState<Mesa[]>([]);
   const [planos, setPlanos] = useState<Plano[]>([]);
+  const [salasPorPlano, setSalasPorPlano] = useState<Map<string, Set<string>>>(new Map());
   const [combinaciones, setCombinaciones] = useState<MesaCombinacion[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -57,18 +58,33 @@ export function EstructuraTab() {
 
   const cargarTodo = useCallback(async (id: string) => {
     setLoading(true);
-    const [s, z, m, c, p] = await Promise.all([
-      listSalas(id),
-      listZonas(id),
-      listMesas(id),
-      listCombinaciones(id),
-      listPlanos(id),
+    const t0 = performance.now();
+    const time = async <T,>(label: string, p: Promise<T>): Promise<T> => {
+      const t = performance.now();
+      const r = await p;
+      // eslint-disable-next-line no-console
+      console.log(`[EstructuraTab] ${label}: ${Math.round(performance.now() - t)}ms`);
+      return r;
+    };
+    const [s, z, m, c, pcs] = await Promise.all([
+      time("listSalas", listSalas(id)),
+      time("listZonas", listZonas(id)),
+      time("listMesas", listMesas(id)),
+      time("listCombinaciones", listCombinaciones(id)),
+      time("listPlanosConSalas", listPlanosConSalas(id)),
     ]);
+    // eslint-disable-next-line no-console
+    console.log(`[EstructuraTab] cargarTodo total: ${Math.round(performance.now() - t0)}ms`);
     if (s.ok) setSalas(s.data);
     if (z.ok) setZonas(z.data);
     if (m.ok) setMesas(m.data);
     if (c.ok) setCombinaciones(c.data);
-    if (p.ok) setPlanos(p.data);
+    setPlanos(pcs.data.planos);
+    const mapa = new Map<string, Set<string>>();
+    for (const [pid, sids] of pcs.data.salasPorPlano) {
+      mapa.set(pid, new Set(sids));
+    }
+    setSalasPorPlano(mapa);
     setLoading(false);
   }, []);
 
@@ -136,8 +152,17 @@ export function EstructuraTab() {
         </div>
       )}
 
-      {/* PLANOS — sección embebida arriba del todo, misma estética */}
-      <PlanosTab localId={localId} embedded />
+      {/* PLANOS — sección embebida arriba del todo, misma estética.
+          Le pasamos los datos ya cargados para que NO duplique los fetch. */}
+      <PlanosTab
+        localId={localId}
+        embedded
+        planos={planos}
+        salas={salas}
+        salasPorPlano={salasPorPlano}
+        loading={loading || !localId}
+        onReload={() => { if (localId) cargarTodo(localId); }}
+      />
 
       <Separator />
 
