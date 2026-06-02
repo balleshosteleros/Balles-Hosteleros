@@ -133,6 +133,7 @@ const DECO_DEFAULTS: Record<TipoDecoracion, { width: number; height: number }> =
   puerta: { width: 50, height: 50 },
   escaleras: { width: 90, height: 60 },
   barra: { width: 220, height: 40 },
+  cocina: { width: 140, height: 90 },
   columna: { width: 36, height: 36 },
   ventana: { width: 120, height: 14 },
   wc: { width: 50, height: 50 },
