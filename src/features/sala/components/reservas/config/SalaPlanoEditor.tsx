@@ -1481,6 +1481,17 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
               {drag?.kind === "deco-nueva" && (
                 <DecoGhost drag={drag} canvasRef={canvasRef} scale={scale} />
               )}
+
+              {/* Fantasma de etiqueta de zona mientras se arrastra desde la paleta */}
+              {drag?.kind === "zona-nueva" && zonaPorId.get(drag.zonaId) && (
+                <ZonaLabelGhost
+                  drag={drag}
+                  nombre={zonaPorId.get(drag.zonaId)!.nombre}
+                  color={zonaPorId.get(drag.zonaId)!.colorPastel}
+                  canvasRef={canvasRef}
+                  scale={scale}
+                />
+              )}
             </div>
           </div>
         </div>
@@ -1526,6 +1537,50 @@ function DecoGhost({
       }}
     >
       <DecoBody tipo={drag.tipo} width={drag.width} height={drag.height} />
+    </div>
+  );
+}
+
+/** Fantasma de previsualización al arrastrar una etiqueta de zona nueva desde la paleta. */
+function ZonaLabelGhost({
+  drag,
+  nombre,
+  color,
+  canvasRef,
+  scale,
+}: {
+  drag: Extract<DragState, { kind: "zona-nueva" }>;
+  nombre: string;
+  color: string;
+  canvasRef: React.RefObject<HTMLDivElement | null>;
+  scale: number;
+}) {
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    function onMove(e: PointerEvent) {
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setPos({
+        x: (e.clientX - rect.left) / scale - drag.offsetX,
+        y: (e.clientY - rect.top) / scale - drag.offsetY,
+      });
+    }
+    window.addEventListener("pointermove", onMove);
+    return () => window.removeEventListener("pointermove", onMove);
+  }, [drag, canvasRef, scale]);
+  if (!pos) return null;
+  return (
+    <div
+      className="absolute opacity-70 pointer-events-none flex items-center justify-center text-[11px] font-bold tracking-wide text-zinc-800 rounded shadow-sm border border-foreground/15"
+      style={{
+        left: Math.max(0, Math.min(CANVAS_W - drag.width, pos.x)),
+        top: Math.max(0, Math.min(CANVAS_H - ZONA_LABEL_H, pos.y)),
+        width: drag.width,
+        height: ZONA_LABEL_H,
+        backgroundColor: color,
+      }}
+    >
+      {nombre}
     </div>
   );
 }
