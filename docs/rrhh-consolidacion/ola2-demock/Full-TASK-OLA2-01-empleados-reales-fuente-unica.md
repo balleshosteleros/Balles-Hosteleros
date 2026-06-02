@@ -1,7 +1,15 @@
 # Full-TASK-OLA2-01 - Empleados reales como fuente unica
 
 ## Estado
-PLANIFICADO (Ola 2 de-mock, 2026-06-01). No implementado. Discovery en DISCOVERY_OLA2-01-empleados-reales-fuente-unica.md.
+IMPLEMENTADO y VALIDADO (2026-06-02, commit `5bbaaa0` en `main`). typecheck + build verdes.
+Smoke UI (Playwright sobre Supabase real, usuario admin `rrhh-smoke-admin`): Formación muestra
+los empleados REALES por empresa (HABANA 10, BACANAL 16; el mock fijaba 10/8), `/rrhh/empleados`
+lista nombres reales, y el cambio de empresa HABANA↔BACANAL re-carga correctamente. Verificado
+además a nivel BD que la query de `getEmpleadosActivos` devuelve 16/10 con la RLS del usuario.
+Nota: en dev (Turbopack HMR) las server actions dan intermitentemente "Failed to find Server
+Action … older/newer deployment" tras recompilar — flake conocido del hot-reload (no de esta
+task, ausente en producción; se va al asentar el server). Discovery en
+DISCOVERY_OLA2-01-empleados-reales-fuente-unica.md.
 
 ## Objetivo
 Retirar `src/features/rrhh/data/rrhh.ts` como fuente funcional de empleados. Centralizar UNA
