@@ -185,6 +185,7 @@ export type TipoDecoracion =
   | "puerta"
   | "escaleras"
   | "barra"
+  | "cocina"
   | "columna"
   | "ventana"
   | "wc";
@@ -197,6 +198,7 @@ export const TIPOS_DECORACION: TipoDecoracion[] = [
   "puerta",
   "escaleras",
   "barra",
+  "cocina",
   "columna",
   "ventana",
   "wc",
@@ -210,6 +212,7 @@ export const TIPO_DECORACION_LABELS: Record<TipoDecoracion, string> = {
   puerta: "Puerta",
   escaleras: "Escaleras",
   barra: "Barra",
+  cocina: "Cocina",
   columna: "Columna",
   ventana: "Ventana",
   wc: "WC",
