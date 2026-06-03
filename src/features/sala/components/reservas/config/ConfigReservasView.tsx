@@ -9,12 +9,13 @@ import { CodigosTab } from "./CodigosTab";
 import { EtiquetasConfigTab } from "./EtiquetasConfigTab";
 import { EstructuraTab } from "./EstructuraTab";
 import { PoliticasCancelacionTab } from "./PoliticasCancelacionTab";
+import { BloqueosTab } from "@/features/sala/bloqueos/components/BloqueosTab";
+import { ComunicacionesPanel } from "./ComunicacionesPanel";
 import { LinksReservaPanel } from "@/features/sala/components/reservas/LinksReservaPanel";
 
 const PLACEHOLDER_TABS = [
   { value: "horarios", label: "Horarios" },
   { value: "canales", label: "Canales" },
-  { value: "comunicaciones", label: "Comunicaciones" },
 ] as const;
 
 interface Props {
@@ -33,6 +34,8 @@ export function ConfigReservasView({ onBack }: Props) {
       case "etiquetas":  return <EtiquetasConfigTab />;
       case "enlaces":    return <LinksReservaPanel embedded />;
       case "politicas":  return <PoliticasCancelacionTab />;
+      case "bloqueos":   return <BloqueosTab />;
+      case "comunicaciones": return <ComunicacionesPanel />;
       default: {
         const placeholder = PLACEHOLDER_TABS.find((t) => t.value === tab);
         if (placeholder) {
@@ -59,13 +62,15 @@ export function ConfigReservasView({ onBack }: Props) {
 
       <div className="flex-1 overflow-y-auto p-4">
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="grid grid-cols-9 w-full">
+          <TabsList className="grid grid-cols-10 w-full">
             <TabsTrigger value="reservas">Reservas</TabsTrigger>
             <TabsTrigger value="estructura">Estructura</TabsTrigger>
             <TabsTrigger value="codigos">Códigos</TabsTrigger>
             <TabsTrigger value="etiquetas">Etiquetas</TabsTrigger>
             <TabsTrigger value="enlaces">Enlaces</TabsTrigger>
             <TabsTrigger value="politicas">Políticas</TabsTrigger>
+            <TabsTrigger value="bloqueos">Bloqueos</TabsTrigger>
+            <TabsTrigger value="comunicaciones">Comunicaciones</TabsTrigger>
             {PLACEHOLDER_TABS.map((t) => (
               <TabsTrigger key={t.value} value={t.value}>
                 {t.label}

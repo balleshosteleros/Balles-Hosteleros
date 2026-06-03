@@ -1,12 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { TipoMesa } from "@/features/sala/planos/data/planos";
-
-// Estados de reserva que liberan la mesa.
-const ESTADOS_NO_OCUPANTES = ["CANCELADA", "NO_SHOW", "COMPLETADA", "LIBERADA"] as const;
-
-// Ventana en horas alrededor de la hora pedida durante la cual una reserva
-// activa bloquea la mesa (turno típico de servicio).
-const VENTANA_OCUPACION_HORAS = 2;
+import {
+  ESTADOS_NO_OCUPANTES,
+  getDuracionReservaMin,
+  horaAMinutos,
+} from "@/features/sala/lib/reserva-conflicto";
+import { getMesasBloqueadas } from "@/features/sala/bloqueos/lib/mesas-bloqueadas";
 
 export type AsignacionInput = {
   localId: string;
@@ -23,24 +22,6 @@ export type AsignacionResultado =
   | { ok: true; mesa: { id: string; codigo: string; zonaNombre: string; planoId: string } }
   | { ok: true; mesa: null; razon: "SIN_MESAS_LIBRES" | "SIN_CANDIDATAS" }
   | { ok: false; razon: "SIN_PLANO_ACTIVO" | "ERROR"; detalle?: string };
-
-function partesHora(hora: string): { h: number; m: number } {
-  const [h, m] = hora.split(":").map((n) => parseInt(n, 10));
-  return { h: Number.isFinite(h) ? h : 0, m: Number.isFinite(m) ? m : 0 };
-}
-
-function horaAStr(h: number, m: number): string {
-  const hh = Math.max(0, Math.min(23, h));
-  const mm = Math.max(0, Math.min(59, m));
-  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:00`;
-}
-
-function ventanaOcupacion(hora: string): { desde: string; hasta: string } {
-  const { h, m } = partesHora(hora);
-  const desde = horaAStr(h - VENTANA_OCUPACION_HORAS, m);
-  const hasta = horaAStr(h + VENTANA_OCUPACION_HORAS, m);
-  return { desde, hasta };
-}
 
 function parteNumericaCodigo(codigo: string): number {
   const match = codigo.match(/\d+/);
@@ -114,21 +95,37 @@ export async function asignarMesaAutomatica(
       return { ok: true, mesa: null, razon: "SIN_CANDIDATAS" };
     }
 
-    // 4. Reservas vivas que solapan la franja para descartar mesas ocupadas.
-    const { desde, hasta } = ventanaOcupacion(input.hora);
+    // Bloqueos manuales (Configuración → Bloqueos): prevalecen sobre el plano.
+    const bloqueadas = await getMesasBloqueadas(supabase, {
+      empresaId: input.empresaId,
+      localId: input.localId,
+      fechaISO: input.fecha,
+    });
+
+    // 4. Reservas vivas del día. Filtramos solape en JS usando la
+    // `duracion_reserva_min` configurada por empresa (aplica a todos los
+    // planos y reservas — fuente única).
+    const duracionMin = await getDuracionReservaMin(supabase, input.empresaId);
     const { data: ocupantes, error: errOcup } = await supabase
       .from("reservas")
-      .select("mesa")
+      .select("mesa, hora")
       .eq("empresa_id", input.empresaId)
       .eq("fecha", input.fecha)
-      .gte("hora", desde)
-      .lt("hora", hasta)
       .not("mesa", "is", null)
       .not("estado", "in", `(${ESTADOS_NO_OCUPANTES.join(",")})`);
     if (errOcup) throw errOcup;
-    const codigosOcupados = new Set<string>(
-      (ocupantes ?? []).map((r) => (r.mesa as string) ?? "").filter(Boolean),
-    );
+    const inicioNuevo = horaAMinutos(input.hora);
+    const finNuevo = inicioNuevo + duracionMin;
+    const codigosOcupados = new Set<string>();
+    for (const r of ocupantes ?? []) {
+      const codigo = (r.mesa as string) ?? "";
+      if (!codigo) continue;
+      const otroInicio = horaAMinutos((r.hora as string) ?? "");
+      const otroFin = otroInicio + duracionMin;
+      if (otroInicio < finNuevo && inicioNuevo < otroFin) {
+        codigosOcupados.add(codigo);
+      }
+    }
 
     type MesaCandidata = {
       id: string;
@@ -137,6 +134,7 @@ export async function asignarMesaAutomatica(
     };
     const libres: MesaCandidata[] = mesas
       .filter((m) => !codigosOcupados.has(m.codigo as string))
+      .filter((m) => !bloqueadas.has(m.id as string))
       .map((m) => {
         const z = m.zonas as unknown as { nombre?: string } | { nombre?: string }[] | null;
         const zonaNombre = Array.isArray(z) ? (z[0]?.nombre ?? "") : (z?.nombre ?? "");

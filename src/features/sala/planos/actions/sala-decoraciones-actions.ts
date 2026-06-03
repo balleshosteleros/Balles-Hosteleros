@@ -36,6 +36,32 @@ export async function listSalaDecoraciones(salaId: string) {
   }
 }
 
+/**
+ * Devuelve TODAS las decoraciones de TODAS las salas del local en una sola
+ * consulta. Usado por `loadReservasModuleContext` para evitar N+1.
+ */
+export async function listSalaDecoracionesByLocal(localId: string) {
+  try {
+    const supabase = await createClient();
+    const { data: salasData, error: e1 } = await supabase
+      .from("salas")
+      .select("id")
+      .eq("local_id", localId);
+    if (e1) throw e1;
+    const salaIds = (salasData ?? []).map((s: { id: string }) => s.id);
+    if (salaIds.length === 0) return { ok: true, data: [] as SalaDecoracion[] };
+    const { data, error } = await supabase
+      .from("sala_decoraciones")
+      .select("id, sala_id, tipo, x, y, rotation, width, height")
+      .in("sala_id", salaIds);
+    if (error) throw error;
+    return { ok: true, data: (data ?? []).map(rowToDecoracion) };
+  } catch (err) {
+    console.error("[sala_decoraciones] list by local:", err);
+    return { ok: false, data: [] as SalaDecoracion[] };
+  }
+}
+
 export async function createSalaDecoracion(input: {
   salaId: string;
   tipo: TipoDecoracion;

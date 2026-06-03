@@ -43,6 +43,10 @@
     {
       "path": "/api/cron/google-rwg-notify-pending",
       "schedule": "10 4 * * *"
+    },
+    {
+      "path": "/api/cron/reservas-recordatorios",
+      "schedule": "0 * * * *"
     }
   ]
 }

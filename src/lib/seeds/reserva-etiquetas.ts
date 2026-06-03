@@ -22,7 +22,6 @@ export interface ReservaEtiquetaSeed {
 export const RESERVA_ETIQUETAS_SEED: ReservaEtiquetaSeed[] = [
   { nombre: "Cumpleaños", emoji: "🎂", color: "#ec4899", orden: 1 },
   { nombre: "Evento",     emoji: "🎉", color: "#f59e0b", orden: 2 },
-  { nombre: "Otra",       emoji: "📌", color: "#64748b", orden: 3 },
 ];
 
 export function normalizeReservaEtiquetaNombre(nombre: string): string {

@@ -4,11 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { listReservasRango } from "@/features/sala/actions/reservas-actions";
 import { getReservasConfig } from "@/features/sala/actions/reservas-config-actions";
 import { listReglasReservas } from "@/features/sala/reglas/actions/reglas-actions";
+import { listHorariosExcepciones } from "@/features/sala/actions/reservas-horarios-excepciones-actions";
 import {
   cupoEfectivoDesdeReglas,
 } from "@/features/sala/lib/reserva-limites";
+import { resolveHorarioReservas, type HorarioResuelto } from "@/features/sala/lib/horario-resolver";
 import type {
   EmpresaReservasConfig,
+  EmpresaReservasHorarioExcepcion,
   TurnoReserva,
 } from "@/features/sala/data/reservas";
 import type { EmpresaReservasRegla } from "@/features/sala/reglas/data/reglas";
@@ -60,6 +63,7 @@ export function useReservasMes(anio: number, mes0: number, aforoPorTurno: number
   const [reservas, setReservas] = useState<Array<{ fecha: string; turno: string; personas: number; estado: string }>>([]);
   const [config, setConfig] = useState<EmpresaReservasConfig | null>(null);
   const [reglas, setReglas] = useState<EmpresaReservasRegla[]>([]);
+  const [excepciones, setExcepciones] = useState<EmpresaReservasHorarioExcepcion[]>([]);
   const [loading, setLoading] = useState(true);
   const { desde, hasta } = useMemo(() => rangoMes(anio, mes0), [anio, mes0]);
 
@@ -67,15 +71,17 @@ export function useReservasMes(anio: number, mes0: number, aforoPorTurno: number
     let cancelado = false;
     setLoading(true);
     (async () => {
-      const [r, c, rs] = await Promise.all([
+      const [r, c, rs, ex] = await Promise.all([
         listReservasRango(desde, hasta),
         getReservasConfig(),
         listReglasReservas(),
+        listHorariosExcepciones(),
       ]);
       if (cancelado) return;
       if (r.ok) setReservas(r.data as typeof reservas);
       if (c.ok) setConfig(c.data);
       if (rs.ok) setReglas(rs.data);
+      if (ex.ok) setExcepciones(ex.data);
       setLoading(false);
     })();
     return () => {
@@ -146,11 +152,21 @@ export function useReservasMes(anio: number, mes0: number, aforoPorTurno: number
     return { personas, reservas: reservasN };
   }, [metricasPorFecha]);
 
+  /** Devuelve el horario resuelto (comida + cena) para una fecha. */
+  function horarioFecha(fecha: string): { comida: HorarioResuelto; cena: HorarioResuelto } | null {
+    if (!config) return null;
+    return {
+      comida: resolveHorarioReservas(fecha, "comida", config, excepciones),
+      cena: resolveHorarioReservas(fecha, "cena", config, excepciones),
+    };
+  }
+
   return {
     loading,
     config,
     reglas,
     metricasFecha,
+    horarioFecha,
     totales,
     aforoPorTurno,
   };

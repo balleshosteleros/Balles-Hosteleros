@@ -234,11 +234,13 @@ export function AppSidebar() {
       setOpen(false);
       return;
     }
-    if (pendingPostClickRef.current && !autoCollapseTimerRef.current) {
-      // Hubo click pero el timer se canceló al re-entrar; reanudar 3s.
+    // Regla universal: si el sidebar está abierto y el cursor sale, cerrar a 3s.
+    // Cubre carga inicial (defaultOpen=true) y cualquier estado en el que
+    // ni openedByHover ni pendingPostClick estén activos.
+    if (!collapsed && !autoCollapseTimerRef.current) {
       scheduleAutoCollapse();
     }
-  }, [isMobile, isPinned, isLocked, clearAutoCollapseTimer, scheduleAutoCollapse, setOpen]);
+  }, [isMobile, isPinned, isLocked, collapsed, clearAutoCollapseTimer, scheduleAutoCollapse, setOpen]);
 
   const handleContentClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {

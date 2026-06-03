@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Users, Utensils, Sun, Moon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useReservasMes, gridFechasMes } from "@/features/sala/hooks/useReservasMes";
+import type { HorarioResuelto } from "@/features/sala/lib/horario-resolver";
 
 interface Props {
   /** Fecha activa (YYYY-MM-DD). Determina el mes mostrado al montar y resincroniza al cambiar de mes. */
@@ -54,7 +55,7 @@ export function CalendarioMes({
     setMes0(d.getMonth());
   }, [fecha]);
 
-  const { loading, metricasFecha, totales } = useReservasMes(anio, mes0, aforoPorTurno);
+  const { loading, metricasFecha, horarioFecha, totales } = useReservasMes(anio, mes0, aforoPorTurno);
   const grid = gridFechasMes(anio, mes0);
 
   useEffect(() => {
@@ -152,6 +153,13 @@ export function CalendarioMes({
           const esSeleccionado = iso === seleccionISO;
           const m = metricasFecha(iso);
           const totalReservasDia = m.comida.reservas + m.cena.reservas;
+          const totalPersonasDia = m.comida.personas + m.cena.personas;
+          const h = compacto ? null : horarioFecha(iso);
+          const comidaActiva = !!h && !h.comida.cerrado && h.comida.fuente !== "sin_definir" && !!h.comida.inicio && !!h.comida.fin;
+          const cenaActiva   = !!h && !h.cena.cerrado   && h.cena.fuente   !== "sin_definir" && !!h.cena.inicio   && !!h.cena.fin;
+          const comidaCerrada = !!h && h.comida.cerrado;
+          const cenaCerrada   = !!h && h.cena.cerrado;
+          const ambasCerradas = !!h && comidaCerrada && cenaCerrada;
           return (
             <button
               key={iso}
@@ -164,36 +172,69 @@ export function CalendarioMes({
                 esSeleccionado && "bg-primary text-primary-foreground hover:bg-primary/90 ring-1 ring-primary",
               )}
             >
-              <div className={cn(
-                compacto
-                  ? "text-xs font-semibold"
-                  : "flex items-center justify-between text-[11px] w-full",
-              )}>
-                <span
-                  className={cn(
-                    "font-semibold",
-                    !compacto && esHoy && !esSeleccionado && "text-amber-700 dark:text-amber-300",
-                  )}
-                >
-                  {d.getDate().toString().padStart(2, "0")}
-                </span>
-              </div>
               {compacto ? (
-                !loading && totalReservasDia > 0 && (
-                  <span
-                    className={cn(
-                      "w-1.5 h-1.5 rounded-full",
-                      esSeleccionado ? "bg-primary-foreground/80" : "bg-sky-500",
-                    )}
-                  />
-                )
+                <>
+                  <span className="text-xs font-semibold">{d.getDate().toString().padStart(2, "0")}</span>
+                  {!loading && totalReservasDia > 0 && (
+                    <span
+                      className={cn(
+                        "w-1.5 h-1.5 rounded-full",
+                        esSeleccionado ? "bg-primary-foreground/80" : "bg-sky-500",
+                      )}
+                    />
+                  )}
+                </>
               ) : (
-                !loading && (
-                  <>
-                    <TurnoMini turno="comida" metricas={m.comida} />
-                    <TurnoMini turno="cena" metricas={m.cena} />
-                  </>
-                )
+                <>
+                  <div className="flex items-center justify-between text-[11px] w-full">
+                    <span
+                      className={cn(
+                        "font-semibold",
+                        esHoy && !esSeleccionado && "text-amber-700 dark:text-amber-300",
+                      )}
+                    >
+                      {d.getDate().toString().padStart(2, "0")}
+                    </span>
+                  </div>
+
+                  {!loading && (
+                    <div className="flex-1 flex flex-col justify-center gap-0.5">
+                      {ambasCerradas ? (
+                        <div className={cn(
+                          "text-center text-[11px] font-medium uppercase tracking-wide",
+                          esSeleccionado ? "text-primary-foreground/90" : "text-red-600 dark:text-red-300",
+                        )}>
+                          Cerrado
+                        </div>
+                      ) : (
+                        <>
+                          {(comidaActiva || comidaCerrada) && (
+                            <HorarioLinea turno="comida" h={h!.comida} selected={esSeleccionado} />
+                          )}
+                          {(cenaActiva || cenaCerrada) && (
+                            <HorarioLinea turno="cena" h={h!.cena} selected={esSeleccionado} />
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {!loading && (totalReservasDia > 0 || totalPersonasDia > 0) && (
+                    <div className={cn(
+                      "flex items-center justify-end gap-2 text-[10px] tabular-nums",
+                      esSeleccionado ? "text-primary-foreground/90" : "text-muted-foreground",
+                    )}>
+                      <span className="inline-flex items-center gap-0.5">
+                        <Utensils className={cn("h-2.5 w-2.5", esSeleccionado ? "" : "text-sky-500")} />
+                        <span className="font-semibold">{totalReservasDia}</span>
+                      </span>
+                      <span className="inline-flex items-center gap-0.5">
+                        <Users className={cn("h-2.5 w-2.5", esSeleccionado ? "" : "text-emerald-500")} />
+                        <span className="font-semibold">{totalPersonasDia}</span>
+                      </span>
+                    </div>
+                  )}
+                </>
               )}
             </button>
           );
@@ -203,35 +244,34 @@ export function CalendarioMes({
   );
 }
 
-function TurnoMini({
+function HorarioLinea({
   turno,
-  metricas,
+  h,
+  selected,
 }: {
   turno: "comida" | "cena";
-  metricas: { personas: number; reservas: number; cupo: number | null };
+  h: HorarioResuelto;
+  selected: boolean;
 }) {
   const Icon = turno === "comida" ? Sun : Moon;
   const tono = turno === "comida" ? "text-amber-500" : "text-indigo-400";
-  const saturado = metricas.cupo != null && metricas.reservas >= metricas.cupo;
-  const vacio = metricas.reservas === 0;
+  const cerrado = h.cerrado;
+  const ini = (h.inicio ?? "").slice(0, 5);
+  const fin = (h.fin ?? "").slice(0, 5);
   return (
     <div
       className={cn(
-        "flex items-center justify-between gap-1 text-[10px] leading-tight rounded px-1 py-0.5",
-        saturado && "bg-red-500/15 text-red-600 dark:text-red-300",
-        vacio && "opacity-50",
+        "flex items-center gap-1 text-[10px] leading-tight tabular-nums",
+        cerrado && !selected && "text-red-600 dark:text-red-300",
       )}
       title={turno === "comida" ? "Comida" : "Cena"}
     >
-      <Icon className={cn("h-3 w-3 shrink-0", !saturado && tono)} />
-      <span className="flex items-center gap-0.5">
-        <Utensils className="h-2.5 w-2.5 text-sky-500" />
-        <span className="font-semibold tabular-nums">{metricas.reservas}</span>
-      </span>
-      <span className="flex items-center gap-0.5">
-        <Users className="h-2.5 w-2.5 text-emerald-500" />
-        <span className="font-semibold tabular-nums">{metricas.personas}</span>
-      </span>
+      <Icon className={cn("h-3 w-3 shrink-0", !selected && (cerrado ? "text-red-500" : tono))} />
+      {cerrado ? (
+        <span className="font-medium">Cerrado</span>
+      ) : (
+        <span className="font-medium">{ini}–{fin}</span>
+      )}
     </div>
   );
 }

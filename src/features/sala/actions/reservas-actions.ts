@@ -6,7 +6,13 @@ import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { findOrLinkClienteSala, type CampoDistinto } from "@/features/sala/lib/cliente-link";
 import { asignarMesaAutomatica } from "@/features/sala/planos/lib/asignacion-mesa";
+import { getMesasBloqueadas } from "@/features/sala/bloqueos/lib/mesas-bloqueadas";
+import {
+  buscarConflictoMesa,
+  getDuracionReservaMin,
+} from "@/features/sala/lib/reserva-conflicto";
 import type { TipoMesa } from "@/features/sala/planos/data/planos";
+import { enviarReservaEmail } from "@/lib/email/reservas/mailer";
 async function getContext() {
   const supabase = await createClient();
   const {
@@ -98,6 +104,8 @@ export async function createReserva(input: {
   bloqueada?: boolean;
   grupoId?: string | null;
   etiquetaId?: string | null;
+  /** Override de duración solo para ESTA reserva (min). NULL = default empresa. */
+  duracionMinutos?: number | null;
   // Asignación automática de mesa (PRP-048). Si `asignarAuto=true` y la
   // reserva llega sin `mesa`, el sistema busca la primera libre del plano
   // activo del local con capacidad para los comensales. `localId` es
@@ -181,6 +189,88 @@ export async function createReserva(input: {
       zonaFinal = zonaFinal ?? asign.mesa.zonaNombre ?? null;
     }
 
+    // Bloqueo de solape: si se asigna mesa (manual o auto), comprobar que no
+    // pisa otra reserva activa de la misma mesa dentro de la ventana
+    // `duracion_reserva_min` configurada por empresa. Si esta reserva llega
+    // con override puntual (`duracionMinutos`), se prioriza ese valor.
+    if (mesaFinal) {
+      // Bloqueos manuales: si la mesa elegida está bloqueada para la fecha,
+      // rechazamos. Solo aplicable cuando conocemos el local.
+      if (input.localId) {
+        const bloqueadas = await getMesasBloqueadas(
+          supabase as unknown as SupabaseClient,
+          {
+            empresaId,
+            localId: input.localId,
+            fechaISO: input.fecha,
+          },
+        );
+        if (bloqueadas.size > 0) {
+          const { data: mesaRow } = await supabase
+            .from("mesas")
+            .select("id")
+            .eq("local_id", input.localId)
+            .eq("codigo", mesaFinal)
+            .maybeSingle();
+          const mesaId = (mesaRow?.id as string | undefined) ?? null;
+          if (mesaId && bloqueadas.has(mesaId)) {
+            return {
+              ok: false,
+              error: `La mesa ${mesaFinal} está bloqueada para ese día. Quita el bloqueo desde Configuración → Bloqueos o elige otra mesa.`,
+            };
+          }
+        }
+      }
+      const duracionDefault = await getDuracionReservaMin(
+        supabase as unknown as SupabaseClient,
+        empresaId,
+      );
+      const duracionMin = typeof input.duracionMinutos === "number" && input.duracionMinutos > 0
+        ? input.duracionMinutos
+        : duracionDefault;
+      const conflicto = await buscarConflictoMesa(
+        supabase as unknown as SupabaseClient,
+        {
+          empresaId,
+          fecha: input.fecha,
+          hora: input.hora,
+          mesa: mesaFinal,
+          duracionMin,
+        },
+      );
+      if (conflicto) {
+        const quien = conflicto.clienteNombre ? ` de ${conflicto.clienteNombre}` : "";
+        return {
+          ok: false,
+          error: `La mesa ${mesaFinal} ya tiene una reserva${quien} a las ${conflicto.hora}. Ajusta la hora o la mesa (duración configurada: ${duracionMin} min).`,
+        };
+      }
+    }
+
+    // Reglas de intervalo (máx. reservas / máx. personas por franja). Se
+    // valida después de la mesa porque el cómputo es global por empresa y
+    // depende de fecha + hora + turno + personas.
+    {
+      const turnoFinal = (input.turno ?? "COMIDA").toUpperCase();
+      const turnoRpc = turnoFinal === "CENA" ? "CENA" : "COMIDA";
+      const { data: intervaloError, error: rpcError } = await supabase.rpc(
+        "validar_intervalo_reservas",
+        {
+          p_empresa_id: empresaId,
+          p_fecha: input.fecha,
+          p_hora: input.hora,
+          p_personas: input.personas,
+          p_turno: turnoRpc,
+          p_ignore_reserva_id: null,
+        },
+      );
+      if (rpcError) {
+        console.error("[reservas] validar_intervalo_reservas:", rpcError);
+      } else if (typeof intervaloError === "string" && intervaloError.length > 0) {
+        return { ok: false, error: intervaloError };
+      }
+    }
+
     const { data, error } = await supabase.from("reservas").insert({
       empresa_id: empresaId,
       cliente_id: clienteId,
@@ -206,6 +296,9 @@ export async function createReserva(input: {
       bloqueada: input.bloqueada ?? false,
       grupo_id: input.grupoId ?? null,
       etiqueta_id: input.etiquetaId ?? null,
+      duracion_minutos: typeof input.duracionMinutos === "number" && input.duracionMinutos > 0
+        ? input.duracionMinutos
+        : null,
       created_by: user?.id ?? null,
     }).select("id").single();
     if (error) throw error;
@@ -258,6 +351,8 @@ export async function updateReserva(
     grupoId?: string | null;
     etiquetaId?: string | null;
     reconfirmadaAt?: string | null;
+    /** Override de duración. Pasa null para volver a la default empresa. */
+    duracionMinutos?: number | null;
   }
 ) {
   try {
@@ -356,6 +451,12 @@ export async function updateReserva(
     if (updates.bloqueada !== undefined) dbUpdates.bloqueada = updates.bloqueada;
     if (updates.grupoId !== undefined) dbUpdates.grupo_id = updates.grupoId;
     if (updates.etiquetaId !== undefined) dbUpdates.etiqueta_id = updates.etiquetaId;
+    if (updates.duracionMinutos !== undefined) {
+      dbUpdates.duracion_minutos =
+        typeof updates.duracionMinutos === "number" && updates.duracionMinutos > 0
+          ? updates.duracionMinutos
+          : null;
+    }
     if (updates.reconfirmadaAt !== undefined) {
       dbUpdates.reconfirmada_at = updates.reconfirmadaAt;
     } else if (updates.estado === "RECONFIRMADA") {
@@ -374,11 +475,115 @@ export async function updateReserva(
       dbUpdates.reconfirmada_at = null;
     }
 
+    // Bloqueo de solape al re-asignar mesa/fecha/hora. Reutiliza la
+    // `duracion_reserva_min` configurada por empresa. Solo se chequea cuando
+    // el UPDATE final tendrá mesa (la reserva resultante ocupa una mesa).
+    const tocaSlot =
+      updates.mesa !== undefined ||
+      updates.fecha !== undefined ||
+      updates.hora !== undefined;
+    if (tocaSlot && empresaId) {
+      const { data: actual } = await supabase
+        .from("reservas")
+        .select("fecha, hora, mesa, duracion_minutos")
+        .eq("id", id)
+        .maybeSingle();
+      const fechaFinal = (dbUpdates.fecha as string | undefined) ?? (actual?.fecha as string | undefined) ?? null;
+      const horaFinal  = (dbUpdates.hora  as string | undefined) ?? (actual?.hora  as string | undefined) ?? null;
+      const mesaFinal  = (dbUpdates.mesa  as string | null | undefined) !== undefined
+        ? (dbUpdates.mesa as string | null)
+        : ((actual?.mesa as string | null | undefined) ?? null);
+      // Si esta reserva tiene un override de duración (propio o vigente),
+      // se usa para el cálculo de solape. Si no, default de empresa.
+      const overrideTrasUpdate = (dbUpdates.duracion_minutos as number | null | undefined) !== undefined
+        ? (dbUpdates.duracion_minutos as number | null)
+        : (actual?.duracion_minutos as number | null | undefined) ?? null;
+      if (fechaFinal && horaFinal && mesaFinal) {
+        const duracionDefault = await getDuracionReservaMin(
+          supabase as unknown as SupabaseClient,
+          empresaId,
+        );
+        const duracionMin = typeof overrideTrasUpdate === "number" && overrideTrasUpdate > 0
+          ? overrideTrasUpdate
+          : duracionDefault;
+        const conflicto = await buscarConflictoMesa(
+          supabase as unknown as SupabaseClient,
+          {
+            empresaId,
+            fecha: fechaFinal,
+            hora: horaFinal,
+            mesa: mesaFinal,
+            duracionMin,
+            ignoreReservaId: id,
+          },
+        );
+        if (conflicto) {
+          const quien = conflicto.clienteNombre ? ` de ${conflicto.clienteNombre}` : "";
+          return {
+            ok: false,
+            error: `La mesa ${mesaFinal} ya tiene una reserva${quien} a las ${conflicto.hora}. Ajusta la hora o la mesa (duración configurada: ${duracionMin} min).`,
+          };
+        }
+      }
+    }
+
+    // Reglas de intervalo: re-validar solo si cambia algo que afecte
+    // (fecha, hora, personas o turno). Excluimos la propia reserva al contar.
+    const tocaIntervalo =
+      updates.fecha !== undefined ||
+      updates.hora !== undefined ||
+      updates.personas !== undefined ||
+      updates.turno !== undefined;
+    if (tocaIntervalo && empresaId) {
+      const { data: actual } = await supabase
+        .from("reservas")
+        .select("fecha, hora, personas, turno")
+        .eq("id", id)
+        .maybeSingle();
+      const fechaFinal = (dbUpdates.fecha as string | undefined) ?? (actual?.fecha as string | undefined);
+      const horaFinal = (dbUpdates.hora as string | undefined) ?? (actual?.hora as string | undefined);
+      const personasFinal = (dbUpdates.personas as number | undefined) ?? (actual?.personas as number | undefined) ?? 0;
+      const turnoRaw = (dbUpdates.turno as string | undefined) ?? (actual?.turno as string | undefined) ?? "COMIDA";
+      const turnoRpc = turnoRaw.toUpperCase() === "CENA" ? "CENA" : "COMIDA";
+      if (fechaFinal && horaFinal) {
+        const { data: intervaloError, error: rpcError } = await supabase.rpc(
+          "validar_intervalo_reservas",
+          {
+            p_empresa_id: empresaId,
+            p_fecha: fechaFinal,
+            p_hora: horaFinal,
+            p_personas: personasFinal,
+            p_turno: turnoRpc,
+            p_ignore_reserva_id: id,
+          },
+        );
+        if (rpcError) {
+          console.error("[reservas] validar_intervalo_reservas (update):", rpcError);
+        } else if (typeof intervaloError === "string" && intervaloError.length > 0) {
+          return { ok: false, error: intervaloError };
+        }
+      }
+    }
+
     const { error } = await supabase
       .from("reservas")
       .update(dbUpdates)
       .eq("id", id);
     if (error) throw error;
+
+    // Disparadores de correo según transición de estado. Idempotente: el mailer
+    // no reenvía si ya hay timestamp en la columna de auditoría correspondiente.
+    // No await — fire-and-forget para que un fallo de SMTP no rompa el UPDATE.
+    if (updates.estado === "RECONFIRMADA") {
+      enviarReservaEmail(id, "RECONFIRMACION").catch((e) =>
+        console.error("[reservas] mail RECONFIRMACION:", e),
+      );
+    } else if (updates.estado === "CANCELADA") {
+      enviarReservaEmail(id, "CANCELACION").catch((e) =>
+        console.error("[reservas] mail CANCELACION:", e),
+      );
+    }
+
     return { ok: true };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
@@ -401,4 +606,33 @@ export async function deleteReserva(id: string) {
     console.error("[reservas] deleteReserva:", msg);
     return { ok: false, error: msg };
   }
+}
+
+/**
+ * Envía al cliente el correo de confirmación de su reserva.
+ * Lo dispara el toggle "Notificar al cliente por Email" del diálogo de
+ * Nueva reserva. Idempotente: no reenvía si ya hay timestamp en
+ * `reservas.email_confirmacion_at`. Resuelve plantilla, logo y color de marca
+ * a través del mailer genérico.
+ */
+export async function notificarReservaCreadaPorEmail(reservaId: string) {
+  const res = await enviarReservaEmail(reservaId, "CONFIRMACION");
+  if (res.ok) return { ok: true };
+  return { ok: false, error: res.error };
+}
+
+/**
+ * Envía un correo de un tipo arbitrario para una reserva. Pensado para
+ * acciones manuales desde el detalle de la reserva (p.ej. "Reenviar
+ * recordatorio") y para tests. Tipos válidos: CONFIRMACION, RECONFIRMACION,
+ * RECORDATORIO, CANCELACION.
+ */
+export async function enviarReservaEmailManual(
+  reservaId: string,
+  tipo: "CONFIRMACION" | "RECONFIRMACION" | "RECORDATORIO" | "CANCELACION",
+) {
+  // `force: true` permite reenvíos manuales aunque ya haya timestamp.
+  const res = await enviarReservaEmail(reservaId, tipo, { force: true });
+  if (res.ok) return { ok: true };
+  return { ok: false, error: res.error };
 }

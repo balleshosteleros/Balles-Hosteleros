@@ -19,6 +19,7 @@ import { INSPECTOR_EMAIL_PLANTILLAS_SEED } from "./inspector-email-plantillas";
 import { INSPECCION_PRESENTACION_SEED } from "./inspeccion-presentacion";
 import { RESERVA_ETIQUETAS_SEED, normalizeReservaEtiquetaNombre } from "./reserva-etiquetas";
 import { SALA_ETIQUETAS_SEED, normalizeEtiquetaNombre } from "./sala-etiquetas";
+import { RESERVA_EMAIL_PLANTILLAS_SEED } from "./reserva-email-plantillas";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -229,6 +230,42 @@ export async function syncInspectorEmailPlantillasAEmpresa(
 }
 
 /**
+ * Sincroniza plantillas de email de RESERVAS a una empresa (aditivo).
+ * Solo crea los tipos que aún no existen; respeta personalizaciones del cliente.
+ * Inserta con asunto_personalizado=null y mensaje_personalizado=null para que
+ * el mailer use los textos de fábrica (definidos en el seed).
+ */
+export async function syncReservaEmailPlantillasAEmpresa(
+  admin: Admin,
+  empresaId: string,
+): Promise<{ creadas: number }> {
+  const { data: existentes } = await admin
+    .from("reserva_email_plantillas")
+    .select("tipo")
+    .eq("empresa_id", empresaId);
+  const setExistentes = new Set(
+    (existentes ?? []).map((r) => r.tipo as string),
+  );
+
+  const aCrear = RESERVA_EMAIL_PLANTILLAS_SEED
+    .filter((p) => !setExistentes.has(p.tipo))
+    .map((p) => ({
+      empresa_id: empresaId,
+      tipo: p.tipo,
+      activa: true,
+      asunto_personalizado: null,
+      mensaje_personalizado: null,
+    }));
+
+  if (aCrear.length === 0) return { creadas: 0 };
+  const { error } = await admin
+    .from("reserva_email_plantillas")
+    .insert(aCrear);
+  if (error) throw error;
+  return { creadas: aCrear.length };
+}
+
+/**
  * Siembra la presentación canónica de inspecciones SOLO si la empresa no
  * tiene una aún (o la tiene vacía). No sobreescribe ediciones del cliente.
  */
@@ -424,6 +461,7 @@ export async function seedEmpresaDefaults(
   await syncReservaEtiquetasAEmpresa(admin, empresaId);
   await syncSalaEtiquetasAEmpresa(admin, empresaId);
   await ensureReservasConfigEmpresa(admin, empresaId);
+  await syncReservaEmailPlantillasAEmpresa(admin, empresaId);
 }
 
 /**
@@ -443,6 +481,7 @@ export async function syncSeedsToAllEmpresas(): Promise<{
     inspeccionPresentacionCreada: boolean;
     reservaEtiquetasCreadas: number;
     reservasConfigCreada: boolean;
+    reservaEmailsCreadas: number;
   }>;
   error?: string;
 }> {
@@ -466,6 +505,7 @@ export async function syncSeedsToAllEmpresas(): Promise<{
       salaEtiquetasCategoriasCreadas: number;
       salaEtiquetasCreadas: number;
       reservasConfigCreada: boolean;
+      reservaEmailsCreadas: number;
     }> = [];
 
     for (const e of empresas ?? []) {
@@ -481,6 +521,7 @@ export async function syncSeedsToAllEmpresas(): Promise<{
       const re = await syncReservaEtiquetasAEmpresa(admin, empresaId);
       const se = await syncSalaEtiquetasAEmpresa(admin, empresaId);
       const rcfg = await ensureReservasConfigEmpresa(admin, empresaId);
+      const rep = await syncReservaEmailPlantillasAEmpresa(admin, empresaId);
       resumen.push({
         empresa: empresaNombre,
         deptosCreados: d.creados,
@@ -493,6 +534,7 @@ export async function syncSeedsToAllEmpresas(): Promise<{
         salaEtiquetasCategoriasCreadas: se.categoriasCreadas,
         salaEtiquetasCreadas: se.etiquetasCreadas,
         reservasConfigCreada: rcfg.creada,
+        reservaEmailsCreadas: rep.creadas,
       });
     }
 

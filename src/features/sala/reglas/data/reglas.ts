@@ -140,10 +140,21 @@ export function rowToRegla(r: ReglaRow): EmpresaReservasRegla {
 }
 
 /**
+ * Forma mínima para derivar la vigencia: cualquier entidad que persista los
+ * mismos 4 campos puede pasarse (cupo/maxpax, reglas de intervalo, etc.).
+ */
+export interface VigenciaSource {
+  fechaDesde: string | null;
+  fechaHasta: string | null;
+  diasSemana: number[] | null;
+  fechasExtra: string[] | null;
+}
+
+/**
  * Deriva el ModoVigencia desde una regla persistida (para precargar el modal
  * al editar).
  */
-export function reglaToVigencia(r: EmpresaReservasRegla): VigenciaSpec {
+export function reglaToVigencia(r: VigenciaSource): VigenciaSpec {
   if (r.fechasExtra && r.fechasExtra.length === 1) {
     const hoyISO = new Date().toISOString().slice(0, 10);
     if (r.fechasExtra[0] === hoyISO) return { modo: "hoy", fechas: r.fechasExtra };

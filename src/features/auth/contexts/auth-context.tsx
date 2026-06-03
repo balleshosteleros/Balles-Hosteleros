@@ -208,8 +208,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             ]);
 
             const nextProfile = (profileRes.data as AuthProfile | null) ?? null;
-            const nextRoles = (permisosRes?.appRoles ?? []) as AppRole[];
-            const nextPermisos = permisosRes?.permisos ?? [];
+            const fetchedRoles = (permisosRes?.appRoles ?? []) as AppRole[];
+            const fetchedPermisos = permisosRes?.permisos ?? [];
+
+            // Defensa: si el fetch llega vacío pero el caché previo tenía datos,
+            // NO los borramos. Un getUserPermisos que falla silenciosamente (red,
+            // admin client transitorio) devolvía `appRoles: []` y vaciaba el
+            // sidebar y los gates como "No tienes departamentos asignados". La
+            // fuente de verdad cuando todo va bien sigue siendo el fetch nuevo.
+            const fetchFailedSilently =
+              permisosRes !== null && fetchedRoles.length === 0 && (cached?.roles.length ?? 0) > 0;
+            const nextRoles = fetchFailedSilently ? cached!.roles : fetchedRoles;
+            const nextPermisos = fetchFailedSilently ? cached!.permisos : fetchedPermisos;
+
+            if (fetchFailedSilently) {
+              console.warn(
+                "[auth] permisos vacíos en el fetch — manteniendo caché previo para no romper la UI",
+              );
+            }
 
             if (nextProfile) setProfile(nextProfile);
             setRoles(nextRoles);
@@ -217,10 +233,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setPermisosLoaded(true);
             setLoading(false);
 
-            writeAuthCache(userId, {
-              roles: nextRoles,
-              permisos: nextPermisos,
-            });
+            // Solo persistimos el caché si el fetch fue real. Así un fallo
+            // transitorio no corrompe el localStorage para el próximo mount.
+            if (!fetchFailedSilently) {
+              writeAuthCache(userId, {
+                roles: nextRoles,
+                permisos: nextPermisos,
+              });
+            }
           }, 0);
         } else {
           setProfile(null);

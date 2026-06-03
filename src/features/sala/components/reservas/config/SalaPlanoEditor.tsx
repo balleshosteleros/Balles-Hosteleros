@@ -4,6 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader as AlertDialogHeaderUI,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   ArrowLeft,
   Circle,
   DoorOpen,
@@ -12,12 +20,14 @@ import {
   RectangleHorizontal,
   RotateCcw,
   RotateCw,
+  Save,
   Square,
   StretchHorizontal,
   Tag,
   Trash2,
   Trees,
 } from "lucide-react";
+import { DECO_DEFAULTS, DecoBody } from "@/features/sala/planos/components/DecoBody";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type {
@@ -124,21 +134,6 @@ type DragState =
 const MIN_MESA_SIZE = 36;
 const MIN_DECO_SIZE = 16;
 
-/** Tamaños por defecto de cada decoración (en px del canvas). */
-const DECO_DEFAULTS: Record<TipoDecoracion, { width: number; height: number }> = {
-  maceta: { width: 40, height: 40 },
-  planta_grande: { width: 72, height: 72 },
-  pasillo: { width: 220, height: 32 },
-  pared: { width: 180, height: 14 },
-  puerta: { width: 50, height: 50 },
-  escaleras: { width: 90, height: 60 },
-  barra: { width: 220, height: 40 },
-  cocina: { width: 140, height: 90 },
-  columna: { width: 36, height: 36 },
-  ventana: { width: 120, height: 14 },
-  wc: { width: 50, height: 50 },
-};
-
 /** Decoraciones agrupadas para la paleta. */
 const DECO_GRUPOS: { titulo: string; tipos: TipoDecoracion[] }[] = [
   {
@@ -152,6 +147,7 @@ const DECO_GRUPOS: { titulo: string; tipos: TipoDecoracion[] }[] = [
       "puerta",
       "escaleras",
       "barra",
+      "cocina",
       "pasillo",
       "wc",
     ],
@@ -198,116 +194,6 @@ function MesaThumb({ forma, color }: { forma: FormaMesa; color: string }) {
       style={{ width: 14, height: 14, backgroundColor: color, borderRadius: 2 }}
     />
   );
-}
-
-/** Render visual del cuerpo de una decoración (sin posición/rotación). */
-function DecoBody({
-  tipo,
-  width,
-  height,
-  counterRotation = 0,
-}: {
-  tipo: TipoDecoracion;
-  width: number;
-  height: number;
-  /** Para tipos con texto, contra-rota la etiqueta para mantenerla legible. */
-  counterRotation?: number;
-}) {
-  const baseStyle = { width, height } as const;
-  switch (tipo) {
-    case "maceta":
-      return (
-        <div
-          className="flex items-center justify-center rounded-md bg-emerald-100/80 border border-emerald-600/40 text-emerald-700"
-          style={baseStyle}
-        >
-          <Flower2 className="h-1/2 w-1/2" />
-        </div>
-      );
-    case "planta_grande":
-      return (
-        <div
-          className="flex items-center justify-center rounded-full bg-emerald-200/70 border border-emerald-700/40 text-emerald-800"
-          style={baseStyle}
-        >
-          <Trees className="h-1/2 w-1/2" />
-        </div>
-      );
-    case "pared":
-      return (
-        <div
-          className="bg-stone-700 border border-stone-900"
-          style={{ ...baseStyle, borderRadius: 2 }}
-        />
-      );
-    case "pasillo":
-      return (
-        <div
-          className="bg-muted/20 border-y-2 border-dashed border-stone-400"
-          style={baseStyle}
-        />
-      );
-    case "columna":
-      return (
-        <div
-          className="rounded-full bg-stone-500 border border-stone-700"
-          style={baseStyle}
-        />
-      );
-    case "ventana":
-      return (
-        <div
-          className="bg-sky-200/70 border border-sky-500"
-          style={{
-            ...baseStyle,
-            backgroundImage:
-              "repeating-linear-gradient(90deg, transparent 0 14px, rgba(255,255,255,0.6) 14px 16px)",
-          }}
-        />
-      );
-    case "puerta":
-      return (
-        <div
-          className="flex items-center justify-center rounded-md bg-amber-100 border border-amber-700/60 text-amber-800"
-          style={baseStyle}
-        >
-          <DoorOpen className="h-3/5 w-3/5" />
-        </div>
-      );
-    case "escaleras":
-      return (
-        <div
-          className="rounded-sm border border-stone-500 bg-stone-100 overflow-hidden"
-          style={baseStyle}
-        >
-          <div
-            className="h-full w-full"
-            style={{
-              backgroundImage:
-                "repeating-linear-gradient(180deg, rgba(0,0,0,0.18) 0 6px, transparent 6px 12px)",
-            }}
-          />
-        </div>
-      );
-    case "barra":
-      return (
-        <div
-          className="flex items-center justify-center rounded-md bg-amber-900/80 border border-amber-950 text-amber-50 text-[11px] font-semibold uppercase tracking-wider"
-          style={baseStyle}
-        >
-          <span style={{ transform: `rotate(${-counterRotation}deg)` }}>Barra</span>
-        </div>
-      );
-    case "wc":
-      return (
-        <div
-          className="flex items-center justify-center rounded-md bg-slate-100 border border-slate-500 text-slate-700 text-[11px] font-bold"
-          style={baseStyle}
-        >
-          <span style={{ transform: `rotate(${-counterRotation}deg)` }}>WC</span>
-        </div>
-      );
-  }
 }
 
 /**
@@ -364,6 +250,8 @@ function DecoPaletteIcon({ tipo }: { tipo: TipoDecoracion }) {
       return <StretchHorizontal className="h-3.5 w-3.5 rotate-90" />;
     case "barra":
       return <RectangleHorizontal className="h-3.5 w-3.5" />;
+    case "cocina":
+      return <RectangleHorizontal className="h-3.5 w-3.5" />;
     case "wc":
       return <Square className="h-3.5 w-3.5" />;
   }
@@ -388,8 +276,41 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
   const [decoSeleccionada, setDecoSeleccionada] = useState<string | null>(null);
   const [zonaLabelSeleccionada, setZonaLabelSeleccionada] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
+  /**
+   * Operaciones pendientes de guardar. Toda interacción del usuario alimenta estos
+   * sets en lugar de llamar al servidor — el persist se dispara solo al pulsar Guardar.
+   */
+  const [pendingMesaUpserts, setPendingMesaUpserts] = useState<Set<string>>(new Set());
+  const [pendingMesaRemovals, setPendingMesaRemovals] = useState<Set<string>>(new Set());
+  const [pendingFormas, setPendingFormas] = useState<Set<string>>(new Set());
+  const [pendingDecoCreates, setPendingDecoCreates] = useState<Set<string>>(new Set());
+  const [pendingDecoUpdates, setPendingDecoUpdates] = useState<Set<string>>(new Set());
+  const [pendingDecoRemovals, setPendingDecoRemovals] = useState<Set<string>>(new Set());
+  const [pendingZonaLabels, setPendingZonaLabels] = useState<Set<string>>(new Set());
+  const [saving, setSaving] = useState(false);
+  const [exitDialogOpen, setExitDialogOpen] = useState(false);
   const outerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
+
+  const isDirty =
+    pendingMesaUpserts.size > 0 ||
+    pendingMesaRemovals.size > 0 ||
+    pendingFormas.size > 0 ||
+    pendingDecoCreates.size > 0 ||
+    pendingDecoUpdates.size > 0 ||
+    pendingDecoRemovals.size > 0 ||
+    pendingZonaLabels.size > 0;
+
+  /** Aviso del navegador en refresh/cierre si hay cambios sin guardar. */
+  useEffect(() => {
+    if (!isDirty) return;
+    function handler(e: BeforeUnloadEvent) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isDirty]);
 
   useEffect(() => {
     const el = outerRef.current;
@@ -432,6 +353,15 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
       for (const d of decoRes.data) map.set(d.id, d);
       setDecoraciones(map);
     }
+    setFormas(new Map());
+    setZonaLabelPos(new Map());
+    setPendingMesaUpserts(new Set());
+    setPendingMesaRemovals(new Set());
+    setPendingFormas(new Set());
+    setPendingDecoCreates(new Set());
+    setPendingDecoUpdates(new Set());
+    setPendingDecoRemovals(new Set());
+    setPendingZonaLabels(new Set());
     setLoading(false);
   }, [sala.id]);
 
@@ -722,7 +652,7 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
     // El render del fantasma sale a partir del puntero + drag.tipo/width/height.
   }
 
-  async function handlePointerUp(e: React.PointerEvent) {
+  function handlePointerUp(e: React.PointerEvent) {
     if (!drag) return;
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) {
@@ -730,82 +660,47 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
       return;
     }
 
-    if (drag.kind === "mesa") {
-      const pos = posiciones.get(drag.mesaId);
+    if (drag.kind === "mesa" || drag.kind === "mesa-resize") {
+      const mesaId = drag.mesaId;
       setDrag(null);
-      if (!pos) return;
-      const res = await upsertMesaPosicion({
-        mesaId: drag.mesaId,
-        x: pos.x,
-        y: pos.y,
-        rotation: pos.rotation,
-        width: pos.width,
-        height: pos.height,
+      if (!posiciones.has(mesaId)) return;
+      setPendingMesaUpserts((prev) => {
+        const next = new Set(prev);
+        next.add(mesaId);
+        return next;
       });
-      if (!res.ok) {
-        toast.error(res.error ?? "No se pudo guardar");
-        cargar();
-      }
+      // Si la mesa estaba marcada para borrar, deja de estarlo (volvió al lienzo).
+      setPendingMesaRemovals((prev) => {
+        if (!prev.has(mesaId)) return prev;
+        const next = new Set(prev);
+        next.delete(mesaId);
+        return next;
+      });
       return;
     }
 
-    if (drag.kind === "mesa-resize") {
-      const pos = posiciones.get(drag.mesaId);
+    if (drag.kind === "deco" || drag.kind === "deco-resize") {
+      const id = drag.id;
       setDrag(null);
-      if (!pos) return;
-      const res = await upsertMesaPosicion({
-        mesaId: drag.mesaId,
-        x: pos.x,
-        y: pos.y,
-        rotation: pos.rotation,
-        width: pos.width,
-        height: pos.height,
+      if (!decoraciones.has(id)) return;
+      // Si es una deco aún no persistida (tmp_), basta con su estado local.
+      if (pendingDecoCreates.has(id)) return;
+      setPendingDecoUpdates((prev) => {
+        const next = new Set(prev);
+        next.add(id);
+        return next;
       });
-      if (!res.ok) {
-        toast.error(res.error ?? "No se pudo guardar");
-        cargar();
-      }
-      return;
-    }
-
-    if (drag.kind === "deco") {
-      const deco = decoraciones.get(drag.id);
-      setDrag(null);
-      if (!deco) return;
-      const res = await updateSalaDecoracion(deco.id, { x: deco.x, y: deco.y });
-      if (!res.ok) {
-        toast.error(res.error ?? "No se pudo guardar");
-        cargar();
-      }
-      return;
-    }
-
-    if (drag.kind === "deco-resize") {
-      const deco = decoraciones.get(drag.id);
-      setDrag(null);
-      if (!deco) return;
-      const res = await updateSalaDecoracion(deco.id, {
-        x: deco.x,
-        y: deco.y,
-        width: deco.width,
-        height: deco.height,
-      });
-      if (!res.ok) {
-        toast.error(res.error ?? "No se pudo guardar");
-        cargar();
-      }
       return;
     }
 
     if (drag.kind === "zona") {
-      const pos = getZonaLabelPos(drag.zonaId);
+      const zonaId = drag.zonaId;
       setDrag(null);
-      if (!pos) return;
-      const res = await updateZona(drag.zonaId, {
-        etiquetaX: Math.round(pos.x),
-        etiquetaY: Math.round(pos.y),
+      setPendingZonaLabels((prev) => {
+        const next = new Set(prev);
+        next.add(zonaId);
+        return next;
       });
-      if (!res.ok) toast.error(res.error ?? "No se pudo guardar");
       return;
     }
 
@@ -841,19 +736,11 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
         return next;
       });
       setZonaLabelSeleccionada(zonaId);
-      const res = await updateZona(zonaId, {
-        etiquetaX: Math.round(x),
-        etiquetaY: Math.round(y),
+      setPendingZonaLabels((prev) => {
+        const next = new Set(prev);
+        next.add(zonaId);
+        return next;
       });
-      if (!res.ok) {
-        toast.error(res.error ?? "No se pudo colocar la etiqueta");
-        // Revertir override local si falla.
-        setZonaLabelPos((prev) => {
-          const next = new Map(prev);
-          next.delete(zonaId);
-          return next;
-        });
-      }
       return;
     }
 
@@ -879,43 +766,50 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
     const width = drag.width;
     const height = drag.height;
     setDrag(null);
-    const res = await createSalaDecoracion({
-      salaId: sala.id,
-      tipo,
-      x,
-      y,
-      width,
-      height,
-    });
-    if (!res.ok) {
-      toast.error(res.error ?? "No se pudo crear");
-      return;
-    }
-    if (res.data) {
-      setDecoraciones((prev) => {
-        const next = new Map(prev);
-        next.set(res.data!.id, res.data!);
-        return next;
+    const tempId = `tmp_${typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Math.random().toString(36).slice(2)}`;
+    setDecoraciones((prev) => {
+      const next = new Map(prev);
+      next.set(tempId, {
+        id: tempId,
+        salaId: sala.id,
+        tipo,
+        x,
+        y,
+        rotation: 0,
+        width,
+        height,
       });
-      setDecoSeleccionada(res.data.id);
-    }
+      return next;
+    });
+    setPendingDecoCreates((prev) => {
+      const next = new Set(prev);
+      next.add(tempId);
+      return next;
+    });
+    setDecoSeleccionada(tempId);
   }
 
-  async function handleQuitarMesa(mesaId: string) {
+  function handleQuitarMesa(mesaId: string) {
     setPosiciones((prev) => {
       const next = new Map(prev);
       next.delete(mesaId);
       return next;
     });
     setMesaSeleccionada(null);
-    const res = await removeMesaPosicion(mesaId);
-    if (!res.ok) {
-      toast.error(res.error ?? "No se pudo quitar");
-      cargar();
-    }
+    setPendingMesaUpserts((prev) => {
+      if (!prev.has(mesaId)) return prev;
+      const next = new Set(prev);
+      next.delete(mesaId);
+      return next;
+    });
+    setPendingMesaRemovals((prev) => {
+      const next = new Set(prev);
+      next.add(mesaId);
+      return next;
+    });
   }
 
-  async function handleRotarMesa(mesaId: string, delta: number) {
+  function handleRotarMesa(mesaId: string, delta: number) {
     const pos = posiciones.get(mesaId);
     if (!pos) return;
     const nuevaRotacion = (pos.rotation + delta + 360) % 360;
@@ -924,31 +818,27 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
       next.set(mesaId, { ...pos, rotation: nuevaRotacion });
       return next;
     });
-    const res = await upsertMesaPosicion({
-      mesaId,
-      x: pos.x,
-      y: pos.y,
-      rotation: nuevaRotacion,
-      width: pos.width,
-      height: pos.height,
+    setPendingMesaUpserts((prev) => {
+      const next = new Set(prev);
+      next.add(mesaId);
+      return next;
     });
-    if (!res.ok) toast.error(res.error ?? "No se pudo guardar");
   }
 
-  async function handleCambiarForma(mesaId: string, nueva: FormaMesa) {
+  function handleCambiarForma(mesaId: string, nueva: FormaMesa) {
     setFormas((prev) => {
       const next = new Map(prev);
       next.set(mesaId, nueva);
       return next;
     });
-    const res = await updateMesa(mesaId, { forma: nueva });
-    if (!res.ok) {
-      toast.error(res.error ?? "No se pudo cambiar la forma");
-      cargar();
-    }
+    setPendingFormas((prev) => {
+      const next = new Set(prev);
+      next.add(mesaId);
+      return next;
+    });
   }
 
-  async function handleRotarDeco(id: string, delta: number) {
+  function handleRotarDeco(id: string, delta: number) {
     const deco = decoraciones.get(id);
     if (!deco) return;
     const nuevaRotacion = (deco.rotation + delta + 360) % 360;
@@ -957,25 +847,47 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
       next.set(id, { ...deco, rotation: nuevaRotacion });
       return next;
     });
-    const res = await updateSalaDecoracion(id, { rotation: nuevaRotacion });
-    if (!res.ok) toast.error(res.error ?? "No se pudo guardar");
+    // Si aún no se ha creado en BD, basta con su estado local (el create lleva
+    // la rotación actual). En otro caso, marca actualización pendiente.
+    if (!pendingDecoCreates.has(id)) {
+      setPendingDecoUpdates((prev) => {
+        const next = new Set(prev);
+        next.add(id);
+        return next;
+      });
+    }
   }
 
-  async function handleQuitarDeco(id: string) {
+  function handleQuitarDeco(id: string) {
     setDecoraciones((prev) => {
       const next = new Map(prev);
       next.delete(id);
       return next;
     });
     setDecoSeleccionada(null);
-    const res = await deleteSalaDecoracion(id);
-    if (!res.ok) {
-      toast.error(res.error ?? "No se pudo quitar");
-      cargar();
+    if (pendingDecoCreates.has(id)) {
+      // Nunca llegó a BD: descarta el create pendiente y listo.
+      setPendingDecoCreates((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      return;
     }
+    setPendingDecoUpdates((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    setPendingDecoRemovals((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
   }
 
-  async function handleQuitarEtiquetaZona(zonaId: string) {
+  function handleQuitarEtiquetaZona(zonaId: string) {
     if (zonaTieneMesasColocadas(zonaId)) {
       toast.error(
         "No se puede quitar: la zona tiene mesas en el plano. Quita las mesas primero.",
@@ -988,8 +900,169 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
       return next;
     });
     setZonaLabelSeleccionada(null);
-    const res = await updateZona(zonaId, { etiquetaX: null, etiquetaY: null });
-    if (!res.ok) toast.error(res.error ?? "No se pudo quitar");
+    setPendingZonaLabels((prev) => {
+      const next = new Set(prev);
+      next.add(zonaId);
+      return next;
+    });
+  }
+
+  async function handleSave(): Promise<boolean> {
+    if (saving) return false;
+    setSaving(true);
+
+    const failedMesaUpserts = new Set<string>();
+    const failedMesaRemovals = new Set<string>();
+    const failedFormas = new Set<string>();
+    const failedDecoCreates = new Set<string>();
+    const failedDecoUpdates = new Set<string>();
+    const failedDecoRemovals = new Set<string>();
+    const failedZonaLabels = new Set<string>();
+    let errCount = 0;
+
+    // 1) Removals primero (libera mesas/decos).
+    for (const mesaId of pendingMesaRemovals) {
+      const res = await removeMesaPosicion(mesaId);
+      if (!res.ok) {
+        errCount++;
+        failedMesaRemovals.add(mesaId);
+      }
+    }
+    for (const id of pendingDecoRemovals) {
+      const res = await deleteSalaDecoracion(id);
+      if (!res.ok) {
+        errCount++;
+        failedDecoRemovals.add(id);
+      }
+    }
+
+    // 2) Cambios de forma.
+    for (const mesaId of pendingFormas) {
+      const forma = formas.get(mesaId);
+      if (!forma) continue;
+      const res = await updateMesa(mesaId, { forma });
+      if (!res.ok) {
+        errCount++;
+        failedFormas.add(mesaId);
+      }
+    }
+
+    // 3) Posiciones/tamaños/rotaciones de mesas ya colocadas.
+    for (const mesaId of pendingMesaUpserts) {
+      if (pendingMesaRemovals.has(mesaId)) continue;
+      const pos = posiciones.get(mesaId);
+      if (!pos) continue;
+      const res = await upsertMesaPosicion({
+        mesaId,
+        x: pos.x,
+        y: pos.y,
+        rotation: pos.rotation,
+        width: pos.width,
+        height: pos.height,
+      });
+      if (!res.ok) {
+        errCount++;
+        failedMesaUpserts.add(mesaId);
+      }
+    }
+
+    // 4) Updates de decos ya persistidas.
+    for (const id of pendingDecoUpdates) {
+      const deco = decoraciones.get(id);
+      if (!deco) continue;
+      const res = await updateSalaDecoracion(id, {
+        x: deco.x,
+        y: deco.y,
+        rotation: deco.rotation,
+        width: deco.width,
+        height: deco.height,
+      });
+      if (!res.ok) {
+        errCount++;
+        failedDecoUpdates.add(id);
+      }
+    }
+
+    // 5) Creates de decos nuevas (tmp_id → id real).
+    const tempIds = Array.from(pendingDecoCreates);
+    for (const tempId of tempIds) {
+      const deco = decoraciones.get(tempId);
+      if (!deco) continue;
+      const res = await createSalaDecoracion({
+        salaId: sala.id,
+        tipo: deco.tipo,
+        x: deco.x,
+        y: deco.y,
+        rotation: deco.rotation,
+        width: deco.width,
+        height: deco.height,
+      });
+      if (!res.ok) {
+        errCount++;
+        failedDecoCreates.add(tempId);
+        continue;
+      }
+      if (res.data) {
+        const real = res.data;
+        setDecoraciones((prev) => {
+          const next = new Map(prev);
+          next.delete(tempId);
+          next.set(real.id, real);
+          return next;
+        });
+        setDecoSeleccionada((cur) => (cur === tempId ? real.id : cur));
+      }
+    }
+
+    // 6) Etiquetas de zona (posición o limpieza).
+    for (const zonaId of pendingZonaLabels) {
+      const pos = zonaLabelPos.get(zonaId);
+      const res = await updateZona(zonaId, {
+        etiquetaX: pos ? Math.round(pos.x) : null,
+        etiquetaY: pos ? Math.round(pos.y) : null,
+      });
+      if (!res.ok) {
+        errCount++;
+        failedZonaLabels.add(zonaId);
+      }
+    }
+
+    setPendingMesaUpserts(failedMesaUpserts);
+    setPendingMesaRemovals(failedMesaRemovals);
+    setPendingFormas(failedFormas);
+    setPendingDecoCreates(failedDecoCreates);
+    setPendingDecoUpdates(failedDecoUpdates);
+    setPendingDecoRemovals(failedDecoRemovals);
+    setPendingZonaLabels(failedZonaLabels);
+    setSaving(false);
+
+    if (errCount === 0) {
+      toast.success("Plano guardado");
+      return true;
+    }
+    toast.error(`No se pudieron guardar ${errCount} cambio(s)`);
+    return false;
+  }
+
+  function handleBack() {
+    if (isDirty || saving) {
+      setExitDialogOpen(true);
+      return;
+    }
+    onBack();
+  }
+
+  async function handleGuardarYSalir() {
+    const ok = await handleSave();
+    if (ok) {
+      setExitDialogOpen(false);
+      onBack();
+    }
+  }
+
+  function handleSalirSinGuardar() {
+    setExitDialogOpen(false);
+    onBack();
   }
 
   if (loading) {
@@ -1006,12 +1079,12 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
 
   return (
     <div className="space-y-3">
-      <header className="flex items-center justify-between">
-        <Button variant="ghost" size="sm" onClick={onBack}>
+      <header className="flex items-center justify-between gap-3">
+        <Button variant="ghost" size="sm" onClick={handleBack}>
           <ArrowLeft className="h-4 w-4 mr-1.5" />
           Volver a salas
         </Button>
-        <div className="text-sm">
+        <div className="text-sm flex-1 text-center">
           <span className="text-muted-foreground">Plano de</span>{" "}
           <span className="font-semibold">{sala.nombre}</span>
           {sala.esPrincipal && (
@@ -1019,6 +1092,21 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
               Principal
             </span>
           )}
+        </div>
+        <div className="flex items-center gap-2">
+          {isDirty && !saving && (
+            <span className="text-[11px] text-muted-foreground italic">
+              Cambios sin guardar
+            </span>
+          )}
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={!isDirty || saving}
+          >
+            <Save className="h-4 w-4 mr-1.5" />
+            {saving ? "Guardando…" : isDirty ? "Guardar" : "Guardado"}
+          </Button>
         </div>
       </header>
 
@@ -1499,8 +1587,39 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
       </div>
 
       <p className="text-[11px] text-muted-foreground">
-        Arrastra mesas o decoraciones desde el panel al lienzo. Click para seleccionar y rotar, cambiar forma o quitar. Las decoraciones son solo visuales — no afectan a las reservas. Las posiciones se guardan automáticamente.
+        Arrastra mesas o decoraciones desde el panel al lienzo. Click para seleccionar y rotar, cambiar forma o quitar. Las decoraciones son solo visuales — no afectan a las reservas. Pulsa <span className="font-semibold">Guardar</span> para conservar los cambios.
       </p>
+
+      <AlertDialog open={exitDialogOpen} onOpenChange={setExitDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeaderUI>
+            <AlertDialogTitle>¿Guardar los cambios del plano?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tienes cambios sin guardar en este plano. Si sales sin guardar se perderán.
+            </AlertDialogDescription>
+          </AlertDialogHeaderUI>
+          <AlertDialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setExitDialogOpen(false)}
+              disabled={saving}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={handleSalirSinGuardar}
+              disabled={saving}
+            >
+              Salir sin guardar
+            </Button>
+            <Button onClick={handleGuardarYSalir} disabled={saving}>
+              <Save className="h-4 w-4 mr-1.5" />
+              {saving ? "Guardando…" : "Guardar y salir"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

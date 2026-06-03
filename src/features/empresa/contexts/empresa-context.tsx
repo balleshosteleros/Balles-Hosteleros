@@ -36,6 +36,13 @@ function buildInitialData(): Record<string, Incidencia[]> {
 }
 
 const AJUSTES_STORAGE_KEY = "balles_ajustes_v1";
+/**
+ * Slug de la empresa activa en localStorage. Sobrevive a reinicios del dev
+ * server y a limpiezas de cookie. Se usa SOLO como fallback cuando la cookie
+ * `bh_empresa_activa` no existe — la cookie sigue siendo la fuente de verdad
+ * para las server actions.
+ */
+const EMPRESA_ACTIVA_SLUG_KEY = "bh_empresa_activa_slug";
 
 // Roles legados que detectamos en localStorage para descartar el snapshot
 // y volver a sembrar desde defaults / Supabase.
@@ -190,7 +197,31 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
         if (matchByCookie) {
           setEmpresaId(matchByCookie.id);
         } else {
-          setEmpresaId((prev) => list.some((e) => e.id === prev) ? prev : list[0].id);
+          // Sin cookie: 2ª preferencia es el slug que dejamos en localStorage la
+          // última vez que el usuario eligió empresa. Evita que un reinicio del
+          // dev server (o limpieza de cookies) te tire a la empresa principal
+          // del perfil cuando llevas trabajando en otra.
+          let restoredSlug: string | null = null;
+          if (typeof window !== "undefined") {
+            try {
+              restoredSlug = window.localStorage.getItem(EMPRESA_ACTIVA_SLUG_KEY);
+            } catch {
+              // ignore
+            }
+          }
+          const restored = restoredSlug
+            ? list.find((e) => e.id === restoredSlug)
+            : null;
+          if (restored) {
+            setEmpresaId(restored.id);
+            // Re-arma la cookie para que las server actions vean la empresa
+            // correcta sin esperar a que el usuario vuelva a hacer click.
+            if (restored.dbId) {
+              setEmpresaActiva(restored.dbId).catch(() => {});
+            }
+          } else {
+            setEmpresaId((prev) => list.some((e) => e.id === prev) ? prev : list[0].id);
+          }
         }
         isHydrated.current = true;
 
@@ -320,6 +351,14 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
 
   const handleSetEmpresaId = useCallback((id: string) => {
     setEmpresaId(id);
+    // Persistimos el slug elegido para que sobreviva a una pérdida de cookie.
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(EMPRESA_ACTIVA_SLUG_KEY, id);
+      } catch {
+        // ignore
+      }
+    }
     if (!isHydrated.current) return;
     const empresa = empresasList.find((e) => e.id === id);
     if (!empresa?.dbId) return;

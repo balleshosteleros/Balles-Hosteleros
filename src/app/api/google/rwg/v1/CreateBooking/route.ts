@@ -8,6 +8,7 @@ import type {
   CreateBookingResponse,
 } from "@/features/canales-google-rwg/lib/proto-types";
 import { RWG_EXTERNAL_ORIGEN, RWG_ORIGEN_CANONICO } from "@/features/canales-google-rwg/lib/proto-types";
+import { validarMotorWebReserva } from "@/features/sala/lib/motor-web-validar";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -133,6 +134,24 @@ export const POST = withMetricas("CreateBooking", async (request) => {
   const { fecha, hora } = startSecToFechaHora(data.slot.start_sec);
   const turno = deducirTurno(hora);
   const personas = data.party_size ?? data.slot.resources?.party_size ?? 2;
+
+  // 3b. Preferencias del motor (cierre web, tope personas/hora, intervalos).
+  const motor = await validarMotorWebReserva(admin, {
+    empresaId: merchant.empresaId,
+    fecha,
+    hora,
+    personas,
+    turno,
+  });
+  if (!motor.ok) {
+    const body: CreateBookingResponse = {
+      booking_failure: { cause: "SLOT_UNAVAILABLE", description: motor.error },
+    };
+    return {
+      status: 200, body,
+      metrica: { empresaId: merchant.empresaId, causa: "motor_web_bloquea" },
+    };
+  }
 
   // 4. Lock optimista
   const { data: granted, error: lockErr } = await admin.rpc("try_reservar_slot", {

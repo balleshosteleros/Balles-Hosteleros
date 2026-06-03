@@ -71,7 +71,7 @@ export const ESTADO_RESERVA_LABELS: Record<EstadoReserva, string> = {
 
 export const ESTADO_MESA_LABELS: Record<EstadoMesa, string> = {
   LIBRE: "Libre",
-  OCUPADA: "Ocupada",
+  OCUPADA: "Sentada",
   RESERVADA: "Reservada",
   BLOQUEADA: "Bloqueada",
 };
@@ -124,6 +124,12 @@ export interface Reserva {
   reconfirmadaAt?: string | null;
   externalId?: string | null;
   externalOrigen?: string | null;
+  /**
+   * Duración de ESTA reserva en minutos. NULL/undefined = se usa la default
+   * de empresa (`EmpresaReservasConfig.duracionReservaMin`). Solo editable por
+   * reserva; no expone configuración general.
+   */
+  duracionMinutos?: number | null;
 }
 
 // --- POLÍTICAS DE CANCELACIÓN ---
@@ -210,7 +216,8 @@ export interface ReservaCodigo {
 
 // --- CONFIGURACIÓN DE RESERVAS POR EMPRESA ---
 // Aforo y máximo por reserva viven en `empresa_reservas_reglas` (PRP-050).
-// Esta config persiste solo horario y antelación.
+// Esta config persiste horario, antelación y duración de reserva (para
+// detección de solape al asignar mesa).
 export type DiaSemanaKey = "lun" | "mar" | "mie" | "jue" | "vie" | "sab" | "dom";
 export type TurnoKey = "comida" | "cena";
 
@@ -230,6 +237,13 @@ export type EmpresaReservasConfig = SemanaHorarios & {
   empresaId: string;
   antelacionMinMinutos: number;
   antelacionMaxDias: number;
+  /**
+   * Duración por defecto de una reserva, en minutos. Aplica a todos los planos
+   * y a todas las reservas: define la ventana durante la cual una mesa queda
+   * ocupada y se usa para bloquear nuevas reservas que solapen con una
+   * existente. Rango admitido: 15–360 (6 h). Default 120.
+   */
+  duracionReservaMin: number;
   // Horario general (heredable por días sin valor propio)
   generalInicioComida: string | null;
   generalFinComida:    string | null;
@@ -237,7 +251,130 @@ export type EmpresaReservasConfig = SemanaHorarios & {
   generalFinCena:      string | null;
   generalCerradoComida: boolean;
   generalCerradoCena:   boolean;
+  /**
+   * Slots de 15 min ("HH:MM") DESACTIVADOS para reservas. Aplica IGUAL a
+   * todos los días del turno (genérico). Empty = todos los slots entre
+   * apertura y cierre están activos. Si la apertura/cierre cambia, los
+   * nuevos slots aparecen activos sin necesidad de tocar nada.
+   */
+  generalSlotsInactivosComida: string[];
+  generalSlotsInactivosCena:   string[];
+  // Política de cancelación (texto fijo en código; solo estas dos cifras
+  // y el mensaje opcional son configurables por empresa).
+  cancelacionHorasAntes: number;      // entero 1–168, horas completas
+  cancelacionImporteEur: number;      // €, mín 1.00, máx 2 decimales
+  cancelacionPersonalizarMensaje: boolean;
+  cancelacionMensajePersonalizado: string | null;
+  // Mensaje al pedir tarjeta al SELECCIONAR UN PRODUCTO (PRP-051, tipo_categoria='ticket').
+  // El toggle vive en el tab de Ticket; el texto se añade al correo cuando aplique.
+  productoPersonalizarMensaje: boolean;
+  productoMensajePersonalizado: string | null;
+  // Reconfirmación automática por correo. El email se envía a la misma hora
+  // que la reserva, `reconfirmacionDiasAntes` días antes (1–7). Si la reserva
+  // se crea con menos de 24 h de antelación: `reconfirmacionLt24hInmediata`
+  // = true envía el correo justo después del de confirmación; false no envía.
+  reconfirmacionDiasAntes: number;
+  reconfirmacionLt24hInmediata: boolean;
+  // Recordatorio automático por correo (X horas antes de la reserva).
+  recordatorioActivo: boolean;
+  recordatorioHorasAntes: number;
+
+  // Preferencias del motor (panel "Preferencias del motor" en /sala/configuracion).
+  cerrarMotorWebActivo: boolean;
+  cerrarMotorWebComida: string | null; // HH:MM
+  cerrarMotorWebCena:   string | null; // HH:MM
+
+  maxPersonasHoraActivo: boolean;
+  maxPersonasHoraModo:   MaxPersonasHoraModo;
+  maxPersonasHoraGlobal: number | null;
+  maxPersonasHoraReglas: MaxPersonasReglaTramo[];
+
+  parpadeoPasadoDuracion: boolean;
+  parpadeo0a15:           boolean;
+  parpadeo15a30:          boolean;
+
+  intervaloReservaMin: IntervaloReservaMin;
+  ocultarCanceladas:   boolean;
 };
+
+/** Modo del tope "número máximo de personas en misma hora". */
+export type MaxPersonasHoraModo = "mismo" | "diferente_hora" | "diferente_tramo";
+
+export const MAX_PERSONAS_HORA_MODOS: MaxPersonasHoraModo[] = [
+  "mismo",
+  "diferente_hora",
+  "diferente_tramo",
+];
+
+export const MAX_PERSONAS_HORA_MODO_LABELS: Record<MaxPersonasHoraModo, string> = {
+  mismo: "Mismo en todas las horas",
+  diferente_hora: "Diferente según hora",
+  diferente_tramo: "Diferente según tramo horario",
+};
+
+export interface MaxPersonasReglaTramo {
+  inicio: string; // HH:MM
+  fin: string;    // HH:MM
+  max: number;
+}
+
+/** Granularidad de hueco de reserva ofrecida en el motor web. */
+export type IntervaloReservaMin = 5 | 10 | 15 | 30 | 45 | 60;
+export const INTERVALOS_RESERVA: IntervaloReservaMin[] = [5, 10, 15, 30, 45, 60];
+
+export const CANCELACION_HORAS_MIN = 1;
+export const CANCELACION_HORAS_MAX = 168; // 1 semana
+export const CANCELACION_HORAS_DEFAULT = 6;
+export const CANCELACION_IMPORTE_MIN = 1.0;
+export const CANCELACION_IMPORTE_MAX = 9999.99;
+export const CANCELACION_IMPORTE_DEFAULT = 10.0;
+
+/**
+ * Texto fijo (idéntico para todas las empresas) que se muestra en la
+ * configuración de políticas de cancelación y en el correo al cliente
+ * cuando la reserva usa política de cancelación.
+ */
+export const CANCELACION_TEXTO_FIJO =
+  "Las reservas efectuadas con política de cancelación serán gratuitas. " +
+  "Al efectuar la reserva, el cliente proporciona los datos de su tarjeta. " +
+  "Se cargará una cantidad en cuenta al cliente en caso de no presentación " +
+  "o cancelación de última hora.";
+
+/** Límites del campo `duracionReservaMin` (ver migración 20260602160000). */
+export const DURACION_RESERVA_MIN_MINUTOS = 15;
+export const DURACION_RESERVA_MAX_MINUTOS = 360;
+export const DURACION_RESERVA_DEFAULT_MINUTOS = 120;
+
+/** Límites de `reconfirmacionDiasAntes` (ver migración 20260602180000). */
+export const RECONFIRMACION_DIAS_MIN = 1;
+export const RECONFIRMACION_DIAS_MAX = 7;
+export const RECONFIRMACION_DIAS_DEFAULT = 1;
+
+/** Tamaño del slot del indicador genérico de reservas (en minutos). */
+export const RESERVA_SLOT_MIN = 15;
+
+/**
+ * Genera los slots "HH:MM" de duración `RESERVA_SLOT_MIN` entre `inicio` y
+ * `fin` (formato "HH:MM"; soporta cruzar medianoche cuando fin < inicio).
+ * Devuelve array vacío si el intervalo está vacío o las horas no son válidas.
+ */
+export function generarSlotsTurno(inicio: string | null, fin: string | null): string[] {
+  if (!inicio || !fin) return [];
+  const [hi, mi] = inicio.slice(0, 5).split(":").map(Number);
+  const [hf, mf] = fin.slice(0, 5).split(":").map(Number);
+  if (![hi, mi, hf, mf].every((n) => Number.isFinite(n))) return [];
+  const ini = hi * 60 + mi;
+  let f = hf * 60 + mf;
+  if (f <= ini) f += 24 * 60;
+  const out: string[] = [];
+  for (let m = ini; m < f; m += RESERVA_SLOT_MIN) {
+    const real = m % (24 * 60);
+    const h = Math.floor(real / 60);
+    const mm = real % 60;
+    out.push(`${String(h).padStart(2, "0")}:${String(mm).padStart(2, "0")}`);
+  }
+  return out;
+}
 
 // --- EXCEPCIONES DE HORARIO POR ÁMBITO ---
 export type HorarioAmbito = "fecha" | "rango" | "dias_especificos";

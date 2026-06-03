@@ -1,11 +1,15 @@
 "use client";
 
-import type { EmpresaReservasRegla, VigenciaSpec } from "../data/reglas";
+import type { VigenciaSource, VigenciaSpec } from "../data/reglas";
 import { vigenciaEnHumano } from "../lib/vigencia-format";
 
 interface Props {
-  /** Acepta una regla persistida o una vigencia "intencional" (form). */
-  value: EmpresaReservasRegla | VigenciaSpec;
+  /**
+   * Acepta una regla persistida (cualquier entidad con los 4 campos de
+   * vigencia: fechaDesde, fechaHasta, diasSemana, fechasExtra) o una
+   * vigencia "intencional" (form).
+   */
+  value: VigenciaSource | VigenciaSpec;
   className?: string;
 }
 

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { findOrLinkClienteSala, type CampoDistinto } from "@/features/sala/lib/cliente-link";
 import { asignarMesaAutomatica } from "@/features/sala/planos/lib/asignacion-mesa";
+import { validarMotorWebReserva } from "@/features/sala/lib/motor-web-validar";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const inputSchema = z.object({
@@ -53,6 +54,22 @@ export async function crearReservaPublicaAction(
     .maybeSingle();
   if (errEmpresa || !empresa) {
     return { ok: false, error: "Restaurante no encontrado" };
+  }
+
+  // Preferencias del motor web (cierre del día actual, tope personas/hora,
+  // intervalos). Aplicar antes que cualquier otro side-effect.
+  const horaMin = parseInt(data.hora.slice(0, 2), 10) * 60
+    + parseInt(data.hora.slice(3, 5), 10);
+  const turno: "COMIDA" | "CENA" = horaMin < 18 * 60 ? "COMIDA" : "CENA";
+  const motor = await validarMotorWebReserva(admin, {
+    empresaId: empresa.id as string,
+    fecha: data.fecha,
+    hora: data.hora,
+    personas: data.personas,
+    turno,
+  });
+  if (!motor.ok) {
+    return { ok: false, error: motor.error };
   }
 
   // Código → solo aviso. No se valida vigencia/stock/personas/turno/día,
@@ -147,7 +164,7 @@ export async function crearReservaPublicaAction(
     notas: data.notas ?? null,
     origen: data.origen ?? null,
     estado: "PENDIENTE",
-    turno: "COMIDA",
+    turno,
     codigo_id: codigoId,
     codigo_nombre: codigoNombre,
   });

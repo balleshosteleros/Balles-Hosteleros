@@ -3,11 +3,12 @@
 import { listLocalesEmpresa } from "@/features/sala/planos/actions/locales-actions";
 import { listSalas } from "@/features/sala/planos/actions/salas-actions";
 import {
-  listPlanos,
+  listPlanosConSalas,
   getPlanoActivoConPosiciones,
 } from "@/features/sala/planos/actions/planos-actions";
 import { listZonas } from "@/features/sala/planos/actions/zonas-actions";
 import { listMesas } from "@/features/sala/planos/actions/mesas-actions";
+import { listSalaDecoracionesByLocal } from "@/features/sala/planos/actions/sala-decoraciones-actions";
 import { listReservaEtiquetas } from "@/features/sala/actions/reserva-etiquetas-actions";
 import type {
   LocalMin,
@@ -16,6 +17,7 @@ import type {
   Zona,
   Mesa as MesaConfig,
   MesaPosicion,
+  SalaDecoracion,
 } from "@/features/sala/planos/data/planos";
 import type { ReservaEtiqueta } from "@/features/sala/data/reservas";
 
@@ -24,10 +26,13 @@ export interface ReservasModuleContext {
   localId: string;
   salas: Sala[];
   planos: Plano[];
+  /** Mapa plano_id → sala_ids asociadas. Necesario para resolver zonas del plano vigente del día. */
+  planoSalas: Record<string, string[]>;
   zonas: Zona[];
   mesas: MesaConfig[];
   posiciones: MesaPosicion[];
   etiquetas: ReservaEtiqueta[];
+  decoraciones: SalaDecoracion[];
 }
 
 const EMPTY: ReservasModuleContext = {
@@ -35,10 +40,12 @@ const EMPTY: ReservasModuleContext = {
   localId: "",
   salas: [],
   planos: [],
+  planoSalas: {},
   zonas: [],
   mesas: [],
   posiciones: [],
   etiquetas: [],
+  decoraciones: [],
 };
 
 /**
@@ -55,15 +62,30 @@ export async function loadReservasModuleContext(
     }
     const localId = localIdOverride || localesRes.data[0].id;
 
-    const [salasRes, planosRes, zonasRes, mesasRes, planoActivoRes, etiquetasRes] =
-      await Promise.all([
-        listSalas(localId),
-        listPlanos(localId),
-        listZonas(localId),
-        listMesas(localId),
-        getPlanoActivoConPosiciones(localId),
-        listReservaEtiquetas({ soloActivos: true }),
-      ]);
+    const [
+      salasRes,
+      planosConSalasRes,
+      zonasRes,
+      mesasRes,
+      planoActivoRes,
+      etiquetasRes,
+      decoracionesRes,
+    ] = await Promise.all([
+      listSalas(localId),
+      listPlanosConSalas(localId),
+      listZonas(localId),
+      listMesas(localId),
+      getPlanoActivoConPosiciones(localId),
+      listReservaEtiquetas({ soloActivos: true }),
+      listSalaDecoracionesByLocal(localId),
+    ]);
+
+    const planoSalas: Record<string, string[]> = {};
+    if (planosConSalasRes.ok) {
+      planosConSalasRes.data.salasPorPlano.forEach((salaIds, planoId) => {
+        planoSalas[planoId] = salaIds;
+      });
+    }
 
     return {
       ok: true,
@@ -71,7 +93,8 @@ export async function loadReservasModuleContext(
         locales: localesRes.data,
         localId,
         salas: salasRes.ok ? salasRes.data : [],
-        planos: planosRes.ok ? planosRes.data : [],
+        planos: planosConSalasRes.ok ? planosConSalasRes.data.planos : [],
+        planoSalas,
         zonas: zonasRes.ok ? zonasRes.data : [],
         mesas: mesasRes.ok ? mesasRes.data : [],
         posiciones:
@@ -79,6 +102,7 @@ export async function loadReservasModuleContext(
             ? planoActivoRes.data.posiciones
             : [],
         etiquetas: etiquetasRes.ok ? etiquetasRes.data : [],
+        decoraciones: decoracionesRes.ok ? decoracionesRes.data : [],
       },
     };
   } catch (err) {

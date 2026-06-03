@@ -6,6 +6,7 @@
 
 import {
   type EmpresaReservasRegla,
+  type VigenciaSource,
   type VigenciaSpec,
   type DiaIsoDow,
   DIA_ISO_DOW_LABELS,
@@ -41,7 +42,7 @@ function mismoAno(a: string, b: string): boolean {
  *   - "9 jun 2026"
  *   - "9 jun, 16 jun, 23 jun 2026"
  */
-export function vigenciaEnHumano(input: EmpresaReservasRegla | VigenciaSpec): string {
+export function vigenciaEnHumano(input: VigenciaSource | VigenciaSpec): string {
   // Caso VigenciaSpec (intencional)
   if ("modo" in input) {
     switch (input.modo) {

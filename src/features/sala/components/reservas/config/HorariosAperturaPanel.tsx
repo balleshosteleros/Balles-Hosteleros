@@ -8,7 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { ChevronRight, DoorClosed, DoorOpen, Plus, Trash2, X } from "lucide-react";
+import { Check, ChevronRight, DoorClosed, DoorOpen, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type {
@@ -16,7 +16,11 @@ import type {
   EmpresaReservasHorarioExcepcion,
   TurnoKey,
   DiaSemanaKey,
+  SemanaHorarioInicioKey,
+  SemanaHorarioFinKey,
+  SemanaHorarioCerradoKey,
 } from "@/features/sala/data/reservas";
+import { DIA_SEMANA_KEY, generarSlotsTurno } from "@/features/sala/data/reservas";
 import {
   createHorarioExcepcion,
   deleteHorarioExcepcion,
@@ -53,12 +57,139 @@ function turnoLabel(t: TurnoKey): string {
   return t === "comida" ? "Comida" : "Cena";
 }
 
+const MIN_POR_DIA = 1440;
+
+function aMinutos(h: string): number {
+  const [hh, mm] = h.split(":").map(Number);
+  return (hh ?? 0) * 60 + (mm ?? 0);
+}
+
+function intervaloMinutos(inicio: string, fin: string): [number, number] {
+  const s = aMinutos(inicio);
+  let e = aMinutos(fin);
+  if (e <= s) e += MIN_POR_DIA;
+  return [s, e];
+}
+
+interface VentanaTurno {
+  cerrado: boolean;
+  inicio: string;
+  fin: string;
+}
+
+function ventanaEfectiva(
+  cfg: EmpresaReservasConfig,
+  dia: DiaSemanaKey,
+  t: TurnoKey,
+): VentanaTurno | null {
+  const cerradoKey = `${dia}_cerrado_${t}` as SemanaHorarioCerradoKey;
+  const inicioKey = `${dia}_inicio_${t}` as SemanaHorarioInicioKey;
+  const finKey = `${dia}_fin_${t}` as SemanaHorarioFinKey;
+  if (cfg[cerradoKey] === true) return { cerrado: true, inicio: "", fin: "" };
+  const diaIni = cfg[inicioKey];
+  const diaFin = cfg[finKey];
+  if (diaIni && diaFin) return { cerrado: false, inicio: diaIni, fin: diaFin };
+  if (t === "comida") {
+    if (cfg.generalCerradoComida) return { cerrado: true, inicio: "", fin: "" };
+    if (cfg.generalInicioComida && cfg.generalFinComida) {
+      return { cerrado: false, inicio: cfg.generalInicioComida, fin: cfg.generalFinComida };
+    }
+  } else {
+    if (cfg.generalCerradoCena) return { cerrado: true, inicio: "", fin: "" };
+    if (cfg.generalInicioCena && cfg.generalFinCena) {
+      return { cerrado: false, inicio: cfg.generalInicioCena, fin: cfg.generalFinCena };
+    }
+  }
+  return null;
+}
+
+// Comida debe terminar antes (o justo cuando) empieza cena. Nunca pueden solaparse
+// ni invertirse el orden. Devuelve un mensaje de error o null si todo cuadra.
+function validaOrdenComidaCena(
+  comida: VentanaTurno | null,
+  cena: VentanaTurno | null,
+): string | null {
+  if (!comida || comida.cerrado || !cena || cena.cerrado) return null;
+  const [, ce] = intervaloMinutos(comida.inicio, comida.fin);
+  const [ds] = intervaloMinutos(cena.inicio, cena.fin);
+  if (ce > ds) {
+    return "El horario de comida debe terminar antes de que empiece el de cena. No pueden solaparse.";
+  }
+  return null;
+}
+
+function rangoFechasIso(ini: string, fin: string): string[] {
+  const out: string[] = [];
+  const start = new Date(`${ini}T00:00:00`);
+  const end = new Date(`${fin}T00:00:00`);
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    out.push(`${yyyy}-${mm}-${dd}`);
+  }
+  return out;
+}
+
+function diasSemanaUnicos(fechas: string[]): DiaSemanaKey[] {
+  const set = new Set<DiaSemanaKey>();
+  for (const f of fechas) {
+    const d = new Date(`${f}T00:00:00`);
+    set.add(DIA_SEMANA_KEY[d.getDay()]);
+  }
+  return [...set];
+}
+
+/**
+ * Decide qué turno mostrar por defecto en función de la hora actual:
+ *  - mientras la comida esté activa → "comida"
+ *  - mientras la cena esté activa → "cena"
+ *  - si ningún turno está activo → el siguiente que toque (en minutos)
+ * Aplica la ventana general como fallback si el día no tiene horario propio.
+ */
+function turnoPorHoraActual(cfg: EmpresaReservasConfig): TurnoKey {
+  const ahora = new Date();
+  const dia = DIA_SEMANA_KEY[ahora.getDay()];
+  const minActual = ahora.getHours() * 60 + ahora.getMinutes();
+  const comida = ventanaEfectiva(cfg, dia, "comida");
+  const cena   = ventanaEfectiva(cfg, dia, "cena");
+  const dentro = (v: VentanaTurno | null): boolean => {
+    if (!v || v.cerrado) return false;
+    const [ini, fin] = intervaloMinutos(v.inicio, v.fin);
+    const mNorm = minActual < ini ? minActual + MIN_POR_DIA : minActual;
+    return mNorm >= ini && mNorm < fin;
+  };
+  if (dentro(comida)) return "comida";
+  if (dentro(cena))   return "cena";
+  // Ninguno activo: el más cercano en el futuro
+  const distanciaA = (v: VentanaTurno | null): number => {
+    if (!v || v.cerrado) return Number.POSITIVE_INFINITY;
+    const [ini] = intervaloMinutos(v.inicio, v.fin);
+    let d = ini - minActual;
+    if (d <= 0) d += MIN_POR_DIA;
+    return d;
+  };
+  return distanciaA(comida) <= distanciaA(cena) ? "comida" : "cena";
+}
+
 export function HorariosAperturaPanel({ config, onChange }: Props) {
-  const [turno, setTurno] = useState<TurnoKey>("cena");
+  const [turno, setTurno] = useState<TurnoKey>(() => turnoPorHoraActual(config));
   const [cerrado, setCerrado] = useState(false);
   const [inicio, setInicio] = useState("20:00");
   const [fin, setFin] = useState("02:00");
   const [ambito, setAmbito] = useState<Ambito>("dia_semana");
+
+  // Re-evalúa el turno por defecto cada minuto: cuando termine el turno actual
+  // pasamos automáticamente al siguiente.
+  useEffect(() => {
+    const id = setInterval(() => {
+      setTurno((prev) => {
+        const sugerido = turnoPorHoraActual(config);
+        return prev === sugerido ? prev : sugerido;
+      });
+    }, 60_000);
+    return () => clearInterval(id);
+  }, [config]);
 
   // Estado específico de ámbitos
   const [diaSemanaSel, setDiaSemanaSel] = useState<DiaSemanaKey>("lun");
@@ -112,8 +243,27 @@ export function HorariosAperturaPanel({ config, onChange }: Props) {
     }
     setAplicando(true);
     try {
+      // Comida y cena nunca pueden solaparse: comida SIEMPRE antes que cena.
+      const ventanaEdicion: VentanaTurno = cerrado
+        ? { cerrado: true, inicio: "", fin: "" }
+        : { cerrado: false, inicio, fin };
+      const otroTurno: TurnoKey = turno === "comida" ? "cena" : "comida";
+
+      const validarEnDia = (dia: DiaSemanaKey): string | null => {
+        const otra = ventanaEfectiva(config, dia, otroTurno);
+        return turno === "comida"
+          ? validaOrdenComidaCena(ventanaEdicion, otra)
+          : validaOrdenComidaCena(otra, ventanaEdicion);
+      };
+
       // Caso semanal: escribe en la config por día de la semana elegido
       if (ambito === "dia_semana") {
+        const err = validarEnDia(diaSemanaSel);
+        if (err) {
+          toast.error(err);
+          setAplicando(false);
+          return;
+        }
         const parche: Record<string, unknown> = {
           [`${diaSemanaSel}_inicio_${turno}`]:  cerrado ? null : inicio,
           [`${diaSemanaSel}_fin_${turno}`]:     cerrado ? null : fin,
@@ -133,6 +283,15 @@ export function HorariosAperturaPanel({ config, onChange }: Props) {
           setAplicando(false);
           return;
         }
+        const dias = diasSemanaUnicos(rangoFechasIso(rangoIni, rangoFin));
+        for (const dia of dias) {
+          const err = validarEnDia(dia);
+          if (err) {
+            toast.error(`En ${DIAS_LABELS[dia]}: ${err}`);
+            setAplicando(false);
+            return;
+          }
+        }
         payload = {
           turno,
           ambito: "rango",
@@ -149,6 +308,15 @@ export function HorariosAperturaPanel({ config, onChange }: Props) {
           toast.error("Añade al menos una fecha");
           setAplicando(false);
           return;
+        }
+        const dias = diasSemanaUnicos(fechasLista);
+        for (const dia of dias) {
+          const err = validarEnDia(dia);
+          if (err) {
+            toast.error(`En ${DIAS_LABELS[dia]}: ${err}`);
+            setAplicando(false);
+            return;
+          }
         }
         payload = {
           turno,
@@ -191,6 +359,10 @@ export function HorariosAperturaPanel({ config, onChange }: Props) {
         <p className="text-xs text-muted-foreground">
           Define cuándo aceptas reservas en cada turno. Aplícalo a un día concreto de la semana
           (se repite siempre), a un rango entre dos fechas, o a días específicos del calendario.
+        </p>
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          El horario de comida debe terminar antes de que empiece el de cena. Nunca pueden solaparse:
+          si comida cubre todo el día, no podrás configurar cena.
         </p>
       </div>
 
@@ -266,6 +438,13 @@ export function HorariosAperturaPanel({ config, onChange }: Props) {
         </div>
       </div>
 
+      {/* Indicador genérico de slots activos para reservas (mismo para todos los días) */}
+      <SlotsActivosPicker
+        turno={turno}
+        config={config}
+        onChange={onChange}
+      />
+
       <Separator />
 
       {/* Fila 2: ámbito */}
@@ -284,7 +463,7 @@ export function HorariosAperturaPanel({ config, onChange }: Props) {
               className={cn(
                 "px-3 h-8 rounded border text-xs font-medium transition-colors",
                 ambito === opt.value
-                  ? "bg-foreground text-background border-foreground"
+                  ? "bg-primary text-primary-foreground border-primary"
                   : "bg-background text-foreground border-input hover:bg-muted",
               )}
             >
@@ -444,6 +623,124 @@ export function HorariosAperturaPanel({ config, onChange }: Props) {
           </ul>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Selector genérico de slots de 15 min activos para reservas.
+ *
+ * Reglas:
+ *  · Aplica IGUAL a todos los días del turno (no se diferencia por día).
+ *  · Los slots se generan automáticamente entre la apertura y el cierre
+ *    "general" del turno (`generalInicio*`/`generalFin*`). Si abres antes
+ *    o cierras después, los nuevos slots aparecen activos sin tocar nada.
+ *  · Por defecto TODOS están activos; lo que se persiste es la lista de
+ *    slots desactivados (`generalSlotsInactivos*`), por eficiencia.
+ *  · Auto-guarda al hacer click (vía `onChange`).
+ */
+function SlotsActivosPicker({
+  turno,
+  config,
+  onChange,
+}: {
+  turno: TurnoKey;
+  config: EmpresaReservasConfig;
+  onChange: (parche: Partial<EmpresaReservasConfig>) => void;
+}) {
+  const ini = turno === "comida" ? config.generalInicioComida : config.generalInicioCena;
+  const fin = turno === "comida" ? config.generalFinComida    : config.generalFinCena;
+  const cerrado = turno === "comida" ? config.generalCerradoComida : config.generalCerradoCena;
+  const slots = generarSlotsTurno(ini, fin);
+  const inactivosKey: keyof EmpresaReservasConfig =
+    turno === "comida" ? "generalSlotsInactivosComida" : "generalSlotsInactivosCena";
+  const inactivos = new Set<string>(
+    (turno === "comida" ? config.generalSlotsInactivosComida : config.generalSlotsInactivosCena) ?? [],
+  );
+
+  function toggle(slot: string) {
+    const next = new Set(inactivos);
+    if (next.has(slot)) next.delete(slot);
+    else next.add(slot);
+    onChange({ [inactivosKey]: [...next].sort() } as Partial<EmpresaReservasConfig>);
+  }
+
+  function setTodos(activo: boolean) {
+    onChange({ [inactivosKey]: activo ? [] : [...slots] } as Partial<EmpresaReservasConfig>);
+  }
+
+  const activosCount = slots.length - [...inactivos].filter((s) => slots.includes(s)).length;
+
+  return (
+    <div className="space-y-2 rounded border border-dashed bg-muted/30 p-3">
+      <div className="flex items-end justify-between gap-3 flex-wrap">
+        <div>
+          <Label className="text-xs">
+            Slots activos para reservas{" "}
+            <span className="text-muted-foreground font-normal">
+              | mismos para todos los días de {turnoLabel(turno).toLowerCase()} · 15 min
+            </span>
+          </Label>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            Por defecto todos activos. Desmarca los huecos en los que NO quieras aceptar reservas.
+          </p>
+        </div>
+        {slots.length > 0 && (
+          <div className="flex items-center gap-2 text-[11px]">
+            <span className="text-muted-foreground">
+              {activosCount}/{slots.length} activos
+            </span>
+            <button
+              type="button"
+              onClick={() => setTodos(true)}
+              className="rounded border bg-background px-2 h-7 hover:bg-muted"
+            >
+              Todos
+            </button>
+            <button
+              type="button"
+              onClick={() => setTodos(false)}
+              className="rounded border bg-background px-2 h-7 hover:bg-muted"
+            >
+              Ninguno
+            </button>
+          </div>
+        )}
+      </div>
+
+      {cerrado ? (
+        <p className="text-xs text-muted-foreground italic">
+          Turno cerrado: no hay slots configurables.
+        </p>
+      ) : slots.length === 0 ? (
+        <p className="text-xs text-muted-foreground italic">
+          Configura la hora de apertura y cierre general del turno para ver los slots.
+        </p>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {slots.map((s) => {
+            const activo = !inactivos.has(s);
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() => toggle(s)}
+                className={cn(
+                  "inline-flex items-center gap-1 h-7 rounded border px-2 text-xs font-medium transition-colors",
+                  activo
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background text-muted-foreground border-input hover:bg-muted line-through",
+                )}
+                aria-pressed={activo}
+                aria-label={`${s} ${activo ? "activo" : "inactivo"}`}
+              >
+                {activo && <Check className="h-3 w-3" />}
+                {s}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
