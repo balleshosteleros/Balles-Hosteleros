@@ -2,7 +2,10 @@
 
 ## Estado
 
-PLANIFICADO (Ola 2, 2026-06-01). **No implementado.** Contrato ejecutable derivado del discovery.
+**IMPLEMENTADO y validado (2026-06-03).** Cierre: `docs/rrhh-consolidacion/ola2-demock/CIERRE_2026-06-03_OLA2-04.md`.
+
+> **Corrección de contrato (schema real manda).** La verificación con Management API reveló que el schema productivo de `plantillas_boarding`/`procesos_boarding` YA estaba migrado y correcto (a diferencia del DDL `010` que leyó el discovery): existen `updated_at`, `iniciado_por` (FK→auth.users), `fecha_fin`; `empresa_id`/`empleado_id` son `uuid NOT NULL`; la RLS YA es multi-tenant (`*_rw_empresa`); y el `estado` YA tiene CHECK canónico `activo|finalizado|archivado`. **No existían** `created_by` ni `empleado_nombre` (de ahí los P0 al escribirlas). Y **`procesos_boarding.empleado_id` es FK a `empleados(id)`, NO a `profiles.user_id`** como asumía este contrato. Conclusión: **no se requirió migración**; el fix fue solo código (alinear actions + componente + IO al schema real) y se persiste `empleados.id` en `empleado_id`. La deuda de reproducibilidad (schema sin `.sql` versionado) es pre-existente y queda anotada.
+
 Discovery de respaldo: `docs/rrhh-consolidacion/ola2-demock/DISCOVERY_OLA2-04-boarding-reparar-mixto.md` (DDL, actions, view, io, modelo TS y nucleo de alta verificados directamente sobre el codigo el 2026-06-01).
 
 ## Objetivo
