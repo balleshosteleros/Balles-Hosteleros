@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ModuleIO, RowSchema } from "@/shared/io";
-import { getProcesosPorEmpresa, type ProcesoBoarding } from "@/features/rrhh/data/boarding";
+import { type ProcesoBoarding } from "@/features/rrhh/data/boarding";
+import { listProcesos } from "@/features/rrhh/actions/boarding-actions";
 
 const TIPOS = ["onboarding", "offboarding"] as const;
 const ESTADOS = ["activo", "finalizado", "archivado"] as const;
@@ -36,5 +37,10 @@ export const boardingIO: ModuleIO<ProcesoBoarding> = {
     { key: "tareas", label: "Tareas", hideInExport: true, hideInImport: true },
     { key: "empresaId", label: "Empresa", hideInImport: true },
   ],
-  fetchAll: async (ctx) => getProcesosPorEmpresa((ctx.empresaId as string) ?? ""),
+  // OLA2-04: exporta los procesos reales de la empresa activa (resuelta
+  // server-side por la action), no el mock.
+  fetchAll: async () => {
+    const res = await listProcesos();
+    return res.ok ? res.data : [];
+  },
 };

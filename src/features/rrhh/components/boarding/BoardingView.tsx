@@ -4,15 +4,23 @@ import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { getEmpleadosActivos, type EmpleadoActivo } from "@/features/rrhh/actions/empleados-actions";
 import {
-  getProcesosPorEmpresa,
-  getPlantillasPorEmpresa,
   type ProcesoBoarding,
   type PlantillaBoarding,
   type TareaProceso,
   type TipoBoarding,
   type EstadoProceso,
 } from "@/features/rrhh/data/boarding";
-import { listPlantillas as listPlantillasAction, createPlantilla as createPlantillaAction, listProcesos as listProcesosAction, createProceso as createProcesoAction, updateProcesoTareas as updateProcesoTareasAction } from "@/features/rrhh/actions/boarding-actions";
+import {
+  listPlantillas as listPlantillasAction,
+  createPlantilla as createPlantillaAction,
+  updatePlantilla as updatePlantillaAction,
+  deletePlantilla as deletePlantillaAction,
+  listProcesos as listProcesosAction,
+  createProceso as createProcesoAction,
+  updateProcesoTareas as updateProcesoTareasAction,
+  setEstadoProceso as setEstadoProcesoAction,
+  duplicarProceso as duplicarProcesoAction,
+} from "@/features/rrhh/actions/boarding-actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -75,8 +83,8 @@ const hoy = () => new Date().toISOString().slice(0, 10);
 
 export function BoardingView() {
   const { empresaActual } = useEmpresa();
-  // OLA2-01: empleados reales (fuente única) para el selector y la resolución
-  // de nombres. Procesos y plantillas siguen siendo mock hasta OLA2-04.
+  // Empleados reales (OLA2-01) para el selector y la resolución de nombres por
+  // empleado_id (= empleados.id). Procesos y plantillas son reales desde OLA2-04.
   const [empleados, setEmpleados] = useState<EmpleadoActivo[]>([]);
   useEffect(() => {
     let alive = true;
@@ -98,25 +106,23 @@ export function BoardingView() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [pltRes, procRes] = await Promise.all([listPlantillasAction(), listProcesosAction()]);
-      if (pltRes.ok && pltRes.data.length > 0) {
-        // DB has data but shape is flat; fall back to mock for rich nested data
-        setPlantillas(getPlantillasPorEmpresa(empresaActual.id));
-      } else {
-        setPlantillas(getPlantillasPorEmpresa(empresaActual.id));
-      }
-      if (procRes.ok && procRes.data.length > 0) {
-        setProcesos(getProcesosPorEmpresa(empresaActual.id));
-      } else {
-        setProcesos(getProcesosPorEmpresa(empresaActual.id));
-      }
-    } catch {
-      setProcesos(getProcesosPorEmpresa(empresaActual.id));
-      setPlantillas(getPlantillasPorEmpresa(empresaActual.id));
+      // OLA2-04: fuente única = BD (sin fallback al mock). Pasamos el dbId
+      // explícito para evitar la carrera con la cookie de empresa activa al
+      // cambiar de empresa; RLS filtra por empresa en ambos casos.
+      const [pltRes, procRes] = await Promise.all([
+        listPlantillasAction(empresaActual.dbId),
+        listProcesosAction(empresaActual.dbId),
+      ]);
+      setPlantillas(pltRes.ok ? pltRes.data : []);
+      setProcesos(procRes.ok ? procRes.data : []);
+    } catch (err) {
+      console.error("[boarding] loadData:", err);
+      setPlantillas([]);
+      setProcesos([]);
     } finally {
       setLoading(false);
     }
-  }, [empresaActual.id]);
+  }, [empresaActual.dbId]);
 
   useEffect(() => {
     loadData();
@@ -174,65 +180,93 @@ export function BoardingView() {
     if (!newEmpleadoId || !newPlantillaId) { toast.error("Selecciona empleado y plantilla"); return; }
     const plt = plantillas.find((p) => p.id === newPlantillaId);
     if (!plt) return;
-    const emp = empleados.find((e) => e.empleadoId === newEmpleadoId);
-    const nuevo: ProcesoBoarding = {
-      id: `proc-${Date.now()}`,
-      empleadoId: newEmpleadoId,
+    const tempId = `temp-${Date.now()}`;
+    const optimista: ProcesoBoarding = {
+      id: tempId,
+      empleadoId: newEmpleadoId, // = empleados.id (selector real OLA2-01)
       tipo: newTipo,
       estado: "activo",
       plantillaId: plt.id,
       plantillaNombre: plt.nombre,
       fechaInicio: newFecha,
-      empresaId: empresaActual.id,
-      tareas: plt.tareas.map((t) => ({ id: `pt-${Date.now()}-${t.id}`, nombre: t.nombre, completada: false, fechaCompletado: null, orden: t.orden })),
+      empresaId: empresaActual.dbId ?? "",
+      tareas: plt.tareas.map((t) => ({ id: t.id, nombre: t.nombre, completada: false, fechaCompletado: null, orden: t.orden })),
     };
-    setProcesos((prev) => [nuevo, ...prev]);
+    setProcesos((prev) => [optimista, ...prev]);
     setShowNew(false);
+    const empleadoIdSel = newEmpleadoId;
     setNewEmpleadoId("");
     setNewPlantillaId("");
     const res = await createProcesoAction({
-      empleado_nombre: emp ? `${emp.nombre} ${emp.apellidos}` : newEmpleadoId,
-      empleado_id: newEmpleadoId,
-      plantilla_id: plt.id,
+      empleadoId: empleadoIdSel,
+      plantillaId: plt.id,
+      plantillaNombre: plt.nombre,
       tipo: newTipo,
-      fecha_inicio: newFecha,
-      tareas: plt.tareas.map((t) => ({ titulo: t.nombre, completada: false })),
+      fechaInicio: newFecha,
+      tareas: plt.tareas.map((t) => ({ titulo: t.nombre, completada: false, orden: t.orden })),
     });
-    if (res.ok) toast.success("Proceso creado correctamente");
-    else toast.error(res.error ?? "Error al crear proceso");
+    if (res.ok) {
+      setProcesos((prev) => prev.map((p) => (p.id === tempId ? res.data : p)));
+      toast.success("Proceso creado correctamente");
+    } else {
+      setProcesos((prev) => prev.filter((p) => p.id !== tempId));
+      toast.error(res.error ?? "Error al crear proceso");
+    }
   }
 
   async function toggleTarea(tareaId: string) {
     if (!procesoActivo) return;
-    const updated = { ...procesoActivo, tareas: procesoActivo.tareas.map((t) =>
+    const prevProceso = procesoActivo;
+    const updated = { ...prevProceso, tareas: prevProceso.tareas.map((t) =>
       t.id === tareaId ? { ...t, completada: !t.completada, fechaCompletado: !t.completada ? hoy() : null } : t
     )};
     setProcesoActivo(updated);
     setProcesos((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
-    await updateProcesoTareasAction(updated.id, updated.tareas.map((t) => ({ titulo: t.nombre, completada: t.completada })));
+    const res = await updateProcesoTareasAction(
+      updated.id,
+      updated.tareas.map((t) => ({ titulo: t.nombre, completada: t.completada, orden: t.orden, fechaCompletado: t.fechaCompletado })),
+    );
+    if (!res.ok) {
+      setProcesoActivo(prevProceso);
+      setProcesos((prev) => prev.map((p) => (p.id === prevProceso.id ? prevProceso : p)));
+      toast.error(res.error ?? "No se pudo guardar el cambio");
+    }
   }
 
-  function finalizarProceso(id: string) {
+  async function finalizarProceso(id: string) {
+    const snapshot = procesos;
     setProcesos((prev) => prev.map((p) => (p.id === id ? { ...p, estado: "finalizado" as EstadoProceso } : p)));
-    if (procesoActivo?.id === id) setProcesoActivo((p) => p ? { ...p, estado: "finalizado" } : p);
-    toast.success("Proceso finalizado");
+    if (procesoActivo?.id === id) setProcesoActivo((p) => (p ? { ...p, estado: "finalizado" } : p));
+    const res = await setEstadoProcesoAction(id, "finalizado");
+    if (res.ok) {
+      toast.success("Proceso finalizado");
+    } else {
+      setProcesos(snapshot);
+      if (procesoActivo?.id === id) setProcesoActivo((p) => (p ? { ...p, estado: "activo" } : p));
+      toast.error(res.error ?? "No se pudo finalizar");
+    }
   }
 
-  function archivarProceso(id: string) {
+  async function archivarProceso(id: string) {
+    const snapshot = procesos;
     setProcesos((prev) => prev.map((p) => (p.id === id ? { ...p, estado: "archivado" as EstadoProceso } : p)));
-    toast.success("Proceso archivado");
+    const res = await setEstadoProcesoAction(id, "archivado");
+    if (res.ok) {
+      toast.success("Proceso archivado");
+    } else {
+      setProcesos(snapshot);
+      toast.error(res.error ?? "No se pudo archivar");
+    }
   }
 
-  function duplicarProceso(proc: ProcesoBoarding) {
-    const dup: ProcesoBoarding = {
-      ...proc,
-      id: `proc-${Date.now()}`,
-      estado: "activo",
-      fechaInicio: hoy(),
-      tareas: proc.tareas.map((t) => ({ ...t, id: `pt-${Date.now()}-${t.id}`, completada: false, fechaCompletado: null })),
-    };
-    setProcesos((prev) => [dup, ...prev]);
-    toast.success("Proceso duplicado");
+  async function duplicarProceso(proc: ProcesoBoarding) {
+    const res = await duplicarProcesoAction(proc.id);
+    if (res.ok) {
+      setProcesos((prev) => [res.data, ...prev]);
+      toast.success("Proceso duplicado");
+    } else {
+      toast.error(res.error ?? "No se pudo duplicar");
+    }
   }
 
   function openNewPlantilla() {
@@ -255,24 +289,34 @@ export function BoardingView() {
     if (!pltNombre.trim()) { toast.error("El nombre es obligatorio"); return; }
     const tareasLimpias = pltTareas.filter((t) => t.trim());
     if (!tareasLimpias.length) { toast.error("Añade al menos una tarea"); return; }
-    const tareas = tareasLimpias.map((nombre, i) => ({ id: `tpl-${Date.now()}-${i}`, nombre, orden: i + 1 }));
+    const tareas = tareasLimpias.map((nombre, i) => ({ id: `t${i + 1}`, nombre, orden: i + 1 }));
+    const tareasInput = tareasLimpias.map((t, i) => ({ titulo: t, orden: i + 1 }));
 
     if (editPlantilla) {
-      setPlantillas((prev) => prev.map((p) => (p.id === editPlantilla.id ? { ...p, nombre: pltNombre, tipo: pltTipo, tareas } : p)));
-      toast.success("Plantilla actualizada");
+      const target = editPlantilla;
+      const snapshot = plantillas;
+      setPlantillas((prev) => prev.map((p) => (p.id === target.id ? { ...p, nombre: pltNombre, tipo: pltTipo, tareas } : p)));
+      setShowPlantillaDialog(false);
+      const res = await updatePlantillaAction({ id: target.id, nombre: pltNombre, tipo: pltTipo, tareas: tareasInput });
+      if (res.ok) toast.success("Plantilla actualizada");
+      else { setPlantillas(snapshot); toast.error(res.error ?? "Error al actualizar plantilla"); }
     } else {
-      const nueva: PlantillaBoarding = { id: `plt-${Date.now()}`, nombre: pltNombre, tipo: pltTipo, empresaId: empresaActual.id, tareas };
-      setPlantillas((prev) => [...prev, nueva]);
-      const res = await createPlantillaAction({ nombre: pltNombre, tipo: pltTipo, tareas: tareasLimpias.map((t, i) => ({ titulo: t, orden: i + 1 })) });
-      if (res.ok) toast.success("Plantilla creada");
-      else toast.error(res.error ?? "Error al crear plantilla");
+      const tempId = `temp-${Date.now()}`;
+      const optimista: PlantillaBoarding = { id: tempId, nombre: pltNombre, tipo: pltTipo, empresaId: empresaActual.dbId ?? "", tareas };
+      setPlantillas((prev) => [...prev, optimista]);
+      setShowPlantillaDialog(false);
+      const res = await createPlantillaAction({ nombre: pltNombre, tipo: pltTipo, tareas: tareasInput });
+      if (res.ok) { setPlantillas((prev) => prev.map((p) => (p.id === tempId ? res.data : p))); toast.success("Plantilla creada"); }
+      else { setPlantillas((prev) => prev.filter((p) => p.id !== tempId)); toast.error(res.error ?? "Error al crear plantilla"); }
     }
-    setShowPlantillaDialog(false);
   }
 
-  function eliminarPlantilla(id: string) {
+  async function eliminarPlantilla(id: string) {
+    const snapshot = plantillas;
     setPlantillas((prev) => prev.filter((p) => p.id !== id));
-    toast.success("Plantilla eliminada");
+    const res = await deletePlantillaAction(id);
+    if (res.ok) toast.success("Plantilla eliminada");
+    else { setPlantillas(snapshot); toast.error(res.error ?? "No se pudo eliminar"); }
   }
 
   // ─── DETALLE view ───────────────────────────────────────────
