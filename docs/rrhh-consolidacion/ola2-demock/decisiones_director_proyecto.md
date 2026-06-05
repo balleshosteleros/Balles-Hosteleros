@@ -164,6 +164,29 @@ En hostelería los turnos cambian a última hora (refuerzos, coberturas, imprevi
 
 ---
 
+## ✅ DECISIONES TOMADAS POR EL DIRECTOR
+
+**Fecha de decisión:** 2026-06-05
+**Decididas por:** responsable del proyecto (Iván / balleshosteleros@gmail.com)
+
+| # | Decisión | Lo elegido | ¿Coincide con la recomendación? |
+|---|----------|-----------|----------------------------------|
+| 1 | Salario oficial | **Opción B — Manda la tabla por puesto.** Cada empleado hereda el salario de su categoría/puesto. **Matiz del director:** al crear un empleado nuevo, el sistema debe **preguntar a quien lo está creando si quiere heredar** las condiciones del puesto (no se aplica a ciegas; queda como valor por defecto editable). | No (recom. era C) |
+| 2 | Efectivo extra | **Opción C — Guardarlo como un dato más del salario.** ✅ **Confirmado por la gestora del director (2026-06-05): se puede construir ya.** Queda como dato normal del salario. | No (recom. era A) |
+| 3 | Bonus | **Opción A — Solo describir.** El sistema guarda y muestra las reglas; los importes se deciden a mano por ahora. | Sí |
+| 4 | Formación | **Opción A — Unificar.** El recorrido de bienvenida se convierte en un "curso de bienvenida" dentro de la academia. | Sí |
+| 5 | Calendario de ausencias | **Opción A — Solo mostrar.** El calendario pinta lo de Solicitudes; para crear se va a Solicitudes. | Sí |
+| 6 | Ratios y previsiones | **Opción A — Mostrar lo real ya** y dejar la previsión como "pendiente de histórico". | Sí |
+| 7 | Turnos | **Opción A — Solo viven en Horarios.** El calendario los lee de ahí. | Sí |
+| 8 | Fichar fuera de turno | **Opción B — Bloquear los fichajes fuera de turno.** Más control. (Recom. era solo avisar; el director opta por bloquear.) | No (recom. era A) |
+
+### Notas para implementación
+- **D1:** el flujo de alta de empleado debe ofrecer "heredar condiciones del puesto" como opción explícita (sí/no) al creador, con los valores del puesto precargados pero editables.
+- **D2:** ✅ **Confirmado por la gestora (2026-06-05). Vía libre para construir** el "efectivo extra" como dato normal del salario.
+- **D8:** al bloquear fichajes fuera de turno, considerar desde el diseño un mecanismo de excepción/override por responsable para coberturas e imprevistos de última hora (evitar perder trabajo realmente realizado).
+
+---
+
 ## ¿Y ahora qué?
 
 - Con que elijas una opción en cada punto (o nos digas "vamos con todas las recomendadas"), tenemos vía libre para empezar a construir.
@@ -171,3 +194,22 @@ En hostelería los turnos cambian a última hora (refuerzos, coberturas, imprevi
 - Hay además **dos asuntos urgentes de seguridad/errores** que conviene comentar aparte (uno sobre el acceso a contraseñas de aplicaciones y otro sobre un guardado que hoy falla en silencio). No son decisiones de negocio, pero sí cosas a las que dar prioridad.
 
 Cualquier duda en alguna de las 8, la vemos juntos antes de decidir.
+
+---
+
+## 🔧 ASUNTOS URGENTES — estado (actualizado 2026-06-05)
+
+### Asunto 1 — Seguridad de las contraseñas de apps (módulo `/accesos`, PRP-043) → ✅ CORREGIDO
+
+**Verificación con la base de datos real (Management API, 2026-06-05):** el diagnóstico del discovery OLA2-15 era **más pesimista que la realidad**. En producción **sí existían y eran correctas** la RLS de revelado (intersección de roles: solo ve la contraseña quien es director de la app o tiene el rol asignado a esa credencial) y todas las funciones de seguridad. **No había puerta abierta de filtración; el cifrado no era "teatro".**
+
+El riesgo real era de **reproducibilidad/auditoría**: las 3 tablas, RLS, funciones, índices y triggers estaban aplicados **a mano sobre prod, sin ninguna migración `.sql`**. Un entorno limpio (CI, empresa nueva, recreación de BD) se quedaba sin ellos y `/accesos` se rompía sin red de seguridad.
+
+**Corregido:**
+- Nueva migración versionada `supabase/migrations/20260605120000_accesos_prp043_versionar_schema_rls.sql` que captura **exactamente** el estado vivo (idempotente: no-op en prod, completo en entornos limpios). Aplicada y verificada (RLS activa, 2 políticas por tabla, sin avisos del advisor de seguridad).
+- Documentada la clave de cifrado `CREDENCIALES_ENCRYPTION_KEY` en `.env.example` (obligatoria, `openssl rand -hex 32`, aviso de no rotar a la ligera).
+- **Pendiente menor (no urgente):** procedimiento formal de rotación de la clave de cifrado (PRP-043 lo dejaba como "Fase 7 opcional"). Reservado a Fernando junto con el resto del módulo.
+
+### Asunto 2 — Boarding guardaba "en silencio" (OLA2-04) → ✅ YA RESUELTO EN REMOTO
+
+Lo cerró Fernando en `origin/main` (commits `35c8d23` + `f698193`: *"boarding real - lee/escribe BD y retira mock"*). Solo falta **bajarlo a local** (`git pull --rebase`).
