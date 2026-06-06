@@ -194,7 +194,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // 2) Refresco en paralelo (stale-while-revalidate). Profile y permisos
           //    en una sola tanda — getUserPermisos ya devuelve appRoles, así que
           //    no necesitamos una query extra a user_roles.
-          setTimeout(async () => {
+          //    Reintenta si el fetch llega "en blanco" por una carrera con la
+          //    propagación de cookies justo tras el login (ver loadFreshAuth).
+          const loadFreshAuth = async (attempt: number) => {
             const [profileRes, permisosRes] = await Promise.all([
               supabase
                 .from("profiles")
@@ -211,11 +213,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const fetchedRoles = (permisosRes?.appRoles ?? []) as AppRole[];
             const fetchedPermisos = permisosRes?.permisos ?? [];
 
-            // Defensa: si el fetch llega vacío pero el caché previo tenía datos,
-            // NO los borramos. Un getUserPermisos que falla silenciosamente (red,
-            // admin client transitorio) devolvía `appRoles: []` y vaciaba el
-            // sidebar y los gates como "No tienes departamentos asignados". La
-            // fuente de verdad cuando todo va bien sigue siendo el fetch nuevo.
+            // Race justo tras el login: el server action corre antes de que las
+            // cookies de sesión estén propagadas, así que auth.getUser() devuelve
+            // null y getUserPermisos retorna empresaId null + appRoles []. Sin
+            // caché previo (p.ej. incógnito) eso pintaba "No tienes departamentos"
+            // en falso. Mientras parezca un fallo de carrera, NO marcamos como
+            // cargado: mantenemos el skeleton y reintentamos con backoff corto.
+            const looksRaceFailure =
+              permisosRes === null || permisosRes.empresaId == null;
+            if (looksRaceFailure && attempt < 3) {
+              setTimeout(() => loadFreshAuth(attempt + 1), 250 * (attempt + 1));
+              return;
+            }
+
+            // Defensa adicional: si el fetch llega vacío pero el caché previo tenía
+            // datos, NO los borramos (fallo silencioso de red / admin transitorio).
             const fetchFailedSilently =
               permisosRes !== null && fetchedRoles.length === 0 && (cached?.roles.length ?? 0) > 0;
             const nextRoles = fetchFailedSilently ? cached!.roles : fetchedRoles;
@@ -235,13 +247,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             // Solo persistimos el caché si el fetch fue real. Así un fallo
             // transitorio no corrompe el localStorage para el próximo mount.
-            if (!fetchFailedSilently) {
+            if (!fetchFailedSilently && !looksRaceFailure) {
               writeAuthCache(userId, {
                 roles: nextRoles,
                 permisos: nextPermisos,
               });
             }
-          }, 0);
+          };
+          setTimeout(() => loadFreshAuth(0), 0);
         } else {
           setProfile(null);
           setRoles([]);
