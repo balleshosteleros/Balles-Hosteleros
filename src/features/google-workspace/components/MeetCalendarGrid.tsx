@@ -127,12 +127,13 @@ export function MeetCalendarGrid({
     return d.getHours() * 60 + d.getMinutes();
   }, [nowTime]);
 
-  const visibles = useMemo(
-    () => (soloMeet ? eventos.filter(esMeet) : eventos),
-    [eventos, soloMeet],
-  );
-  const timed = visibles.filter((e) => !e.allDay);
-  const allday = visibles.filter((e) => e.allDay);
+  const visibles = useMemo(() => {
+    const base = soloMeet ? eventos.filter(esMeet) : eventos;
+    // No mostramos eventos de "todo el día": saturan la cabecera y nunca
+    // son reuniones de Meet.
+    return base.filter((e) => !e.allDay);
+  }, [eventos, soloMeet]);
+  const timed = visibles;
 
   // Al montar el contenedor scrollable, posiciona en la hora actual.
   const setScrollContainer = (el: HTMLDivElement | null) => {
@@ -189,30 +190,6 @@ export function MeetCalendarGrid({
                 >
                   {d.getDate()}
                 </p>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Fila de eventos de todo el día */}
-      {allday.length > 0 && (
-        <div className="flex shrink-0 border-b bg-muted/10">
-          <div className="w-[52px] shrink-0 border-r px-1 py-1 text-right text-[9px] uppercase text-muted-foreground">
-            Todo&nbsp;el&nbsp;día
-          </div>
-          {dias.map((d, i) => {
-            const dayIso = isoDate(d);
-            const evs = allday.filter((e) => allDayCubreFecha(e, dayIso));
-            return (
-              <div key={i} className="min-h-[28px] flex-1 space-y-0.5 border-r p-1">
-                {evs.map((ev) => (
-                  <BloquePill
-                    key={`${ev.id}-${dayIso}`}
-                    ev={ev}
-                    onAbrir={onAbrir}
-                  />
-                ))}
               </div>
             );
           })}
@@ -318,36 +295,6 @@ export function MeetCalendarGrid({
         })}
       </div>
     </div>
-  );
-}
-
-// Pastilla compacta (eventos de todo el día y celdas de mes)
-function BloquePill({
-  ev,
-  onAbrir,
-}: {
-  ev: EventoGrid;
-  onAbrir: (ev: EventoGrid) => void;
-}) {
-  const meet = esMeet(ev);
-  const bg = meet ? colorMeet(ev) : GRIS_BG;
-  const txt = meet ? textOnColor(bg) : GRIS_TXT;
-  return (
-    <button
-      type="button"
-      onClick={() => meet && onAbrir(ev)}
-      disabled={!meet}
-      className={cn(
-        "flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-[10px] font-medium",
-        meet
-          ? "cursor-pointer hover:shadow-sm"
-          : "cursor-default border border-dashed border-gray-300 opacity-60",
-      )}
-      style={{ backgroundColor: bg, color: txt }}
-    >
-      {meet && <Video className="h-2.5 w-2.5 shrink-0" />}
-      <span className="truncate">{ev.titulo}</span>
-    </button>
   );
 }
 

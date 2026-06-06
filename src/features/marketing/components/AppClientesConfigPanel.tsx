@@ -1,7 +1,11 @@
 "use client";
 
 /**
- * Panel de configuración de la landing de visita (Ajustes → Herramientas).
+ * Panel de configuración de la App de clientes (Marketing → App clientes).
+ *
+ * Arranca con un QR en las mesas que abre una landing con la marca de la
+ * empresa y captura leads + reseñas. Base sobre la que se desarrollará la
+ * app de clientes completa más adelante.
  *
  * Una sola pantalla, sin builder ni nodos. La empresa edita:
  *   - Activado / desactivado.
@@ -62,7 +66,7 @@ function tiempoADelay(valor: number, unidad: UnidadTiempo): number {
   return valor;
 }
 
-export function VisitaLandingConfigPanel() {
+export function AppClientesConfigPanel() {
   const [cfg, setCfg] = useState<VisitaConfigData | null>(null);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);

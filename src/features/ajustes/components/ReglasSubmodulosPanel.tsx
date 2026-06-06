@@ -26,6 +26,7 @@ import {
 } from "@/features/logistica/actions/categorias-proveedor-actions";
 import { Checkbox } from "@/components/ui/checkbox";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { ValidadoresSolicitudesConfig } from "@/features/ajustes/components/RrhhConfigTab";
 
 // ============================================================
 // Tarjetas de modo (las 4 modalidades) — UI muy visual
@@ -347,49 +348,57 @@ function SubmoduloRow({
         )}
         <Icon className={`h-3.5 w-3.5 ${card.color} shrink-0`} />
         <span className="text-sm font-medium flex-1">{submodulo.label}</span>
-        {submodulo.placeholder && (
+        {submodulo.placeholder && submodulo.key !== "solicitudes" && (
           <Badge variant="outline" className="text-[9px] text-muted-foreground">
             PRÓXIMAMENTE
           </Badge>
         )}
-        <Badge
-          variant="outline"
-          className={`text-[10px] ${card.color} ${card.border} ${bloqueadoPorModulo ? "opacity-70" : ""}`}
-        >
-          {bloqueadoPorModulo && <Lock className="h-2.5 w-2.5 mr-1 inline" />}
-          {card.label}
-        </Badge>
+        {submodulo.key !== "solicitudes" && (
+          <Badge
+            variant="outline"
+            className={`text-[10px] ${card.color} ${card.border} ${bloqueadoPorModulo ? "opacity-70" : ""}`}
+          >
+            {bloqueadoPorModulo && <Lock className="h-2.5 w-2.5 mr-1 inline" />}
+            {card.label}
+          </Badge>
+        )}
       </button>
 
       {open && (
         <div className="border-t px-3 py-3 space-y-3">
-          {bloqueadoPorModulo && (
-            <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900 px-2.5 py-1.5">
-              <Lock className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
-              <p className="text-[11px] text-amber-800 dark:text-amber-300">
-                Bloqueado: el módulo está en <strong>{cardForModo(modoModulo).label}</strong>.
-                Para configurar este submódulo aparte, cambia el módulo a <strong>PERSONALIZADO</strong>.
-              </p>
-            </div>
+          {submodulo.key === "solicitudes" ? (
+            <ValidadoresSolicitudesConfig embedded />
+          ) : (
+            <>
+              {bloqueadoPorModulo && (
+                <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900 px-2.5 py-1.5">
+                  <Lock className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
+                  <p className="text-[11px] text-amber-800 dark:text-amber-300">
+                    Bloqueado: el módulo está en <strong>{cardForModo(modoModulo).label}</strong>.
+                    Para configurar este submódulo aparte, cambia el módulo a <strong>PERSONALIZADO</strong>.
+                  </p>
+                </div>
+              )}
+
+              <SelectorModo
+                modoActivo={reglaSub.modo}
+                onChange={handleSubmoduloModoChange}
+                disabled={bloqueadoPorModulo}
+                size="sm"
+              />
+
+              <ChecklistCampos
+                submodulo={submodulo}
+                modoEfectivo={modoEfectivo}
+                modoSub={reglaSub.modo}
+                camposPersonalizados={reglaSub.camposPersonalizados}
+                onTogglePersonalizado={toggleCampo}
+                bloqueadoPorModulo={bloqueadoPorModulo}
+              />
+
+              {submodulo.key === "proveedores" && <OperativaCompraProveedores />}
+            </>
           )}
-
-          <SelectorModo
-            modoActivo={reglaSub.modo}
-            onChange={handleSubmoduloModoChange}
-            disabled={bloqueadoPorModulo}
-            size="sm"
-          />
-
-          <ChecklistCampos
-            submodulo={submodulo}
-            modoEfectivo={modoEfectivo}
-            modoSub={reglaSub.modo}
-            camposPersonalizados={reglaSub.camposPersonalizados}
-            onTogglePersonalizado={toggleCampo}
-            bloqueadoPorModulo={bloqueadoPorModulo}
-          />
-
-          {submodulo.key === "proveedores" && <OperativaCompraProveedores />}
         </div>
       )}
     </div>

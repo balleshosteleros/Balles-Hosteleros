@@ -11,7 +11,6 @@ import {
   Notebook,
   Cctv,
   Rocket,
-  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -21,10 +20,14 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { TelefonoConfigPanel } from "@/features/ajustes/components/TelefonoConfigPanel";
-import { VisitaLandingConfigPanel } from "@/features/ajustes/components/VisitaLandingConfigPanel";
+import { ToolNotifPanel } from "@/features/ajustes/components/ToolNotifPanel";
+import type { ToolNotifKey } from "@/features/ajustes/data/ajustes";
+
+// Iconos sin contador real → se oculta el toggle del círculo de aviso.
+const SIN_BADGE = new Set<ToolNotifKey>(["videovigilancia", "aplicaciones"]);
 
 type Herramienta = {
-  id: string;
+  id: ToolNotifKey;
   nombre: string;
   descripcion: string;
   Icon: LucideIcon;
@@ -82,14 +85,6 @@ const HERRAMIENTAS: Herramienta[] = [
     iconClassName: "text-sky-600",
   },
   {
-    id: "visita-landing",
-    nombre: "Landing de visita",
-    descripcion:
-      "QR para mesas → landing con tu marca → captura de leads y reseñas.",
-    Icon: Sparkles,
-    iconClassName: "text-violet-600",
-  },
-  {
     id: "agenda",
     nombre: "Agenda de contactos",
     descripcion: "Directorio de contactos compartido.",
@@ -144,13 +139,18 @@ export function HerramientasTab() {
             </AccordionTrigger>
             <AccordionContent>
               {id === "telefono" ? (
-                <TelefonoConfigPanel />
-              ) : id === "visita-landing" ? (
-                <VisitaLandingConfigPanel />
-              ) : (
-                <div className="rounded-md border border-dashed bg-muted/30 p-4 text-center text-xs text-muted-foreground">
-                  Sin ajustes globales configurados todavía.
+                <div className="space-y-6">
+                  <TelefonoConfigPanel />
+                  <div className="border-t pt-4">
+                    <ToolNotifPanel toolKey="telefono" />
+                  </div>
                 </div>
+              ) : (
+                <ToolNotifPanel
+                  toolKey={id}
+                  hasBadge={!SIN_BADGE.has(id)}
+                  withDiasAnuncio={id === "agenda"}
+                />
               )}
             </AccordionContent>
           </AccordionItem>

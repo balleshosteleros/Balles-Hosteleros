@@ -61,7 +61,7 @@ export const ESTADO_LABEL: Record<SolicitudEstado, string> = {
   pendiente: "Pendiente",
   aprobada: "Aprobada",
   rechazada: "Rechazada",
-  anulada: "Anulada",
+  anulada: "Anulada por el empleado",
 };
 
 export const ESTADO_COLOR: Record<SolicitudEstado, string> = {

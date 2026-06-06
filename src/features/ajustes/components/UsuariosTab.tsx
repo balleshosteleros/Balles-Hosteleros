@@ -128,6 +128,10 @@ export function UsuariosTab() {
   const [sinAcceso, setSinAcceso] = useState<EmpleadoSinAcceso[]>([]);
   const [rolesData, setRolesData] = useState<Rol[]>([]);
   const [userEmpresas, setUserEmpresas] = useState<Record<string, string[]>>({});
+  // empleadoId (profiles.id) → empresa_id propia del perfil. Sirve para
+  // resolver la pertenencia a la empresa activa de usuarios legados que aún
+  // no tienen filas en user_empresas (unión profiles.empresa_id ∪ user_empresas).
+  const [ownEmpresaByEmpleado, setOwnEmpresaByEmpleado] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   const [filtroEstados, setFiltroEstados] = useState<Set<string>>(new Set());
@@ -161,6 +165,11 @@ export function UsuariosTab() {
       } else {
         const profiles = (empResult.data ?? []) as SupabaseProfile[];
         setAccesos(profiles.map((p) => profileToAcceso(p, empresaActual)));
+        const ownMap: Record<string, string> = {};
+        for (const p of profiles) {
+          if (p.empresa_id) ownMap[p.id] = p.empresa_id;
+        }
+        setOwnEmpresaByEmpleado(ownMap);
       }
       setSinAcceso((sinResult.data ?? []) as EmpleadoSinAcceso[]);
       setUserEmpresas(ueMap ?? {});
@@ -252,8 +261,17 @@ export function UsuariosTab() {
   }, [accesos]);
 
   const filtrados = useMemo(() => {
+    const activaId = empresaActual.dbId;
     return accesos.filter((a) => {
       const empresasIds = a.userId ? userEmpresas[a.userId] ?? [] : [];
+      // Solo se listan los usuarios que pertenecen a la empresa activa. Los
+      // multi-empresa aparecen en cada empresa a la que tienen acceso.
+      // Pertenencia = user_empresas ∪ profiles.empresa_id (mismo criterio que la RLS).
+      if (activaId) {
+        const perteneceActiva =
+          empresasIds.includes(activaId) || ownEmpresaByEmpleado[a.empleadoId] === activaId;
+        if (!perteneceActiva) return false;
+      }
       const empresasNombres = empresasIds
         .map((id) => empresaNombrePorId.get(id))
         .filter((n): n is string => Boolean(n));
@@ -269,7 +287,7 @@ export function UsuariosTab() {
       }
       return true;
     });
-  }, [accesos, busqueda, filtroEstados, filtroRoles, filtroDepartamentos, filtroEmpresas, userEmpresas, empresaNombrePorId]);
+  }, [accesos, busqueda, filtroEstados, filtroRoles, filtroDepartamentos, filtroEmpresas, userEmpresas, empresaNombrePorId, empresaActual.dbId, ownEmpresaByEmpleado]);
 
   const activar = async (acc: AccesoPortal) => {
     setAccesos((prev) => prev.map((a) => a.id === acc.id ? { ...a, estadoAcceso: "Activo" as EstadoAcceso } : a));

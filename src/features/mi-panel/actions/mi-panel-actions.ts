@@ -905,13 +905,24 @@ export async function anularMiSolicitud(id: string) {
   try {
     const { supabase, user } = await getContext();
     if (!user) return { ok: false, error: "No autenticado" };
-    const { error } = await supabase
+    // Solo se puede anular mientras está PENDIENTE (sin respuesta de RRHH).
+    // Si ya fue aprobada o rechazada, el UPDATE no afecta filas y la solicitud
+    // sigue su curso: devolvemos un error claro en vez de un falso "anulada".
+    const { data, error } = await supabase
       .from("solicitudes_personal")
       .update({ estado: "anulada" })
       .eq("id", id)
       .eq("user_id", user.id)
-      .eq("estado", "pendiente");
+      .eq("estado", "pendiente")
+      .select("id");
     if (error) throw error;
+    if (!data || data.length === 0) {
+      return {
+        ok: false,
+        error:
+          "Esta solicitud ya ha recibido respuesta y no se puede anular: se llevará a cabo lo que indica.",
+      };
+    }
     return { ok: true };
   } catch (err: unknown) {
     const msg = extractErrorMessage(err);

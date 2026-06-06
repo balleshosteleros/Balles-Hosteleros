@@ -106,8 +106,8 @@ export function ValidadoresEmpleadoCard({
             {area && departamentoNombre ? (
               <>
                 Al ser de área <strong className="text-foreground">{AREA_LABEL[area]}</strong>,
-                sus validadores salen del departamento{" "}
-                <strong className="text-foreground">{departamentoNombre}</strong>.
+                pueden validarle quienes tengan acceso a{" "}
+                <strong className="text-foreground">{departamentoNombre}</strong> en su rol.
               </>
             ) : (
               <>El departamento validador se configura en Ajustes → RRHH.</>
@@ -123,7 +123,7 @@ export function ValidadoresEmpleadoCard({
           {!area
             ? "Este empleado no tiene departamento asignado, así que no se puede determinar su área. Asígnale un departamento primero."
             : departamentoNombre
-              ? `No hay empleados activos en el departamento ${departamentoNombre}. Crea uno en ese departamento, o cambia el departamento validador en Ajustes → RRHH.`
+              ? `No hay ningún empleado activo con acceso a ${departamentoNombre} en su rol. Da acceso a ${departamentoNombre} a algún rol, o cambia el departamento validador en Ajustes → RRHH.`
               : "No hay ningún departamento validador configurado para esta área. Configúralo en Ajustes → RRHH."}
         </p>
       ) : (

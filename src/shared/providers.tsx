@@ -10,6 +10,7 @@ import { EmpresaProvider } from "@/features/empresa/contexts/empresa-context";
 import { AyudaProvider } from "@/features/ajustes/contexts/ayuda-context";
 import { MarketingProvider } from "@/features/marketing/contexts/marketing-context";
 import { ViewModeProvider } from "@/features/layout/contexts/view-mode-context";
+import { LlamadasProvider } from "@/features/llamadas-internas/components/LlamadasProvider";
 import { GlobalLoadingOverlay } from "@/shared/components/GlobalLoadingOverlay";
 import { NavigationLoadingDetector } from "@/shared/components/NavigationLoadingDetector";
 
@@ -24,7 +25,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <AyudaProvider>
               <MarketingProvider>
                 <ViewModeProvider>
-                  {children}
+                  <LlamadasProvider>{children}</LlamadasProvider>
                   <Toaster />
                   <Sonner />
                   <GlobalLoadingOverlay />

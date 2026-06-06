@@ -24,8 +24,12 @@ type DepartamentoOpt = { id: string; nombre: string };
  * departamento que se elija aquí (default RRHH), y los de área administrativa
  * por el que se elija (default Dirección). Aplica a las dos columnas de
  * validador (trabajo y ausencias).
+ *
+ * Vive como bloque dentro de Ajustes → Departamentos → RRHH → submódulo
+ * "Solicitudes". El prop `embedded` quita el marco/ancho propios para que
+ * encaje dentro de la fila del submódulo (que ya aporta su tarjeta).
  */
-export function RrhhConfigTab() {
+export function ValidadoresSolicitudesConfig({ embedded = false }: { embedded?: boolean } = {}) {
   const [departamentos, setDepartamentos] = useState<DepartamentoOpt[]>([]);
   const [operativaId, setOperativaId] = useState<string>("");
   const [administrativaId, setAdministrativaId] = useState<string>("");
@@ -67,7 +71,7 @@ export function RrhhConfigTab() {
   }
 
   return (
-    <div className="rounded-lg border bg-card p-4 md:p-6 space-y-5 max-w-2xl">
+    <div className={embedded ? "space-y-5" : "rounded-lg border bg-card p-4 md:p-6 space-y-5 max-w-2xl"}>
       <div className="flex items-start gap-2.5">
         <div className="h-8 w-8 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
           <ShieldCheck className="h-4 w-4" />

@@ -5,6 +5,7 @@ import { useGoogleConnection } from "./useGoogleConnection";
 import { contarPendientesHoy } from "@/features/tareas/actions/tareas-actions";
 import { getTareasValidacionPendientes } from "@/features/mi-panel/actions/mi-panel-actions";
 import { listCanales } from "@/features/comunicacion/actions/comunicacion-actions";
+import { contarContactosNuevos } from "@/features/agenda/actions/contactos-actions";
 import { contarLlamadasNoVistas } from "./TelefonoDrawer";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 
@@ -22,14 +23,16 @@ export interface DailyCounts {
   tasks: number;      // tareas pendientes hoy
   chatGroups: number; // canales/grupos con mensajes sin leer
   missedCalls: number; // llamadas entrantes nuevas no vistas
+  newContacts: number; // contactos añadidos a la agenda dentro de la ventana de anuncio
 }
 
 const REFRESH_MS = 60 * 1000; // 1 minuto
 
 export function useDailyCounts(): DailyCounts {
   const { connected } = useGoogleConnection();
-  const { empresaActual } = useEmpresa();
+  const { empresaActual, ajustes } = useEmpresa();
   const empresaSlug = empresaActual.id;
+  const diasAnuncio = ajustes.notificaciones.agenda.diasAnuncio;
   const [counts, setCounts] = useState<DailyCounts>({
     emails: 0,
     events: 0,
@@ -37,6 +40,7 @@ export function useDailyCounts(): DailyCounts {
     tasks: 0,
     chatGroups: 0,
     missedCalls: 0,
+    newContacts: 0,
   });
 
   const fetchCounts = useCallback(async () => {
@@ -74,6 +78,14 @@ export function useDailyCounts(): DailyCounts {
     // Llamadas: entrantes nuevas no vistas (mock hasta que VoIP esté integrado)
     const missedCalls = contarLlamadasNoVistas();
 
+    // Agenda: contactos nuevos dentro de la ventana de anuncio configurada.
+    let newContacts = 0;
+    try {
+      newContacts = await contarContactosNuevos(diasAnuncio);
+    } catch {
+      /* ignore */
+    }
+
     if (!connected) {
       setCounts({
         emails: 0,
@@ -82,6 +94,7 @@ export function useDailyCounts(): DailyCounts {
         tasks,
         chatGroups,
         missedCalls,
+        newContacts,
       });
       return;
     }
@@ -111,11 +124,11 @@ export function useDailyCounts(): DailyCounts {
         meetings = eventos.filter((e) => !!e.meetLink).length;
       }
 
-      setCounts({ emails, events, meetings, tasks, chatGroups, missedCalls });
+      setCounts({ emails, events, meetings, tasks, chatGroups, missedCalls, newContacts });
     } catch {
-      setCounts((prev) => ({ ...prev, tasks, chatGroups, missedCalls }));
+      setCounts((prev) => ({ ...prev, tasks, chatGroups, missedCalls, newContacts }));
     }
-  }, [connected, empresaSlug]);
+  }, [connected, empresaSlug, diasAnuncio]);
 
   useEffect(() => {
     fetchCounts();

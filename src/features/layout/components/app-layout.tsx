@@ -51,6 +51,7 @@ import {
   useDailyCounts,
 } from "@/features/google-workspace/components";
 import { AgendaDrawer } from "@/features/agenda/components/AgendaDrawer";
+import { ToolsAvisoPopups } from "@/features/layout/components/ToolsAvisoPopups";
 import { CamarasDrawer } from "@/features/camaras/components/CamarasDrawer";
 import { RecordingTrigger } from "@/features/recorder/components/RecordingTrigger";
 import { RecordingDrawer } from "@/features/recorder/components/RecordingDrawer";
@@ -65,16 +66,21 @@ import { ExternalLink } from "lucide-react";
 import { useViewMode } from "@/features/layout/contexts/view-mode-context";
 
 
+const NAV_BADGE_BG: Record<string, string> = {
+  red: "bg-red-500",
+  blue: "bg-blue-600",
+  emerald: "bg-emerald-600",
+  violet: "bg-violet-600",
+  green: "bg-green-500",
+  sky: "bg-sky-600",
+  yellow: "bg-yellow-500",
+  slate: "bg-slate-700",
+  amber: "bg-amber-500",
+};
+
 function NavBadge({ count, color = "blue" }: { count: number; color?: string }) {
   if (count === 0) return null;
-  const bg =
-    color === "blue"
-      ? "bg-blue-600"
-      : color === "emerald"
-        ? "bg-emerald-600"
-        : color === "red"
-          ? "bg-red-600"
-          : "bg-violet-600";
+  const bg = NAV_BADGE_BG[color] ?? NAV_BADGE_BG.blue;
   return (
     <span
       className={`absolute -top-0.5 -right-0.5 flex items-center justify-center h-3.5 min-w-3.5 px-0.5 rounded-full text-white text-[8px] font-bold leading-none ${bg}`}
@@ -144,7 +150,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     return "•".repeat(len || 8);
   }
 
-  const { empresaActual } = useEmpresa();
+  const { empresaActual, ajustes } = useEmpresa();
   const [accesosAppsRaw, setAccesosAppsRaw] = useState<AccesoApp[]>([]);
   useEffect(() => {
     let alive = true;
@@ -193,7 +199,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         title="Correo"
                       >
                         <Mail className="!h-[18px] !w-[18px] text-red-500" />
-                        <NavBadge count={counts.emails} color="blue" />
+                        <NavBadge count={ajustes.notificaciones.email.badgeActivo ? counts.emails : 0} color="red" />
                       </Button>
                     </GmailDrawer>
 
@@ -205,7 +211,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         title="Calendario"
                       >
                         <CalendarIcon className="!h-[18px] !w-[18px] text-blue-600" />
-                        <NavBadge count={counts.events} color="blue" />
+                        <NavBadge count={ajustes.notificaciones.calendario.badgeActivo ? counts.events : 0} color="blue" />
                       </Button>
                     </CalendarDrawer>
 
@@ -217,7 +223,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         title="Reuniones Meet"
                       >
                         <Video className="!h-[18px] !w-[18px] text-emerald-600" />
-                        <NavBadge count={counts.meetings} color="emerald" />
+                        <NavBadge count={ajustes.notificaciones.reuniones.badgeActivo ? counts.meetings : 0} color="emerald" />
                       </Button>
                     </MeetDrawer>
 
@@ -235,7 +241,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         title="Mis tareas"
                       >
                         <CheckSquare2 className="!h-[18px] !w-[18px] text-violet-600" />
-                        <NavBadge count={counts.tasks} color="violet" />
+                        <NavBadge count={ajustes.notificaciones.tareas.badgeActivo ? counts.tasks : 0} color="violet" />
                       </Button>
                     </TareasDrawer>
 
@@ -247,7 +253,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         title="Comunicación interna"
                       >
                         <MessageCircle className="!h-[18px] !w-[18px] text-green-500 fill-green-500/15" />
-                        <NavBadge count={counts.chatGroups} color="emerald" />
+                        <NavBadge count={ajustes.notificaciones.chat.badgeActivo ? counts.chatGroups : 0} color="green" />
                       </Button>
                     </ChatDrawer>
 
@@ -259,7 +265,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         title="Teléfono"
                       >
                         <Phone className="!h-[18px] !w-[18px] text-sky-600" />
-                        <NavBadge count={counts.missedCalls} color="red" />
+                        <NavBadge count={ajustes.notificaciones.telefono.badgeActivo ? counts.missedCalls : 0} color="sky" />
                       </Button>
                     </TelefonoDrawer>
 
@@ -271,6 +277,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         title="Agenda de contactos"
                       >
                         <Notebook className="!h-[18px] !w-[18px] text-yellow-500" />
+                        <NavBadge count={ajustes.notificaciones.agenda.badgeActivo ? counts.newContacts : 0} color="yellow" />
                       </Button>
                     </AgendaDrawer>
 
@@ -582,6 +589,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
         {showUi && <FloatingSoporteButton />}
       </div>
+      {showUi && <ToolsAvisoPopups />}
       <RecordingDrawer />
       <RecordingOverlay />
       <CountdownOverlay />

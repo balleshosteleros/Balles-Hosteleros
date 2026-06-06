@@ -12,10 +12,10 @@ import { PoliticasCancelacionTab } from "./PoliticasCancelacionTab";
 import { BloqueosTab } from "@/features/sala/bloqueos/components/BloqueosTab";
 import { ComunicacionesPanel } from "./ComunicacionesPanel";
 import { LinksReservaPanel } from "@/features/sala/components/reservas/LinksReservaPanel";
+import { CanalesTab } from "./CanalesTab";
 
 const PLACEHOLDER_TABS = [
   { value: "horarios", label: "Horarios" },
-  { value: "canales", label: "Canales" },
 ] as const;
 
 interface Props {
@@ -36,6 +36,7 @@ export function ConfigReservasView({ onBack }: Props) {
       case "politicas":  return <PoliticasCancelacionTab />;
       case "bloqueos":   return <BloqueosTab />;
       case "comunicaciones": return <ComunicacionesPanel />;
+      case "canales":    return <CanalesTab />;
       default: {
         const placeholder = PLACEHOLDER_TABS.find((t) => t.value === tab);
         if (placeholder) {
@@ -71,6 +72,7 @@ export function ConfigReservasView({ onBack }: Props) {
             <TabsTrigger value="politicas">Políticas</TabsTrigger>
             <TabsTrigger value="bloqueos">Bloqueos</TabsTrigger>
             <TabsTrigger value="comunicaciones">Comunicaciones</TabsTrigger>
+            <TabsTrigger value="canales">Canales</TabsTrigger>
             {PLACEHOLDER_TABS.map((t) => (
               <TabsTrigger key={t.value} value={t.value}>
                 {t.label}

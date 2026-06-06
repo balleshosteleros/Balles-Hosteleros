@@ -10,6 +10,16 @@ import {
 import type { SolicitudPersonal } from "@/features/mi-panel/types";
 import { ESTADO_LABEL, SUBTIPO_LABEL } from "@/features/mi-panel/types";
 import { SolicitudModal } from "@/features/mi-panel/components/SolicitudModal";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/shared/components/ui/alert-dialog";
 import { cn } from "@/shared/lib/utils";
 
 const TABS: Array<{ key: "todas" | "ausencias" | "trabajos"; label: string }> = [
@@ -40,6 +50,8 @@ export function MisSolicitudesMobile() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"todas" | "ausencias" | "trabajos">("todas");
+  const [aAnular, setAAnular] = useState<SolicitudPersonal | null>(null);
+  const [anulando, setAnulando] = useState(false);
 
   useEffect(() => {
     let cancel = false;
@@ -59,10 +71,15 @@ export function MisSolicitudesMobile() {
     return items;
   }, [items, tab]);
 
-  async function handleAnular(id: string) {
-    const res = await anularMiSolicitud(id);
+  async function handleAnular() {
+    if (!aAnular) return;
+    setAnulando(true);
+    const res = await anularMiSolicitud(aAnular.id);
+    setAnulando(false);
+    setAAnular(null);
     if (!res.ok) {
       toast.error(res.error || "No se pudo anular");
+      setRefreshKey((k) => k + 1);
       return;
     }
     toast.success("Solicitud anulada");
@@ -145,13 +162,20 @@ export function MisSolicitudesMobile() {
                     )}
                   </div>
                   <div className="flex flex-col items-end gap-2">
-                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <span
+                      className={cn(
+                        "text-right text-[10px] font-medium tracking-wide",
+                        s.estado === "anulada"
+                          ? "text-slate-400"
+                          : "text-muted-foreground",
+                      )}
+                    >
                       {ESTADO_LABEL[s.estado]}
                     </span>
                     {s.estado === "pendiente" && (
                       <button
                         type="button"
-                        onClick={() => handleAnular(s.id)}
+                        onClick={() => setAAnular(s)}
                         className="rounded-full p-1.5 text-muted-foreground active:bg-muted active:text-rose-500"
                         aria-label="Anular solicitud"
                       >
@@ -171,6 +195,40 @@ export function MisSolicitudesMobile() {
         onOpenChange={setOpen}
         onCreated={() => setRefreshKey((k) => k + 1)}
       />
+
+      <AlertDialog
+        open={!!aAnular}
+        onOpenChange={(v) => {
+          if (!v) setAAnular(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Anular esta solicitud?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Solo puedes anularla mientras está pendiente, antes de que tu
+              responsable la conteste. Quedará registrada como «anulada por el
+              empleado». Si ya ha recibido respuesta, no se podrá anular y se
+              llevará a cabo lo que indica.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={anulando}>
+              No, mantener
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleAnular();
+              }}
+              disabled={anulando}
+              className="bg-rose-600 hover:bg-rose-700 active:bg-blue-600"
+            >
+              {anulando ? "Anulando…" : "Sí, anular"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

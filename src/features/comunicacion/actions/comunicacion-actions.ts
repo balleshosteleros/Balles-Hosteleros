@@ -67,45 +67,36 @@ function matchDepartamento(canalNombre: string, candidatos: string[]): boolean {
   return candNorm.some((c) => grupoNorm.includes(c));
 }
 
-export async function listCanales(_empresaSlug: string) {
-  try {
-    const { supabase, user, empresaId } = await getContext();
-    if (!empresaId) return { ok: true, data: [] };
-    const { data, error } = await supabase
-      .from("canales")
-      .select("*")
-      .eq("empresa_id", empresaId)
-      .order("nombre");
-    if (error) throw error;
-    const rows = data ?? [];
+// ───────── Control de acceso a canales (espejo de la RLS) ─────────
+// La seguridad real vive en RLS (ver migración canales_visibilidad_departamentos);
+// estas funciones replican la lógica en el servidor para filtrar y validar.
+type AccesoCtx = { esAdmin: boolean; candidatos: string[]; userId: string };
 
-    if (!user) return { ok: true, data: rows };
+async function getAccesoCtx(
+  supabase: SupabaseClient,
+  userId: string,
+  empresaId: string,
+): Promise<AccesoCtx> {
+  const { data: rolesRows } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId);
+  const appRoles = (rolesRows ?? []).map((r) => r.role as string);
+  const esAdmin = appRoles.includes("director") || appRoles.includes("admin");
 
-    // Director / admin: ven todos los canales.
-    const { data: rolesRows } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id);
-    const appRoles = (rolesRows ?? []).map((r) => r.role as string);
-    if (appRoles.includes("director") || appRoles.includes("admin")) {
-      return { ok: true, data: rows };
-    }
-
-    // Resto: filtramos por permisos reales (empresa_roles.permisos) +
-    // membresía explícita en canales tipo asunto/grupo/directo.
+  const candidatos: string[] = [];
+  if (!esAdmin) {
     const { data: profile } = await supabase
       .from("profiles")
       .select("rol_label, departamento")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .maybeSingle();
     const rolLabel = ((profile?.rol_label as string | null) ?? "").trim();
     const departamento = ((profile?.departamento as string | null) ?? "").trim();
-
-    const candidatos: string[] = [];
     if (departamento) candidatos.push(departamento);
     if (rolLabel) candidatos.push(rolLabel);
 
-    if (rolLabel && empresaId) {
+    if (rolLabel) {
       const { data: rolRow } = await supabase
         .from("empresa_roles")
         .select("permisos")
@@ -120,21 +111,66 @@ export async function listCanales(_empresaSlug: string) {
         if (p?.ver && p.modulo) candidatos.push(p.modulo);
       }
     }
+  }
+  return { esAdmin, candidatos, userId };
+}
 
-    const filtered = rows.filter((row) => {
-      const tipo = row.tipo as string | null;
-      const miembros = (row.miembros_user_ids as string[] | null) ?? [];
-      if (tipo === "departamento") {
-        return matchDepartamento(String(row.nombre ?? ""), candidatos);
-      }
-      // asunto / grupo / directo: solo si está en la lista de miembros.
-      return miembros.includes(user.id);
-    });
+// ¿Puede el usuario (según ctx) ver esta fila de canal?
+// - departamento: visible si su rol da acceso a ese departamento (por nombre).
+// - asunto/grupo/directo: visible si su rol da acceso a alguno de los
+//   departamentos ligados al canal, o si es miembro explícito.
+function canalAccesible(row: Record<string, unknown>, ctx: AccesoCtx): boolean {
+  if (ctx.esAdmin) return true;
+  const tipo = (row.tipo as string | null) ?? "asunto";
+  const miembros = (row.miembros_user_ids as string[] | null) ?? [];
+  if (miembros.includes(ctx.userId)) return true;
+  if (tipo === "departamento") {
+    return matchDepartamento(String(row.nombre ?? ""), ctx.candidatos);
+  }
+  const deptos = (row.departamentos as string[] | null) ?? [];
+  return deptos.some((d) => matchDepartamento(String(d ?? ""), ctx.candidatos));
+}
 
-    return { ok: true, data: filtered };
+// Verifica acceso a un canal por id (lee la fila y comprueba pertenencia).
+async function assertAccesoCanal(
+  supabase: SupabaseClient,
+  userId: string,
+  empresaId: string,
+  canalId: string,
+): Promise<boolean> {
+  const { data: row } = await supabase
+    .from("canales")
+    .select("id, empresa_id, nombre, tipo, miembros_user_ids, departamentos")
+    .eq("id", canalId)
+    .maybeSingle();
+  if (!row) return false;
+  if ((row.empresa_id as string) !== empresaId) return false;
+  const ctx = await getAccesoCtx(supabase, userId, empresaId);
+  return canalAccesible(row, ctx);
+}
+
+export async function listCanales(_empresaSlug: string) {
+  try {
+    const { supabase, user, empresaId } = await getContext();
+    if (!empresaId) return { ok: true, data: [] };
+    const { data, error } = await supabase
+      .from("canales")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .order("nombre");
+    if (error) throw error;
+    const rows = data ?? [];
+
+    if (!user) return { ok: true, data: rows, esAdmin: false };
+
+    const ctx = await getAccesoCtx(supabase, user.id, empresaId);
+    if (ctx.esAdmin) return { ok: true, data: rows, esAdmin: true };
+
+    const filtered = rows.filter((row) => canalAccesible(row, ctx));
+    return { ok: true, data: filtered, esAdmin: false };
   } catch (err) {
     console.error("[comunicacion] listCanales:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], esAdmin: false };
   }
 }
 
@@ -143,6 +179,7 @@ export async function createCanal(
   tipo: string = "grupo",
   miembrosUserIds: string[] = [],
   _empresaSlug: string = "",
+  departamentos: string[] = [],
 ) {
   try {
     const { supabase, empresaId } = await getContext();
@@ -154,6 +191,7 @@ export async function createCanal(
         tipo,
         empresa_id: empresaId,
         miembros_user_ids: miembrosUserIds,
+        departamentos,
       })
       .select()
       .single();
@@ -187,6 +225,27 @@ export async function updateCanalMiembros(
   }
 }
 
+export async function updateCanalDepartamentos(
+  canalId: string,
+  departamentos: string[],
+) {
+  try {
+    const { supabase } = await getContext();
+    const { data, error } = await supabase
+      .from("canales")
+      .update({ departamentos })
+      .eq("id", canalId)
+      .select()
+      .single();
+    if (error) throw error;
+    return { ok: true, data };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error";
+    console.error("[comunicacion] updateCanalDepartamentos:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
 export interface EmpleadoCanal {
   userId: string;
   nombre: string;
@@ -203,11 +262,9 @@ export async function listEmpleadosEmpresa(): Promise<{
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, data: [], error: "No autenticado" };
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("user_id, nombre, apellidos, rol_label, departamento")
-      .eq("empresa_id", empresaId)
-      .order("nombre", { ascending: true });
+    // Vía RPC SECURITY DEFINER: profiles tiene RLS que solo deja ver el propio
+    // perfil, así que una lectura directa devolvería la lista vacía.
+    const { data, error } = await supabase.rpc("chat_empleados", { p_empresa: empresaId });
     if (error) throw error;
     return {
       ok: true,
@@ -230,7 +287,11 @@ export async function listEmpleadosEmpresa(): Promise<{
 
 export async function listMensajes(canalId: string) {
   try {
-    const { supabase } = await getContext();
+    const { supabase, user, empresaId } = await getContext();
+    if (!user || !empresaId) return { ok: false, data: [] };
+    if (!(await assertAccesoCanal(supabase, user.id, empresaId, canalId))) {
+      return { ok: false, data: [] };
+    }
     const { data, error } = await supabase
       .from("mensajes")
       .select("*")
@@ -247,7 +308,11 @@ export async function listMensajes(canalId: string) {
 
 export async function sendMensaje(canalId: string, texto: string) {
   try {
-    const { supabase, user, nombre } = await getContext();
+    const { supabase, user, nombre, empresaId } = await getContext();
+    if (!user || !empresaId) return { ok: false, error: "No autenticado" };
+    if (!(await assertAccesoCanal(supabase, user.id, empresaId, canalId))) {
+      return { ok: false, error: "Sin acceso a este canal" };
+    }
     const { data, error } = await supabase
       .from("mensajes")
       .insert({
@@ -281,7 +346,11 @@ export async function sendMensajeAdjunto(input: {
   adjuntoTamano: number;
 }) {
   try {
-    const { supabase, user, nombre } = await getContext();
+    const { supabase, user, nombre, empresaId } = await getContext();
+    if (!user || !empresaId) return { ok: false, error: "No autenticado" };
+    if (!(await assertAccesoCanal(supabase, user.id, empresaId, input.canalId))) {
+      return { ok: false, error: "Sin acceso a este canal" };
+    }
     const { data, error } = await supabase
       .from("mensajes")
       .insert({
@@ -311,7 +380,14 @@ export async function sendMensajeAdjunto(input: {
  */
 export async function getAdjuntoSignedUrl(path: string) {
   try {
-    const { supabase } = await getContext();
+    const { supabase, user, empresaId } = await getContext();
+    if (!user || !empresaId) return { ok: false, error: "No autenticado", url: null };
+    // El path es `${empresaSlug}/${canalId}/...`: validamos acceso al canal
+    // antes de firmar, para que nadie descargue adjuntos de canales ajenos.
+    const canalId = path.split("/")[1] ?? "";
+    if (!canalId || !(await assertAccesoCanal(supabase, user.id, empresaId, canalId))) {
+      return { ok: false, error: "Sin acceso a este adjunto", url: null };
+    }
     const { data, error } = await supabase.storage
       .from("chat-archivos")
       .createSignedUrl(path, 60 * 60);

@@ -11,7 +11,7 @@ import {
   Apple, CreditCard, Presentation, QrCode, Globe, Send, Wallet, Fingerprint,
   Inbox, FileSignature, Trophy, UserCircle, LayoutDashboard, FileQuestion,
   LayoutGrid, CalendarClock, AlertTriangle, HelpCircle, MessageSquareWarning,
-  Video, Mail, MessageSquare, Banknote, Building2,
+  Video, Mail, MessageSquare, Banknote, Building2, Smartphone,
 } from "lucide-react";
 
 // ─── Icons custom ──────────────────────────────────────────────────────────
@@ -167,6 +167,7 @@ export const marketingSubs: SubItem[] = [
   { title: "CONTENIDO", url: "/marketing/contenido", icon: FolderOpen },
   { title: "CAMPAÑAS", url: "/marketing/campanas", icon: Send },
   { title: "CARTA DIGITAL", url: "/marketing/carta-digital", icon: QrCode },
+  { title: "APP CLIENTES", url: "/marketing/app-clientes", icon: Smartphone },
   { title: "PÁGINA WEB", url: "/marketing/pagina-web", icon: Globe },
   { title: "FIDELIZACIÓN", url: "/marketing/fidelizacion", icon: Heart },
   { title: "CAPTACIÓN", url: "/marketing/captacion", icon: UserPlus },
@@ -235,7 +236,6 @@ const MODULE_META: Record<string, ModuleMeta> = {
   "/accesos": { label: "ACCESOS", icon: KeyRound },
   "/consultas-pendientes": { label: "CONSULTAS", icon: MessageSquareWarning },
   "/formacion": { label: "FORMACIÓN", icon: GraduationCap },
-  "/comunicacion": { label: "COMUNICACIÓN", icon: MessageSquareWarning },
   "/reuniones": { label: "REUNIONES", icon: Video },
   "/agenda": { label: "AGENDA", icon: ContactRound },
 };

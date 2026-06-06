@@ -3,17 +3,20 @@
 import { ReactNode, useState, useEffect, useCallback, useMemo } from "react";
 import {
   Video, Clock, Users, RefreshCw, ExternalLink, Loader2, MapPin, X,
-  ChevronLeft, ChevronRight, List, CalendarRange,
+  ChevronLeft, ChevronRight, List, CalendarRange, Menu as MenuIcon,
 } from "lucide-react";
 import {
   Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { GoogleConnectBanner } from "./GoogleConnectBanner";
 import { GoogleReauthBanner } from "./GoogleReauthBanner";
 import { GoogleAccountButton } from "./GoogleAccountButton";
 import { useGoogleConnection } from "./useGoogleConnection";
+import { MeetCalendarGrid } from "./MeetCalendarGrid";
+import { CalendarSidebar, type SidebarCalendar } from "./CalendarSidebar";
 
 interface EventoApi {
   id: string;
@@ -144,8 +147,57 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
   const [refDate, setRefDate] = useState<string>(() => ymd(new Date()));
   const [modo, setModo] = useState<"agenda" | "calendario">("agenda");
   const [soloMeet, setSoloMeet] = useState(false);
+  const [calendarios, setCalendarios] = useState<SidebarCalendar[]>([]);
+  const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
+  const [sidebarAbierto, setSidebarAbierto] = useState(false);
   const [needsReauth, setNeedsReauth] = useState(false);
   const nowTime = useNow();
+
+  // Lista de calendarios (para el filtro) al conectar
+  useEffect(() => {
+    if (!connected) {
+      setCalendarios([]);
+      setSeleccionados(new Set());
+      return;
+    }
+    fetch("/api/google/calendar/list")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.connected && Array.isArray(data.calendarios)) {
+          const cals: SidebarCalendar[] = data.calendarios.map(
+            (c: {
+              id: string;
+              nombre: string;
+              color: string;
+              primary?: boolean;
+            }) => ({
+              id: c.id,
+              nombre: c.nombre,
+              color: c.color,
+              primary: c.primary,
+            }),
+          );
+          setCalendarios(cals);
+          const init = new Set<string>(
+            data.calendarios
+              .filter((c: { seleccionado?: boolean }) => c.seleccionado)
+              .map((c: { id: string }) => c.id),
+          );
+          if (init.size === 0) cals.forEach((c) => init.add(c.id));
+          setSeleccionados(init);
+        }
+      })
+      .catch(() => {});
+  }, [connected]);
+
+  const toggleCal = useCallback((id: string) => {
+    setSeleccionados((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }, []);
 
   const rangoIncluyeHoy = useMemo(() => {
     const hoy = new Date();
@@ -166,15 +218,25 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
 
   const load = useCallback(async () => {
     if (!connected) return;
+    // Si ya cargó la lista y el usuario no dejó ningún calendario, no hay nada.
+    if (calendarios.length > 0 && seleccionados.size === 0) {
+      setEventosAll([]);
+      setEventosSinMeet(0);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setNeedsReauth(false);
     try {
       const apiView =
         vista === "dia" ? "day" : vista === "mes" ? "month" : "week";
-      const r = await fetch(
-        `/api/google/calendar/events?view=${apiView}&date=${refDate}`,
-        { cache: "no-store" },
-      );
+      const params = new URLSearchParams({ view: apiView, date: refDate });
+      if (calendarios.length > 0) {
+        params.set("calendarIds", Array.from(seleccionados).join(","));
+      }
+      const r = await fetch(`/api/google/calendar/events?${params}`, {
+        cache: "no-store",
+      });
       if (!r.ok) {
         setEventosAll([]);
         setEventosSinMeet(0);
@@ -206,7 +268,7 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [connected, vista, refDate]);
+  }, [connected, vista, refDate, calendarios, seleccionados]);
 
   useEffect(() => {
     load();
@@ -229,7 +291,15 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
         <SheetTitle className="sr-only">Google Meet — Reuniones</SheetTitle>
         <SheetHeader className="bg-[#f6f8fc] px-2 py-2 border-b border-transparent">
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 pl-2 pr-3">
+            <button
+              type="button"
+              onClick={() => setSidebarAbierto((v) => !v)}
+              className="rounded-full p-3 hover:bg-black/5 transition-colors"
+              title="Menú principal"
+            >
+              <MenuIcon className="h-5 w-5 text-[#5f6368]" />
+            </button>
+            <div className="flex items-center gap-1 pr-3">
               <MeetLogo className="h-9 w-auto" />
             </div>
             <div className="ml-auto flex items-center gap-1">
@@ -266,58 +336,136 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
           <GoogleReauthBanner servicio="las reuniones" />
         )}
 
-        <div className="flex border-b bg-muted/20 shrink-0">
-          {(["dia", "semana", "mes"] as const).map((v) => (
-            <button
-              key={v}
-              onClick={() => setVista(v)}
-              className={`flex-1 py-2.5 text-xs font-semibold tracking-wide transition-colors ${
-                vista === v
-                  ? "border-b-2 border-emerald-600 text-emerald-700 bg-emerald-50/50"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {v === "dia" ? "Día" : v === "semana" ? "Semana" : "Mes"}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-1 border-b bg-white px-2 py-1.5 shrink-0">
-          <button
-            type="button"
-            onClick={() => setRefDate((r) => desplazar(r, vista, -1))}
-            className="rounded-full p-1.5 hover:bg-black/5 transition-colors"
-            title="Anterior"
-          >
-            <ChevronLeft className="h-4 w-4 text-[#5f6368]" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setRefDate((r) => desplazar(r, vista, 1))}
-            className="rounded-full p-1.5 hover:bg-black/5 transition-colors"
-            title="Siguiente"
-          >
-            <ChevronRight className="h-4 w-4 text-[#5f6368]" />
-          </button>
-          <span className="ml-1 truncate text-sm font-semibold text-[#3c4043]">
-            {etiquetaRango(refDate, vista)}
-          </span>
-          {pendientes > 0 && (
-            <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-600 px-1 text-[9px] font-bold text-white">
-              {pendientes}
-            </span>
-          )}
-          {!rangoIncluyeHoy && (
-            <button
-              type="button"
+        {/* Toolbar estilo Calendar */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-white px-3 py-2 shrink-0">
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => setRefDate(ymd(new Date()))}
-              className="ml-auto rounded-full border px-3 py-1 text-xs font-medium text-[#3c4043] transition-colors hover:bg-black/5"
+              disabled={rangoIncluyeHoy}
             >
               Hoy
-            </button>
-          )}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setRefDate((r) => desplazar(r, vista, -1))}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setRefDate((r) => desplazar(r, vista, 1))}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <span className="ml-1 truncate text-sm font-semibold capitalize text-foreground">
+              {etiquetaRango(refDate, vista)}
+            </span>
+            {pendientes > 0 && (
+              <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-600 px-1 text-[9px] font-bold text-white">
+                {pendientes}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Tabs value={vista} onValueChange={(v) => setVista(v as Vista)}>
+              <TabsList className="h-8">
+                <TabsTrigger value="dia" className="text-xs">Día</TabsTrigger>
+                <TabsTrigger value="semana" className="text-xs">Semana</TabsTrigger>
+                <TabsTrigger value="mes" className="text-xs">Mes</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            {/* Conmutador agenda ↔ calendario */}
+            <div className="flex items-center rounded-full border bg-muted/30 p-0.5">
+              <button
+                type="button"
+                onClick={() => setModo("agenda")}
+                className={`rounded-full p-1.5 transition-colors ${
+                  modo === "agenda"
+                    ? "bg-white text-emerald-700 shadow-sm"
+                    : "text-[#5f6368] hover:text-foreground"
+                }`}
+                title="Vista agenda"
+              >
+                <List className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setModo("calendario")}
+                className={`rounded-full p-1.5 transition-colors ${
+                  modo === "calendario"
+                    ? "bg-white text-emerald-700 shadow-sm"
+                    : "text-[#5f6368] hover:text-foreground"
+                }`}
+                title="Vista calendario"
+              >
+                <CalendarRange className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
         </div>
 
+        {modo === "calendario" && (
+          <div className="flex items-center justify-between gap-2 border-b bg-emerald-50/40 px-3 py-1.5 shrink-0">
+            <span className="flex items-center gap-1.5 text-[11px] text-emerald-800">
+              <Video className="h-3.5 w-3.5" />
+              Resaltando reuniones con Meet
+            </span>
+            <button
+              type="button"
+              onClick={() => setSoloMeet((v) => !v)}
+              className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
+                soloMeet
+                  ? "border-emerald-600 bg-emerald-600 text-white"
+                  : "border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-50"
+              }`}
+              title={
+                soloMeet
+                  ? "Mostrando solo reuniones con Meet"
+                  : "Mostrando el resto de eventos en gris"
+              }
+            >
+              {soloMeet ? "Solo Meet" : "Atenuar resto"}
+            </button>
+          </div>
+        )}
+
+        <div className="flex flex-1 min-h-0">
+          {sidebarAbierto && connected && (
+            <CalendarSidebar
+              calendarios={calendarios}
+              seleccionados={seleccionados}
+              onToggle={toggleCal}
+              fechaRef={parseYmd(refDate)}
+              onSelectDate={(d) => setRefDate(ymd(d))}
+              nowIso={ymd(new Date())}
+              connected={connected}
+            />
+          )}
+          <div className="flex flex-1 min-w-0 flex-col">
+        {modo === "calendario" ? (
+          loading ? (
+            <div className="flex flex-1 min-h-0 items-center justify-center text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+            </div>
+          ) : (
+            <MeetCalendarGrid
+              eventos={eventosAll}
+              vista={vista}
+              refDate={refDate}
+              nowTime={nowTime}
+              soloMeet={soloMeet}
+              onAbrir={(ev) =>
+                ev.meetLink && window.open(ev.meetLink, "_blank")
+              }
+            />
+          )
+        ) : (
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <div className="flex h-40 items-center justify-center text-muted-foreground">
@@ -441,6 +589,9 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
               })}
             </ul>
           )}
+        </div>
+        )}
+          </div>
         </div>
       </SheetContent>
     </Sheet>

@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Incidencia, SAMPLE_DATA } from "@/features/empresa/data/mantenimiento";
-import { AjustesEmpresa, buildDefaultAjustes, DatosGenerales, ConfigOperativa } from "@/features/ajustes/data/ajustes";
+import { AjustesEmpresa, buildDefaultAjustes, DatosGenerales, ConfigOperativa, mergeNotificaciones } from "@/features/ajustes/data/ajustes";
 import { getLogoUrls, getIsotipoUrls } from "@/features/empresa/actions/logo-actions";
 import { listEmpresasCompletas } from "@/features/empresa/actions/empresas-actions";
 import { listEmpresasDeUsuario } from "@/features/empresa/actions/user-empresas-actions";
@@ -98,6 +98,7 @@ function mergeWithDefaults(stored: AjustesEmpresa, nombre: string): AjustesEmpre
     roles: storedRoles.length ? migrateRoles(storedRoles, defaults.roles) : defaults.roles,
     usuarios: stored.usuarios ?? defaults.usuarios,
     auditoria: stored.auditoria ?? defaults.auditoria,
+    notificaciones: mergeNotificaciones(stored.notificaciones),
   };
 }
 
