@@ -235,7 +235,6 @@ const MODULE_META: Record<string, ModuleMeta> = {
   "/accesos": { label: "ACCESOS", icon: KeyRound },
   "/consultas-pendientes": { label: "CONSULTAS", icon: MessageSquareWarning },
   "/formacion": { label: "FORMACIÓN", icon: GraduationCap },
-  "/comunicacion": { label: "COMUNICACIÓN", icon: MessageSquareWarning },
   "/reuniones": { label: "REUNIONES", icon: Video },
   "/agenda": { label: "AGENDA", icon: ContactRound },
 };

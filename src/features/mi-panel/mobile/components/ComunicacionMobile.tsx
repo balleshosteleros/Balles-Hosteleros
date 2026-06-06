@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  MessageCircle, Search, Plus, Send, Mic, Paperclip, X, ChevronLeft,
-  Building2, Briefcase, Loader2, Lock, FileText, Download, Check,
+  MessageCircle, Search, Plus, Send, Mic, Paperclip, X, ChevronLeft, ChevronDown,
+  Building2, Briefcase, Loader2, Lock, FileText, Download, Check, Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/shared/lib/utils";
@@ -11,7 +11,8 @@ import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
 import {
   listCanales, listMensajes, sendMensaje, createCanal,
-  sendMensajeAdjunto, getAdjuntoSignedUrl,
+  sendMensajeAdjunto, getAdjuntoSignedUrl, listEmpleadosEmpresa,
+  type EmpleadoCanal,
 } from "@/features/comunicacion/actions/comunicacion-actions";
 
 type Canal = {
@@ -68,7 +69,8 @@ function mapMensaje(r: Record<string, unknown>, miUserId: string | null): Mensaj
 }
 
 export function ComunicacionMobile() {
-  const { empresaActual } = useEmpresa();
+  const { empresaActual, getIsotipoUrl } = useEmpresa();
+  const logoUrl = getIsotipoUrl(empresaActual.id);
   const [miUserId, setMiUserId] = useState<string | null>(null);
 
   const [canales, setCanales] = useState<Canal[]>([]);
@@ -79,9 +81,15 @@ export function ComunicacionMobile() {
   const [cargando, setCargando] = useState(true);
   const [cargandoMsgs, setCargandoMsgs] = useState(false);
 
+  const [openDeptos, setOpenDeptos] = useState(true);
+  const [openAsuntos, setOpenAsuntos] = useState(true);
+
   const [dlgNuevo, setDlgNuevo] = useState(false);
   const [nombreNuevo, setNombreNuevo] = useState("");
   const [deptosNuevo, setDeptosNuevo] = useState<Set<string>>(new Set());
+  const [miembrosNuevo, setMiembrosNuevo] = useState<Set<string>>(new Set());
+  const [empleados, setEmpleados] = useState<EmpleadoCanal[]>([]);
+  const [buscaEmp, setBuscaEmp] = useState("");
 
   const [subiendo, setSubiendo] = useState(false);
   const [grabando, setGrabando] = useState(false);
@@ -109,9 +117,19 @@ export function ComunicacionMobile() {
     [canales],
   );
 
+  const empleadosFiltrados = useMemo(() => {
+    const q = buscaEmp.trim().toLowerCase();
+    if (!q) return empleados;
+    return empleados.filter((e) => {
+      const full = `${e.nombre} ${e.apellidos}`.toLowerCase();
+      return full.includes(q) || (e.rolLabel ?? "").toLowerCase().includes(q) || (e.departamento ?? "").toLowerCase().includes(q);
+    });
+  }, [empleados, buscaEmp]);
+
   useEffect(() => {
     const supabase = createBrowserClient();
     supabase.auth.getUser().then(({ data }) => setMiUserId(data.user?.id ?? null));
+    listEmpleadosEmpresa().then((res) => { if (res.ok) setEmpleados(res.data); });
   }, []);
 
   const cargarCanales = useCallback(async () => {
@@ -220,14 +238,18 @@ export function ComunicacionMobile() {
 
   async function crearAsunto() {
     const limpio = nombreNuevo.trim();
-    if (!limpio || deptosNuevo.size === 0) return;
-    const res = await createCanal(limpio, "asunto", [], empresaActual.id, Array.from(deptosNuevo));
+    if (!limpio || (deptosNuevo.size === 0 && miembrosNuevo.size === 0)) return;
+    const res = await createCanal(
+      limpio, "asunto", Array.from(miembrosNuevo), empresaActual.id, Array.from(deptosNuevo),
+    );
     if (!res.ok) { toast.error(res.error ?? "No se pudo crear"); return; }
     const nuevo = mapCanal(res.data as Record<string, unknown>);
     setCanales((prev) => [...prev, nuevo]);
     setDlgNuevo(false);
     setNombreNuevo("");
     setDeptosNuevo(new Set());
+    setMiembrosNuevo(new Set());
+    setBuscaEmp("");
     setCanalActivo(nuevo.id);
     toast.success("Asunto creado");
   }
@@ -249,14 +271,38 @@ export function ComunicacionMobile() {
         {cargando ? (
           <div className="flex justify-center py-12 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>
         ) : (
-          <div className="mt-3 space-y-4">
-            <Seccion icon={<Building2 className="h-3.5 w-3.5" />} label="Departamentos" count={deptos.length} />
-            {deptos.map((c) => <FilaCanal key={c.id} canal={c} color={empresaActual.color} onClick={() => setCanalActivo(c.id)} />)}
-            {deptos.length === 0 && <Vacio texto="Sin departamentos disponibles." />}
+          <div className="mt-3 space-y-2">
+            <Seccion
+              icon={<Building2 className="h-3.5 w-3.5" />}
+              label="Departamentos"
+              count={deptos.length}
+              open={openDeptos}
+              onToggle={() => setOpenDeptos((v) => !v)}
+            />
+            {openDeptos && (
+              <div className="space-y-2">
+                {deptos.map((c) => (
+                  <FilaCanal key={c.id} canal={c} color={empresaActual.color} logoUrl={logoUrl} onClick={() => setCanalActivo(c.id)} />
+                ))}
+                {deptos.length === 0 && <Vacio texto="Sin departamentos disponibles." />}
+              </div>
+            )}
 
-            <Seccion icon={<Briefcase className="h-3.5 w-3.5" />} label="Asuntos" count={asuntos.length} />
-            {asuntos.map((c) => <FilaCanal key={c.id} canal={c} color={empresaActual.color} onClick={() => setCanalActivo(c.id)} />)}
-            {asuntos.length === 0 && <Vacio texto="Sin asuntos. Crea uno con el botón +." />}
+            <Seccion
+              icon={<Briefcase className="h-3.5 w-3.5" />}
+              label="Asuntos"
+              count={asuntos.length}
+              open={openAsuntos}
+              onToggle={() => setOpenAsuntos((v) => !v)}
+            />
+            {openAsuntos && (
+              <div className="space-y-2">
+                {asuntos.map((c) => (
+                  <FilaCanal key={c.id} canal={c} color={empresaActual.color} logoUrl={logoUrl} onClick={() => setCanalActivo(c.id)} />
+                ))}
+                {asuntos.length === 0 && <Vacio texto="Sin asuntos. Crea uno con el botón +." />}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -264,7 +310,7 @@ export function ComunicacionMobile() {
       {/* Botón flotante crear asunto */}
       <button
         type="button"
-        onClick={() => { setNombreNuevo(""); setDeptosNuevo(new Set()); setDlgNuevo(true); }}
+        onClick={() => { setNombreNuevo(""); setDeptosNuevo(new Set()); setMiembrosNuevo(new Set()); setBuscaEmp(""); setDlgNuevo(true); }}
         className="fixed bottom-24 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg active:scale-95"
         aria-label="Crear asunto"
       >
@@ -278,9 +324,7 @@ export function ComunicacionMobile() {
             <button onClick={() => setCanalActivo(null)} className="flex h-9 w-9 items-center justify-center rounded-full active:bg-muted" aria-label="Volver">
               <ChevronLeft className="h-5 w-5" />
             </button>
-            <div className="flex h-9 w-9 items-center justify-center rounded-full text-[11px] font-bold text-white" style={{ backgroundColor: empresaActual.color }}>
-              {empresaActual.iniciales}
-            </div>
+            <CanalAvatar logoUrl={logoUrl} iniciales={empresaActual.iniciales} color={empresaActual.color} />
             <div className="min-w-0 flex-1">
               <p className="flex items-center gap-1.5 truncate text-sm font-bold">
                 {canal.nombre}
@@ -352,7 +396,7 @@ export function ComunicacionMobile() {
           <div className="max-h-[88dvh] overflow-y-auto rounded-t-3xl bg-background p-5 pb-[max(env(safe-area-inset-bottom),20px)]" onClick={(e) => e.stopPropagation()}>
             <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-muted" />
             <h2 className="flex items-center gap-2 text-base font-bold"><Briefcase className="h-4 w-4 text-primary" /> Nuevo asunto</h2>
-            <p className="mt-1 text-xs text-muted-foreground">Liga el asunto a uno o varios departamentos. Solo verán el grupo los empleados con ese departamento activo en su rol.</p>
+            <p className="mt-1 text-xs text-muted-foreground">Liga el asunto a departamentos enteros y/o añade usuarios concretos. Solo verán el grupo los empleados con ese departamento en su rol y las personas añadidas.</p>
 
             <label className="mt-4 block text-xs font-semibold">Título del asunto</label>
             <input
@@ -391,9 +435,50 @@ export function ComunicacionMobile() {
               })}
             </div>
 
+            <label className="mt-4 flex items-center gap-1.5 text-xs font-semibold">
+              <Users className="h-3.5 w-3.5 text-primary" /> Usuarios concretos ({miembrosNuevo.size}) <span className="text-[10px] font-normal text-muted-foreground">· opcional</span>
+            </label>
+            <div className="relative mt-1.5">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <input
+                value={buscaEmp}
+                onChange={(e) => setBuscaEmp(e.target.value)}
+                placeholder="Buscar persona…"
+                className="h-10 w-full rounded-xl border border-input bg-background pl-9 pr-3 text-sm outline-none focus:border-primary"
+              />
+            </div>
+            <div className="mt-1.5 max-h-[28dvh] overflow-y-auto rounded-xl border">
+              {empleadosFiltrados.length === 0 && <p className="px-4 py-6 text-center text-xs text-muted-foreground">Sin personas que coincidan.</p>}
+              {empleadosFiltrados.map((e) => {
+                const checked = miembrosNuevo.has(e.userId);
+                const ini = `${e.nombre[0] ?? ""}${e.apellidos[0] ?? ""}`.toUpperCase();
+                return (
+                  <button
+                    key={e.userId}
+                    type="button"
+                    onClick={() => {
+                      const next = new Set(miembrosNuevo);
+                      if (next.has(e.userId)) next.delete(e.userId); else next.add(e.userId);
+                      setMiembrosNuevo(next);
+                    }}
+                    className={cn("flex w-full items-center gap-3 border-b px-3 py-2 text-left last:border-b-0", checked ? "bg-primary/5" : "active:bg-muted/50")}
+                  >
+                    <div className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded border", checked ? "border-primary bg-primary" : "border-input bg-background")}>
+                      {checked && <Check className="h-3.5 w-3.5 text-primary-foreground" />}
+                    </div>
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-bold">{ini || "—"}</div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{e.nombre} {e.apellidos}</p>
+                      <p className="truncate text-[11px] text-muted-foreground">{[e.rolLabel, e.departamento].filter(Boolean).join(" · ") || "Sin rol"}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
             <div className="mt-5 flex gap-2">
               <button onClick={() => setDlgNuevo(false)} className="flex-1 rounded-xl border py-3 text-sm font-semibold active:bg-muted">Cancelar</button>
-              <button onClick={crearAsunto} disabled={!nombreNuevo.trim() || deptosNuevo.size === 0} className="flex-1 rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground disabled:opacity-50">Crear asunto</button>
+              <button onClick={crearAsunto} disabled={!nombreNuevo.trim() || (deptosNuevo.size === 0 && miembrosNuevo.size === 0)} className="flex-1 rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground disabled:opacity-50">Crear asunto</button>
             </div>
           </div>
         </div>
@@ -402,12 +487,17 @@ export function ComunicacionMobile() {
   );
 }
 
-function Seccion({ icon, label, count }: { icon: React.ReactNode; label: string; count: number }) {
+function Seccion({ icon, label, count, open, onToggle }: { icon: React.ReactNode; label: string; count: number; open: boolean; onToggle: () => void }) {
   return (
-    <div className="flex items-center gap-1.5 px-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+    <button
+      type="button"
+      onClick={onToggle}
+      className="flex w-full items-center gap-1.5 px-1 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground active:opacity-70"
+    >
+      <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", !open && "-rotate-90")} />
       {icon}{label}
       <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-[10px]">{count}</span>
-    </div>
+    </button>
   );
 }
 
@@ -415,12 +505,22 @@ function Vacio({ texto }: { texto: string }) {
   return <p className="px-2 py-3 text-center text-[11px] text-muted-foreground">{texto}</p>;
 }
 
-function FilaCanal({ canal, color, onClick }: { canal: Canal; color: string; onClick: () => void }) {
+function CanalAvatar({ logoUrl, iniciales, color }: { logoUrl?: string; iniciales: string; color: string }) {
+  if (logoUrl) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={logoUrl} alt="" className="h-11 w-11 shrink-0 rounded-full bg-background object-cover ring-1 ring-border" />;
+  }
+  return (
+    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ backgroundColor: color }}>
+      {iniciales}
+    </div>
+  );
+}
+
+function FilaCanal({ canal, color, logoUrl, onClick }: { canal: Canal; color: string; logoUrl?: string; onClick: () => void }) {
   return (
     <button onClick={onClick} className="flex w-full items-center gap-3 rounded-2xl border border-border/50 bg-card px-3 py-3 text-left active:bg-muted/40">
-      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ backgroundColor: color }}>
-        {canal.nombre.slice(0, 2).toUpperCase()}
-      </div>
+      <CanalAvatar logoUrl={logoUrl} iniciales={canal.nombre.slice(0, 2).toUpperCase()} color={color} />
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-1.5 truncate text-sm font-bold">
           {canal.nombre}
