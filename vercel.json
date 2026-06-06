@@ -46,7 +46,7 @@
     },
     {
       "path": "/api/cron/reservas-recordatorios",
-      "schedule": "0 * * * *"
+      "schedule": "0 8 * * *"
     }
   ]
 }
