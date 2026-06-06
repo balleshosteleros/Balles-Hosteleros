@@ -2,24 +2,33 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { Copy, Check, Power, Trash2, Link2, ArrowLeft } from "lucide-react";
+import { Copy, Check, Power, Trash2, Link2, ArrowLeft, Code2, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { SubmoduleToolbar, coincideBusquedaUniversal, type ToolbarColumna, type ToolbarColumnaVisible } from "@/shared/components/SubmoduleToolbar";
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { toast } from "sonner";
-import { PALABRA_CLAVE_MAX, validarPalabraClave, type ReservaLink } from "@/features/sala/data/reserva-links";
+import {
+  PALABRA_CLAVE_MAX,
+  validarPalabraClave,
+  buildIframeSnippet,
+  buildEmbedUrl,
+  type ReservaLink,
+} from "@/features/sala/data/reserva-links";
 import {
   listReservaLinks,
   createReservaLink,
   toggleReservaLink,
   deleteReservaLink,
 } from "@/features/sala/actions/reserva-links-actions";
+import { listTicketProductos } from "@/features/sala/actions/ticket-productos-actions";
+import type { ReservaTicketProducto } from "@/features/sala/data/ticket-productos";
 
 const COLUMNAS: ToolbarColumna[] = [
   { campo: "palabraClave", label: "Palabra clave", bloqueada: true },
@@ -38,8 +47,14 @@ export function LinksReservaPanel({ embedded = false }: { embedded?: boolean } =
   const [busqueda, setBusqueda] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [nuevaPalabra, setNuevaPalabra] = useState("");
+  const [nuevoNombre, setNuevoNombre] = useState("");
+  const [vendeTickets, setVendeTickets] = useState(false);
+  const [ticketIdsSel, setTicketIdsSel] = useState<string[]>([]);
+  const [productos, setProductos] = useState<ReservaTicketProducto[]>([]);
+  const [productosCargados, setProductosCargados] = useState(false);
   const [creando, startCreate] = useTransition();
   const [copiadoId, setCopiadoId] = useState<string | null>(null);
+  const [copiadoIframeId, setCopiadoIframeId] = useState<string | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({
     palabraClave: true, urlGenerada: true, activo: true, createdAt: true,
   });
@@ -54,6 +69,55 @@ export function LinksReservaPanel({ embedded = false }: { embedded?: boolean } =
   }
 
   useEffect(() => { refrescar(); }, []);
+
+  async function cargarProductosLazy() {
+    if (productosCargados) return;
+    const r = await listTicketProductos();
+    if (r.ok) {
+      setProductos(r.data.filter((p) => p.activo));
+      setProductosCargados(true);
+    }
+  }
+
+  function abrirDialog() {
+    setNuevaPalabra("");
+    setNuevoNombre("");
+    setVendeTickets(false);
+    setTicketIdsSel([]);
+    setDialogOpen(true);
+    void cargarProductosLazy();
+  }
+
+  function toggleProductoSel(id: string) {
+    setTicketIdsSel((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  }
+
+  function copiarIframe(link: ReservaLink, slug: string | null) {
+    if (!slug) {
+      toast.error("La empresa no tiene slug configurado");
+      return;
+    }
+    const url = buildEmbedUrl(slug, link.palabraClave);
+    const snippet = buildIframeSnippet(url);
+    navigator.clipboard.writeText(snippet).then(() => {
+      setCopiadoIframeId(link.id);
+      toast.success("Snippet de iframe copiado");
+      setTimeout(() => setCopiadoIframeId((cur) => (cur === link.id ? null : cur)), 1500);
+    });
+  }
+
+  function extractEmpresaSlug(link: ReservaLink): string | null {
+    try {
+      const u = new URL(link.urlGenerada);
+      const parts = u.pathname.split("/").filter(Boolean);
+      const idx = parts.indexOf("reservar");
+      return idx >= 0 ? parts[idx + 1] ?? null : null;
+    } catch {
+      return null;
+    }
+  }
 
   const palabraValidacion = useMemo(() => {
     if (!nuevaPalabra) return null;
@@ -75,14 +139,26 @@ export function LinksReservaPanel({ embedded = false }: { embedded?: boolean } =
 
   function onCrear() {
     if (!palabraValidacion?.ok) return;
+    if (vendeTickets && ticketIdsSel.length === 0) {
+      toast.error("Selecciona al menos un producto-ticket");
+      return;
+    }
     startCreate(async () => {
-      const r = await createReservaLink(nuevaPalabra);
+      const r = await createReservaLink({
+        palabraClave: nuevaPalabra,
+        nombre: nuevoNombre.trim() || null,
+        vendeTickets,
+        ticketProductoIds: vendeTickets ? ticketIdsSel : [],
+      });
       if (!r.ok) {
         toast.error(r.error ?? "Error al crear link");
         return;
       }
       toast.success(`Link "${r.data!.palabraClave}" creado`);
       setNuevaPalabra("");
+      setNuevoNombre("");
+      setVendeTickets(false);
+      setTicketIdsSel([]);
       setDialogOpen(false);
       refrescar();
     });
@@ -125,7 +201,7 @@ export function LinksReservaPanel({ embedded = false }: { embedded?: boolean } =
         busqueda={busqueda}
         onBusquedaChange={setBusqueda}
         placeholderBusqueda="Buscar palabra clave..."
-        onNuevo={() => setDialogOpen(true)}
+        onNuevo={abrirDialog}
         textoNuevo="Nuevo link"
         columnas={COLUMNAS}
         columnasVisibles={columnasVisibles}
@@ -171,7 +247,18 @@ export function LinksReservaPanel({ embedded = false }: { embedded?: boolean } =
                 <tr key={l.id} className="border-b last:border-b-0 hover:bg-muted/20">
                   {ordenVisible.includes("palabraClave") && (
                     <td className="px-3 py-2">
-                      <Badge variant={l.activo ? "default" : "outline"} className="font-mono">{l.palabraClave}</Badge>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant={l.activo ? "default" : "outline"} className="font-mono">{l.palabraClave}</Badge>
+                        {l.vendeTickets && (
+                          <Badge variant="secondary" className="text-[10px] gap-1">
+                            <Ticket className="h-3 w-3" />
+                            Vende ticket
+                          </Badge>
+                        )}
+                        {l.nombre && (
+                          <span className="text-xs text-muted-foreground">{l.nombre}</span>
+                        )}
+                      </div>
                     </td>
                   )}
                   {ordenVisible.includes("urlGenerada") && (
@@ -196,6 +283,15 @@ export function LinksReservaPanel({ embedded = false }: { embedded?: boolean } =
                   )}
                   <td className="px-3 py-2 text-right">
                     <div className="inline-flex items-center gap-1">
+                      <Button
+                        size="icon" variant="ghost" className="h-7 w-7"
+                        onClick={() => copiarIframe(l, extractEmpresaSlug(l))}
+                        title="Copiar snippet de iframe (embed para web)"
+                      >
+                        {copiadoIframeId === l.id
+                          ? <Check className="h-3.5 w-3.5 text-emerald-600" />
+                          : <Code2 className="h-3.5 w-3.5" />}
+                      </Button>
                       <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onToggle(l)} title={l.activo ? "Desactivar" : "Activar"}>
                         <Power className={l.activo ? "h-3.5 w-3.5 text-emerald-600" : "h-3.5 w-3.5 text-muted-foreground"} />
                       </Button>
@@ -212,11 +308,24 @@ export function LinksReservaPanel({ embedded = false }: { embedded?: boolean } =
       </ResizableColumnsProvider>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Nuevo link de reserva</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 py-2">
+          <div className="space-y-4 py-2">
+            <div>
+              <Label htmlFor="nombre-link">Nombre del enlace</Label>
+              <Input
+                id="nombre-link"
+                value={nuevoNombre}
+                onChange={(e) => setNuevoNombre(e.target.value)}
+                placeholder="Promoción Nochevieja, Influencer Lucía, …"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Solo para identificarlo internamente. Opcional.
+              </p>
+            </div>
+
             <div>
               <Label htmlFor="palabra-clave">Palabra clave</Label>
               <Input
@@ -235,14 +344,64 @@ export function LinksReservaPanel({ embedded = false }: { embedded?: boolean } =
               )}
               {palabraValidacion?.ok && (
                 <p className="text-xs text-muted-foreground mt-2 break-all">
-                  URL: <code className="text-foreground">.../r/&lt;empresa&gt;/{palabraValidacion.valor.toLowerCase()}</code>
+                  URL: <code className="text-foreground">.../reservar/&lt;empresa&gt;/{palabraValidacion.valor.toLowerCase()}</code>
                 </p>
+              )}
+            </div>
+
+            <div className="rounded-md border p-3 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-0.5">
+                  <Label htmlFor="vende-tickets" className="text-sm font-medium">
+                    Incluir venta de ticket
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    El enlace solo aceptará reservas con uno de los productos seleccionados.
+                  </p>
+                </div>
+                <Switch
+                  id="vende-tickets"
+                  checked={vendeTickets}
+                  onCheckedChange={(v) => setVendeTickets(Boolean(v))}
+                />
+              </div>
+              {vendeTickets && (
+                <div className="space-y-2">
+                  {productos.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      No hay productos-ticket activos. Crea uno en Configuración → Reservas → Tickets.
+                    </p>
+                  ) : (
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                      {productos.map((p) => (
+                        <label
+                          key={p.id}
+                          className="flex items-center gap-2 rounded-md border p-2 cursor-pointer hover:bg-accent"
+                        >
+                          <Checkbox
+                            checked={ticketIdsSel.includes(p.id)}
+                            onCheckedChange={() => toggleProductoSel(p.id)}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm truncate">{p.nombre}</p>
+                            <p className="text-[11px] text-muted-foreground">
+                              {p.precio.toFixed(2)} € · {p.modoPrecio === "por_persona" ? "por persona" : "por reserva"}
+                              {p.stockModo === "limitado" && p.stockTotal != null && (
+                                <> · stock {Math.max(0, p.stockTotal - p.stockConsumido)}/{p.stockTotal}</>
+                              )}
+                            </p>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={onCrear} disabled={!palabraValidacion?.ok || creando}>
+            <Button onClick={onCrear} disabled={!palabraValidacion?.ok || creando || (vendeTickets && ticketIdsSel.length === 0)}>
               {creando ? "Creando..." : "Crear link"}
             </Button>
           </DialogFooter>

@@ -7,6 +7,9 @@ export interface ReservaLink {
   creadoPor: string | null;
   createdAt: string;
   updatedAt: string;
+  nombre: string | null;
+  vendeTickets: boolean;
+  ticketProductoIds: string[];
 }
 
 export const PALABRA_CLAVE_REGEX = /^[A-Z0-9_]+$/;
@@ -23,4 +26,14 @@ export function validarPalabraClave(raw: string): { ok: true; valor: string } | 
 export function buildReservaUrl(empresaSlug: string, palabraClave: string): string {
   const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://sistema.balleshosteleros.com";
   return `${base.replace(/\/$/, "")}/reservar/${empresaSlug}/${palabraClave.toLowerCase()}`;
+}
+
+export function buildEmbedUrl(empresaSlug: string, palabraClave: string | null): string {
+  const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://sistema.balleshosteleros.com";
+  const root = `${base.replace(/\/$/, "")}/reservar/${empresaSlug}`;
+  return palabraClave ? `${root}/${palabraClave.toLowerCase()}/embed` : `${root}/embed`;
+}
+
+export function buildIframeSnippet(embedUrl: string, width = "100%", height = "780"): string {
+  return `<iframe src="${embedUrl}" width="${width}" height="${height}" frameborder="0" style="border:0;max-width:100%;"></iframe>`;
 }

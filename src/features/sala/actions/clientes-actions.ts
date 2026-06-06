@@ -277,3 +277,74 @@ export async function incrementarVisita(id: string) {
     return { ok: false, error: msg };
   }
 }
+
+// ────────────────────────────────────────────────────────────────
+// PRP-051: bloqueos de cliente para reservas con ticket (no-show).
+// ────────────────────────────────────────────────────────────────
+
+export interface ClienteTicketBloqueo {
+  id: string;
+  empresaId: string;
+  clienteId: string;
+  motivo: "no_show" | "manual" | "otro";
+  reservaOrigenId: string | null;
+  notas: string | null;
+  createdAt: string;
+  desbloqueadoAt: string | null;
+  desbloqueadoPor: string | null;
+}
+
+function rowToBloqueo(row: Record<string, unknown>): ClienteTicketBloqueo {
+  return {
+    id: row.id as string,
+    empresaId: row.empresa_id as string,
+    clienteId: row.cliente_id as string,
+    motivo: row.motivo as "no_show" | "manual" | "otro",
+    reservaOrigenId: (row.reserva_origen_id as string | null) ?? null,
+    notas: (row.notas as string | null) ?? null,
+    createdAt: row.created_at as string,
+    desbloqueadoAt: (row.desbloqueado_at as string | null) ?? null,
+    desbloqueadoPor: (row.desbloqueado_por as string | null) ?? null,
+  };
+}
+
+export async function listBloqueosClienteTicket(clienteId: string) {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, data: [] as ClienteTicketBloqueo[], error: "Sin empresa" };
+    const { data, error } = await supabase
+      .from("cliente_ticket_bloqueos")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .eq("cliente_id", clienteId)
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return { ok: true, data: (data ?? []).map(rowToBloqueo) };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error";
+    console.error("[clientes] listBloqueosClienteTicket:", msg);
+    return { ok: false, data: [] as ClienteTicketBloqueo[], error: msg };
+  }
+}
+
+export async function desbloquearClienteTicket(bloqueoId: string) {
+  try {
+    const { supabase, user, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "Sin empresa" };
+    const { error } = await supabase
+      .from("cliente_ticket_bloqueos")
+      .update({
+        desbloqueado_at: new Date().toISOString(),
+        desbloqueado_por: user?.id ?? null,
+      })
+      .eq("id", bloqueoId)
+      .eq("empresa_id", empresaId)
+      .is("desbloqueado_at", null);
+    if (error) throw error;
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error";
+    console.error("[clientes] desbloquearClienteTicket:", msg);
+    return { ok: false, error: msg };
+  }
+}

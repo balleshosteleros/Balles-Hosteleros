@@ -9,6 +9,7 @@ import {
   type Mesa,
   type TipoMesa,
 } from "@/features/sala/planos/data/planos";
+import { ESTADOS_NO_OCUPANTES } from "@/features/sala/data/reservas";
 
 function rowToMesa(r: Record<string, unknown>): Mesa {
   return {
@@ -183,7 +184,7 @@ export async function deleteMesa(id: string) {
       .select("id", { count: "exact", head: true })
       .eq("mesa", codigo)
       .gte("fecha", today)
-      .not("estado", "in", "(CANCELADA,NO_SHOW,COMPLETADA,LIBERADA)");
+      .not("estado", "in", `(${ESTADOS_NO_OCUPANTES.join(",")})`);
     if ((reservasFuturas ?? 0) > 0) {
       return {
         ok: false,

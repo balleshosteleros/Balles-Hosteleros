@@ -83,7 +83,8 @@ export type AltaUsuarioEmpleadoInput = {
   empresaPrincipalId: string;
   /** Empresas a las que tendrá acceso (debe incluir la principal). */
   empresasAcceso: string[];
-  localPrincipalId: string;
+  /** Locales donde podrá fichar (de cualquiera de sus empresas). Mínimo 1. */
+  localIds: string[];
 };
 
 export type AltaUsuarioEmpleadoResult =
@@ -148,16 +149,26 @@ export async function altaUsuarioEmpleado(
     return { ok: false, error: `Error asignando acceso a empresas: ${friendlyError(accesoErr)}` };
   }
 
-  // 5. Validar que el local pertenece a la empresa principal (rollback si no)
-  const { data: localRow, error: localErr } = await admin
+  // 5. Validar los locales: deben existir y pertenecer a una de las empresas
+  //    a las que el empleado tendrá acceso (rollback si alguno no cumple).
+  const localIds = Array.from(new Set((input.localIds ?? []).filter(Boolean)));
+  if (localIds.length === 0) {
+    await admin.auth.admin.deleteUser(userId);
+    return { ok: false, error: "Asigna al menos un local donde el empleado pueda fichar." };
+  }
+  const { data: localesRows, error: localErr } = await admin
     .from("locales")
     .select("id, empresa_id")
-    .eq("id", input.localPrincipalId)
-    .maybeSingle();
-  if (localErr || !localRow || localRow.empresa_id !== input.empresaPrincipalId) {
+    .in("id", localIds);
+  const empresasPermitidas = new Set(input.empresasAcceso);
+  const validos = (localesRows ?? []).filter((l) => empresasPermitidas.has(l.empresa_id));
+  if (localErr || validos.length !== localIds.length) {
     await admin.auth.admin.deleteUser(userId);
-    return { ok: false, error: "El local asignado debe pertenecer a la empresa principal." };
+    return { ok: false, error: "Todos los locales deben pertenecer a las empresas del empleado." };
   }
+  // Local por defecto (compat empleados.local_id): uno de la empresa principal si hay.
+  const localDefecto =
+    validos.find((l) => l.empresa_id === input.empresaPrincipalId)?.id ?? validos[0].id;
 
   // 6. Crear empleado vinculado (rollback si falla)
   const { data: empleado, error: empErr } = await admin
@@ -177,13 +188,21 @@ export async function altaUsuarioEmpleado(
       estado: "Activo",
       tipo_jornada: "Completa",
       perfil_completado: false,
-      local_id: input.localPrincipalId,
+      local_id: localDefecto,
     })
     .select("id")
     .single();
   if (empErr || !empleado) {
     await admin.auth.admin.deleteUser(userId);
     return { ok: false, error: empErr ? friendlyError(empErr) : "No se pudo crear el empleado" };
+  }
+
+  // 7. Conjunto de locales donde puede fichar (tabla puente). Rollback si falla.
+  const puenteRows = localIds.map((local_id) => ({ empleado_id: empleado.id, local_id }));
+  const { error: puenteErr } = await admin.from("empleado_locales").insert(puenteRows);
+  if (puenteErr) {
+    await admin.auth.admin.deleteUser(userId);
+    return { ok: false, error: `Error asignando locales: ${friendlyError(puenteErr)}` };
   }
 
   return { ok: true, userId, empleadoId: empleado.id, tempPassword };

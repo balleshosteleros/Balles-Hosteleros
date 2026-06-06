@@ -34,6 +34,43 @@ async function fetchEmpresaBySlug(slug: string): Promise<EmpresaMarca | null> {
   };
 }
 
+interface LinkInfo {
+  vendeTickets: boolean;
+}
+
+async function fetchLinkInfo(empresaId: string, keyword: string): Promise<LinkInfo> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("reserva_links")
+    .select("vende_tickets")
+    .eq("empresa_id", empresaId)
+    .eq("palabra_clave", keyword.toUpperCase())
+    .eq("activo", true)
+    .maybeSingle();
+  return { vendeTickets: Boolean(data?.vende_tickets) };
+}
+
+async function fetchProductosTicket(slug: string, keyword: string | null) {
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("list_ticket_productos_publicos", {
+    p_empresa_slug: slug,
+    p_keyword: keyword,
+  });
+  if (error || !data) return [];
+  return (data as Record<string, unknown>[]).map((r) => ({
+    id: r.id as string,
+    nombre: r.nombre as string,
+    descripcion: (r.descripcion as string | null) ?? null,
+    precio: Number(r.precio),
+    iva: Number(r.iva),
+    modoPrecio: r.modo_precio as "por_persona" | "por_reserva",
+    stockModo: r.stock_modo as "ilimitado" | "limitado",
+    stockTotal: (r.stock_total as number | null) ?? null,
+    stockConsumido: (r.stock_consumido as number) ?? 0,
+    ocultarAlAgotar: (r.ocultar_al_agotar as boolean) ?? true,
+  }));
+}
+
 function normalizarOrigen(raw: string): string | null {
   const upper = decodeURIComponent(raw).toUpperCase();
   return /^[A-Z0-9_]+$/.test(upper) && upper.length <= 32 ? upper : null;
@@ -48,6 +85,11 @@ export default async function ReservarCortoPage({
   const empresa = await fetchEmpresaBySlug(slug);
   if (!empresa) notFound();
 
+  const linkInfo = await fetchLinkInfo(empresa.id, keyword);
+  const productosTicket = linkInfo.vendeTickets
+    ? await fetchProductosTicket(slug, keyword.toUpperCase())
+    : await fetchProductosTicket(slug, null);
+
   return (
     <ReservaPublicaForm
       empresaSlug={empresa.slug}
@@ -56,6 +98,8 @@ export default async function ReservarCortoPage({
       colorPrimario={empresa.color}
       colorTexto={empresa.colorTexto}
       origen={normalizarOrigen(keyword)}
+      productosTicket={productosTicket}
+      ticketOnly={linkInfo.vendeTickets}
     />
   );
 }

@@ -73,6 +73,21 @@ export async function getMesasBloqueadas(
       if (errMz) throw errMz;
       for (const m of mesasZona ?? []) mesaIds.add(m.id as string);
     }
+
+    // Excepciones puntuales: el usuario quitó el bloqueo solo para este
+    // (fecha, turno) sobre mesas concretas — restamos. Si `turno` no se filtra
+    // restamos solo las excepciones que coincidan con cualquier turno.
+    let excepQuery = supabase
+      .from("empresa_reservas_bloqueos_excepciones")
+      .select("mesa_id, turno")
+      .eq("empresa_id", args.empresaId)
+      .eq("local_id", args.localId)
+      .eq("fecha", args.fechaISO);
+    if (args.turno) excepQuery = excepQuery.eq("turno", args.turno);
+    const { data: excepciones, error: errEx } = await excepQuery;
+    if (errEx) throw errEx;
+    for (const e of excepciones ?? []) mesaIds.delete(e.mesa_id as string);
+
     return mesaIds;
   } catch (err) {
     console.error("[bloqueos] getMesasBloqueadas:", err);

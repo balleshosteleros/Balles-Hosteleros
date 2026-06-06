@@ -178,11 +178,11 @@ export async function iniciarOffboarding(empleadoId: string) {
 
     if (error) throw error;
 
-    // Marcar empleado como Baja temporal (constraint exige fecha_baja para cualquier baja)
+    // Desactivar empleado (constraint exige fecha_baja al desactivar)
     await supabase
       .from("empleados")
       .update({
-        estado: "Baja temporal",
+        estado: "Desactivado",
         fecha_baja: new Date().toISOString().slice(0, 10),
       })
       .eq("id", empleadoId)

@@ -72,8 +72,7 @@ type EmpleadoConAcceso = EmpleadoUI & {
 };
 
 function normalizarEstadoEmpleado(estado: string): EmpleadoUI["estado"] {
-  if (estado === "Baja temporal" || estado === "Baja definitiva") return estado;
-  return "Activo";
+  return estado === "Activo" ? "Activo" : "Desactivado";
 }
 
 function bdToEmpleado(row: EmpleadoBDRow): EmpleadoConAcceso {
@@ -116,7 +115,11 @@ export function EmpleadosView() {
   useEffect(() => { cargar(); }, [cargar, empresaActual.id]);
 
   const [busqueda, setBusqueda] = useState("");
-  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  // Por defecto solo se muestran los empleados activos; los desactivados quedan
+  // ocultos salvo que el usuario cambie manualmente este filtro de Estado.
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([
+    { id: "default-estado-activo", campo: "estado", etiqueta: "Estado", valores: [ESTADOS_LABEL.Activo] },
+  ]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);

@@ -112,12 +112,13 @@ export async function listLocales(empresaIdOverride?: string | null) {
     const ids = (data ?? []).map((c) => c.id);
     let counts: Record<string, number> = {};
     if (ids.length > 0) {
-      const { data: empleados } = await admin
-        .from("empleados")
+      // Conteo de empleados por local desde la tabla puente (multi-local).
+      const { data: asignaciones } = await admin
+        .from("empleado_locales")
         .select("local_id")
         .in("local_id", ids);
-      counts = (empleados ?? []).reduce<Record<string, number>>((acc, e) => {
-        if (e.local_id) acc[e.local_id] = (acc[e.local_id] ?? 0) + 1;
+      counts = (asignaciones ?? []).reduce<Record<string, number>>((acc, a) => {
+        if (a.local_id) acc[a.local_id] = (acc[a.local_id] ?? 0) + 1;
         return acc;
       }, {});
     }
@@ -215,14 +216,17 @@ export async function listEmpleadosLocal(localId: string) {
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, data: [] };
+    // Empleados asignados a este local vía la tabla puente (multi-local).
     const { data, error } = await supabase
-      .from("empleados")
-      .select("id, nombre, apellidos, estado, permite_teletrabajo")
-      .eq("empresa_id", empresaId)
-      .eq("local_id", localId)
-      .order("nombre");
+      .from("empleado_locales")
+      .select("empleados!inner(id, nombre, apellidos, estado, permite_teletrabajo)")
+      .eq("local_id", localId);
     if (error) throw error;
-    return { ok: true, data: data ?? [] };
+    const empleados = (data ?? [])
+      .map((row) => (row as { empleados: unknown }).empleados)
+      .filter(Boolean) as Array<Record<string, unknown>>;
+    empleados.sort((a, b) => String(a.nombre).localeCompare(String(b.nombre)));
+    return { ok: true, data: empleados };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     return { ok: false, data: [], error: msg };
@@ -249,28 +253,160 @@ export async function listEmpleadosEmpresaParaLocales(
       .eq("empresa_id", target)
       .order("nombre");
     if (error) throw error;
-    return { ok: true, data: data ?? [] };
+    const empleados = data ?? [];
+
+    // Locales asignados (de ESTA empresa) por empleado, vía la tabla puente.
+    const empleadoIds = empleados.map((e) => e.id);
+    const porEmpleado: Record<string, string[]> = {};
+    if (empleadoIds.length > 0) {
+      const { data: asignaciones } = await admin
+        .from("empleado_locales")
+        .select("empleado_id, locales!inner(id, empresa_id)")
+        .in("empleado_id", empleadoIds)
+        .eq("locales.empresa_id", target);
+      for (const row of asignaciones ?? []) {
+        const r = row as unknown as { empleado_id: string; locales: { id: string } | null };
+        if (!r.locales?.id) continue;
+        (porEmpleado[r.empleado_id] ??= []).push(r.locales.id);
+      }
+    }
+
+    return {
+      ok: true,
+      data: empleados.map((e) => ({ ...e, local_ids: porEmpleado[e.id] ?? [] })),
+    };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     return { ok: false, data: [], error: msg };
   }
 }
 
-export async function asignarLocalEmpleado(
-  empleadoId: string,
-  localId: string | null
-) {
+/** Locales (ids) donde el empleado puede fichar, de todas sus empresas. */
+export async function getLocalesEmpleado(empleadoId: string) {
   try {
     const { supabase } = await getContext();
-    const { error } = await supabase
-      .from("empleados")
-      .update({ local_id: localId })
-      .eq("id", empleadoId);
+    const { data, error } = await supabase
+      .from("empleado_locales")
+      .select("local_id")
+      .eq("empleado_id", empleadoId);
     if (error) throw error;
+    return { ok: true, data: (data ?? []).map((r) => r.local_id as string) };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[locales] getLocalesEmpleado:", msg);
+    return { ok: false, data: [], error: msg };
+  }
+}
+
+/**
+ * Recalcula empleados.local_id (local "por defecto", compat con lecturas
+ * existentes) tras cambiar el conjunto: prioriza un local de la empresa
+ * principal del empleado; si no hay, el primero del conjunto; si está vacío, null.
+ */
+async function recomputarLocalPorDefecto(
+  supabase: Awaited<ReturnType<typeof getContext>>["supabase"],
+  empleadoId: string,
+) {
+  const { data: emp } = await supabase
+    .from("empleados")
+    .select("empresa_id")
+    .eq("id", empleadoId)
+    .maybeSingle();
+  const { data: asignados } = await supabase
+    .from("empleado_locales")
+    .select("local_id, locales!inner(id, empresa_id)")
+    .eq("empleado_id", empleadoId);
+  const filas = (asignados ?? []).map(
+    (r) => (r as unknown as { locales: { id: string; empresa_id: string } }).locales,
+  );
+  const principal = emp?.empresa_id
+    ? filas.find((l) => l.empresa_id === emp.empresa_id)
+    : undefined;
+  const defecto = principal?.id ?? filas[0]?.id ?? null;
+  await supabase.from("empleados").update({ local_id: defecto }).eq("id", empleadoId);
+}
+
+/** Reemplaza por completo el conjunto de locales donde el empleado puede fichar. */
+export async function setLocalesEmpleado(empleadoId: string, localIds: string[]) {
+  try {
+    const { supabase } = await getContext();
+    const ids = Array.from(new Set((localIds ?? []).filter(Boolean)));
+
+    // Cada local debe pertenecer a una empresa a la que el empleado tiene acceso.
+    if (ids.length > 0) {
+      const { data: emp } = await supabase
+        .from("empleados")
+        .select("user_id")
+        .eq("id", empleadoId)
+        .maybeSingle();
+      const { data: accesos } = await supabase
+        .from("user_empresas")
+        .select("empresa_id")
+        .eq("user_id", emp?.user_id ?? "");
+      const empresasEmpleado = new Set((accesos ?? []).map((a) => a.empresa_id));
+      const { data: locs } = await supabase
+        .from("locales")
+        .select("id, empresa_id")
+        .in("id", ids);
+      if ((locs?.length ?? 0) !== ids.length ||
+          (locs ?? []).some((l) => !empresasEmpleado.has(l.empresa_id))) {
+        return { ok: false, error: "Algún local no pertenece a una empresa del empleado." };
+      }
+    }
+
+    const { error: delErr } = await supabase
+      .from("empleado_locales")
+      .delete()
+      .eq("empleado_id", empleadoId);
+    if (delErr) throw delErr;
+
+    if (ids.length > 0) {
+      const rows = ids.map((local_id) => ({ empleado_id: empleadoId, local_id }));
+      const { error: insErr } = await supabase.from("empleado_locales").insert(rows);
+      if (insErr) throw insErr;
+    }
+
+    await recomputarLocalPorDefecto(supabase, empleadoId);
     return { ok: true };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[locales] asignarLocalEmpleado:", msg);
+    console.error("[locales] setLocalesEmpleado:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/** Añade un local al conjunto del empleado (idempotente). */
+export async function addLocalEmpleado(empleadoId: string, localId: string) {
+  try {
+    const { supabase } = await getContext();
+    const { error } = await supabase
+      .from("empleado_locales")
+      .upsert({ empleado_id: empleadoId, local_id: localId }, { onConflict: "empleado_id,local_id" });
+    if (error) throw error;
+    await recomputarLocalPorDefecto(supabase, empleadoId);
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[locales] addLocalEmpleado:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/** Quita un local del conjunto del empleado. */
+export async function removeLocalEmpleado(empleadoId: string, localId: string) {
+  try {
+    const { supabase } = await getContext();
+    const { error } = await supabase
+      .from("empleado_locales")
+      .delete()
+      .eq("empleado_id", empleadoId)
+      .eq("local_id", localId);
+    if (error) throw error;
+    await recomputarLocalPorDefecto(supabase, empleadoId);
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[locales] removeLocalEmpleado:", msg);
     return { ok: false, error: msg };
   }
 }

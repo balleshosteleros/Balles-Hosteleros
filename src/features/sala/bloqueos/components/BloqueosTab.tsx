@@ -214,6 +214,26 @@ export function BloqueosTab() {
     return mesas.filter((m) => zonaIds.has(m.zonaId) && posiciones.has(m.id));
   }, [mesas, zonasSala, posiciones]);
 
+  /**
+   * IDs de mesa que tienen al menos un bloqueo activo (cualquier vigencia,
+   * cualquier turno) en este local. Las zonas se expanden a sus mesas. Solo
+   * cuenta para la visualización del plano — la validación real ya la hace el
+   * motor con `getMesasBloqueadas` y la fecha/turno reales.
+   */
+  const mesasConBloqueoIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const b of bloqueos) {
+      for (const mid of b.mesaIds) ids.add(mid);
+      if (b.zonaIds.length > 0) {
+        const setZ = new Set(b.zonaIds);
+        for (const m of mesas) {
+          if (setZ.has(m.zonaId)) ids.add(m.id);
+        }
+      }
+    }
+    return ids;
+  }, [bloqueos, mesas]);
+
   function toggleMesa(mesaId: string) {
     setSeleccionMesas((prev) => {
       const next = new Set(prev);
@@ -308,11 +328,11 @@ export function BloqueosTab() {
         </p>
       </div>
 
-      {/* Selectores local / sala */}
+      {/* Contexto local + sala (siempre visible) */}
       <div className="flex flex-wrap items-end gap-3">
-        {locales.length > 1 && (
-          <div className="space-y-1.5">
-            <Label className="text-xs">Local</Label>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Local</Label>
+          {locales.length > 1 ? (
             <Select value={localId} onValueChange={setLocalId}>
               <SelectTrigger className="h-8 w-56 text-xs">
                 <SelectValue />
@@ -325,11 +345,15 @@ export function BloqueosTab() {
                 ))}
               </SelectContent>
             </Select>
-          </div>
-        )}
-        {salas.length > 0 && (
-          <div className="space-y-1.5">
-            <Label className="text-xs">Sala</Label>
+          ) : (
+            <div className="h-8 px-3 inline-flex items-center rounded-md border bg-muted/30 text-xs font-medium">
+              {locales[0]?.nombre ?? "Sin local"}
+            </div>
+          )}
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Sala</Label>
+          {salas.length > 1 ? (
             <Select value={salaId} onValueChange={setSalaId}>
               <SelectTrigger className="h-8 w-56 text-xs">
                 <SelectValue />
@@ -342,8 +366,12 @@ export function BloqueosTab() {
                 ))}
               </SelectContent>
             </Select>
-          </div>
-        )}
+          ) : (
+            <div className="h-8 px-3 inline-flex items-center rounded-md border bg-muted/30 text-xs font-medium">
+              {salas[0]?.nombre ?? "Sin salas"}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Toggles de zona */}
@@ -385,10 +413,15 @@ export function BloqueosTab() {
         className="border rounded-md overflow-hidden bg-muted/20 relative flex items-center justify-center"
         style={{ height: CANVAS_H }}
       >
-        {mesasSalaPosicionadas.length === 0 ? (
+        {salas.length === 0 ? (
           <p className="text-xs text-muted-foreground italic px-4 text-center">
-            Esta sala no tiene mesas colocadas en el plano todavía. Edita el
-            plano desde Estructura → Salas para colocar mesas.
+            Este local no tiene salas todavía. Crea una desde Estructura → Salas.
+          </p>
+        ) : mesasSalaPosicionadas.length === 0 ? (
+          <p className="text-xs text-muted-foreground italic px-4 text-center">
+            La sala &quot;{salas.find((s) => s.id === salaId)?.nombre ?? ""}&quot;
+            no tiene mesas colocadas en el plano todavía. Edita el plano desde
+            Estructura → Salas para colocar mesas.
           </p>
         ) : (
           <div
@@ -464,9 +497,27 @@ export function BloqueosTab() {
                 const zona = zonaPorId.get(m.zonaId);
                 const seleccionada = seleccionMesas.has(m.id);
                 const dims = getMesaDims(m.forma, pos);
-                const radius =
-                  m.forma === "redonda" ? 9999 : 6;
+                const radius = m.forma === "redonda" ? 9999 : 6;
                 const zonaIncluida = zona && seleccionZonas.has(zona.id);
+                const bloqueada = mesasConBloqueoIds.has(m.id);
+                let bg = zona?.colorPastel ?? "#FDE68A";
+                let textCol = "text-foreground";
+                let borderCls = "border-foreground/40 hover:border-foreground";
+                if (bloqueada) {
+                  bg = "#1f2937"; // gris-900: el "negro" del plano
+                  textCol = "text-white";
+                  borderCls = "border-black";
+                }
+                if (zonaIncluida) {
+                  bg = "#fee2e2";
+                  textCol = "text-foreground";
+                  borderCls = "border-destructive/60 ring-1 ring-destructive/30";
+                }
+                if (seleccionada) {
+                  bg = "#fecaca";
+                  textCol = "text-foreground";
+                  borderCls = "border-destructive shadow-lg ring-2 ring-destructive/40";
+                }
                 return (
                   <button
                     key={m.id}
@@ -474,11 +525,8 @@ export function BloqueosTab() {
                     onClick={() => toggleMesa(m.id)}
                     className={cn(
                       "absolute flex flex-col items-center justify-center text-xs font-semibold border-2 select-none transition-shadow",
-                      seleccionada
-                        ? "border-destructive shadow-lg ring-2 ring-destructive/40"
-                        : zonaIncluida
-                          ? "border-destructive/60 ring-1 ring-destructive/30"
-                          : "border-foreground/40 hover:border-foreground",
+                      borderCls,
+                      textCol,
                     )}
                     style={{
                       left: Math.max(0, Math.min(CANVAS_W - dims.w, pos.x)),
@@ -486,21 +534,33 @@ export function BloqueosTab() {
                       width: dims.w,
                       height: dims.h,
                       borderRadius: radius,
-                      backgroundColor: seleccionada
-                        ? "#fecaca"
-                        : zonaIncluida
-                          ? "#fee2e2"
-                          : zona?.colorPastel ?? "#FDE68A",
+                      backgroundColor: bg,
                       transform: `rotate(${pos.rotation}deg)`,
                     }}
-                    title={`${m.codigo} · ${m.capacidadMin}-${m.capacidadMax} pax`}
+                    title={
+                      bloqueada
+                        ? `${m.codigo} · ${m.capacidadMin}-${m.capacidadMax} pax · Bloqueada`
+                        : `${m.codigo} · ${m.capacidadMin}-${m.capacidadMax} pax`
+                    }
                   >
                     <div
                       className="flex flex-col items-center justify-center pointer-events-none"
                       style={{ transform: `rotate(${-pos.rotation}deg)` }}
                     >
-                      <span>{m.codigo}</span>
-                      <span className="text-[10px] text-muted-foreground font-normal">
+                      <span className="flex items-center gap-1">
+                        {bloqueada && !seleccionada && !zonaIncluida && (
+                          <Lock className="h-3 w-3" />
+                        )}
+                        {m.codigo}
+                      </span>
+                      <span
+                        className={cn(
+                          "text-[10px] font-normal",
+                          bloqueada && !seleccionada && !zonaIncluida
+                            ? "text-white/70"
+                            : "text-muted-foreground",
+                        )}
+                      >
                         {m.capacidadMin}-{m.capacidadMax}
                       </span>
                     </div>
@@ -510,6 +570,22 @@ export function BloqueosTab() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Leyenda */}
+      <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block h-3 w-3 rounded-sm border border-foreground/40" style={{ backgroundColor: "#FDE68A" }} />
+          Disponible
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block h-3 w-3 rounded-sm border border-black" style={{ backgroundColor: "#1f2937" }} />
+          Bloqueada
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block h-3 w-3 rounded-sm border border-destructive" style={{ backgroundColor: "#fecaca" }} />
+          Seleccionada para nuevo bloqueo
+        </span>
       </div>
 
       {/* Resumen de selección */}

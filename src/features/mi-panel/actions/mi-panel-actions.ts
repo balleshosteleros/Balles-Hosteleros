@@ -181,7 +181,7 @@ export async function ficharEntradaPersonal(geo?: GeoInput) {
     if (!user || !empresaId) return { ok: false, error: "No autenticado" };
     const { data: empleado, error: empleadoErr } = await supabase
       .from("empleados")
-      .select("local_id, permite_teletrabajo")
+      .select("id, permite_teletrabajo")
       .eq("user_id", user.id)
       .eq("empresa_id", empresaId)
       .maybeSingle();
@@ -192,15 +192,30 @@ export async function ficharEntradaPersonal(geo?: GeoInput) {
         error: "Tu usuario no está vinculado a ningún empleado.",
       };
     }
-    if (!empleado.local_id) {
+
+    // Locales donde puede fichar EN ESTA empresa (tabla puente multi-local).
+    const { data: asignados, error: asignadosErr } = await supabase
+      .from("empleado_locales")
+      .select("locales!inner(id, nombre, lat, lng, radio_metros, empresa_id)")
+      .eq("empleado_id", empleado.id)
+      .eq("locales.empresa_id", empresaId);
+    if (asignadosErr) throw asignadosErr;
+    const localesAsignados = (asignados ?? [])
+      .map((r) => (r as unknown as { locales: {
+        id: string; nombre: string | null; lat: number | null;
+        lng: number | null; radio_metros: number;
+      } }).locales)
+      .filter(Boolean);
+    if (localesAsignados.length === 0) {
       return {
         ok: false,
-        error: "No tienes un local asignado. Pide a tu responsable que te asigne uno.",
+        error: "No tienes ningún local asignado en esta empresa. Pide a tu responsable que te asigne uno.",
       };
     }
 
     const modoTeletrabajo = Boolean(empleado.permite_teletrabajo);
     let centro = "";
+    let localElegidoId: string;
 
     if (!modoTeletrabajo) {
       if (!geo) {
@@ -209,33 +224,37 @@ export async function ficharEntradaPersonal(geo?: GeoInput) {
           error: "Activa la geolocalización para poder fichar.",
         };
       }
-      const { data: local, error: localErr } = await supabase
-        .from("locales")
-        .select("lat, lng, radio_metros, nombre")
-        .eq("id", empleado.local_id)
-        .single();
-      if (localErr) throw localErr;
-      if (!local || local.lat == null || local.lng == null) {
+      // Elige el local más cercano dentro de su radio (cualquiera de los suyos).
+      let mejor: { id: string; nombre: string; dist: number } | null = null;
+      let masCercano: { nombre: string; dist: number; radio: number } | null = null;
+      for (const l of localesAsignados) {
+        if (l.lat == null || l.lng == null) continue;
+        const dist = distanciaMetros(geo.lat, geo.lng, l.lat, l.lng);
+        if (!masCercano || dist < masCercano.dist) {
+          masCercano = { nombre: l.nombre ?? "", dist, radio: l.radio_metros };
+        }
+        if (dist <= l.radio_metros && (!mejor || dist < mejor.dist)) {
+          mejor = { id: l.id, nombre: l.nombre ?? "", dist };
+        }
+      }
+      if (!mejor) {
+        if (!masCercano) {
+          return {
+            ok: false,
+            error: "Tus locales no tienen ubicación configurada. Avisa a tu responsable.",
+          };
+        }
         return {
           ok: false,
-          error: "Tu local no tiene ubicación configurada. Avisa a tu responsable.",
+          error: `Estás a ${Math.round(masCercano.dist)} m de "${masCercano.nombre}" (radio permitido ${masCercano.radio} m). Acércate a un local asignado para fichar.`,
         };
       }
-      centro = local.nombre ?? "";
-      const dist = distanciaMetros(geo.lat, geo.lng, local.lat, local.lng);
-      if (dist > local.radio_metros) {
-        return {
-          ok: false,
-          error: `Estás a ${Math.round(dist)} m de "${local.nombre}" (radio permitido ${local.radio_metros} m). Acércate al local para fichar.`,
-        };
-      }
+      localElegidoId = mejor.id;
+      centro = mejor.nombre;
     } else {
-      const { data: local } = await supabase
-        .from("locales")
-        .select("nombre")
-        .eq("id", empleado.local_id)
-        .maybeSingle();
-      centro = local?.nombre ?? "";
+      // Teletrabajo: no se valida zona; se usa el local por defecto (primero).
+      localElegidoId = localesAsignados[0].id;
+      centro = localesAsignados[0].nombre ?? "";
     }
 
     const ahora = new Date();
@@ -248,7 +267,7 @@ export async function ficharEntradaPersonal(geo?: GeoInput) {
         fecha: todayISO(),
         hora_entrada: ahora.toISOString(),
         estado: "trabajando",
-        local_id: empleado.local_id,
+        local_id: localElegidoId,
         lat_entrada: geo?.lat ?? null,
         lng_entrada: geo?.lng ?? null,
         precision_entrada_metros: geo?.precision ?? null,

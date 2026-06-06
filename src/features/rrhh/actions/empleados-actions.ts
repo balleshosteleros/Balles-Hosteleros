@@ -15,9 +15,7 @@ import {
 import type { DatosPersonalesInput, DatosPersonalesCompletos } from "@/features/mi-panel/actions/datos-personales-actions";
 import type { SolicitudPersonal, SolicitudSubtipo, SolicitudTipo, SolicitudEstado } from "@/features/mi-panel/types";
 
-export type EstadoEmpleado = "Activo" | "Baja temporal" | "Baja definitiva";
-
-const ESTADOS_BAJA: EstadoEmpleado[] = ["Baja temporal", "Baja definitiva"];
+export type EstadoEmpleado = "Activo" | "Desactivado";
 
 const FALLBACK_DEPARTAMENTOS = [
   "DIRECCIÓN", "SALA", "COCINA", "GERENCIA", "CAMAREROS",
@@ -263,10 +261,9 @@ export async function createEmpleado(input: {
   // `empresaPrincipalId`, se usa la primera o la empresa activa del admin.
   empresaIds?: string[];
   empresaPrincipalId?: string;
-  // Mapa transitorio desde la UI. A día de hoy solo persistimos el local de la
-  // empresa principal en empleados.local_id; los accesos secundarios se
-  // guardan únicamente en user_empresas.
-  localPorEmpresa?: Record<string, string | null>;
+  // Locales donde el empleado podrá fichar (de cualquiera de sus empresas).
+  // Mínimo uno; se guardan en la tabla puente empleado_locales.
+  localIds?: string[];
 }) {
   try {
     const { empresaId: empresaActivaId } = await getAppContext();
@@ -303,11 +300,11 @@ export async function createEmpleado(input: {
     const nombreNorm = normalizarNombre(input.nombre);
     const apellidosNorm = normalizarNombreOrNull(input.apellidos);
     const fullName = `${nombreNorm} ${apellidosNorm ?? ""}`.trim();
-    // Local de la empresa principal: obligatorio en el modelo actual.
+    // Locales donde podrá fichar: al menos uno (de cualquiera de sus empresas).
     const isRealId = (id?: string) => !!id && !id.startsWith("mock-");
-    const localPrincipal = input.localPorEmpresa?.[empresaPrincipalId] ?? null;
-    if (!localPrincipal) {
-      return { ok: false, error: "La empresa principal debe tener un local asignado." };
+    const localIds = Array.from(new Set((input.localIds ?? []).filter(Boolean)));
+    if (localIds.length === 0) {
+      return { ok: false, error: "Asigna al menos un local donde el empleado pueda fichar." };
     }
 
     // Alta en cascada (auth.user → profile → roles → user_empresas → empleado),
@@ -325,7 +322,7 @@ export async function createEmpleado(input: {
       puesto: input.puesto ?? null,
       empresaPrincipalId,
       empresasAcceso,
-      localPrincipalId: localPrincipal,
+      localIds,
     });
     if (!alta.ok) {
       return { ok: false, error: alta.error };
@@ -347,7 +344,6 @@ type UpdateEmpleadoInput = {
   emailEmpresa?: string | null;
   emailPersonal?: string | null;
   telefono?: string | null;
-  notas?: string | null;
 };
 
 export async function updateEmpleadoEmpresasAcceso(input: {
@@ -373,7 +369,7 @@ export async function updateEmpleadoEmpresasAcceso(input: {
     if (!empresaIds.includes(empleado.empresa_id)) {
       return {
         ok: false,
-        error: "La empresa principal del empleado no se puede quitar del acceso.",
+        error: "No se puede quitar del acceso la empresa donde el empleado está dado de alta.",
       };
     }
 
@@ -398,6 +394,44 @@ export async function updateEmpleadoEmpresasAcceso(input: {
       .insert(rows);
     if (insertErr) throw insertErr;
 
+    // Retirada "unida": al quitar una empresa, se retiran los locales de esa
+    // empresa del conjunto donde el empleado puede fichar.
+    const { data: asignados } = await admin
+      .from("empleado_locales")
+      .select("local_id, locales!inner(id, empresa_id)")
+      .eq("empleado_id", input.empleadoId);
+    const aRetirar = (asignados ?? [])
+      .map((r) => (r as unknown as { locales: { id: string; empresa_id: string } }).locales)
+      .filter((l) => l && !empresaIds.includes(l.empresa_id))
+      .map((l) => l.id);
+    if (aRetirar.length > 0) {
+      await admin
+        .from("empleado_locales")
+        .delete()
+        .eq("empleado_id", input.empleadoId)
+        .in("local_id", aRetirar);
+      // Recalcular el local por defecto si el actual quedó fuera del conjunto.
+      const { data: emp } = await admin
+        .from("empleados")
+        .select("local_id")
+        .eq("id", input.empleadoId)
+        .maybeSingle();
+      if (emp && aRetirar.includes(emp.local_id as string)) {
+        const { data: resto } = await admin
+          .from("empleado_locales")
+          .select("local_id, locales!inner(empresa_id)")
+          .eq("empleado_id", input.empleadoId);
+        const filas = (resto ?? []).map(
+          (r) => (r as unknown as { local_id: string; locales: { empresa_id: string } }),
+        );
+        const defecto =
+          filas.find((f) => f.locales.empresa_id === empleado.empresa_id)?.local_id ??
+          filas[0]?.local_id ??
+          null;
+        await admin.from("empleados").update({ local_id: defecto }).eq("id", input.empleadoId);
+      }
+    }
+
     revalidatePath("/rrhh/empleados");
     revalidatePath(`/rrhh/empleados/${input.empleadoId}`);
     return { ok: true };
@@ -420,7 +454,6 @@ export async function updateEmpleado(id: string, updates: UpdateEmpleadoInput) {
     if (updates.emailEmpresa !== undefined) patch.email_empresa = updates.emailEmpresa;
     if (updates.emailPersonal !== undefined) patch.email_personal = updates.emailPersonal;
     if (updates.telefono !== undefined) patch.telefono = updates.telefono;
-    if (updates.notas !== undefined) patch.notas = updates.notas;
 
     if (Object.keys(patch).length === 0) return { ok: true };
 
@@ -439,7 +472,7 @@ export async function updateEmpleado(id: string, updates: UpdateEmpleadoInput) {
 /**
  * Cambia el estado del empleado. Validaciones (también las hace el constraint
  * `empleados_estado_check` en BD, esto es solo para dar errores legibles):
- *   - Para 'Baja temporal' / 'Baja definitiva' es obligatorio `fechaBaja`.
+ *   - Para 'Desactivado' es obligatorio `fechaBaja`.
  *   - Para 'Activo' se limpia automáticamente la `fechaBaja`.
  *
  * Al guardar, el trigger `empleados_sync_estado_acceso` actualiza
@@ -452,16 +485,20 @@ export async function setEmpleadoEstado(input: {
   fechaBaja?: string | null;
 }) {
   try {
-    if (ESTADOS_BAJA.includes(input.estado) && !input.fechaBaja) {
+    if (input.estado !== "Activo" && !input.fechaBaja) {
       return {
         ok: false,
-        error: "La fecha de baja es obligatoria para Baja temporal o Baja definitiva.",
+        error: "La fecha de baja es obligatoria al desactivar a un empleado.",
       };
     }
 
     const { supabase } = await getAppContext();
-    const patch: Record<string, unknown> = { estado: input.estado };
-    patch.fecha_baja = input.estado === "Activo" ? null : input.fechaBaja ?? null;
+    // La fecha de baja queda siempre reflejada: al reactivar (Activo) NO se borra,
+    // se conserva como historico de la ultima baja.
+    const patch: Record<string, unknown> = {
+      estado: input.estado,
+      fecha_baja: input.fechaBaja ?? null,
+    };
 
     const { error } = await supabase.from("empleados").update(patch).eq("id", input.id);
     if (error) throw error;

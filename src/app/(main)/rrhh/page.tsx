@@ -5,7 +5,6 @@ import {
   CalendarClock,
   ClipboardList,
   FileSignature,
-  UserPlus,
   Users,
 } from "lucide-react";
 import { getRrhhDashboard } from "@/features/rrhh/actions/dashboard-actions";
@@ -83,25 +82,6 @@ export default async function RRHHPage() {
 
   return (
     <div className="p-4 md:p-6 space-y-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center">
-        <div className="flex items-center gap-3">
-          <Users className="h-6 w-6 text-muted-foreground" />
-          <div>
-            <h1 className="text-xl font-bold tracking-tight">Recursos Humanos</h1>
-            <p className="text-sm text-muted-foreground">
-              Cuadro operativo{dashboard.empresaNombre ? ` · ${dashboard.empresaNombre}` : ""}
-            </p>
-          </div>
-        </div>
-        <Link
-          href="/rrhh/empleados/nuevo"
-          className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 md:ml-auto"
-        >
-          <UserPlus className="h-4 w-4" />
-          Alta empleado
-        </Link>
-      </div>
-
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         {metrics.map((metric) => (
           <div key={metric.label} className="rounded-lg border bg-card p-4">

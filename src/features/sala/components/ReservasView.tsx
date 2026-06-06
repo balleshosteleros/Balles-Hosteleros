@@ -38,6 +38,10 @@ import {
   SAMPLE_MESAS,
   Mesa, Reserva, EstadoReserva, ZonaSala, TurnoReserva,
   ZONAS_LABELS, ZONAS_SALA, ESTADO_RESERVA_LABELS, ESTADO_MESA_LABELS, ESTADOS_RESERVA,
+  ESTADO_BADGE_CLASS,
+  ESTADO_DOT_CLASS,
+  ESTADO_ORDEN_PRIORIDAD,
+  ESTADOS_NO_OCUPANTES,
   TIPO_RESERVA_CATEGORIA_LABELS,
   DURACION_RESERVA_MAX_MINUTOS,
   DURACION_RESERVA_MIN_MINUTOS,
@@ -51,7 +55,19 @@ import {
   notificarReservaCreadaPorEmail,
 } from "@/features/sala/actions/reservas-actions";
 import { listReservaEtiquetas } from "@/features/sala/actions/reserva-etiquetas-actions";
+import { CuponInputReserva } from "@/features/sala/cupones/components/CuponInputReserva";
+import { validarCuponAdminAction } from "@/features/sala/cupones/actions/validar-cupon-action";
 import { loadReservasModuleContext } from "@/features/sala/actions/reservas-module-context";
+import {
+  crearBloqueoExcepcion,
+  listBloqueoExcepciones,
+  listBloqueos,
+} from "@/features/sala/bloqueos/actions/bloqueos-actions";
+import {
+  vigenciaAplicaEnFecha,
+  type BloqueoExcepcion,
+  type ReservaBloqueo,
+} from "@/features/sala/bloqueos/data/bloqueos";
 import {
   COLORES_PASTEL_ZONAS,
   type Sala as SalaConfig,
@@ -113,7 +129,7 @@ const LIBRE_RAINBOW = `linear-gradient(135deg, ${COLORES_PASTEL_ZONAS
  *  - LIBRE: hereda el color pastel de su zona inline (aclarado en render).
  *  - OCUPADA: alguien sentado (walk-in) → verde oscuro estilo CoverManager.
  *  - RESERVADA: reserva confirmada/reconfirmada pero aún no sentada → verde
- *    claro llamativo, distinto del verde de SENTADA.
+ *    claro llamativo, distinto del verde oscuro de OCUPADA.
  *  - BLOQUEADA: negro.
  */
 const mesaBg: Record<string, string> = {
@@ -123,56 +139,18 @@ const mesaBg: Record<string, string> = {
   BLOQUEADA: "bg-[#111111] hover:bg-[#1F1F1F] text-white",
 };
 
-// Prioridad de ordenación de la lista de reservas: tras la hora ascendente, los
-// estados con compromiso real (confirmadas/reconfirmadas) van primero, luego
-// lista de espera, luego liberadas, y el resto al fondo. Regla permanente.
-const ESTADO_ORDEN_PRIORIDAD: Record<EstadoReserva, number> = {
-  CONFIRMADA: 0,
-  RECONFIRMADA: 0,
-  LISTA_ESPERA: 1,
-  LIBERADA: 2,
-  PENDIENTE: 3,
-  WALK_IN: 3,
-  LLEGADA: 3,
-  LLEGADA_BARRA: 3,
-  SENTADA: 3,
-  POSTRE: 3,
-  CUENTA_SOLICITADA: 3,
-  LIMPIAR: 3,
-  TARJETA_NO_INTRODUCIDA: 3,
-  A_REVISAR: 3,
-  NO_SHOW: 3,
-  COMPLETADA: 3,
-  CANCELADA: 3,
-};
-
 /** Metadatos visuales por mesa, derivados del catálogo + zona en BD. */
 interface MesaMeta {
   forma: FormaMesa;
   colorZona: string;
   capacidadMin: number;
   capacidadMax: number;
+  zonaId: string;
 }
 
-const reservaColor: Record<EstadoReserva, string> = {
-  CONFIRMADA: "bg-emerald-600/20 text-emerald-400 border-emerald-600/40",
-  PENDIENTE: "bg-amber-600/20 text-amber-400 border-amber-600/40",
-  RECONFIRMADA: "bg-sky-600/20 text-sky-400 border-sky-600/40",
-  LISTA_ESPERA: "bg-violet-600/20 text-violet-400 border-violet-600/40",
-  WALK_IN: "bg-orange-600/20 text-orange-300 border-orange-600/40",
-  LLEGADA: "bg-blue-600/20 text-blue-400 border-blue-600/40",
-  NO_SHOW: "bg-red-600/20 text-red-400 border-red-600/40",
-  COMPLETADA: "bg-muted text-muted-foreground border-border",
-  CANCELADA: "bg-red-900/20 text-red-500 border-red-800/40",
-  TARJETA_NO_INTRODUCIDA: "bg-zinc-100 text-zinc-800 border-zinc-300",
-  LLEGADA_BARRA: "bg-purple-600/20 text-purple-300 border-purple-600/40",
-  SENTADA: "bg-green-700/20 text-green-300 border-green-700/40",
-  POSTRE: "bg-cyan-600/20 text-cyan-300 border-cyan-600/40",
-  CUENTA_SOLICITADA: "bg-blue-700/20 text-blue-300 border-blue-700/40",
-  LIMPIAR: "bg-lime-600/20 text-lime-300 border-lime-600/40",
-  LIBERADA: "bg-yellow-600/20 text-yellow-300 border-yellow-600/40",
-  A_REVISAR: "bg-rose-600/20 text-rose-300 border-rose-600/40",
-};
+// Alias local del badge centralizado (importado desde data/reservas) para
+// no romper los call sites que ya leen `reservaColor[r.estado]`.
+const reservaColor = ESTADO_BADGE_CLASS;
 
 const MESES_ES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -204,17 +182,9 @@ function addMonths(iso: string, n: number) {
 }
 
 function StatusDot({ estado }: { estado: EstadoReserva }) {
-  const colors: Record<EstadoReserva, string> = {
-    CONFIRMADA: "bg-emerald-500", PENDIENTE: "bg-amber-500", RECONFIRMADA: "bg-sky-500",
-    LISTA_ESPERA: "bg-violet-500", WALK_IN: "bg-orange-400", LLEGADA: "bg-blue-500",
-    NO_SHOW: "bg-red-500", COMPLETADA: "bg-muted-foreground", CANCELADA: "bg-red-800",
-    TARJETA_NO_INTRODUCIDA: "bg-zinc-400", LLEGADA_BARRA: "bg-purple-500",
-    SENTADA: "bg-green-600", POSTRE: "bg-cyan-500", CUENTA_SOLICITADA: "bg-blue-700",
-    LIMPIAR: "bg-lime-500", LIBERADA: "bg-yellow-500", A_REVISAR: "bg-rose-500",
-  };
   return (
     <span className="flex items-center gap-1.5">
-      <span className={cn("w-2.5 h-2.5 rounded-full shrink-0", colors[estado])} />
+      <span className={cn("w-2.5 h-2.5 rounded-full shrink-0", ESTADO_DOT_CLASS[estado])} />
       <span className="truncate">{ESTADO_RESERVA_LABELS[estado]}</span>
     </span>
   );
@@ -252,8 +222,7 @@ function ReservaQuickPopover({
     | { tipo: "pendiente"; key: string; label: string };
 
   const acciones: AccionRapida[] = [
-    { tipo: "estado", key: "SENTADA", estado: "SENTADA", label: "Sentada" },
-    { tipo: "estado", key: "TERMINANDO", estado: "POSTRE", label: "Terminando" },
+    { tipo: "estado", key: "TERMINANDO", estado: "TERMINANDO", label: "Terminando" },
     { tipo: "estado", key: "LIBERADA", estado: "LIBERADA", label: "Liberada" },
     { tipo: "estado", key: "CANCELADA", estado: "CANCELADA", label: "Cancelada" },
     { tipo: "estado", key: "NO_SHOW", estado: "NO_SHOW", label: "No show" },
@@ -348,6 +317,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
     importePagado?: number | null;
     duracionMinutos?: number | null;
     notificarEmail?: boolean;
+    codigoCupon?: string | null;
   }) => void;
 }) {
   const [form, setForm] = useState({
@@ -366,7 +336,9 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
     duracionMinutos: "" as string,
     duracionTouched: false as boolean,
     notificarEmail: true,
+    codigoCupon: "" as string,
   });
+  const [cuponValido, setCuponValido] = useState<boolean | null>(null);
   const [etiquetas, setEtiquetas] = useState<ReservaEtiqueta[]>([]);
   const [politicas, setPoliticas] = useState<PoliticaCancelacion[]>([]);
   const [config, setConfig] = useState<EmpresaReservasConfig | null>(null);
@@ -522,7 +494,8 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
     (!form.esWalkIn && !form.cliente) ||
     !form.hora ||
     excedeMaxPax ||
-    zonaNoDisponible;
+    zonaNoDisponible ||
+    cuponValido === false;
 
   const seleccionarCliente = (c: ClienteSugerencia) => {
     setForm((p) => ({
@@ -547,7 +520,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
       fecha: form.fecha, hora: form.hora, turno: form.turno,
       comensales: form.comensales, zona: form.zona,
       mesaId: form.mesaId || (mesaPreseleccionada?.id ?? ""),
-      estado: form.esWalkIn ? "WALK_IN" : "PENDIENTE",
+      estado: form.esWalkIn ? "WALK_IN" : "CONFIRMADA",
       observaciones: form.observaciones,
       etiquetaId: form.etiquetaId || null,
       tipoCategoria: (form.tipoCategoria || null) as TipoReservaCategoria | null,
@@ -568,6 +541,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
         return clamped;
       })(),
       notificarEmail: form.notificarEmail,
+      codigoCupon: form.codigoCupon.trim() ? form.codigoCupon.trim().toUpperCase() : null,
     });
   };
 
@@ -810,16 +784,21 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
           <Label className="text-xs">Tipo de reserva</Label>
           <select
             value={form.tipoCategoria}
-            onChange={(e) =>
+            onChange={(e) => {
+              const nuevoTipo = e.target.value as TipoReservaCategoria | "";
+              const incompatibleConCupon = nuevoTipo === "gratis" || nuevoTipo === "ticket";
               setForm((p) => ({
                 ...p,
-                tipoCategoria: e.target.value as TipoReservaCategoria | "",
+                tipoCategoria: nuevoTipo,
                 // Limpia los campos que dejan de aplicar al cambiar de tipo.
-                politicaCancelacionId: e.target.value === "politica" ? p.politicaCancelacionId : "",
-                garantiaImporte: e.target.value === "politica" ? p.garantiaImporte : "",
-                importePagado: e.target.value === "cupon" ? p.importePagado : "",
-              }))
-            }
+                politicaCancelacionId: nuevoTipo === "politica" ? p.politicaCancelacionId : "",
+                garantiaImporte: nuevoTipo === "politica" ? p.garantiaImporte : "",
+                importePagado: nuevoTipo === "cupon" ? p.importePagado : "",
+                // Si el tipo es incompatible con cupón, limpia el código.
+                codigoCupon: incompatibleConCupon ? "" : p.codigoCupon,
+              }));
+              if (incompatibleConCupon) setCuponValido(null);
+            }}
             className="h-8 text-xs w-full rounded-md border border-input bg-background px-2"
           >
             <option value="">— Sin tipo —</option>
@@ -868,6 +847,22 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
               placeholder="0,00"
               value={form.importePagado}
               onChange={(e) => setForm((p) => ({ ...p, importePagado: e.target.value }))}
+            />
+          </div>
+        )}
+        {/* Cupón NO coexiste con 'gratis' ni con 'ticket' (son tipos distintos). */}
+        {form.tipoCategoria !== "gratis" && form.tipoCategoria !== "ticket" && (
+          <div className="col-span-2">
+            <CuponInputReserva
+              value={form.codigoCupon}
+              onChange={(v) => setForm((p) => ({ ...p, codigoCupon: v }))}
+              validar={(codigo) => validarCuponAdminAction({
+                codigo,
+                fecha: form.fecha,
+                turno: form.turno === "DIA_COMPLETO" ? null : (form.turno as "COMIDA" | "CENA"),
+              })}
+              contextoSerial={`${form.fecha}|${form.turno}|${form.comensales}`}
+              onResult={(r) => setCuponValido(r === null ? null : r.ok)}
             />
           </div>
         )}
@@ -1129,7 +1124,7 @@ function mapDbToReserva(row: Record<string, unknown>): Reserva {
     comensales: (row.personas as number) ?? (row.comensales as number) ?? 0,
     zona: (row.zona as ZonaSala | "") ?? "",
     mesaId: (row.mesa as string) ?? (row.mesa_id as string) ?? "",
-    estado: (row.estado as EstadoReserva) ?? "PENDIENTE",
+    estado: (row.estado as EstadoReserva) ?? "CONFIRMADA",
     observaciones: (row.notas as string) ?? (row.observaciones as string) ?? "",
     clienteId: (row.cliente_id as string | null) ?? null,
     origen: (row.origen as string | null) ?? null,
@@ -1139,11 +1134,16 @@ function mapDbToReserva(row: Record<string, unknown>): Reserva {
     politicaCancelacionId: (row.politica_cancelacion_id as string | null) ?? null,
     garantiaImporte: (row.garantia_importe as number | null) ?? null,
     importePagado: (row.importe_pagado as number | null) ?? null,
+    ticketProductoId: (row.ticket_producto_id as string | null) ?? null,
+    ticketUnidades: (row.ticket_unidades as number | null) ?? null,
+    ticketImporte: (row.ticket_importe as number | null) ?? null,
+    ticketIva: (row.ticket_iva as number | null) ?? null,
+    pagoPendiente: (row.pago_pendiente as boolean) ?? false,
     bloqueada: (row.bloqueada as boolean) ?? false,
     grupoId: (row.grupo_id as string | null) ?? null,
     etiquetaId: (row.etiqueta_id as string | null) ?? null,
     codigoId: (row.codigo_id as string | null) ?? null,
-    codigoNombre: (row.codigo_nombre as string | null) ?? null,
+    codigo: (row.codigo as string | null) ?? null,
     reconfirmadaAt: (row.reconfirmada_at as string | null) ?? null,
     externalId: (row.external_id as string | null) ?? null,
     externalOrigen: (row.external_origen as string | null) ?? null,
@@ -1557,6 +1557,7 @@ function PlanoCanvas({
   onEditar,
   onCambiarEstado,
   onAccionPendiente,
+  onQuitarBloqueoMesa,
 }: {
   mesas: Mesa[];
   posiciones: Map<string, PlanoMesaPosicion>;
@@ -1573,6 +1574,8 @@ function PlanoCanvas({
   onEditar: (r: Reserva) => void;
   onCambiarEstado: (id: string, e: EstadoReserva) => void;
   onAccionPendiente: (label: string) => void;
+  /** Si la mesa está BLOQUEADA y se pulsa, levanta el bloqueo solo para (fecha, turno). */
+  onQuitarBloqueoMesa?: (m: Mesa) => void;
 }) {
   // Mesas con posición x/y conocida.
   // Si la sala tiene zonas en BD: filtra estrictamente por las seleccionadas (zonas=[] => no muestra nada, como espera el usuario al pulsar "Ninguna").
@@ -1780,14 +1783,31 @@ function PlanoCanvas({
                 </button>
               </PopoverTrigger>
               <PopoverContent className="w-72 p-3">
-                <ReservaQuickPopover
-                  mesa={m}
-                  reserva={rs[0] ?? null}
-                  onNueva={() => onNueva(m)}
-                  onEditar={() => { if (rs[0]) onEditar(rs[0]); }}
-                  onCambiarEstado={onCambiarEstado}
-                  onAccionPendiente={onAccionPendiente}
-                />
+                {estado === "BLOQUEADA" && onQuitarBloqueoMesa ? (
+                  <div className="space-y-2">
+                    <h4 className="font-bold text-sm">Mesa {m.codigo}</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Bloqueada para este turno.
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full h-8 text-xs"
+                      onClick={() => onQuitarBloqueoMesa(m)}
+                    >
+                      Desbloquear
+                    </Button>
+                  </div>
+                ) : (
+                  <ReservaQuickPopover
+                    mesa={m}
+                    reserva={rs[0] ?? null}
+                    onNueva={() => onNueva(m)}
+                    onEditar={() => { if (rs[0]) onEditar(rs[0]); }}
+                    onCambiarEstado={onCambiarEstado}
+                    onAccionPendiente={onAccionPendiente}
+                  />
+                )}
               </PopoverContent>
             </Popover>
           );
@@ -1923,6 +1943,7 @@ export function ReservasView() {
           colorZona: zonaColorPorId.get(m.zonaId) ?? "#FDE68A",
           capacidadMin: m.capacidadMin,
           capacidadMax: m.capacidadMax,
+          zonaId: m.zonaId,
         });
       }
       setMesasMeta(meta);
@@ -2046,6 +2067,59 @@ export function ReservasView() {
     loadReservas(fecha);
   }, [fecha, loadReservas]);
 
+  // Bloqueos del local (Config → Bloqueos). Se cargan al cambiar de local y se
+  // filtran client-side por fecha + turno para sacar las mesas que están
+  // bloqueadas hoy. Las zonas se expanden a sus mesas.
+  const [bloqueosLocal, setBloqueosLocal] = useState<ReservaBloqueo[]>([]);
+  const [bloqueoExcepciones, setBloqueoExcepciones] = useState<BloqueoExcepcion[]>([]);
+  const [bloqueosRefresh, setBloqueosRefresh] = useState(0);
+  useEffect(() => {
+    if (!localId) {
+      setBloqueosLocal([]);
+      setBloqueoExcepciones([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const [r, ex] = await Promise.all([
+        listBloqueos(localId),
+        listBloqueoExcepciones(localId),
+      ]);
+      if (cancelled) return;
+      setBloqueosLocal(r.ok ? r.data : []);
+      setBloqueoExcepciones(ex.ok ? ex.data : []);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [localId, posicionesRefresh, bloqueosRefresh]);
+
+  const mesasBloqueadasIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (bloqueosLocal.length === 0) return ids;
+    const turnoActual: "COMIDA" | "CENA" | null =
+      turno === "COMIDA" || turno === "CENA" ? turno : null;
+    for (const b of bloqueosLocal) {
+      if (!vigenciaAplicaEnFecha(b, fecha)) continue;
+      if (b.turno !== "AMBOS" && turnoActual && b.turno !== turnoActual) continue;
+      for (const mid of b.mesaIds) ids.add(mid);
+      if (b.zonaIds.length > 0) {
+        const setZ = new Set(b.zonaIds);
+        for (const [mesaId, m] of mesasMeta.entries()) {
+          if (setZ.has(m.zonaId)) ids.add(mesaId);
+        }
+      }
+    }
+    // Restamos excepciones puntuales: una mesa con excepción para esta
+    // (fecha, turno) deja de estar bloqueada solo ese día/turno.
+    for (const e of bloqueoExcepciones) {
+      if (e.fecha !== fecha) continue;
+      if (turnoActual && e.turno !== turnoActual) continue;
+      ids.delete(e.mesaId);
+    }
+    return ids;
+  }, [bloqueosLocal, bloqueoExcepciones, fecha, turno, mesasMeta]);
+
   // Config de reservas (preferencias del motor: ocultar canceladas, parpadeo,
   // duración por defecto…). Se recarga al volver al view.
   useEffect(() => {
@@ -2083,7 +2157,7 @@ export function ReservasView() {
     (r: Reserva): string | null => {
       if (!cfgReservas) return null;
       if (r.fecha !== fecha) return null;
-      if (["CANCELADA", "NO_SHOW", "COMPLETADA", "LIBERADA"].includes(r.estado)) return null;
+      if (ESTADOS_NO_OCUPANTES.includes(r.estado)) return null;
       const ahora = new Date(tickAhora);
       const hoyISO = ahora.toISOString().split("T")[0];
       if (r.fecha !== hoyISO) return null;
@@ -2137,8 +2211,13 @@ export function ReservasView() {
 
   const mesasActivas = mesas.filter(m => m.activa);
   const capacidadTotal = mesasActivas.reduce((s, m) => s + m.capacidad, 0);
-  const cubiertosReservados = reservasTurno.reduce((s, r) => s + r.comensales, 0);
-  const mesasOcupadas = new Set(reservasTurno.filter(r => r.mesaId && !["CANCELADA", "NO_SHOW", "COMPLETADA"].includes(r.estado)).map(r => r.mesaId)).size;
+  // Las reservas canceladas (también NO_SHOW y LIBERADA) no cuentan en ningún
+  // sumatorio: si se cancela deja de ocupar plaza.
+  const reservasContables = reservasTurno.filter(
+    r => r.estado !== "CANCELADA" && r.estado !== "NO_SHOW" && r.estado !== "LIBERADA",
+  );
+  const cubiertosReservados = reservasContables.reduce((s, r) => s + r.comensales, 0);
+  const mesasOcupadas = new Set(reservasTurno.filter(r => r.mesaId && !ESTADOS_NO_OCUPANTES.includes(r.estado)).map(r => r.mesaId)).size;
 
   // Índice mesaId → reservas activas del turno. Se rehace solo si cambia `reservasTurno`,
   // evitando un O(N×M) en cada render (antes hacíamos un `.filter()` por cada mesa).
@@ -2146,7 +2225,7 @@ export function ReservasView() {
     const map = new Map<string, Reserva[]>();
     for (const r of reservasTurno) {
       if (!r.mesaId) continue;
-      if (r.estado === "CANCELADA" || r.estado === "NO_SHOW" || r.estado === "COMPLETADA") continue;
+      if (ESTADOS_NO_OCUPANTES.includes(r.estado)) continue;
       const arr = map.get(r.mesaId);
       if (arr) arr.push(r);
       else map.set(r.mesaId, [r]);
@@ -2155,6 +2234,7 @@ export function ReservasView() {
   }, [reservasTurno]);
 
   const getMesaEstadoTurno = (m: Mesa): string => {
+    if (mesasBloqueadasIds.has(m.id)) return "BLOQUEADA";
     const rs = reservasActivasPorMesa.get(m.id);
     if (!rs || rs.length === 0) return "LIBRE";
     if (rs.some(r => r.estado === "WALK_IN")) return "OCUPADA";
@@ -2202,6 +2282,27 @@ export function ReservasView() {
   // Placeholder para Bloquear/Desplazar (sin backend todavía).
   const accionPendiente = (label: string) =>
     toast.info(`${label}: disponible próximamente`);
+
+  const handleQuitarBloqueoMesa = useCallback(
+    async (m: Mesa) => {
+      if (!localId) return;
+      const turnoExcep: "COMIDA" | "CENA" =
+        turno === "COMIDA" ? "COMIDA" : "CENA";
+      const r = await crearBloqueoExcepcion({
+        localId,
+        fecha,
+        turno: turnoExcep,
+        mesaId: m.id,
+      });
+      if (!r.ok) {
+        toast.error(r.error ?? "No se pudo quitar el bloqueo");
+        return;
+      }
+      toast.success(`Mesa ${m.codigo} desbloqueada solo para hoy (${turnoExcep === "COMIDA" ? "comida" : "cena"})`);
+      setBloqueosRefresh((n) => n + 1);
+    },
+    [localId, fecha, turno],
+  );
 
   if (showConfig) {
     return (
@@ -2271,6 +2372,7 @@ export function ReservasView() {
                     garantiaImporte: r.garantiaImporte ?? null,
                     importePagado: r.importePagado ?? null,
                     duracionMinutos: r.duracionMinutos ?? null,
+                    codigoCupon: r.codigoCupon ?? null,
                   });
                   setSelectedMesa(null);
                   if (res.ok) {
@@ -2527,11 +2629,7 @@ export function ReservasView() {
                             {r.origen}
                           </span>
                         )}
-                        {r.codigoNombre && (
-                          <span className="shrink-0 text-[9px] font-mono uppercase bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/40 rounded px-1 py-px" title={`Código promocional: ${r.codigoNombre}`}>
-                            🎟 {r.codigoNombre}
-                          </span>
-                        )}
+                        {/* El chip "Cupón <CODIGO>" se pinta dentro de <ReservaFlagsChips />. */}
                         <ReservaFlagsChips reserva={r} etiquetas={etiquetasReserva} className="shrink-0" />
                       </span>
                       <span className="text-center">{r.comensales}</span>
@@ -2654,6 +2752,7 @@ export function ReservasView() {
               onEditar={abrirDetalleReserva}
               onCambiarEstado={cambiarEstadoReserva}
               onAccionPendiente={accionPendiente}
+              onQuitarBloqueoMesa={handleQuitarBloqueoMesa}
             />
           ) : (
             <div className="flex-1 overflow-auto p-4 space-y-4">

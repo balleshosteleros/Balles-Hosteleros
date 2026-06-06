@@ -34,6 +34,40 @@ async function fetchEmpresaBySlug(slug: string): Promise<EmpresaMarca | null> {
   };
 }
 
+export interface ProductoTicketPublico {
+  id: string;
+  nombre: string;
+  descripcion: string | null;
+  precio: number;
+  iva: number;
+  modoPrecio: "por_persona" | "por_reserva";
+  stockModo: "ilimitado" | "limitado";
+  stockTotal: number | null;
+  stockConsumido: number;
+  ocultarAlAgotar: boolean;
+}
+
+async function fetchProductosTicket(slug: string, keyword: string | null): Promise<ProductoTicketPublico[]> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("list_ticket_productos_publicos", {
+    p_empresa_slug: slug,
+    p_keyword: keyword,
+  });
+  if (error || !data) return [];
+  return (data as Record<string, unknown>[]).map((r) => ({
+    id: r.id as string,
+    nombre: r.nombre as string,
+    descripcion: (r.descripcion as string | null) ?? null,
+    precio: Number(r.precio),
+    iva: Number(r.iva),
+    modoPrecio: r.modo_precio as "por_persona" | "por_reserva",
+    stockModo: r.stock_modo as "ilimitado" | "limitado",
+    stockTotal: (r.stock_total as number | null) ?? null,
+    stockConsumido: (r.stock_consumido as number) ?? 0,
+    ocultarAlAgotar: (r.ocultar_al_agotar as boolean) ?? true,
+  }));
+}
+
 export default async function ReservarPublicaPage({
   params,
   searchParams,
@@ -47,6 +81,7 @@ export default async function ReservarPublicaPage({
   if (!empresa) notFound();
 
   const origenLimpio = o && /^[A-Z0-9_]+$/.test(o) && o.length <= 32 ? o : null;
+  const productosTicket = await fetchProductosTicket(slug, null);
 
   return (
     <ReservaPublicaForm
@@ -56,6 +91,7 @@ export default async function ReservarPublicaPage({
       colorPrimario={empresa.color}
       colorTexto={empresa.colorTexto}
       origen={origenLimpio}
+      productosTicket={productosTicket}
     />
   );
 }

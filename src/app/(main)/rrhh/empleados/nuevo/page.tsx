@@ -44,7 +44,7 @@ export default function NuevoEmpleadoPage() {
   const [empresasMarcadas, setEmpresasMarcadas] = useState<string[]>([]);
   const [empresaPrincipalId, setEmpresaPrincipalId] = useState<string | null>(null);
   const [localesPorEmpresa, setLocalesPorEmpresa] = useState<Record<string, LocalOpt[]>>({});
-  const [localSeleccionado, setLocalSeleccionado] = useState<Record<string, string>>({});
+  const [localesSeleccionados, setLocalesSeleccionados] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [credenciales, setCredenciales] = useState<CredencialesAlta | null>(null);
   const [copiado, setCopiado] = useState(false);
@@ -62,21 +62,29 @@ export default function NuevoEmpleadoPage() {
     });
   }, []);
 
-  // Solo cargamos locales para la empresa principal, porque el modelo actual
-  // solo persiste empleados.local_id en esa empresa.
+  // Cargamos los locales de TODAS las empresas marcadas: el empleado puede
+  // fichar en varios locales de cualquiera de sus empresas.
   useEffect(() => {
-    if (!empresaPrincipalId || localesPorEmpresa[empresaPrincipalId]) return;
-    listLocales(empresaPrincipalId).then((res) => {
-      const nombreEmpresa = empresas.find((e) => e.id === empresaPrincipalId)?.nombre ?? empresaPrincipalId;
-      if (!res.ok) {
-        toast.error(`No se pudieron cargar locales de ${nombreEmpresa}: ${res.error ?? "error desconocido"}`);
-      }
-      setLocalesPorEmpresa((prev) => ({
-        ...prev,
-        [empresaPrincipalId]: res.ok ? (res.data as LocalOpt[]) : [],
-      }));
+    for (const empId of empresasMarcadas) {
+      if (localesPorEmpresa[empId]) continue;
+      listLocales(empId).then((res) => {
+        const nombreEmpresa = empresas.find((e) => e.id === empId)?.nombre ?? empId;
+        if (!res.ok) {
+          toast.error(`No se pudieron cargar locales de ${nombreEmpresa}: ${res.error ?? "error desconocido"}`);
+        }
+        setLocalesPorEmpresa((prev) =>
+          prev[empId] ? prev : { ...prev, [empId]: (res.ok ? res.data : []) as LocalOpt[] },
+        );
+      });
+    }
+  }, [empresasMarcadas, localesPorEmpresa, empresas]);
+
+  function toggleLocal(localId: string, checked: boolean) {
+    setLocalesSeleccionados((prev) => {
+      if (checked) return prev.includes(localId) ? prev : [...prev, localId];
+      return prev.filter((id) => id !== localId);
     });
-  }, [empresaPrincipalId, localesPorEmpresa, empresas]);
+  }
 
   function toggleEmpresa(id: string, checked: boolean) {
     setEmpresasMarcadas((prev) => {
@@ -87,12 +95,9 @@ export default function NuevoEmpleadoPage() {
         return next;
       }
       const next = prev.filter((x) => x !== id);
-      // Si desmarcamos, limpiamos el local elegido para esa empresa.
-      setLocalSeleccionado((s) => {
-        const copia = { ...s };
-        delete copia[id];
-        return copia;
-      });
+      // Al desmarcar, retiramos del conjunto los locales de esa empresa.
+      const idsEmpresa = new Set((localesPorEmpresa[id] ?? []).map((l) => l.id));
+      setLocalesSeleccionados((sel) => sel.filter((lid) => !idsEmpresa.has(lid)));
       setEmpresaPrincipalId((actual) => {
         if (actual !== id) return actual;
         return next[0] ?? null;
@@ -118,12 +123,11 @@ export default function NuevoEmpleadoPage() {
       return;
     }
     if (!empresaPrincipalId || !empresasMarcadas.includes(empresaPrincipalId)) {
-      toast.error("Selecciona una empresa principal válida");
+      toast.error("Indica en qué empresa ficha el empleado");
       return;
     }
-    const localPrincipalId = localSeleccionado[empresaPrincipalId];
-    if (!localPrincipalId) {
-      toast.error("Asigna un local a la empresa principal antes de crear el empleado");
+    if (localesSeleccionados.length === 0) {
+      toast.error("Marca al menos un local donde el empleado pueda fichar");
       return;
     }
 
@@ -143,7 +147,7 @@ export default function NuevoEmpleadoPage() {
       telefono: (formData.get("telefono") as string) || undefined,
       empresaIds: empresasOrdenadas,
       empresaPrincipalId,
-      localPorEmpresa: localSeleccionado,
+      localIds: localesSeleccionados,
     });
     setSaving(false);
 
@@ -279,7 +283,7 @@ export default function NuevoEmpleadoPage() {
             </Label>
           </div>
           <p className="text-xs text-muted-foreground">
-            Marca las empresas a las que el empleado podrá acceder y elige cuál será la principal.
+            Marca las empresas en las que trabaja y, dentro de cada una, los locales donde podrá fichar (uno o varios).
           </p>
           {empresas.length === 0 ? (
             <div className="text-sm text-muted-foreground py-2">Cargando empresas…</div>
@@ -288,77 +292,68 @@ export default function NuevoEmpleadoPage() {
               {empresas.map((e) => {
                 const marcada = empresasMarcadas.includes(e.id);
                 const esPrincipal = empresaPrincipalId === e.id;
-                const locales = esPrincipal ? (localesPorEmpresa[e.id] ?? []) : [];
+                const locales = localesPorEmpresa[e.id];
                 return (
                   <div
                     key={e.id}
                     className="rounded-lg border bg-muted/20 p-3 space-y-2"
                   >
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <Checkbox
-                        checked={marcada}
-                        onCheckedChange={(v) => toggleEmpresa(e.id, v === true)}
-                      />
-                      <span className="font-medium">{e.nombre}</span>
-                      {esPrincipal && (
-                        <span className="text-[10px] uppercase font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded">
-                          Principal
-                        </span>
+                    <div className="flex items-center justify-between gap-3">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <Checkbox
+                          checked={marcada}
+                          onCheckedChange={(v) => toggleEmpresa(e.id, v === true)}
+                        />
+                        <span className="font-medium">{e.nombre}</span>
+                        {esPrincipal && (
+                          <span className="text-[10px] uppercase font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                            Principal
+                          </span>
+                        )}
+                      </label>
+                      {marcada && !esPrincipal && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => {
+                            setEmpresaPrincipalId(e.id);
+                            setEmpresasMarcadas((prev) =>
+                              ordenarEmpresasConPrincipal(prev, e.id)
+                            );
+                          }}
+                        >
+                          Marcar principal
+                        </Button>
                       )}
-                    </label>
+                    </div>
                     {marcada && (
-                      <div className="pl-6 space-y-1">
-                        <div className="flex items-center justify-between gap-3">
-                          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                            Empresa principal
-                          </Label>
-                          <Button
-                            type="button"
-                            variant={esPrincipal ? "default" : "outline"}
-                            size="sm"
-                            className="h-7 text-xs"
-                            onClick={() => {
-                              setEmpresaPrincipalId(e.id);
-                              setEmpresasMarcadas((prev) =>
-                                ordenarEmpresasConPrincipal(prev, e.id)
-                              );
-                            }}
-                          >
-                            {esPrincipal ? "Principal" : "Marcar principal"}
-                          </Button>
-                        </div>
-                        {esPrincipal ? (
-                          <div className="space-y-1">
-                            <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                              Local principal
-                            </Label>
-                            <Select
-                              value={localSeleccionado[e.id] ?? ""}
-                              onValueChange={(v) =>
-                                setLocalSeleccionado((prev) => ({ ...prev, [e.id]: v }))
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder={locales.length === 0 ? "Sin locales disponibles" : "Seleccionar local"} />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {locales.length === 0 ? (
-                                  <SelectItem value="__none__" disabled>
-                                    Esta empresa aún no tiene locales
-                                  </SelectItem>
-                                ) : (
-                                  locales.map((l) => (
-                                    <SelectItem key={l.id} value={l.id}>{l.nombre}</SelectItem>
-                                  ))
-                                )}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        ) : (
+                      <div className="pl-6 space-y-1.5">
+                        <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                          Locales donde ficha
+                        </Label>
+                        {locales === undefined ? (
+                          <p className="text-xs text-muted-foreground">Cargando locales…</p>
+                        ) : locales.length === 0 ? (
                           <p className="text-xs text-muted-foreground">
-                            El local solo se asigna en la empresa principal. Este acceso secundario
-                            se guarda sin local asociado.
+                            Esta empresa aún no tiene locales.
                           </p>
+                        ) : (
+                          <div className="grid gap-1.5 sm:grid-cols-2">
+                            {locales.map((l) => (
+                              <label
+                                key={l.id}
+                                className="flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm cursor-pointer"
+                              >
+                                <Checkbox
+                                  checked={localesSeleccionados.includes(l.id)}
+                                  onCheckedChange={(v) => toggleLocal(l.id, v === true)}
+                                />
+                                <span>{l.nombre}</span>
+                              </label>
+                            ))}
+                          </div>
                         )}
                       </div>
                     )}

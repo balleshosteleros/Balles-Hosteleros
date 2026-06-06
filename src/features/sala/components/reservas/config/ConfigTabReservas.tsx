@@ -163,61 +163,86 @@ export function ConfigTabReservas() {
           del servicio.
         </p>
 
-        <div className="grid grid-cols-2 gap-3 max-w-md">
-          <div className="space-y-1.5">
-            <Label className="text-xs">Enviar reconfirmación</Label>
-            <Select
-              value={String(config.reconfirmacionDiasAntes)}
-              onValueChange={(v) => {
-                const n = Math.min(
-                  RECONFIRMACION_DIAS_MAX,
-                  Math.max(RECONFIRMACION_DIAS_MIN, Number(v) || 1),
-                );
-                handleConfigChange({ reconfirmacionDiasAntes: n });
-              }}
-            >
-              <SelectTrigger className="h-8">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Array.from(
-                  { length: RECONFIRMACION_DIAS_MAX - RECONFIRMACION_DIAS_MIN + 1 },
-                  (_, i) => i + RECONFIRMACION_DIAS_MIN,
-                ).map((d) => (
-                  <SelectItem key={d} value={String(d)}>
-                    {d === 1 ? "1 día antes" : `${d} días antes`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-[10px] text-muted-foreground">
-              El correo se envía a la misma hora de la reserva. El mínimo de
-              antelación es 24 h, por eso la opción más cercana es 1 día antes.
-            </p>
-          </div>
-        </div>
-
         <div className="flex items-start justify-between gap-3 rounded-md border p-3 max-w-md">
           <div className="space-y-0.5">
-            <Label className="text-xs font-medium" htmlFor="reconf-lt24h">
-              Reconfirmar reservas con menos de 24 h
+            <Label className="text-xs font-medium" htmlFor="reconf-activa">
+              Reconfirmación activa
             </Label>
             <p className="text-[10px] text-muted-foreground">
-              Si está activo, las reservas creadas con menos de 24 h de
-              antelación reciben el correo de reconfirmación inmediatamente
-              después del de confirmación. Si está desactivado, no reciben
-              correo de reconfirmación. Las reservas con 24 h o más se envían
-              siempre según la configuración de arriba.
+              Si está apagado, no se envía ningún correo de reconfirmación.
             </p>
           </div>
           <Switch
-            id="reconf-lt24h"
-            checked={config.reconfirmacionLt24hInmediata}
+            id="reconf-activa"
+            checked={config.reconfirmacionActiva}
             onCheckedChange={(v) =>
-              handleConfigChange({ reconfirmacionLt24hInmediata: Boolean(v) })
+              handleConfigChange({ reconfirmacionActiva: Boolean(v) })
             }
           />
         </div>
+
+        {config.reconfirmacionActiva && (
+          <>
+            <div className="grid grid-cols-2 gap-3 max-w-md">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Enviar reconfirmación</Label>
+                <Select
+                  value={String(config.reconfirmacionDiasAntes)}
+                  onValueChange={(v) => {
+                    const n = Math.min(
+                      RECONFIRMACION_DIAS_MAX,
+                      Math.max(RECONFIRMACION_DIAS_MIN, Number(v) || 1),
+                    );
+                    handleConfigChange({ reconfirmacionDiasAntes: n });
+                  }}
+                >
+                  <SelectTrigger className="h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from(
+                      { length: RECONFIRMACION_DIAS_MAX - RECONFIRMACION_DIAS_MIN + 1 },
+                      (_, i) => i + RECONFIRMACION_DIAS_MIN,
+                    ).map((d) => (
+                      <SelectItem key={d} value={String(d)}>
+                        {d === 1 ? "1 día antes" : `${d} días antes`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground">
+                  El correo se envía a la misma hora de la reserva. El mínimo
+                  de antelación es 24 h, por eso la opción más cercana es
+                  1 día antes.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start justify-between gap-3 rounded-md border p-3 max-w-md">
+              <div className="space-y-0.5">
+                <Label className="text-xs font-medium" htmlFor="reconf-envio-inmediato">
+                  Reconfirmar al instante si la reserva entra con menos
+                  antelación que la configurada
+                </Label>
+                <p className="text-[10px] text-muted-foreground">
+                  Toma como referencia los días seleccionados arriba (no 24 h
+                  fijas). Ej.: con la opción "3 días antes", una reserva que
+                  entra a 2 días: si está activo recibe la reconfirmación a la
+                  vez que la confirmación; si está apagado no recibe
+                  reconfirmación. Las reservas con antelación igual o mayor a
+                  la configurada se envían siempre a la hora programada.
+                </p>
+              </div>
+              <Switch
+                id="reconf-envio-inmediato"
+                checked={config.reconfirmacionEnvioInmediato}
+                onCheckedChange={(v) =>
+                  handleConfigChange({ reconfirmacionEnvioInmediato: Boolean(v) })
+                }
+              />
+            </div>
+          </>
+        )}
       </div>
 
     </div>
