@@ -9,10 +9,11 @@
  *    no no-show, no completadas, no liberadas) y aún no tengan
  *    email_recordatorio_at. Las envía y marca el timestamp.
  *
- * 2. RECONFIRMACIÓN (config: reconfirmacion_dias_antes): igual que arriba pero
- *    para reservas a [N días, N días + 1 hora] de la actual y estado en
- *    PENDIENTE/CONFIRMADA. Solo se envía si no se envió ya (idempotente vía
- *    email_reconfirmacion_at).
+ * 2. RECONFIRMACIÓN (config: reconfirmacion_activa + reconfirmacion_dias_antes):
+ *    si la empresa tiene la reconfirmación activa, busca reservas a
+ *    [N días, N días + 1 hora] de la actual en estado CONFIRMADA. Solo se
+ *    envía si no se envió ya (idempotente vía email_reconfirmacion_at). Si la
+ *    empresa tiene `reconfirmacion_activa = false`, no se envía nada.
  *
  * El mailer genérico ya implementa la idempotencia por columna de auditoría,
  * pero pre-filtramos en SQL para no tirar millones de queries en empresas con
@@ -34,6 +35,7 @@ interface ConfigEmpresa {
   empresa_id: string;
   recordatorio_activo: boolean;
   recordatorio_horas_antes: number;
+  reconfirmacion_activa: boolean;
   reconfirmacion_dias_antes: number;
 }
 
@@ -64,7 +66,7 @@ export async function GET(request: Request) {
   const { data: configs, error: errCfg } = await supabase
     .from("empresa_reservas_config")
     .select(
-      "empresa_id, recordatorio_activo, recordatorio_horas_antes, reconfirmacion_dias_antes",
+      "empresa_id, recordatorio_activo, recordatorio_horas_antes, reconfirmacion_activa, reconfirmacion_dias_antes",
     );
   if (errCfg) {
     return NextResponse.json({ ok: false, error: errCfg.message }, { status: 500 });
@@ -88,11 +90,10 @@ export async function GET(request: Request) {
         desde,
         hasta,
         estados: [
-          "PENDIENTE",
           "CONFIRMADA",
           "RECONFIRMADA",
-          "LLEGADA",
-          "SENTADA",
+          "NO_RECONFIRMADA",
+          "TERMINANDO",
         ],
         auditCol: "email_recordatorio_at",
       });
@@ -104,20 +105,22 @@ export async function GET(request: Request) {
     }
 
     // ── RECONFIRMACIÓN ────────────────────────────────────────────────────
-    const diasAntes = c.reconfirmacion_dias_antes ?? 1;
-    const desdeR = new Date(ahora.getTime() + diasAntes * 24 * 3600 * 1000);
-    const hastaR = new Date(desdeR.getTime() + 60 * 60 * 1000);
-    const pendientesR = await buscarPendientes(supabase, {
-      empresaId: c.empresa_id,
-      desde: desdeR,
-      hasta: hastaR,
-      estados: ["PENDIENTE", "CONFIRMADA"],
-      auditCol: "email_reconfirmacion_at",
-    });
-    for (const r of pendientesR) {
-      const res = await enviarReservaEmail(r.id, "RECONFIRMACION");
-      if (res.ok) reconfirmacionesOk++;
-      else reconfirmacionesErr++;
+    if (c.reconfirmacion_activa) {
+      const diasAntes = c.reconfirmacion_dias_antes ?? 1;
+      const desdeR = new Date(ahora.getTime() + diasAntes * 24 * 3600 * 1000);
+      const hastaR = new Date(desdeR.getTime() + 60 * 60 * 1000);
+      const pendientesR = await buscarPendientes(supabase, {
+        empresaId: c.empresa_id,
+        desde: desdeR,
+        hasta: hastaR,
+        estados: ["CONFIRMADA"],
+        auditCol: "email_reconfirmacion_at",
+      });
+      for (const r of pendientesR) {
+        const res = await enviarReservaEmail(r.id, "RECONFIRMACION");
+        if (res.ok) reconfirmacionesOk++;
+        else reconfirmacionesErr++;
+      }
     }
   }
 

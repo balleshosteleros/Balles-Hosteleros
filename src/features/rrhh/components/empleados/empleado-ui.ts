@@ -1,4 +1,4 @@
-export type EstadoEmpleadoUI = "Activo" | "Baja temporal" | "Baja definitiva";
+export type EstadoEmpleadoUI = "Activo" | "Desactivado";
 
 export interface EmpleadoUI {
   id: string;
@@ -19,12 +19,10 @@ export interface EmpleadoUI {
 
 export const ESTADOS_LABEL: Record<EstadoEmpleadoUI, string> = {
   Activo: "Activo",
-  "Baja temporal": "Baja temporal",
-  "Baja definitiva": "Baja definitiva",
+  Desactivado: "Desactivado",
 };
 
 export const ESTADOS_COLOR: Record<EstadoEmpleadoUI, string> = {
   Activo: "bg-emerald-500",
-  "Baja temporal": "bg-amber-400",
-  "Baja definitiva": "bg-destructive",
+  Desactivado: "bg-destructive",
 };

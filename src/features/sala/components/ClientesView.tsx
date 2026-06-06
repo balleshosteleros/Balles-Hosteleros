@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EtiquetasPanel } from "@/features/sala/components/reservas/EtiquetasPanel";
+import { ClienteBloqueoTicketBanner } from "@/features/sala/components/clientes/ClienteBloqueoTicketBanner";
 import { Label } from "@/components/ui/label";
 import { Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -260,6 +261,7 @@ export function ClientesView() {
           <DialogHeader><DialogTitle>Ficha de cliente</DialogTitle></DialogHeader>
           {selectedCliente && (
             <div className="space-y-4 text-sm">
+              <ClienteBloqueoTicketBanner clienteId={selectedCliente.id} />
               <div className="grid grid-cols-2 gap-3">
                 <div><Label className="text-muted-foreground">Nombre</Label><p className="font-medium">{selectedCliente.nombre}</p></div>
                 <div><Label className="text-muted-foreground">Clasificación</Label><Badge className={`ml-1 ${clasificacionBadge[selectedCliente.clasificacion]}`} variant="outline">{selectedCliente.clasificacion}</Badge></div>

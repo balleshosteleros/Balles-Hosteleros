@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   listEmpleadosEmpresaParaLocales,
-  asignarLocalEmpleado,
+  addLocalEmpleado,
+  removeLocalEmpleado,
   setEmpleadoTeletrabajo,
 } from "@/features/ajustes/actions/locales-actions";
 import {
@@ -24,7 +25,7 @@ interface Empleado {
   nombre: string;
   apellidos: string | null;
   estado: string | null;
-  local_id: string | null;
+  local_ids: string[];
   permite_teletrabajo: boolean;
 }
 
@@ -62,32 +63,40 @@ export function AsignacionEmpleadosLocalDialog({
   }, [abierto, cargar]);
 
   const asignados = useMemo(
-    () => empleados.filter((e) => e.local_id === localId),
+    () => empleados.filter((e) => e.local_ids.includes(localId)),
     [empleados, localId]
   );
   const disponibles = useMemo(() => {
     const q = busqueda.toLowerCase();
     return empleados.filter(
       (e) =>
-        e.local_id !== localId &&
+        !e.local_ids.includes(localId) &&
         (!q || `${e.nombre} ${e.apellidos ?? ""}`.toLowerCase().includes(q))
     );
   }, [empleados, localId, busqueda]);
 
   async function asignar(empleadoId: string) {
-    const res = await asignarLocalEmpleado(empleadoId, localId);
+    const res = await addLocalEmpleado(empleadoId, localId);
     if (!res.ok) return toast.error(res.error ?? "Error");
     setEmpleados((prev) =>
-      prev.map((e) => (e.id === empleadoId ? { ...e, local_id: localId } : e))
+      prev.map((e) =>
+        e.id === empleadoId
+          ? { ...e, local_ids: [...new Set([...e.local_ids, localId])] }
+          : e
+      )
     );
     onChange();
   }
 
   async function quitar(empleadoId: string) {
-    const res = await asignarLocalEmpleado(empleadoId, null);
+    const res = await removeLocalEmpleado(empleadoId, localId);
     if (!res.ok) return toast.error(res.error ?? "Error");
     setEmpleados((prev) =>
-      prev.map((e) => (e.id === empleadoId ? { ...e, local_id: null } : e))
+      prev.map((e) =>
+        e.id === empleadoId
+          ? { ...e, local_ids: e.local_ids.filter((id) => id !== localId) }
+          : e
+      )
     );
     onChange();
   }

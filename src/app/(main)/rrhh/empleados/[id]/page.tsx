@@ -1,15 +1,23 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { FichaEmpleadoHeader } from "@/features/rrhh/components/empleados/FichaEmpleadoHeader";
 import {
   FichajesTab, HorariosTab, SolicitudesEmpleadoTab,
 } from "@/features/rrhh/components/empleados/FichaTabsContent";
-import { GestionEmpleadoCard } from "@/features/rrhh/components/empleados/GestionEmpleadoCard";
+import {
+  GestionEmpleadoCard,
+  type GestionEmpleadoCardHandle,
+} from "@/features/rrhh/components/empleados/GestionEmpleadoCard";
 import { SubmoduloPorEmpleadoPlaceholder } from "@/features/rrhh/components/empleados/SubmoduloPorEmpleadoPlaceholder";
 import { FirmasEmpleadoTab } from "@/features/rrhh/components/empleados/FirmasEmpleadoTab";
-import { DatosPersonalesForm } from "@/features/mi-panel/components/DatosPersonalesForm";
+import {
+  DatosPersonalesForm,
+  type DatosPersonalesFormHandle,
+} from "@/features/mi-panel/components/DatosPersonalesForm";
+import { Button } from "@/components/ui/button";
 import type { DatosPersonalesCompletos } from "@/features/mi-panel/actions/datos-personales-actions";
 import {
   getEmpleadoConPerfil,
@@ -30,6 +38,7 @@ import {
   Fingerprint, Inbox, FileSignature, Calendar, Timer,
   UserRoundSearch, UserCheck, Gift, Trophy, HandCoins,
   GraduationCap, ClipboardList, FileQuestion, Building2,
+  Save, Loader2,
 } from "lucide-react";
 
 type EmpresaAcceso = { id: string; nombre: string; esPrincipal: boolean };
@@ -68,7 +77,6 @@ type EmpleadoBD = {
   local_id: string | null;
   permite_teletrabajo: boolean | null;
   fecha_baja: string | null;
-  notas: string | null;
   estado: string;
   departamentos?: { nombre: string } | null;
 };
@@ -83,10 +91,7 @@ function bdToEmpleadoUI(emp: EmpleadoBD): EmpleadoUI {
     id: emp.id,
     nombre: emp.nombre ?? "",
     apellidos: emp.apellidos ?? "",
-    estado:
-      emp.estado === "Baja temporal" || emp.estado === "Baja definitiva"
-        ? emp.estado
-        : "Activo",
+    estado: emp.estado === "Activo" ? "Activo" : "Desactivado",
     horarioTipo: "—",
     horarioSemanal: "—",
     horasHoy: "—",
@@ -112,6 +117,9 @@ export default function FichaEmpleadoPage() {
   const [horarioActual, setHorarioActual] = useState<EmpleadoHorarioActual | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TopTab>("perfil");
+  const [savingPerfil, setSavingPerfil] = useState(false);
+  const datosRef = useRef<DatosPersonalesFormHandle>(null);
+  const gestionRef = useRef<GestionEmpleadoCardHandle>(null);
 
   const cargarFicha = useCallback(async () => {
     if (!id) return;
@@ -153,6 +161,29 @@ export default function FichaEmpleadoPage() {
     [empleadoBD],
   );
 
+  // Un único guardado para todo el perfil: datos personales + gestión laboral +
+  // accesos multiempresa. El recuadro rojo (estado/baja) tiene su propio botón
+  // con reconfirmación y NO se incluye aquí.
+  const guardarPerfilCompleto = useCallback(async () => {
+    if (savingPerfil) return;
+    setSavingPerfil(true);
+    try {
+      const [rDatos, rGestion] = await Promise.all([
+        datosRef.current?.save() ?? Promise.resolve({ ok: true as const }),
+        gestionRef.current?.saveGeneral() ?? Promise.resolve({ ok: true as const }),
+      ]);
+      const errMsg = !rDatos.ok ? rDatos.error : !rGestion.ok ? rGestion.error : null;
+      if (errMsg) {
+        toast.error(errMsg);
+        return;
+      }
+      toast.success("Cambios guardados");
+      await cargarFicha();
+    } finally {
+      setSavingPerfil(false);
+    }
+  }, [savingPerfil, cargarFicha]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full p-12">
@@ -187,7 +218,28 @@ export default function FichaEmpleadoPage() {
         // empleado vía la admin action `guardarPerfilEmpleado`.
         return (
           <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-6">
+            <div className="sticky top-0 z-10 -mx-4 md:-mx-6 px-4 md:px-6 py-3 bg-background/90 backdrop-blur border-b flex justify-end">
+              <Button
+                onClick={guardarPerfilCompleto}
+                size="lg"
+                className="gap-2"
+                disabled={savingPerfil}
+              >
+                {savingPerfil ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" />Guardando…</>
+                ) : (
+                  <><Save className="h-4 w-4" />Guardar</>
+                )}
+              </Button>
+            </div>
+            <DatosPersonalesForm
+              ref={datosRef}
+              hideSaveButton
+              initial={datosPerfil}
+              targetEmpleadoId={empleadoRegistro.id}
+            />
             <GestionEmpleadoCard
+              ref={gestionRef}
               empleadoId={empleadoRegistro.id}
               initial={{
                 empresaId: empleadoRegistro.empresa_id,
@@ -198,16 +250,11 @@ export default function FichaEmpleadoPage() {
                 puesto: empleadoRegistro.puesto,
                 localId: empleadoRegistro.local_id,
                 permiteTeletrabajo: empleadoRegistro.permite_teletrabajo,
-                estado: empleadoRegistro.estado as "Activo" | "Baja temporal" | "Baja definitiva",
+                estado: empleadoRegistro.estado === "Activo" ? "Activo" : "Desactivado",
                 fechaBaja: empleadoRegistro.fecha_baja,
-                notas: empleadoRegistro.notas,
               }}
               onUpdated={cargarFicha}
               onDeleted={() => router.push("/rrhh/empleados")}
-            />
-            <DatosPersonalesForm
-              initial={datosPerfil}
-              targetEmpleadoId={empleadoRegistro.id}
             />
           </div>
         );
@@ -256,20 +303,9 @@ export default function FichaEmpleadoPage() {
           {empresasAcceso.map((e) => (
             <span
               key={e.id}
-              className={cn(
-                "text-xs px-2 py-0.5 rounded font-medium",
-                e.esPrincipal
-                  ? "bg-primary/10 text-primary"
-                  : "bg-muted text-foreground"
-              )}
-              title={e.esPrincipal ? "Empresa principal" : "Acceso secundario"}
+              className="text-xs px-2 py-0.5 rounded font-medium bg-muted text-foreground"
             >
               {e.nombre}
-              {e.esPrincipal && (
-                <span className="ml-1.5 text-[9px] uppercase tracking-wider opacity-70">
-                  Principal
-                </span>
-              )}
             </span>
           ))}
         </div>

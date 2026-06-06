@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft } from "lucide-react";
 import { ConfigTabReservas } from "./ConfigTabReservas";
-import { CodigosTab } from "./CodigosTab";
+import { TicketsTab } from "./TicketsTab";
 import { EtiquetasConfigTab } from "./EtiquetasConfigTab";
 import { EstructuraTab } from "./EstructuraTab";
 import { PoliticasCancelacionTab } from "./PoliticasCancelacionTab";
@@ -30,7 +30,7 @@ export function ConfigReservasView({ onBack }: Props) {
     switch (tab) {
       case "reservas":   return <ConfigTabReservas />;
       case "estructura": return <EstructuraTab />;
-      case "codigos":    return <CodigosTab />;
+      case "tickets":    return <TicketsTab />;
       case "etiquetas":  return <EtiquetasConfigTab />;
       case "enlaces":    return <LinksReservaPanel embedded />;
       case "politicas":  return <PoliticasCancelacionTab />;
@@ -65,7 +65,7 @@ export function ConfigReservasView({ onBack }: Props) {
           <TabsList className="grid grid-cols-10 w-full">
             <TabsTrigger value="reservas">Reservas</TabsTrigger>
             <TabsTrigger value="estructura">Estructura</TabsTrigger>
-            <TabsTrigger value="codigos">Códigos</TabsTrigger>
+            <TabsTrigger value="tickets">Tickets</TabsTrigger>
             <TabsTrigger value="etiquetas">Etiquetas</TabsTrigger>
             <TabsTrigger value="enlaces">Enlaces</TabsTrigger>
             <TabsTrigger value="politicas">Políticas</TabsTrigger>

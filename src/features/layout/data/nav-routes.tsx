@@ -107,6 +107,7 @@ export const salaSubs: SubItem[] = [
   { title: "TARIFAS", url: "/sala/tarifas", icon: Tag },
   { title: "VENTAS", url: "/sala/ventas", icon: TrendingUp },
   { title: "RESERVAS", url: "/sala/reservas", icon: BookOpen },
+  { title: "CUPONES", url: "/sala/cupones", icon: Gift },
   { title: "CLIENTES", url: "/sala/clientes", icon: Contact },
 ];
 

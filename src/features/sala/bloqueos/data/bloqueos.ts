@@ -26,6 +26,21 @@ export interface BloqueoInput {
   motivo?: string | null;
 }
 
+/**
+ * Excepción puntual a un bloqueo: "esta mesa NO está bloqueada en (fecha, turno)".
+ * Generada cuando el usuario pulsa "Quitar bloqueo" sobre una mesa en
+ * /sala/reservas — solo para ese día y turno, sin tocar el bloqueo recurrente.
+ */
+export interface BloqueoExcepcion {
+  id: string;
+  empresaId: string;
+  localId: string;
+  fecha: string;
+  turno: "COMIDA" | "CENA";
+  mesaId: string;
+  createdAt: string;
+}
+
 /** Devuelve true si la vigencia del bloqueo aplica al `fechaISO` indicado. */
 export function vigenciaAplicaEnFecha(b: ReservaBloqueo, fechaISO: string): boolean {
   const isoDow = (() => {

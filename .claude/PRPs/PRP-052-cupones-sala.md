@@ -1,391 +1,483 @@
-# PRP-052: Cupones de sala — códigos promocionales con vigencia, stock y descuento real
+# PRP-052: Cupones de sala — etiqueta informativa con código auto, stock y validación
 
 > **Estado**: PENDIENTE
-> **Fecha**: 2026-06-02
+> **Fecha**: 2026-06-03
 > **Proyecto**: Balles-Hosteleros (módulo Sala / Reservas)
 
 ---
 
 ## Objetivo
 
-Convertir los actuales "códigos promocionales" de reservas (`reserva_codigos`, hoy stub que solo guarda el texto del código en la reserva) en cupones **realmente funcionales**: validados al introducirlos (vigencia, día de la semana, turno, personas, stock), consumidos atómicamente al confirmar la reserva, vinculados a la reserva por id, surface‑ados como chip y, cuando el cupón es de descuento, expuestos al POS como porcentaje a aplicar.
+Construir un sistema de **cupones puramente informativos** que se adjuntan a una reserva como una etiqueta. El restaurante crea cupones desde `/sala/cupones` con un código auto-generado de 6 caracteres alfanuméricos. Al crear o editar una reserva (interna o pública), se puede introducir ese código manualmente y el sistema valida en tiempo real (existe, no caducado, día/turno permitido, queda stock). Si es válido, el cupón queda registrado en la reserva (código + título visible al cliente). **No tiene precio, no afecta a la política de cancelación, no afecta a `tipo_categoria`, no afecta al POS, no afecta a `importe_pagado`.** Son universos completamente independientes.
 
 ## Por Qué
 
 | Problema | Solución |
 |----------|----------|
-| Hoy un código promocional se introduce en la reserva pero NO se valida: la fecha de fin, los días, el stock, el min/max personas y los turnos se ignoran. Solo se enlaza por nombre. | Validación dura en server (admin y público) con mismas reglas que el panel de configuración, antes de insertar la reserva. |
-| El stock del cupón nunca se descuenta. Un cupón con "stock 50" se puede usar infinitas veces. | RPC atómica `consumir_stock_cupon` invocada en la creación de reserva (igual patrón que tickets en PRP-051, pero NO bloquea por no-show). |
-| El descuento (% sobre la cuenta) no llega a sala/POS. Hoy se queda en el panel de configuración. | Snapshot del % en la reserva (`cupon_porcentaje_descuento`) y chip "Cupón −X%" en `ReservasView` / `ReservaFlagsChips`, listo para que el POS lo lea cuando se cablée. |
-| `tipo_categoria='cupon'` hoy significa "pago anticipado" y NO está conectado con `reserva_codigos`. Son dos conceptos sin relación. | Mantener `cupon` como semántica de "reserva con cupón" y diferenciarlo del nuevo `ticket` (PRP-051, pago real). Un cupón aplicado fija `tipo_categoria='cupon'` automáticamente y, si tiene importe prepagado real, se sigue rellenando `importe_pagado`. |
-| Códigos de tipo "grupo" o "contador de personas" no descuentan del aforo ni se reportan en métricas de campaña. | Que el código aplicado quede registrado en `reservas.codigo_id` (ya existe) + nuevo `cupon_aplicado_at` y se cuente en `v_campanas_atribucion` para medir ROI de campañas. |
+| Hoy `reserva_codigos` existe como stub con un modelo confuso (3 tipos de promoción, min/max personas, `es_descuento` booleano, `nombre` editable…) que no se ajusta al cupón que queremos. Producción está vacía (0 filas), así que es seguro rediseñar. | DROP + RECREATE `reserva_codigos` con un modelo limpio: código auto 6 chars, 3 tipos de beneficio (porcentaje / importe / producto_gratis), 2 títulos (interno y cliente), stock por reservas o personas, caducidad, días, turnos. |
+| El campo "código promocional" del form público hoy se guarda sin validar (sin stock, sin caducidad, sin días, sin turnos). | Validación dura en server (admin + público) ANTES de crear la reserva. Si falla, error claro y no se crea reserva. |
+| El stock nunca se descuenta. | RPC atómica `consumir_stock_cupon(codigo_id, personas)` que suma 1 si `unidad_stock='reservas'` o `personas` si `unidad_stock='personas'`. |
+| Mezclar cupón con `tipo_categoria='cupon'` (pago anticipado) o con política de cancelación causa confusión. | Cupón es **etiqueta informativa**, sin relación con ninguno de los dos. Pueden coexistir libremente. |
 
-**Valor de negocio**: campañas promocionales (influencers, prensa, eventos especiales) con stock real garantizado, control de fraude (no se reusa un código agotado), atribución medible y un puente claro hacia el POS para aplicar el descuento en el ticket.
+**Valor de negocio**: regalos de bienvenida, promos de cumpleaños, premios a influencers — sin contabilidad ni descuentos automáticos, el restaurante aplica el cupón a discreción. Visible para el cliente con dos datos: código + título.
 
 ## Qué
 
 ### Criterios de Éxito
 
-- [ ] Al introducir un código en `/reservar/<slug>` o en el formulario interno de reservas, el server valida: existe, está activo, está dentro de `fecha_inicio`/`fecha_fin`, día actual de la semana está permitido (o `dias_semana` vacío), turno de la reserva está cubierto por `turnos`, personas ∈ `[min_personas, max_personas]` (o `max=-1`), y queda stock (`stock_total=0` → ilimitado).
-- [ ] RPC `consumir_stock_cupon(codigo_id, unidades)` resta atómicamente y rechaza con `'AGOTADO'` si supera `stock_total`. `unidades = personas` si `tipo_promocion='grupo'`, en otro caso `unidades = 1`.
-- [ ] Stock NO se devuelve nunca (igual regla que tickets): cancelar / no-show / cambio de fecha / borrar reserva NO incrementa stock hacia abajo. Documentado en gotchas.
-- [ ] Reserva con cupón aplicado guarda: `codigo_id`, `codigo_nombre` (snapshot), `cupon_porcentaje_descuento` (snapshot si el cupón era de descuento), `cupon_aplicado_at` (timestamp), `tipo_categoria='cupon'`.
-- [ ] Mensajes de error claros y específicos en cliente público: "Código no válido", "Código caducado", "Código agotado", "Código no válido para este número de personas", "Código no válido para este turno", "Código no válido este día de la semana". Sin filtrar información de stock interna.
-- [ ] Si la reserva ya tiene `tipo_categoria='cupon'` con `importe_pagado` (pago anticipado manual desde admin) y además se aplica un código, ambos conviven (importe_pagado intacto, `cupon_porcentaje_descuento` añadido).
-- [ ] `ReservaFlagsChips` muestra un chip "Cupón −X%" cuando hay descuento, y mantiene el chip "Cupón pagado Y€" cuando hay `importe_pagado`. Se pueden ver los dos a la vez.
-- [ ] `ReservasView` muestra el código aplicado (texto del cupón) como dato visible en la fila, además del chip.
-- [ ] La vista `v_campanas_atribucion` se amplía para contar reservas con cupón aplicado por tipo (`restaurante_contador`, `grupo`, `descuento`) y para cruzar con `origen` (UTM).
-- [ ] El input público de "Código promocional" en `/reservar/<slug>` valida en tiempo real con un `comprobar-codigo-publico.ts` (mismo patrón que `comprobar-cliente-publico.ts`) y muestra ✅/❌ antes del submit.
-- [ ] `CodigosTab` muestra columna "Stock consumido" actualizada en vivo después de cada reserva (refetch o realtime), y badge rojo cuando `stock_consumido >= stock_total`.
-- [ ] Toda política RLS nueva usa `empresas_del_usuario()` / `empresas_del_usuario_text()`. Migraciones afectan a TODAS las empresas presentes y futuras (sin tocar empresa concreta).
-- [ ] Reglas UI activas aplicadas: BARRA HORIZONTAL 1 en `CodigosTab`, sentence case en labels/títulos, header sin duplicar título de la vista, validaciones inline tolerantes (no muestran error mientras el usuario escribe un prefijo aún válido).
+- [ ] `reserva_codigos` rediseñada con el modelo nuevo. Migración sin pérdida de datos relevantes (producción vacía).
+- [ ] Al crear cupón, el código se genera automáticamente: 6 chars `[A-Z0-9]` aleatorios, único por empresa, no editable por nadie.
+- [ ] Admin puede definir 3 tipos de beneficio: `porcentaje` (10 = 10%), `importe` (10 = 10 €) o `producto_gratis` con descripción libre (ej: "Botella de cava 75 cl").
+- [ ] Admin define `unidad_stock` (`reservas` o `personas`) + `stock_total`. Opcional: `fecha_caducidad`, `dias_semana[]`, `turnos[]`.
+- [ ] Admin define 2 títulos: `titulo_interno` (obligatorio) y `titulo_cliente` (opcional, fallback al interno).
+- [ ] Validación al canjear (server, admin + público) devuelve uno de: `OK`, `NO_EXISTE`, `INACTIVO`, `CADUCADO`, `AGOTADO`, `DIA_NO_PERMITIDO`, `TURNO_NO_PERMITIDO`.
+- [ ] RPC `consumir_stock_cupon` atómica: si `unidad_stock='reservas'` suma 1, si `unidad_stock='personas'` suma `num_personas`. Rechaza con `AGOTADO` si supera `stock_total`.
+- [ ] Stock NO se devuelve nunca al cancelar / no-show / borrar reserva. Documentado.
+- [ ] Reserva con cupón guarda solo: `codigo_id` (FK) y `codigo` (snapshot text del código de 6 chars). Nada más. NO toca `tipo_categoria`, NO toca `importe_pagado`, NO toca `politicas_*`.
+- [ ] UI: submódulo `/sala/cupones` con lista + crear/editar siguiendo BARRA HORIZONTAL 1. Sentence case en todo. Sin duplicar título de página.
+- [ ] UI: form de reserva (interno y público) añade campo "Código de cupón" con validación inline tolerante (no marca error mientras se teclea prefijo válido). Al validar OK muestra chip con título del cliente.
+- [ ] Cliente final, en su pantalla de éxito y en email de confirmación, ve dos datos: `Cupón: K7M2X9 — Tu regalo de bienvenida`.
+- [ ] RLS multi-tenant con `empresas_del_usuario()` / `_text()`. Cupones siempre por empresa (Habana ≠ Bacanal).
+- [ ] Cambios universales: se aplican a TODAS las empresas presentes y futuras, sin tocar ninguna empresa concreta.
 
 ### Comportamiento Esperado
 
-**Configuración (admin restaurante)**
-1. Admin entra a Sala → Configuración → Reservas → pestaña "Códigos promocionales".
-2. La pestaña ahora se titula "Cupones" en el header (sentence case) y mantiene el patrón BARRA HORIZONTAL 1.
-3. Crea/edita un cupón con el formulario actual (campos ya existen: nombre, descripción, tipo, min/max personas, fechas, stock, turnos, restricción, %descuento, días).
-4. La lista muestra ahora: nombre · tipo · turnos · vigencia · `stock_consumido / stock_total` · personas permitidas · días · estado.
-5. Cuando `stock_consumido >= stock_total` y stock no es 0/ilimitado: badge "Agotado" en rojo y el cupón deja de aplicarse aunque siga `activo=true`.
+**Crear cupón (admin)**
+1. Admin entra a `/sala/cupones`. Ve lista vacía con barra horizontal `+ Nuevo`.
+2. Click `+ Nuevo` → drawer con campos:
+   - **Código** (auto-generado, read-only, con botón "Copiar"). Ejemplo: `K7M2X9`.
+   - **Título interno** (obligatorio, lo ve el restaurante).
+   - **Título para el cliente** (opcional; placeholder: "Si lo dejas vacío, el cliente verá el título interno").
+   - **Tipo de beneficio**: radio `Porcentaje` / `Importe en €` / `Producto gratis`.
+   - **Valor**:
+     - Si Porcentaje → input numérico 1-100.
+     - Si Importe → input numérico ≥ 0.
+     - Si Producto gratis → input texto corto ("Botella de cava 75 cl").
+   - **Unidad de stock**: radio `Por reservas` / `Por personas`.
+   - **Stock total**: input numérico ≥ 1.
+   - **Fecha de caducidad**: date picker opcional ("Sin caducidad" si vacío).
+   - **Días permitidos**: chips multi-select lun-dom. Por defecto todos seleccionados.
+   - **Turnos permitidos**: chips multi-select Comida / Cena. Por defecto ambos.
+   - **Activo**: switch (default ON).
+3. Guardar → INSERT con `codigo` auto, `stock_consumido=0`.
 
-**Flujo público (cliente final)**
-1. Cliente abre `/reservar/<slug>?o=instagram` o `/reservar/<slug>/<keyword>`.
-2. Rellena fecha/hora/personas/datos.
-3. (Opcional) Introduce un código promocional. Al cambiar el campo (debounced) se llama a `comprobarCodigoPublicoAction`:
-   - Si pasa todas las validaciones → ✅ "Cupón válido: 10% de descuento" (o el detalle del tipo).
-   - Si falla → ❌ con el motivo concreto.
-4. Al confirmar:
-   - `findOrLinkClienteSala` resuelve cliente.
-   - Si hay código → server re‑valida (defensa en profundidad) y llama `consumir_stock_cupon`. Si falla, devuelve error y NO crea reserva.
-   - `asignarMesaAutomatica` asigna mesa.
-   - INSERT en `reservas` con `codigo_id`, `codigo_nombre`, `cupon_porcentaje_descuento`, `cupon_aplicado_at`, `tipo_categoria='cupon'`.
-5. Pantalla de éxito incluye recordatorio del cupón aplicado: "Tu cupón <NOMBRE> dará 10% en el restaurante".
+**Canjear cupón en reserva (admin o público)**
+1. Empleado o cliente rellena la reserva. En la sección "Cupón" hay un input "Código (6 caracteres)".
+2. Al escribir y hacer blur (con debounce 300 ms), action `validarCuponAction(codigo, empresaId, fecha, turno)` devuelve:
+   - `OK` → muestra chip verde "✅ Cupón válido: <título cliente>"
+   - `NO_EXISTE` → "❌ No existe ningún cupón con ese código"
+   - `INACTIVO` → "❌ Cupón inactivo"
+   - `CADUCADO` → "❌ Cupón caducado el dd/mm/yyyy"
+   - `AGOTADO` → "❌ Cupón agotado (50/50)"
+   - `DIA_NO_PERMITIDO` → "❌ Cupón válido solo lun-jue"
+   - `TURNO_NO_PERMITIDO` → "❌ Cupón válido solo en cenas"
+3. Al guardar la reserva con cupón válido:
+   - Server re-valida (defensa en profundidad).
+   - Llama `consumir_stock_cupon(codigo_id, num_personas_o_1)`. Si falla por concurrencia, NO crea reserva.
+   - INSERT reserva con `codigo_id` + `codigo` (snapshot del texto del código).
+4. El campo `tipo_categoria` se queda como esté (probablemente `gratis`). Política de cancelación independiente.
 
-**Flujo admin (reserva interna)**
-1. Empleado abre `+ Nueva reserva` en `/sala/reservas`.
-2. Rellena datos y selecciona en el desplegable de "Tipo" el valor `Cupón` (UI ya existe), o introduce un código en un nuevo campo opcional "Código promocional" del formulario.
-3. Submit: si hay código, mismo flujo de validación + consumo de stock que el público.
+**Cliente final**
+- Pantalla de éxito: bloque destacado "Cupón aplicado: `K7M2X9` — Tu regalo de bienvenida".
+- Email de confirmación: misma info.
+- En el listado/detalle de la reserva en admin: chip "Cupón K7M2X9" en `ReservaFlagsChips`; al pasar el cursor muestra tooltip con título interno y descripción.
 
-**Aplicación en sala / POS (out of scope v1 pero preparado)**
-- El POS lee `reservas.cupon_porcentaje_descuento` y lo aplica al ticket. v1 solo expone el dato; el cableado real al ticket se hace cuando el POS esté listo.
+**Lo que NO hace v1**
+- No genera cupones automáticos desde campañas / cumpleaños / reseñas.
+- No se conecta al POS para aplicar descuento real al ticket.
+- No alimenta `v_campanas_atribucion`. Esa vista es solo para campañas (PRP-046).
+- No restringe por nº personas mín/máx.
+- No tiene fecha de inicio (solo caducidad).
 
 ---
 
 ## Contexto
 
-### Referencias (código existente — usar como patrón)
-- `src/features/sala/data/reservas.ts:179-215` — tipos `ReservaCodigo*` y labels. Añadir campo `stockConsumido` ya existe; añadir `cuponPorcentajeDescuento` a `Reserva`.
-- `src/features/sala/actions/reserva-codigos-actions.ts` — CRUD admin; patrón a seguir para añadir RPC consumo.
-- `src/features/sala/components/reservas/config/CodigosTab.tsx` — lista actual; añadir badge "Agotado", contador en vivo, renombrar título a "Cupones".
-- `src/features/sala/components/reservas/config/CodigoForm.tsx` — formulario admin; ya cubre todos los campos necesarios.
-- `src/features/sala/actions/reservas-actions.ts:241-422` — `createReserva` / `updateReserva`; añadir rama de validación + consumo de cupón.
-- `src/features/reservar-publica/actions/crear-reserva-publica.ts:60-77` — lógica actual "solo aviso" que hay que reemplazar por validación dura + consumo de stock.
-- `src/features/reservar-publica/actions/comprobar-cliente-publico.ts` — patrón para `comprobarCodigoPublicoAction` (dry-run validación).
-- `src/features/reservar-publica/components/ReservaPublicaForm.tsx` — añadir feedback ✅/❌ del cupón en el campo "Código promocional".
-- `src/features/sala/components/reservas/ReservaFlagsChips.tsx:75-77` — chip "Cupón pagado X€"; añadir chip paralelo "Cupón −X%".
-- `src/features/sala/components/ReservasView.tsx:556,820,860,1138` — manejo de `tipoCategoria='cupon'` y `importePagado`; añadir tratamiento de descuento y campo `codigoNombre`.
-- `src/features/sala/actions/analitica-origen-actions.ts` — para extender `v_campanas_atribucion` con métricas de cupón.
-- Memoria `project_reservas_tipo_y_etiqueta.md` — `tipo_categoria` (gratis/politica/cupon) gobierna política/garantía/importe; alinear con cuponPorcentajeDescuento.
-- Memoria `project_reservas_dedup_cliente.md` — `find_or_link_cliente_sala` para vincular cliente.
-- Memoria `project_rls_helper_empresas_del_usuario.md` — RLS obligatorio multi-tenant.
-- Memoria `project_campanas_marketing_atribucion.md` — PRP-046: `v_campanas_atribucion` a extender.
-- Memoria `feedback_barra_horizontal_1.md` — toolbar minimalista por defecto.
-- Memoria `feedback_capitalizacion_textos_ui.md` — sentence case en toda UI.
-- Memoria `feedback_titulo_pagina.md` — no duplicar título de la vista.
-- Memoria `feedback_validaciones_inline.md` — validaciones tolerantes mientras se teclea.
-- Memoria `feedback_cambios_multi_tenant.md` — cambios al software, no a empresa concreta.
+### Referencias (código existente)
 
-### Estado actual de BD (consultado en código)
-- `reserva_codigos`: tabla creada con columnas `nombre`, `descripcion`, `tipo_promocion`, `min_personas`, `max_personas`, `fecha_inicio`, `fecha_fin`, `stock_total`, `stock_consumido`, `turnos`, `restriccion_especial`, `es_descuento`, `porcentaje_descuento`, `dias_semana`, `activo`. RLS multi-tenant existente.
-- `reservas`: ya tiene `codigo_id UUID NULL REFERENCES reserva_codigos(id)` y `codigo_nombre TEXT NULL`. NO tiene `cupon_porcentaje_descuento` ni `cupon_aplicado_at`. `tipo_categoria` con CHECK `IN ('gratis','politica','cupon')`.
-- `reserva_codigos.stock_consumido` ya existe pero nunca se incrementa hoy.
-- RPCs existentes: `empresas_del_usuario`, `find_or_link_cliente_sala`, `try_reservar_slot`, `registrar_visita_cliente_sala`.
+- `src/features/sala/data/reservas.ts:179-215` — tipos viejos `ReservaCodigo*` a reemplazar.
+- `src/features/sala/actions/reserva-codigos-actions.ts` — CRUD viejo; rehacer.
+- `src/features/sala/components/reservas/config/CodigosTab.tsx` — pestaña dentro de config; **mover a submódulo propio `/sala/cupones`**.
+- `src/features/sala/components/reservas/config/CodigoForm.tsx` — form viejo; reemplazar.
+- `src/features/sala/actions/reservas-actions.ts:241-422` — `createReserva` / `updateReserva`; añadir validación + consumo si viene `codigoCupon`.
+- `src/features/reservar-publica/actions/crear-reserva-publica.ts:60-77` — bloque "Código → solo aviso" a reemplazar por validar + consumir.
+- `src/features/reservar-publica/actions/comprobar-cliente-publico.ts` — patrón para action de validación inline.
+- `src/features/reservar-publica/components/ReservaPublicaForm.tsx` — añadir campo cupón con feedback inline.
+- `src/features/sala/components/reservas/ReservaFlagsChips.tsx` — añadir chip "Cupón K7M2X9".
+- `src/features/sala/components/ReservasView.tsx` — mostrar código en fila.
+- `src/lib/email/templates/reserva-confirmada.ts` — añadir bloque cupón.
+- Memorias relevantes: `feedback_barra_horizontal_1.md`, `feedback_capitalizacion_textos_ui.md`, `feedback_titulo_pagina.md`, `feedback_validaciones_inline.md`, `feedback_cambios_multi_tenant.md`, `project_rls_helper_empresas_del_usuario.md`, `project_horarios_comida_cena_no_solapan.md`.
+
+### Estado actual de BD
+
+- `reserva_codigos` existe con 0 filas. Columnas viejas: `nombre, descripcion, tipo_promocion, min_personas, max_personas, fecha_inicio, fecha_fin, stock_total, stock_consumido, turnos (enum), restriccion_especial, es_descuento, porcentaje_descuento, dias_semana, activo`. Se DROPea entera.
+- `reservas.codigo_id UUID NULL REFERENCES reserva_codigos(id)` ya existe → se mantiene.
+- `reservas.codigo_nombre TEXT NULL` ya existe → se renombra a `codigo` (text del código de 6 chars, snapshot).
+- `tipo_categoria CHECK IN ('gratis','politica','cupon')` se mantiene, pero el cupón NO la fija automáticamente. Es responsabilidad del operador si quiere marcarla.
 
 ### Arquitectura Propuesta (Feature-First)
 
-Reutilizar las features existentes (no crear feature nueva):
-
 ```
 src/features/sala/
-├── data/
-│   └── reservas.ts                       # +campo cuponPorcentajeDescuento, cuponAplicadoAt en Reserva
-├── actions/
-│   ├── reserva-codigos-actions.ts        # +validarCupon(codigoId, ctx)
-│   └── reservas-actions.ts               # +rama cupón en create/update (validar + consumir)
+├── cupones/                                # NUEVO submódulo
+│   ├── data/
+│   │   └── cupones.ts                      # tipos + constantes
+│   ├── actions/
+│   │   ├── cupones-actions.ts              # CRUD admin
+│   │   └── validar-cupon-action.ts         # validación inline (admin + público)
+│   ├── lib/
+│   │   └── validar-cupon.ts                # helper puro de validación
+│   └── components/
+│       ├── CuponesView.tsx                 # lista + barra horizontal 1
+│       ├── CuponDrawer.tsx                 # crear/editar
+│       └── CuponInputReserva.tsx           # input compartido para form reserva
+├── data/reservas.ts                        # +campo codigoCupon en Reserva
+├── actions/reservas-actions.ts             # +rama cupón en create/update
 └── components/reservas/
-    ├── ReservaFlagsChips.tsx             # +chip "Cupón −X%"
-    ├── ReservasView.tsx                  # +mostrar código aplicado en fila
-    └── config/
-        └── CodigosTab.tsx                # +badge "Agotado", contador en vivo, título "Cupones"
+    ├── ReservaFlagsChips.tsx               # +chip "Cupón K7M2X9"
+    └── ReservasView.tsx                    # +mostrar código en fila
 
 src/features/reservar-publica/
 ├── actions/
-│   ├── comprobar-codigo-publico.ts       # NUEVO: validación dry-run
-│   └── crear-reserva-publica.ts          # reemplazar "solo aviso" por validar + consumir
+│   ├── crear-reserva-publica.ts            # +validar + consumir cupón
+│   └── validar-cupon-publico-action.ts     # action pública (anon-friendly)
 └── components/
-    └── ReservaPublicaForm.tsx            # +feedback ✅/❌ del código
+    └── ReservaPublicaForm.tsx              # +CuponInputReserva
 
-src/features/sala/lib/
-└── validar-cupon.ts                      # NUEVO: pura helper compartida (admin + público + server)
+src/app/(main)/sala/
+└── cupones/page.tsx                        # ruta nueva
 ```
 
-### Modelo de Datos (DDL final propuesto)
+### Modelo de Datos (DDL)
 
 ```sql
 -- ============================================================
--- Migración 1: columnas snapshot de cupón en reservas
+-- Migración 1: DROP reserva_codigos viejo (vacío) y RECREATE
 -- ============================================================
-ALTER TABLE public.reservas
-  ADD COLUMN cupon_porcentaje_descuento NUMERIC(5,2)
-    CHECK (cupon_porcentaje_descuento IS NULL
-           OR (cupon_porcentaje_descuento >= 0 AND cupon_porcentaje_descuento <= 100)),
-  ADD COLUMN cupon_aplicado_at          TIMESTAMPTZ;
 
--- Coherencia: si hay descuento o timestamp, debe existir codigo_id
+-- Primero limpiar referencias en reservas (también vacías):
 ALTER TABLE public.reservas
-  ADD CONSTRAINT reservas_cupon_coherente CHECK (
-    (cupon_porcentaje_descuento IS NULL AND cupon_aplicado_at IS NULL)
-    OR codigo_id IS NOT NULL
-  );
+  DROP CONSTRAINT IF EXISTS reservas_codigo_id_fkey;
 
-CREATE INDEX IF NOT EXISTS reservas_codigo_id_idx
-  ON public.reservas (codigo_id) WHERE codigo_id IS NOT NULL;
+ALTER TABLE public.reservas
+  RENAME COLUMN codigo_nombre TO codigo;
+
+DROP TABLE IF EXISTS public.reserva_codigos CASCADE;
+
+CREATE TABLE public.reserva_codigos (
+  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  empresa_id            UUID NOT NULL REFERENCES public.empresas(id) ON DELETE CASCADE,
+
+  codigo                TEXT NOT NULL CHECK (codigo ~ '^[A-Z0-9]{6}$'),
+  titulo_interno        TEXT NOT NULL CHECK (length(titulo_interno) BETWEEN 1 AND 120),
+  titulo_cliente        TEXT NULL CHECK (titulo_cliente IS NULL OR length(titulo_cliente) BETWEEN 1 AND 120),
+
+  beneficio_tipo        TEXT NOT NULL CHECK (beneficio_tipo IN ('porcentaje','importe','producto_gratis')),
+  beneficio_valor       NUMERIC(10,2) NULL,           -- porcentaje (1-100) o importe (>=0)
+  producto_descripcion  TEXT NULL CHECK (producto_descripcion IS NULL OR length(producto_descripcion) BETWEEN 1 AND 200),
+
+  unidad_stock          TEXT NOT NULL CHECK (unidad_stock IN ('reservas','personas')),
+  stock_total           INT NOT NULL CHECK (stock_total >= 1),
+  stock_consumido       INT NOT NULL DEFAULT 0 CHECK (stock_consumido >= 0),
+
+  fecha_caducidad       DATE NULL,
+  dias_semana           TEXT[] NOT NULL DEFAULT ARRAY['lun','mar','mie','jue','vie','sab','dom']::TEXT[],
+  turnos                TEXT[] NOT NULL DEFAULT ARRAY['COMIDA','CENA']::TEXT[],
+
+  activo                BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  -- Coherencia beneficio / valor / descripcion
+  CONSTRAINT cupon_beneficio_coherente CHECK (
+    (beneficio_tipo = 'porcentaje'      AND beneficio_valor BETWEEN 1 AND 100 AND producto_descripcion IS NULL)
+    OR (beneficio_tipo = 'importe'      AND beneficio_valor >= 0              AND producto_descripcion IS NULL)
+    OR (beneficio_tipo = 'producto_gratis' AND beneficio_valor IS NULL        AND producto_descripcion IS NOT NULL)
+  ),
+
+  -- Stock consumido no supera total
+  CONSTRAINT cupon_stock_no_supera_total CHECK (stock_consumido <= stock_total),
+
+  -- Código único por empresa
+  CONSTRAINT cupon_codigo_unico_empresa UNIQUE (empresa_id, codigo)
+);
+
+CREATE INDEX reserva_codigos_empresa_idx ON public.reserva_codigos(empresa_id);
+CREATE INDEX reserva_codigos_codigo_idx  ON public.reserva_codigos(empresa_id, codigo);
+
+-- FK desde reservas
+ALTER TABLE public.reservas
+  ADD CONSTRAINT reservas_codigo_id_fkey
+    FOREIGN KEY (codigo_id) REFERENCES public.reserva_codigos(id) ON DELETE SET NULL;
+
+-- updated_at trigger (reutilizar trigger existente set_updated_at)
+CREATE TRIGGER reserva_codigos_set_updated_at
+  BEFORE UPDATE ON public.reserva_codigos
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+-- RLS
+ALTER TABLE public.reserva_codigos ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY reserva_codigos_select_empresa
+  ON public.reserva_codigos FOR SELECT TO authenticated
+  USING (empresa_id = ANY (public.empresas_del_usuario()));
+
+CREATE POLICY reserva_codigos_insert_empresa
+  ON public.reserva_codigos FOR INSERT TO authenticated
+  WITH CHECK (empresa_id = ANY (public.empresas_del_usuario()));
+
+CREATE POLICY reserva_codigos_update_empresa
+  ON public.reserva_codigos FOR UPDATE TO authenticated
+  USING (empresa_id = ANY (public.empresas_del_usuario()))
+  WITH CHECK (empresa_id = ANY (public.empresas_del_usuario()));
+
+CREATE POLICY reserva_codigos_delete_empresa
+  ON public.reserva_codigos FOR DELETE TO authenticated
+  USING (empresa_id = ANY (public.empresas_del_usuario()));
 
 -- ============================================================
--- Migración 2: RPC consumo atómico de stock de cupón
+-- Migración 2: RPC generar_codigo_cupon (helper interno)
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.generar_codigo_cupon(p_empresa_id UUID)
+RETURNS TEXT
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_chars  TEXT := 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  v_code   TEXT;
+  v_attempt INT := 0;
+BEGIN
+  LOOP
+    v_code := '';
+    FOR i IN 1..6 LOOP
+      v_code := v_code || substr(v_chars, floor(random() * 36)::INT + 1, 1);
+    END LOOP;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM public.reserva_codigos
+      WHERE empresa_id = p_empresa_id AND codigo = v_code
+    ) THEN
+      RETURN v_code;
+    END IF;
+
+    v_attempt := v_attempt + 1;
+    IF v_attempt > 50 THEN
+      RAISE EXCEPTION 'No se pudo generar código único tras 50 intentos';
+    END IF;
+  END LOOP;
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.generar_codigo_cupon(UUID) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.generar_codigo_cupon(UUID) TO authenticated, service_role;
+
+-- ============================================================
+-- Migración 3: RPC consumir_stock_cupon (atómica, service_role)
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.consumir_stock_cupon(
   p_codigo_id UUID,
-  p_unidades  INT
+  p_personas  INT
 ) RETURNS public.reserva_codigos
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_row public.reserva_codigos;
+  v_consume INT;
 BEGIN
-  IF p_unidades <= 0 THEN
-    RAISE EXCEPTION 'unidades inválidas';
+  IF p_personas < 1 THEN
+    RAISE EXCEPTION 'personas inválidas';
   END IF;
 
-  -- stock_total = 0 significa ilimitado (convención existente del módulo)
-  UPDATE public.reserva_codigos
-    SET stock_consumido = stock_consumido + p_unidades,
-        updated_at      = NOW()
-    WHERE id = p_codigo_id
-      AND activo = TRUE
-      AND (stock_total = 0
-           OR stock_consumido + p_unidades <= stock_total)
-    RETURNING * INTO v_row;
+  SELECT * INTO v_row FROM public.reserva_codigos WHERE id = p_codigo_id FOR UPDATE;
+  IF v_row.id IS NULL THEN RAISE EXCEPTION 'NO_EXISTE'; END IF;
+  IF NOT v_row.activo THEN RAISE EXCEPTION 'INACTIVO'; END IF;
 
-  IF v_row.id IS NULL THEN
+  v_consume := CASE WHEN v_row.unidad_stock = 'personas' THEN p_personas ELSE 1 END;
+
+  IF v_row.stock_consumido + v_consume > v_row.stock_total THEN
     RAISE EXCEPTION 'AGOTADO' USING ERRCODE = 'P0001';
   END IF;
+
+  UPDATE public.reserva_codigos
+    SET stock_consumido = stock_consumido + v_consume,
+        updated_at      = NOW()
+    WHERE id = p_codigo_id
+    RETURNING * INTO v_row;
 
   RETURN v_row;
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.consumir_stock_cupon(UUID, INT)
-  FROM PUBLIC, anon, authenticated;
-GRANT  EXECUTE ON FUNCTION public.consumir_stock_cupon(UUID, INT)
-  TO service_role;
--- Se llama desde Server Action con admin client; NUNCA expuesta a anon.
+REVOKE EXECUTE ON FUNCTION public.consumir_stock_cupon(UUID, INT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.consumir_stock_cupon(UUID, INT) TO service_role;
 
 -- ============================================================
--- Migración 3: RPC pública (SECURITY DEFINER) para validar un código
+-- Migración 4: RPC validar_cupon (pública, anon + authenticated)
 -- ============================================================
--- Devuelve estructura mínima: existencia + razón de invalidez si no aplica.
--- NO devuelve stock_consumido ni stock_total.
-CREATE OR REPLACE FUNCTION public.validar_codigo_publico(
-  p_empresa_slug TEXT,
-  p_codigo       TEXT,
-  p_fecha        DATE,
-  p_turno        TEXT,    -- 'COMIDA' | 'CENA'
-  p_personas     INT
+-- Devuelve ok + motivo + datos públicos del cupón. NUNCA expone stock_total / stock_consumido.
+CREATE OR REPLACE FUNCTION public.validar_cupon(
+  p_empresa_id UUID,
+  p_codigo     TEXT,
+  p_fecha      DATE,
+  p_turno      TEXT  -- 'COMIDA' o 'CENA'
 ) RETURNS TABLE (
-  ok                     BOOLEAN,
-  motivo                 TEXT,     -- null si ok=true
-  tipo_promocion         TEXT,
-  es_descuento           BOOLEAN,
-  porcentaje_descuento   NUMERIC,
-  nombre                 TEXT
+  ok                    BOOLEAN,
+  motivo                TEXT,
+  cupon_id              UUID,
+  titulo_cliente_efectivo TEXT,
+  beneficio_tipo        TEXT,
+  beneficio_valor       NUMERIC,
+  producto_descripcion  TEXT,
+  fecha_caducidad       DATE
 )
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
 AS $$
 DECLARE
-  v_empresa_id UUID;
-  v_codigo     public.reserva_codigos;
-  v_dia_key    TEXT;
+  v public.reserva_codigos;
+  v_dia_key TEXT;
+  v_codigo_norm TEXT;
 BEGIN
-  SELECT id INTO v_empresa_id FROM public.empresas WHERE slug = p_empresa_slug;
-  IF v_empresa_id IS NULL THEN
-    RETURN QUERY SELECT FALSE, 'NO_EXISTE', NULL::TEXT, NULL::BOOLEAN, NULL::NUMERIC, NULL::TEXT;
+  v_codigo_norm := UPPER(regexp_replace(COALESCE(p_codigo,''), '\s+', '', 'g'));
+  IF v_codigo_norm !~ '^[A-Z0-9]{6}$' THEN
+    RETURN QUERY SELECT FALSE, 'NO_EXISTE', NULL::UUID, NULL::TEXT, NULL::TEXT, NULL::NUMERIC, NULL::TEXT, NULL::DATE;
     RETURN;
   END IF;
 
-  SELECT * INTO v_codigo
-    FROM public.reserva_codigos
-    WHERE empresa_id = v_empresa_id
-      AND nombre = UPPER(regexp_replace(p_codigo, '\s+', '', 'g'))
-    LIMIT 1;
+  SELECT * INTO v FROM public.reserva_codigos
+    WHERE empresa_id = p_empresa_id AND codigo = v_codigo_norm LIMIT 1;
 
-  IF v_codigo.id IS NULL THEN
-    RETURN QUERY SELECT FALSE, 'NO_EXISTE', NULL::TEXT, NULL::BOOLEAN, NULL::NUMERIC, NULL::TEXT; RETURN;
+  IF v.id IS NULL THEN
+    RETURN QUERY SELECT FALSE, 'NO_EXISTE', NULL::UUID, NULL::TEXT, NULL::TEXT, NULL::NUMERIC, NULL::TEXT, NULL::DATE;
+    RETURN;
   END IF;
-  IF NOT v_codigo.activo THEN
-    RETURN QUERY SELECT FALSE, 'INACTIVO', v_codigo.tipo_promocion, v_codigo.es_descuento, v_codigo.porcentaje_descuento, v_codigo.nombre; RETURN;
+
+  IF NOT v.activo THEN
+    RETURN QUERY SELECT FALSE, 'INACTIVO', v.id, COALESCE(v.titulo_cliente, v.titulo_interno), v.beneficio_tipo, v.beneficio_valor, v.producto_descripcion, v.fecha_caducidad;
+    RETURN;
   END IF;
-  IF p_fecha < v_codigo.fecha_inicio OR p_fecha > v_codigo.fecha_fin THEN
-    RETURN QUERY SELECT FALSE, 'FUERA_DE_VIGENCIA', v_codigo.tipo_promocion, v_codigo.es_descuento, v_codigo.porcentaje_descuento, v_codigo.nombre; RETURN;
+
+  IF v.fecha_caducidad IS NOT NULL AND p_fecha > v.fecha_caducidad THEN
+    RETURN QUERY SELECT FALSE, 'CADUCADO', v.id, COALESCE(v.titulo_cliente, v.titulo_interno), v.beneficio_tipo, v.beneficio_valor, v.producto_descripcion, v.fecha_caducidad;
+    RETURN;
   END IF;
-  IF p_personas < v_codigo.min_personas OR (v_codigo.max_personas <> -1 AND p_personas > v_codigo.max_personas) THEN
-    RETURN QUERY SELECT FALSE, 'PERSONAS_FUERA_DE_RANGO', v_codigo.tipo_promocion, v_codigo.es_descuento, v_codigo.porcentaje_descuento, v_codigo.nombre; RETURN;
-  END IF;
-  IF v_codigo.turnos = 'comida' AND p_turno <> 'COMIDA' THEN
-    RETURN QUERY SELECT FALSE, 'TURNO_NO_PERMITIDO', v_codigo.tipo_promocion, v_codigo.es_descuento, v_codigo.porcentaje_descuento, v_codigo.nombre; RETURN;
-  END IF;
-  IF v_codigo.turnos = 'cena' AND p_turno <> 'CENA' THEN
-    RETURN QUERY SELECT FALSE, 'TURNO_NO_PERMITIDO', v_codigo.tipo_promocion, v_codigo.es_descuento, v_codigo.porcentaje_descuento, v_codigo.nombre; RETURN;
-  END IF;
+
   v_dia_key := (ARRAY['dom','lun','mar','mie','jue','vie','sab'])[EXTRACT(DOW FROM p_fecha)::INT + 1];
-  IF array_length(v_codigo.dias_semana, 1) IS NOT NULL
-     AND NOT (v_dia_key = ANY (v_codigo.dias_semana)) THEN
-    RETURN QUERY SELECT FALSE, 'DIA_NO_PERMITIDO', v_codigo.tipo_promocion, v_codigo.es_descuento, v_codigo.porcentaje_descuento, v_codigo.nombre; RETURN;
-  END IF;
-  IF v_codigo.stock_total <> 0 AND v_codigo.stock_consumido >= v_codigo.stock_total THEN
-    RETURN QUERY SELECT FALSE, 'AGOTADO', v_codigo.tipo_promocion, v_codigo.es_descuento, v_codigo.porcentaje_descuento, v_codigo.nombre; RETURN;
+  IF NOT (v_dia_key = ANY (v.dias_semana)) THEN
+    RETURN QUERY SELECT FALSE, 'DIA_NO_PERMITIDO', v.id, COALESCE(v.titulo_cliente, v.titulo_interno), v.beneficio_tipo, v.beneficio_valor, v.producto_descripcion, v.fecha_caducidad;
+    RETURN;
   END IF;
 
-  RETURN QUERY SELECT TRUE, NULL::TEXT, v_codigo.tipo_promocion, v_codigo.es_descuento, v_codigo.porcentaje_descuento, v_codigo.nombre;
+  IF p_turno IS NOT NULL AND NOT (p_turno = ANY (v.turnos)) THEN
+    RETURN QUERY SELECT FALSE, 'TURNO_NO_PERMITIDO', v.id, COALESCE(v.titulo_cliente, v.titulo_interno), v.beneficio_tipo, v.beneficio_valor, v.producto_descripcion, v.fecha_caducidad;
+    RETURN;
+  END IF;
+
+  IF v.stock_consumido >= v.stock_total THEN
+    RETURN QUERY SELECT FALSE, 'AGOTADO', v.id, COALESCE(v.titulo_cliente, v.titulo_interno), v.beneficio_tipo, v.beneficio_valor, v.producto_descripcion, v.fecha_caducidad;
+    RETURN;
+  END IF;
+
+  RETURN QUERY SELECT TRUE, NULL::TEXT, v.id, COALESCE(v.titulo_cliente, v.titulo_interno), v.beneficio_tipo, v.beneficio_valor, v.producto_descripcion, v.fecha_caducidad;
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.validar_codigo_publico(TEXT, TEXT, DATE, TEXT, INT)
-  TO anon, authenticated;
-
--- ============================================================
--- Migración 4: extender v_campanas_atribucion con cupones
--- ============================================================
--- Solo se modifica la vista para añadir columnas:
---   reservas_con_cupon, reservas_cupon_descuento, reservas_cupon_grupo.
--- (DDL exacto se genera en Fase 1 al consultar la vista vigente.)
+GRANT EXECUTE ON FUNCTION public.validar_cupon(UUID, TEXT, DATE, TEXT) TO anon, authenticated;
 ```
 
-### Endpoints / Server Actions a crear o editar
+### Server Actions
 
 | Archivo | Cambio |
 |---|---|
-| `src/features/sala/lib/validar-cupon.ts` | NUEVO: helper puro `validarCuponContexto({codigo, fecha, turno, personas})` que llama a la RPC o reutiliza la lógica del lado server. |
-| `src/features/sala/actions/reserva-codigos-actions.ts` | +`getCodigoByNombre(nombre)` (admin), reexponer contador de stock. |
-| `src/features/sala/actions/reservas-actions.ts` | En `createReservaAction` / `updateReservaAction`: si `codigoNombre` viene, validar + `consumir_stock_cupon` + fijar `tipo_categoria='cupon'` + snapshot `cupon_porcentaje_descuento`/`cupon_aplicado_at`. |
-| `src/features/reservar-publica/actions/comprobar-codigo-publico.ts` | NUEVO: server action que recibe `(slug, codigo, fecha, turno, personas)` y devuelve `{ok, motivo, porcentajeDescuento, tipoPromocion, nombre}`. Llama `validar_codigo_publico` RPC. |
-| `src/features/reservar-publica/actions/crear-reserva-publica.ts` | Reemplazar el bloque "Código → solo aviso" por validación dura + consumo de stock; revertir reserva si stock se agota entre validación y submit. |
+| `src/features/sala/cupones/actions/cupones-actions.ts` | NUEVO. `listCuponesAction`, `createCuponAction` (genera código vía RPC), `updateCuponAction`, `togglarActivoCuponAction`, `deleteCuponAction`. |
+| `src/features/sala/cupones/actions/validar-cupon-action.ts` | NUEVO. Wrapper de RPC `validar_cupon` para form admin. |
+| `src/features/reservar-publica/actions/validar-cupon-publico-action.ts` | NUEVO. Wrapper público con slug → empresa_id. |
+| `src/features/sala/cupones/lib/validar-cupon.ts` | NUEVO. Helper puro server-side que llama a la RPC. |
+| `src/features/sala/actions/reservas-actions.ts` | Si `codigoCupon` viene: validar (RPC), llamar `consumir_stock_cupon` con `num_personas`, snapshot `codigo` + `codigo_id` en reserva. Si falla, abortar sin crear reserva. |
+| `src/features/reservar-publica/actions/crear-reserva-publica.ts` | Reemplazar bloque "solo aviso" por el mismo flujo. |
 
 ### Componentes UI
 
 | Archivo | Cambio |
 |---|---|
-| `src/features/sala/components/reservas/config/CodigosTab.tsx` | Renombrar título a "Cupones"; añadir badge "Agotado" cuando aplica; refrescar tras crear reserva (revalidatePath o realtime). |
-| `src/features/sala/components/reservas/config/CodigoForm.tsx` | Sin cambios estructurales; revisar sentence case y BARRA HORIZONTAL 1 si falta. |
-| `src/features/sala/components/reservas/ReservaFlagsChips.tsx` | Nuevo chip "Cupón −X%" cuando `cuponPorcentajeDescuento != null`. Compatible con chip "Cupón pagado Y€" existente. |
-| `src/features/sala/components/ReservasView.tsx` | Mostrar `codigoNombre` en fila si está; tratar `cuponPorcentajeDescuento` en el form admin (nuevo campo opcional "Código promocional"). |
-| `src/features/reservar-publica/components/ReservaPublicaForm.tsx` | Campo "Código promocional" con debounce + feedback ✅/❌ con motivo. Validación tolerante (no muestra error mientras se teclea un prefijo válido). |
+| `src/features/sala/cupones/components/CuponesView.tsx` | NUEVO. BARRA HORIZONTAL 1 (`+ Nuevo` + buscar + 3 iconos). Tabla con columnas: código (mono), título interno, tipo beneficio, valor, stock (`X/Y`), caducidad, días, turnos, estado. |
+| `src/features/sala/cupones/components/CuponDrawer.tsx` | NUEVO. Form crear/editar. Código read-only con botón "Copiar". Validación inline tolerante. |
+| `src/features/sala/cupones/components/CuponInputReserva.tsx` | NUEVO. Input compartido (admin + público) con feedback ✅/❌ y debounce 300 ms. |
+| `src/features/sala/components/reservas/ReservaFlagsChips.tsx` | +chip "Cupón K7M2X9" cuando `reserva.codigo` no es null. Tooltip con título interno + beneficio. |
+| `src/features/sala/components/ReservasView.tsx` | Mostrar `codigo` en columna opcional. Incluir `CuponInputReserva` en ReservaDrawer. |
+| `src/features/reservar-publica/components/ReservaPublicaForm.tsx` | Incluir `CuponInputReserva` antes de submit. |
+| `src/app/(main)/sala/cupones/page.tsx` | NUEVO. Server component que renderiza `CuponesView`. |
+| `src/lib/email/templates/reserva-confirmada.ts` | Bloque opcional "Cupón aplicado: <código> — <título cliente>". |
+| `src/features/layout/components/app-sidebar.tsx` | Añadir entrada "Cupones" bajo Sala. |
+| `src/features/sala/components/reservas/config/CodigosTab.tsx` | ELIMINAR (la pestaña ya no vive en config; se mueve a su propio submódulo). |
 
 ---
 
 ## Blueprint (Assembly Line)
 
-> IMPORTANTE: Solo se definen FASES. Las subtareas las genera `/bucle-agentico` mapeando contexto justo antes de cada fase. Validar (typecheck + build + Playwright) al final de cada fase.
+### Fase 1: Migración BD — DROP/RECREATE reserva_codigos + RPC helpers
+**Objetivo**: tabla nueva con CHECKs, RLS multi-tenant, índices, trigger updated_at, RPC `generar_codigo_cupon`.
+**Validación**: `\d reserva_codigos`; INSERT manual respeta CHECKs (porcentaje fuera de 1-100 falla, producto sin descripción falla, etc.); RLS aísla Habana vs Bacanal.
 
-### Fase 1: Migración BD — columnas snapshot + índices
-**Objetivo**: Añadir `cupon_porcentaje_descuento`, `cupon_aplicado_at` y CHECK de coherencia en `reservas`. Crear índice de `codigo_id`.
-**Validación**: `\d reservas` muestra columnas; INSERT con descuento y sin `codigo_id` falla por CHECK; con `codigo_id` pasa.
+### Fase 2: Migración BD — RPC consumir_stock_cupon + validar_cupon
+**Objetivo**: las 2 RPCs. Consumo atómico; validación pública sin filtrar stock interno.
+**Validación**: 2 llamadas concurrentes a `consumir_stock_cupon` con stock 1 → solo 1 pasa; `validar_cupon` devuelve cada motivo en pruebas manuales.
 
-### Fase 2: Migración BD — RPC consumo atómico
-**Objetivo**: `consumir_stock_cupon(codigo_id, unidades)` SECURITY DEFINER, no expuesta a anon ni authenticated.
-**Validación**: dos llamadas concurrentes desde service_role no superan `stock_total`; `stock_total=0` (ilimitado) jamás falla; `unidades<=0` lanza error.
+### Fase 3: Tipos + data + acciones admin (`cupones/`)
+**Objetivo**: nuevo módulo `features/sala/cupones` con tipos, actions CRUD, helper validación.
+**Validación**: `npm run typecheck` OK; creación de cupón desde script de prueba devuelve código de 6 chars único.
 
-### Fase 3: Migración BD — RPC pública de validación
-**Objetivo**: `validar_codigo_publico(slug, codigo, fecha, turno, personas)` con todas las reglas (vigencia, turnos, días, personas, agotado, activo). Expuesta a anon.
-**Validación**: probar cada motivo en una empresa de pruebas; nunca devuelve `stock_total`/`stock_consumido`.
+### Fase 4: UI submódulo /sala/cupones
+**Objetivo**: `CuponesView` + `CuponDrawer` + ruta `/sala/cupones` + entrada en sidebar. BARRA HORIZONTAL 1, sentence case, sin duplicar título.
+**Validación**: visual; crear, editar, pausar/reactivar, borrar funcionan.
 
-### Fase 4: Migración BD — extender v_campanas_atribucion
-**Objetivo**: añadir métricas de cupón a la vista (reservas con cupón, por tipo, por origen).
-**Validación**: SELECT en la vista devuelve nuevas columnas; ROI por origen sigue cuadrando con los datos preexistentes.
+### Fase 5: Input cupón en reservas (admin)
+**Objetivo**: `CuponInputReserva` integrado en ReservaDrawer admin. Validación inline + consumo en `createReservaAction`/`updateReservaAction`. Chip "Cupón XXXXXX" en `ReservaFlagsChips`.
+**Validación**: Playwright: crear reserva con cupón válido (chip aparece, stock baja); con cupón inexistente (error inline, no se guarda); con cupón agotado (error).
 
-### Fase 5: Helper compartido y action pública de validación
-**Objetivo**: `src/features/sala/lib/validar-cupon.ts` + `src/features/reservar-publica/actions/comprobar-codigo-publico.ts` (paralelo a `comprobar-cliente-publico.ts`).
-**Validación**: typecheck pasa; tests manuales devuelven motivos correctos para cada caso límite.
+### Fase 6: Input cupón en /reservar/[slug] (público)
+**Objetivo**: misma UI en form público. RPC pública `validar_cupon` por slug → empresa. Email confirmación incluye bloque cupón.
+**Validación**: Playwright: cliente reserva con cupón válido (pantalla éxito + email lo muestran); con cupón caducado, error inline.
 
-### Fase 6: Integración admin — reservas con cupón
-**Objetivo**: extender `reservas-actions.ts` (create/update) con rama de cupón: validar → consumir_stock → fijar `tipo_categoria='cupon'` + snapshot descuento. Añadir campo opcional "Código promocional" al form admin.
-**Validación**: Playwright crea reserva interna con cupón válido; reserva queda con `codigo_id`, `cupon_porcentaje_descuento`, `tipo_categoria='cupon'`. Intentar con cupón agotado devuelve error.
-
-### Fase 7: Integración pública — comprobar-codigo + crear-reserva
-**Objetivo**: feedback ✅/❌ en `ReservaPublicaForm` + reemplazar el bloque "solo aviso" en `crear-reserva-publica.ts` por validar + consumir.
-**Validación**: Playwright completa `/reservar/<slug>` con cupón válido; segundo intento con stock agotado muestra "Cupón agotado"; cupón fuera de vigencia muestra motivo correcto.
-
-### Fase 8: UI — chips y lista de cupones
-**Objetivo**: chip "Cupón −X%" en `ReservaFlagsChips`; mostrar `codigoNombre` en `ReservasView`; badge "Agotado" en `CodigosTab` y refresco en vivo tras cada reserva.
-**Validación**: visual sobre datos sembrados; revisión sentence case; reglas BARRA HORIZONTAL 1.
-
-### Fase 9: Pulido + multi-tenant + analítica
-**Objetivo**: comprobar que ninguna migración referencia empresa concreta; revisar RLS con `empresas_del_usuario()`; verificar advisors Supabase sin warnings; documentar gotcha "stock no se devuelve".
-**Validación**: `mcp__supabase__get_advisors` sin warnings nuevos; `grep -ri "uppercase" src/features/sala/components/reservas/config/Codigos*` vacío; `v_campanas_atribucion` muestra ROI de cupones.
-
-### Fase 10: Validación Final (QA end-to-end Playwright)
-**Objetivo**: sistema funcionando end-to-end.
+### Fase 7: Eliminar legado y QA final
+**Objetivo**: borrar `CodigosTab`, `CodigoForm`, viejas actions, tipos viejos. Verificar `git grep "ReservaCodigo"` vacío salvo en módulo nuevo (renombrar a `Cupon`).
 **Validación**:
-- [ ] `npm run typecheck` pasa.
-- [ ] `npm run build` exitoso.
-- [ ] Checklist Playwright:
-  - [ ] Admin crea cupón `INFLUENCERA` (tipo descuento, 15%, stock 10, válido este mes, todos los turnos, todos los días, 2-6 personas).
-  - [ ] Cliente A reserva por `/reservar/<slug>?o=instagram` para 4 personas con `INFLUENCERA` → reserva queda con `tipo_categoria='cupon'`, `cupon_porcentaje_descuento=15`, `codigo_nombre='INFLUENCERA'`.
-  - [ ] Stock pasa a 1/10 (no 9/10: consume 1 cuando es descuento) → corregir si la decisión final es "consume = 1 siempre que no sea tipo grupo".
-  - [ ] Cliente B intenta con `INFLUENCERA` y 7 personas → "Código no válido para este número de personas".
-  - [ ] Cliente B intenta con cupón fuera de vigencia → "Código caducado".
-  - [ ] Cliente B intenta con cupón solo-comida en turno CENA → "Código no válido para este turno".
-  - [ ] Admin crea cupón `GRUPO20` (tipo grupo, stock 20 personas) → cliente reserva 8 personas y stock pasa a 8/20.
-  - [ ] Admin cancela esa reserva → stock NO se devuelve (sigue 8/20). Documentado.
-  - [ ] ReservasView muestra fila con chip "Cupón −15%" e indica el código aplicado.
-  - [ ] `v_campanas_atribucion` cuenta la reserva del origen `instagram` con cupón.
+- [ ] `npm run typecheck` y `npm run build` OK.
+- [ ] Playwright end-to-end:
+  - [ ] Admin crea cupón `Welcome` (porcentaje 10%, stock 5 reservas, caducidad +30d, todos días, ambos turnos) → código auto generado.
+  - [ ] Cliente público reserva con ese código para 4 personas → reserva guarda `codigo` + `codigo_id`; stock 1/5.
+  - [ ] 2º cliente reserva con mismo código → 2/5.
+  - [ ] Crear cupón `BebidaCava` (producto_gratis, descripción "Botella de cava 75 cl", stock 10 personas) → reserva de 4 personas baja stock a 4/10.
+  - [ ] Cancelar reserva → stock NO se devuelve.
+  - [ ] Admin intenta editar campo `codigo` → bloqueado (read-only).
+  - [ ] Cupón caducado: error "Cupón caducado el dd/mm".
+  - [ ] Habana no ve cupones de Bacanal (RLS).
 - [ ] `mcp__supabase__get_advisors` sin warnings nuevos.
-
----
-
-## Aprendizajes (Self-Annealing)
-
-> Se rellena durante implementación con cada bug y fix encontrados.
 
 ---
 
 ## Gotchas
 
-- [ ] `stock_total = 0` significa ilimitado (convención preexistente del módulo y del CodigoForm). NO cambiar a NULL para no romper datos sembrados.
-- [ ] Stock NUNCA se devuelve: cancelar / no-show / cambio de fecha / borrar reserva NO toca `stock_consumido` (igual regla que tickets en PRP-051). Si en el futuro se decide devolver, hacerlo opt-in por configuración.
-- [ ] Decisión a confirmar en Fase 6: `consumir_stock_cupon` para tipo `grupo` consume `personas`; para `restaurante_contador` y `descuento` consume `1` por reserva. Documentar en código y en formulario.
-- [ ] La RPC pública `validar_codigo_publico` NO debe devolver `stock_total`/`stock_consumido` (anti-fraude). Solo devolver `ok` + motivo + datos públicos del cupón.
-- [ ] `consumir_stock_cupon` solo se invoca desde server action con admin client. NUNCA expuesta a anon ni authenticated.
-- [ ] Defensa en profundidad: validar también dentro de `consumir_stock_cupon` (vía CHECK del UPDATE), porque el cliente puede haber pasado validación y aun así llegar agotado por concurrencia.
-- [ ] El campo `tipo_categoria='cupon'` ya existe con significado "pago anticipado"; al aplicar un código se fija el mismo valor pero pueden coexistir descuento (% en `cupon_porcentaje_descuento`) y pago anticipado (`importe_pagado`). Diferenciar en chips y en ReservasView.
-- [ ] Diferencia clara entre PRP-051 (ticket: producto vendible con pago real) y PRP-052 (cupón: código promocional con descuento o registro de promoción). No mezclar tablas ni columnas.
-- [ ] Multi-tenant: las migraciones no deben referenciar UUIDs de empresas concretas. La regla `empresas_del_usuario()` aplica a presentes y futuras (memoria `feedback_cambios_multi_tenant.md`).
-- [ ] BARRA HORIZONTAL 1 obligatoria en CodigosTab: `+ Nuevo` izquierda, buscar + 3 iconos derecha. Filtros/toggles en fila aparte (memoria `feedback_barra_horizontal_1.md`).
-- [ ] Sentence case en todos los strings de UI: "Cupones", "Agotado", "Cupón aplicado", no "CUPONES" (memoria `feedback_capitalizacion_textos_ui.md`). El nombre del cupón en sí (RUBIACRIOLLA) sí va en mayúsculas porque es un código.
-- [ ] Validación inline tolerante: no marcar el código como inválido mientras el usuario teclea un prefijo aún válido; el feedback ✅/❌ se calcula con debounce y solo cuando el campo deja de cambiar (memoria `feedback_validaciones_inline.md`).
+- [ ] **Producción está vacía** → DROP de `reserva_codigos` seguro. Si en algún momento alguien siembra antes de aplicar la migración, hay que vaciar primero.
+- [ ] El cupón **NO toca `tipo_categoria`**. Si una reserva tiene cupón Y `tipo_categoria='politica'` Y `importe_pagado>0`, son 3 cosas independientes que coexisten.
+- [ ] Stock NUNCA se devuelve al cancelar/no-show/borrar. Decidido por simplicidad y para evitar fraude (mismo principio que tickets PRP-051).
+- [ ] `consumir_stock_cupon` solo desde service_role. NUNCA desde anon/authenticated directamente.
+- [ ] `validar_cupon` NO devuelve `stock_total`/`stock_consumido`. Solo `ok` + motivo + datos públicos (anti-fraude).
+- [ ] Código auto-generado siempre por la RPC `generar_codigo_cupon`; nunca aceptarlo del cliente en el INSERT.
+- [ ] Validación tolerante en el input: hasta que el usuario no ha escrito 6 chars (o ha hecho blur), NO mostrar error.
+- [ ] Cuando `unidad_stock='personas'` y la reserva trae 4 personas, consume 4 unidades aunque el cupón "se aplique a 1 reserva". Dejar claro en el form: helper text "El stock se descontará en función del número de personas de la reserva".
+- [ ] Multi-tenant: cupones por empresa. Habana y Bacanal pueden tener códigos idénticos (`K7M2X9` en ambas) sin colisión, porque el UNIQUE es `(empresa_id, codigo)`.
 
 ## Anti-Patrones
 
-- NO crear feature nueva — vive dentro de `features/sala` y `features/reservar-publica`.
-- NO duplicar la lógica de validación entre admin y público — usar el helper `validar-cupon.ts` o la RPC `validar_codigo_publico`.
-- NO leer/escribir `stock_consumido` desde el cliente: SIEMPRE vía `consumir_stock_cupon`.
-- NO devolver stock al cancelar / no-show / borrar reserva — regla explícita.
-- NO exponer `consumir_stock_cupon` a anon/authenticated.
-- NO romper la convención `stock_total = 0 ⇒ ilimitado`.
-- NO mezclar el flujo de tickets (PRP-051) con cupones (este PRP) — tablas, RPCs y rama de código separadas.
-- NO usar `any` en zod ni en server actions.
-- NO tocar ninguna empresa concreta en seeds o migraciones.
+- NO crear lógica de descuento automático en el POS (out of scope v1).
+- NO alimentar `v_campanas_atribucion` desde cupones.
+- NO mezclar con tickets (PRP-051): son tablas, flujos y propósitos distintos.
+- NO permitir editar el `codigo` desde ninguna UI.
+- NO devolver stock al cancelar/no-show.
+- NO mostrar stock interno en la RPC pública.
+- NO fijar `tipo_categoria='cupon'` automáticamente al aplicar cupón.
+- NO leer/escribir `stock_consumido` directamente desde el cliente.
+- NO tocar empresa concreta en migraciones.
 
 ---
 

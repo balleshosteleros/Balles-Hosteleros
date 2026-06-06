@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Loader2,
@@ -73,7 +73,17 @@ interface Props {
    * el guardado va contra el profile del usuario autenticado (caso Mi Panel).
    */
   targetEmpleadoId?: string;
+  /**
+   * Oculta el botón "Guardar" interno. Lo usa la ficha de empleado, donde un
+   * único botón superior orquesta el guardado de todo el perfil vía `ref.save()`.
+   */
+  hideSaveButton?: boolean;
 }
+
+/** Handle imperativo para guardar el formulario desde un contenedor superior. */
+export type DatosPersonalesFormHandle = {
+  save: () => Promise<{ ok: boolean; error?: string }>;
+};
 
 type FormState = {
   nombre: string;
@@ -137,7 +147,11 @@ function fromInitial(d: DatosPersonalesCompletos): FormState {
   };
 }
 
-export function DatosPersonalesForm({ initial, readOnly = false, targetEmpleadoId }: Props) {
+export const DatosPersonalesForm = forwardRef<DatosPersonalesFormHandle, Props>(
+  function DatosPersonalesForm(
+    { initial, readOnly = false, targetEmpleadoId, hideSaveButton = false },
+    ref,
+  ) {
   const [form, setForm] = useState<FormState>(() => fromInitial(initial));
   const [saving, setSaving] = useState(false);
   const [bancoOpen, setBancoOpen] = useState(false);
@@ -189,23 +203,20 @@ export function DatosPersonalesForm({ initial, readOnly = false, targetEmpleadoI
     setForm((f) => ({ ...f, [k]: v }));
   }
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (saving) return;
-
+  // Valida y guarda devolviendo el resultado, SIN mostrar toast. Lo usan tanto
+  // el botón interno como el handle imperativo (`ref.save()`); de este modo el
+  // contenedor superior puede mostrar un único toast para todo el perfil.
+  async function doSave(): Promise<{ ok: boolean; error?: string }> {
     if (form.dni_nie && !form.tipo_documento) {
-      toast.error("Selecciona el tipo de documento (DNI / NIE / Pasaporte)");
-      return;
+      return { ok: false, error: "Selecciona el tipo de documento (DNI / NIE / Pasaporte)" };
     }
     if (docCheck && !docCheck.valido) {
-      toast.error(docCheck.mensaje ?? "Documento inválido");
-      return;
+      return { ok: false, error: docCheck.mensaje ?? "Documento inválido" };
     }
     if (form.iban) {
       const fullCheck = validarIban(form.iban);
       if (!fullCheck.valido) {
-        toast.error(fullCheck.mensaje ?? "IBAN inválido");
-        return;
+        return { ok: false, error: fullCheck.mensaje ?? "IBAN inválido" };
       }
     }
 
@@ -223,19 +234,30 @@ export function DatosPersonalesForm({ initial, readOnly = false, targetEmpleadoI
         ? await guardarPerfilEmpleado(targetEmpleadoId, payload)
         : await guardarDatosPersonales(payload);
       if (!res.ok) {
-        toast.error(res.error ?? "No se pudieron guardar los datos");
-      } else {
-        toast.success(
-          targetEmpleadoId
-            ? "Cambios guardados — visibles para el empleado al instante"
-            : "Datos personales guardados",
-        );
+        return { ok: false, error: res.error ?? "No se pudieron guardar los datos" };
       }
+      return { ok: true };
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Error inesperado";
-      toast.error(msg);
+      return { ok: false, error: err instanceof Error ? err.message : "Error inesperado" };
     } finally {
       setSaving(false);
+    }
+  }
+
+  useImperativeHandle(ref, () => ({ save: doSave }));
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (saving) return;
+    const res = await doSave();
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudieron guardar los datos");
+    } else {
+      toast.success(
+        targetEmpleadoId
+          ? "Cambios guardados — visibles para el empleado al instante"
+          : "Datos personales guardados",
+      );
     }
   }
 
@@ -288,8 +310,6 @@ export function DatosPersonalesForm({ initial, readOnly = false, targetEmpleadoI
               <SelectContent>
                 <SelectItem value="mujer">Mujer</SelectItem>
                 <SelectItem value="hombre">Hombre</SelectItem>
-                <SelectItem value="otro">Otro</SelectItem>
-                <SelectItem value="prefiero_no_decirlo">Prefiero no decirlo</SelectItem>
               </SelectContent>
             </Select>
           </Field>
@@ -629,7 +649,7 @@ export function DatosPersonalesForm({ initial, readOnly = false, targetEmpleadoI
       </Section>
       </fieldset>
 
-      {!readOnly && (
+      {!readOnly && !hideSaveButton && (
         <div className="flex justify-end">
           <Button
             type="submit"
@@ -645,7 +665,7 @@ export function DatosPersonalesForm({ initial, readOnly = false, targetEmpleadoI
             ) : (
               <>
                 <Save className="h-4 w-4" />
-                Guardar datos personales
+                Guardar
               </>
             )}
           </Button>
@@ -653,7 +673,7 @@ export function DatosPersonalesForm({ initial, readOnly = false, targetEmpleadoI
       )}
     </form>
   );
-}
+});
 
 function Section({
   title,

@@ -301,7 +301,7 @@ export async function promoverCandidato(input: PromoverInput): Promise<PromoverR
     puesto: puestoNombre,
     empresaPrincipalId: empresaId,
     empresasAcceso: [empresaId],
-    localPrincipalId: input.localId,
+    localIds: [input.localId],
   });
 
   if (!alta.ok) {

@@ -67,6 +67,8 @@ type ReservaRow = {
   tipo_categoria: string | null;
   garantia_importe: number | null;
   importe_pagado: number | null;
+  codigo: string | null;
+  codigo_id: string | null;
 };
 
 type ConfigRow = {
@@ -113,7 +115,7 @@ export async function enviarReservaEmail(
   const { data: reservaData, error: errR } = await admin
     .from("reservas")
     .select(
-      "empresa_id, cliente_nombre, cliente_email, fecha, hora, personas, mesa, zona, notas, tipo_categoria, garantia_importe, importe_pagado, email_confirmacion_at, email_reconfirmacion_at, email_recordatorio_at, email_cancelacion_at",
+      "empresa_id, cliente_nombre, cliente_email, fecha, hora, personas, mesa, zona, notas, tipo_categoria, garantia_importe, importe_pagado, codigo, codigo_id, email_confirmacion_at, email_reconfirmacion_at, email_recordatorio_at, email_cancelacion_at",
     )
     .eq("id", reservaId)
     .maybeSingle();
@@ -133,6 +135,8 @@ export async function enviarReservaEmail(
     tipo_categoria: (reservaData.tipo_categoria as string | null) ?? null,
     garantia_importe: (reservaData.garantia_importe as number | null) ?? null,
     importe_pagado: (reservaData.importe_pagado as number | null) ?? null,
+    codigo: (reservaData.codigo as string | null) ?? null,
+    codigo_id: (reservaData.codigo_id as string | null) ?? null,
   };
 
   const email = (reserva.cliente_email ?? "").trim();
@@ -238,6 +242,7 @@ export async function enviarReservaEmail(
   // ---- Bloques añadidos (política, cupón) solo en CONFIRMACION ----------------------
   let politicaBloque: { horas: number; importe: number; mensajeExtra: string } | null = null;
   let cuponBloque: { importeEur: number; mensajeExtra: string } | null = null;
+  let cuponCanjeadoBloque: { codigo: string; tituloCliente: string } | null = null;
   if (tipo === "CONFIRMACION") {
     if (
       reserva.tipo_categoria === "politica" &&
@@ -283,6 +288,15 @@ export async function enviarReservaEmail(
         mensajeExtra,
       };
     }
+    if (reserva.codigo_id && reserva.codigo) {
+      const { data: cuponRow } = await admin
+        .from("reserva_codigos")
+        .select("titulo_interno, titulo_cliente")
+        .eq("id", reserva.codigo_id)
+        .maybeSingle();
+      const titulo = (cuponRow?.titulo_cliente as string | null) ?? (cuponRow?.titulo_interno as string | null) ?? "";
+      cuponCanjeadoBloque = { codigo: reserva.codigo, tituloCliente: titulo };
+    }
   }
 
   // ---- Render HTML / texto ---------------------------------------------------------
@@ -299,6 +313,7 @@ export async function enviarReservaEmail(
     mensajeLibre,
     politicaBloque,
     cuponBloque,
+    cuponCanjeadoBloque,
   });
   const text = renderText({
     tipo,
@@ -313,6 +328,7 @@ export async function enviarReservaEmail(
     mensajeLibre,
     politicaBloque,
     cuponBloque,
+    cuponCanjeadoBloque,
   });
 
   const res = await sendEmail({
@@ -357,6 +373,7 @@ interface RenderInput {
   mensajeLibre: string;
   politicaBloque: { horas: number; importe: number; mensajeExtra: string } | null;
   cuponBloque: { importeEur: number; mensajeExtra: string } | null;
+  cuponCanjeadoBloque: { codigo: string; tituloCliente: string } | null;
 }
 
 function renderHtml(input: RenderInput): string {
@@ -396,6 +413,14 @@ function renderHtml(input: RenderInput): string {
         <div style="font-weight:700;margin-bottom:4px;">Pago recibido</div>
         Ya tienes pagados <strong>${formatearImporte(input.cuponBloque.importeEur)} €</strong> por adelantado. Trae este correo el día de la reserva.
         ${input.cuponBloque.mensajeExtra ? `<div style="margin-top:6px;">${nl2br(escapeHtml(input.cuponBloque.mensajeExtra))}</div>` : ""}
+      </div>`
+    : "";
+
+  const bloqueCuponCanjeado = input.cuponCanjeadoBloque
+    ? `<div style="margin-top:14px;padding:14px 16px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;font-size:13px;color:#78350f;line-height:1.6;">
+        <div style="text-transform:uppercase;font-size:11px;letter-spacing:0.6px;color:#92400e;font-weight:700;">Cupón aplicado</div>
+        <div style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:18px;font-weight:700;color:#7c2d12;margin-top:4px;">${escapeHtml(input.cuponCanjeadoBloque.codigo)}</div>
+        <div style="margin-top:2px;">${escapeHtml(input.cuponCanjeadoBloque.tituloCliente)}</div>
       </div>`
     : "";
 
@@ -450,6 +475,7 @@ function renderHtml(input: RenderInput): string {
                 }
                 ${bloquePolitica}
                 ${bloqueCupon}
+                ${bloqueCuponCanjeado}
               </td>
             </tr>
             <tr>
@@ -491,6 +517,12 @@ function renderText(input: Omit<RenderInput, "empresa"> & { empresa: string }): 
   if (input.cuponBloque) {
     lineas.push(``, `Pago recibido: ${formatearImporte(input.cuponBloque.importeEur)} €.`);
     if (input.cuponBloque.mensajeExtra) lineas.push(input.cuponBloque.mensajeExtra);
+  }
+  if (input.cuponCanjeadoBloque) {
+    lineas.push(
+      ``,
+      `Cupón aplicado: ${input.cuponCanjeadoBloque.codigo} - ${input.cuponCanjeadoBloque.tituloCliente}`,
+    );
   }
   lineas.push(``, footerSegunTipo(input.tipo, true));
   return lineas.join("\n");
@@ -701,6 +733,7 @@ export function previewReservaEmail(input: PreviewInput): {
     mensajeLibre,
     politicaBloque,
     cuponBloque: null,
+    cuponCanjeadoBloque: null,
   });
   return { subject: asunto || RESERVA_EMAIL_TIPO_LABELS[input.tipo], html };
 }

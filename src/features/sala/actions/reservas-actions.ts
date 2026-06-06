@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -97,7 +98,7 @@ export async function createReserva(input: {
   // Flags acumulables (PRP-047)
   tarjetaIntroducida?: boolean;
   esTicket?: boolean;
-  tipoCategoria?: "gratis" | "politica" | "cupon" | null;
+  tipoCategoria?: import("@/features/sala/data/reservas").TipoReservaCategoria | null;
   politicaCancelacionId?: string | null;
   garantiaImporte?: number | null;
   importePagado?: number | null;
@@ -115,6 +116,11 @@ export async function createReserva(input: {
   salaIdFiltro?: string | null;
   zonaIdFiltro?: string | null;
   tipoMesaFiltro?: TipoMesa | null;
+  // Ticket (PRP-051): si tipoCategoria==='ticket', estos campos son obligatorios.
+  ticketProductoId?: string | null;
+  // Cupón (PRP-052): código de 6 chars opcional. Si viene, se valida y se
+  // consume stock. NO afecta a tipo_categoria ni a importe_pagado.
+  codigoCupon?: string | null;
 }) {
   try {
     const { supabase, user, empresaId } = await getContext();
@@ -153,7 +159,7 @@ export async function createReserva(input: {
       emailFinal = link.result.cliente.email;
     }
 
-    const estadoFinal = input.estado ?? "PENDIENTE";
+    const estadoFinal = input.estado ?? "CONFIRMADA";
     // Walk-in siempre marca origen = WALKIN (el cliente no vino por canal digital).
     const origenFinal = estadoFinal === "WALK_IN" ? "WALKIN" : (input.origen ?? null);
 
@@ -271,6 +277,116 @@ export async function createReserva(input: {
       }
     }
 
+    // ────────────────────────────────────────────────────────────────
+    // PRP-051: rama Ticket. Validar bloqueo cliente + consumir stock atómico.
+    // El stock NO se devuelve nunca (regla del dueño).
+    // ────────────────────────────────────────────────────────────────
+    let ticketProductoIdFinal: string | null = null;
+    let ticketUnidadesFinal: number | null = null;
+    let ticketImporteFinal: number | null = null;
+    let ticketIvaFinal: number | null = null;
+    let pagoPendienteFinal = false;
+
+    if (input.tipoCategoria === "ticket") {
+      if (!input.ticketProductoId) {
+        return { ok: false, error: "Selecciona un producto-ticket para esta reserva." };
+      }
+      if (clienteId) {
+        const bloqueo = await supabase
+          .from("cliente_ticket_bloqueos")
+          .select("id", { head: true, count: "exact" })
+          .eq("empresa_id", empresaId)
+          .eq("cliente_id", clienteId)
+          .is("desbloqueado_at", null);
+        if (bloqueo.error) {
+          console.error("[reservas] check bloqueo ticket:", bloqueo.error);
+          return { ok: false, error: "No se pudo validar el cliente." };
+        }
+        if ((bloqueo.count ?? 0) > 0) {
+          return { ok: false, error: "Este cliente tiene un bloqueo activo para reservas con ticket." };
+        }
+      }
+
+      const admin = createAdminClient();
+      const producto = await admin
+        .from("reserva_ticket_productos")
+        .select("id, precio, iva, modo_precio, activo, empresa_id")
+        .eq("id", input.ticketProductoId)
+        .eq("empresa_id", empresaId)
+        .maybeSingle();
+      if (producto.error || !producto.data) {
+        return { ok: false, error: "Producto-ticket no encontrado." };
+      }
+      if (!producto.data.activo) {
+        return { ok: false, error: "El producto-ticket está desactivado." };
+      }
+      const unidades = producto.data.modo_precio === "por_persona" ? input.personas : 1;
+      const precio = Number(producto.data.precio);
+      const iva = Number(producto.data.iva);
+
+      const consumo = await admin.rpc("consumir_stock_ticket", {
+        p_producto_id: input.ticketProductoId,
+        p_unidades: unidades,
+      });
+      if (consumo.error) {
+        const msg = consumo.error.message ?? "";
+        if (msg.includes("AGOTADO")) {
+          return { ok: false, error: "Producto agotado." };
+        }
+        console.error("[reservas] consumir_stock_ticket:", consumo.error);
+        return { ok: false, error: "No se pudo reservar el stock." };
+      }
+      ticketProductoIdFinal = input.ticketProductoId;
+      ticketUnidadesFinal = unidades;
+      ticketImporteFinal = Number((precio * unidades).toFixed(2));
+      ticketIvaFinal = iva;
+      pagoPendienteFinal = true;
+    }
+
+    // PRP-052: validar y consumir cupón si viene.
+    // Regla del dueño: cupón NO coexiste con `gratis` ni con `ticket`
+    // (son tipos de reserva distintos). Sí coexiste con `politica`.
+    let cuponIdFinal: string | null = null;
+    let cuponCodigoFinal: string | null = null;
+    const codigoCuponNorm = input.codigoCupon?.toUpperCase().replace(/\s+/g, "") ?? "";
+    if (codigoCuponNorm) {
+      if (input.tipoCategoria === "gratis") {
+        return { ok: false, error: "Una reserva gratis no puede llevar cupón." };
+      }
+      if (input.tipoCategoria === "ticket" || input.ticketProductoId) {
+        return { ok: false, error: "Una reserva con ticket no puede llevar cupón." };
+      }
+      const admin = createAdminClient();
+      const { data: vRows, error: vErr } = await admin.rpc("validar_cupon", {
+        p_empresa_id: empresaId,
+        p_codigo: codigoCuponNorm,
+        p_fecha: input.fecha,
+        p_turno: input.turno ?? "COMIDA",
+      });
+      if (vErr) {
+        console.error("[reservas] validar_cupon:", vErr);
+        return { ok: false, error: "No se pudo validar el cupón." };
+      }
+      const vRow = (vRows ?? [])[0] as { ok: boolean; motivo: string | null; cupon_id: string | null } | undefined;
+      if (!vRow?.ok) {
+        const motivo = vRow?.motivo ?? "NO_EXISTE";
+        return { ok: false, error: `Cupón no válido (${motivo}).` };
+      }
+      const { error: cErr } = await admin.rpc("consumir_stock_cupon", {
+        p_codigo_id: vRow.cupon_id,
+        p_personas: input.personas,
+      });
+      if (cErr) {
+        const msg = cErr.message ?? "";
+        if (msg.includes("AGOTADO")) return { ok: false, error: "Cupón agotado." };
+        if (msg.includes("INACTIVO")) return { ok: false, error: "Cupón inactivo." };
+        console.error("[reservas] consumir_stock_cupon:", cErr);
+        return { ok: false, error: "No se pudo aplicar el cupón." };
+      }
+      cuponIdFinal = vRow.cupon_id;
+      cuponCodigoFinal = codigoCuponNorm;
+    }
+
     const { data, error } = await supabase.from("reservas").insert({
       empresa_id: empresaId,
       cliente_id: clienteId,
@@ -293,9 +409,16 @@ export async function createReserva(input: {
       politica_cancelacion_id: input.tipoCategoria === "politica" ? (input.politicaCancelacionId ?? null) : null,
       garantia_importe: input.tipoCategoria === "politica" ? (input.garantiaImporte ?? null) : null,
       importe_pagado: input.tipoCategoria === "cupon" ? (input.importePagado ?? null) : null,
+      ticket_producto_id: ticketProductoIdFinal,
+      ticket_unidades: ticketUnidadesFinal,
+      ticket_importe: ticketImporteFinal,
+      ticket_iva: ticketIvaFinal,
+      pago_pendiente: pagoPendienteFinal,
       bloqueada: input.bloqueada ?? false,
       grupo_id: input.grupoId ?? null,
       etiqueta_id: input.etiquetaId ?? null,
+      codigo_id: cuponIdFinal,
+      codigo: cuponCodigoFinal,
       duracion_minutos: typeof input.duracionMinutos === "number" && input.duracionMinutos > 0
         ? input.duracionMinutos
         : null,
@@ -343,7 +466,7 @@ export async function updateReserva(
     // Flags acumulables (PRP-047)
     tarjetaIntroducida?: boolean;
     esTicket?: boolean;
-    tipoCategoria?: "gratis" | "politica" | "cupon" | null;
+    tipoCategoria?: import("@/features/sala/data/reservas").TipoReservaCategoria | null;
     politicaCancelacionId?: string | null;
     garantiaImporte?: number | null;
     importePagado?: number | null;
@@ -469,7 +592,7 @@ export async function updateReserva(
       if (!actual?.reconfirmada_at) {
         dbUpdates.reconfirmada_at = new Date().toISOString();
       }
-    } else if (updates.estado === "PENDIENTE" || updates.estado === "CONFIRMADA") {
+    } else if (updates.estado === "CONFIRMADA" || updates.estado === "NO_RECONFIRMADA") {
       // Volver a un estado previo a la reconfirmación borra el flag — corrige
       // errores manuales sin necesidad de UI dedicada.
       dbUpdates.reconfirmada_at = null;
@@ -614,11 +737,51 @@ export async function deleteReserva(id: string) {
  * Nueva reserva. Idempotente: no reenvía si ya hay timestamp en
  * `reservas.email_confirmacion_at`. Resuelve plantilla, logo y color de marca
  * a través del mailer genérico.
+ *
+ * Además, si la reserva se crea con MENOS antelación que el lead time
+ * configurado (`reconfirmacion_dias_antes`, p. ej. 3 días) y la empresa tiene
+ * activado `reconfirmacion_envio_inmediato`, encadena el correo de
+ * RECONFIRMACION justo después (fire-and-forget). Para reservas con antelación
+ * >= lead time, la reconfirmación la dispara el cron a la hora programada.
  */
 export async function notificarReservaCreadaPorEmail(reservaId: string) {
   const res = await enviarReservaEmail(reservaId, "CONFIRMACION");
-  if (res.ok) return { ok: true };
-  return { ok: false, error: res.error };
+  if (!res.ok) return { ok: false, error: res.error };
+
+  // Encadenar reconfirmación inmediata si procede. No bloqueamos la respuesta
+  // ni dejamos que un fallo aquí rompa el flujo de creación.
+  try {
+    const { supabase } = await getContext();
+    const { data: r } = await supabase
+      .from("reservas")
+      .select("empresa_id, fecha, hora")
+      .eq("id", reservaId)
+      .maybeSingle();
+    if (r?.fecha && r?.hora && r?.empresa_id) {
+      const { data: cfg } = await supabase
+        .from("empresa_reservas_config")
+        .select(
+          "reconfirmacion_activa, reconfirmacion_dias_antes, reconfirmacion_envio_inmediato",
+        )
+        .eq("empresa_id", r.empresa_id as string)
+        .maybeSingle();
+      const activa = cfg?.reconfirmacion_activa === true;
+      const diasAntes = (cfg?.reconfirmacion_dias_antes as number | null) ?? 1;
+      const envioInmediato = cfg?.reconfirmacion_envio_inmediato === true;
+      const ts = new Date(`${r.fecha as string}T${(r.hora as string).slice(0, 5)}:00`);
+      const diffMs = ts.getTime() - Date.now();
+      const leadMs = diasAntes * 24 * 3600 * 1000;
+      const porDebajoDelLead = diffMs > 0 && diffMs < leadMs;
+      if (activa && porDebajoDelLead && envioInmediato) {
+        enviarReservaEmail(reservaId, "RECONFIRMACION").catch((e) =>
+          console.error("[reservas] mail RECONFIRMACION lt-lead:", e),
+        );
+      }
+    }
+  } catch (e) {
+    console.error("[reservas] reconfirmacion lt-lead check:", e);
+  }
+  return { ok: true };
 }
 
 /**

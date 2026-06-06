@@ -75,6 +75,15 @@ export function ReservaFlagsChips({
   if (reserva.tipoCategoria === "cupon" && reserva.importePagado != null && reserva.importePagado > 0) {
     chips.push({ key: "cupon", label: `Cupón pagado ${reserva.importePagado}€`, icon: <Ticket className={iconSize} />, cls: "text-emerald-600 border-emerald-500/40 bg-emerald-500/10" });
   }
+  if (reserva.codigo) {
+    chips.push({
+      key: "codigo_cupon",
+      label: `Cupón ${reserva.codigo}`,
+      icon: <Ticket className={iconSize} />,
+      cls: "text-amber-700 dark:text-amber-400 border-amber-500/40 bg-amber-500/10",
+      extra: reserva.codigo,
+    });
+  }
   if (reserva.tipoCategoria === "gratis") {
     chips.push({ key: "gratis", label: "Reserva gratis", icon: <span className="leading-none">🆓</span>, cls: "text-zinc-600 border-zinc-400/40 bg-zinc-200/40" });
   }

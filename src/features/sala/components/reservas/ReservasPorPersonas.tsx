@@ -4,13 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { listReservasRango } from "@/features/sala/actions/reservas-actions";
 import type { EstadoReserva, Reserva } from "@/features/sala/data/reservas";
+import { ESTADOS_NO_OCUPANTES } from "@/features/sala/data/reservas";
 
 interface Props {
   fecha: string;
   reservasDia: Reserva[];
 }
 
-const EXCLUIDOS = new Set<EstadoReserva>(["CANCELADA", "NO_SHOW", "LIBERADA"]);
+const EXCLUIDOS = new Set<EstadoReserva>(ESTADOS_NO_OCUPANTES);
 
 type Scope = "dia" | "mes";
 type DataRow = { personas: number; estado: EstadoReserva };

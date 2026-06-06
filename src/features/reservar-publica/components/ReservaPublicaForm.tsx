@@ -8,6 +8,9 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { CalendarCheck, Users, Mail, Phone, Calendar, Clock, Ticket, Info } from "lucide-react";
 import { crearReservaPublicaAction } from "@/features/reservar-publica/actions/crear-reserva-publica";
 import { comprobarClientePublicoAction } from "@/features/reservar-publica/actions/comprobar-cliente-publico";
+import { validarCuponPublicoAction } from "@/features/reservar-publica/actions/validar-cupon-publico-action";
+import { CuponInputReserva } from "@/features/sala/cupones/components/CuponInputReserva";
+import { TicketSelector, type ProductoTicketPublico } from "@/features/reservar-publica/components/TicketSelector";
 import { toast } from "sonner";
 
 interface AvisoDatosOriginales {
@@ -32,6 +35,10 @@ interface Props {
   colorPrimario: string | null;
   colorTexto: string | null;
   origen: string | null;
+  productosTicket?: ProductoTicketPublico[];
+  ticketOnly?: boolean;
+  /** Si es true, oculta el header con logo (modo iframe / embed). */
+  embedded?: boolean;
 }
 
 function isHexColor(c: string | null | undefined): c is string {
@@ -45,6 +52,9 @@ export function ReservaPublicaForm({
   colorPrimario,
   colorTexto,
   origen,
+  productosTicket = [],
+  ticketOnly = false,
+  embedded = false,
 }: Props) {
   const [nombre, setNombre] = useState("");
   const [apellidos, setApellidos] = useState("");
@@ -55,15 +65,34 @@ export function ReservaPublicaForm({
   const [personas, setPersonas] = useState(2);
   const [codigo, setCodigo] = useState("");
   const [mostrarCodigo, setMostrarCodigo] = useState(false);
+  const [cuponValido, setCuponValido] = useState<boolean | null>(null);
+  const [ticketProductoId, setTicketProductoId] = useState<string | null>(null);
   const [enviando, startTransition] = useTransition();
   const [exito, setExito] = useState(false);
   const [avisoDatos, setAvisoDatos] = useState<AvisoDatosOriginales | null>(null);
   const [match, setMatch] = useState<MatchCliente | null>(null);
+  const [cuponAplicado, setCuponAplicado] = useState<{ codigo: string; tituloCliente: string } | null>(null);
 
   const accent = isHexColor(colorPrimario) ? colorPrimario : "#0a0a0a";
   const onAccent = isHexColor(colorTexto) ? colorTexto : "#ffffff";
 
-  const valido = nombre.trim().length > 0 && telefono.trim().length >= 5 && personas > 0 && fecha && hora;
+  const ticketObligatorio = ticketOnly && productosTicket.length > 0;
+  const ticketValido = !ticketObligatorio || Boolean(ticketProductoId);
+  const turnoPorHora = useMemo<"COMIDA" | "CENA" | null>(() => {
+    if (!hora) return null;
+    const h = Number(hora.slice(0, 2));
+    if (Number.isNaN(h)) return null;
+    if (h < 17) return "COMIDA";
+    return "CENA";
+  }, [hora]);
+  const valido =
+    nombre.trim().length > 0 &&
+    telefono.trim().length >= 5 &&
+    personas > 0 &&
+    fecha &&
+    hora &&
+    ticketValido &&
+    cuponValido !== false;
 
   const styleVars = useMemo(
     () => ({ ["--brand" as string]: accent, ["--brand-fg" as string]: onAccent }) as React.CSSProperties,
@@ -82,6 +111,8 @@ export function ReservaPublicaForm({
       hora,
       personas,
       codigo: codigo.trim() ? codigo.trim().toUpperCase().replace(/\s+/g, "") : null,
+      ticketProductoId: ticketProductoId ?? null,
+      ticketOnly: ticketOnly && productosTicket.length > 0,
     });
     if (!r.ok) {
       toast.error(r.error);
@@ -92,6 +123,7 @@ export function ReservaPublicaForm({
     } else {
       setAvisoDatos(null);
     }
+    setCuponAplicado(r.cuponAplicado);
     setExito(true);
   }
 
@@ -127,6 +159,37 @@ export function ReservaPublicaForm({
     });
   }
 
+  // Enlace dedicado a ticket pero TODOS los productos están agotados/ocultos.
+  // No tiene sentido permitir reserva libre desde aquí.
+  if (ticketOnly && productosTicket.length === 0) {
+    return (
+      <main
+        className="min-h-[100dvh] flex flex-col items-center justify-center px-6 py-12 bg-gradient-to-b from-zinc-50 to-zinc-100"
+        style={styleVars}
+      >
+        <div className="max-w-md w-full bg-white sm:rounded-2xl sm:shadow-xl sm:border sm:border-zinc-100 p-8 sm:p-10 text-center space-y-5">
+          {logoUrl ? (
+            <div className="mx-auto w-24 h-24 flex items-center justify-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={logoUrl} alt={empresaNombre} className="max-w-full max-h-full object-contain" />
+            </div>
+          ) : null}
+          <div className="space-y-1">
+            <h1 className="text-2xl font-bold tracking-tight">Evento agotado</h1>
+            <p className="text-zinc-600">
+              Ya no quedan plazas disponibles para esta promoción. Contacta con
+              el restaurante para más información.
+            </p>
+          </div>
+          <div className="pt-4 border-t border-zinc-100">
+            <p className="text-sm text-zinc-500">Gracias por tu interés en</p>
+            <p className="text-lg font-semibold mt-1">{empresaNombre}</p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   if (exito) {
     return (
       <main
@@ -144,6 +207,13 @@ export function ReservaPublicaForm({
             <h1 className="text-2xl font-bold tracking-tight">¡Reserva recibida!</h1>
             <p className="text-zinc-600">Te confirmamos en breve por teléfono.</p>
           </div>
+          {cuponAplicado && (
+            <div className="text-left rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-xs uppercase tracking-wide text-amber-700 font-medium">Cupón aplicado</p>
+              <p className="mt-1 font-mono text-lg font-bold text-amber-900">{cuponAplicado.codigo}</p>
+              <p className="text-sm text-amber-900">{cuponAplicado.tituloCliente}</p>
+            </div>
+          )}
           {avisoDatos ? (
             <div className="text-left rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
               <div className="flex items-start gap-2">
@@ -188,37 +258,59 @@ export function ReservaPublicaForm({
       style={styleVars}
     >
       <div className="max-w-md mx-auto pb-[max(env(safe-area-inset-bottom),1.5rem)]">
-        {/* HERO con logo */}
-        <header className="text-center pt-[max(env(safe-area-inset-top),1.5rem)] sm:pt-0 pb-4">
-          {logoUrl ? (
-            <div className="mx-auto w-32 h-32 sm:w-44 sm:h-44 flex items-center justify-center">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={logoUrl}
-                alt={empresaNombre}
-                className="max-w-full max-h-full object-contain drop-shadow-sm"
-              />
-            </div>
-          ) : (
-            <>
-              <div
-                className="mx-auto w-24 h-24 sm:w-28 sm:h-28 rounded-2xl flex items-center justify-center text-3xl sm:text-4xl font-black"
-                style={{ background: accent, color: onAccent }}
-              >
-                {empresaNombre.charAt(0).toUpperCase()}
+        {/* HERO con logo — oculto en embed para que el iframe quede limpio. */}
+        {!embedded && (
+          <header className="text-center pt-[max(env(safe-area-inset-top),1.5rem)] sm:pt-0 pb-4">
+            {logoUrl ? (
+              <div className="mx-auto w-32 h-32 sm:w-44 sm:h-44 flex items-center justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={logoUrl}
+                  alt={empresaNombre}
+                  className="max-w-full max-h-full object-contain drop-shadow-sm"
+                />
               </div>
-              <h1 className="mt-4 text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900">
-                {empresaNombre}
-              </h1>
-            </>
-          )}
-        </header>
+            ) : (
+              <>
+                <div
+                  className="mx-auto w-24 h-24 sm:w-28 sm:h-28 rounded-2xl flex items-center justify-center text-3xl sm:text-4xl font-black"
+                  style={{ background: accent, color: onAccent }}
+                >
+                  {empresaNombre.charAt(0).toUpperCase()}
+                </div>
+                <h1 className="mt-4 text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900">
+                  {empresaNombre}
+                </h1>
+              </>
+            )}
+          </header>
+        )}
 
         {/* FORM CARD — full-bleed en móvil, card en sm+ */}
         <form
           onSubmit={onSubmit}
           className="bg-white sm:rounded-2xl sm:shadow-xl sm:border sm:border-zinc-100 px-5 sm:px-7 pt-2 pb-6 sm:pt-7 sm:pb-7 space-y-5"
         >
+          {productosTicket.length > 0 && (
+            <TicketSelector
+              productos={productosTicket}
+              selectedId={ticketProductoId}
+              onChange={(id) => {
+                setTicketProductoId(id);
+                // Cupón y ticket son tipos incompatibles: si el cliente elige
+                // ticket, limpiamos cualquier cupón previo del estado.
+                if (id) {
+                  setCodigo("");
+                  setMostrarCodigo(false);
+                  setCuponValido(null);
+                }
+              }}
+              required={ticketObligatorio}
+              accent={accent}
+              onAccent={onAccent}
+            />
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label htmlFor="nombre" className="text-zinc-700">Nombre *</Label>
@@ -346,38 +438,36 @@ export function ReservaPublicaForm({
             </div>
           </div>
 
-          <div className="pt-1">
-            {mostrarCodigo ? (
-              <div className="space-y-1.5">
-                <Label htmlFor="codigo" className="text-zinc-700 flex items-center gap-1.5">
-                  <Ticket className="h-3.5 w-3.5" />
-                  Código promocional
-                </Label>
-                <Input
-                  id="codigo"
+          {/* Cupón y ticket son tipos de reserva incompatibles: si el cliente
+              ha elegido un producto-ticket, no mostramos la opción de cupón. */}
+          {!ticketProductoId && (
+            <div className="pt-1">
+              {mostrarCodigo ? (
+                <CuponInputReserva
                   value={codigo}
-                  onChange={(e) =>
-                    setCodigo(e.target.value.toUpperCase().replace(/\s+/g, ""))
-                  }
-                  placeholder="EJEMPLO2025"
-                  autoCapitalize="characters"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  maxLength={64}
-                  className="mt-1 h-12 sm:h-10 text-base sm:text-sm font-mono tracking-wide"
+                  onChange={setCodigo}
+                  validar={(c) => validarCuponPublicoAction({
+                    empresaSlug,
+                    codigo: c,
+                    fecha,
+                    turno: turnoPorHora,
+                  })}
+                  contextoSerial={`${fecha}|${turnoPorHora}|${personas}`}
+                  onResult={(r) => setCuponValido(r === null ? null : r.ok)}
+                  label="Código de cupón"
                 />
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setMostrarCodigo(true)}
-                className="text-sm text-zinc-500 hover:text-zinc-700 underline underline-offset-4 inline-flex items-center gap-1.5"
-              >
-                <Ticket className="h-3.5 w-3.5" />
-                ¿Tienes un código promocional?
-              </button>
-            )}
-          </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setMostrarCodigo(true)}
+                  className="text-sm text-zinc-500 hover:text-zinc-700 underline underline-offset-4 inline-flex items-center gap-1.5"
+                >
+                  <Ticket className="h-3.5 w-3.5" />
+                  ¿Tienes un código promocional?
+                </button>
+              )}
+            </div>
+          )}
 
           <Button
             type="submit"

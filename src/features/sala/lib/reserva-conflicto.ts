@@ -1,13 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { DURACION_RESERVA_DEFAULT_MINUTOS } from "@/features/sala/data/reservas";
+import {
+  DURACION_RESERVA_DEFAULT_MINUTOS,
+  ESTADOS_NO_OCUPANTES,
+} from "@/features/sala/data/reservas";
 
-/** Estados de reserva que liberan la mesa (no cuentan como ocupantes). */
-export const ESTADOS_NO_OCUPANTES = [
-  "CANCELADA",
-  "NO_SHOW",
-  "COMPLETADA",
-  "LIBERADA",
-] as const;
+// Reexport para no romper imports históricos (motor-web-validar, asignacion-mesa).
+export { ESTADOS_NO_OCUPANTES };
 
 /**
  * Devuelve la duración por reserva configurada para la empresa en minutos.

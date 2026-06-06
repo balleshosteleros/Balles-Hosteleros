@@ -10,7 +10,7 @@ alter table public.profiles
   add column if not exists fecha_nacimiento date,
   add column if not exists nacionalidad text,
   add column if not exists genero text
-    check (genero in ('mujer','hombre','otro','prefiero_no_decirlo')),
+    check (genero in ('mujer','hombre')),
   add column if not exists estado_civil text
     check (estado_civil in ('soltero','casado','pareja_hecho','divorciado','viudo','otro')),
   add column if not exists numero_ss text,

@@ -78,6 +78,23 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        // Reserva pública en modo embed (PRP-051) — sin chrome del portal.
+        // Las rutas /reservar/[slug]/embed y /reservar/[slug]/[keyword]/embed
+        // permiten incrustar el flujo en webs externas vía <iframe>.
+        source: '/reservar/:slug/embed',
+        headers: [
+          { key: 'X-Frame-Options', value: 'ALLOWALL' },
+          { key: 'Content-Security-Policy', value: 'frame-ancestors *' },
+        ],
+      },
+      {
+        source: '/reservar/:slug/:keyword/embed',
+        headers: [
+          { key: 'X-Frame-Options', value: 'ALLOWALL' },
+          { key: 'Content-Security-Policy', value: 'frame-ancestors *' },
+        ],
+      },
+      {
         // PRP-045: la home pública NO se cachea para que el redirect móvil
         // pueda aplicarse con el User-Agent real en cada request.
         source: '/',

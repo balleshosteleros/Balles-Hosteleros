@@ -1,23 +1,87 @@
 export type EstadoMesa = "LIBRE" | "OCUPADA" | "RESERVADA" | "BLOQUEADA";
 
 /**
- * 17 estados posibles de una reserva.
- * Los 9 primeros son los originales; los 8 últimos son la operativa de servicio
- * (estilo CoverManager). NO_SHOW se escribe con guion bajo (BD); la app traduce
- * el label "No Show".
+ * 9 estados canónicos de una reserva — fuente única para toda la app.
+ * NO_SHOW / NO_RECONFIRMADA / LISTA_ESPERA usan guion bajo (BD); la app traduce
+ * los labels al castellano natural.
  */
 export type EstadoReserva =
-  | "CONFIRMADA" | "PENDIENTE" | "RECONFIRMADA" | "LISTA_ESPERA" | "WALK_IN"
-  | "LLEGADA" | "NO_SHOW" | "COMPLETADA" | "CANCELADA"
-  | "TARJETA_NO_INTRODUCIDA" | "LLEGADA_BARRA" | "SENTADA" | "POSTRE"
-  | "CUENTA_SOLICITADA" | "LIMPIAR" | "LIBERADA" | "A_REVISAR";
+  | "CONFIRMADA"
+  | "RECONFIRMADA"
+  | "NO_RECONFIRMADA"
+  | "LISTA_ESPERA"
+  | "LIBERADA"
+  | "WALK_IN"
+  | "TERMINANDO"
+  | "NO_SHOW"
+  | "CANCELADA";
 
 export const ESTADOS_RESERVA: EstadoReserva[] = [
-  "CONFIRMADA","PENDIENTE","RECONFIRMADA","LISTA_ESPERA","WALK_IN",
-  "LLEGADA","NO_SHOW","COMPLETADA","CANCELADA",
-  "TARJETA_NO_INTRODUCIDA","LLEGADA_BARRA","SENTADA","POSTRE",
-  "CUENTA_SOLICITADA","LIMPIAR","LIBERADA","A_REVISAR",
+  "CONFIRMADA",
+  "RECONFIRMADA",
+  "NO_RECONFIRMADA",
+  "LISTA_ESPERA",
+  "LIBERADA",
+  "WALK_IN",
+  "TERMINANDO",
+  "NO_SHOW",
+  "CANCELADA",
 ];
+
+/**
+ * Estados que liberan la mesa (no cuentan como ocupantes en aforo ni en
+ * detección de solape). Importar SIEMPRE desde aquí para no duplicar el set.
+ */
+export const ESTADOS_NO_OCUPANTES: EstadoReserva[] = [
+  "CANCELADA",
+  "NO_SHOW",
+  "LIBERADA",
+];
+
+/**
+ * Prioridad de ordenación cuando dos reservas comparten hora: compromiso real
+ * primero (confirmada/reconfirmada), luego lista de espera, liberadas, resto.
+ */
+export const ESTADO_ORDEN_PRIORIDAD: Record<EstadoReserva, number> = {
+  CONFIRMADA: 0,
+  RECONFIRMADA: 0,
+  LISTA_ESPERA: 1,
+  LIBERADA: 2,
+  NO_RECONFIRMADA: 3,
+  WALK_IN: 3,
+  TERMINANDO: 3,
+  NO_SHOW: 3,
+  CANCELADA: 3,
+};
+
+/**
+ * Paleta visual de cada estado. Clases Tailwind para chip (badge) y para el
+ * punto sólido. Único origen — `ReservaEstadoBadge` y `ReservasView` importan
+ * desde aquí.
+ */
+export const ESTADO_BADGE_CLASS: Record<EstadoReserva, string> = {
+  CONFIRMADA:      "bg-emerald-600/20 text-emerald-400 border-emerald-600/40",
+  RECONFIRMADA:    "bg-sky-600/20 text-sky-400 border-sky-600/40",
+  NO_RECONFIRMADA: "bg-amber-600/20 text-amber-400 border-amber-600/40",
+  LISTA_ESPERA:    "bg-violet-600/20 text-violet-400 border-violet-600/40",
+  LIBERADA:        "bg-yellow-600/20 text-yellow-300 border-yellow-600/40",
+  WALK_IN:         "bg-orange-600/20 text-orange-300 border-orange-600/40",
+  TERMINANDO:      "bg-cyan-600/20 text-cyan-300 border-cyan-600/40",
+  NO_SHOW:         "bg-red-600/20 text-red-400 border-red-600/40",
+  CANCELADA:       "bg-red-900/20 text-red-500 border-red-800/40",
+};
+
+export const ESTADO_DOT_CLASS: Record<EstadoReserva, string> = {
+  CONFIRMADA:      "bg-emerald-500",
+  RECONFIRMADA:    "bg-sky-500",
+  NO_RECONFIRMADA: "bg-amber-500",
+  LISTA_ESPERA:    "bg-violet-500",
+  LIBERADA:        "bg-yellow-500",
+  WALK_IN:         "bg-orange-400",
+  TERMINANDO:      "bg-cyan-500",
+  NO_SHOW:         "bg-red-500",
+  CANCELADA:       "bg-red-800",
+};
 
 export type ZonaSala = "SALA" | "BARRA" | "TERRAZA_INTERIOR" | "TERRAZA_EXTERIOR" | "PRIVADO";
 
@@ -26,15 +90,17 @@ export type ZonaSala = "SALA" | "BARRA" | "TERRAZA_INTERIOR" | "TERRAZA_EXTERIOR
  * - gratis: sin compromiso económico, ningún campo extra
  * - politica: aplica una política de cancelación con importe retenido si cancela
  * - cupon: el cliente ya ha pagado por adelantado (se guarda el importe pagado)
+ * - ticket: la reserva incluye un producto-ticket vendido (cena evento, brunch, etc.)
  */
-export type TipoReservaCategoria = "gratis" | "politica" | "cupon";
+export type TipoReservaCategoria = "gratis" | "politica" | "cupon" | "ticket";
 
-export const TIPO_RESERVA_CATEGORIAS: TipoReservaCategoria[] = ["gratis", "politica", "cupon"];
+export const TIPO_RESERVA_CATEGORIAS: TipoReservaCategoria[] = ["gratis", "politica", "cupon", "ticket"];
 
 export const TIPO_RESERVA_CATEGORIA_LABELS: Record<TipoReservaCategoria, string> = {
   gratis: "Gratis",
   politica: "Política de cancelación",
   cupon: "Cupón",
+  ticket: "Ticket",
 };
 
 export const ZONAS_SALA: ZonaSala[] = ["SALA", "BARRA", "TERRAZA_INTERIOR", "TERRAZA_EXTERIOR", "PRIVADO"];
@@ -50,23 +116,15 @@ export const ZONAS_LABELS: Record<ZonaSala, string> = {
 };
 
 export const ESTADO_RESERVA_LABELS: Record<EstadoReserva, string> = {
-  CONFIRMADA: "Reserva confirmada",
-  PENDIENTE: "Pendiente de confirmación",
-  RECONFIRMADA: "Reconfirmada",
-  LISTA_ESPERA: "Lista de espera",
-  WALK_IN: "Walk In",
-  LLEGADA: "Llegada",
-  NO_SHOW: "No Show",
-  COMPLETADA: "Completada",
-  CANCELADA: "Reserva cancelada",
-  TARJETA_NO_INTRODUCIDA: "Tarjeta no introducida",
-  LLEGADA_BARRA: "Llegada Barra",
-  SENTADA: "Sentada",
-  POSTRE: "Postre",
-  CUENTA_SOLICITADA: "Cuenta solicitada",
-  LIMPIAR: "Limpiar",
-  LIBERADA: "Reserva liberada",
-  A_REVISAR: "Reserva a revisar",
+  CONFIRMADA:      "Confirmada",
+  RECONFIRMADA:    "Reconfirmada",
+  NO_RECONFIRMADA: "No reconfirmada",
+  LISTA_ESPERA:    "Lista de espera",
+  LIBERADA:        "Liberada",
+  WALK_IN:         "Walk in",
+  TERMINANDO:      "Terminando",
+  NO_SHOW:         "No show",
+  CANCELADA:       "Cancelada",
 };
 
 export const ESTADO_MESA_LABELS: Record<EstadoMesa, string> = {
@@ -116,11 +174,18 @@ export interface Reserva {
   politicaCancelacionId?: string | null;
   garantiaImporte?: number | null;
   importePagado?: number | null;
+  // PRP-051: ticket comprado al reservar.
+  ticketProductoId?: string | null;
+  ticketUnidades?: number | null;
+  ticketImporte?: number | null;
+  ticketIva?: number | null;
+  pagoPendiente?: boolean;
   bloqueada?: boolean;
   grupoId?: string | null;
   etiquetaId?: string | null;
   codigoId?: string | null;
-  codigoNombre?: string | null;
+  /** Código de 6 chars del cupón aplicado (PRP-052). */
+  codigo?: string | null;
   reconfirmadaAt?: string | null;
   externalId?: string | null;
   externalOrigen?: string | null;
@@ -176,43 +241,8 @@ export interface ReservaEtiqueta {
   updatedAt: string;
 }
 
-// --- CÓDIGOS PROMOCIONALES DE RESERVA ---
-export type ReservaCodigoTipoPromocion = "restaurante_contador" | "grupo" | "descuento";
-export type ReservaCodigoTurnos = "comida" | "cena" | "comida_cena";
-
-export const RESERVA_CODIGO_TIPO_LABELS: Record<ReservaCodigoTipoPromocion, string> = {
-  restaurante_contador: "Código sólo para este restaurante (contador personas)",
-  grupo: "Código para el grupo (personas)",
-  descuento: "Código de descuento",
-};
-
-export const RESERVA_CODIGO_TURNOS_LABELS: Record<ReservaCodigoTurnos, string> = {
-  comida: "Sólo comida",
-  cena: "Sólo cena",
-  comida_cena: "Comida y Cena",
-};
-
-export interface ReservaCodigo {
-  id: string;
-  empresaId: string;
-  nombre: string;
-  descripcion: string | null;
-  tipoPromocion: ReservaCodigoTipoPromocion;
-  minPersonas: number;
-  maxPersonas: number; // -1 = sin límite
-  fechaInicio: string; // YYYY-MM-DD
-  fechaFin: string;    // YYYY-MM-DD
-  stockTotal: number;
-  stockConsumido: number;
-  turnos: ReservaCodigoTurnos;
-  restriccionEspecial: boolean;
-  esDescuento: boolean;
-  porcentajeDescuento: number | null;
-  diasSemana: DiaSemanaKey[];
-  activo: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
+// Tipos de cupones (PRP-052) viven en `@/features/sala/cupones/data/cupones`.
+// La tabla `reserva_codigos` fue rediseñada en esa migración.
 
 // --- CONFIGURACIÓN DE RESERVAS POR EMPRESA ---
 // Aforo y máximo por reserva viven en `empresa_reservas_reglas` (PRP-050).
@@ -269,12 +299,18 @@ export type EmpresaReservasConfig = SemanaHorarios & {
   // El toggle vive en el tab de Ticket; el texto se añade al correo cuando aplique.
   productoPersonalizarMensaje: boolean;
   productoMensajePersonalizado: string | null;
-  // Reconfirmación automática por correo. El email se envía a la misma hora
-  // que la reserva, `reconfirmacionDiasAntes` días antes (1–7). Si la reserva
-  // se crea con menos de 24 h de antelación: `reconfirmacionLt24hInmediata`
-  // = true envía el correo justo después del de confirmación; false no envía.
+  // Reconfirmación automática por correo.
+  //   · `reconfirmacionActiva = false` → master OFF, no se envía ningún correo
+  //     de reconfirmación (ni cron ni inmediato).
+  //   · `reconfirmacionActiva = true`  → el correo se envía a la misma hora
+  //     que la reserva, `reconfirmacionDiasAntes` días antes (1–7). Si la
+  //     reserva entra con MENOS antelación que ese lead time:
+  //       · `reconfirmacionEnvioInmediato = true`  → envía inmediatamente tras
+  //         la confirmación.
+  //       · `reconfirmacionEnvioInmediato = false` → no envía reconfirmación.
+  reconfirmacionActiva: boolean;
   reconfirmacionDiasAntes: number;
-  reconfirmacionLt24hInmediata: boolean;
+  reconfirmacionEnvioInmediato: boolean;
   // Recordatorio automático por correo (X horas antes de la reserva).
   recordatorioActivo: boolean;
   recordatorioHorasAntes: number;
@@ -472,10 +508,10 @@ export const SAMPLE_MESAS: Mesa[] = [
 
 export const SAMPLE_RESERVAS: Reserva[] = [
   { id: "r1", cliente: "María", apellidos: "García López", telefono: "612345678", email: "maria@email.com", fecha: hoy, hora: "14:00", turno: "COMIDA", comensales: 4, zona: "SALA", mesaId: "s2", estado: "CONFIRMADA", observaciones: "Cumpleaños" },
-  { id: "r2", cliente: "Carlos", apellidos: "López Ruiz", telefono: "698765432", email: "carlos@email.com", fecha: hoy, hora: "21:00", turno: "CENA", comensales: 2, zona: "TERRAZA_EXTERIOR", mesaId: "te1", estado: "PENDIENTE", observaciones: "" },
+  { id: "r2", cliente: "Carlos", apellidos: "López Ruiz", telefono: "698765432", email: "carlos@email.com", fecha: hoy, hora: "21:00", turno: "CENA", comensales: 2, zona: "TERRAZA_EXTERIOR", mesaId: "te1", estado: "NO_RECONFIRMADA", observaciones: "" },
   { id: "r3", cliente: "Ana", apellidos: "Martínez Sanz", telefono: "655443322", email: "ana@email.com", fecha: "2026-04-08", hora: "14:30", turno: "COMIDA", comensales: 6, zona: "SALA", mesaId: "s12", estado: "CONFIRMADA", observaciones: "Alergia frutos secos" },
   { id: "r4", cliente: "Pedro", apellidos: "Ruiz Fernández", telefono: "633221100", email: "pedro@email.com", fecha: hoy, hora: "21:30", turno: "CENA", comensales: 8, zona: "PRIVADO", mesaId: "p1", estado: "CONFIRMADA", observaciones: "Cena de empresa" },
-  { id: "r5", cliente: "Laura", apellidos: "Fernández Gil", telefono: "677889900", email: "", fecha: hoy, hora: "14:00", turno: "COMIDA", comensales: 2, zona: "", mesaId: "", estado: "PENDIENTE", observaciones: "" },
+  { id: "r5", cliente: "Laura", apellidos: "Fernández Gil", telefono: "677889900", email: "", fecha: hoy, hora: "14:00", turno: "COMIDA", comensales: 2, zona: "", mesaId: "", estado: "NO_RECONFIRMADA", observaciones: "" },
   { id: "r6", cliente: "Lorena", apellidos: "Melchor", telefono: "611223344", email: "", fecha: hoy, hora: "23:30", turno: "CENA", comensales: 7, zona: "TERRAZA_INTERIOR", mesaId: "ti1", estado: "CONFIRMADA", observaciones: "" },
   { id: "r7", cliente: "Lorena", apellidos: "Melchor", telefono: "611223344", email: "", fecha: hoy, hora: "23:30", turno: "CENA", comensales: 7, zona: "TERRAZA_INTERIOR", mesaId: "ti2", estado: "CONFIRMADA", observaciones: "" },
   { id: "r8", cliente: "Alejandra", apellidos: "Camargo", telefono: "622334455", email: "", fecha: hoy, hora: "20:15", turno: "CENA", comensales: 2, zona: "SALA", mesaId: "v1", estado: "WALK_IN", observaciones: "" },

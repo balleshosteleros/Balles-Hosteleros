@@ -6,6 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { vigenciaToCampos } from "@/features/sala/reglas/data/reglas";
 import type {
+  BloqueoExcepcion,
   BloqueoInput,
   ReservaBloqueo,
 } from "@/features/sala/bloqueos/data/bloqueos";
@@ -112,6 +113,107 @@ export async function deleteBloqueo(id: string) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[bloqueos] delete:", msg);
     return { ok: false as const, error: msg };
+  }
+}
+
+// --- Excepciones puntuales ---
+
+function rowToExcepcion(r: Record<string, unknown>): BloqueoExcepcion {
+  return {
+    id: r.id as string,
+    empresaId: r.empresa_id as string,
+    localId: r.local_id as string,
+    fecha: r.fecha as string,
+    turno: r.turno as "COMIDA" | "CENA",
+    mesaId: r.mesa_id as string,
+    createdAt: r.created_at as string,
+  };
+}
+
+/**
+ * Crea una excepción "esta mesa NO está bloqueada en (fecha, turno)" —
+ * permite levantar puntualmente el bloqueo desde el plano de /sala/reservas
+ * sin tocar el bloqueo recurrente.
+ */
+export async function crearBloqueoExcepcion(input: {
+  localId: string;
+  fecha: string;
+  turno: "COMIDA" | "CENA";
+  mesaId: string;
+}) {
+  try {
+    const { supabase, empresaId } = await getCtx();
+    if (!empresaId) return { ok: false as const, error: "No autenticado" };
+    if (!input.localId || !input.mesaId || !input.fecha) {
+      return { ok: false as const, error: "Datos incompletos" };
+    }
+    const { data, error } = await supabase
+      .from("empresa_reservas_bloqueos_excepciones")
+      .upsert(
+        {
+          empresa_id: empresaId,
+          local_id: input.localId,
+          fecha: input.fecha,
+          turno: input.turno,
+          mesa_id: input.mesaId,
+        },
+        { onConflict: "empresa_id,fecha,turno,mesa_id" },
+      )
+      .select("*")
+      .single();
+    if (error) throw error;
+    revalidatePath("/sala/reservas");
+    return { ok: true as const, data: rowToExcepcion(data) };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[bloqueos] crearExcepcion:", msg);
+    return { ok: false as const, error: msg };
+  }
+}
+
+/** Borra la excepción de una mesa para (fecha, turno) — vuelve a estar bloqueada. */
+export async function deleteBloqueoExcepcion(input: {
+  localId: string;
+  fecha: string;
+  turno: "COMIDA" | "CENA";
+  mesaId: string;
+}) {
+  try {
+    const { supabase, empresaId } = await getCtx();
+    if (!empresaId) return { ok: false as const, error: "No autenticado" };
+    const { error } = await supabase
+      .from("empresa_reservas_bloqueos_excepciones")
+      .delete()
+      .eq("empresa_id", empresaId)
+      .eq("local_id", input.localId)
+      .eq("fecha", input.fecha)
+      .eq("turno", input.turno)
+      .eq("mesa_id", input.mesaId);
+    if (error) throw error;
+    revalidatePath("/sala/reservas");
+    return { ok: true as const };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[bloqueos] deleteExcepcion:", msg);
+    return { ok: false as const, error: msg };
+  }
+}
+
+/** Lista excepciones del local — usado por la UI cliente para restar al pintar. */
+export async function listBloqueoExcepciones(localId: string) {
+  try {
+    const { supabase, empresaId } = await getCtx();
+    if (!empresaId) return { ok: false as const, data: [] as BloqueoExcepcion[] };
+    const { data, error } = await supabase
+      .from("empresa_reservas_bloqueos_excepciones")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .eq("local_id", localId);
+    if (error) throw error;
+    return { ok: true as const, data: (data ?? []).map(rowToExcepcion) };
+  } catch (err) {
+    console.error("[bloqueos] listExcepciones:", err);
+    return { ok: false as const, data: [] as BloqueoExcepcion[] };
   }
 }
 

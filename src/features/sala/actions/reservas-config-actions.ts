@@ -51,8 +51,9 @@ function rowToConfig(row: Record<string, unknown>): EmpresaReservasConfig {
     cancelacionMensajePersonalizado: (row.cancelacion_mensaje_personalizado as string | null) ?? null,
     productoPersonalizarMensaje:     Boolean(row.producto_personalizar_mensaje ?? false),
     productoMensajePersonalizado:    (row.producto_mensaje_personalizado as string | null) ?? null,
+    reconfirmacionActiva:           Boolean(row.reconfirmacion_activa ?? true),
     reconfirmacionDiasAntes:        (row.reconfirmacion_dias_antes as number) ?? RECONFIRMACION_DIAS_DEFAULT,
-    reconfirmacionLt24hInmediata:   Boolean(row.reconfirmacion_lt_24h_inmediata ?? false),
+    reconfirmacionEnvioInmediato:   Boolean(row.reconfirmacion_envio_inmediato ?? false),
     recordatorioActivo:             Boolean(row.recordatorio_activo ?? false),
     recordatorioHorasAntes:         (row.recordatorio_horas_antes as number) ?? 3,
 
@@ -141,8 +142,9 @@ export async function upsertReservasConfig(updates: Partial<EmpresaReservasConfi
     if ("cancelacionMensajePersonalizado" in updates) db.cancelacion_mensaje_personalizado = updates.cancelacionMensajePersonalizado;
     if ("productoPersonalizarMensaje"     in updates) db.producto_personalizar_mensaje     = updates.productoPersonalizarMensaje;
     if ("productoMensajePersonalizado"    in updates) db.producto_mensaje_personalizado    = updates.productoMensajePersonalizado;
+    if ("reconfirmacionActiva"            in updates) db.reconfirmacion_activa             = updates.reconfirmacionActiva;
     if ("reconfirmacionDiasAntes"         in updates) db.reconfirmacion_dias_antes         = updates.reconfirmacionDiasAntes;
-    if ("reconfirmacionLt24hInmediata"    in updates) db.reconfirmacion_lt_24h_inmediata   = updates.reconfirmacionLt24hInmediata;
+    if ("reconfirmacionEnvioInmediato"    in updates) db.reconfirmacion_envio_inmediato    = updates.reconfirmacionEnvioInmediato;
     if ("recordatorioActivo"              in updates) db.recordatorio_activo               = updates.recordatorioActivo;
     if ("recordatorioHorasAntes"          in updates) db.recordatorio_horas_antes          = updates.recordatorioHorasAntes;
     if ("cerrarMotorWebActivo"  in updates) db.cerrar_motor_web_activo  = updates.cerrarMotorWebActivo;
@@ -171,10 +173,83 @@ export async function upsertReservasConfig(updates: Partial<EmpresaReservasConfi
       .from("empresa_reservas_config")
       .upsert(db, { onConflict: "empresa_id" });
     if (error) throw error;
+
+    // Si cambió la regla de reconfirmación, barrer reservas pendientes y
+    // aplicar la nueva regla en este mismo momento (fire-and-forget).
+    if (
+      "reconfirmacionActiva" in updates ||
+      "reconfirmacionDiasAntes" in updates ||
+      "reconfirmacionEnvioInmediato" in updates
+    ) {
+      barrerReconfirmacionesPendientesPorCambio(empresaId).catch((e) =>
+        console.error("[reservas-config] barrido reconfirmacion:", e),
+      );
+    }
     return { ok: true };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[reservas-config] upsert:", msg);
     return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Tras un cambio en la configuración de reconfirmación, barre las reservas
+ * pendientes (sin `email_reconfirmacion_at`) que han quedado por debajo del
+ * nuevo lead time y, si la empresa tiene activado el envío inmediato, dispara
+ * la reconfirmación en ese momento. Las que siguen por encima del lead las
+ * recogerá el cron horario a su hora programada.
+ *
+ * Solo actúa cuando `reconfirmacion_envio_inmediato = true`: si la empresa lo
+ * tiene desactivado, el comportamiento es el mismo que al crear una reserva
+ * por debajo del lead — no se envía nada y el cron tampoco las pillará.
+ */
+async function barrerReconfirmacionesPendientesPorCambio(empresaId: string) {
+  const { createClient: createAdmin } = await import("@supabase/supabase-js");
+  const { enviarReservaEmail } = await import("@/lib/email/reservas/mailer");
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceKey) return;
+  const admin = createAdmin(supabaseUrl, serviceKey);
+
+  const { data: cfg } = await admin
+    .from("empresa_reservas_config")
+    .select(
+      "reconfirmacion_activa, reconfirmacion_dias_antes, reconfirmacion_envio_inmediato",
+    )
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+  if (!cfg) return;
+  if (cfg.reconfirmacion_activa !== true) return;
+  if (cfg.reconfirmacion_envio_inmediato !== true) return;
+
+  const diasAntes = (cfg.reconfirmacion_dias_antes as number | null) ?? 1;
+  const ahora = new Date();
+  const limite = new Date(ahora.getTime() + diasAntes * 24 * 3600 * 1000);
+  const fechaDesde = ahora.toISOString().slice(0, 10);
+  const fechaHasta = limite.toISOString().slice(0, 10);
+
+  const { data: pendientes } = await admin
+    .from("reservas")
+    .select("id, fecha, hora")
+    .eq("empresa_id", empresaId)
+    .in("estado", ["PENDIENTE", "CONFIRMADA"])
+    .is("email_reconfirmacion_at", null)
+    .not("cliente_email", "is", null)
+    .gte("fecha", fechaDesde)
+    .lte("fecha", fechaHasta)
+    .limit(500);
+  if (!pendientes || pendientes.length === 0) return;
+
+  const leadMs = diasAntes * 24 * 3600 * 1000;
+  for (const r of pendientes) {
+    const ts = new Date(`${r.fecha as string}T${(r.hora as string).slice(0, 5)}:00`);
+    const diffMs = ts.getTime() - ahora.getTime();
+    if (diffMs > 0 && diffMs < leadMs) {
+      await enviarReservaEmail(r.id as string, "RECONFIRMACION").catch(
+        (e: unknown) =>
+          console.error("[reservas-config] barrido send:", e),
+      );
+    }
   }
 }
