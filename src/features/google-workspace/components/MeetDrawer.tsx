@@ -16,7 +16,14 @@ import { GoogleReauthBanner } from "./GoogleReauthBanner";
 import { GoogleAccountButton } from "./GoogleAccountButton";
 import { useGoogleConnection } from "./useGoogleConnection";
 import { MeetCalendarGrid } from "./MeetCalendarGrid";
+import { SelectorTZ } from "./SelectorTZ";
 import { CalendarSidebar, type SidebarCalendar } from "./CalendarSidebar";
+import { loadUserPref, saveUserPref } from "@/shared/io/user-preferences";
+import {
+  TZ_HORA_SECUNDARIA_KEY,
+  horaFechaEnTZ,
+  shortTZLabel,
+} from "../lib/timezones";
 
 interface EventoApi {
   id: string;
@@ -150,7 +157,18 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
   const [sidebarAbierto, setSidebarAbierto] = useState(false);
   const [needsReauth, setNeedsReauth] = useState(false);
+  const [tzSecundaria, setTzSecundaria] = useState<string | null>(null);
   const nowTime = useNow();
+
+  // Huso secundario opcional (preferencia personal por usuario, compartida con
+  // el Calendario vía la misma clave). El botón del reloj la cambia en caliente.
+  useEffect(() => {
+    loadUserPref(TZ_HORA_SECUNDARIA_KEY).then((v) => setTzSecundaria(v));
+  }, []);
+  const cambiarTz = (v: string | null) => {
+    setTzSecundaria(v);
+    saveUserPref(TZ_HORA_SECUNDARIA_KEY, v);
+  };
 
   // Lista de calendarios (para el filtro) al conectar
   useEffect(() => {
@@ -197,23 +215,6 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
       return n;
     });
   }, []);
-
-  const rangoIncluyeHoy = useMemo(() => {
-    const hoy = new Date();
-    const hoyKey = ymd(hoy);
-    const ref = parseYmd(refDate);
-    if (vista === "dia") return refDate === hoyKey;
-    if (vista === "mes") {
-      return (
-        ref.getMonth() === hoy.getMonth() &&
-        ref.getFullYear() === hoy.getFullYear()
-      );
-    }
-    const ini = inicioSemanaLunes(ref);
-    const fin = new Date(ini);
-    fin.setDate(ini.getDate() + 7);
-    return hoy.getTime() >= ini.getTime() && hoy.getTime() < fin.getTime();
-  }, [vista, refDate]);
 
   const load = useCallback(async () => {
     if (!connected) return;
@@ -311,6 +312,7 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
               >
                 <RefreshCw className={`h-5 w-5 text-[#5f6368] ${loading ? "animate-spin" : ""}`} />
               </button>
+              <SelectorTZ tz={tzSecundaria} onChange={cambiarTz} />
               <GoogleAccountButton />
               <SheetClose asChild>
                 <button
@@ -342,7 +344,6 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
               variant="outline"
               size="sm"
               onClick={() => setRefDate(ymd(new Date()))}
-              disabled={rangoIncluyeHoy}
             >
               Hoy
             </Button>
@@ -433,6 +434,7 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
               vista={vista}
               refDate={refDate}
               nowTime={nowTime}
+              tzSecundaria={tzSecundaria}
               onAbrir={(ev) =>
                 ev.meetLink && window.open(ev.meetLink, "_blank")
               }
@@ -518,7 +520,11 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
                         <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <Clock className="h-3 w-3" />
-                            {ev.allDay ? "Todo el día" : `${ev.hora} · ${ev.duracion}`}
+                            {ev.allDay
+                              ? "Todo el día"
+                              : tzSecundaria
+                                ? `${ev.hora} / ${horaFechaEnTZ(new Date(ev.inicio), tzSecundaria)} (${shortTZLabel(tzSecundaria)}) · ${ev.duracion}`
+                                : `${ev.hora} · ${ev.duracion}`}
                           </span>
                           {asistentes > 0 && (
                             <span className="flex items-center gap-1">

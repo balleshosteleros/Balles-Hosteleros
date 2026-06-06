@@ -1,11 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Video } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { loadUserPref } from "@/shared/io/user-preferences";
 import {
-  TZ_HORA_SECUNDARIA_KEY,
   horaEnTZ,
   labelTZLocal,
   shortTZLabel,
@@ -160,6 +158,7 @@ interface Props {
   refDate: string; // YYYY-MM-DD
   nowTime: number;
   onAbrir: (ev: EventoGrid) => void;
+  tzSecundaria?: string | null;
 }
 
 export function MeetCalendarGrid({
@@ -168,19 +167,13 @@ export function MeetCalendarGrid({
   refDate,
   nowTime,
   onAbrir,
+  tzSecundaria = null,
 }: Props) {
   const base = useMemo(() => {
     const d = new Date(`${refDate}T00:00:00`);
     d.setHours(0, 0, 0, 0);
     return d;
   }, [refDate]);
-
-  // Huso secundario opcional (preferencia personal por usuario, compartida con
-  // el Calendario). Si está activa, mostramos una 2.ª columna de horas.
-  const [tzSecundaria, setTzSecundaria] = useState<string | null>(null);
-  useEffect(() => {
-    loadUserPref(TZ_HORA_SECUNDARIA_KEY).then((v) => setTzSecundaria(v));
-  }, []);
 
   const nowIso = isoDate(new Date(nowTime));
   const nowMinutes = useMemo(() => {

@@ -96,6 +96,16 @@ export function horaEnTZ(h: number, tz: string, base: Date): string {
   }).format(d);
 }
 
+// Hora (HH:MM, 24h) de una fecha concreta en un huso dado.
+export function horaFechaEnTZ(d: Date, tz: string): string {
+  return new Intl.DateTimeFormat("es-ES", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: tz,
+    hour12: false,
+  }).format(d);
+}
+
 // Etiqueta corta de cualquier huso (cabecera de columna). Usa nombres
 // amistosos en español; cae a la ciudad IANA si no hay mapeo.
 export function shortTZLabel(tz: string): string {
