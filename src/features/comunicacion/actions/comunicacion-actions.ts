@@ -262,11 +262,9 @@ export async function listEmpleadosEmpresa(): Promise<{
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, data: [], error: "No autenticado" };
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("user_id, nombre, apellidos, rol_label, departamento")
-      .eq("empresa_id", empresaId)
-      .order("nombre", { ascending: true });
+    // Vía RPC SECURITY DEFINER: profiles tiene RLS que solo deja ver el propio
+    // perfil, así que una lectura directa devolvería la lista vacía.
+    const { data, error } = await supabase.rpc("chat_empleados", { p_empresa: empresaId });
     if (error) throw error;
     return {
       ok: true,

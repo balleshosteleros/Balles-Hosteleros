@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   MessageCircle, Search, Plus, Send, Mic, Paperclip, X, ChevronLeft, ChevronDown,
-  Building2, Briefcase, Loader2, Lock, FileText, Download, Check, Users,
+  Building2, Briefcase, Loader2, Lock, FileText, Download, Check, Users, Info,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/shared/lib/utils";
@@ -20,6 +20,7 @@ type Canal = {
   nombre: string;
   tipo: "departamento" | "asunto" | "grupo" | "directo";
   departamentos: string[];
+  miembrosUserIds: string[];
 };
 
 type Mensaje = {
@@ -46,6 +47,7 @@ function mapCanal(r: Record<string, unknown>): Canal {
     nombre: (r.nombre as string) ?? "",
     tipo,
     departamentos: Array.isArray(r.departamentos) ? (r.departamentos as string[]) : [],
+    miembrosUserIds: Array.isArray(r.miembros_user_ids) ? (r.miembros_user_ids as string[]) : [],
   };
 }
 
@@ -98,6 +100,7 @@ export function ComunicacionMobile() {
 
   const [openDeptos, setOpenDeptos] = useState(true);
   const [openAsuntos, setOpenAsuntos] = useState(true);
+  const [verInfo, setVerInfo] = useState(false);
 
   const [dlgNuevo, setDlgNuevo] = useState(false);
   const [nombreNuevo, setNombreNuevo] = useState("");
@@ -345,16 +348,21 @@ export function ComunicacionMobile() {
             <button onClick={() => setCanalActivo(null)} className="flex h-9 w-9 items-center justify-center rounded-full active:bg-muted" aria-label="Volver">
               <ChevronLeft className="h-5 w-5" />
             </button>
-            <CanalAvatar logoUrl={logoUrl} iniciales={empresaActual.iniciales} color={empresaActual.color} />
-            <div className="min-w-0 flex-1">
-              <p className="flex items-center gap-1.5 truncate text-sm font-bold">
-                {canal.nombre}
-                {canal.tipo === "departamento" && <Lock className="h-3 w-3 text-muted-foreground" />}
-              </p>
-              <p className="truncate text-[11px] text-muted-foreground">
-                {canal.tipo === "departamento" ? "Departamento" : "Asunto"}
-              </p>
-            </div>
+            <button onClick={() => setVerInfo(true)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+              <CanalAvatar logoUrl={logoUrl} iniciales={empresaActual.iniciales} color={empresaActual.color} />
+              <div className="min-w-0 flex-1">
+                <p className="flex items-center gap-1.5 truncate text-sm font-bold">
+                  {canal.nombre}
+                  {canal.tipo === "departamento" && <Lock className="h-3 w-3 text-muted-foreground" />}
+                </p>
+                <p className="truncate text-[11px] text-muted-foreground">
+                  {canal.tipo === "departamento" ? "Departamento · ver info" : "Asunto · ver info"}
+                </p>
+              </div>
+            </button>
+            <button onClick={() => setVerInfo(true)} className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground active:bg-muted" aria-label="Información del grupo">
+              <Info className="h-5 w-5" />
+            </button>
           </header>
 
           <div ref={scrollRef} className="flex-1 space-y-2.5 overflow-y-auto px-3 py-4">
@@ -407,6 +415,77 @@ export function ComunicacionMobile() {
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Overlay info del grupo */}
+      {verInfo && canal && (
+        <div className="fixed inset-0 z-[65] flex flex-col justify-end bg-black/40" onClick={() => setVerInfo(false)}>
+          <div className="max-h-[88dvh] overflow-y-auto rounded-t-3xl bg-background p-5 pb-[max(env(safe-area-inset-bottom),20px)]" onClick={(e) => e.stopPropagation()}>
+            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-muted" />
+            <div className="flex flex-col items-center gap-2">
+              <CanalAvatar logoUrl={logoUrl} iniciales={empresaActual.iniciales} color={empresaActual.color} />
+              <p className="flex items-center gap-1.5 text-base font-bold">
+                {canal.nombre}
+                {canal.tipo === "departamento" && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
+              </p>
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                {canal.tipo === "departamento" ? "Departamento" : "Asunto"}
+              </span>
+            </div>
+
+            {canal.tipo === "departamento" ? (
+              <div className="mt-5 rounded-xl border bg-muted/30 p-3 text-xs text-muted-foreground">
+                Pueden ver este grupo todos los empleados que tengan el departamento <strong className="text-foreground">{canal.nombre}</strong> activo en su rol.
+              </div>
+            ) : (
+              <>
+                <p className="mt-5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <Building2 className="h-3.5 w-3.5" /> Departamentos con acceso
+                </p>
+                {canal.departamentos.length === 0 ? (
+                  <p className="mt-1 text-xs text-muted-foreground">Ninguno.</p>
+                ) : (
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {canal.departamentos.map((d) => (
+                      <span key={d} className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">{d}</span>
+                    ))}
+                  </div>
+                )}
+
+                <p className="mt-4 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <Users className="h-3.5 w-3.5" /> Empleados en el grupo
+                </p>
+                {(() => {
+                  const dentro = empleados.filter((e) => canal.miembrosUserIds.includes(e.userId));
+                  if (canal.miembrosUserIds.length === 0) {
+                    return <p className="mt-1 text-xs text-muted-foreground">Solo por departamento (sin usuarios sueltos añadidos).</p>;
+                  }
+                  if (dentro.length === 0) {
+                    return <p className="mt-1 text-xs text-muted-foreground">{canal.miembrosUserIds.length} usuario(s) añadidos.</p>;
+                  }
+                  return (
+                    <div className="mt-1.5 space-y-1.5">
+                      {dentro.map((e) => {
+                        const ini = `${e.nombre[0] ?? ""}${e.apellidos[0] ?? ""}`.toUpperCase();
+                        return (
+                          <div key={e.userId} className="flex items-center gap-3 rounded-xl border px-3 py-2">
+                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-bold">{ini || "—"}</div>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium">{e.nombre} {e.apellidos}</p>
+                              <p className="truncate text-[11px] text-muted-foreground">{[e.rolLabel, e.departamento].filter(Boolean).join(" · ") || "Sin rol"}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </>
+            )}
+
+            <button onClick={() => setVerInfo(false)} className="mt-5 w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground">Cerrar</button>
           </div>
         </div>
       )}
