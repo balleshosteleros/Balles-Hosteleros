@@ -14,6 +14,11 @@ export interface Turno {
   activo: boolean;
   centro?: string;
   departamento?: string;
+  // Versionado (PRP-053): cada turno es una versión de una familia.
+  familiaId: string;
+  version: number;
+  esOficial: boolean;
+  vigenteDesde?: string; // ISO date desde la que rige esta versión
 }
 
 export const TURNO_TONOS: Record<TurnoTono, { pill: string; dot: string; label: string }> = {

@@ -17,6 +17,10 @@ import {
   getEmpleadosDirectosPorTurno,
   setEmpleadosDirectosTurno,
 } from "@/features/rrhh/actions/turnos-actions";
+import {
+  AsistenteVersionTurno,
+  HistorialVersionesTurno,
+} from "@/features/rrhh/components/horarios/AsistenteVersionTurno";
 import { listDescansos } from "@/features/rrhh/actions/descansos-actions";
 import {
   getEmpleadosPorTurno,
@@ -60,11 +64,12 @@ import {
   X,
   MoreVertical,
   Archive,
-  AlertTriangle,
   Loader2,
   Users,
   Check,
   Building2,
+  History,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
@@ -138,6 +143,7 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
   const [empleadosActivos, setEmpleadosActivos] = useState<EmpleadoActivo[]>([]);
   const [departamentos, setDepartamentos] = useState<string[]>([]);
   const [empBusqueda, setEmpBusqueda] = useState("");
+  const [empPanelOpen, setEmpPanelOpen] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   useGlobalLoadingSync(cargando || guardando);
@@ -147,6 +153,8 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
   const [draft, setDraft] = useState<TurnoDraft>(() => turnoToDraft(null));
   const [verEmpleadosTurno, setVerEmpleadosTurno] = useState<Turno | null>(null);
   const [verDescansosTurno, setVerDescansosTurno] = useState<Turno | null>(null);
+  const [versionandoTurno, setVersionandoTurno] = useState<Turno | null>(null);
+  const [historialTurno, setHistorialTurno] = useState<Turno | null>(null);
 
   const refrescar = useCallback(async () => {
     setCargando(true);
@@ -236,6 +244,7 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
   const abrirNuevo = () => {
     setEditandoId(null);
     setEmpBusqueda("");
+    setEmpPanelOpen(false);
     setDraft(turnoToDraft(null));
     setShowModal(true);
   };
@@ -243,6 +252,7 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
   const abrirEditar = (t: Turno) => {
     setEditandoId(t.id);
     setEmpBusqueda("");
+    setEmpPanelOpen(false);
     const idsDirectos = (empleadosDirectosPorTurno[t.id] ?? []).map((e) => e.id);
     setDraft(turnoToDraft(t, idsDirectos));
     setShowModal(true);
@@ -475,16 +485,6 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
             <DialogTitle>{editandoId ? "Editar turno" : "Crear turno"}</DialogTitle>
           </DialogHeader>
 
-          {turnoEditando && (
-            <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
-              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-              <p>
-                Modificar el horario generará solapamientos y afectará al tiempo
-                teórico, las estadísticas y el saldo de los empleados.
-              </p>
-            </div>
-          )}
-
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <Type className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -571,19 +571,21 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm font-medium">Tramos horarios</span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setDraft((d) => ({
-                      ...d,
-                      tramos: [...d.tramos, { inicio: "12:00", fin: "16:00" }],
-                    }))
-                  }
-                  className="ml-auto text-sm text-primary hover:underline inline-flex items-center gap-1"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Añadir
-                </button>
+                {!editandoId && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft((d) => ({
+                        ...d,
+                        tramos: [...d.tramos, { inicio: "12:00", fin: "16:00" }],
+                      }))
+                    }
+                    className="ml-auto text-sm text-primary hover:underline inline-flex items-center gap-1"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Añadir
+                  </button>
+                )}
               </div>
               <div className="space-y-2 pl-6">
                 {draft.tramos.map((tramo, idx) => (
@@ -591,6 +593,7 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
                     <Input
                       type="time"
                       value={tramo.inicio}
+                      disabled={!!editandoId}
                       onChange={(e) =>
                         setDraft((d) => ({
                           ...d,
@@ -605,6 +608,7 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
                     <Input
                       type="time"
                       value={tramo.fin}
+                      disabled={!!editandoId}
                       onChange={(e) =>
                         setDraft((d) => ({
                           ...d,
@@ -615,7 +619,7 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
                       }
                       className="w-28"
                     />
-                    {draft.tramos.length > 1 && (
+                    {!editandoId && draft.tramos.length > 1 && (
                       <button
                         type="button"
                         onClick={() =>
@@ -632,6 +636,40 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
                   </div>
                 ))}
               </div>
+              {editandoId && turnoEditando && (
+                <div className="pl-6 space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    El horario está bloqueado. Para cambiarlo se crea una versión
+                    nueva, conservando el histórico y aplicándola a los empleados
+                    que elijas desde una fecha.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5"
+                      onClick={() => {
+                        setShowModal(false);
+                        setVersionandoTurno(turnoEditando);
+                      }}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Crear nueva versión de turno
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="gap-1.5"
+                      onClick={() => setHistorialTurno(turnoEditando)}
+                    >
+                      <History className="h-3.5 w-3.5" />
+                      Ver versiones
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -655,60 +693,81 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
                 </p>
               ) : (
               <div className="pl-6 space-y-2">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                  <Input
-                    placeholder="Buscar empleado..."
-                    value={empBusqueda}
-                    onChange={(e) => setEmpBusqueda(e.target.value)}
-                    className="pl-9 h-8 text-sm"
+                <button
+                  type="button"
+                  onClick={() => setEmpPanelOpen((o) => !o)}
+                  className="flex w-full items-center justify-between gap-2 rounded-md border bg-background px-3 h-9 text-sm hover:bg-muted/60 transition-colors"
+                >
+                  <span className="truncate text-left">
+                    {draft.empleadoIds.length === 0
+                      ? "Seleccionar empleados…"
+                      : pluralEmpleados(draft.empleadoIds.length)}
+                  </span>
+                  <ChevronDown
+                    className={cn(
+                      "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                      empPanelOpen && "rotate-180",
+                    )}
                   />
-                </div>
-                <div className="max-h-44 overflow-y-auto rounded-md border divide-y">
-                  {empleadosDelDepto.length === 0 && (
-                    <p className="px-3 py-4 text-center text-xs text-muted-foreground">
-                      No hay empleados en este departamento.
-                    </p>
-                  )}
-                  {empleadosDelDepto
-                    .filter((e) =>
-                      !empBusqueda
-                        ? true
-                        : e.nombreCompleto
-                            .toLowerCase()
-                            .includes(empBusqueda.toLowerCase()),
-                    )
-                    .map((e) => {
-                      const checked = draft.empleadoIds.includes(e.empleadoId);
-                      return (
-                        <button
-                          key={e.empleadoId}
-                          type="button"
-                          onClick={() =>
-                            setDraft((d) => ({
-                              ...d,
-                              empleadoIds: checked
-                                ? d.empleadoIds.filter((id) => id !== e.empleadoId)
-                                : [...d.empleadoIds, e.empleadoId],
-                            }))
-                          }
-                          className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-muted/60 transition-colors"
-                        >
-                          <span
-                            className={cn(
-                              "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
-                              checked
-                                ? "bg-primary border-primary text-primary-foreground"
-                                : "border-input",
-                            )}
-                          >
-                            {checked && <Check className="h-3 w-3" />}
-                          </span>
-                          <span className="truncate">{e.nombreCompleto}</span>
-                        </button>
-                      );
-                    })}
-                </div>
+                </button>
+                {empPanelOpen && (
+                  <div className="space-y-2 rounded-md border p-2">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar empleado..."
+                        value={empBusqueda}
+                        onChange={(e) => setEmpBusqueda(e.target.value)}
+                        className="pl-9 h-8 text-sm"
+                      />
+                    </div>
+                    <div className="max-h-44 overflow-y-auto rounded-md border divide-y">
+                      {empleadosDelDepto.length === 0 && (
+                        <p className="px-3 py-4 text-center text-xs text-muted-foreground">
+                          No hay empleados en este departamento.
+                        </p>
+                      )}
+                      {empleadosDelDepto
+                        .filter((e) =>
+                          !empBusqueda
+                            ? true
+                            : e.nombreCompleto
+                                .toLowerCase()
+                                .includes(empBusqueda.toLowerCase()),
+                        )
+                        .map((e) => {
+                          const checked = draft.empleadoIds.includes(e.empleadoId);
+                          return (
+                            <button
+                              key={e.empleadoId}
+                              type="button"
+                              onClick={() =>
+                                setDraft((d) => ({
+                                  ...d,
+                                  empleadoIds: checked
+                                    ? d.empleadoIds.filter((id) => id !== e.empleadoId)
+                                    : [...d.empleadoIds, e.empleadoId],
+                                }))
+                              }
+                              className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-muted/60 transition-colors"
+                            >
+                              <span
+                                className={cn(
+                                  "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                                  checked
+                                    ? "bg-primary border-primary text-primary-foreground"
+                                    : "border-input",
+                                )}
+                              >
+                                {checked && <Check className="h-3 w-3" />}
+                              </span>
+                              <span className="truncate">{e.nombreCompleto}</span>
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
               </div>
               )}
             </div>
@@ -749,6 +808,29 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
           verDescansosTurno ? descansosPorTurno.get(verDescansosTurno.id) ?? [] : []
         }
         onClose={() => setVerDescansosTurno(null)}
+      />
+
+      <AsistenteVersionTurno
+        empresaId={empresaId}
+        turno={versionandoTurno}
+        empleados={
+          versionandoTurno
+            ? (empleadosCombinadosPorTurno.get(versionandoTurno.id) ?? []).map(
+                (e) => ({
+                  id: e.id,
+                  nombre: `${e.nombre}${e.apellidos ? " " + e.apellidos : ""}`.trim(),
+                }),
+              )
+            : []
+        }
+        onClose={() => setVersionandoTurno(null)}
+        onDone={refrescar}
+      />
+
+      <HistorialVersionesTurno
+        empresaId={empresaId}
+        turno={historialTurno}
+        onClose={() => setHistorialTurno(null)}
       />
     </div>
   );

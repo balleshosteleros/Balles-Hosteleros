@@ -1,6 +1,6 @@
 # PRP-053: Versionado de turnos en RRHH
 
-> **Estado**: PENDIENTE
+> **Estado**: IMPLEMENTADO (fases 1-4) — pendiente QA visual del usuario
 > **Fecha**: 2026-06-06
 > **Proyecto**: Balles-Hosteleros
 
@@ -145,13 +145,28 @@ src/features/rrhh/
 **Objetivo**: `rrhh_turnos` soporta familias/versiones y `rrhh_turno_empleados` soporta asignación fechada, con RLS y backfill correctos, sin romper datos existentes.
 **Validación**: migración idempotente aplicada; cada turno existente queda como familia propia, versión 1, oficial; índice único parcial de oficial activo; RLS verificada con un usuario multi-empresa.
 
-### Fase 2: Acciones de servidor (versionado + asignación fechada)
+### Fase 2: Acciones de servidor (versionado + asignación fechada) — COMPLETADA ✅
 **Objetivo**: nuevas server actions para crear versión (parte de la oficial, la nueva pasa a oficial, la anterior deja de serlo), listar versiones de una familia, y asignar empleados con `vigente_desde`. `updateTurno` deja de pisar tramos del pasado.
 **Validación**: typecheck verde; prueba manual vía acción: crear versión deja exactamente una oficial, conserva la anterior, y crea asignaciones fechadas para los empleados elegidos.
 
-### Fase 3: Asistente de versión (UI), histórico y limpieza del aviso
+**Hecho (2026-06-06):**
+- Función SQL atómica `rrhh_crear_version_turno` (`20260606180100_*.sql`): flip oficial + insert versión (hereda nombre/código/color/depto/centro, cambia tramos) + asignaciones fechadas, con validación doble de fecha. SECURITY INVOKER (respeta RLS).
+- `data/horarios.ts`: `Turno` extendido con `familiaId`, `version`, `esOficial`, `vigenteDesde`.
+- `turnos-actions.ts`: `rowToTurno` mapea campos nuevos; `listTurnos` filtra `es_oficial=true` (una fila por familia); `createTurno` fija `familia_id=id`, v1, oficial, vigente_desde (arregla el NOT NULL); `updateTurno` IGNORA `tramos` (horario capado); nuevas `crearVersionTurno` (vía RPC) y `getVersionesTurno` (histórico desc).
+- Verificado en BD (transacciones con rollback): v2 creada y oficial, v1 conservada no-oficial, exactamente una oficial; validación de fecha rechaza fecha anterior/solapada. `npm run typecheck` exit 0.
+
+### Fase 3: Asistente de versión (UI), histórico y limpieza del aviso — COMPLETADA ✅
 **Objetivo**: en "Editar turno" los tramos quedan capados (solo lectura) y aparece el botón "Crear nueva versión de turno" que abre `AsistenteVersionTurno` (editar tramos nuevos → paso empleados con "aplicar a todos" → paso fecha con hoy por defecto y validación de la doble restricción). Se añade vista de **histórico de versiones** de la familia (horario + fecha de inicio). Se elimina el bloque amarillo. Sentence case y patrón de guardado del proyecto.
-**Validación**: Playwright/manual — tramos no editables en edición normal; el botón abre el asistente; "a todos" selecciona los empleados del turno; una fecha inválida (anterior al inicio o solapada) se bloquea con aviso; confirmar crea versión oficial y asignaciones fechadas; el histórico lista las versiones; la lista principal muestra el horario de la versión oficial.
+
+**Hecho (2026-06-06):**
+- Nuevo `AsistenteVersionTurno.tsx` con dos componentes: `AsistenteVersionTurno` (editar horario nuevo + fecha con hoy por defecto + empleados con "aplicar a todos"/"quitar todos"; muestra el error de validación de fecha que devuelve el servidor) y `HistorialVersionesTurno` (lista versiones desc con badge "Vigente" en la oficial y "Desde {fecha}").
+- `TurnosSection.tsx`: eliminado el aviso amarillo; al editar, los tramos quedan `disabled` (solo lectura), sin botón añadir/quitar; nota de bloqueo + botones "Crear nueva versión de turno" y "Ver versiones"; render de los dos diálogos nuevos cableados a `empleadosCombinadosPorTurno` y `refrescar`. Icono `AlertTriangle` retirado, `History` añadido.
+
+### Fase 4: Validación Final — COMPLETADA ✅
+- `npm run typecheck` exit 0 (tras Fase 2 y tras Fase 3).
+- `npm run build` exit 0 (build de producción completo).
+- RPC verificada en BD con transacciones revertidas (creación de versión, flip de oficial, validación de fecha).
+- **Pendiente**: QA visual por el usuario en `/rrhh/horarios` (capado, asistente, histórico).
 
 ### Fase 4: Validación Final
 **Objetivo**: sistema funcionando end-to-end multi-empresa.

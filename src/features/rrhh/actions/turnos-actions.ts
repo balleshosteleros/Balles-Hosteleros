@@ -20,6 +20,10 @@ function rowToTurno(r: Record<string, unknown>): Turno {
     activo: !!r.activo,
     centro: (r.centro as string | null) ?? undefined,
     departamento: (r.departamento as string | null) ?? undefined,
+    familiaId: (r.familia_id as string) ?? (r.id as string),
+    version: (r.version as number) ?? 1,
+    esOficial: r.es_oficial === undefined ? true : !!r.es_oficial,
+    vigenteDesde: (r.vigente_desde as string | null) ?? undefined,
   };
 }
 
@@ -41,10 +45,13 @@ export async function listTurnos(empresaIdOrSlug: string): Promise<Result<Turno[
     const { supabase } = await getAppContext();
     const empresaId = await resolveEmpresaUuid(supabase, empresaIdOrSlug);
     if (!empresaId) return { ok: true, data: [] };
+    // La lista de gestión muestra una fila por familia: la versión oficial.
+    // Las versiones anteriores quedan como histórico (getVersionesTurno).
     const { data, error } = await supabase
       .from("rrhh_turnos")
       .select("*")
       .eq("empresa_id", empresaId)
+      .eq("es_oficial", true)
       .order("nombre", { ascending: true });
     if (error) throw error;
     return { ok: true, data: (data ?? []).map(rowToTurno) };
@@ -80,9 +87,14 @@ export async function createTurno(
     if (!empresaId) return { ok: false, error: "Empresa no encontrada" };
 
     const id = makeTurnoId(empresaId);
+    // Un turno nuevo nace como versión 1, oficial, siendo su propia familia.
     const { error } = await supabase.from("rrhh_turnos").insert({
       id,
       empresa_id: empresaId,
+      familia_id: id,
+      version: 1,
+      es_oficial: true,
+      vigente_desde: new Date().toISOString().slice(0, 10),
       nombre: input.nombre.trim(),
       codigo: input.codigo.trim().toUpperCase(),
       tramos: input.tramos,
@@ -100,13 +112,16 @@ export async function createTurno(
   }
 }
 
+// Edita metadatos de la versión oficial EN SITIO (nombre, código, color,
+// departamento, activo). El HORARIO (tramos) está capado aquí: para cambiarlo
+// hay que crear una versión nueva con crearVersionTurno (PRP-053).
 export async function updateTurno(id: string, patch: Partial<TurnoInput>) {
   try {
     const { supabase } = await getAppContext();
     const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (patch.nombre !== undefined) payload.nombre = patch.nombre.trim();
     if (patch.codigo !== undefined) payload.codigo = patch.codigo.trim().toUpperCase();
-    if (patch.tramos !== undefined) payload.tramos = patch.tramos;
+    // patch.tramos se ignora deliberadamente: el horario no se edita en sitio.
     if (patch.color !== undefined) payload.color = patch.color;
     if (patch.departamento !== undefined)
       payload.departamento = patch.departamento?.trim() || null;
@@ -134,6 +149,97 @@ export async function deleteTurno(id: string) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[turnos] deleteTurno:", msg);
     return { ok: false, error: msg };
+  }
+}
+
+// ─── Versionado de turnos (PRP-053) ─────────────────────────────────────
+
+export type CrearVersionInput = {
+  /** id de cualquier versión de la familia (normalmente la oficial mostrada). */
+  turnoId: string;
+  /** nuevo horario de la versión. */
+  tramos: TurnoTramo[];
+  /** empleados a los que aplicar el nuevo horario (vacío = a nadie aún). */
+  empleadoIds: string[];
+  /** fecha desde la que rige el nuevo horario (YYYY-MM-DD). */
+  vigenteDesde: string;
+};
+
+// Crea una versión nueva del turno (cambia solo el horario), la marca oficial
+// y aplica el horario a los empleados elegidos desde la fecha indicada. Todo
+// atómico vía la función rrhh_crear_version_turno. Devuelve el id de la versión.
+export async function crearVersionTurno(
+  empresaIdOrSlug: string,
+  input: CrearVersionInput,
+) {
+  try {
+    const { supabase, userId } = await getAppContext();
+    const empresaId = await resolveEmpresaUuid(supabase, empresaIdOrSlug);
+    if (!empresaId) return { ok: false, error: "Empresa no encontrada" };
+
+    // Resolver la familia a partir del turno indicado.
+    const { data: turnoRow, error: errTurno } = await supabase
+      .from("rrhh_turnos")
+      .select("familia_id")
+      .eq("id", input.turnoId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (errTurno) throw errTurno;
+    if (!turnoRow?.familia_id) return { ok: false, error: "Turno no encontrado" };
+
+    const nuevoId = makeTurnoId(empresaId);
+    const { data, error } = await supabase.rpc("rrhh_crear_version_turno", {
+      p_empresa_id: empresaId,
+      p_familia_id: turnoRow.familia_id as string,
+      p_nuevo_id: nuevoId,
+      p_tramos: input.tramos,
+      p_vigente_desde: input.vigenteDesde,
+      p_empleado_ids: input.empleadoIds.filter(Boolean),
+      p_asignado_por: userId,
+    });
+    if (error) throw error;
+
+    revalidatePath("/rrhh/horarios");
+    return { ok: true, id: (data as string) ?? nuevoId };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[turnos] crearVersionTurno:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+// Histórico de versiones de la familia a la que pertenece un turno, de la
+// más reciente a la más antigua.
+export async function getVersionesTurno(
+  empresaIdOrSlug: string,
+  turnoId: string,
+): Promise<Result<Turno[]>> {
+  try {
+    const { supabase } = await getAppContext();
+    const empresaId = await resolveEmpresaUuid(supabase, empresaIdOrSlug);
+    if (!empresaId) return { ok: true, data: [] };
+
+    const { data: turnoRow, error: errTurno } = await supabase
+      .from("rrhh_turnos")
+      .select("familia_id")
+      .eq("id", turnoId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (errTurno) throw errTurno;
+    if (!turnoRow?.familia_id) return { ok: true, data: [] };
+
+    const { data, error } = await supabase
+      .from("rrhh_turnos")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .eq("familia_id", turnoRow.familia_id as string)
+      .order("version", { ascending: false });
+    if (error) throw error;
+    return { ok: true, data: (data ?? []).map(rowToTurno) };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[turnos] getVersionesTurno:", msg);
+    return { ok: false, data: [], error: msg };
   }
 }
 
