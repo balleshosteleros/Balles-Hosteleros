@@ -96,7 +96,7 @@ export async function enviarInvitacionFirma(input: InvitacionFirmaInput): Promis
       empresaLogoUrl: input.empresaLogoUrl,
     }),
     text,
-    empresaId: input.empresaId,
+    // Correo interno a empleado → no-reply (sin empresaId): no se responde al software.
   });
 }
 
@@ -137,7 +137,7 @@ export async function enviarCodigoOTP(input: CodigoOTPInput): Promise<SendEmailR
       empresaLogoUrl: input.empresaLogoUrl,
     }),
     text,
-    empresaId: input.empresaId,
+    // Correo interno a empleado → no-reply (sin empresaId): no se responde al software.
   });
 }
 
@@ -186,6 +186,6 @@ export async function enviarCopiaFirmada(input: CopiaFirmadaInput): Promise<Send
       empresaLogoUrl: input.empresaLogoUrl,
     }),
     text,
-    empresaId: input.empresaId,
+    // Correo interno a empleado → no-reply (sin empresaId): no se responde al software.
   });
 }

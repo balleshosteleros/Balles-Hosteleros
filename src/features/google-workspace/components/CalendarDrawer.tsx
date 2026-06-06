@@ -38,6 +38,18 @@ import { useGoogleConnection } from "./useGoogleConnection";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { CalendarSidebar } from "./CalendarSidebar";
 import { loadUserPref, saveUserPref } from "@/shared/io/user-preferences";
+import {
+  TZ_HORA_SECUNDARIA_KEY,
+  horaEnTZ,
+  labelTZLocal,
+  shortTZLabel,
+  listaZonas,
+  normTZ,
+  nombreZona,
+  offsetTZ,
+  sinonimosZona,
+  TZ_DESTACADAS,
+} from "../lib/timezones";
 
 type GoogleCalendar = {
   id: string;
@@ -129,6 +141,55 @@ function segmentoEnDia(ev: Evento, dayIso: string): SegmentoDia | null {
   };
 }
 
+// Layout estilo Google Calendar: cuando varios eventos se solapan en el tiempo,
+// el recuadro se divide en columnas lado a lado (col = índice, cols = total).
+type LayoutEvento = { col: number; cols: number };
+
+function calcularLayoutDia(eventos: Evento[], dayIso: string): Map<string, LayoutEvento> {
+  const segs = eventos
+    .map((ev) => {
+      const seg = segmentoEnDia(ev, dayIso);
+      if (!seg) return null;
+      return { id: ev.id, inicio: seg.inicioMin, fin: seg.inicioMin + seg.duracionMin };
+    })
+    .filter((s): s is { id: string; inicio: number; fin: number } => s !== null)
+    .sort((a, b) => a.inicio - b.inicio || a.fin - b.fin);
+
+  const result = new Map<string, LayoutEvento>();
+
+  const volcarCluster = (grupo: { id: string; inicio: number; fin: number }[]) => {
+    const columnas: number[] = []; // fin (min) del último evento en cada columna
+    const colDe = new Map<string, number>();
+    for (const s of grupo) {
+      let asignada = columnas.findIndex((finCol) => finCol <= s.inicio);
+      if (asignada === -1) {
+        asignada = columnas.length;
+        columnas.push(s.fin);
+      } else {
+        columnas[asignada] = s.fin;
+      }
+      colDe.set(s.id, asignada);
+    }
+    const total = columnas.length;
+    for (const s of grupo) result.set(s.id, { col: colDe.get(s.id)!, cols: total });
+  };
+
+  let cluster: { id: string; inicio: number; fin: number }[] = [];
+  let clusterFin = -Infinity;
+  for (const s of segs) {
+    if (cluster.length && s.inicio >= clusterFin) {
+      volcarCluster(cluster);
+      cluster = [];
+      clusterFin = -Infinity;
+    }
+    cluster.push(s);
+    clusterFin = Math.max(clusterFin, s.fin);
+  }
+  if (cluster.length) volcarCluster(cluster);
+
+  return result;
+}
+
 function allDayCubreFecha(ev: Evento, dayIso: string): boolean {
   if (!ev.allDay) return false;
   const startDate = ev.inicio.slice(0, 10);
@@ -171,54 +232,6 @@ function fmtFechaCompleta(d: Date): string {
 function isoDate(d: Date): string {
   return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, "0")}-${d.getDate().toString().padStart(2, "0")}`;
 }
-
-function horaEnTZ(h: number, tz: string, base: Date): string {
-  const d = new Date(base);
-  d.setHours(h, 0, 0, 0);
-  return new Intl.DateTimeFormat("es-ES", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: tz,
-    hour12: false,
-  }).format(d);
-}
-
-function labelTZLocal(): string {
-  try {
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (tz.includes("Madrid") || tz.includes("Europe")) return "España";
-    return tz.split("/").pop() || tz;
-  } catch {
-    return "Local";
-  }
-}
-
-function shortTZLabel(tz: string): string {
-  const map: Record<string, string> = {
-    "Asia/Makassar": "Bali",
-    "Asia/Jakarta": "Yakarta",
-    "America/New_York": "NY",
-    "America/Los_Angeles": "LA",
-    "America/Mexico_City": "MX",
-    "Europe/London": "Londres",
-    "Asia/Tokyo": "Tokio",
-    "Asia/Dubai": "Dubái",
-    "Australia/Sydney": "Sídney",
-  };
-  return map[tz] || tz.split("/").pop() || tz;
-}
-
-const TZ_OPCIONES: { value: string; label: string }[] = [
-  { value: "Asia/Makassar", label: "Bali (UTC+8)" },
-  { value: "Asia/Jakarta", label: "Yakarta (UTC+7)" },
-  { value: "America/New_York", label: "Nueva York (UTC−5/4)" },
-  { value: "America/Los_Angeles", label: "Los Ángeles (UTC−8/7)" },
-  { value: "America/Mexico_City", label: "Ciudad de México" },
-  { value: "Europe/London", label: "Londres" },
-  { value: "Asia/Tokyo", label: "Tokio (UTC+9)" },
-  { value: "Asia/Dubai", label: "Dubái (UTC+4)" },
-  { value: "Australia/Sydney", label: "Sídney" },
-];
 
 type Form = {
   id?: string;
@@ -272,13 +285,13 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
   // Huso secundario guardado por usuario (persiste tras logout y entre
   // dispositivos). Lo cargamos al montar y lo guardamos al cambiarlo.
   useEffect(() => {
-    loadUserPref("google_tz_secundaria").then((v) => {
+    loadUserPref(TZ_HORA_SECUNDARIA_KEY).then((v) => {
       if (v) setTzSecundaria(v);
     });
   }, []);
   const cambiarTz = (v: string | null) => {
     setTzSecundaria(v);
-    saveUserPref("google_tz_secundaria", v);
+    saveUserPref(TZ_HORA_SECUNDARIA_KEY, v);
   };
   const nowIso = useMemo(() => isoDate(new Date(nowTime)), [nowTime]);
   const nowMinutes = useMemo(() => {
@@ -858,7 +871,9 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                         </div>
                       )}
 
-                      {eventosTimed.map((ev) => {
+                      {(() => {
+                        const layout = calcularLayoutDia(eventosTimed, dayIso);
+                        return eventosTimed.map((ev) => {
                         const seg = segmentoEnDia(ev, dayIso);
                         if (!seg) return null;
                         const top = (seg.inicioMin / 60) * HORA_PX;
@@ -869,6 +884,16 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                         const inicioMs = new Date(ev.inicio).getTime();
                         const finalizado = finMs <= nowTime;
                         const enCurso = !finalizado && inicioMs <= nowTime;
+                        const lay = layout.get(ev.id) ?? { col: 0, cols: 1 };
+                        const gap = 2; // px entre columnas solapadas
+                        const left =
+                          lay.cols > 1
+                            ? `calc(${(lay.col / lay.cols) * 100}% + ${lay.col === 0 ? 2 : gap / 2}px)`
+                            : undefined;
+                        const right =
+                          lay.cols > 1
+                            ? `calc(${((lay.cols - lay.col - 1) / lay.cols) * 100}% + ${lay.col === lay.cols - 1 ? 2 : gap / 2}px)`
+                            : undefined;
                         return (
                           <button
                             key={`${ev.id}-${dayIso}`}
@@ -877,7 +902,8 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                               setEventoSel(ev);
                             }}
                             className={cn(
-                              "absolute left-0.5 right-0.5 z-10 overflow-hidden px-1.5 py-0.5 text-left text-[11px] leading-tight transition-shadow hover:z-20 hover:shadow-md",
+                              "absolute z-10 overflow-hidden px-1.5 py-0.5 text-left text-[11px] leading-tight transition-shadow hover:z-20 hover:shadow-md",
+                              lay.cols === 1 && "left-0.5 right-0.5",
                               seg.esInicio && "rounded-t-[4px]",
                               seg.esFin && "rounded-b-[4px]",
                               finalizado && "opacity-70",
@@ -887,6 +913,8 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                             style={{
                               top,
                               height,
+                              left,
+                              right,
                               backgroundColor: bg,
                               color: txt,
                             }}
@@ -897,7 +925,8 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                             </p>
                           </button>
                         );
-                      })}
+                        });
+                      })()}
                     </div>
                   );
                 })}
@@ -984,7 +1013,9 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                     </div>
                   )}
 
-                  {eventosTimed.map((ev) => {
+                  {(() => {
+                    const layout = calcularLayoutDia(eventosTimed, dayIso);
+                    return eventosTimed.map((ev) => {
                     const seg = segmentoEnDia(ev, dayIso);
                     if (!seg) return null;
                     const top = (seg.inicioMin / 60) * HORA_PX;
@@ -995,6 +1026,16 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                     const inicioMs = new Date(ev.inicio).getTime();
                     const finalizado = finMs <= nowTime;
                     const enCurso = !finalizado && inicioMs <= nowTime;
+                    const lay = layout.get(ev.id) ?? { col: 0, cols: 1 };
+                    const gap = 3; // px entre columnas solapadas
+                    const left =
+                      lay.cols > 1
+                        ? `calc(${(lay.col / lay.cols) * 100}% + ${lay.col === 0 ? 4 : gap / 2}px)`
+                        : undefined;
+                    const right =
+                      lay.cols > 1
+                        ? `calc(${((lay.cols - lay.col - 1) / lay.cols) * 100}% + ${lay.col === lay.cols - 1 ? 4 : gap / 2}px)`
+                        : undefined;
                     return (
                       <button
                         key={`${ev.id}-${dayIso}`}
@@ -1003,7 +1044,8 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                           setEventoSel(ev);
                         }}
                         className={cn(
-                          "absolute left-1 right-1 z-10 overflow-hidden px-2 py-1 text-left text-xs leading-tight transition-shadow hover:shadow-md",
+                          "absolute z-10 overflow-hidden px-2 py-1 text-left text-xs leading-tight transition-shadow hover:z-20 hover:shadow-md",
+                          lay.cols === 1 && "left-1 right-1",
                           seg.esInicio && "rounded-t-[4px]",
                           seg.esFin && "rounded-b-[4px]",
                           finalizado && "opacity-70",
@@ -1013,6 +1055,8 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                         style={{
                           top,
                           height,
+                          left,
+                          right,
                           backgroundColor: bg,
                           color: txt,
                         }}
@@ -1024,7 +1068,8 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                         {ev.lugar && <p className="truncate text-[10px] opacity-90">📍 {ev.lugar}</p>}
                       </button>
                     );
-                  })}
+                    });
+                  })()}
                 </div>
               </div>
             </div>
@@ -1342,64 +1387,6 @@ function ColumnaHoras({
 }
 
 // ─── Selector de huso horario secundario (buscable) ──────────
-function ciudadTZ(tz: string): string {
-  const last = tz.split("/").pop() || tz;
-  return last.replace(/_/g, " ");
-}
-
-function offsetTZ(tz: string, base: Date): string {
-  try {
-    const parts = new Intl.DateTimeFormat("es-ES", {
-      timeZone: tz,
-      timeZoneName: "shortOffset",
-    }).formatToParts(base);
-    return parts.find((p) => p.type === "timeZoneName")?.value ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function listaZonas(): string[] {
-  try {
-    const intl = Intl as unknown as {
-      supportedValuesOf?: (k: string) => string[];
-    };
-    const all = intl.supportedValuesOf?.("timeZone");
-    if (Array.isArray(all) && all.length > 0) return all;
-  } catch {}
-  return TZ_OPCIONES.map((o) => o.value);
-}
-
-const normTZ = (s: string) =>
-  s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "");
-
-// Zonas destacadas: nombre amistoso en español + sinónimos de búsqueda, para
-// zonas cuya ciudad IANA no coincide con lo que la gente escribe
-// (p. ej. Bali = Asia/Makassar, España = Europe/Madrid).
-const TZ_DESTACADAS: { value: string; nombre: string; buscar?: string[] }[] = [
-  { value: "Europe/Madrid", nombre: "España (Madrid)", buscar: ["espana", "spain", "madrid", "peninsula"] },
-  { value: "Atlantic/Canary", nombre: "Canarias", buscar: ["canary", "tenerife", "las palmas", "gran canaria"] },
-  { value: "Asia/Makassar", nombre: "Bali", buscar: ["bali", "indonesia"] },
-  { value: "Asia/Jakarta", nombre: "Yakarta", buscar: ["jakarta", "indonesia"] },
-  { value: "America/New_York", nombre: "Nueva York", buscar: ["new york", "ny"] },
-  { value: "America/Los_Angeles", nombre: "Los Ángeles", buscar: ["los angeles", "la"] },
-  { value: "America/Mexico_City", nombre: "Ciudad de México", buscar: ["mexico", "cdmx"] },
-  { value: "Europe/London", nombre: "Londres", buscar: ["london", "reino unido", "uk"] },
-  { value: "Asia/Tokyo", nombre: "Tokio", buscar: ["tokyo", "japon"] },
-  { value: "Asia/Dubai", nombre: "Dubái", buscar: ["dubai", "emiratos"] },
-  { value: "Australia/Sydney", nombre: "Sídney", buscar: ["sydney", "australia"] },
-];
-const TZ_DEST_MAP = new Map(TZ_DESTACADAS.map((d) => [d.value, d]));
-const nombreZona = (z: string): string => TZ_DEST_MAP.get(z)?.nombre || ciudadTZ(z);
-const sinonimosZona = (z: string): string[] => {
-  const d = TZ_DEST_MAP.get(z);
-  const base = [ciudadTZ(z), z];
-  return d ? [d.nombre, ...(d.buscar ?? []), ...base] : base;
-};
-
 function SelectorTZ({
   tz,
   onChange,

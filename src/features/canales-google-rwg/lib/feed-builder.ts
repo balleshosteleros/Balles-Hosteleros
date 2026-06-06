@@ -39,7 +39,6 @@ interface EmpresaRow {
   google_place_id: string;
   slug: string;
   nombre: string;
-  email_contacto: string | null;
   direccion: string | null;
   datos_generales: Record<string, unknown> | null;
 }
@@ -47,7 +46,7 @@ interface EmpresaRow {
 export async function loadFeedSnapshot(admin: SupabaseClient): Promise<FeedSnapshot> {
   const { data: empresasData } = await admin
     .from("empresas")
-    .select("id, google_place_id, slug, nombre, email_contacto, direccion, datos_generales")
+    .select("id, google_place_id, slug, nombre, direccion, datos_generales")
     .not("google_place_id", "is", null);
 
   const empresas: FeedRow[] = ((empresasData ?? []) as EmpresaRow[]).map((e) => ({

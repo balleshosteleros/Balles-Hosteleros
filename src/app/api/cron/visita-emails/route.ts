@@ -60,7 +60,6 @@ export async function GET(request: Request) {
 
   for (const row of pendientes) {
     const r = await sendEmail({
-      empresaId: row.empresa_id as string,
       to: row.to_email as string,
       subject: row.asunto as string,
       html: row.cuerpo_html as string,

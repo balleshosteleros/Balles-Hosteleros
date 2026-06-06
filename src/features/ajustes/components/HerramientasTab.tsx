@@ -20,6 +20,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { TelefonoConfigPanel } from "@/features/ajustes/components/TelefonoConfigPanel";
+import { HoraSecundariaPanel } from "@/features/ajustes/components/HoraSecundariaPanel";
 import { ToolNotifPanel } from "@/features/ajustes/components/ToolNotifPanel";
 import type { ToolNotifKey } from "@/features/ajustes/data/ajustes";
 
@@ -143,6 +144,13 @@ export function HerramientasTab() {
                   <TelefonoConfigPanel />
                   <div className="border-t pt-4">
                     <ToolNotifPanel toolKey="telefono" />
+                  </div>
+                </div>
+              ) : id === "calendario" || id === "reuniones" ? (
+                <div className="space-y-6">
+                  <HoraSecundariaPanel />
+                  <div className="border-t pt-4">
+                    <ToolNotifPanel toolKey={id} hasBadge />
                   </div>
                 </div>
               ) : (

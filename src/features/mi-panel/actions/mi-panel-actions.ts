@@ -1161,7 +1161,7 @@ async function notificarBajaContratoRecibida(args: {
     subject,
     html,
     text,
-    empresaId: args.empresaId,
+    // Correo interno a empleado → no-reply: no se responde al software.
   });
 }
 
@@ -1187,7 +1187,7 @@ async function onBajaContratoCreada(args: {
       .maybeSingle(),
     admin
       .from("empresas")
-      .select("nombre, email_contacto")
+      .select("nombre, datos_generales")
       .eq("id", args.empresaId)
       .maybeSingle(),
   ]);
@@ -1269,9 +1269,15 @@ async function onBajaContratoCreada(args: {
     }
   }
 
-  // 3) Aviso por email al buzón de contacto de la empresa.
+  // 3) Aviso por email al buzón de RRHH de la empresa (Datos generales).
+  const dgEmpresa =
+    (empresaRes.data?.datos_generales as Record<string, unknown> | null) ?? null;
+  const pickCorreoEmpresa = (k: string): string | null => {
+    const v = dgEmpresa?.[k];
+    return typeof v === "string" && v.trim() ? v.trim() : null;
+  };
   const destinoEmpresa =
-    (empresaRes.data?.email_contacto as string | null) ?? null;
+    pickCorreoEmpresa("correoRrhh") ?? pickCorreoEmpresa("correoGeneral");
   if (destinoEmpresa) {
     const appUrl =
       process.env.NEXT_PUBLIC_APP_URL ?? "https://app.balleshosteleros.com";
@@ -1293,11 +1299,11 @@ async function onBajaContratoCreada(args: {
       subject,
       html,
       text,
-      empresaId: args.empresaId,
+      // Aviso interno → no-reply: la empresa lo gestiona desde el panel de RRHH.
     });
   } else {
     console.warn(
-      "[mi-panel] baja_contrato: sin email_contacto configurado para empresa",
+      "[mi-panel] baja_contrato: sin correo de RRHH/general en Datos generales para empresa",
       args.empresaId,
     );
   }

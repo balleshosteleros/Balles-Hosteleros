@@ -1,8 +1,15 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Video } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { loadUserPref } from "@/shared/io/user-preferences";
+import {
+  TZ_HORA_SECUNDARIA_KEY,
+  horaEnTZ,
+  labelTZLocal,
+  shortTZLabel,
+} from "../lib/timezones";
 
 // Rejilla de calendario (día / semana / mes) en modo "foco Meet": las reuniones
 // con Google Meet se pintan resaltadas con el color de su calendario; el resto
@@ -87,6 +94,55 @@ function segmentoEnDia(ev: EventoGrid, dayIso: string): SegmentoDia | null {
   };
 }
 
+// Layout estilo Google Calendar: cuando varios eventos se solapan en el tiempo,
+// el recuadro se divide en columnas lado a lado (col = índice, cols = total).
+type LayoutEvento = { col: number; cols: number };
+
+function calcularLayoutDia(eventos: EventoGrid[], dayIso: string): Map<string, LayoutEvento> {
+  const segs = eventos
+    .map((ev) => {
+      const seg = segmentoEnDia(ev, dayIso);
+      if (!seg) return null;
+      return { id: ev.id, inicio: seg.inicioMin, fin: seg.inicioMin + seg.duracionMin };
+    })
+    .filter((s): s is { id: string; inicio: number; fin: number } => s !== null)
+    .sort((a, b) => a.inicio - b.inicio || a.fin - b.fin);
+
+  const result = new Map<string, LayoutEvento>();
+
+  const volcarCluster = (grupo: { id: string; inicio: number; fin: number }[]) => {
+    const columnas: number[] = [];
+    const colDe = new Map<string, number>();
+    for (const s of grupo) {
+      let asignada = columnas.findIndex((finCol) => finCol <= s.inicio);
+      if (asignada === -1) {
+        asignada = columnas.length;
+        columnas.push(s.fin);
+      } else {
+        columnas[asignada] = s.fin;
+      }
+      colDe.set(s.id, asignada);
+    }
+    const total = columnas.length;
+    for (const s of grupo) result.set(s.id, { col: colDe.get(s.id)!, cols: total });
+  };
+
+  let cluster: { id: string; inicio: number; fin: number }[] = [];
+  let clusterFin = -Infinity;
+  for (const s of segs) {
+    if (cluster.length && s.inicio >= clusterFin) {
+      volcarCluster(cluster);
+      cluster = [];
+      clusterFin = -Infinity;
+    }
+    cluster.push(s);
+    clusterFin = Math.max(clusterFin, s.fin);
+  }
+  if (cluster.length) volcarCluster(cluster);
+
+  return result;
+}
+
 function allDayCubreFecha(ev: EventoGrid, dayIso: string): boolean {
   if (!ev.allDay) return false;
   const startDate = ev.inicio.slice(0, 10);
@@ -103,7 +159,6 @@ interface Props {
   vista: "dia" | "semana" | "mes";
   refDate: string; // YYYY-MM-DD
   nowTime: number;
-  soloMeet: boolean;
   onAbrir: (ev: EventoGrid) => void;
 }
 
@@ -112,7 +167,6 @@ export function MeetCalendarGrid({
   vista,
   refDate,
   nowTime,
-  soloMeet,
   onAbrir,
 }: Props) {
   const base = useMemo(() => {
@@ -121,18 +175,25 @@ export function MeetCalendarGrid({
     return d;
   }, [refDate]);
 
+  // Huso secundario opcional (preferencia personal por usuario, compartida con
+  // el Calendario). Si está activa, mostramos una 2.ª columna de horas.
+  const [tzSecundaria, setTzSecundaria] = useState<string | null>(null);
+  useEffect(() => {
+    loadUserPref(TZ_HORA_SECUNDARIA_KEY).then((v) => setTzSecundaria(v));
+  }, []);
+
   const nowIso = isoDate(new Date(nowTime));
   const nowMinutes = useMemo(() => {
     const d = new Date(nowTime);
     return d.getHours() * 60 + d.getMinutes();
   }, [nowTime]);
 
-  const visibles = useMemo(() => {
-    const base = soloMeet ? eventos.filter(esMeet) : eventos;
-    // No mostramos eventos de "todo el día": saturan la cabecera y nunca
-    // son reuniones de Meet.
-    return base.filter((e) => !e.allDay);
-  }, [eventos, soloMeet]);
+  const visibles = useMemo(
+    // Norma fija: las reuniones con Meet se resaltan y el resto siempre se
+    // atenúa en gris. Nunca mostramos eventos de "todo el día".
+    () => eventos.filter((e) => !e.allDay),
+    [eventos],
+  );
   const timed = visibles;
 
   // Al montar el contenedor scrollable, posiciona en la hora actual.
@@ -169,7 +230,17 @@ export function MeetCalendarGrid({
       {/* Cabecera de días (solo semana) */}
       {!single && (
         <div className="flex shrink-0 border-b bg-card">
-          <div className="w-[52px] shrink-0 border-r" />
+          <div
+            className="shrink-0 border-r flex items-end justify-around pb-1 text-[9px] uppercase text-muted-foreground"
+            style={{ width: tzSecundaria ? 104 : 52 }}
+          >
+            {tzSecundaria ? (
+              <>
+                <span className="font-semibold">{labelTZLocal()}</span>
+                <span className="font-semibold">{shortTZLabel(tzSecundaria)}</span>
+              </>
+            ) : null}
+          </div>
           {dias.map((d, i) => {
             const esHoy = isoDate(d) === nowIso;
             return (
@@ -199,16 +270,23 @@ export function MeetCalendarGrid({
       {/* Rejilla horaria 24 h */}
       <div ref={setScrollContainer} className="flex flex-1 min-h-0 overflow-y-auto">
         <div
-          className="w-[52px] shrink-0 border-r"
-          style={{ height: GRID_PX }}
+          className="shrink-0 border-r"
+          style={{ width: tzSecundaria ? 104 : 52, height: GRID_PX }}
         >
           {HORAS.map((h) => (
             <div
               key={h}
               style={{ height: HORA_PX }}
-              className="flex items-start justify-end border-b px-2 pt-0.5 text-[10px] text-muted-foreground"
+              className="flex items-start justify-end border-b text-[10px] text-muted-foreground"
             >
-              {h.toString().padStart(2, "0")}:00
+              <div className="flex h-full w-[52px] items-start justify-end px-2 pt-0.5">
+                {h.toString().padStart(2, "0")}:00
+              </div>
+              {tzSecundaria && (
+                <div className="flex h-full w-[52px] items-start justify-end border-l px-2 pt-0.5 text-muted-foreground/70">
+                  {horaEnTZ(h, tzSecundaria, base)}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -245,7 +323,9 @@ export function MeetCalendarGrid({
                 </div>
               )}
 
-              {timed.map((ev) => {
+              {(() => {
+                const layout = calcularLayoutDia(timed, dayIso);
+                return timed.map((ev) => {
                 const seg = segmentoEnDia(ev, dayIso);
                 if (!seg) return null;
                 const top = (seg.inicioMin / 60) * HORA_PX;
@@ -260,6 +340,16 @@ export function MeetCalendarGrid({
                 const inicioMs = new Date(ev.inicio).getTime();
                 const finalizado = finMs <= nowTime;
                 const enCurso = !finalizado && inicioMs <= nowTime;
+                const lay = layout.get(ev.id) ?? { col: 0, cols: 1 };
+                const gap = 2; // px entre columnas solapadas
+                const left =
+                  lay.cols > 1
+                    ? `calc(${(lay.col / lay.cols) * 100}% + ${lay.col === 0 ? 2 : gap / 2}px)`
+                    : undefined;
+                const right =
+                  lay.cols > 1
+                    ? `calc(${((lay.cols - lay.col - 1) / lay.cols) * 100}% + ${lay.col === lay.cols - 1 ? 2 : gap / 2}px)`
+                    : undefined;
                 return (
                   <button
                     key={`${ev.id}-${dayIso}`}
@@ -267,7 +357,8 @@ export function MeetCalendarGrid({
                     onClick={() => meet && onAbrir(ev)}
                     disabled={!meet}
                     className={cn(
-                      "absolute left-0.5 right-0.5 overflow-hidden px-1.5 py-0.5 text-left text-[11px] leading-tight",
+                      "absolute overflow-hidden px-1.5 py-0.5 text-left text-[11px] leading-tight",
+                      lay.cols === 1 && "left-0.5 right-0.5",
                       seg.esInicio && "rounded-t-[4px]",
                       seg.esFin && "rounded-b-[4px]",
                       meet
@@ -276,7 +367,7 @@ export function MeetCalendarGrid({
                       finalizado && meet && "opacity-70",
                       enCurso && meet && "ring-2 ring-emerald-400",
                     )}
-                    style={{ top, height, backgroundColor: bg, color: txt }}
+                    style={{ top, height, left, right, backgroundColor: bg, color: txt }}
                   >
                     <p className="flex items-center gap-1 truncate font-semibold">
                       {meet && <Video className="h-3 w-3 shrink-0" />}
@@ -289,7 +380,8 @@ export function MeetCalendarGrid({
                     )}
                   </button>
                 );
-              })}
+                });
+              })()}
             </div>
           );
         })}

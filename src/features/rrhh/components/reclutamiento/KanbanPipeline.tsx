@@ -284,7 +284,7 @@ function reemplazarVariablesEmail(texto: string, candidato: Candidato, vacante: 
     .replace(/\{\{hora_entrevista\}\}/g, "Por confirmar")
     .replace(/\{\{ubicacion\}\}/g, vacante.ubicacion)
     .replace(/\{\{reclutador_nombre\}\}/g, candidato.reclutadorAsignado)
-    .replace(/\{\{email_contacto\}\}/g, "rrhh@balleshosteleros.es")
+    .replace(/\{\{email_contacto\}\}/g, "rrhh@turestaurante.com")
     .replace(/\{\{telefono_empresa\}\}/g, "912 345 678");
 }
 
