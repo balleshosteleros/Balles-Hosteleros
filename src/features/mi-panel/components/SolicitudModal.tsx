@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import { Loader2, ChevronLeft, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { crearSolicitudPersonal } from "@/features/mi-panel/actions/mi-panel-actions";
@@ -70,6 +71,20 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
   const [avisoOpen, setAvisoOpen] = useState(false);
   const [enviando, setEnviando] = useState(false);
 
+  // Guarda contra el "ghost click" táctil de iOS: al cambiar de paso el
+  // contenido se re-renderiza y el click sintético que el navegador dispara
+  // ~300 ms después caía sobre el nuevo elemento (o sobre el overlay, cerrando
+  // el modal). Durante este bloqueo deshabilitamos los punteros y evitamos el
+  // cierre por interacción externa.
+  const [navLock, setNavLock] = useState(false);
+  const navLockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function lockNav() {
+    setNavLock(true);
+    if (navLockTimer.current) clearTimeout(navLockTimer.current);
+    navLockTimer.current = setTimeout(() => setNavLock(false), 400);
+  }
+
   function reset() {
     setPaso("tipo");
     setTipo(null);
@@ -80,6 +95,8 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
     setMotivo("");
     setAvisoOpen(false);
     setEnviando(false);
+    setNavLock(false);
+    if (navLockTimer.current) clearTimeout(navLockTimer.current);
   }
 
   function handleClose(v: boolean) {
@@ -88,12 +105,14 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
   }
 
   function elegirTipo(t: SolicitudTipo) {
+    lockNav();
     setTipo(t);
     setSubtipo(null);
     setPaso("subtipo");
   }
 
   function elegirSubtipo(s: SolicitudSubtipo) {
+    lockNav();
     if (s === "dia_trabajado") {
       setSubtipo(s);
       setAvisoOpen(true);
@@ -104,6 +123,7 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
   }
 
   function aceptarAvisoDia() {
+    lockNav();
     setAvisoOpen(false);
     setPaso("detalle");
   }
@@ -180,7 +200,15 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
   return (
     <>
       <Dialog open={open} onOpenChange={handleClose}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent
+          className={cn("sm:max-w-lg", navLock && "[&_*]:pointer-events-none")}
+          onPointerDownOutside={(e) => {
+            if (navLock) e.preventDefault();
+          }}
+          onInteractOutside={(e) => {
+            if (navLock) e.preventDefault();
+          }}
+        >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {paso !== "tipo" && (
@@ -189,6 +217,7 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
                   size="icon"
                   className="h-7 w-7"
                   onClick={() => {
+                    lockNav();
                     if (paso === "detalle") {
                       setPaso("subtipo");
                     } else if (paso === "subtipo") {
@@ -221,21 +250,21 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
               <button
                 type="button"
                 onClick={() => elegirTipo("ausencia")}
-                className="text-left p-4 rounded-lg border hover:border-primary hover:bg-primary/5 transition-colors"
+                className="text-left p-4 rounded-lg border transition-colors hover:border-primary hover:bg-primary/5 active:border-blue-600 active:bg-blue-50 active:text-blue-700"
               >
                 <div className="font-semibold">Ausencia</div>
                 <div className="text-xs text-muted-foreground mt-0.5">
-                  Solicitar una baja, vacaciones o permiso.
+                  Baja médica, vacaciones, permiso o baja de contrato.
                 </div>
               </button>
               <button
                 type="button"
                 onClick={() => elegirTipo("trabajo")}
-                className="text-left p-4 rounded-lg border hover:border-primary hover:bg-primary/5 transition-colors"
+                className="text-left p-4 rounded-lg border transition-colors hover:border-primary hover:bg-primary/5 active:border-blue-600 active:bg-blue-50 active:text-blue-700"
               >
                 <div className="font-semibold">Trabajo realizado</div>
                 <div className="text-xs text-muted-foreground mt-0.5">
-                  Solicitar registrar horas o un día trabajado.
+                  Registrar horas extras o un día trabajado no fichado.
                 </div>
               </button>
             </div>
@@ -249,7 +278,7 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
                   key={o.value}
                   type="button"
                   onClick={() => elegirSubtipo(o.value)}
-                  className="text-left p-3 rounded-lg border hover:border-primary hover:bg-primary/5 transition-colors"
+                  className="text-left p-3 rounded-lg border transition-colors hover:border-primary hover:bg-primary/5 active:border-blue-600 active:bg-blue-50 active:text-blue-700"
                 >
                   <div className="font-medium">{o.label}</div>
                   <div className="text-xs text-muted-foreground mt-0.5">{o.desc}</div>
@@ -264,7 +293,7 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
                   key={o.value}
                   type="button"
                   onClick={() => elegirSubtipo(o.value)}
-                  className="text-left p-3 rounded-lg border hover:border-primary hover:bg-primary/5 transition-colors"
+                  className="text-left p-3 rounded-lg border transition-colors hover:border-primary hover:bg-primary/5 active:border-blue-600 active:bg-blue-50 active:text-blue-700"
                 >
                   <div className="font-medium">{o.label}</div>
                   <div className="text-xs text-muted-foreground mt-0.5">{o.desc}</div>
@@ -405,7 +434,11 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
               Cancelar
             </Button>
             {paso === "detalle" && (
-              <Button onClick={enviar} disabled={enviando}>
+              <Button
+                onClick={enviar}
+                disabled={enviando}
+                className="active:bg-blue-600"
+              >
                 {enviando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Enviar solicitud
               </Button>

@@ -35,7 +35,7 @@ const ICONO_CATEGORIA = {
 function ListadoMisCuestionarios({
   pendientes, completados, onAbrir,
 }: {
-  pendientes: { c: Cuestionario; intentosRealizados: number }[];
+  pendientes: { c: Cuestionario }[];
   completados: { c: Cuestionario; respuesta: RespuestaEmpleadoCuestionario }[];
   onAbrir: (c: Cuestionario) => void;
 }) {
@@ -60,9 +60,8 @@ function ListadoMisCuestionarios({
             <Badge variant="outline" className="ml-1">{pendientes.length}</Badge>
           </h2>
           <div className="space-y-3">
-            {pendientes.map(({ c, intentosRealizados }) => {
+            {pendientes.map(({ c }) => {
               const Icon = ICONO_CATEGORIA[c.categoria];
-              const intentosRestantes = c.intentosMax - intentosRealizados;
               return (
                 <Card key={c.id} className="hover:shadow-md transition-shadow">
                   <CardContent className="pt-5">
@@ -79,7 +78,7 @@ function ListadoMisCuestionarios({
                             </p>
                           </div>
                           <Button size="sm" onClick={() => onAbrir(c)}>
-                            {intentosRealizados > 0 ? "Reintentar" : "Comenzar"}
+                            Comenzar
                           </Button>
                         </div>
                         {c.descripcion && (
@@ -92,7 +91,6 @@ function ListadoMisCuestionarios({
                           <span className="flex items-center gap-1">
                             <Award className="h-3 w-3" />Nota corte: {c.notaCorte}%
                           </span>
-                          <span>Intentos: {intentosRestantes}/{c.intentosMax}</span>
                           {c.fechaCierre && (
                             <span className="flex items-center gap-1 text-amber-600">
                               <AlertCircle className="h-3 w-3" />Cierra: {c.fechaCierre}
@@ -397,18 +395,18 @@ export function MisCuestionariosView() {
 
   const { pendientes, completados } = useMemo(() => {
     const todos = getCuestionariosPorEmpresa(empresaActual.id).filter((c) => c.estado === "activo");
-    const pend: { c: Cuestionario; intentosRealizados: number }[] = [];
+    const pend: { c: Cuestionario }[] = [];
     const comp: { c: Cuestionario; respuesta: RespuestaEmpleadoCuestionario }[] = [];
     todos.forEach((c) => {
       const misRespuestas = c.respuestas.filter((r) => r.empleadoId === empleadoId);
-      const aprobada = misRespuestas.find((r) => r.aprobado);
-      if (aprobada) {
+      // Un solo envío: en cuanto el empleado lo rellena queda completado y
+      // congelado (solo lectura). No hay reintentos; lo único que se puede
+      // reenviar mientras siga sin rellenar es un recordatorio.
+      if (misRespuestas.length > 0) {
+        const aprobada = misRespuestas.find((r) => r.aprobado) ?? misRespuestas[0];
         comp.push({ c, respuesta: aprobada });
-      } else if (misRespuestas.length >= c.intentosMax) {
-        const ultima = misRespuestas[misRespuestas.length - 1];
-        comp.push({ c, respuesta: ultima });
       } else {
-        pend.push({ c, intentosRealizados: misRespuestas.length });
+        pend.push({ c });
       }
     });
     return { pendientes: pend, completados: comp };

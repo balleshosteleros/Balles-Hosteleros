@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useEffect, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -15,7 +15,6 @@ import {
   Check,
   Menu as MenuIcon,
   Search,
-  Globe,
 } from "lucide-react";
 import {
   Sheet,
@@ -30,14 +29,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { GoogleConnectBanner } from "./GoogleConnectBanner";
@@ -45,6 +36,8 @@ import { GoogleReauthBanner } from "./GoogleReauthBanner";
 import { GoogleAccountButton } from "./GoogleAccountButton";
 import { useGoogleConnection } from "./useGoogleConnection";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import { CalendarSidebar } from "./CalendarSidebar";
+import { loadUserPref, saveUserPref } from "@/shared/io/user-preferences";
 
 type GoogleCalendar = {
   id: string;
@@ -276,19 +269,17 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
   } | null>(null);
   const nowTime = useNow();
 
-  // Persistencia ligera del huso secundario
+  // Huso secundario guardado por usuario (persiste tras logout y entre
+  // dispositivos). Lo cargamos al montar y lo guardamos al cambiarlo.
   useEffect(() => {
-    try {
-      const v = localStorage.getItem("calendar:tz2");
+    loadUserPref("google_tz_secundaria").then((v) => {
       if (v) setTzSecundaria(v);
-    } catch {}
+    });
   }, []);
-  useEffect(() => {
-    try {
-      if (tzSecundaria) localStorage.setItem("calendar:tz2", tzSecundaria);
-      else localStorage.removeItem("calendar:tz2");
-    } catch {}
-  }, [tzSecundaria]);
+  const cambiarTz = (v: string | null) => {
+    setTzSecundaria(v);
+    saveUserPref("google_tz_secundaria", v);
+  };
   const nowIso = useMemo(() => isoDate(new Date(nowTime)), [nowTime]);
   const nowMinutes = useMemo(() => {
     const d = new Date(nowTime);
@@ -631,7 +622,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
               >
                 <Search className="h-5 w-5" />
               </button>
-              <SelectorTZ tz={tzSecundaria} onChange={setTzSecundaria} />
+              <SelectorTZ tz={tzSecundaria} onChange={cambiarTz} />
               <GoogleAccountButton />
               <SheetClose asChild>
                 <button
@@ -714,64 +705,17 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
 
         {/* Cuerpo */}
         <div className="flex flex-1 min-h-0">
-          {/* Sidebar de calendarios */}
+          {/* Sidebar de calendarios (compartido con el panel de Meet) */}
           {sidebarAbierto && (
-          <aside className="w-48 lg:w-56 xl:w-64 shrink-0 overflow-y-auto border-r bg-muted/20 p-2">
-            <MiniCalendario
+            <CalendarSidebar
+              calendarios={calendarios}
+              seleccionados={seleccionados}
+              onToggle={toggleCalendario}
               fechaRef={fechaRef}
-              onSelect={(d) => setFechaRef(d)}
+              onSelectDate={(d) => setFechaRef(d)}
               nowIso={nowIso}
+              connected={connected}
             />
-            <p className="mb-1 mt-3 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Mis calendarios
-            </p>
-            {calendarios.length === 0 && (
-              connected ? (
-                <div className="flex items-center justify-center px-2 py-2">
-                  <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                </div>
-              ) : (
-                <p className="px-2 text-[11px] italic text-muted-foreground">
-                  Conecta Google para ver tus calendarios
-                </p>
-              )
-            )}
-            <ul className="space-y-0.5">
-              {calendarios.map((cal) => {
-                const activo = seleccionados.has(cal.id);
-                return (
-                  <li key={cal.id}>
-                    <button
-                      type="button"
-                      onClick={() => toggleCalendario(cal.id)}
-                      className={cn(
-                        "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted/70",
-                        activo && "bg-muted/40",
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "flex h-4 w-4 shrink-0 items-center justify-center rounded border-2",
-                          activo ? "border-transparent" : "border-muted-foreground/40",
-                        )}
-                        style={activo ? { backgroundColor: cal.color } : undefined}
-                      >
-                        {activo && <Check className="h-3 w-3 text-white" strokeWidth={3} />}
-                      </span>
-                      <span className={cn("truncate", activo ? "font-semibold text-foreground" : "text-muted-foreground")}>
-                        {cal.nombre}
-                      </span>
-                      {cal.primary && (
-                        <Badge variant="outline" className="ml-auto h-4 px-1 text-[8px]">
-                          Mío
-                        </Badge>
-                      )}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </aside>
           )}
 
           {/* VISTA WEEK */}
@@ -1397,7 +1341,65 @@ function ColumnaHoras({
   );
 }
 
-// ─── Selector de huso horario secundario ─────────────────────
+// ─── Selector de huso horario secundario (buscable) ──────────
+function ciudadTZ(tz: string): string {
+  const last = tz.split("/").pop() || tz;
+  return last.replace(/_/g, " ");
+}
+
+function offsetTZ(tz: string, base: Date): string {
+  try {
+    const parts = new Intl.DateTimeFormat("es-ES", {
+      timeZone: tz,
+      timeZoneName: "shortOffset",
+    }).formatToParts(base);
+    return parts.find((p) => p.type === "timeZoneName")?.value ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function listaZonas(): string[] {
+  try {
+    const intl = Intl as unknown as {
+      supportedValuesOf?: (k: string) => string[];
+    };
+    const all = intl.supportedValuesOf?.("timeZone");
+    if (Array.isArray(all) && all.length > 0) return all;
+  } catch {}
+  return TZ_OPCIONES.map((o) => o.value);
+}
+
+const normTZ = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+
+// Zonas destacadas: nombre amistoso en español + sinónimos de búsqueda, para
+// zonas cuya ciudad IANA no coincide con lo que la gente escribe
+// (p. ej. Bali = Asia/Makassar, España = Europe/Madrid).
+const TZ_DESTACADAS: { value: string; nombre: string; buscar?: string[] }[] = [
+  { value: "Europe/Madrid", nombre: "España (Madrid)", buscar: ["espana", "spain", "madrid", "peninsula"] },
+  { value: "Atlantic/Canary", nombre: "Canarias", buscar: ["canary", "tenerife", "las palmas", "gran canaria"] },
+  { value: "Asia/Makassar", nombre: "Bali", buscar: ["bali", "indonesia"] },
+  { value: "Asia/Jakarta", nombre: "Yakarta", buscar: ["jakarta", "indonesia"] },
+  { value: "America/New_York", nombre: "Nueva York", buscar: ["new york", "ny"] },
+  { value: "America/Los_Angeles", nombre: "Los Ángeles", buscar: ["los angeles", "la"] },
+  { value: "America/Mexico_City", nombre: "Ciudad de México", buscar: ["mexico", "cdmx"] },
+  { value: "Europe/London", nombre: "Londres", buscar: ["london", "reino unido", "uk"] },
+  { value: "Asia/Tokyo", nombre: "Tokio", buscar: ["tokyo", "japon"] },
+  { value: "Asia/Dubai", nombre: "Dubái", buscar: ["dubai", "emiratos"] },
+  { value: "Australia/Sydney", nombre: "Sídney", buscar: ["sydney", "australia"] },
+];
+const TZ_DEST_MAP = new Map(TZ_DESTACADAS.map((d) => [d.value, d]));
+const nombreZona = (z: string): string => TZ_DEST_MAP.get(z)?.nombre || ciudadTZ(z);
+const sinonimosZona = (z: string): string[] => {
+  const d = TZ_DEST_MAP.get(z);
+  const base = [ciudadTZ(z), z];
+  return d ? [d.nombre, ...(d.buscar ?? []), ...base] : base;
+};
+
 function SelectorTZ({
   tz,
   onChange,
@@ -1405,127 +1407,114 @@ function SelectorTZ({
   tz: string | null;
   onChange: (tz: string | null) => void;
 }) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            "rounded-full p-3 transition-colors",
-            tz ? "bg-blue-100 text-blue-700" : "text-[#5f6368] hover:bg-black/5",
-          )}
-          title={tz ? `Mostrando ${shortTZLabel(tz)}` : "Huso horario secundario"}
-        >
-          <Globe className="h-5 w-5" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel className="text-xs">Huso secundario</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => onChange(null)}>
-          <span className={cn("flex-1", !tz && "font-semibold text-blue-700")}>
-            Ninguno (sólo local)
-          </span>
-          {!tz && <Check className="h-3.5 w-3.5" />}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        {TZ_OPCIONES.map((opt) => (
-          <DropdownMenuItem key={opt.value} onClick={() => onChange(opt.value)}>
-            <span
-              className={cn(
-                "flex-1 truncate text-xs",
-                tz === opt.value && "font-semibold text-blue-700",
-              )}
-            >
-              {opt.label}
-            </span>
-            {tz === opt.value && <Check className="h-3.5 w-3.5" />}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
 
-// ─── Mini-calendario sidebar ─────────────────────────────────
-function MiniCalendario({
-  fechaRef,
-  onSelect,
-  nowIso,
-}: {
-  fechaRef: Date;
-  onSelect: (d: Date) => void;
-  nowIso: string;
-}) {
-  const [mes, setMes] = useState(() => new Date(fechaRef.getFullYear(), fechaRef.getMonth(), 1));
   useEffect(() => {
-    setMes(new Date(fechaRef.getFullYear(), fechaRef.getMonth(), 1));
-  }, [fechaRef]);
-  const inicio = getInicioSemana(mes);
-  const ultimo = new Date(mes.getFullYear(), mes.getMonth() + 1, 0);
-  const fin = getInicioSemana(ultimo);
-  fin.setDate(fin.getDate() + 7);
-  const dias: Date[] = [];
-  const cur = new Date(inicio);
-  while (cur < fin) {
-    dias.push(new Date(cur));
-    cur.setDate(cur.getDate() + 1);
-  }
-  const refIso = isoDate(fechaRef);
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  // Zonas más usadas (con nombre amistoso) primero; luego el resto.
+  const zonas = useMemo(() => {
+    const full = listaZonas();
+    const fav = TZ_DESTACADAS.map((d) => d.value).filter((v) =>
+      full.includes(v),
+    );
+    const favSet = new Set(fav);
+    return [...fav, ...full.filter((z) => !favSet.has(z))];
+  }, []);
+  const base = useMemo(() => new Date(), []);
+  const filtradas = useMemo(() => {
+    const term = normTZ(q.trim());
+    const arr = term
+      ? zonas.filter((z) =>
+          sinonimosZona(z).some((s) => normTZ(s).includes(term)),
+        )
+      : zonas;
+    return arr.slice(0, 50);
+  }, [q, zonas]);
+
   return (
-    <div className="px-1">
-      <div className="mb-1 flex items-center justify-between">
-        <span className="text-[11px] font-semibold capitalize text-foreground">
-          {fmtMesAnio(mes)}
-        </span>
-        <div className="flex">
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          "rounded-full p-3 transition-colors",
+          tz ? "bg-blue-100 text-blue-700" : "text-[#5f6368] hover:bg-black/5",
+        )}
+        title={tz ? `Mostrando ${nombreZona(tz)}` : "Huso horario secundario"}
+      >
+        <Clock className="h-5 w-5" />
+      </button>
+      {open && (
+        <div className="absolute right-0 z-50 mt-1 w-64 rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
+          <p className="px-2 py-1 text-xs font-semibold text-muted-foreground">
+            Huso secundario
+          </p>
+          <div className="px-1 pb-1">
+            <input
+              autoFocus
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Buscar ciudad o zona…"
+              className="w-full rounded border bg-background px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-400"
+            />
+          </div>
           <button
             type="button"
-            onClick={() => setMes(new Date(mes.getFullYear(), mes.getMonth() - 1, 1))}
-            className="rounded p-0.5 text-muted-foreground hover:bg-muted"
-            aria-label="Mes anterior"
+            onClick={() => {
+              onChange(null);
+              setOpen(false);
+            }}
+            className={cn(
+              "flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted",
+              !tz && "font-semibold text-blue-700",
+            )}
           >
-            <ChevronLeft className="h-3.5 w-3.5" />
+            <span className="flex-1">Ninguno (sólo local)</span>
+            {!tz && <Check className="h-3.5 w-3.5" />}
           </button>
-          <button
-            type="button"
-            onClick={() => setMes(new Date(mes.getFullYear(), mes.getMonth() + 1, 1))}
-            className="rounded p-0.5 text-muted-foreground hover:bg-muted"
-            aria-label="Mes siguiente"
-          >
-            <ChevronRight className="h-3.5 w-3.5" />
-          </button>
+          <div className="max-h-64 overflow-y-auto">
+            {filtradas.map((z) => {
+              const activo = z === tz;
+              return (
+                <button
+                  key={z}
+                  type="button"
+                  onClick={() => {
+                    onChange(z);
+                    setOpen(false);
+                  }}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted",
+                    activo && "font-semibold text-blue-700",
+                  )}
+                >
+                  <span className="flex-1 truncate">{nombreZona(z)}</span>
+                  <span className="shrink-0 text-[10px] text-muted-foreground">
+                    {offsetTZ(z, base)}
+                  </span>
+                  {activo && <Check className="h-3.5 w-3.5 shrink-0" />}
+                </button>
+              );
+            })}
+            {filtradas.length === 0 && (
+              <p className="px-2 py-2 text-[11px] italic text-muted-foreground">
+                Sin resultados
+              </p>
+            )}
+          </div>
         </div>
-      </div>
-      <div className="grid grid-cols-7 gap-y-0.5 text-center">
-        {["L", "M", "X", "J", "V", "S", "D"].map((d) => (
-          <span key={d} className="text-[9px] font-medium text-muted-foreground">
-            {d}
-          </span>
-        ))}
-        {dias.map((d) => {
-          const dIso = isoDate(d);
-          const esHoy = dIso === nowIso;
-          const esRef = dIso === refIso;
-          const esMes = d.getMonth() === mes.getMonth();
-          return (
-            <button
-              key={dIso}
-              type="button"
-              onClick={() => onSelect(d)}
-              className={cn(
-                "mx-auto inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] transition-colors",
-                !esMes && "text-muted-foreground/40",
-                esMes && !esHoy && !esRef && "text-foreground hover:bg-muted",
-                esRef && !esHoy && "bg-blue-100 text-blue-700 font-semibold",
-                esHoy && "bg-blue-600 text-white font-semibold",
-              )}
-            >
-              {d.getDate()}
-            </button>
-          );
-        })}
-      </div>
+      )}
     </div>
   );
 }

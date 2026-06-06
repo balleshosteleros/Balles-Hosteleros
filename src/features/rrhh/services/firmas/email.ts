@@ -19,15 +19,15 @@ function shellHtml(opts: {
   const fontStack =
     "'Inter','Inter Placeholder',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
   const logoHtml = opts.empresaLogoUrl
-    ? `<img src="${esc(opts.empresaLogoUrl)}" alt="${esc(opts.footerEmpresa)}" height="36" style="display:block;height:36px;width:auto;border:0;outline:none;text-decoration:none;" />`
-    : `<div style="font-size:15px;font-weight:600;color:#0f172a;letter-spacing:-0.01em;">${esc(opts.footerEmpresa)}</div>`;
+    ? `<img src="${esc(opts.empresaLogoUrl)}" alt="${esc(opts.footerEmpresa)}" height="72" style="display:block;height:72px;width:auto;max-width:220px;border:0;outline:none;text-decoration:none;margin:0 auto;" />`
+    : `<div style="font-size:24px;font-weight:700;color:#0f172a;letter-spacing:-0.01em;text-align:center;">${esc(opts.footerEmpresa)}</div>`;
   return `<!doctype html>
 <html lang="es">
   <body style="margin:0;padding:0;background:#ffffff;font-family:${fontStack};color:#0f172a;-webkit-font-smoothing:antialiased;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;">
       <tr><td align="center" style="padding:32px 16px;">
         <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
-          <tr><td style="padding:0 4px 24px 4px;">${logoHtml}</td></tr>
+          <tr><td align="center" style="padding:0 4px 28px 4px;text-align:center;">${logoHtml}</td></tr>
           <tr><td style="padding:4px 4px 6px 4px;">
             <h1 style="margin:0;font-size:22px;font-weight:600;color:#0f172a;letter-spacing:-0.015em;line-height:1.25;">${esc(opts.titulo)}</h1>
           </td></tr>
@@ -67,7 +67,7 @@ export async function enviarInvitacionFirma(input: InvitacionFirmaInput): Promis
   });
   const cuerpoHtml = `
     <p>Hola ${esc(input.empleadoNombre)},</p>
-    <p>${esc(input.enviadoPor)} (${esc(input.empresaNombre)}) te ha enviado un documento para firma electrónica:</p>
+    <p>La dirección de ${esc(input.empresaNombre)} te ha enviado un documento para firma electrónica:</p>
     <p style="margin:12px 0;padding:12px 14px;background:#f1f5f9;border-left:3px solid #6366f1;font-weight:500;color:#0f172a;">
       ${esc(input.tituloDocumento)}
     </p>
@@ -81,7 +81,7 @@ export async function enviarInvitacionFirma(input: InvitacionFirmaInput): Promis
   `;
   const text =
     `Hola ${input.empleadoNombre},\n\n` +
-    `${input.enviadoPor} (${input.empresaNombre}) te ha enviado un documento para firma electrónica:\n` +
+    `La dirección de ${input.empresaNombre} te ha enviado un documento para firma electrónica:\n` +
     `  ${input.tituloDocumento}\n\n` +
     `Firma aquí: ${url}\n` +
     `Enlace personal y de un solo uso. Caduca el ${expira}.\n`;

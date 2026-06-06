@@ -444,6 +444,42 @@ export async function ensureReservasConfigEmpresa(
 }
 
 /**
+ * Asegura la fila de `empresa_rrhh_config` con los defaults de validadores por
+ * área: operativa→RECURSOS HUMANOS, administrativa→DIRECCIÓN (resueltos por
+ * nombre dentro de la empresa). Debe llamarse DESPUÉS de sembrar los
+ * departamentos. El dueño puede cambiarlo en Ajustes → RRHH.
+ */
+export async function ensureRrhhConfigEmpresa(
+  admin: Admin,
+  empresaId: string,
+): Promise<{ creada: boolean }> {
+  const { data: existente } = await admin
+    .from("empresa_rrhh_config")
+    .select("empresa_id")
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+  if (existente) return { creada: false };
+
+  const deptoIdPorNombre = async (nombre: string) => {
+    const { data } = await admin
+      .from("departamentos")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .ilike("nombre", nombre)
+      .maybeSingle();
+    return (data?.id as string | null) ?? null;
+  };
+
+  const { error } = await admin.from("empresa_rrhh_config").insert({
+    empresa_id: empresaId,
+    validador_depto_operativa_id: await deptoIdPorNombre("RECURSOS HUMANOS"),
+    validador_depto_administrativa_id: await deptoIdPorNombre("DIRECCIÓN"),
+  });
+  if (error) throw error;
+  return { creada: true };
+}
+
+/**
  * Siembra una empresa nueva con todos los pilares canónicos.
  * Llamar desde `createEmpresa()` justo después del INSERT en `empresas`.
  */
@@ -461,6 +497,7 @@ export async function seedEmpresaDefaults(
   await syncReservaEtiquetasAEmpresa(admin, empresaId);
   await syncSalaEtiquetasAEmpresa(admin, empresaId);
   await ensureReservasConfigEmpresa(admin, empresaId);
+  await ensureRrhhConfigEmpresa(admin, empresaId);
   await syncReservaEmailPlantillasAEmpresa(admin, empresaId);
 }
 
@@ -521,6 +558,7 @@ export async function syncSeedsToAllEmpresas(): Promise<{
       const re = await syncReservaEtiquetasAEmpresa(admin, empresaId);
       const se = await syncSalaEtiquetasAEmpresa(admin, empresaId);
       const rcfg = await ensureReservasConfigEmpresa(admin, empresaId);
+      await ensureRrhhConfigEmpresa(admin, empresaId);
       const rep = await syncReservaEmailPlantillasAEmpresa(admin, empresaId);
       resumen.push({
         empresa: empresaNombre,

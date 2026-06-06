@@ -389,6 +389,7 @@ export const CATALOGO: ModuloDef[] = [
       placeholder("contenido", "Contenido"),
       placeholder("campanas", "Campañas"),
       placeholder("carta_digital", "Carta digital"),
+      placeholder("app_clientes", "App clientes"),
       placeholder("pagina_web", "Página web"),
       placeholder("fidelizacion", "Fidelización"),
       placeholder("captacion", "Captación"),

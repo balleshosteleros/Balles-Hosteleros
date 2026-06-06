@@ -22,7 +22,8 @@ function ensureConfigured(): boolean {
 export type PushEventType =
   | "solicitud_resuelta"
   | "comunicado_nuevo"
-  | "cronograma_cambiado";
+  | "cronograma_cambiado"
+  | "llamada_entrante";
 
 export interface PushPayload {
   title: string;
@@ -30,6 +31,10 @@ export interface PushPayload {
   url?: string;
   tag?: string;
   data?: Record<string, unknown>;
+  /** Opcionales para llamada entrante (vibrar, insistir, no autodescartar). */
+  requireInteraction?: boolean;
+  renotify?: boolean;
+  vibrate?: number[];
 }
 
 export async function sendPushToUser(args: {
@@ -45,14 +50,18 @@ export async function sendPushToUser(args: {
   // Filtrar por opt-in del canal en profiles.
   const { data: profile } = await supabase
     .from("profiles")
-    .select("push_solicitudes, push_comunicados, push_cronograma")
+    .select("push_solicitudes, push_comunicados, push_cronograma, push_llamadas")
     .eq("user_id", args.userId)
     .maybeSingle();
 
-  const optInMap: Record<PushEventType, "push_solicitudes" | "push_comunicados" | "push_cronograma"> = {
+  const optInMap: Record<
+    PushEventType,
+    "push_solicitudes" | "push_comunicados" | "push_cronograma" | "push_llamadas"
+  > = {
     solicitud_resuelta: "push_solicitudes",
     comunicado_nuevo: "push_comunicados",
     cronograma_cambiado: "push_cronograma",
+    llamada_entrante: "push_llamadas",
   };
   if (profile && profile[optInMap[args.eventType]] === false) {
     return { delivered: 0, failed: 0 };

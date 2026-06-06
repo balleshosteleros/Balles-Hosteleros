@@ -17,8 +17,15 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   listDepartamentos,
   updateEmpleado,
@@ -26,6 +33,12 @@ import {
   setEmpleadoEstado,
   type EstadoEmpleado,
 } from "@/features/rrhh/actions/empleados-actions";
+import {
+  getDependientesValidador,
+  reasignarValidadorYDesactivar,
+  type DependienteValidador,
+  type ValidadorElegible,
+} from "@/features/rrhh/actions/validadores-actions";
 import {
   getLocalesEmpleado,
   setLocalesEmpleado,
@@ -74,6 +87,15 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
   const [estado, setEstado] = useState<EstadoEmpleado>(initial.estado);
   const [fechaBaja, setFechaBaja] = useState(initial.fechaBaja ?? "");
   const [savingEstado, setSavingEstado] = useState(false);
+  // Confirmación estándar (activar / desactivar sin dependientes).
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [comprobando, setComprobando] = useState(false);
+  // Sustitución obligatoria: al desactivar a alguien que valida a otros, hay que
+  // reasignar a esos empleados a un sustituto para que ningún puesto quede huérfano.
+  const [sustOpen, setSustOpen] = useState(false);
+  const [dependientes, setDependientes] = useState<DependienteValidador[]>([]);
+  const [reemplazos, setReemplazos] = useState<ValidadorElegible[]>([]);
+  const [sustitutoId, setSustitutoId] = useState<string>("");
 
   useEffect(() => {
     listDepartamentos().then((res) => {
@@ -136,8 +158,20 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
     if (!empresasMarcadas.includes(initial.empresaId)) {
       return { ok: false, error: "No se puede quitar la empresa donde el empleado está dado de alta." };
     }
-    if (localesSeleccionados.length === 0) {
-      return { ok: false, error: "Marca al menos un local donde el empleado pueda fichar" };
+    // Cada empresa marcada necesita ≥1 local: sin local no puede fichar ahí.
+    const sel = new Set(localesSeleccionados);
+    const sinLocal = empresasMarcadas.filter((empId) => {
+      const locales = localesPorEmpresa[empId] ?? [];
+      return !locales.some((l) => sel.has(l.id));
+    });
+    if (sinLocal.length > 0) {
+      const nombres = sinLocal.map(
+        (id) => empresasDisponibles.find((e) => e.id === id)?.nombre ?? id,
+      );
+      return {
+        ok: false,
+        error: `Marca al menos un local de fichaje en cada empresa (falta en: ${nombres.join(", ")})`,
+      };
     }
 
     const [resEmpleado, resLocal, resTeletrabajo, resEmpresas] = await Promise.all([
@@ -166,12 +200,42 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
 
   useImperativeHandle(ref, () => ({ saveGeneral }));
 
-  async function guardarEstado() {
+  // Clic en "Guardar" del recuadro de estado. Para desactivar, primero
+  // comprobamos si este empleado es validador de otros: si lo es, exigimos
+  // sustituto antes de continuar; si no, confirmación estándar.
+  async function onGuardarClick() {
     if (estado !== "Activo" && !fechaBaja) {
       toast.error("La fecha de baja es obligatoria al desactivar a un empleado");
       return;
     }
+    if (estado === "Activo") {
+      setConfirmOpen(true);
+      return;
+    }
+    setComprobando(true);
+    const res = await getDependientesValidador(empleadoId);
+    setComprobando(false);
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudo comprobar si es validador de otros empleados");
+      return;
+    }
+    if (res.dependientes.length === 0) {
+      setConfirmOpen(true);
+      return;
+    }
+    if (res.reemplazos.length === 0) {
+      toast.error(
+        "Este empleado valida a otros y no hay nadie más con acceso a RRHH para sustituirle. Da acceso a RRHH a otra persona antes de desactivarlo.",
+      );
+      return;
+    }
+    setDependientes(res.dependientes);
+    setReemplazos(res.reemplazos);
+    setSustitutoId("");
+    setSustOpen(true);
+  }
 
+  async function guardarEstado() {
     setSavingEstado(true);
     const res = await setEmpleadoEstado({
       id: empleadoId,
@@ -179,6 +243,7 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
       fechaBaja: fechaBaja || null,
     });
     setSavingEstado(false);
+    setConfirmOpen(false);
 
     if (!res.ok) {
       toast.error(res.error ?? "No se pudo actualizar el estado");
@@ -190,6 +255,27 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
         ? "Empleado activado: acceso al sistema restablecido"
         : "Empleado desactivado: acceso al sistema bloqueado",
     );
+    await onUpdated();
+  }
+
+  async function confirmarSustitucion() {
+    if (!sustitutoId) {
+      toast.error("Elige quién sustituye a este empleado como validador");
+      return;
+    }
+    setSavingEstado(true);
+    const res = await reasignarValidadorYDesactivar({
+      empleadoId,
+      sustitutoId,
+      fechaBaja: fechaBaja || "",
+    });
+    setSavingEstado(false);
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudo desactivar al empleado");
+      return;
+    }
+    setSustOpen(false);
+    toast.success("Empleado desactivado: validaciones reasignadas al sustituto");
     await onUpdated();
   }
 
@@ -247,22 +333,32 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
                   {locales === undefined ? (
                     <p className="text-xs text-muted-foreground pl-6">Cargando locales…</p>
                   ) : locales.length === 0 ? (
-                    <p className="text-xs text-muted-foreground pl-6">Esta empresa aún no tiene locales.</p>
+                    <p className="text-xs text-rose-600 pl-6">
+                      Esta empresa aún no tiene locales: el empleado no podría fichar
+                      aquí. Crea un local o desmarca la empresa.
+                    </p>
                   ) : (
-                    <div className="grid gap-1.5 sm:grid-cols-2 pl-1">
-                      {locales.map((local) => (
-                        <label
-                          key={local.id}
-                          className="flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm cursor-pointer"
-                        >
-                          <Checkbox
-                            checked={localesSeleccionados.includes(local.id)}
-                            onCheckedChange={(c) => toggleLocal(local.id, c === true)}
-                          />
-                          <span>{local.nombre}</span>
-                        </label>
-                      ))}
-                    </div>
+                    <>
+                      <div className="grid gap-1.5 sm:grid-cols-2 pl-1">
+                        {locales.map((local) => (
+                          <label
+                            key={local.id}
+                            className="flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm cursor-pointer"
+                          >
+                            <Checkbox
+                              checked={localesSeleccionados.includes(local.id)}
+                              onCheckedChange={(c) => toggleLocal(local.id, c === true)}
+                            />
+                            <span>{local.nombre}</span>
+                          </label>
+                        ))}
+                      </div>
+                      {!locales.some((l) => localesSeleccionados.includes(l.id)) && (
+                        <p className="text-xs text-rose-600 pl-1">
+                          Marca al menos un local de fichaje en esta empresa.
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               );
@@ -363,14 +459,18 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
         </div>
 
         <div className="flex justify-end">
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" disabled={savingEstado} className="gap-2">
-                {savingEstado
-                  ? <><Loader2 className="h-4 w-4 animate-spin" />Actualizando…</>
-                  : <><UserRoundX className="h-4 w-4" />Guardar</>}
-              </Button>
-            </AlertDialogTrigger>
+          <Button
+            variant="destructive"
+            disabled={savingEstado || comprobando}
+            className="gap-2"
+            onClick={onGuardarClick}
+          >
+            {savingEstado || comprobando
+              ? <><Loader2 className="h-4 w-4 animate-spin" />{comprobando ? "Comprobando…" : "Actualizando…"}</>
+              : <><UserRoundX className="h-4 w-4" />Guardar</>}
+          </Button>
+
+          <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>
@@ -408,6 +508,68 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
           </AlertDialog>
         </div>
       </div>
+
+      {/* Sustitución obligatoria al desactivar a un validador en activo. */}
+      <Dialog open={sustOpen} onOpenChange={(o) => { if (!savingEstado) setSustOpen(o); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reasignar validaciones antes de desactivar</DialogTitle>
+            <DialogDescription>
+              Este empleado es el validador de{" "}
+              <strong className="text-foreground">{dependientes.length}</strong>{" "}
+              {dependientes.length === 1 ? "empleado" : "empleados"}. Todo empleado debe
+              tener siempre un validador al cargo, así que elige quién le sustituye. El
+              sustituto asumirá las validaciones (de trabajo y de ausencias) que tuviera
+              asignadas este empleado.
+            </DialogDescription>
+          </DialogHeader>
+
+          {dependientes.length > 0 && (
+            <div className="rounded-md border bg-muted/30 p-3 max-h-40 overflow-auto space-y-1">
+              {dependientes.map((d) => (
+                <div key={d.empleadoId} className="flex items-center justify-between gap-2 text-sm">
+                  <span className="text-foreground">{d.nombreCompleto}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {[d.comoTrabajo ? "trabajo" : null, d.comoAusencias ? "ausencias" : null]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <Label>Sustituto</Label>
+            <Select value={sustitutoId} onValueChange={setSustitutoId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecciona un sustituto" />
+              </SelectTrigger>
+              <SelectContent>
+                {reemplazos.map((r) => (
+                  <SelectItem key={r.id} value={r.id}>{r.nombreCompleto}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSustOpen(false)} disabled={savingEstado}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmarSustitucion}
+              disabled={savingEstado || !sustitutoId}
+              className="gap-2"
+            >
+              {savingEstado
+                ? <><Loader2 className="h-4 w-4 animate-spin" />Desactivando…</>
+                : <>Reasignar y desactivar</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 });

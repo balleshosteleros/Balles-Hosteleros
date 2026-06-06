@@ -157,6 +157,16 @@ export function MisFichajesMobile() {
                             <span>· descanso {formatHora(f.pausaInicio)}–{formatHora(f.pausaFin)}</span>
                           )}
                         </div>
+                        <span
+                          className={cn(
+                            "mt-1.5 inline-block rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                            f.modoTeletrabajo
+                              ? "border-blue-200 bg-blue-100 text-blue-700"
+                              : "border-emerald-200 bg-emerald-100 text-emerald-700",
+                          )}
+                        >
+                          {f.modoTeletrabajo ? "Teletrabajo" : (f.local || "Local")}
+                        </span>
                       </div>
                       <div className="text-right">
                         <p className="text-base font-semibold tabular-nums">

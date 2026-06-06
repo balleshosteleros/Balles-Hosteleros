@@ -21,8 +21,18 @@ type CalendarEvent = {
   };
 };
 
+type UserCalendarListItem = {
+  id: string;
+  selected?: boolean;
+  primary?: boolean;
+  summary?: string;
+  summaryOverride?: string;
+  backgroundColor?: string;
+  foregroundColor?: string;
+};
+
 type UserCalendarList = {
-  items?: { id: string; selected?: boolean; primary?: boolean }[];
+  items?: UserCalendarListItem[];
 };
 
 const COLORS = ["blue", "emerald", "orange", "violet", "red"] as const;
@@ -87,21 +97,32 @@ export async function GET(request: Request) {
     ?.split(",")
     .filter(Boolean);
 
+  // Siempre listamos los calendarios del usuario para construir el mapa de
+  // metadatos (nombre + color), de modo que cada evento sepa de qué calendario
+  // procede y podamos pintar el recuadro de color como en Google Calendar.
+  const calMeta: Record<string, { nombre: string; colorHex: string }> = {};
+  const list = await googleFetchAuto<UserCalendarList>(
+    "https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader",
+  );
+  if (list.needsReauth) {
+    return NextResponse.json({
+      connected: true,
+      needsReauth: true,
+      eventos: [],
+    });
+  }
+  const calItems = list.data?.items ?? [];
+  for (const c of calItems) {
+    calMeta[c.id] = {
+      nombre: c.summaryOverride || c.summary || c.id,
+      colorHex: c.backgroundColor || "#039be5",
+    };
+  }
+
   if (!calendarIds || calendarIds.length === 0) {
-    const list = await googleFetchAuto<UserCalendarList>(
-      "https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader",
-    );
-    if (list.needsReauth) {
-      return NextResponse.json({
-        connected: true,
-        needsReauth: true,
-        eventos: [],
-      });
-    }
-    const items = list.data?.items ?? [];
     calendarIds =
-      items.length > 0
-        ? items.filter((c) => c.selected !== false).map((c) => c.id)
+      calItems.length > 0
+        ? calItems.filter((c) => c.selected !== false).map((c) => c.id)
         : ["primary"];
   }
 
@@ -198,10 +219,17 @@ export async function GET(request: Request) {
     const eventColorHex = ev.colorId
       ? GOOGLE_EVENT_COLORS[ev.colorId] ?? null
       : null;
+    const meta = calMeta[calId];
+    const calendarNombre = meta?.nombre ?? calId;
+    const calendarColorHex = meta?.colorHex ?? "#039be5";
 
     return {
       id: ev.id,
       calendarId: calId,
+      calendarNombre,
+      // Color identificativo del calendario (recuadro tipo Google Calendar).
+      // Si el evento tiene un color propio (colorId) lo respetamos como override.
+      calendarColorHex: eventColorHex ?? calendarColorHex,
       titulo: ev.summary || "(Sin título)",
       descripcion: ev.description ?? "",
       hora: allDay

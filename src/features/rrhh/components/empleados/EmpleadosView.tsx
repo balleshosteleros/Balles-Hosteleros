@@ -41,6 +41,12 @@ function iniciales(nombre: string, apellidos: string) {
   return (nombre[0] + (apellidos[0] ?? "")).toUpperCase();
 }
 
+// Las áreas llegan en mayúsculas desde BD (OPERATIVA / ADMINISTRATIVA); en la UI
+// se muestran en sentence case.
+function formatArea(area: string) {
+  return area.charAt(0).toUpperCase() + area.slice(1).toLowerCase();
+}
+
 function FichajeBar({ fichajes }: { fichajes: number }) {
   const pct = Math.min(fichajes * 25, 100);
   const colors: Record<number, string> = { 0: "bg-muted", 1: "bg-amber-400", 2: "bg-sky-500", 3: "bg-emerald-500" };
@@ -62,8 +68,11 @@ type EmpleadoBDRow = {
   telefono: string | null;
   estado: string;
   departamentos?: { nombre: string } | null;
+  areas?: string[];
   es_principal?: boolean;
   empresas_acceso?: Array<{ id: string; nombre: string }>;
+  validador_trabajo_nombre?: string | null;
+  validador_ausencias_nombre?: string | null;
 };
 
 type EmpleadoConAcceso = EmpleadoUI & {
@@ -85,11 +94,13 @@ function bdToEmpleado(row: EmpleadoBDRow): EmpleadoConAcceso {
     horarioSemanal: "—",
     horasHoy: "—",
     departamento: row.departamentos?.nombre ?? "—",
+    areas: row.areas ?? [],
     telefono: row.telefono ?? "—",
     fichajes: 0,
     emailEmpresa: row.email_empresa ?? "",
     emailPersonal: row.email_personal ?? "",
-    validadorFichajes: "—",
+    validadorTrabajo: row.validador_trabajo_nombre ?? "—",
+    validadorAusencias: row.validador_ausencias_nombre ?? "—",
     esPrincipal: row.es_principal ?? true,
     empresasAcceso: row.empresas_acceso ?? [],
   };
@@ -134,6 +145,10 @@ export function EmpleadosView() {
     () => [...new Set(empleados.flatMap((e) => e.empresasAcceso.map((a) => a.nombre)))].sort(),
     [empleados],
   );
+  const areasUsadas = useMemo(
+    () => [...new Set(empleados.flatMap((e) => e.areas.map(formatArea)))].sort(),
+    [empleados],
+  );
 
   const acceso = (e: EmpleadoConAcceso, campo: string): unknown => {
     if (campo === "empleado") return `${e.nombre} ${e.apellidos}`.trim();
@@ -142,11 +157,13 @@ export function EmpleadosView() {
     if (campo === "horario") return e.horarioTipo;
     if (campo === "horasHoy") return e.horasHoy;
     if (campo === "departamento") return e.departamento;
+    if (campo === "area") return e.areas.map(formatArea);
     if (campo === "telefono") return e.telefono;
     if (campo === "fichajes") return e.fichajes;
     if (campo === "emailEmpresa") return e.emailEmpresa;
     if (campo === "emailPersonal") return e.emailPersonal;
-    if (campo === "validador") return e.validadorFichajes;
+    if (campo === "validador") return e.validadorTrabajo;
+    if (campo === "validadorAusencias") return e.validadorAusencias;
     return (e as unknown as Record<string, unknown>)[campo];
   };
 
@@ -156,16 +173,24 @@ export function EmpleadosView() {
       if (busqueda && !texto.includes(busqueda.toLowerCase())) return false;
       return true;
     });
-    // Filtros multi-valor: el "empresas" es array → match si cualquier opción seleccionada
-    // está en el array del empleado. aplicarFiltrosToolbar trata el valor escalar; lo
-    // tratamos aparte.
+    // Filtros multi-valor: "empresas" y "area" son arrays → match si cualquier opción
+    // seleccionada está en el array del empleado. aplicarFiltrosToolbar trata el valor
+    // escalar; los tratamos aparte.
     const filtrosEmpresas = filtros.filter((f) => f.campo === "empresas");
-    const otrosFiltros = filtros.filter((f) => f.campo !== "empresas");
+    const filtrosArea = filtros.filter((f) => f.campo === "area");
+    const otrosFiltros = filtros.filter((f) => f.campo !== "empresas" && f.campo !== "area");
     lista = aplicarFiltrosToolbar(lista, otrosFiltros, acceso);
     if (filtrosEmpresas.length > 0) {
       lista = lista.filter((e) =>
         filtrosEmpresas.every((f) =>
           f.valores?.some((v) => e.empresasAcceso.some((a) => a.nombre === v)),
+        ),
+      );
+    }
+    if (filtrosArea.length > 0) {
+      lista = lista.filter((e) =>
+        filtrosArea.every((f) =>
+          f.valores?.some((v) => e.areas.map(formatArea).includes(v)),
         ),
       );
     }
@@ -195,11 +220,13 @@ export function EmpleadosView() {
     { campo: "horario", label: "Horario" },
     { campo: "horasHoy", label: "Horas hoy" },
     { campo: "departamento", label: "Departamento" },
+    { campo: "area", label: "Área" },
     { campo: "telefono", label: "Teléfono" },
     { campo: "fichajes", label: "Fichajes" },
     { campo: "emailEmpresa", label: "Email empresa" },
     { campo: "emailPersonal", label: "Email personal" },
-    { campo: "validador", label: "Validador fichajes" },
+    { campo: "validador", label: "Validador trabajo" },
+    { campo: "validadorAusencias", label: "Validador ausencias" },
   ];
 
   const columnDefs: Record<string, { th: ReactNode; td: (emp: EmpleadoConAcceso) => ReactNode }> = {
@@ -342,6 +369,38 @@ export function EmpleadosView() {
         <td key="departamento" className="px-3 py-2 align-middle text-center"><span className="text-sm font-bold text-foreground">{emp.departamento}</span></td>
       ),
     },
+    area: {
+      th: (
+        <TableColumnHeader
+          key="area"
+          label="Área"
+          campo="area"
+          align="center"
+          filtroTipo="lista"
+          opciones={areasUsadas}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+        />
+      ),
+      td: (emp) => (
+        <td key="area" className="px-3 py-2 align-middle text-center">
+          <div className="flex flex-wrap justify-center gap-1">
+            {emp.areas.length === 0 ? (
+              <span className="text-sm text-muted-foreground">—</span>
+            ) : (
+              emp.areas.map((a) => (
+                <span
+                  key={a}
+                  className="text-[11px] px-1.5 py-0.5 rounded bg-muted text-foreground"
+                >
+                  {formatArea(a)}
+                </span>
+              ))
+            )}
+          </div>
+        </td>
+      ),
+    },
     telefono: {
       th: (
         <TableColumnHeader
@@ -409,12 +468,24 @@ export function EmpleadosView() {
       th: (
         <TableColumnHeader
           key="validador"
-          label="Validador fichajes"
+          label="Validador trabajo"
           campo="validador"
         />
       ),
       td: (emp) => (
-        <td key="validador" className="px-3 py-2 align-middle"><span className="text-sm text-foreground whitespace-nowrap">{emp.validadorFichajes}</span></td>
+        <td key="validador" className="px-3 py-2 align-middle"><span className="text-sm text-foreground whitespace-nowrap">{emp.validadorTrabajo}</span></td>
+      ),
+    },
+    validadorAusencias: {
+      th: (
+        <TableColumnHeader
+          key="validadorAusencias"
+          label="Validador ausencias"
+          campo="validadorAusencias"
+        />
+      ),
+      td: (emp) => (
+        <td key="validadorAusencias" className="px-3 py-2 align-middle"><span className="text-sm text-foreground whitespace-nowrap">{emp.validadorAusencias}</span></td>
       ),
     },
   };

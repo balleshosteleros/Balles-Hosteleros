@@ -62,11 +62,22 @@ export async function listEmpleados() {
 
     const { data, error } = await admin
       .from("empleados")
-      .select(`*, departamentos(nombre)`)
+      .select(`*, departamentos(nombre, area)`)
       .or(filtro)
       .order("nombre", { ascending: true });
 
     if (error) throw error;
+
+    // Áreas a las que pertenece cada usuario: se agregan las áreas de TODAS sus
+    // fichas (una por empresa), porque un multiempresa puede ser operativo en una
+    // y administrativo en otra y debe mostrar ambas.
+    const areasPorUser: Record<string, Set<string>> = {};
+    for (const e of data ?? []) {
+      const uid = e.user_id as string | null;
+      const area = (e.departamentos as { area?: string } | null)?.area;
+      if (!uid || !area) continue;
+      (areasPorUser[uid] ??= new Set<string>()).add(area);
+    }
 
     // Cargar todas las empresas a las que cada empleado tiene acceso para enriquecer.
     const userIds = Array.from(new Set((data ?? []).map((e) => e.user_id as string).filter(Boolean)));
@@ -112,10 +123,41 @@ export async function listEmpleados() {
       if (currPrincipal && !prevPrincipal) porUser.set(uid, e);
     }
 
+    // Nombres de los validadores (de trabajo y de ausencias) de cada empleado.
+    const validadorIds = Array.from(
+      new Set(
+        (data ?? [])
+          .flatMap((e) => [e.validador_trabajo_id, e.validador_ausencias_id])
+          .filter((v): v is string => Boolean(v)),
+      ),
+    );
+    let nombrePorEmpleadoId: Record<string, string> = {};
+    if (validadorIds.length > 0) {
+      const { data: vals } = await admin
+        .from("empleados")
+        .select("id, nombre, apellidos")
+        .in("id", validadorIds);
+      nombrePorEmpleadoId = (vals ?? []).reduce<Record<string, string>>((acc, v) => {
+        acc[v.id as string] = `${(v.nombre as string) ?? ""} ${(v.apellidos as string | null) ?? ""}`.trim();
+        return acc;
+      }, {});
+    }
+
     const enriched = [...porUser.values(), ...sinUser].map((e) => ({
       ...e,
       es_principal: e.empresa_id === empresaId,
       empresas_acceso: empresasPorUser[e.user_id as string] ?? [],
+      areas: e.user_id
+        ? Array.from(areasPorUser[e.user_id as string] ?? [])
+        : [(e.departamentos as { area?: string } | null)?.area].filter(
+            (a): a is string => Boolean(a),
+          ),
+      validador_trabajo_nombre: e.validador_trabajo_id
+        ? nombrePorEmpleadoId[e.validador_trabajo_id as string] ?? null
+        : null,
+      validador_ausencias_nombre: e.validador_ausencias_id
+        ? nombrePorEmpleadoId[e.validador_ausencias_id as string] ?? null
+        : null,
     }));
     enriched.sort((a, b) =>
       String(a.nombre ?? "").localeCompare(String(b.nombre ?? ""), "es"),
@@ -164,7 +206,17 @@ export async function getEmpleadosActivos(
     // la carrera con la cookie de empresa activa al cambiar de empresa; si no se
     // pasa, caemos a la empresa activa resuelta server-side. RLS protege en
     // ambos casos (un dbId fuera de las empresas del usuario devuelve []).
-    const empresaId = empresaDbId ?? empresaActivaId;
+    // Tolerante al slug: si llega un identificador no-UUID lo resolvemos contra
+    // empresas.slug (algunos clientes solo disponen del slug, p.ej. Horarios).
+    let empresaId = empresaDbId ?? empresaActivaId;
+    if (empresaDbId && !/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(empresaDbId)) {
+      const { data: emp } = await supabase
+        .from("empresas")
+        .select("id")
+        .eq("slug", empresaDbId)
+        .maybeSingle();
+      empresaId = (emp?.id as string | undefined) ?? empresaActivaId;
+    }
     if (!empresaId) return { ok: false, data: [] };
 
     const { data: accesosUE } = await supabase
@@ -329,7 +381,7 @@ export async function createEmpleado(input: {
     }
 
     revalidatePath("/rrhh/empleados");
-    return { ok: true, tempPassword: alta.tempPassword, email };
+    return { ok: true, tempPassword: alta.tempPassword, email, empleadoId: alta.empleadoId };
   } catch (err: unknown) {
     console.error("[rrhh] createEmpleado:", err);
     return { ok: false, error: friendlyError(err) };

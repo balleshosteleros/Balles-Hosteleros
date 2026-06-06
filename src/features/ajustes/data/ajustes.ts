@@ -108,6 +108,52 @@ export interface TelefoniaConfig {
   grabarLlamadas: boolean;
 }
 
+// ─── Notificaciones de la barra de herramientas ─────────────────
+// Configuración a medida del aviso (badge + pop-up) de cada icono de la
+// barra superior. El badge SIEMPRE muestra "9+" cuando hay más de 9.
+export interface ToolNotifConfig {
+  // Mostrar/ocultar el círculo de aviso (badge) del icono.
+  badgeActivo: boolean;
+  // Aviso emergente (pop-up) que se muestra una sola vez a cada usuario.
+  popupActivo: boolean;
+  popupTitulo: string;
+  popupMensaje: string;
+  // Se incrementa al "Publicar" para volver a mostrar el aviso a todos.
+  popupVersion: number;
+}
+
+// La agenda añade su ventana de anuncio de contactos nuevos.
+export interface AgendaNotifConfig extends ToolNotifConfig {
+  // Cuántos días se anuncia un contacto recién añadido (1–30).
+  diasAnuncio: number;
+}
+
+// Claves = ids de iconos de la barra (coinciden con HERRAMIENTAS).
+export type ToolNotifKey =
+  | "email"
+  | "calendario"
+  | "reuniones"
+  | "grabacion"
+  | "tareas"
+  | "chat"
+  | "telefono"
+  | "agenda"
+  | "videovigilancia"
+  | "aplicaciones";
+
+export interface NotificacionesConfig {
+  email: ToolNotifConfig;
+  calendario: ToolNotifConfig;
+  reuniones: ToolNotifConfig;
+  grabacion: ToolNotifConfig;
+  tareas: ToolNotifConfig;
+  chat: ToolNotifConfig;
+  telefono: ToolNotifConfig;
+  agenda: AgendaNotifConfig;
+  videovigilancia: ToolNotifConfig;
+  aplicaciones: ToolNotifConfig;
+}
+
 export interface EntradaAuditoria {
   id: string;
   usuario: string;
@@ -124,7 +170,56 @@ export interface AjustesEmpresa {
   contactos: Contacto;
   configOperativa: ConfigOperativa;
   telefonia: TelefoniaConfig;
+  notificaciones: NotificacionesConfig;
   auditoria: EntradaAuditoria[];
+}
+
+function defaultToolNotif(): ToolNotifConfig {
+  return {
+    badgeActivo: true,
+    popupActivo: false,
+    popupTitulo: "",
+    popupMensaje: "",
+    popupVersion: 0,
+  };
+}
+
+export function buildDefaultNotificaciones(): NotificacionesConfig {
+  return {
+    email: defaultToolNotif(),
+    calendario: defaultToolNotif(),
+    reuniones: defaultToolNotif(),
+    grabacion: defaultToolNotif(),
+    tareas: defaultToolNotif(),
+    chat: defaultToolNotif(),
+    telefono: defaultToolNotif(),
+    agenda: { ...defaultToolNotif(), diasAnuncio: 7 },
+    videovigilancia: defaultToolNotif(),
+    aplicaciones: defaultToolNotif(),
+  };
+}
+
+/** Merge profundo de notificaciones contra los defaults (hidratación). */
+export function mergeNotificaciones(
+  stored: Partial<NotificacionesConfig> | undefined,
+): NotificacionesConfig {
+  const d = buildDefaultNotificaciones();
+  const m = <T extends ToolNotifConfig>(def: T, s: Partial<T> | undefined): T => ({
+    ...def,
+    ...(s ?? {}),
+  });
+  return {
+    email: m(d.email, stored?.email),
+    calendario: m(d.calendario, stored?.calendario),
+    reuniones: m(d.reuniones, stored?.reuniones),
+    grabacion: m(d.grabacion, stored?.grabacion),
+    tareas: m(d.tareas, stored?.tareas),
+    chat: m(d.chat, stored?.chat),
+    telefono: m(d.telefono, stored?.telefono),
+    agenda: m(d.agenda, stored?.agenda),
+    videovigilancia: m(d.videovigilancia, stored?.videovigilancia),
+    aplicaciones: m(d.aplicaciones, stored?.aplicaciones),
+  };
 }
 
 // Formato canónico — debe coincidir con MODULOS_NAV en RolesTab y con
@@ -242,6 +337,7 @@ export function buildDefaultAjustes(empresaNombre: string): AjustesEmpresa {
       twilioAppSid: "",
       grabarLlamadas: false,
     },
+    notificaciones: buildDefaultNotificaciones(),
     auditoria: [
       { id: "a1", usuario: "Admin Principal", accion: "Empresa creada", apartado: "Datos generales", fecha: "2026-01-15 10:00" },
       { id: "a2", usuario: "Admin Principal", accion: "Usuario añadido", apartado: "Usuarios", fecha: "2026-02-01 09:30" },

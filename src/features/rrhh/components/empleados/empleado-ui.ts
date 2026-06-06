@@ -10,11 +10,13 @@ export interface EmpleadoUI {
   horarioSemanal: string;
   horasHoy: string;
   departamento: string;
+  areas: string[];
   telefono: string;
   fichajes: number;
   emailEmpresa: string;
   emailPersonal: string;
-  validadorFichajes: string;
+  validadorTrabajo: string;
+  validadorAusencias: string;
 }
 
 export const ESTADOS_LABEL: Record<EstadoEmpleadoUI, string> = {

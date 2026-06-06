@@ -22,20 +22,37 @@ self.addEventListener("fetch", (event) => {
 // Web Push: stub para Fase 6.
 self.addEventListener("push", (event) => {
   if (!event.data) return;
+  let payload;
   try {
-    const payload = event.data.json();
-    event.waitUntil(
-      self.registration.showNotification(payload.title || "Balles", {
+    payload = event.data.json();
+  } catch (e) {
+    return; // payload no-JSON: ignorar silenciosamente.
+  }
+  const esLlamada = !!(payload.data && payload.data.callId);
+  event.waitUntil(
+    (async () => {
+      // Si es una llamada y la app ya está visible, el timbre in-app la gestiona:
+      // no mostramos también la notificación del sistema (evita doble aviso).
+      if (esLlamada) {
+        const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+        if (wins.some((c) => c.visibilityState === "visible")) return;
+      }
+      await self.registration.showNotification(payload.title || "Balles", {
         body: payload.body || "",
         icon: "/icons/icon-192.png",
         badge: "/icons/icon-192.png",
         tag: payload.tag || "default",
         data: payload.data || {},
-      }),
-    );
-  } catch (e) {
-    // payload no-JSON: ignorar silenciosamente.
-  }
+        // Campos opcionales: una llamada entrante vibra, insiste y no se
+        // autodescarta hasta que el usuario interactúe (estilo WhatsApp).
+        requireInteraction: payload.requireInteraction === true,
+        renotify: payload.renotify === true,
+        vibrate: payload.vibrate || undefined,
+        actions: payload.actions || undefined,
+        silent: false,
+      });
+    })(),
+  );
 });
 
 self.addEventListener("notificationclick", (event) => {

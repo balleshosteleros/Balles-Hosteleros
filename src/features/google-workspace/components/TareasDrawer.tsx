@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   CheckSquare2, Square, Plus, Trash2, ChevronLeft, ChevronRight, Link2, Sparkles,
   CalendarClock, Info, AlertTriangle, Users, RefreshCw, Clock, Lock,
+  ClipboardCheck, CalendarX, Briefcase,
 } from "lucide-react";
 import { PosponerTareaDialog } from "./PosponerTareaDialog";
 import {
@@ -39,6 +40,10 @@ import {
 } from "@/components/ui/select";
 import { getModuloForCronograma } from "@/features/direccion/data/cronogramaAreas";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import {
+  getTareasValidacionPendientes,
+  type TareasValidacion,
+} from "@/features/mi-panel/actions/mi-panel-actions";
 
 type InfoTarea = { id: string; tarea?: string; resumen?: string };
 
@@ -232,6 +237,7 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
   const [modulosVisibles, setModulosVisibles] = useState<string[] | null>(null);
   const [selectedRol, setSelectedRol] = useState<string>("default");
   const [infoTareas, setInfoTareas] = useState<InfoTarea[]>([]);
+  const [validacion, setValidacion] = useState<TareasValidacion>({ activo: false, ausencia: 0, trabajo: 0 });
 
   const cargar = useCallback(async () => {
     const res = await listTareasMias();
@@ -335,7 +341,11 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
       } else {
         if (!cancelled) setInfoTareas([]);
       }
-      
+
+      // Validaciones pendientes (si soy validador de alguien y hay pendientes).
+      const resVal = await getTareasValidacionPendientes();
+      if (!cancelled && resVal.ok) setValidacion(resVal.data);
+
       if (!cancelled) await cargar();
     };
 
@@ -515,6 +525,49 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
+
+              {validacion.activo && (validacion.ausencia > 0 || validacion.trabajo > 0) && (
+                <div className="shrink-0">
+                  <div className="px-5 py-2 bg-amber-100/70 border-b border-amber-200 flex items-center gap-2">
+                    <ClipboardCheck className="h-3.5 w-3.5 text-amber-700" />
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-amber-800">
+                      Validaciones pendientes
+                    </span>
+                  </div>
+                  <div className="divide-y divide-amber-100 bg-amber-50/40">
+                    {validacion.ausencia > 0 && (
+                      <Link
+                        href="/rrhh/solicitudes"
+                        onClick={() => setOpen(false)}
+                        className="px-5 py-3 flex items-center gap-3 hover:bg-amber-100/50 transition-colors"
+                      >
+                        <span className="h-7 w-7 rounded-md bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                          <CalendarX className="h-4 w-4" />
+                        </span>
+                        <p className="flex-1 text-sm font-medium text-amber-900">
+                          Tienes solicitudes de ausencia pendientes
+                        </p>
+                        <ChevronRight className="h-4 w-4 text-amber-600 shrink-0" />
+                      </Link>
+                    )}
+                    {validacion.trabajo > 0 && (
+                      <Link
+                        href="/rrhh/solicitudes"
+                        onClick={() => setOpen(false)}
+                        className="px-5 py-3 flex items-center gap-3 hover:bg-amber-100/50 transition-colors"
+                      >
+                        <span className="h-7 w-7 rounded-md bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                          <Briefcase className="h-4 w-4" />
+                        </span>
+                        <p className="flex-1 text-sm font-medium text-amber-900">
+                          Tienes solicitudes de trabajo pendientes
+                        </p>
+                        <ChevronRight className="h-4 w-4 text-amber-600 shrink-0" />
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {isSyncing ? (
                 <div className="flex flex-col items-center justify-center flex-1 py-10 gap-2 text-violet-600">

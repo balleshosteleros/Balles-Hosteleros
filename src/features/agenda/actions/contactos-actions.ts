@@ -36,6 +36,31 @@ export async function listContactos(): Promise<Contacto[]> {
   }
 }
 
+/**
+ * Cuenta los contactos añadidos a la agenda en los últimos `dias` días.
+ * Cada contacto cuenta para el badge durante su ventana de anuncio: a los
+ * `dias` días deja de contar, pero otros más recientes siguen anunciándose.
+ */
+export async function contarContactosNuevos(dias = 7): Promise<number> {
+  try {
+    const supabase = await createClient();
+    const empresaId = await getEmpresaId();
+    if (!empresaId) return 0;
+    const ventana = Math.max(1, Math.min(365, Math.floor(dias)));
+    const cutoff = new Date(Date.now() - ventana * 24 * 60 * 60 * 1000).toISOString();
+    const { count, error } = await supabase
+      .from("contactos_agenda")
+      .select("id", { count: "exact", head: true })
+      .eq("empresa_id", empresaId)
+      .gte("created_at", cutoff);
+    if (error) throw error;
+    return count ?? 0;
+  } catch (err) {
+    console.error("[contactos] contarContactosNuevos:", err);
+    return 0;
+  }
+}
+
 export async function createContacto(input: ContactoInput): Promise<{ ok: boolean; error?: string }> {
   try {
     const supabase = await createClient();

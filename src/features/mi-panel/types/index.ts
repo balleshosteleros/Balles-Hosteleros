@@ -35,6 +35,9 @@ export interface MiFichajeHoy {
   horasTotales: number;
   estado: string;
   incidencia: string | null;
+  modoTeletrabajo: boolean;
+  /** Nombre del local donde fichó (presencial). En teletrabajo no aplica. */
+  local: string | null;
 }
 
 export interface DiaCalendario {
@@ -58,7 +61,7 @@ export const ESTADO_LABEL: Record<SolicitudEstado, string> = {
   pendiente: "Pendiente",
   aprobada: "Aprobada",
   rechazada: "Rechazada",
-  anulada: "Anulada",
+  anulada: "Anulada por el empleado",
 };
 
 export const ESTADO_COLOR: Record<SolicitudEstado, string> = {

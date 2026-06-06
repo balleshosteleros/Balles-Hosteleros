@@ -41,6 +41,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   guardarDatosPersonales,
   type DatosPersonalesCompletos,
+  type DatosPersonalesInput,
 } from "@/features/mi-panel/actions/datos-personales-actions";
 import { guardarPerfilEmpleado } from "@/features/rrhh/actions/empleados-actions";
 import {
@@ -78,11 +79,26 @@ interface Props {
    * único botón superior orquesta el guardado de todo el perfil vía `ref.save()`.
    */
   hideSaveButton?: boolean;
+  /**
+   * Cuando se proporciona, el submit interno (Enter) NO guarda: delega en este
+   * callback. Lo usa el ALTA de empleado (perfil en blanco, aún sin empleado),
+   * donde el guardado lo orquesta el contenedor tras crear el empleado. Sin
+   * esto, pulsar Enter guardaría en el perfil del admin autenticado.
+   */
+  onSubmitOverride?: () => void;
 }
 
 /** Handle imperativo para guardar el formulario desde un contenedor superior. */
 export type DatosPersonalesFormHandle = {
   save: () => Promise<{ ok: boolean; error?: string }>;
+  /**
+   * Valida (documento/IBAN) y devuelve el payload SIN persistir. Lo usa el alta
+   * de empleado: el contenedor crea primero el empleado y luego guarda el perfil
+   * con este payload. Mi Panel y la ficha de edición siguen usando `save()`.
+   */
+  getPayload: () =>
+    | { ok: true; payload: DatosPersonalesInput }
+    | { ok: false; error: string };
 };
 
 type FormState = {
@@ -149,7 +165,7 @@ function fromInitial(d: DatosPersonalesCompletos): FormState {
 
 export const DatosPersonalesForm = forwardRef<DatosPersonalesFormHandle, Props>(
   function DatosPersonalesForm(
-    { initial, readOnly = false, targetEmpleadoId, hideSaveButton = false },
+    { initial, readOnly = false, targetEmpleadoId, hideSaveButton = false, onSubmitOverride },
     ref,
   ) {
   const [form, setForm] = useState<FormState>(() => fromInitial(initial));
@@ -206,7 +222,10 @@ export const DatosPersonalesForm = forwardRef<DatosPersonalesFormHandle, Props>(
   // Valida y guarda devolviendo el resultado, SIN mostrar toast. Lo usan tanto
   // el botón interno como el handle imperativo (`ref.save()`); de este modo el
   // contenedor superior puede mostrar un único toast para todo el perfil.
-  async function doSave(): Promise<{ ok: boolean; error?: string }> {
+  // Valida documento/IBAN y construye el payload normalizado, sin persistir.
+  function buildPayload():
+    | { ok: true; payload: DatosPersonalesInput }
+    | { ok: false; error: string } {
     if (form.dni_nie && !form.tipo_documento) {
       return { ok: false, error: "Selecciona el tipo de documento (DNI / NIE / Pasaporte)" };
     }
@@ -219,20 +238,26 @@ export const DatosPersonalesForm = forwardRef<DatosPersonalesFormHandle, Props>(
         return { ok: false, error: fullCheck.mensaje ?? "IBAN inválido" };
       }
     }
+    const payload: DatosPersonalesInput = {
+      ...form,
+      iban: form.iban ? form.iban.replace(/\s+/g, "").toUpperCase() : null,
+      tipo_documento: form.tipo_documento || null,
+    };
+    return { ok: true, payload };
+  }
+
+  async function doSave(): Promise<{ ok: boolean; error?: string }> {
+    const built = buildPayload();
+    if (!built.ok) return { ok: false, error: built.error };
 
     setSaving(true);
     try {
-      const payload = {
-        ...form,
-        iban: form.iban ? form.iban.replace(/\s+/g, "").toUpperCase() : null,
-        tipo_documento: form.tipo_documento || null,
-      };
       // Si hay targetEmpleadoId, escribimos en el profile vinculado vía admin
       // action. En caso contrario, escribimos en el profile del usuario
       // autenticado (Mi Panel).
       const res = targetEmpleadoId
-        ? await guardarPerfilEmpleado(targetEmpleadoId, payload)
-        : await guardarDatosPersonales(payload);
+        ? await guardarPerfilEmpleado(targetEmpleadoId, built.payload)
+        : await guardarDatosPersonales(built.payload);
       if (!res.ok) {
         return { ok: false, error: res.error ?? "No se pudieron guardar los datos" };
       }
@@ -244,10 +269,14 @@ export const DatosPersonalesForm = forwardRef<DatosPersonalesFormHandle, Props>(
     }
   }
 
-  useImperativeHandle(ref, () => ({ save: doSave }));
+  useImperativeHandle(ref, () => ({ save: doSave, getPayload: buildPayload }));
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (onSubmitOverride) {
+      onSubmitOverride();
+      return;
+    }
     if (saving) return;
     const res = await doSave();
     if (!res.ok) {

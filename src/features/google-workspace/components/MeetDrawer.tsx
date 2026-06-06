@@ -3,20 +3,26 @@
 import { ReactNode, useState, useEffect, useCallback, useMemo } from "react";
 import {
   Video, Clock, Users, RefreshCw, ExternalLink, Loader2, MapPin, X,
+  ChevronLeft, ChevronRight, List, CalendarRange, Menu as MenuIcon,
 } from "lucide-react";
 import {
   Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { GoogleConnectBanner } from "./GoogleConnectBanner";
 import { GoogleReauthBanner } from "./GoogleReauthBanner";
 import { GoogleAccountButton } from "./GoogleAccountButton";
 import { useGoogleConnection } from "./useGoogleConnection";
+import { MeetCalendarGrid } from "./MeetCalendarGrid";
+import { CalendarSidebar, type SidebarCalendar } from "./CalendarSidebar";
 
 interface EventoApi {
   id: string;
   calendarId: string;
+  calendarNombre?: string;
+  calendarColorHex?: string;
   titulo: string;
   descripcion?: string;
   hora: string;
@@ -30,6 +36,13 @@ interface EventoApi {
   fechaDia: string;
   meetLink: string | null;
 }
+
+type Vista = "dia" | "semana" | "mes";
+
+const MESES_LARGOS = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
 
 interface ReunionesResponse {
   connected: boolean;
@@ -86,83 +99,190 @@ function etiquetaFecha(iso: string): string {
   return `${dia} ${fecha.getDate()} ${mesCorto}`;
 }
 
+function parseYmd(s: string): Date {
+  const d = new Date(`${s}T00:00:00`);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+// Desplaza la fecha de referencia hacia delante/atrás según la vista activa.
+function desplazar(refYmd: string, vista: Vista, dir: 1 | -1): string {
+  const d = parseYmd(refYmd);
+  if (vista === "dia") d.setDate(d.getDate() + dir);
+  else if (vista === "semana") d.setDate(d.getDate() + dir * 7);
+  else d.setMonth(d.getMonth() + dir);
+  return ymd(d);
+}
+
+// Texto del rango visible (lo que se ve en Calendar como cabecera).
+function etiquetaRango(refYmd: string, vista: Vista): string {
+  const d = parseYmd(refYmd);
+  if (vista === "dia") {
+    const hoyKey = ymd(new Date());
+    if (refYmd === hoyKey) return "Hoy";
+    const dia = DIAS_LARGOS[d.getDay()];
+    return `${dia.charAt(0).toUpperCase()}${dia.slice(1)} ${d.getDate()} ${MESES_CORTOS[d.getMonth()]}`;
+  }
+  if (vista === "mes") {
+    const mes = MESES_LARGOS[d.getMonth()];
+    return `${mes.charAt(0).toUpperCase()}${mes.slice(1)} ${d.getFullYear()}`;
+  }
+  // semana: lunes → domingo
+  const ini = inicioSemanaLunes(d);
+  const fin = new Date(ini);
+  fin.setDate(ini.getDate() + 6);
+  const mismoMes = ini.getMonth() === fin.getMonth();
+  if (mismoMes) {
+    return `${ini.getDate()} – ${fin.getDate()} ${MESES_CORTOS[fin.getMonth()]}`;
+  }
+  return `${ini.getDate()} ${MESES_CORTOS[ini.getMonth()]} – ${fin.getDate()} ${MESES_CORTOS[fin.getMonth()]}`;
+}
+
 export function MeetDrawer({ children }: { children: ReactNode }) {
   const { connected } = useGoogleConnection();
-  const [eventos, setEventos] = useState<EventoApi[]>([]);
+  const [eventosAll, setEventosAll] = useState<EventoApi[]>([]);
   const [eventosSinMeet, setEventosSinMeet] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<"hoy" | "semana">("hoy");
+  const [vista, setVista] = useState<Vista>("dia");
+  const [refDate, setRefDate] = useState<string>(() => ymd(new Date()));
+  const [modo, setModo] = useState<"agenda" | "calendario">("agenda");
+  const [soloMeet, setSoloMeet] = useState(false);
+  const [calendarios, setCalendarios] = useState<SidebarCalendar[]>([]);
+  const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
+  const [sidebarAbierto, setSidebarAbierto] = useState(false);
   const [needsReauth, setNeedsReauth] = useState(false);
   const nowTime = useNow();
 
+  // Lista de calendarios (para el filtro) al conectar
+  useEffect(() => {
+    if (!connected) {
+      setCalendarios([]);
+      setSeleccionados(new Set());
+      return;
+    }
+    fetch("/api/google/calendar/list")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.connected && Array.isArray(data.calendarios)) {
+          const cals: SidebarCalendar[] = data.calendarios.map(
+            (c: {
+              id: string;
+              nombre: string;
+              color: string;
+              primary?: boolean;
+            }) => ({
+              id: c.id,
+              nombre: c.nombre,
+              color: c.color,
+              primary: c.primary,
+            }),
+          );
+          setCalendarios(cals);
+          const init = new Set<string>(
+            data.calendarios
+              .filter((c: { seleccionado?: boolean }) => c.seleccionado)
+              .map((c: { id: string }) => c.id),
+          );
+          if (init.size === 0) cals.forEach((c) => init.add(c.id));
+          setSeleccionados(init);
+        }
+      })
+      .catch(() => {});
+  }, [connected]);
+
+  const toggleCal = useCallback((id: string) => {
+    setSeleccionados((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }, []);
+
+  const rangoIncluyeHoy = useMemo(() => {
+    const hoy = new Date();
+    const hoyKey = ymd(hoy);
+    const ref = parseYmd(refDate);
+    if (vista === "dia") return refDate === hoyKey;
+    if (vista === "mes") {
+      return (
+        ref.getMonth() === hoy.getMonth() &&
+        ref.getFullYear() === hoy.getFullYear()
+      );
+    }
+    const ini = inicioSemanaLunes(ref);
+    const fin = new Date(ini);
+    fin.setDate(ini.getDate() + 7);
+    return hoy.getTime() >= ini.getTime() && hoy.getTime() < fin.getTime();
+  }, [vista, refDate]);
+
   const load = useCallback(async () => {
     if (!connected) return;
+    // Si ya cargó la lista y el usuario no dejó ningún calendario, no hay nada.
+    if (calendarios.length > 0 && seleccionados.size === 0) {
+      setEventosAll([]);
+      setEventosSinMeet(0);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setNeedsReauth(false);
     try {
-      const ref = ymd(new Date());
-      const r = await fetch(
-        `/api/google/calendar/events?view=week&date=${ref}`,
-        { cache: "no-store" },
-      );
+      const apiView =
+        vista === "dia" ? "day" : vista === "mes" ? "month" : "week";
+      const params = new URLSearchParams({ view: apiView, date: refDate });
+      if (calendarios.length > 0) {
+        params.set("calendarIds", Array.from(seleccionados).join(","));
+      }
+      const r = await fetch(`/api/google/calendar/events?${params}`, {
+        cache: "no-store",
+      });
       if (!r.ok) {
-        setEventos([]);
+        setEventosAll([]);
         setEventosSinMeet(0);
         return;
       }
       const data = (await r.json()) as ReunionesResponse;
       if (data.needsReauth) {
         setNeedsReauth(true);
-        setEventos([]);
+        setEventosAll([]);
         setEventosSinMeet(0);
         return;
       }
       if (!data.connected) {
-        setEventos([]);
+        setEventosAll([]);
         setEventosSinMeet(0);
         return;
       }
-      const todos = data.eventos ?? [];
-      const conMeet = todos.filter((e) => !!e.meetLink);
-      const sinMeet = todos.length - conMeet.length;
-      conMeet.sort(
+      const todos = (data.eventos ?? []).slice();
+      const sinMeet = todos.filter((e) => !e.meetLink).length;
+      todos.sort(
         (a, b) => new Date(a.inicio).getTime() - new Date(b.inicio).getTime(),
       );
-      setEventos(conMeet);
+      setEventosAll(todos);
       setEventosSinMeet(sinMeet);
     } catch (err) {
       console.error("[meet-drawer] error cargando", err);
-      setEventos([]);
+      setEventosAll([]);
       setEventosSinMeet(0);
     } finally {
       setLoading(false);
     }
-  }, [connected]);
+  }, [connected, vista, refDate, calendarios, seleccionados]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const grupos = useMemo(() => {
-    const ahora = new Date();
-    const hoyKey = ymd(ahora);
-    const inicioSem = inicioSemanaLunes(ahora);
-    const finSem = new Date(inicioSem);
-    finSem.setDate(inicioSem.getDate() + 7);
-
-    const hoy = eventos.filter((e) => ymd(new Date(e.inicio)) === hoyKey);
-    const semana = eventos.filter((e) => {
-      const t = new Date(e.inicio).getTime();
-      return (
-        t >= inicioSem.getTime() &&
-        t < finSem.getTime() &&
-        ymd(new Date(e.inicio)) !== hoyKey
-      );
-    });
-    return { hoy, semana };
-  }, [eventos]);
-
-  const lista = tab === "hoy" ? grupos.hoy : grupos.semana;
+  // Agenda: solo reuniones con Meet (ya vienen ordenadas por hora).
+  const lista = useMemo(
+    () => eventosAll.filter((e) => !!e.meetLink),
+    [eventosAll],
+  );
+  const pendientes = useMemo(
+    () => lista.filter((e) => new Date(e.fin).getTime() > nowTime).length,
+    [lista, nowTime],
+  );
 
   return (
     <Sheet>
@@ -171,7 +291,15 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
         <SheetTitle className="sr-only">Google Meet — Reuniones</SheetTitle>
         <SheetHeader className="bg-[#f6f8fc] px-2 py-2 border-b border-transparent">
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 pl-2 pr-3">
+            <button
+              type="button"
+              onClick={() => setSidebarAbierto((v) => !v)}
+              className="rounded-full p-3 hover:bg-black/5 transition-colors"
+              title="Menú principal"
+            >
+              <MenuIcon className="h-5 w-5 text-[#5f6368]" />
+            </button>
+            <div className="flex items-center gap-1 pr-3">
               <MeetLogo className="h-9 w-auto" />
             </div>
             <div className="ml-auto flex items-center gap-1">
@@ -208,31 +336,136 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
           <GoogleReauthBanner servicio="las reuniones" />
         )}
 
-        <div className="flex border-b bg-muted/20 shrink-0">
-          {(["hoy", "semana"] as const).map((t) => {
-            const items = t === "hoy" ? grupos.hoy : grupos.semana;
-            const count = items.filter((e) => new Date(e.fin).getTime() > nowTime).length;
-            return (
+        {/* Toolbar estilo Calendar */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-white px-3 py-2 shrink-0">
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setRefDate(ymd(new Date()))}
+              disabled={rangoIncluyeHoy}
+            >
+              Hoy
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setRefDate((r) => desplazar(r, vista, -1))}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setRefDate((r) => desplazar(r, vista, 1))}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <span className="ml-1 truncate text-sm font-semibold capitalize text-foreground">
+              {etiquetaRango(refDate, vista)}
+            </span>
+            {pendientes > 0 && (
+              <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-600 px-1 text-[9px] font-bold text-white">
+                {pendientes}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Tabs value={vista} onValueChange={(v) => setVista(v as Vista)}>
+              <TabsList className="h-8">
+                <TabsTrigger value="dia" className="text-xs">Día</TabsTrigger>
+                <TabsTrigger value="semana" className="text-xs">Semana</TabsTrigger>
+                <TabsTrigger value="mes" className="text-xs">Mes</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            {/* Conmutador agenda ↔ calendario */}
+            <div className="flex items-center rounded-full border bg-muted/30 p-0.5">
               <button
-                key={t}
-                onClick={() => setTab(t)}
-                className={`flex-1 py-2.5 text-xs font-semibold uppercase tracking-wider transition-colors ${
-                  tab === t
-                    ? "border-b-2 border-emerald-600 text-emerald-700 bg-emerald-50/50"
-                    : "text-muted-foreground hover:text-foreground"
+                type="button"
+                onClick={() => setModo("agenda")}
+                className={`rounded-full p-1.5 transition-colors ${
+                  modo === "agenda"
+                    ? "bg-white text-emerald-700 shadow-sm"
+                    : "text-[#5f6368] hover:text-foreground"
                 }`}
+                title="Vista agenda"
               >
-                {t === "hoy" ? "Hoy" : "Esta semana"}
-                {count > 0 && (
-                  <span className="ml-1.5 inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-emerald-600 text-white text-[9px] font-bold">
-                    {count}
-                  </span>
-                )}
+                <List className="h-4 w-4" />
               </button>
-            );
-          })}
+              <button
+                type="button"
+                onClick={() => setModo("calendario")}
+                className={`rounded-full p-1.5 transition-colors ${
+                  modo === "calendario"
+                    ? "bg-white text-emerald-700 shadow-sm"
+                    : "text-[#5f6368] hover:text-foreground"
+                }`}
+                title="Vista calendario"
+              >
+                <CalendarRange className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
         </div>
 
+        {modo === "calendario" && (
+          <div className="flex items-center justify-between gap-2 border-b bg-emerald-50/40 px-3 py-1.5 shrink-0">
+            <span className="flex items-center gap-1.5 text-[11px] text-emerald-800">
+              <Video className="h-3.5 w-3.5" />
+              Resaltando reuniones con Meet
+            </span>
+            <button
+              type="button"
+              onClick={() => setSoloMeet((v) => !v)}
+              className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
+                soloMeet
+                  ? "border-emerald-600 bg-emerald-600 text-white"
+                  : "border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-50"
+              }`}
+              title={
+                soloMeet
+                  ? "Mostrando solo reuniones con Meet"
+                  : "Mostrando el resto de eventos en gris"
+              }
+            >
+              {soloMeet ? "Solo Meet" : "Atenuar resto"}
+            </button>
+          </div>
+        )}
+
+        <div className="flex flex-1 min-h-0">
+          {sidebarAbierto && connected && (
+            <CalendarSidebar
+              calendarios={calendarios}
+              seleccionados={seleccionados}
+              onToggle={toggleCal}
+              fechaRef={parseYmd(refDate)}
+              onSelectDate={(d) => setRefDate(ymd(d))}
+              nowIso={ymd(new Date())}
+              connected={connected}
+            />
+          )}
+          <div className="flex flex-1 min-w-0 flex-col">
+        {modo === "calendario" ? (
+          loading ? (
+            <div className="flex flex-1 min-h-0 items-center justify-center text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+            </div>
+          ) : (
+            <MeetCalendarGrid
+              eventos={eventosAll}
+              vista={vista}
+              refDate={refDate}
+              nowTime={nowTime}
+              soloMeet={soloMeet}
+              onAbrir={(ev) =>
+                ev.meetLink && window.open(ev.meetLink, "_blank")
+              }
+            />
+          )
+        ) : (
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <div className="flex h-40 items-center justify-center text-muted-foreground">
@@ -242,13 +475,17 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
             <div className="flex flex-col items-center justify-center h-48 px-6 text-center text-muted-foreground">
               <Video className="h-10 w-10 opacity-20 mb-3" />
               <p className="text-sm font-medium">
-                {tab === "hoy" ? "No hay reuniones hoy" : "No hay reuniones esta semana"}
+                {vista === "dia"
+                  ? "No hay reuniones este día"
+                  : vista === "semana"
+                    ? "No hay reuniones esta semana"
+                    : "No hay reuniones este mes"}
               </p>
               <p className="text-xs mt-1 opacity-70">Los eventos con Google Meet aparecerán aquí</p>
               {eventosSinMeet > 0 && (
                 <p className="mt-3 text-[11px] leading-relaxed text-amber-700">
                   Tienes {eventosSinMeet}{" "}
-                  {eventosSinMeet === 1 ? "evento este mes" : "eventos este mes"}{" "}
+                  {eventosSinMeet === 1 ? "evento en este periodo" : "eventos en este periodo"}{" "}
                   sin videollamada de Meet. Edítalos en Google Calendar y añade
                   Meet, o créalos desde aquí marcando «Google Meet».
                 </p>
@@ -263,34 +500,48 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
                 const finMs = new Date(ev.fin).getTime();
                 const finalizada = finMs <= nowTime;
                 const enCurso = !finalizada && inicioMs <= nowTime;
+                const color = ev.calendarColorHex || "#039be5";
                 return (
                   <li
                     key={`${ev.calendarId}-${ev.id}`}
+                    style={{ borderLeft: `4px solid ${color}` }}
                     className={cn(
                       "px-5 py-4 hover:bg-muted/30 transition-colors",
-                      finalizada && "opacity-70",
+                      finalizada && "opacity-75",
                       enCurso && "bg-emerald-50/60",
                     )}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 mb-1 flex items-center gap-1.5">
-                          {fecha}
-                          {enCurso && (
-                            <span className="inline-flex items-center gap-1 text-emerald-700">
-                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                              En curso
-                            </span>
-                          )}
-                          {finalizada && (
-                            <span className="text-muted-foreground font-medium normal-case tracking-normal">
-                              · Finalizada
-                            </span>
-                          )}
-                        </span>
+                        {(vista !== "dia" || enCurso || finalizada) && (
+                          <span className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-600">
+                            {vista !== "dia" && fecha}
+                            {enCurso && (
+                              <span className="inline-flex items-center gap-1 text-emerald-700">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                En curso
+                              </span>
+                            )}
+                            {finalizada && (
+                              <span className="font-medium normal-case tracking-normal text-muted-foreground">
+                                {vista !== "dia" ? "· " : ""}Finalizada
+                              </span>
+                            )}
+                          </span>
+                        )}
                         <p className="font-semibold text-sm leading-tight">
                           {ev.titulo}
                         </p>
+                        {/* Calendario de origen — recuadro de color tipo Google Calendar */}
+                        <span className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                          <span
+                            className="h-2.5 w-2.5 shrink-0 rounded-[3px]"
+                            style={{ backgroundColor: color }}
+                          />
+                          <span className="truncate">
+                            {ev.calendarNombre || "Calendario"}
+                          </span>
+                        </span>
                         <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <Clock className="h-3 w-3" />
@@ -311,14 +562,24 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
                         </div>
                       </div>
 
-                      {ev.meetLink && !finalizada && (
+                      {ev.meetLink && (
                         <Button
                           size="sm"
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 shrink-0 h-9 px-4 shadow-sm shadow-emerald-600/20"
+                          className={cn(
+                            "gap-1.5 shrink-0 h-9 px-4 text-white shadow-sm",
+                            finalizada
+                              ? "bg-gray-400 hover:bg-gray-500 shadow-gray-400/20"
+                              : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20",
+                          )}
                           onClick={() => window.open(ev.meetLink!, "_blank")}
+                          title={
+                            finalizada
+                              ? "Reunión finalizada — abrir en Meet"
+                              : undefined
+                          }
                         >
                           <Video className="h-3.5 w-3.5" />
-                          Entrar
+                          {finalizada ? "Acceder" : "Entrar"}
                           <ExternalLink className="h-3 w-3 opacity-60" />
                         </Button>
                       )}
@@ -328,6 +589,9 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
               })}
             </ul>
           )}
+        </div>
+        )}
+          </div>
         </div>
       </SheetContent>
     </Sheet>

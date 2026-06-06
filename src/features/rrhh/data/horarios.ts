@@ -11,17 +11,14 @@ export interface Turno {
   codigo: string;
   tramos: TurnoTramo[];
   color: TurnoTono;
-  esGuardia: boolean;
-  cuadranteId?: string;
   activo: boolean;
   centro?: string;
   departamento?: string;
-}
-
-export interface Cuadrante {
-  id: string;
-  nombre: string;
-  empresaId: string;
+  // Versionado (PRP-053): cada turno es una versión de una familia.
+  familiaId: string;
+  version: number;
+  esOficial: boolean;
+  vigenteDesde?: string; // ISO date desde la que rige esta versión
 }
 
 export const TURNO_TONOS: Record<TurnoTono, { pill: string; dot: string; label: string }> = {
@@ -52,9 +49,9 @@ export interface Descanso {
   activo: boolean;
 }
 
-// Datos de turnos, descansos, cuadrantes, tipos fichaje y tipos ausencia ahora
-// viven en Supabase (rrhh_turnos / rrhh_descansos / rrhh_cuadrantes /
-// tipos_fichaje / tipos_ausencia). Este archivo conserva tipos y helpers.
+// Datos de turnos, descansos, tipos fichaje y tipos ausencia ahora
+// viven en Supabase (rrhh_turnos / rrhh_descansos / tipos_fichaje /
+// tipos_ausencia). Este archivo conserva tipos y helpers.
 
 export interface TipoFichaje {
   id: string;

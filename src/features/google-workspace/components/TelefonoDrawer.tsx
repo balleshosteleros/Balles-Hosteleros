@@ -16,7 +16,7 @@ import { ReactNode, useState, useEffect, useRef } from "react";
 import {
   Phone, PhoneOff, PhoneMissed, PhoneCall,
   Mic, MicOff, Volume2, VolumeX,
-  Settings2, X, Delete, Wifi, WifiOff,
+  Settings2, X, Delete, Wifi, WifiOff, Users,
 } from "lucide-react";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { DirectorioEmpleados } from "@/features/llamadas-internas/components/DirectorioEmpleados";
 
 const LS_KEY_PHONE = "balles_phone_cfg_v1";
 
@@ -96,7 +97,7 @@ export function llamarDesdeApp(numero: string) {
 
 export function TelefonoDrawer({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<"marcador" | "recientes" | "ajustes">("marcador");
+  const [tab, setTab] = useState<"equipo" | "marcador" | "recientes" | "ajustes">("equipo");
   const [numero, setNumero] = useState("");
   const [callState, setCallState] = useState<CallState>("idle");
   const [callSeconds, setCallSeconds] = useState(0);
@@ -192,7 +193,7 @@ export function TelefonoDrawer({ children }: { children: ReactNode }) {
 
         {/* Tabs */}
         <div className="flex border-b bg-muted/20 shrink-0">
-          {(["marcador", "recientes", "ajustes"] as const).map((t) => (
+          {(["equipo", "marcador", "recientes", "ajustes"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -202,15 +203,23 @@ export function TelefonoDrawer({ children }: { children: ReactNode }) {
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
+              {t === "equipo" && <Users className="h-3.5 w-3.5" />}
               {t === "marcador" && <Phone className="h-3.5 w-3.5" />}
               {t === "recientes" && <PhoneCall className="h-3.5 w-3.5" />}
               {t === "ajustes" && <Settings2 className="h-3.5 w-3.5" />}
-              {t === "marcador" ? "Marcador" : t === "recientes" ? "Recientes" : "Ajustes"}
+              {t === "equipo" ? "Equipo" : t === "marcador" ? "Marcador" : t === "recientes" ? "Recientes" : "Ajustes"}
             </button>
           ))}
         </div>
 
         <div className="flex-1 overflow-y-auto flex flex-col">
+
+          {/* ─── EQUIPO (llamadas internas entre empleados, gratis por internet) ─── */}
+          {tab === "equipo" && (
+            <div className="px-4 py-4">
+              <DirectorioEmpleados onIniciar={() => setOpen(false)} />
+            </div>
+          )}
 
           {/* ─── MARCADOR ─── */}
           {tab === "marcador" && (

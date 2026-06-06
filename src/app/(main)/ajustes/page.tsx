@@ -1,35 +1,50 @@
 "use client";
 
-import { Users, Shield, Layers, Store, AppWindow, Palette, Wrench, Share2 } from "lucide-react";
+import { Users, Shield, Layers, Store, Rocket, Palette, Mail, Calendar as CalendarIcon, Video, MessageCircle } from "lucide-react";
+import { cn } from "@/shared/lib/utils";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UsuariosTab } from "@/features/ajustes/components/UsuariosTab";
 import { RolesTab } from "@/features/ajustes/components/RolesTab";
 import { DepartamentosTab } from "@/features/ajustes/components/DepartamentosTab";
-import { EmpresasTab } from "@/features/ajustes/components/EmpresasTab";
+import { EmpresaTab } from "@/features/ajustes/components/EmpresaTab";
 import { AplicacionesTab } from "@/features/ajustes/components/AplicacionesTab";
 import { ImagenMarcaTab } from "@/features/ajustes/components/ImagenMarcaTab";
 import { HerramientasTab } from "@/features/ajustes/components/HerramientasTab";
-import { CanalesTab } from "@/features/ajustes/components/CanalesTab";
 import { useHydrateUsuarios } from "@/features/ajustes/hooks/use-hydrate-usuarios";
 
+// Mini-icono compuesto: rejilla 2×2 con 4 iconos de herramientas reales
+// (Correo, Calendario, Meet y Comunicación interna).
+function HerramientasIcon({ className }: { className?: string }) {
+  return (
+    <span className={cn("grid grid-cols-2 grid-rows-2 gap-px", className)}>
+      <Mail className="h-full w-full" />
+      <CalendarIcon className="h-full w-full" />
+      <Video className="h-full w-full" />
+      <MessageCircle className="h-full w-full" />
+    </span>
+  );
+}
+
+// Todas las pestañas configuran ÚNICAMENTE la empresa activa del selector.
+// El catálogo del grupo (crear/borrar/cambiar de empresa) vive en /empresas.
 const tabs = [
-  { id: "empresas",       label: "Empresas",        icon: Store     },
-  { id: "imagen-marca",   label: "Imagen de marca", icon: Palette   },
-  { id: "usuarios",       label: "Usuarios",        icon: Users     },
-  { id: "roles",          label: "Roles",           icon: Shield    },
-  { id: "departamentos",  label: "Departamentos",   icon: Layers    },
-  { id: "aplicaciones",   label: "Aplicaciones",    icon: AppWindow },
-  { id: "canales",        label: "Canales",         icon: Share2    },
-  { id: "herramientas",   label: "Herramientas",    icon: Wrench    },
-];
+  { id: "empresa",        label: "Empresa",         icon: Store      },
+  { id: "imagen-marca",   label: "Imagen de marca", icon: Palette    },
+  { id: "usuarios",       label: "Usuarios",        icon: Users      },
+  { id: "roles",          label: "Roles",           icon: Shield     },
+  { id: "departamentos",  label: "Departamentos",   icon: Layers     },
+  { id: "herramientas",   label: "Herramientas",    icon: HerramientasIcon },
+  { id: "aplicaciones",   label: "Aplicaciones",    icon: Rocket           },
+] as const;
 
 export default function AjustesPage() {
   useHydrateUsuarios();
   const router = useRouter();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
-  const activeTab = tabs.some((t) => t.id === tabParam) ? tabParam! : "empresas";
+  const activeTab = tabs.some((t) => t.id === tabParam) ? tabParam! : "empresa";
+
   return (
     <div className="p-3 md:p-4 space-y-2">
       <Tabs
@@ -51,13 +66,12 @@ export default function AjustesPage() {
           ))}
         </TabsList>
 
-        <TabsContent value="empresas"><EmpresasTab /></TabsContent>
+        <TabsContent value="empresa"><EmpresaTab /></TabsContent>
         <TabsContent value="imagen-marca"><ImagenMarcaTab /></TabsContent>
         <TabsContent value="usuarios"><UsuariosTab /></TabsContent>
         <TabsContent value="roles"><RolesTab /></TabsContent>
         <TabsContent value="departamentos"><DepartamentosTab /></TabsContent>
         <TabsContent value="aplicaciones"><AplicacionesTab /></TabsContent>
-        <TabsContent value="canales"><CanalesTab /></TabsContent>
         <TabsContent value="herramientas"><HerramientasTab /></TabsContent>
       </Tabs>
     </div>
