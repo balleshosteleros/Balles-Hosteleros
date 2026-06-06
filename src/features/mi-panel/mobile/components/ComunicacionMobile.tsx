@@ -68,6 +68,21 @@ function mapMensaje(r: Record<string, unknown>, miUserId: string | null): Mensaj
   };
 }
 
+// Elige un formato de grabación soportado. mp4 primero (iOS y reproducible en
+// todos lados); si no, webm (Chrome/Firefox/Android).
+function pickAudioMime(): string {
+  if (typeof MediaRecorder === "undefined" || !MediaRecorder.isTypeSupported) return "";
+  if (MediaRecorder.isTypeSupported("audio/mp4")) return "audio/mp4";
+  if (MediaRecorder.isTypeSupported("audio/webm")) return "audio/webm";
+  return "";
+}
+function audioExt(type: string): string {
+  if (type.includes("mp4") || type.includes("aac") || type.includes("mpeg")) return "m4a";
+  if (type.includes("webm")) return "webm";
+  if (type.includes("ogg")) return "ogg";
+  return "dat";
+}
+
 export function ComunicacionMobile() {
   const { empresaActual, getIsotipoUrl } = useEmpresa();
   const logoUrl = getIsotipoUrl(empresaActual.id);
@@ -207,13 +222,19 @@ export function ComunicacionMobile() {
     if (!canalActivo) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mr = new MediaRecorder(stream);
+      // Grabamos en el formato que el propio dispositivo soporta: iOS/Safari usa
+      // mp4 (reproducible en todas partes), Chrome/Firefox usan webm. Etiquetar
+      // mal el archivo (p. ej. webm en iOS) hace que el reproductor muestre "Error".
+      const preferido = pickAudioMime();
+      const mr = preferido ? new MediaRecorder(stream, { mimeType: preferido }) : new MediaRecorder(stream);
       audioChunksRef.current = [];
       mr.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
       mr.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        await subirYEnviar(new File([blob], `audio_${Date.now()}.webm`, { type: "audio/webm" }), "audio");
+        const type = mr.mimeType || preferido || "audio/mp4";
+        const ext = audioExt(type);
+        const blob = new Blob(audioChunksRef.current, { type });
+        await subirYEnviar(new File([blob], `audio_${Date.now()}.${ext}`, { type }), "audio");
       };
       mr.start();
       mediaRecorderRef.current = mr;

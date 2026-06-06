@@ -206,6 +206,21 @@ function mapDbPref(r: Record<string, unknown>): { canalId: string; pref: PrefCan
   };
 }
 
+// Elige un formato de grabación de audio soportado: mp4 primero (iOS y
+// reproducible en todos lados); si no, webm (Chrome/Firefox/Android).
+function pickAudioMime(): string {
+  if (typeof MediaRecorder === "undefined" || !MediaRecorder.isTypeSupported) return "";
+  if (MediaRecorder.isTypeSupported("audio/mp4")) return "audio/mp4";
+  if (MediaRecorder.isTypeSupported("audio/webm")) return "audio/webm";
+  return "";
+}
+function audioExt(type: string): string {
+  if (type.includes("mp4") || type.includes("aac") || type.includes("mpeg")) return "m4a";
+  if (type.includes("webm")) return "webm";
+  if (type.includes("ogg")) return "ogg";
+  return "dat";
+}
+
 function GrupoAvatar({
   logoUrl, iniciales, color, size = "md",
 }: {
@@ -704,15 +719,21 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
     if (!canalActivo) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mr = new MediaRecorder(stream);
+      // Formato soportado por el dispositivo: mp4 (iOS, reproducible en todos
+      // lados) o webm (Chrome/Firefox). Etiquetar mal el archivo hace que el
+      // reproductor muestre "Error" (p. ej. webm en iOS/Safari).
+      const preferido = pickAudioMime();
+      const mr = preferido ? new MediaRecorder(stream, { mimeType: preferido }) : new MediaRecorder(stream);
       audioChunksRef.current = [];
       mr.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
       };
       mr.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        const file = new File([blob], `audio_${Date.now()}.webm`, { type: "audio/webm" });
+        const type = mr.mimeType || preferido || "audio/mp4";
+        const ext = audioExt(type);
+        const blob = new Blob(audioChunksRef.current, { type });
+        const file = new File([blob], `audio_${Date.now()}.${ext}`, { type });
         await subirYEnviarAdjunto(file, "audio");
       };
       mr.start();
