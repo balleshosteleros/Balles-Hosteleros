@@ -39,6 +39,7 @@ import {
   listCanalPreferencias,
   upsertCanalPreferencia,
   updateCanalMiembros,
+  updateCanalDepartamentos,
   listEmpleadosEmpresa,
   purgeCanalesObsoletos,
   sendMensajeAdjunto,
@@ -58,6 +59,7 @@ type Canal = {
   tipo: "departamento" | "asunto" | "grupo" | "directo";
   miembros: number;
   miembrosUserIds: string[];
+  departamentos: string[];
   ultimoMensaje?: string;
   sinLeer: number;
   descripcion?: string;
@@ -133,6 +135,9 @@ function mapDbCanal(r: Record<string, unknown>): Canal {
   const miembrosArr = Array.isArray(r.miembros_user_ids)
     ? (r.miembros_user_ids as string[])
     : [];
+  const deptosArr = Array.isArray(r.departamentos)
+    ? (r.departamentos as string[])
+    : [];
   // Normalizamos: lo que se creó antes como "grupo" se trata como asunto manual.
   const tipoRaw = (r.tipo as string) ?? "asunto";
   const tipo: Canal["tipo"] =
@@ -145,6 +150,7 @@ function mapDbCanal(r: Record<string, unknown>): Canal {
     tipo,
     miembros: (r.miembros as number) ?? miembrosArr.length,
     miembrosUserIds: miembrosArr,
+    departamentos: deptosArr,
     ultimoMensaje: (r.ultimo_mensaje as string) || undefined,
     sinLeer: (r.sin_leer as number) ?? 0,
     descripcion: (r.descripcion as string) || undefined,
@@ -251,6 +257,9 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
   const [dlgNuevo, setDlgNuevo] = useState(false);
   const [nombreNuevo, setNombreNuevo] = useState("");
   const [miembrosNuevo, setMiembrosNuevo] = useState<Set<string>>(new Set());
+  const [deptosNuevo, setDeptosNuevo] = useState<Set<string>>(new Set());
+  const [dlgDeptos, setDlgDeptos] = useState(false);
+  const [deptosEdit, setDeptosEdit] = useState<Set<string>>(new Set());
   const [dlgAjustes, setDlgAjustes] = useState(false);
   const [editandoNombre, setEditandoNombre] = useState(false);
   const [nombreEdit, setNombreEdit] = useState("");
@@ -303,6 +312,16 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
   const canalesDepartamento = canalesFiltrados.filter((c) => c.tipo === "departamento");
   const canalesAsunto = canalesFiltrados.filter((c) => c.tipo !== "departamento");
 
+  // Departamentos disponibles para ligar a un asunto (todos los del organigrama,
+  // independientes del buscador).
+  const departamentosDisponibles = useMemo(
+    () =>
+      Array.from(
+        new Set(canales.filter((c) => c.tipo === "departamento").map((c) => c.nombre)),
+      ).sort((a, b) => a.localeCompare(b)),
+    [canales],
+  );
+
   const isDepartamento = canal?.tipo === "departamento";
 
   const empleadosFiltrados = useMemo(() => {
@@ -326,13 +345,8 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
     const empresaSlug = empresaActual.id;
     try {
       setCargando(true);
-      const departamentos = await getDepartamentosDelOrganigrama(empresaSlug);
-      console.log(`[chat] departamentos para ${empresaSlug}:`, departamentos);
 
-      // 1. Purgar grupos obsoletos preservando 'asunto'
-      await purgeCanalesObsoletos(departamentos, empresaSlug);
-
-      // 2. Releer y crear los que falten
+      // 1. Leer canales visibles para el usuario.
       const res = await listCanales(empresaSlug);
       if (!res.ok) {
         toast.error("No se pudo leer los canales (revisa migraciones / sesión).");
@@ -340,27 +354,31 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
       }
       let data = res.data as Record<string, unknown>[];
 
-      const existentes = new Set(
-        data.map((d) => String(d.nombre ?? "").trim().toUpperCase())
-      );
-      const faltantes = departamentos.filter((nombre) => !existentes.has(nombre));
-      if (faltantes.length > 0) {
-        const resultados = await Promise.all(
-          faltantes.map((nombre) => createCanal(nombre, "departamento", [], empresaSlug)),
+      // 2. Solo admins/directores mantienen el catálogo de departamentos
+      //    (purgan obsoletos y crean los que falten). Un usuario normal ve la
+      //    lista ya filtrada y no debe recrear departamentos que no ve.
+      if (res.esAdmin) {
+        const departamentos = await getDepartamentosDelOrganigrama(empresaSlug);
+        await purgeCanalesObsoletos(departamentos, empresaSlug);
+
+        const existentes = new Set(
+          data.map((d) => String(d.nombre ?? "").trim().toUpperCase()),
         );
-        const fallos = resultados.filter((r) => !r.ok);
-        if (fallos.length > 0) {
-          console.warn("[chat] fallos al crear canales:", fallos);
-          toast.error(
-            `No se pudieron crear ${fallos.length} grupos. ${fallos[0].error ?? ""}`,
+        const faltantes = departamentos.filter((nombre) => !existentes.has(nombre));
+        if (faltantes.length > 0) {
+          const resultados = await Promise.all(
+            faltantes.map((nombre) => createCanal(nombre, "departamento", [], empresaSlug)),
           );
+          const fallos = resultados.filter((r) => !r.ok);
+          if (fallos.length > 0) {
+            console.warn("[chat] fallos al crear canales:", fallos);
+          }
         }
         const retry = await listCanales(empresaSlug);
         if (retry.ok) data = retry.data as Record<string, unknown>[];
       }
 
       const mapped = data.map(mapDbCanal);
-      console.log(`[chat] canales cargados (${empresaSlug}):`, mapped.length);
       setCanales(mapped);
     } catch (err) {
       console.error("[chat] cargarCanales error:", err);
@@ -458,12 +476,18 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
   async function crearAsunto() {
     const limpio = nombreNuevo.trim();
     if (!limpio) return;
-    if (miembrosNuevo.size === 0) {
-      toast.error("Selecciona al menos un miembro");
+    if (deptosNuevo.size === 0) {
+      toast.error("Liga el asunto a al menos un departamento");
       return;
     }
     try {
-      const res = await createCanal(limpio, "asunto", Array.from(miembrosNuevo), empresaActual.id);
+      const res = await createCanal(
+        limpio,
+        "asunto",
+        Array.from(miembrosNuevo),
+        empresaActual.id,
+        Array.from(deptosNuevo),
+      );
       if (!res.ok) {
         toast.error(res.error ?? "No se pudo crear el asunto");
         return;
@@ -474,11 +498,35 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
       setDlgNuevo(false);
       setNombreNuevo("");
       setMiembrosNuevo(new Set());
+      setDeptosNuevo(new Set());
       setBusquedaEmpleados("");
       toast.success("Asunto creado");
     } catch {
       toast.error("No se pudo crear el asunto");
     }
+  }
+
+  async function guardarDeptos() {
+    if (!canal) return;
+    if (canal.tipo === "departamento") {
+      toast.error("Un departamento no se liga a otros departamentos");
+      return;
+    }
+    const lista = Array.from(deptosEdit);
+    if (lista.length === 0) {
+      toast.error("Liga el asunto a al menos un departamento");
+      return;
+    }
+    const res = await updateCanalDepartamentos(canal.id, lista);
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudieron guardar los departamentos");
+      return;
+    }
+    setCanales((prev) =>
+      prev.map((c) => (c.id === canal.id ? { ...c, departamentos: lista } : c)),
+    );
+    setDlgDeptos(false);
+    toast.success("Departamentos actualizados");
   }
 
   async function guardarMiembros() {
@@ -825,7 +873,7 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
             {/* Botón crear asunto */}
             <div className="p-3 border-t shrink-0">
               <Button
-                onClick={() => { setNombreNuevo(""); setMiembrosNuevo(new Set()); setBusquedaEmpleados(""); setDlgNuevo(true); }}
+                onClick={() => { setNombreNuevo(""); setMiembrosNuevo(new Set()); setDeptosNuevo(new Set()); setBusquedaEmpleados(""); setDlgNuevo(true); }}
                 className="w-full gap-2 rounded-full h-12 text-sm font-semibold shadow-sm"
                 size="lg"
               >
@@ -900,6 +948,9 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
                           <>
                             <DropdownMenuItem onSelect={() => { setNombreEdit(canal.nombre); setEditandoNombre(true); setDlgAjustes(true); }}>
                               <Pencil className="mr-2 h-4 w-4" /> Editar nombre
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => { setDeptosEdit(new Set(canal.departamentos)); setDlgDeptos(true); }}>
+                              <Building2 className="mr-2 h-4 w-4" /> Editar departamentos
                             </DropdownMenuItem>
                             <DropdownMenuItem onSelect={() => { setMiembrosEdit(new Set(canal.miembrosUserIds)); setBusquedaEmpleados(""); setDlgMiembros(true); }}>
                               <Users className="mr-2 h-4 w-4" /> Editar miembros
@@ -1074,7 +1125,7 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
                 <Briefcase className="h-4 w-4 text-primary" /> Nuevo asunto
               </DialogTitle>
               <DialogDescription>
-                Crea un grupo manual con el título y los miembros que tú elijas. El icono se fija al de la empresa.
+                Liga el asunto a uno o varios departamentos: solo verán el grupo los empleados con ese departamento activo en su rol. El icono se fija al de la empresa.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-3 overflow-hidden flex-1 flex flex-col min-h-0">
@@ -1087,10 +1138,26 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
                   autoFocus
                 />
               </div>
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <Building2 className="h-3.5 w-3.5 text-primary" />
+                  Departamentos con acceso ({deptosNuevo.size})
+                  <span className="text-[10px] font-normal text-muted-foreground">· obligatorio</span>
+                </label>
+                <DepartamentosCheckList
+                  departamentos={departamentosDisponibles}
+                  seleccion={deptosNuevo}
+                  onToggle={(nombre) => {
+                    const next = new Set(deptosNuevo);
+                    if (next.has(nombre)) next.delete(nombre); else next.add(nombre);
+                    setDeptosNuevo(next);
+                  }}
+                />
+              </div>
               <div className="space-y-2 flex-1 flex flex-col min-h-0">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-semibold text-foreground">
-                    Miembros ({miembrosNuevo.size})
+                    Miembros sueltos ({miembrosNuevo.size}) <span className="text-[10px] font-normal text-muted-foreground">· opcional</span>
                   </label>
                   <button
                     type="button"
@@ -1130,7 +1197,7 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDlgNuevo(false)}>Cancelar</Button>
-              <Button onClick={crearAsunto} disabled={!nombreNuevo.trim() || miembrosNuevo.size === 0}>
+              <Button onClick={crearAsunto} disabled={!nombreNuevo.trim() || deptosNuevo.size === 0}>
                 Crear asunto
               </Button>
             </DialogFooter>
@@ -1192,6 +1259,40 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
               <Button variant="outline" onClick={() => setDlgMiembros(false)}>Cancelar</Button>
               <Button onClick={guardarMiembros} disabled={miembrosEdit.size === 0}>
                 Guardar miembros
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Diálogo: editar departamentos ligados (sólo asuntos) */}
+        <Dialog open={dlgDeptos} onOpenChange={setDlgDeptos}>
+          <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Building2 className="h-4 w-4 text-primary" /> Departamentos del asunto
+              </DialogTitle>
+              <DialogDescription>
+                Solo los empleados con acceso a estos departamentos en su rol verán <strong>{canal?.nombre}</strong>.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2 flex-1 flex flex-col min-h-0">
+              <span className="text-xs text-muted-foreground">
+                Seleccionados: {deptosEdit.size}
+              </span>
+              <DepartamentosCheckList
+                departamentos={departamentosDisponibles}
+                seleccion={deptosEdit}
+                onToggle={(nombre) => {
+                  const next = new Set(deptosEdit);
+                  if (next.has(nombre)) next.delete(nombre); else next.add(nombre);
+                  setDeptosEdit(next);
+                }}
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDlgDeptos(false)}>Cancelar</Button>
+              <Button onClick={guardarDeptos} disabled={deptosEdit.size === 0}>
+                Guardar departamentos
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -1437,6 +1538,53 @@ function EmpleadosCheckList({
   );
 }
 
+function DepartamentosCheckList({
+  departamentos, seleccion, onToggle,
+}: {
+  departamentos: string[];
+  seleccion: Set<string>;
+  onToggle: (nombre: string) => void;
+}) {
+  if (departamentos.length === 0) {
+    return (
+      <div className="rounded-md border bg-muted/20 flex items-center justify-center min-h-[120px]">
+        <p className="text-xs text-muted-foreground px-4 text-center">
+          Aún no hay departamentos en el organigrama.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="max-h-[200px] overflow-y-auto rounded-md border">
+      {departamentos.map((nombre) => {
+        const checked = seleccion.has(nombre);
+        return (
+          <button
+            key={nombre}
+            type="button"
+            onClick={() => onToggle(nombre)}
+            className={cn(
+              "flex w-full items-center gap-3 px-3 py-2 text-left transition-colors border-b last:border-b-0",
+              checked ? "bg-primary/5" : "hover:bg-muted/40",
+            )}
+          >
+            <div
+              className={cn(
+                "h-5 w-5 shrink-0 rounded border flex items-center justify-center transition-colors",
+                checked ? "bg-primary border-primary" : "bg-background border-input",
+              )}
+            >
+              {checked && <Check className="h-3.5 w-3.5 text-primary-foreground" />}
+            </div>
+            <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="text-sm font-medium truncate">{nombre}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function SidebarSeccion({
   icon, label, hint, count, open, onToggle,
 }: {
@@ -1599,7 +1747,8 @@ function Adjunto({
       <audio
         src={url}
         controls
-        className="my-1 max-w-[260px]"
+        preload="metadata"
+        className="my-1 block h-10 w-[230px] max-w-full"
       />
     );
   }

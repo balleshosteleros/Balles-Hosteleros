@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Fingerprint, LayoutGrid } from "lucide-react";
+import { Home, Fingerprint, LayoutGrid, MessageCircle } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 
 type NavItem = {
@@ -15,6 +15,7 @@ type NavItem = {
 const items: readonly NavItem[] = [
   { href: "/m", label: "Inicio", icon: Home },
   { href: "/m/fichar", label: "Fichar", icon: Fingerprint, primary: true },
+  { href: "/m/comunicacion", label: "Chat", icon: MessageCircle },
   { href: "/m/mas", label: "Más", icon: LayoutGrid },
 ];
 
