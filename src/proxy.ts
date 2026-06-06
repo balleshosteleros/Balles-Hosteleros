@@ -51,7 +51,9 @@ export async function proxy(request: NextRequest) {
 
   // Paso 1: refresco de sesión + rewrite de hostnames custom + redirect
   // de "/" hacia el módulo del usuario logueado.
-  const sessionResponse = await updateSession(request)
+  // `user` viene ya validado por updateSession → así el Paso 2 no repite
+  // auth.getUser() (otra ida a la red a GoTrue) en cada request de módulo.
+  const { response: sessionResponse, user } = await updateSession(request)
 
   // Si updateSession devolvió un redirect/rewrite, respétalo.
   if (sessionResponse.status >= 300 && sessionResponse.status < 400) {
@@ -62,6 +64,9 @@ export async function proxy(request: NextRequest) {
   const moduloReq = moduloRequerido(pathname)
   if (!moduloReq) return sessionResponse
 
+  if (!user) return sessionResponse
+
+  // Cliente SSR solo para signOut si la cuenta está inactiva (abajo).
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -74,9 +79,6 @@ export async function proxy(request: NextRequest) {
       },
     }
   )
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return sessionResponse
 
   const adminUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY

@@ -1,8 +1,16 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import type { User } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { esHostPrincipal } from '@/features/marketing/pagina-web/services/hostname-resolver'
 import { LANDING_PATH } from '@/features/auth/lib/role-redirect'
 import { checkProfileGuard } from '@/features/auth/lib/profile-guard'
+
+export type UpdateSessionResult = {
+  response: NextResponse
+  /** Usuario ya validado por GoTrue (o null). El proxy lo reutiliza en vez de
+   * volver a llamar a auth.getUser() — cada getUser() es otra ida a la red. */
+  user: User | null
+}
 
 const AUTH_PATHS = ['/', '/callback', '/forgot-password', '/update-password', '/check-email', '/acceso-demo']
 const PUBLIC_PREFIXES = ['/carta', '/__site', '/api/google/connect', '/empleo', '/api/empleo', '/firmar', '/inspectores', '/inspecciones/verificar', '/v', '/r', '/api/visita']
@@ -19,12 +27,14 @@ function isPublicPath(pathname: string) {
   return PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))
 }
 
-export async function updateSession(request: NextRequest) {
+export async function updateSession(
+  request: NextRequest,
+): Promise<UpdateSessionResult> {
   // Alias /login → / (la pantalla de login vive en la raíz)
   if (request.nextUrl.pathname === '/login') {
     const target = request.nextUrl.clone()
     target.pathname = '/'
-    return NextResponse.redirect(target)
+    return { response: NextResponse.redirect(target), user: null }
   }
 
   // ── Hostname rewrite: dominios custom de páginas web ────────────────
@@ -38,7 +48,7 @@ export async function updateSession(request: NextRequest) {
       target.pathname = `/__site${pathname === '/' ? '' : pathname}`
       const res = NextResponse.rewrite(target)
       res.headers.set('x-paginas-web-host', rawHost)
-      return res
+      return { response: res, user: null }
     }
   }
 
@@ -90,16 +100,19 @@ export async function updateSession(request: NextRequest) {
         await supabase.auth.signOut()
         const url = new URL('/', request.url)
         url.searchParams.set('error', guard.code)
-        return NextResponse.redirect(url)
+        return { response: NextResponse.redirect(url), user: null }
       }
-      return NextResponse.redirect(new URL(LANDING_PATH, request.url))
+      return {
+        response: NextResponse.redirect(new URL(LANDING_PATH, request.url)),
+        user,
+      }
     }
-    return supabaseResponse
+    return { response: supabaseResponse, user }
   }
 
   // Resto: privado → requiere sesión
   if (!user) {
-    return NextResponse.redirect(new URL('/', request.url))
+    return { response: NextResponse.redirect(new URL('/', request.url)), user: null }
   }
 
   // Y además, perfil completo y activo. Sin esto, un usuario que entrara
@@ -110,8 +123,8 @@ export async function updateSession(request: NextRequest) {
     await supabase.auth.signOut()
     const url = new URL('/', request.url)
     url.searchParams.set('error', guard.code)
-    return NextResponse.redirect(url)
+    return { response: NextResponse.redirect(url), user: null }
   }
 
-  return supabaseResponse
+  return { response: supabaseResponse, user }
 }
