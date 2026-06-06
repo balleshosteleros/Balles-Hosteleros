@@ -166,6 +166,8 @@ export async function getMiFichajeHoy(): Promise<{
         horasTotales: (data.horas_totales as number | null) ?? 0,
         estado: (data.estado as string | null) ?? "pendiente",
         incidencia: (data.incidencia as string | null) ?? null,
+        modoTeletrabajo: Boolean(data.modo_teletrabajo),
+        local: (data.centro as string | null) ?? null,
       },
     };
   } catch (err: unknown) {
@@ -175,7 +177,31 @@ export async function getMiFichajeHoy(): Promise<{
   }
 }
 
-export async function ficharEntradaPersonal(geo?: GeoInput) {
+export type ModoFichaje = "presencial" | "teletrabajo";
+
+/**
+ * Indica si el empleado puede ELEGIR fichar como teletrabajo en esta empresa.
+ * La UI usa esto para decidir si pregunta "¿presencial o teletrabajo?" antes de
+ * fichar. Si es false, el fichaje es siempre presencial (con ubicación).
+ */
+export async function getMiConfigFichaje(): Promise<{ ok: boolean; permiteTeletrabajo: boolean; error?: string }> {
+  try {
+    const { supabase, user, empresaId } = await getContext();
+    if (!user || !empresaId) return { ok: false, permiteTeletrabajo: false, error: "No autenticado" };
+    const { data: empleado, error } = await supabase
+      .from("empleados")
+      .select("permite_teletrabajo")
+      .eq("user_id", user.id)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (error) throw error;
+    return { ok: true, permiteTeletrabajo: Boolean(empleado?.permite_teletrabajo) };
+  } catch (err: unknown) {
+    return { ok: false, permiteTeletrabajo: false, error: extractErrorMessage(err) };
+  }
+}
+
+export async function ficharEntradaPersonal(geo?: GeoInput, modoSolicitado?: ModoFichaje) {
   try {
     const { supabase, user, empresaId, nombre } = await getContext();
     if (!user || !empresaId) return { ok: false, error: "No autenticado" };
@@ -213,7 +239,11 @@ export async function ficharEntradaPersonal(geo?: GeoInput) {
       };
     }
 
-    const modoTeletrabajo = Boolean(empleado.permite_teletrabajo);
+    // El empleado solo ficha como teletrabajo si lo tiene permitido Y lo elige
+    // explícitamente. En cualquier otro caso (incluido presencial elegido por
+    // quien sí puede teletrabajar) se exige ubicación dentro de un local.
+    const permiteTeletrabajo = Boolean(empleado.permite_teletrabajo);
+    const modoTeletrabajo = permiteTeletrabajo && modoSolicitado === "teletrabajo";
     let centro = "";
     let localElegidoId: string;
 
@@ -221,7 +251,7 @@ export async function ficharEntradaPersonal(geo?: GeoInput) {
       if (!geo) {
         return {
           ok: false,
-          error: "Activa la geolocalización para poder fichar.",
+          error: "Activa la geolocalización para poder fichar de forma presencial.",
         };
       }
       // Elige el local más cercano dentro de su radio (cualquiera de los suyos).
@@ -410,6 +440,8 @@ export async function listarMisFichajes(limite = 60): Promise<{
         horasTotales: (f.horas_totales as number | null) ?? 0,
         estado: (f.estado as string | null) ?? "pendiente",
         incidencia: (f.incidencia as string | null) ?? null,
+        modoTeletrabajo: Boolean(f.modo_teletrabajo),
+        local: (f.centro as string | null) ?? null,
       })),
     };
   } catch (err: unknown) {

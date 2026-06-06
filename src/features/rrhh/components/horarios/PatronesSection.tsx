@@ -165,7 +165,10 @@ function ListaPatrones({
             className="pl-9"
           />
         </div>
-        <Button onClick={() => setShowTipoSelector(true)}>Crear patrón</Button>
+        <Button variant="primary" size="sm" onClick={() => setShowTipoSelector(true)} className="gap-1.5">
+          <Plus className="h-4 w-4" />
+          Nuevo
+        </Button>
       </div>
 
       <div className="rounded-lg border overflow-hidden">
@@ -328,7 +331,7 @@ function TipoSelectorDialog({
             <div>
               <h3 className="font-semibold">Patrón semanal</h3>
               <p className="text-xs text-muted-foreground mt-1">
-                Crea patrones semanales y asígnalos a los empleados de tus cuadrantes de turnos.
+                Crea patrones semanales y asígnalos a los empleados de tus turnos.
               </p>
             </div>
           </button>

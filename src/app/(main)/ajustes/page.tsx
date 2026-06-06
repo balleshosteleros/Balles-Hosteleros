@@ -1,6 +1,6 @@
 "use client";
 
-import { Users, Shield, Layers, Store, AppWindow, Palette, Wrench, Share2 } from "lucide-react";
+import { Users, Shield, Layers, Store, AppWindow, Palette, Wrench, Share2, UsersRound } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UsuariosTab } from "@/features/ajustes/components/UsuariosTab";
@@ -11,6 +11,7 @@ import { AplicacionesTab } from "@/features/ajustes/components/AplicacionesTab";
 import { ImagenMarcaTab } from "@/features/ajustes/components/ImagenMarcaTab";
 import { HerramientasTab } from "@/features/ajustes/components/HerramientasTab";
 import { CanalesTab } from "@/features/ajustes/components/CanalesTab";
+import { RrhhConfigTab } from "@/features/ajustes/components/RrhhConfigTab";
 import { useHydrateUsuarios } from "@/features/ajustes/hooks/use-hydrate-usuarios";
 
 const tabs = [
@@ -19,6 +20,7 @@ const tabs = [
   { id: "usuarios",       label: "Usuarios",        icon: Users     },
   { id: "roles",          label: "Roles",           icon: Shield    },
   { id: "departamentos",  label: "Departamentos",   icon: Layers    },
+  { id: "rrhh",           label: "RRHH",            icon: UsersRound },
   { id: "aplicaciones",   label: "Aplicaciones",    icon: AppWindow },
   { id: "canales",        label: "Canales",         icon: Share2    },
   { id: "herramientas",   label: "Herramientas",    icon: Wrench    },
@@ -56,6 +58,7 @@ export default function AjustesPage() {
         <TabsContent value="usuarios"><UsuariosTab /></TabsContent>
         <TabsContent value="roles"><RolesTab /></TabsContent>
         <TabsContent value="departamentos"><DepartamentosTab /></TabsContent>
+        <TabsContent value="rrhh"><RrhhConfigTab /></TabsContent>
         <TabsContent value="aplicaciones"><AplicacionesTab /></TabsContent>
         <TabsContent value="canales"><CanalesTab /></TabsContent>
         <TabsContent value="herramientas"><HerramientasTab /></TabsContent>

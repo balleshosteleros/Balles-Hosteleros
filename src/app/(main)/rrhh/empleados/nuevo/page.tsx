@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,39 +12,105 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/shared/components/ui/checkbox";
-import { ArrowLeft, UserPlus, Loader2, Copy, Check, Building2 } from "lucide-react";
+import { ArrowLeft, UserPlus, Loader2, Copy, Check, Building2, Briefcase } from "lucide-react";
 import { toast } from "sonner";
 import {
-  createEmpleado, listDepartamentos,
+  createEmpleado, listDepartamentos, guardarPerfilEmpleado,
 } from "@/features/rrhh/actions/empleados-actions";
 import { getEmpresasAccesibles, type EmpresaAccesible } from "@/features/empresa/actions/empresas-accesibles-actions";
 import { listLocales } from "@/features/ajustes/actions/locales-actions";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
-import { normalizarNombre } from "@/shared/lib/normalizar-nombre";
+import {
+  DatosPersonalesForm, type DatosPersonalesFormHandle,
+} from "@/features/mi-panel/components/DatosPersonalesForm";
+import type {
+  DatosPersonalesCompletos, DatosPersonalesInput,
+} from "@/features/mi-panel/actions/datos-personales-actions";
 
 type CredencialesAlta = { email: string; password: string };
 type LocalOpt = { id: string; nombre: string };
 
-function ordenarEmpresasConPrincipal(
+// Perfil en blanco: el alta abre la MISMA ficha que se edita después, vacía.
+const PERFIL_VACIO: DatosPersonalesCompletos = {
+  nombre: null, apellidos: null, email: null,
+  tipo_documento: null, dni_nie: null, fecha_nacimiento: null,
+  nacionalidad: null, genero: null, estado_civil: null, numero_ss: null,
+  telefono: null, telefono_empresa: null, email_personal: null, email_empresa: null,
+  direccion: null, codigo_postal: null, ciudad: null, provincia: null, pais: null,
+  iban: null, banco_codigo: null, banco_nombre: null, titular_cuenta: null,
+  iban_verificado: false,
+  emergencia_nombre: null, emergencia_relacion: null, emergencia_telefono: null,
+  talla_camiseta: null, talla_pantalon: null,
+};
+
+// Campos del perfil que DEBEN estar completos para poder crear al empleado.
+// Quedan fuera (opcionales) por reglas del negocio: email_empresa (solo si hay
+// cuenta corporativa) y telefono_empresa; banco/titular se autocompletan.
+const PERFIL_REQUERIDOS: Array<[keyof DatosPersonalesInput, string]> = [
+  ["nombre", "Nombre"],
+  ["apellidos", "Apellidos"],
+  ["tipo_documento", "Tipo de documento"],
+  ["dni_nie", "Nº de documento"],
+  ["fecha_nacimiento", "Fecha de nacimiento"],
+  ["nacionalidad", "Nacionalidad"],
+  ["genero", "Género"],
+  ["estado_civil", "Estado civil"],
+  ["numero_ss", "Nº Seguridad Social"],
+  ["telefono", "Teléfono"],
+  ["email_personal", "Email personal"],
+  ["direccion", "Dirección"],
+  ["codigo_postal", "Código postal"],
+  ["ciudad", "Ciudad"],
+  ["provincia", "Provincia"],
+  ["pais", "País"],
+  ["iban", "IBAN"],
+  ["emergencia_nombre", "Contacto de emergencia (nombre)"],
+  ["emergencia_relacion", "Contacto de emergencia (relación)"],
+  ["emergencia_telefono", "Contacto de emergencia (teléfono)"],
+  ["talla_camiseta", "Talla de camiseta"],
+  ["talla_pantalon", "Talla de pantalón"],
+];
+
+function ordenarEmpresasConFichaje(
   empresaIds: string[],
-  empresaPrincipalId: string | null,
+  empresaFichajeId: string | null,
 ) {
-  if (!empresaPrincipalId) return empresaIds;
-  const resto = empresaIds.filter((id) => id !== empresaPrincipalId);
-  return empresaIds.includes(empresaPrincipalId)
-    ? [empresaPrincipalId, ...resto]
+  if (!empresaFichajeId) return empresaIds;
+  const resto = empresaIds.filter((id) => id !== empresaFichajeId);
+  return empresaIds.includes(empresaFichajeId)
+    ? [empresaFichajeId, ...resto]
     : empresaIds;
+}
+
+// Cada empresa marcada DEBE tener al menos un local de fichaje seleccionado: sin
+// local el empleado no podría fichar en esa empresa. Devuelve los ids de las
+// empresas marcadas que no tienen ningún local elegido (o que no tienen locales).
+function empresasSinLocalSeleccionado(
+  empresasMarcadas: string[],
+  localesPorEmpresa: Record<string, LocalOpt[]>,
+  localesSeleccionados: string[],
+): string[] {
+  const sel = new Set(localesSeleccionados);
+  return empresasMarcadas.filter((empId) => {
+    const locales = localesPorEmpresa[empId] ?? [];
+    return !locales.some((l) => sel.has(l.id));
+  });
 }
 
 export default function NuevoEmpleadoPage() {
   const router = useRouter();
+  const datosRef = useRef<DatosPersonalesFormHandle>(null);
 
   const [departamentos, setDepartamentos] = useState<Array<{ id: string; nombre: string }>>([]);
   const [empresas, setEmpresas] = useState<EmpresaAccesible[]>([]);
   const [empresasMarcadas, setEmpresasMarcadas] = useState<string[]>([]);
-  const [empresaPrincipalId, setEmpresaPrincipalId] = useState<string | null>(null);
+  // Empresa donde el empleado ficha (su local "por defecto" vive aquí). No es
+  // una jerarquía "principal/secundaria": el empleado aparece igual en todas.
+  const [empresaFichajeId, setEmpresaFichajeId] = useState<string | null>(null);
   const [localesPorEmpresa, setLocalesPorEmpresa] = useState<Record<string, LocalOpt[]>>({});
   const [localesSeleccionados, setLocalesSeleccionados] = useState<string[]>([]);
+  const [departamentoId, setDepartamentoId] = useState<string>("");
+  const [puesto, setPuesto] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [credenciales, setCredenciales] = useState<CredencialesAlta | null>(null);
   const [copiado, setCopiado] = useState(false);
@@ -55,10 +121,7 @@ export default function NuevoEmpleadoPage() {
       setDepartamentos((res.data ?? []) as Array<{ id: string; nombre: string }>);
     });
     getEmpresasAccesibles().then((res) => {
-      if (res.ok) {
-        setEmpresas(res.data);
-        // Por defecto, ninguna marcada: el admin elige.
-      }
+      if (res.ok) setEmpresas(res.data);
     });
   }, []);
 
@@ -91,70 +154,90 @@ export default function NuevoEmpleadoPage() {
       if (checked) {
         if (prev.includes(id)) return prev;
         const next = [...prev, id];
-        setEmpresaPrincipalId((actual) => actual ?? id);
+        setEmpresaFichajeId((actual) => actual ?? id);
         return next;
       }
       const next = prev.filter((x) => x !== id);
-      // Al desmarcar, retiramos del conjunto los locales de esa empresa.
       const idsEmpresa = new Set((localesPorEmpresa[id] ?? []).map((l) => l.id));
       setLocalesSeleccionados((sel) => sel.filter((lid) => !idsEmpresa.has(lid)));
-      setEmpresaPrincipalId((actual) => {
-        if (actual !== id) return actual;
-        return next[0] ?? null;
-      });
+      setEmpresaFichajeId((actual) => (actual !== id ? actual : next[0] ?? null));
       return next;
     });
   }
 
-  async function handleSubmit(formData: FormData) {
-    const nombre = (formData.get("nombre") as string)?.trim();
-    const emailEmpresa = ((formData.get("email_empresa") as string) || "").trim();
-    const emailPersonal = ((formData.get("email_personal") as string) || "").trim();
-    if (!nombre) {
-      toast.error("El nombre es obligatorio");
-      return;
-    }
-    if (!emailPersonal) {
-      toast.error("El email personal es obligatorio (se usa como login si no hay email de empresa)");
-      return;
-    }
-    if (empresasMarcadas.length === 0) {
-      toast.error("Selecciona al menos una empresa para el empleado");
-      return;
-    }
-    if (!empresaPrincipalId || !empresasMarcadas.includes(empresaPrincipalId)) {
-      toast.error("Indica en qué empresa ficha el empleado");
-      return;
-    }
-    if (localesSeleccionados.length === 0) {
-      toast.error("Marca al menos un local donde el empleado pueda fichar");
-      return;
-    }
+  async function crear() {
+    if (saving) return;
 
-    const empresasOrdenadas = ordenarEmpresasConPrincipal(
-      empresasMarcadas,
-      empresaPrincipalId,
+    const built = datosRef.current?.getPayload();
+    if (!built) {
+      toast.error("El formulario aún no está listo");
+      return;
+    }
+    if (!built.ok) {
+      toast.error(built.error);
+      return;
+    }
+    const payload = built.payload;
+
+    // Todo obligatorio: no se crea al empleado hasta que el perfil esté completo.
+    const faltan: string[] = [];
+    for (const [campo, label] of PERFIL_REQUERIDOS) {
+      if (!String(payload[campo] ?? "").trim()) faltan.push(label);
+    }
+    if (!departamentoId) faltan.push("Departamento");
+    if (!puesto.trim()) faltan.push("Puesto");
+    if (empresasMarcadas.length === 0) faltan.push("Empresa");
+    if (!empresaFichajeId) faltan.push("Empresa donde ficha");
+    const sinLocal = empresasSinLocalSeleccionado(
+      empresasMarcadas, localesPorEmpresa, localesSeleccionados,
     );
+    if (sinLocal.length > 0) {
+      const nombres = sinLocal.map((id) => empresas.find((e) => e.id === id)?.nombre ?? id);
+      faltan.push(`Un local de fichaje en cada empresa (falta en: ${nombres.join(", ")})`);
+    }
+    if (faltan.length > 0) {
+      toast.error(`Faltan campos obligatorios: ${faltan.join(", ")}`);
+      return;
+    }
 
     setSaving(true);
+    const empresasOrdenadas = ordenarEmpresasConFichaje(empresasMarcadas, empresaFichajeId);
     const res = await createEmpleado({
-      nombre,
-      apellidos: (formData.get("apellidos") as string) || undefined,
-      departamentoId: (formData.get("departamento_id") as string) || undefined,
-      puesto: (formData.get("puesto") as string) || undefined,
-      emailEmpresa: emailEmpresa || undefined,
-      emailPersonal,
-      telefono: (formData.get("telefono") as string) || undefined,
+      nombre: payload.nombre ?? "",
+      apellidos: payload.apellidos ?? undefined,
+      departamentoId,
+      puesto: puesto.trim(),
+      emailEmpresa: payload.email_empresa ?? undefined,
+      emailPersonal: payload.email_personal ?? "",
+      telefono: payload.telefono ?? undefined,
       empresaIds: empresasOrdenadas,
-      empresaPrincipalId,
+      empresaPrincipalId: empresaFichajeId ?? undefined,
       localIds: localesSeleccionados,
     });
-    setSaving(false);
 
     if (!res.ok) {
+      setSaving(false);
       toast.error(res.error ?? "Error creando empleado");
       return;
     }
+
+    // El empleado ya existe (usuario + ficha + perfil vacío). Completamos el
+    // resto del perfil (documento, IBAN, dirección, emergencia, tallas…).
+    if (res.empleadoId) {
+      const perfilRes = await guardarPerfilEmpleado(res.empleadoId, payload);
+      if (!perfilRes.ok) {
+        setSaving(false);
+        toast.error(
+          `Empleado creado, pero no se guardó todo el perfil: ${perfilRes.error ?? ""}. Complétalo en su ficha.`,
+        );
+        if (res.tempPassword && res.email) {
+          setCredenciales({ email: res.email, password: res.tempPassword });
+        }
+        return;
+      }
+    }
+    setSaving(false);
+
     if (res.tempPassword && res.email) {
       setCredenciales({ email: res.email, password: res.tempPassword });
     } else {
@@ -181,7 +264,7 @@ export default function NuevoEmpleadoPage() {
   }
 
   return (
-    <div className="p-4 md:p-6 max-w-2xl mx-auto space-y-6">
+    <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-6">
       <div className="flex items-center gap-3">
         <Button
           variant="ghost"
@@ -196,46 +279,36 @@ export default function NuevoEmpleadoPage() {
             Nuevo empleado
           </h1>
           <p className="text-sm text-muted-foreground">
-            Al dar de alta se crea también su usuario para el portal. El login
-            será el email de empresa si tiene; si no, el personal.
+            Rellena la ficha completa. Todos los campos son obligatorios: no se
+            crea al empleado hasta que esté todo completo. Al crearlo se genera
+            también su usuario para el portal.
           </p>
         </div>
       </div>
 
-      <form action={handleSubmit} className="rounded-2xl border bg-card p-6 shadow-sm space-y-4">
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-              Nombre <span className="text-rose-500">*</span>
-            </Label>
-            <Input
-              name="nombre"
-              required
-              onBlur={(e) => {
-                e.currentTarget.value = normalizarNombre(e.currentTarget.value);
-              }}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-              Apellidos
-            </Label>
-            <Input
-              name="apellidos"
-              onBlur={(e) => {
-                e.currentTarget.value = normalizarNombre(e.currentTarget.value);
-              }}
-            />
-          </div>
-        </div>
+      {/* Ficha de perfil en blanco — el mismo formulario que se edita después. */}
+      <div className="rounded-2xl border bg-card p-4 md:p-6 shadow-sm">
+        <DatosPersonalesForm
+          ref={datosRef}
+          initial={PERFIL_VACIO}
+          hideSaveButton
+          onSubmitOverride={crear}
+        />
+      </div>
 
+      {/* Datos laborales */}
+      <div className="rounded-2xl border bg-card p-4 md:p-6 shadow-sm space-y-4">
+        <div className="flex items-center gap-2">
+          <Briefcase className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold text-foreground">Datos laborales</h2>
+        </div>
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-1.5">
             <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-              Departamento
+              Departamento <span className="text-rose-500">*</span>
             </Label>
-            <Select name="departamento_id">
-              <SelectTrigger><SelectValue placeholder="Sin asignar" /></SelectTrigger>
+            <Select value={departamentoId} onValueChange={setDepartamentoId}>
+              <SelectTrigger><SelectValue placeholder="Seleccionar departamento" /></SelectTrigger>
               <SelectContent>
                 {departamentos.length === 0
                   ? <SelectItem value="__none__" disabled>No hay departamentos</SelectItem>
@@ -247,99 +320,86 @@ export default function NuevoEmpleadoPage() {
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-              Puesto
+              Puesto <span className="text-rose-500">*</span>
             </Label>
-            <Input name="puesto" placeholder="ej. Camarero/a" />
+            <Input
+              value={puesto}
+              onChange={(e) => setPuesto(e.target.value)}
+              placeholder="ej. Camarero/a"
+            />
           </div>
         </div>
+      </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-              Email personal <span className="text-rose-500">*</span>
-            </Label>
-            <Input name="email_personal" type="email" required />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-              Email empresa
-            </Label>
-            <Input name="email_empresa" type="email" placeholder="solo si tiene cuenta corporativa" />
-          </div>
+      {/* Acceso a empresas y locales de fichaje */}
+      <div className="rounded-2xl border bg-card p-4 md:p-6 shadow-sm space-y-3">
+        <div className="flex items-center gap-2">
+          <Building2 className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold text-foreground">
+            Acceso a empresas <span className="text-rose-500">*</span>
+          </h2>
         </div>
-
-        <div className="space-y-1.5">
-          <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-            Teléfono
-          </Label>
-          <Input name="telefono" />
-        </div>
-
-        <div className="space-y-2 pt-2 border-t">
-          <div className="flex items-center gap-2">
-            <Building2 className="h-4 w-4 text-muted-foreground" />
-            <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-              Acceso a empresas <span className="text-rose-500">*</span>
-            </Label>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Marca las empresas en las que trabaja y, dentro de cada una, los locales donde podrá fichar (uno o varios).
-          </p>
-          {empresas.length === 0 ? (
-            <div className="text-sm text-muted-foreground py-2">Cargando empresas…</div>
-          ) : (
-            <div className="space-y-3">
-              {empresas.map((e) => {
-                const marcada = empresasMarcadas.includes(e.id);
-                const esPrincipal = empresaPrincipalId === e.id;
-                const locales = localesPorEmpresa[e.id];
-                return (
-                  <div
-                    key={e.id}
-                    className="rounded-lg border bg-muted/20 p-3 space-y-2"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <Checkbox
-                          checked={marcada}
-                          onCheckedChange={(v) => toggleEmpresa(e.id, v === true)}
-                        />
-                        <span className="font-medium">{e.nombre}</span>
-                        {esPrincipal && (
-                          <span className="text-[10px] uppercase font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded">
-                            Principal
-                          </span>
-                        )}
-                      </label>
-                      {marcada && !esPrincipal && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs"
-                          onClick={() => {
-                            setEmpresaPrincipalId(e.id);
-                            setEmpresasMarcadas((prev) =>
-                              ordenarEmpresasConPrincipal(prev, e.id)
-                            );
-                          }}
-                        >
-                          Marcar principal
-                        </Button>
+        <p className="text-xs text-muted-foreground">
+          Marca las empresas en las que trabaja. Aparecerá como empleado en todas
+          ellas, con los mismos datos. Dentro de cada una, marca los locales donde
+          podrá fichar (uno o varios).
+        </p>
+        {empresas.length === 0 ? (
+          <div className="text-sm text-muted-foreground py-2">Cargando empresas…</div>
+        ) : (
+          <div className="space-y-3">
+            {empresas.map((e) => {
+              const marcada = empresasMarcadas.includes(e.id);
+              const esFichaje = empresaFichajeId === e.id;
+              const locales = localesPorEmpresa[e.id];
+              return (
+                <div key={e.id} className="rounded-lg border bg-muted/20 p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <Checkbox
+                        checked={marcada}
+                        onCheckedChange={(v) => toggleEmpresa(e.id, v === true)}
+                      />
+                      <span className="font-medium">{e.nombre}</span>
+                      {esFichaje && (
+                        <span className="text-[10px] uppercase font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                          Ficha aquí
+                        </span>
                       )}
-                    </div>
-                    {marcada && (
-                      <div className="pl-6 space-y-1.5">
-                        <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                          Locales donde ficha
-                        </Label>
-                        {locales === undefined ? (
-                          <p className="text-xs text-muted-foreground">Cargando locales…</p>
-                        ) : locales.length === 0 ? (
-                          <p className="text-xs text-muted-foreground">
-                            Esta empresa aún no tiene locales.
-                          </p>
-                        ) : (
+                    </label>
+                    {marcada && !esFichaje && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => {
+                          setEmpresaFichajeId(e.id);
+                          setEmpresasMarcadas((prev) => ordenarEmpresasConFichaje(prev, e.id));
+                        }}
+                      >
+                        Marcar como local de fichaje
+                      </Button>
+                    )}
+                  </div>
+                  {marcada && (() => {
+                    const algunoSeleccionado = (locales ?? []).some((l) =>
+                      localesSeleccionados.includes(l.id),
+                    );
+                    return (
+                    <div className="pl-6 space-y-1.5">
+                      <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                        Locales donde ficha <span className="text-rose-500">*</span>
+                      </Label>
+                      {locales === undefined ? (
+                        <p className="text-xs text-muted-foreground">Cargando locales…</p>
+                      ) : locales.length === 0 ? (
+                        <p className="text-xs text-rose-600">
+                          Esta empresa aún no tiene locales: el empleado no podría
+                          fichar aquí. Crea un local o desmarca la empresa.
+                        </p>
+                      ) : (
+                        <>
                           <div className="grid gap-1.5 sm:grid-cols-2">
                             {locales.map((l) => (
                               <label
@@ -354,32 +414,38 @@ export default function NuevoEmpleadoPage() {
                               </label>
                             ))}
                           </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+                          {!algunoSeleccionado && (
+                            <p className="text-xs text-rose-600">
+                              Marca al menos un local de fichaje en esta empresa.
+                            </p>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    );
+                  })()}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
-        <div className="flex justify-end gap-2 pt-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => router.push("/rrhh/empleados")}
-            disabled={saving}
-          >
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={saving} className="gap-2">
-            {saving
-              ? <><Loader2 className="h-4 w-4 animate-spin" />Creando…</>
-              : <><UserPlus className="h-4 w-4" />Crear empleado y usuario</>}
-          </Button>
-        </div>
-      </form>
+      <div className="flex justify-end gap-2 pt-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => router.push("/rrhh/empleados")}
+          disabled={saving}
+        >
+          Cancelar
+        </Button>
+        <Button type="button" onClick={crear} disabled={saving} className="gap-2">
+          {saving
+            ? <><Loader2 className="h-4 w-4 animate-spin" />Creando…</>
+            : <><UserPlus className="h-4 w-4" />Crear empleado</>}
+        </Button>
+      </div>
 
       <Dialog open={credenciales !== null} onOpenChange={(open) => { if (!open) cerrarDialog(); }}>
         <DialogContent>

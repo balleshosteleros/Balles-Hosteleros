@@ -102,7 +102,7 @@ export function TiposAusenciaSection({ empresaId }: { empresaId: string }) {
           <h2 className="text-lg font-semibold flex items-center gap-2"><CalendarOff className="h-5 w-5 text-primary" />Ausencias</h2>
           <p className="text-sm text-muted-foreground">Crea, configura y asigna las políticas de ausencias necesarias para tus empleados.</p>
         </div>
-        <Button variant="primary" size="sm" onClick={() => { setEditando(null); setShowModal(true); }}><Plus className="h-4 w-4" />Crear</Button>
+        <Button variant="primary" size="sm" onClick={() => { setEditando(null); setShowModal(true); }} className="gap-1.5"><Plus className="h-4 w-4" />Nuevo</Button>
       </div>
 
       <div className="relative max-w-sm">

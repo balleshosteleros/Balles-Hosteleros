@@ -10,7 +10,6 @@ const turnoSchema = z.object({
   horario: z.string(),
   duracion: z.number(),
   color: z.string(),
-  cuadranteId: z.string().optional(),
 });
 
 type TurnoExportRow = z.infer<typeof turnoSchema>;
@@ -30,7 +29,6 @@ export const horariosIO: ModuleIO<TurnoExportRow> = {
     { key: "horario", label: "Horario", example: "12:30 - 17:00 / 19:30 - 00:30" },
     { key: "duracion", label: "Duración (h)", type: "number", example: "8" },
     { key: "color", label: "Color" },
-    { key: "cuadranteId", label: "Cuadrante" },
   ],
   fetchAll: async (ctx) => {
     const res = await listTurnos((ctx.empresaId as string) ?? "");
@@ -42,7 +40,6 @@ export const horariosIO: ModuleIO<TurnoExportRow> = {
       horario: formatTurnoHorario(t),
       duracion: calcularDuracionTurno(t),
       color: t.color,
-      cuadranteId: t.cuadranteId,
     }));
   },
 };

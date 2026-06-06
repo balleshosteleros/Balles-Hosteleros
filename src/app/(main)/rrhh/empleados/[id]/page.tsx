@@ -13,6 +13,9 @@ import {
 } from "@/features/rrhh/components/empleados/GestionEmpleadoCard";
 import { SubmoduloPorEmpleadoPlaceholder } from "@/features/rrhh/components/empleados/SubmoduloPorEmpleadoPlaceholder";
 import { FirmasEmpleadoTab } from "@/features/rrhh/components/empleados/FirmasEmpleadoTab";
+import { InspeccionesEmpleadoTab } from "@/features/rrhh/components/empleados/InspeccionesEmpleadoTab";
+import { CuestionariosEmpleadoTab } from "@/features/rrhh/components/empleados/CuestionariosEmpleadoTab";
+import { ValidadoresEmpleadoCard } from "@/features/rrhh/components/empleados/ValidadoresEmpleadoCard";
 import {
   DatosPersonalesForm,
   type DatosPersonalesFormHandle,
@@ -37,7 +40,7 @@ import {
   User,
   Fingerprint, Inbox, FileSignature, Calendar, Timer,
   UserRoundSearch, UserCheck, Gift, Trophy, HandCoins,
-  GraduationCap, ClipboardList, FileQuestion, Building2,
+  GraduationCap, ClipboardList, FileQuestion, FileSearch, Building2,
   Save, Loader2,
 } from "lucide-react";
 
@@ -58,6 +61,7 @@ const TOP_TABS = [
   { id: "formacion",       label: "Formación",      icon: GraduationCap     },
   { id: "encuestas",       label: "Encuestas",      icon: ClipboardList     },
   { id: "cuestionarios",   label: "Cuestionarios",  icon: FileQuestion      },
+  { id: "inspecciones",    label: "Inspecciones",   icon: FileSearch        },
 ] as const;
 
 type TopTab = typeof TOP_TABS[number]["id"];
@@ -78,6 +82,8 @@ type EmpleadoBD = {
   permite_teletrabajo: boolean | null;
   fecha_baja: string | null;
   estado: string;
+  validador_trabajo_id: string | null;
+  validador_ausencias_id: string | null;
   departamentos?: { nombre: string } | null;
 };
 
@@ -96,11 +102,13 @@ function bdToEmpleadoUI(emp: EmpleadoBD): EmpleadoUI {
     horarioSemanal: "—",
     horasHoy: "—",
     departamento: emp.departamentos?.nombre ?? "—",
+    areas: [],
     telefono: emp.telefono ?? "—",
     fichajes: 0,
     emailEmpresa: emp.email_empresa ?? "",
     emailPersonal: emp.email_personal ?? "",
-    validadorFichajes: "—",
+    validadorTrabajo: "—",
+    validadorAusencias: "—",
   };
 }
 
@@ -217,12 +225,12 @@ export default function FichaEmpleadoPage() {
         // modo editable. El guardado va contra el profile vinculado al
         // empleado vía la admin action `guardarPerfilEmpleado`.
         return (
-          <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-6">
-            <div className="sticky top-0 z-10 -mx-4 md:-mx-6 px-4 md:px-6 py-3 bg-background/90 backdrop-blur border-b flex justify-end">
+          <div className="relative p-4 md:p-6">
+            <div className="sticky top-4 z-20 flex justify-end pointer-events-none">
               <Button
                 onClick={guardarPerfilCompleto}
                 size="lg"
-                className="gap-2"
+                className="gap-2 pointer-events-auto shadow-md"
                 disabled={savingPerfil}
               >
                 {savingPerfil ? (
@@ -232,6 +240,7 @@ export default function FichaEmpleadoPage() {
                 )}
               </Button>
             </div>
+            <div className="max-w-3xl mx-auto space-y-6 -mt-14">
             <DatosPersonalesForm
               ref={datosRef}
               hideSaveButton
@@ -256,6 +265,7 @@ export default function FichaEmpleadoPage() {
               onUpdated={cargarFicha}
               onDeleted={() => router.push("/rrhh/empleados")}
             />
+            </div>
           </div>
         );
       case "fichajes":
@@ -263,7 +273,17 @@ export default function FichaEmpleadoPage() {
       case "horarios":
         return <div className="p-6"><HorariosTab horario={horarioActual} /></div>;
       case "solicitudes":
-        return <div className="p-6"><SolicitudesEmpleadoTab solicitudes={solicitudes} /></div>;
+        return (
+          <div className="p-6 space-y-6">
+            <ValidadoresEmpleadoCard
+              empleadoId={empleadoRegistro.id}
+              validadorTrabajoId={empleadoRegistro.validador_trabajo_id}
+              validadorAusenciasId={empleadoRegistro.validador_ausencias_id}
+              onSaved={cargarFicha}
+            />
+            <SolicitudesEmpleadoTab solicitudes={solicitudes} />
+          </div>
+        );
       case "firmas":
         return <FirmasEmpleadoTab empleadoId={empleadoRegistro.id} />;
       case "calendarios":
@@ -283,7 +303,9 @@ export default function FichaEmpleadoPage() {
       case "encuestas":
         return <SubmoduloPorEmpleadoPlaceholder modulo="Encuestas" path="/rrhh/encuestas" empleado={empleado} />;
       case "cuestionarios":
-        return <SubmoduloPorEmpleadoPlaceholder modulo="Cuestionarios" path="/calidad/cuestionarios" empleado={empleado} />;
+        return <CuestionariosEmpleadoTab empleadoId={empleadoRegistro.id} />;
+      case "inspecciones":
+        return <InspeccionesEmpleadoTab empleadoId={empleadoRegistro.id} />;
     }
   }
 

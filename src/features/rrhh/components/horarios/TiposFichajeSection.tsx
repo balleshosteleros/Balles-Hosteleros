@@ -84,7 +84,7 @@ export function TiposFichajeSection({ empresaId }: { empresaId: string }) {
           <h2 className="text-lg font-semibold flex items-center gap-2"><Fingerprint className="h-5 w-5 text-primary" />Tipos de fichaje</h2>
           <p className="text-sm text-muted-foreground">Define los tipos de fichaje que registra el sistema</p>
         </div>
-        <Button variant="primary" size="sm" onClick={() => { setEditando(null); setShowModal(true); }}><Plus className="h-4 w-4" />Nuevo</Button>
+        <Button variant="primary" size="sm" onClick={() => { setEditando(null); setShowModal(true); }} className="gap-1.5"><Plus className="h-4 w-4" />Nuevo</Button>
       </div>
 
       <div className="relative max-w-sm">

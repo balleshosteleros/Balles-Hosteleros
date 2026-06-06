@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Fingerprint, Loader2, Coffee, Play, CheckCircle2, WifiOff } from "lucide-react";
+import { Fingerprint, Loader2, Coffee, Play, CheckCircle2, WifiOff, MapPin, House } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/shared/lib/utils";
 import { obtenerPosicionActual } from "@/features/rrhh/utils/geo";
@@ -11,6 +11,8 @@ import {
   ficharSalidaPersonal,
   iniciarPausaPersonal,
   finalizarPausaPersonal,
+  getMiConfigFichaje,
+  type ModoFichaje,
 } from "@/features/mi-panel/actions/mi-panel-actions";
 import { enqueue } from "../lib/offline-fichaje-db";
 import { useOfflineFichajes } from "../hooks/use-offline-fichajes";
@@ -62,9 +64,17 @@ export function BigClockButton({ fichajeId, estado }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState(false);
+  const [permiteTeletrabajo, setPermiteTeletrabajo] = useState(false);
+  const [eligiendoModo, setEligiendoModo] = useState(false);
   const { online, pending: pendingOffline, flushing } = useOfflineFichajes(() => {
     startTransition(() => router.refresh());
   });
+
+  useEffect(() => {
+    getMiConfigFichaje().then((res) => {
+      if (res.ok) setPermiteTeletrabajo(res.permiteTeletrabajo);
+    });
+  }, []);
 
   const Icon = STYLES[estado].icon;
   const disabled = estado === "completado" || busy || pending || flushing;
@@ -83,20 +93,41 @@ export function BigClockButton({ fichajeId, estado }: Props) {
     toast.success("Sin conexión — guardado, se sincronizará cuando vuelva la señal");
   };
 
-  const action = async () => {
-    if (disabled) return;
+  // Fichaje de entrada con modo explícito. El teletrabajo no captura ubicación;
+  // el presencial sí (y el server valida que estés dentro de un local).
+  const ficharEntrada = async (modo: ModoFichaje) => {
+    setEligiendoModo(false);
     setBusy(true);
     try {
-      if (estado === "sin-fichar") {
-        const geo = await tryGetGeo();
-        if (!online) {
-          await enqueueOffline("entrada", geo);
-        } else {
-          const res = await ficharEntradaPersonal(geo);
-          if (!res.ok) toast.error(res.error || "No se pudo fichar la entrada");
-          else toast.success("Entrada registrada");
-        }
-      } else if (estado === "trabajando" && fichajeId) {
+      const geo = modo === "presencial" ? await tryGetGeo() : null;
+      if (!online) {
+        // Sin conexión se encola siempre como presencial (con la geo capturada).
+        await enqueueOffline("entrada", geo);
+      } else {
+        const res = await ficharEntradaPersonal(geo ?? undefined, modo);
+        if (!res.ok) toast.error(res.error || "No se pudo fichar la entrada");
+        else toast.success(modo === "teletrabajo" ? "Entrada registrada (teletrabajo)" : "Entrada registrada");
+      }
+    } finally {
+      setBusy(false);
+      startTransition(() => router.refresh());
+    }
+  };
+
+  const action = async () => {
+    if (disabled) return;
+    // Entrada: si puede teletrabajar y hay conexión, preguntamos el modo.
+    if (estado === "sin-fichar") {
+      if (online && permiteTeletrabajo) {
+        setEligiendoModo(true);
+        return;
+      }
+      await ficharEntrada("presencial");
+      return;
+    }
+    setBusy(true);
+    try {
+      if (estado === "trabajando" && fichajeId) {
         const geo = await tryGetGeo();
         if (!online) {
           await enqueueOffline("salida", geo);
@@ -181,6 +212,47 @@ export function BigClockButton({ fichajeId, estado }: Props) {
         >
           <Coffee className="h-4 w-4" /> Iniciar pausa
         </button>
+      )}
+
+      {/* Hoja de elección de modo (solo si el empleado puede teletrabajar). */}
+      {eligiendoModo && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+          onClick={() => setEligiendoModo(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-t-3xl bg-background p-5 pb-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-muted" />
+            <h2 className="text-center text-lg font-semibold">¿Cómo quieres fichar?</h2>
+            <p className="mt-1 mb-4 text-center text-sm text-muted-foreground">
+              El presencial necesita que estés en tu local; el teletrabajo no requiere ubicación.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => ficharEntrada("presencial")}
+                disabled={busy}
+                className="flex flex-col items-center gap-2 rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-5 text-emerald-800 active:bg-emerald-100 disabled:opacity-60"
+              >
+                <MapPin className="h-7 w-7" />
+                <span className="font-semibold">Presencial</span>
+                <span className="text-xs text-emerald-700/80">Con ubicación</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => ficharEntrada("teletrabajo")}
+                disabled={busy}
+                className="flex flex-col items-center gap-2 rounded-2xl border-2 border-blue-200 bg-blue-50 p-5 text-blue-800 active:bg-blue-100 disabled:opacity-60"
+              >
+                <House className="h-7 w-7" />
+                <span className="font-semibold">Teletrabajo</span>
+                <span className="text-xs text-blue-700/80">Sin ubicación</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

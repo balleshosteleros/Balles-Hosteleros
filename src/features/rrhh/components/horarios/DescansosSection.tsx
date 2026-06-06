@@ -210,7 +210,7 @@ export function DescansosSection({ empresaId }: { empresaId: string }) {
             puedan marcarlos durante su jornada.
           </p>
         </div>
-        <Button variant="primary" size="sm" onClick={abrirNuevo}>
+        <Button variant="primary" size="sm" onClick={abrirNuevo} className="gap-1.5">
           <Plus className="h-4 w-4" />
           Nuevo
         </Button>

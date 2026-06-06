@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   TURNO_TONOS,
   formatTurnoHorario,
-  type Cuadrante,
   type Descanso,
   type Turno,
   type TurnoTono,
@@ -12,20 +11,25 @@ import {
 } from "@/features/rrhh/data/horarios";
 import {
   listTurnos,
-  listCuadrantes,
   createTurno,
   updateTurno,
   deleteTurno,
+  getEmpleadosDirectosPorTurno,
+  setEmpleadosDirectosTurno,
 } from "@/features/rrhh/actions/turnos-actions";
 import { listDescansos } from "@/features/rrhh/actions/descansos-actions";
 import {
   getEmpleadosPorTurno,
   type EmpleadoBasico,
 } from "@/features/rrhh/actions/patrones-actions";
+import {
+  getEmpleadosActivos,
+  listDepartamentos,
+  type EmpleadoActivo,
+} from "@/features/rrhh/actions/empleados-actions";
 import { Card } from "@/shared/components/ui/card";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
-import { Checkbox } from "@/shared/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -53,12 +57,14 @@ import {
   Type,
   Quote,
   Clock,
-  Activity,
   X,
   MoreVertical,
   Archive,
   AlertTriangle,
   Loader2,
+  Users,
+  Check,
+  Building2,
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
@@ -78,19 +84,19 @@ interface TurnoDraft {
   codigo: string;
   tramos: TurnoTramo[];
   color: TurnoTono;
-  esGuardia: boolean;
-  cuadranteId?: string;
+  departamento: string;
+  empleadoIds: string[];
 }
 
-function turnoToDraft(t: Turno | null): TurnoDraft {
+function turnoToDraft(t: Turno | null, empleadoIds: string[] = []): TurnoDraft {
   if (!t) {
     return {
       nombre: "",
       codigo: "",
       tramos: [{ inicio: "09:00", fin: "17:00" }],
       color: "emerald",
-      esGuardia: false,
-      cuadranteId: undefined,
+      departamento: "",
+      empleadoIds,
     };
   }
   return {
@@ -98,10 +104,15 @@ function turnoToDraft(t: Turno | null): TurnoDraft {
     codigo: t.codigo,
     tramos: t.tramos.map((tr) => ({ ...tr })),
     color: t.color,
-    esGuardia: t.esGuardia,
-    cuadranteId: t.cuadranteId,
+    departamento: t.departamento ?? "",
+    empleadoIds,
   };
 }
+
+type EmpleadoConOrigen = EmpleadoBasico & {
+  directo: boolean;
+  patron: boolean;
+};
 
 function pluralEmpleados(n: number) {
   if (n === 0) return "0 empleados";
@@ -117,11 +128,16 @@ function pluralDescansos(n: number) {
 
 export function TurnosSection({ empresaId }: { empresaId: string }) {
   const [turnos, setTurnos] = useState<Turno[]>([]);
-  const [cuadrantes, setCuadrantes] = useState<Cuadrante[]>([]);
   const [descansos, setDescansos] = useState<Descanso[]>([]);
   const [empleadosPorTurno, setEmpleadosPorTurno] = useState<
     Record<string, EmpleadoBasico[]>
   >({});
+  const [empleadosDirectosPorTurno, setEmpleadosDirectosPorTurno] = useState<
+    Record<string, EmpleadoBasico[]>
+  >({});
+  const [empleadosActivos, setEmpleadosActivos] = useState<EmpleadoActivo[]>([]);
+  const [departamentos, setDepartamentos] = useState<string[]>([]);
+  const [empBusqueda, setEmpBusqueda] = useState("");
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   useGlobalLoadingSync(cargando || guardando);
@@ -134,16 +150,25 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
 
   const refrescar = useCallback(async () => {
     setCargando(true);
-    const [tr, cr, dr, ep] = await Promise.all([
+    const [tr, dr, ep, ed, ea, dp] = await Promise.all([
       listTurnos(empresaId),
-      listCuadrantes(empresaId),
       listDescansos(empresaId),
       getEmpleadosPorTurno(empresaId),
+      getEmpleadosDirectosPorTurno(empresaId),
+      getEmpleadosActivos(empresaId),
+      listDepartamentos(),
     ]);
     if (tr.ok) setTurnos(tr.data);
-    if (cr.ok) setCuadrantes(cr.data);
     if (dr.ok) setDescansos(dr.data);
     if (ep.ok) setEmpleadosPorTurno(ep.data);
+    if (ed.ok) setEmpleadosDirectosPorTurno(ed.data);
+    if (ea.ok) setEmpleadosActivos(ea.data);
+    if (dp.ok) {
+      const nombres = Array.from(
+        new Set((dp.data ?? []).map((d) => d.nombre).filter(Boolean)),
+      ).sort((a, b) => a.localeCompare(b, "es"));
+      setDepartamentos(nombres);
+    }
     setCargando(false);
   }, [empresaId]);
 
@@ -163,6 +188,44 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
     return map;
   }, [descansos]);
 
+  // Empleados por turno combinando asignación directa + patrón, sin duplicar.
+  const empleadosCombinadosPorTurno = useMemo(() => {
+    const map = new Map<string, EmpleadoConOrigen[]>();
+    const turnoIds = new Set<string>([
+      ...Object.keys(empleadosDirectosPorTurno),
+      ...Object.keys(empleadosPorTurno),
+    ]);
+    for (const turnoId of turnoIds) {
+      const porId = new Map<string, EmpleadoConOrigen>();
+      for (const e of empleadosDirectosPorTurno[turnoId] ?? []) {
+        porId.set(e.id, { ...e, directo: true, patron: false });
+      }
+      for (const e of empleadosPorTurno[turnoId] ?? []) {
+        const prev = porId.get(e.id);
+        if (prev) prev.patron = true;
+        else porId.set(e.id, { ...e, directo: false, patron: true });
+      }
+      map.set(
+        turnoId,
+        Array.from(porId.values()).sort((a, b) =>
+          a.nombre.localeCompare(b.nombre, "es"),
+        ),
+      );
+    }
+    return map;
+  }, [empleadosDirectosPorTurno, empleadosPorTurno]);
+
+  // Empleados seleccionables: solo los del departamento vinculado al turno.
+  // Se recalcula en vivo, de modo que si un empleado cambia de departamento
+  // deja de estar disponible aquí en cuanto se recargan los datos.
+  const empleadosDelDepto = useMemo(
+    () =>
+      draft.departamento
+        ? empleadosActivos.filter((e) => e.departamento === draft.departamento)
+        : [],
+    [empleadosActivos, draft.departamento],
+  );
+
   const filtrados = turnos.filter(
     (t) =>
       !busqueda ||
@@ -172,13 +235,16 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
 
   const abrirNuevo = () => {
     setEditandoId(null);
+    setEmpBusqueda("");
     setDraft(turnoToDraft(null));
     setShowModal(true);
   };
 
   const abrirEditar = (t: Turno) => {
     setEditandoId(t.id);
-    setDraft(turnoToDraft(t));
+    setEmpBusqueda("");
+    const idsDirectos = (empleadosDirectosPorTurno[t.id] ?? []).map((e) => e.id);
+    setDraft(turnoToDraft(t, idsDirectos));
     setShowModal(true);
   };
 
@@ -189,8 +255,6 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
       codigo: t.codigo,
       tramos: t.tramos.map((tr) => ({ ...tr })),
       color: t.color,
-      esGuardia: t.esGuardia,
-      cuadranteId: t.cuadranteId,
       activo: true,
     });
     await refrescar();
@@ -207,29 +271,42 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
   const guardar = async () => {
     const nombre = draft.nombre.trim();
     const codigo = draft.codigo.trim().toUpperCase();
-    if (!nombre || !codigo) return;
+    const departamento = draft.departamento.trim();
+    if (!nombre || !codigo || !departamento) return;
     const tramos = draft.tramos.filter((tr) => tr.inicio && tr.fin);
     if (tramos.length === 0) return;
 
+    // Solo se persisten empleados que sigan perteneciendo al departamento del
+    // turno (el vínculo manda; si alguien cambió de departamento, se descarta).
+    const idsDelDepto = new Set(
+      empleadosActivos
+        .filter((e) => e.departamento === departamento)
+        .map((e) => e.empleadoId),
+    );
+    const empleadoIds = draft.empleadoIds.filter((id) => idsDelDepto.has(id));
+
     setGuardando(true);
+    let turnoId = editandoId;
     if (editandoId) {
       await updateTurno(editandoId, {
         nombre,
         codigo,
         tramos,
         color: draft.color,
-        esGuardia: draft.esGuardia,
-        cuadranteId: draft.cuadranteId,
+        departamento,
       });
     } else {
-      await createTurno(empresaId, {
+      const res = await createTurno(empresaId, {
         nombre,
         codigo,
         tramos,
         color: draft.color,
-        esGuardia: draft.esGuardia,
-        cuadranteId: draft.cuadranteId,
+        departamento,
       });
+      turnoId = res.ok ? res.id ?? null : null;
+    }
+    if (turnoId) {
+      await setEmpleadosDirectosTurno(empresaId, turnoId, empleadoIds);
     }
     await refrescar();
     setGuardando(false);
@@ -255,14 +332,15 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
         </div>
         <Button variant="primary" size="sm" onClick={abrirNuevo} className="gap-1.5">
           <Plus className="h-4 w-4" />
-          Añadir turno
+          Nuevo
         </Button>
       </div>
 
       <Card className="overflow-hidden">
-        <div className="grid grid-cols-[1fr_1fr_140px_140px_56px] items-center px-4 py-2.5 border-b bg-muted/40 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <div className="grid grid-cols-[1fr_1fr_150px_120px_120px_56px] items-center px-4 py-2.5 border-b bg-muted/40 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           <div>Nombre</div>
           <div>Horario</div>
+          <div>Departamento</div>
           <div className="text-center">Descansos</div>
           <div className="text-center">Empleados</div>
           <div />
@@ -277,11 +355,12 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
             filtrados.map((t) => {
               const tono = TURNO_TONOS[t.color];
               const descansosDelTurno = descansosPorTurno.get(t.id) ?? [];
-              const empleadosDelTurno = empleadosPorTurno[t.id] ?? [];
+              const empleadosDelTurno =
+                empleadosCombinadosPorTurno.get(t.id) ?? [];
               return (
                 <div
                   key={t.id}
-                  className="group grid grid-cols-[1fr_1fr_140px_140px_56px] items-center px-4 py-3 hover:bg-muted/40 transition-colors"
+                  className="group grid grid-cols-[1fr_1fr_150px_120px_120px_56px] items-center px-4 py-3 hover:bg-muted/40 transition-colors"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <span
@@ -296,6 +375,18 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
                   </div>
                   <div className="text-sm text-muted-foreground tabular-nums">
                     {formatTurnoHorario(t)}
+                  </div>
+                  <div className="text-sm truncate pr-2">
+                    {t.departamento ? (
+                      <span className="inline-flex items-center gap-1.5 text-foreground">
+                        <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <span className="truncate">{t.departamento}</span>
+                      </span>
+                    ) : (
+                      <span className="text-amber-600 dark:text-amber-500">
+                        Sin asignar
+                      </span>
+                    )}
                   </div>
                   <div className="text-sm text-center">
                     {descansosDelTurno.length === 0 ? (
@@ -444,15 +535,37 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
               </div>
             </div>
 
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <Checkbox
-                checked={draft.esGuardia}
-                onCheckedChange={(v) =>
-                  setDraft((d) => ({ ...d, esGuardia: v === true }))
-                }
-              />
-              <span>Establecer turno como guardia</span>
-            </label>
+            <div className="flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+              <select
+                value={draft.departamento}
+                onChange={(e) => {
+                  const departamento = e.target.value;
+                  setDraft((d) => {
+                    // Al cambiar de departamento se descartan los empleados que ya
+                    // no pertenecen a él; el vínculo turno↔departamento manda.
+                    const idsDelDepto = new Set(
+                      empleadosActivos
+                        .filter((emp) => emp.departamento === departamento)
+                        .map((emp) => emp.empleadoId),
+                    );
+                    return {
+                      ...d,
+                      departamento,
+                      empleadoIds: d.empleadoIds.filter((id) => idsDelDepto.has(id)),
+                    };
+                  });
+                }}
+                className="flex h-9 flex-1 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              >
+                <option value="">Selecciona un departamento…</option>
+                {departamentos.map((dep) => (
+                  <option key={dep} value={dep}>
+                    {dep}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             <div className="space-y-2">
               <div className="flex items-center gap-2">
@@ -521,37 +634,83 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 text-sm">
-              <Activity className="h-4 w-4 text-muted-foreground" />
-              <span className="font-medium">Actividades</span>
-              <button
-                type="button"
-                className="ml-auto text-sm text-primary hover:underline inline-flex items-center gap-1"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Añadir
-              </button>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Cuadrante al que pertenece</label>
-              <select
-                value={draft.cuadranteId ?? ""}
-                onChange={(e) =>
-                  setDraft((d) => ({
-                    ...d,
-                    cuadranteId: e.target.value || undefined,
-                  }))
-                }
-                className="w-full h-9 rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value="">Sin cuadrante asignado</option>
-                {cuadrantes.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nombre}
-                  </option>
-                ))}
-              </select>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Empleados asignados</span>
+                {draft.empleadoIds.length > 0 && (
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {pluralEmpleados(draft.empleadoIds.length)}
+                  </span>
+                )}
+              </div>
+              <p className="pl-6 text-xs text-muted-foreground">
+                Solo aparecen los empleados del departamento del turno. Asigna a
+                quien solo trabaja ese horario; para quien rota entre varios
+                turnos, usa un patrón.
+              </p>
+              {!draft.departamento ? (
+                <p className="pl-6 text-xs text-amber-600 dark:text-amber-500">
+                  Selecciona primero un departamento para ver sus empleados.
+                </p>
+              ) : (
+              <div className="pl-6 space-y-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar empleado..."
+                    value={empBusqueda}
+                    onChange={(e) => setEmpBusqueda(e.target.value)}
+                    className="pl-9 h-8 text-sm"
+                  />
+                </div>
+                <div className="max-h-44 overflow-y-auto rounded-md border divide-y">
+                  {empleadosDelDepto.length === 0 && (
+                    <p className="px-3 py-4 text-center text-xs text-muted-foreground">
+                      No hay empleados en este departamento.
+                    </p>
+                  )}
+                  {empleadosDelDepto
+                    .filter((e) =>
+                      !empBusqueda
+                        ? true
+                        : e.nombreCompleto
+                            .toLowerCase()
+                            .includes(empBusqueda.toLowerCase()),
+                    )
+                    .map((e) => {
+                      const checked = draft.empleadoIds.includes(e.empleadoId);
+                      return (
+                        <button
+                          key={e.empleadoId}
+                          type="button"
+                          onClick={() =>
+                            setDraft((d) => ({
+                              ...d,
+                              empleadoIds: checked
+                                ? d.empleadoIds.filter((id) => id !== e.empleadoId)
+                                : [...d.empleadoIds, e.empleadoId],
+                            }))
+                          }
+                          className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-muted/60 transition-colors"
+                        >
+                          <span
+                            className={cn(
+                              "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                              checked
+                                ? "bg-primary border-primary text-primary-foreground"
+                                : "border-input",
+                            )}
+                          >
+                            {checked && <Check className="h-3 w-3" />}
+                          </span>
+                          <span className="truncate">{e.nombreCompleto}</span>
+                        </button>
+                      );
+                    })}
+                </div>
+              </div>
+              )}
             </div>
           </div>
 
@@ -559,7 +718,15 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
             <Button variant="outline" onClick={() => setShowModal(false)}>
               Cancelar
             </Button>
-            <Button onClick={guardar} disabled={guardando}>
+            <Button
+              onClick={guardar}
+              disabled={
+                guardando ||
+                !draft.nombre.trim() ||
+                !draft.codigo.trim() ||
+                !draft.departamento.trim()
+              }
+            >
               {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : "Guardar"}
             </Button>
           </DialogFooter>
@@ -569,7 +736,9 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
       <EmpleadosTurnoDialog
         turno={verEmpleadosTurno}
         empleados={
-          verEmpleadosTurno ? empleadosPorTurno[verEmpleadosTurno.id] ?? [] : []
+          verEmpleadosTurno
+            ? empleadosCombinadosPorTurno.get(verEmpleadosTurno.id) ?? []
+            : []
         }
         onClose={() => setVerEmpleadosTurno(null)}
       />
@@ -591,7 +760,7 @@ function EmpleadosTurnoDialog({
   onClose,
 }: {
   turno: Turno | null;
-  empleados: EmpleadoBasico[];
+  empleados: EmpleadoConOrigen[];
   onClose: () => void;
 }) {
   const tono = turno ? TURNO_TONOS[turno.color] : null;
@@ -615,14 +784,31 @@ function EmpleadosTurnoDialog({
         </DialogHeader>
         {empleados.length === 0 ? (
           <p className="text-sm text-muted-foreground py-4 text-center">
-            Ningún empleado tiene este turno asignado vía patrón.
+            Ningún empleado tiene este turno asignado.
           </p>
         ) : (
           <ul className="max-h-80 overflow-y-auto divide-y">
             {empleados.map((e) => (
-              <li key={e.id} className="py-2 text-sm">
-                {e.nombre}
-                {e.apellidos ? ` ${e.apellidos}` : ""}
+              <li
+                key={e.id}
+                className="py-2 text-sm flex items-center justify-between gap-2"
+              >
+                <span>
+                  {e.nombre}
+                  {e.apellidos ? ` ${e.apellidos}` : ""}
+                </span>
+                <span className="flex items-center gap-1 shrink-0">
+                  {e.directo && (
+                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                      Directo
+                    </span>
+                  )}
+                  {e.patron && (
+                    <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
+                      Patrón
+                    </span>
+                  )}
+                </span>
               </li>
             ))}
           </ul>

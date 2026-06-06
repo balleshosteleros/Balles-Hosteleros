@@ -4,14 +4,19 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { LogIn, LogOut, Coffee, Play, Loader2, Clock, Plus } from "lucide-react";
+import {
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { LogIn, LogOut, Coffee, Play, Loader2, Clock, Plus, MapPin, House } from "lucide-react";
 import { toast } from "sonner";
 import {
   ficharEntradaPersonal,
   ficharSalidaPersonal,
   finalizarPausaPersonal,
+  getMiConfigFichaje,
   getMiFichajeHoy,
   iniciarPausaPersonal,
+  type ModoFichaje,
 } from "@/features/mi-panel/actions/mi-panel-actions";
 import { obtenerPosicionActual } from "@/features/rrhh/utils/geo";
 import type { MiFichajeHoy } from "@/features/mi-panel/types";
@@ -51,6 +56,9 @@ export function FichajeBar({
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [tick, setTick] = useState(0);
+  // Si el empleado puede teletrabajar, al fichar entrada le preguntamos el modo.
+  const [permiteTeletrabajo, setPermiteTeletrabajo] = useState(false);
+  const [eligiendoModo, setEligiendoModo] = useState(false);
 
   async function refresh() {
     const res = await getMiFichajeHoy();
@@ -60,6 +68,9 @@ export function FichajeBar({
 
   useEffect(() => {
     refresh();
+    getMiConfigFichaje().then((res) => {
+      if (res.ok) setPermiteTeletrabajo(res.permiteTeletrabajo);
+    });
   }, []);
 
   useEffect(() => {
@@ -80,13 +91,28 @@ export function FichajeBar({
     }
   }
 
-  async function handleEntrada() {
+  // Punto de entrada del botón "Fichar": si el empleado puede teletrabajar le
+  // preguntamos cómo quiere fichar; si no, va directo a presencial (con ubicación).
+  function handleEntrada() {
+    console.log("[fichaje-debug] permiteTeletrabajo=", permiteTeletrabajo);
+    if (permiteTeletrabajo) {
+      setEligiendoModo(true);
+      return;
+    }
+    void ficharConModo("presencial");
+  }
+
+  async function ficharConModo(modo: ModoFichaje) {
+    setEligiendoModo(false);
     setWorking(true);
-    const geo = await intentarGeo();
-    const res = await ficharEntradaPersonal(geo);
+    // El teletrabajo no necesita ubicación; el presencial sí (se valida en server).
+    const geo = modo === "presencial" ? await intentarGeo() : undefined;
+    const res = await ficharEntradaPersonal(geo, modo);
     setWorking(false);
     if (!res.ok) return toast.error(res.error || "No se pudo fichar entrada");
-    toast.success("Entrada registrada");
+    toast.success(
+      modo === "teletrabajo" ? "Entrada registrada (teletrabajo)" : "Entrada registrada",
+    );
     await refresh();
     onChange?.();
   }
@@ -122,6 +148,7 @@ export function FichajeBar({
 
   void tick; // forzar render del cronómetro
 
+  const esTeletrabajo = !!fichaje?.modoTeletrabajo;
   let estadoLabel = "Sin fichar";
   let estadoColor = "bg-slate-100 text-slate-700 border-slate-200";
   if (finalizado) {
@@ -131,8 +158,11 @@ export function FichajeBar({
     estadoLabel = "En descanso";
     estadoColor = "bg-amber-100 text-amber-800 border-amber-200";
   } else if (trabajando) {
-    estadoLabel = "Trabajando";
-    estadoColor = "bg-emerald-100 text-emerald-800 border-emerald-200";
+    // Verde = fichaje presencial (con ubicación); azul = teletrabajo.
+    estadoLabel = esTeletrabajo ? "Trabajando · Teletrabajo" : "Trabajando · Presencial";
+    estadoColor = esTeletrabajo
+      ? "bg-blue-100 text-blue-800 border-blue-200"
+      : "bg-emerald-100 text-emerald-800 border-emerald-200";
   }
 
   return (
@@ -236,6 +266,45 @@ export function FichajeBar({
           )}
         </div>
       </div>
+
+      {/* Elección de modo: solo aparece si el empleado puede teletrabajar. */}
+      <Dialog open={eligiendoModo} onOpenChange={(open) => { if (!open) setEligiendoModo(false); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>¿Cómo quieres fichar?</DialogTitle>
+            <DialogDescription>
+              Elige el tipo de jornada. El fichaje presencial necesita que estés
+              dentro de uno de tus locales; el teletrabajo no requiere ubicación.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 sm:grid-cols-2 pt-2">
+            <button
+              type="button"
+              onClick={() => ficharConModo("presencial")}
+              disabled={working}
+              className="flex flex-col items-center gap-2 rounded-xl border-2 border-emerald-200 bg-emerald-50 p-5 text-emerald-800 transition-colors hover:border-emerald-300 hover:bg-emerald-100 disabled:opacity-60"
+            >
+              <MapPin className="h-7 w-7" />
+              <span className="font-semibold">Presencial</span>
+              <span className="text-xs text-emerald-700/80 text-center">
+                Con ubicación, en tu local
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => ficharConModo("teletrabajo")}
+              disabled={working}
+              className="flex flex-col items-center gap-2 rounded-xl border-2 border-blue-200 bg-blue-50 p-5 text-blue-800 transition-colors hover:border-blue-300 hover:bg-blue-100 disabled:opacity-60"
+            >
+              <House className="h-7 w-7" />
+              <span className="font-semibold">Teletrabajo</span>
+              <span className="text-xs text-blue-700/80 text-center">
+                Sin ubicación
+              </span>
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

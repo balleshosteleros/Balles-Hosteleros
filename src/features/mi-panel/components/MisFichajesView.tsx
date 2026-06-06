@@ -96,6 +96,7 @@ export function MisFichajesView() {
                   <th className="py-2 px-3 font-medium">Descanso</th>
                   <th className="py-2 px-3 font-medium">Salida</th>
                   <th className="py-2 px-3 font-medium text-right">Horas</th>
+                  <th className="py-2 px-3 font-medium">Local</th>
                   <th className="py-2 pl-3 font-medium">Estado</th>
                 </tr>
               </thead>
@@ -119,6 +120,18 @@ export function MisFichajesView() {
                     </td>
                     <td className="py-2 px-3 text-right tabular-nums">
                       {f.horaSalida ? formatHorasDecimal(f.horasTotales) : "—"}
+                    </td>
+                    <td className="py-2 px-3">
+                      <Badge
+                        variant="outline"
+                        className={`text-[10px] ${
+                          f.modoTeletrabajo
+                            ? "bg-blue-100 text-blue-700 border-blue-200"
+                            : "bg-emerald-100 text-emerald-700 border-emerald-200"
+                        }`}
+                      >
+                        {f.modoTeletrabajo ? "Teletrabajo" : (f.local || "Local")}
+                      </Badge>
                     </td>
                     <td className="py-2 pl-3">
                       <div className="flex items-center gap-1.5">
