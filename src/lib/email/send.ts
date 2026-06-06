@@ -3,32 +3,42 @@
  *
  * Transporte (2026-05-29): SMTP único global vía nodemailer. Las credenciales
  * viven en variables de entorno (SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS),
- * nunca en BD ni en código. El cliente (la empresa hostelera) no configura nada
- * técnico: solo rellena `empresas.email_contacto`, que se usa como Reply-To para
- * que las respuestas del destinatario lleguen a su buzón real.
+ * nunca en BD ni en código.
+ *
+ * Política de respuestas (2026-06-06): TODOS los correos que envía la plataforma
+ * son **no-reply**. El remitente es el software, así que nadie debe poder
+ * "responder" a un correo del SaaS — ni empleados ni clientes. El Reply-To se
+ * fija siempre a `EMAIL_NOREPLY` (una dirección que no se monitoriza: las
+ * respuestas rebotan). Cualquier comunicación real se hace por los canales de la
+ * propia empresa, no contestando al correo.
  *
  * Si faltan las env vars SMTP → { ok: false, configured: false } y el llamador
  * degrada con elegancia (nunca rompe el flujo de negocio).
  *
- * Server-only: usa nodemailer y la service-role para resolver el Reply-To.
+ * Server-only: usa nodemailer.
  */
 
 import "server-only";
 import nodemailer from "nodemailer";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+/** Dirección no-reply: capa cualquier respuesta a los correos del software. */
+const NOREPLY =
+  process.env.EMAIL_NOREPLY?.trim() || "no-reply@balleshosteleros.com";
+
+/** Límite diario gratuito del transporte (Gmail Workspace, toda la plataforma). */
+const LIMITE_DIARIO = 2000;
+/** A partir de cuántos envíos del día avisamos al dueño (default 90% = 1.800). */
+const UMBRAL_AVISO = Number(process.env.EMAIL_LIMITE_AVISO) || 1800;
+/** Buzón al que llega el aviso de cercanía al límite. */
+const DESTINO_ALERTAS =
+  process.env.EMAIL_ALERTAS?.trim() || "balleshosteleros@gmail.com";
+
 export type SendEmailInput = {
   to: string;
   subject: string;
   html: string;
   text?: string;
-  /**
-   * Si se pasa, leemos `empresas.email_contacto` y lo usamos como Reply-To
-   * para que las respuestas del destinatario lleguen al cliente, no al SaaS.
-   */
-  empresaId?: string | null;
-  /** Override manual del Reply-To. Tiene prioridad sobre `empresaId`. */
-  replyTo?: string | null;
 };
 
 export type SendEmailResult =
@@ -68,29 +78,12 @@ function resolverSmtpConfig(): SmtpConfig | null {
   return { host, port, secure, user, pass, from };
 }
 
-async function resolverReplyTo(empresaId: string): Promise<string | null> {
-  try {
-    const admin = createAdminClient();
-    const { data } = await admin
-      .from("empresas")
-      .select("email_contacto")
-      .eq("id", empresaId)
-      .maybeSingle();
-    const email = (data?.email_contacto as string | null) ?? null;
-    return email && email.trim() ? email.trim() : null;
-  } catch {
-    return null;
-  }
-}
-
 export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult> {
   const cfg = resolverSmtpConfig();
   if (!cfg) return { ok: false, configured: false };
 
-  let replyTo: string | null = input.replyTo ?? null;
-  if (!replyTo && input.empresaId) {
-    replyTo = await resolverReplyTo(input.empresaId);
-  }
+  // Reply-To siempre no-reply: nadie responde a un correo del software.
+  const replyTo = NOREPLY;
 
   try {
     const transporter = nodemailer.createTransport({
@@ -105,8 +98,11 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
       subject: input.subject,
       html: input.html,
       text: input.text,
-      replyTo: replyTo ?? undefined,
+      replyTo,
     });
+    // Cuenta el envío y avisa si nos acercamos al límite diario (best-effort:
+    // nunca rompe ni ralentiza de forma crítica el flujo de negocio).
+    await registrarEnvioYAvisar();
     return { ok: true, transport: "smtp", id: info.messageId };
   } catch (e) {
     return {
@@ -114,5 +110,35 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
       configured: true,
       error: e instanceof Error ? e.message : "Error SMTP desconocido",
     };
+  }
+}
+
+/**
+ * Incrementa el contador diario de correos y, la primera vez que se cruza el
+ * umbral en el día, manda UN aviso al dueño. Todo dentro de try/catch: si algo
+ * falla, el correo principal ya se envió y no queremos romper nada.
+ *
+ * El propio aviso vuelve a pasar por `sendEmail`, pero el RPC marca `alertado`
+ * antes de enviarlo, así que no se genera un segundo aviso (sin bucle).
+ */
+async function registrarEnvioYAvisar(): Promise<void> {
+  try {
+    const admin = createAdminClient();
+    const { data, error } = await admin.rpc("registrar_envio_email", {
+      p_umbral: UMBRAL_AVISO,
+    });
+    if (error || !data) return;
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row?.debe_alertar) return;
+
+    const { limiteEnviosEmail } = await import("./templates/limite-envios");
+    const { subject, html, text } = limiteEnviosEmail({
+      total: Number(row.total) || UMBRAL_AVISO,
+      limite: LIMITE_DIARIO,
+      umbral: UMBRAL_AVISO,
+    });
+    await sendEmail({ to: DESTINO_ALERTAS, subject, html, text });
+  } catch (e) {
+    console.error("[email] aviso límite diario:", e);
   }
 }

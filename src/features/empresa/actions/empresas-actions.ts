@@ -89,14 +89,12 @@ export async function saveEmpresaAjustes(input: {
   id: string;
   datosGenerales?: Partial<DatosGenerales>;
   configOperativa?: Partial<ConfigOperativa>;
-  emailContacto?: string | null;
 }): Promise<{ ok: boolean; error?: string }> {
   try {
     const supabase = await createClient();
     const updates: Record<string, unknown> = {};
     if (input.datosGenerales !== undefined) updates.datos_generales = input.datosGenerales;
     if (input.configOperativa !== undefined) updates.config_operativa = input.configOperativa;
-    if (input.emailContacto !== undefined) updates.email_contacto = input.emailContacto;
     // Fuente de verdad: nombreComercial manda sobre empresas.nombre.
     const nc = input.datosGenerales?.nombreComercial?.trim();
     if (nc) updates.nombre = nc;
@@ -113,29 +111,12 @@ export async function saveEmpresaAjustes(input: {
   }
 }
 
-export async function getEmpresaEmailContacto(
-  empresaId: string,
-): Promise<{ ok: true; email: string | null } | { ok: false; error: string }> {
-  try {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("empresas")
-      .select("email_contacto")
-      .eq("id", empresaId)
-      .maybeSingle();
-    if (error) throw error;
-    return { ok: true, email: (data?.email_contacto as string | null) ?? null };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[empresas] getEmailContacto:", msg);
-    return { ok: false, error: msg };
-  }
-}
-
 export async function createEmpresa(input: {
   nombre: string;
   iniciales: string;
   color: string;
+  datosGenerales?: Partial<DatosGenerales>;
+  configOperativa?: Partial<ConfigOperativa>;
 }): Promise<{ ok: boolean; data?: EmpresaIdentidad; error?: string }> {
   try {
     const supabase = await createClient();
@@ -146,15 +127,22 @@ export async function createEmpresa(input: {
 
     const admin = createAdminClient();
     const slug = slugify(input.nombre);
+    // El nombre comercial del formulario manda sobre `nombre`/`slug`.
+    const datosGenerales: Partial<DatosGenerales> = {
+      ...(input.datosGenerales ?? {}),
+      nombreComercial: input.datosGenerales?.nombreComercial?.trim() || input.nombre,
+    };
+    const insertRow: Record<string, unknown> = {
+      nombre: input.nombre,
+      slug,
+      iniciales: input.iniciales,
+      color: input.color,
+      datos_generales: datosGenerales,
+    };
+    if (input.configOperativa) insertRow.config_operativa = input.configOperativa;
     const { data, error } = await admin
       .from("empresas")
-      .insert({
-        nombre: input.nombre,
-        slug,
-        iniciales: input.iniciales,
-        color: input.color,
-        datos_generales: { nombreComercial: input.nombre },
-      })
+      .insert(insertRow)
       .select("id, slug, nombre, iniciales, color, estado")
       .single();
     if (error) throw error;
@@ -194,15 +182,59 @@ export async function createEmpresa(input: {
   }
 }
 
+/**
+ * Soft-delete: marca la empresa para eliminación. NO borra nada todavía — la
+ * empresa sigue accesible 30 días (periodo de gracia / restauración). El cron
+ * /api/cron/empresas-purga hace el hard-delete definitivo pasado el plazo.
+ * El plazo en días vive en EMPRESA_RETENCION_DIAS (constants.ts).
+ */
 export async function deleteEmpresa(id: string): Promise<{ ok: boolean; error?: string }> {
   try {
     const admin = createAdminClient();
-    const { error } = await admin.from("empresas").delete().eq("id", id);
+    const { error } = await admin
+      .from("empresas")
+      .update({ eliminacion_programada_at: new Date().toISOString() })
+      .eq("id", id);
     if (error) throw error;
     return { ok: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[empresas] delete:", msg);
+    console.error("[empresas] delete (soft):", msg);
     return { ok: false, error: msg };
+  }
+}
+
+/** Cancela una eliminación programada (restaura la empresa). */
+export async function cancelarEliminacionEmpresa(id: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const admin = createAdminClient();
+    const { error } = await admin
+      .from("empresas")
+      .update({ eliminacion_programada_at: null })
+      .eq("id", id);
+    if (error) throw error;
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[empresas] cancelarEliminacion:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/** Devuelve la fecha de eliminación programada de una empresa (o null). */
+export async function getEmpresaEliminacion(
+  id: string,
+): Promise<{ programadaEn: string | null }> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("empresas")
+      .select("eliminacion_programada_at")
+      .eq("id", id)
+      .single();
+    if (error) throw error;
+    return { programadaEn: (data?.eliminacion_programada_at as string) ?? null };
+  } catch {
+    return { programadaEn: null };
   }
 }

@@ -52,7 +52,6 @@ type EmpresaRow = {
   logo_url: string | null;
   color: string | null;
   color_secundario: string | null;
-  email_contacto: string | null;
 };
 
 type ReservaRow = {
@@ -155,7 +154,7 @@ export async function enviarReservaEmail(
     await Promise.all([
       admin
         .from("empresas")
-        .select("nombre, logo_url, color, color_secundario, email_contacto")
+        .select("nombre, logo_url, color, color_secundario")
         .eq("id", empresaId)
         .maybeSingle(),
       admin
@@ -179,8 +178,6 @@ export async function enviarReservaEmail(
     color: (empresaData?.color as string | null | undefined) ?? null,
     color_secundario:
       (empresaData?.color_secundario as string | null | undefined) ?? null,
-    email_contacto:
-      (empresaData?.email_contacto as string | null | undefined) ?? null,
   };
 
   const config: ConfigRow = {
@@ -336,7 +333,6 @@ export async function enviarReservaEmail(
     subject,
     html,
     text,
-    empresaId,
   });
 
   if (!res.ok) {
@@ -721,7 +717,6 @@ export function previewReservaEmail(input: PreviewInput): {
       logo_url: input.logoUrl,
       color: input.colorPrimario,
       color_secundario: null,
-      email_contacto: null,
     },
     cliente: placeholders.nombre,
     fechaLegible: placeholders.fecha,

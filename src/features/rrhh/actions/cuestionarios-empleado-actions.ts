@@ -272,7 +272,7 @@ export async function enviarRecordatorioCuestionario(envioId: string) {
       subject,
       html,
       text,
-      empresaId: envio.empresa_id,
+      // Correo interno a empleado → no-reply: no se responde al software.
     });
 
     if (!res.ok) {

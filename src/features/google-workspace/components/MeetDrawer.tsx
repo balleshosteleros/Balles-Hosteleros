@@ -146,7 +146,6 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
   const [vista, setVista] = useState<Vista>("dia");
   const [refDate, setRefDate] = useState<string>(() => ymd(new Date()));
   const [modo, setModo] = useState<"agenda" | "calendario">("agenda");
-  const [soloMeet, setSoloMeet] = useState(false);
   const [calendarios, setCalendarios] = useState<SidebarCalendar[]>([]);
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
   const [sidebarAbierto, setSidebarAbierto] = useState(false);
@@ -410,31 +409,6 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        {modo === "calendario" && (
-          <div className="flex items-center justify-between gap-2 border-b bg-emerald-50/40 px-3 py-1.5 shrink-0">
-            <span className="flex items-center gap-1.5 text-[11px] text-emerald-800">
-              <Video className="h-3.5 w-3.5" />
-              Resaltando reuniones con Meet
-            </span>
-            <button
-              type="button"
-              onClick={() => setSoloMeet((v) => !v)}
-              className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
-                soloMeet
-                  ? "border-emerald-600 bg-emerald-600 text-white"
-                  : "border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-50"
-              }`}
-              title={
-                soloMeet
-                  ? "Mostrando solo reuniones con Meet"
-                  : "Mostrando el resto de eventos en gris"
-              }
-            >
-              {soloMeet ? "Solo Meet" : "Atenuar resto"}
-            </button>
-          </div>
-        )}
-
         <div className="flex flex-1 min-h-0">
           {sidebarAbierto && connected && (
             <CalendarSidebar
@@ -459,7 +433,6 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
               vista={vista}
               refDate={refDate}
               nowTime={nowTime}
-              soloMeet={soloMeet}
               onAbrir={(ev) =>
                 ev.meetLink && window.open(ev.meetLink, "_blank")
               }

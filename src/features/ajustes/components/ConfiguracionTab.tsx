@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { forwardRef, useImperativeHandle, useState } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,42 +8,29 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { type DatosGenerales, type ConfigOperativa } from "@/features/ajustes/data/ajustes";
-import {
-  saveEmpresaAjustes,
-  getEmpresaEmailContacto,
-} from "@/features/empresa/actions/empresas-actions";
+import { saveEmpresaAjustes } from "@/features/empresa/actions/empresas-actions";
 
 function Field({ label, value, onChange, type = "text", placeholder = "" }: {
   label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string;
 }) {
   return (
     <div>
-      <Label className="text-xs font-bold uppercase">{label}</Label>
+      <Label className="text-xs font-bold">{label}</Label>
       <Input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="mt-1" />
     </div>
   );
 }
 
-export function ConfiguracionTab() {
+export interface ConfiguracionTabHandle {
+  save: () => Promise<void>;
+}
+
+export const ConfiguracionTab = forwardRef<ConfiguracionTabHandle, { hideSaveButton?: boolean }>(
+  function ConfiguracionTab({ hideSaveButton = false }, ref) {
   const { ajustes, setAjustes, empresaActual, updateEmpresa } = useEmpresa();
   const d = ajustes.datosGenerales;
   const c = ajustes.configOperativa;
   const [savingConfig, setSavingConfig] = useState(false);
-  const [emailContacto, setEmailContacto] = useState<string>("");
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!empresaActual.dbId) {
-      setEmailContacto("");
-      return;
-    }
-    getEmpresaEmailContacto(empresaActual.dbId).then((res) => {
-      if (!cancelled && res.ok) setEmailContacto(res.email ?? "");
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [empresaActual.dbId]);
 
   const setD = (k: keyof DatosGenerales, v: string) =>
     setAjustes((prev) => ({ ...prev, datosGenerales: { ...prev.datosGenerales, [k]: v } }));
@@ -62,7 +49,6 @@ export function ConfiguracionTab() {
         id: empresaActual.dbId,
         datosGenerales: d,
         configOperativa: c,
-        emailContacto: emailContacto.trim() || null,
       });
       if (!res.ok) throw new Error(res.error ?? "Error al guardar");
       const nombreComercial = d.nombreComercial?.trim();
@@ -77,6 +63,10 @@ export function ConfiguracionTab() {
       setSavingConfig(false);
     }
   };
+
+  // Permite que el contenedor (EmpresaTab) dispare el guardado desde su propia
+  // botonera inferior, junto a "Crear" y "Borrar".
+  useImperativeHandle(ref, () => ({ save: handleSave }));
 
   return (
     <div className="space-y-2">
@@ -94,7 +84,7 @@ export function ConfiguracionTab() {
           <Field label="País"                value={d.pais}               onChange={(v) => setD("pais", v)} />
           <Field label="Código postal"       value={d.codigoPostal}       onChange={(v) => setD("codigoPostal", v)} />
           <div>
-            <Label className="text-xs font-bold uppercase">Estado de la empresa</Label>
+            <Label className="text-xs font-bold">Estado de la empresa</Label>
             <Select value={d.estado} onValueChange={(v) => setD("estado", v)}>
               <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -102,32 +92,6 @@ export function ConfiguracionTab() {
                 <SelectItem value="Inactiva">Inactiva</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="px-4 pt-3 pb-2">
-          <CardTitle className="text-base">Correo de contacto</CardTitle>
-        </CardHeader>
-        <CardContent className="px-4 pb-3 pt-0 space-y-2">
-          <div>
-            <Label className="text-xs font-bold uppercase">
-              ¿A qué correo enviamos los avisos y las respuestas?
-            </Label>
-            <Input
-              type="email"
-              value={emailContacto}
-              onChange={(e) => setEmailContacto(e.target.value)}
-              placeholder="admin@tuempresa.com"
-              className="mt-1"
-            />
-            <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
-              Los correos del sistema (solicitudes de vacaciones, bajas,
-              firmas, etc.) salen desde la plataforma. Cuando alguien responda
-              a uno de esos correos, la respuesta llegará a esta dirección. Es
-              también el buzón al que avisamos cuando hay algo pendiente para ti.
-            </p>
           </div>
         </CardContent>
       </Card>
@@ -150,7 +114,7 @@ export function ConfiguracionTab() {
         <CardHeader className="px-4 pt-3 pb-2"><CardTitle className="text-base">Configuración regional</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 px-4 pb-3 pt-0">
           <div>
-            <Label className="text-xs font-bold uppercase">Moneda</Label>
+            <Label className="text-xs font-bold">Moneda</Label>
             <Select value={c.moneda} onValueChange={(v) => setC("moneda", v)}>
               <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -161,7 +125,7 @@ export function ConfiguracionTab() {
             </Select>
           </div>
           <div>
-            <Label className="text-xs font-bold uppercase">Idioma</Label>
+            <Label className="text-xs font-bold">Idioma</Label>
             <Select value={c.idioma} onValueChange={(v) => setC("idioma", v)}>
               <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -171,7 +135,7 @@ export function ConfiguracionTab() {
             </Select>
           </div>
           <div>
-            <Label className="text-xs font-bold uppercase">Zona horaria</Label>
+            <Label className="text-xs font-bold">Zona horaria</Label>
             <Select value={c.zonaHoraria} onValueChange={(v) => setC("zonaHoraria", v)}>
               <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -182,7 +146,7 @@ export function ConfiguracionTab() {
             </Select>
           </div>
           <div>
-            <Label className="text-xs font-bold uppercase">Formato de fecha</Label>
+            <Label className="text-xs font-bold">Formato de fecha</Label>
             <Select value={c.formatoFecha} onValueChange={(v) => setC("formatoFecha", v)}>
               <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -193,7 +157,7 @@ export function ConfiguracionTab() {
             </Select>
           </div>
           <div>
-            <Label className="text-xs font-bold uppercase">Primer día de la semana</Label>
+            <Label className="text-xs font-bold">Primer día de la semana</Label>
             <Select value={c.primerDiaSemana} onValueChange={(v) => setC("primerDiaSemana", v)}>
               <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -205,11 +169,13 @@ export function ConfiguracionTab() {
         </CardContent>
       </Card>
 
-      <div className="flex justify-end">
-        <Button onClick={handleSave} disabled={savingConfig}>
-          {savingConfig ? "GUARDANDO…" : "GUARDAR CONFIGURACIÓN"}
-        </Button>
-      </div>
+      {!hideSaveButton && (
+        <div className="flex justify-end">
+          <Button onClick={handleSave} disabled={savingConfig}>
+            {savingConfig ? "Guardando…" : "Guardar configuración"}
+          </Button>
+        </div>
+      )}
     </div>
   );
-}
+});
