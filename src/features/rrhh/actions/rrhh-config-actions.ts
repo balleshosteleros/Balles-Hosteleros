@@ -10,6 +10,8 @@ export interface RrhhConfig {
   validadorDeptoOperativaId: string | null;
   /** Departamento cuyos empleados validan a los empleados de área administrativa. */
   validadorDeptoAdministrativaId: string | null;
+  /** Si al validador le aparece una tarea en Mi Panel mientras tenga pendientes. */
+  tareasValidadorActivo: boolean;
 }
 
 /** Lee la configuración RRHH de la empresa activa (validadores por área). */
@@ -24,7 +26,7 @@ export async function getRrhhConfig(): Promise<{ ok: boolean; data?: RrhhConfig;
 
     const { data, error } = await admin
       .from("empresa_rrhh_config")
-      .select("validador_depto_operativa_id, validador_depto_administrativa_id")
+      .select("validador_depto_operativa_id, validador_depto_administrativa_id, tareas_validador_activo")
       .eq("empresa_id", empresaId)
       .maybeSingle();
     if (error) throw error;
@@ -34,6 +36,7 @@ export async function getRrhhConfig(): Promise<{ ok: boolean; data?: RrhhConfig;
       data: {
         validadorDeptoOperativaId: (data?.validador_depto_operativa_id as string | null) ?? null,
         validadorDeptoAdministrativaId: (data?.validador_depto_administrativa_id as string | null) ?? null,
+        tareasValidadorActivo: data ? (data.tareas_validador_activo as boolean) !== false : true,
       },
     };
   } catch (err) {
@@ -47,6 +50,7 @@ export async function getRrhhConfig(): Promise<{ ok: boolean; data?: RrhhConfig;
 export async function saveRrhhConfig(input: {
   validadorDeptoOperativaId: string | null;
   validadorDeptoAdministrativaId: string | null;
+  tareasValidadorActivo: boolean;
 }) {
   try {
     const { empresaId } = await getAppContext();
@@ -64,6 +68,7 @@ export async function saveRrhhConfig(input: {
           empresa_id: empresaId,
           validador_depto_operativa_id: input.validadorDeptoOperativaId,
           validador_depto_administrativa_id: input.validadorDeptoAdministrativaId,
+          tareas_validador_activo: input.tareasValidadorActivo,
         },
         { onConflict: "empresa_id" },
       );

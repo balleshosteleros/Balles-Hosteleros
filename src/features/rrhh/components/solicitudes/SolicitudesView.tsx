@@ -23,7 +23,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { CheckCircle2, XCircle, Loader2, Inbox, Settings } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, Inbox, Settings, Lock } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -74,9 +74,11 @@ function formatFechaHora(s: string): string {
 
 type Modo = "aprobar" | "rechazar";
 
+type SolicitudConFlag = SolicitudPersonal & { puedoValidar?: boolean };
+
 export function SolicitudesView() {
   const [tab, setTab] = useTabQuery(["pendientes", "todas"] as const, "pendientes");
-  const [items, setItems] = useState<SolicitudPersonal[]>([]);
+  const [items, setItems] = useState<SolicitudConFlag[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
@@ -128,6 +130,11 @@ export function SolicitudesView() {
     return lista;
   }, [items, busqueda, filtros, orden]);
 
+  const puedoValidarIds = useMemo(
+    () => new Set(items.filter((s) => s.puedoValidar).map((s) => s.id)),
+    [items],
+  );
+
   const stats = useMemo(() => {
     const pendientes = items.filter((s) => s.estado === "pendiente").length;
     const aprobadas = items.filter((s) => s.estado === "aprobada").length;
@@ -136,6 +143,10 @@ export function SolicitudesView() {
   }, [items]);
 
   function abrirRevision(sol: SolicitudPersonal, m: Modo) {
+    if (!puedoValidarIds.has(sol.id)) {
+      toast.error("Solo el validador asignado de este empleado puede gestionar esta solicitud.");
+      return;
+    }
     setRevisando(sol);
     setModo(m);
     setNotas("");
@@ -319,25 +330,32 @@ export function SolicitudesView() {
                       {columnasRender.map((c) => columnDefs[c.campo]?.td(s))}
                       <TableCell className="text-right">
                         {s.estado === "pendiente" ? (
-                          <div className="flex justify-end gap-1">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-rose-600 hover:bg-rose-50"
-                              onClick={() => abrirRevision(s, "rechazar")}
-                            >
-                              <XCircle className="h-4 w-4 mr-1" />
-                              Rechazar
-                            </Button>
-                            <Button
-                              size="sm"
-                              className="bg-emerald-600 hover:bg-emerald-700"
-                              onClick={() => abrirRevision(s, "aprobar")}
-                            >
-                              <CheckCircle2 className="h-4 w-4 mr-1" />
-                              Aprobar
-                            </Button>
-                          </div>
+                          puedoValidarIds.has(s.id) ? (
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-rose-600 hover:bg-rose-50"
+                                onClick={() => abrirRevision(s, "rechazar")}
+                              >
+                                <XCircle className="h-4 w-4 mr-1" />
+                                Rechazar
+                              </Button>
+                              <Button
+                                size="sm"
+                                className="bg-emerald-600 hover:bg-emerald-700"
+                                onClick={() => abrirRevision(s, "aprobar")}
+                              >
+                                <CheckCircle2 className="h-4 w-4 mr-1" />
+                                Aprobar
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-end gap-1.5 text-xs text-muted-foreground">
+                              <Lock className="h-3.5 w-3.5" />
+                              <span>Solo su validador</span>
+                            </div>
+                          )
                         ) : (
                           <span className="text-xs text-muted-foreground">—</span>
                         )}

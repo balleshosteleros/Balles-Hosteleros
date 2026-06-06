@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useGoogleConnection } from "./useGoogleConnection";
 import { contarPendientesHoy } from "@/features/tareas/actions/tareas-actions";
+import { getTareasValidacionPendientes } from "@/features/mi-panel/actions/mi-panel-actions";
 import { listCanales } from "@/features/comunicacion/actions/comunicacion-actions";
 import { contarLlamadasNoVistas } from "./TelefonoDrawer";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
@@ -39,11 +40,20 @@ export function useDailyCounts(): DailyCounts {
   });
 
   const fetchCounts = useCallback(async () => {
-    // Tareas de BD (no localStorage)
+    // Tareas de BD (no localStorage) + tareas de validación (validador).
     let tasks = 0;
     try {
       const res = await contarPendientesHoy();
       if (res.ok) tasks = res.data;
+    } catch {
+      /* ignore */
+    }
+    try {
+      const val = await getTareasValidacionPendientes();
+      if (val.ok && val.data.activo) {
+        // Cuenta como 1 tarea por tipo con pendientes (igual que el drawer).
+        tasks += (val.data.ausencia > 0 ? 1 : 0) + (val.data.trabajo > 0 ? 1 : 0);
+      }
     } catch {
       /* ignore */
     }

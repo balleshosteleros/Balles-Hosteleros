@@ -195,7 +195,7 @@ export async function getMiConfigFichaje(): Promise<{ ok: boolean; permiteTeletr
       .eq("empresa_id", empresaId)
       .maybeSingle();
     if (error) throw error;
-    return { ok: true, permiteTeletrabajo: Boolean(empleado?.permite_teletrabajo) };
+       return { ok: true, permiteTeletrabajo: Boolean(empleado?.permite_teletrabajo) };
   } catch (err: unknown) {
     return { ok: false, permiteTeletrabajo: false, error: extractErrorMessage(err) };
   }
@@ -922,9 +922,40 @@ export async function anularMiSolicitud(id: string) {
 
 // ─── ADMIN / RRHH: gestión de solicitudes ──────────────────
 
+type ServerClient = Awaited<ReturnType<typeof createClient>>;
+
+/**
+ * ¿El usuario es el validador asignado de esta solicitud según su tipo?
+ * Las de trabajo las valida `empleados.validador_trabajo_id` del solicitante;
+ * las de ausencia, `empleados.validador_ausencias_id`. Solo ese empleado puede
+ * aprobar/denegar.
+ */
+async function esValidadorAsignado(
+  supabase: ServerClient,
+  userId: string,
+  solicitud: { empresa_id: string; user_id: string; tipo: SolicitudTipo },
+): Promise<boolean> {
+  const empresaId = solicitud.empresa_id;
+  const [{ data: actual }, { data: solicitante }] = await Promise.all([
+    supabase.from("empleados").select("id").eq("user_id", userId).eq("empresa_id", empresaId).maybeSingle(),
+    supabase
+      .from("empleados")
+      .select("validador_trabajo_id, validador_ausencias_id")
+      .eq("user_id", solicitud.user_id)
+      .eq("empresa_id", empresaId)
+      .maybeSingle(),
+  ]);
+  if (!actual?.id || !solicitante) return false;
+  const validadorId =
+    solicitud.tipo === "trabajo"
+      ? (solicitante.validador_trabajo_id as string | null)
+      : (solicitante.validador_ausencias_id as string | null);
+  return !!validadorId && validadorId === actual.id;
+}
+
 export async function listarSolicitudesEmpresa(filtro: "pendientes" | "todas" = "pendientes") {
   try {
-    const { supabase, empresaId } = await getContext();
+    const { supabase, empresaId, user } = await getContext();
     if (!empresaId) return { ok: false, data: [], error: "No autenticado" };
     const query = supabase
       .from("solicitudes_personal")
@@ -939,7 +970,41 @@ export async function listarSolicitudesEmpresa(filtro: "pendientes" | "todas" = 
     }
     const { data, error } = await query;
     if (error) throw error;
-    return { ok: true, data: (data ?? []).map(mapSolicitud) };
+
+    // Marca cada solicitud con si el usuario actual es su validador asignado
+    // (solo él puede aprobar/denegar). Todos ven todas; el control es por fila.
+    let miEmpleadoId: string | null = null;
+    const validadoresPorUser = new Map<string, { t: string | null; a: string | null }>();
+    if (user) {
+      const userIds = Array.from(new Set((data ?? []).map((r) => r.user_id as string)));
+      const [{ data: actual }, { data: solicitantes }] = await Promise.all([
+        supabase.from("empleados").select("id").eq("user_id", user.id).eq("empresa_id", empresaId).maybeSingle(),
+        userIds.length > 0
+          ? supabase
+              .from("empleados")
+              .select("user_id, validador_trabajo_id, validador_ausencias_id")
+              .eq("empresa_id", empresaId)
+              .in("user_id", userIds)
+          : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
+      ]);
+      miEmpleadoId = (actual?.id as string | null) ?? null;
+      for (const s of solicitantes ?? []) {
+        validadoresPorUser.set(s.user_id as string, {
+          t: (s.validador_trabajo_id as string | null) ?? null,
+          a: (s.validador_ausencias_id as string | null) ?? null,
+        });
+      }
+    }
+
+    const dataConFlag = (data ?? []).map((row) => {
+      const base = mapSolicitud(row);
+      const v = validadoresPorUser.get(base.userId);
+      const validadorId = base.tipo === "trabajo" ? v?.t : v?.a;
+      const puedoValidar = !!miEmpleadoId && !!validadorId && validadorId === miEmpleadoId;
+      return { ...base, puedoValidar };
+    });
+
+    return { ok: true, data: dataConFlag };
   } catch (err: unknown) {
     const msg = extractErrorMessage(err);
     console.error("[mi-panel] listarSolicitudesEmpresa:", msg);
@@ -955,11 +1020,20 @@ export async function aprobarSolicitud(id: string, notasRevision?: string) {
     // Cargamos la solicitud antes del UPDATE para decidir si hay notificación.
     const { data: solicitud, error: fetchErr } = await supabase
       .from("solicitudes_personal")
-      .select("id, empresa_id, user_id, empleado_nombre, subtipo, fecha_inicio, fecha_fin")
+      .select("id, empresa_id, user_id, tipo, empleado_nombre, subtipo, fecha_inicio, fecha_fin")
       .eq("id", id)
       .maybeSingle();
     if (fetchErr) throw fetchErr;
     if (!solicitud) return { ok: false, error: "Solicitud no encontrada" };
+
+    // Solo el validador asignado del empleado puede aprobarla.
+    if (!(await esValidadorAsignado(supabase, user.id, {
+      empresa_id: solicitud.empresa_id as string,
+      user_id: solicitud.user_id as string,
+      tipo: solicitud.tipo as SolicitudTipo,
+    }))) {
+      return { ok: false, error: "Solo el validador asignado de este empleado puede aprobar esta solicitud." };
+    }
 
     const { error } = await supabase
       .from("solicitudes_personal")
@@ -1224,9 +1298,19 @@ export async function rechazarSolicitud(id: string, notasRevision?: string) {
     if (!user) return { ok: false, error: "No autenticado" };
     const { data: solicitud } = await supabase
       .from("solicitudes_personal")
-      .select("id, empresa_id, user_id, subtipo")
+      .select("id, empresa_id, user_id, tipo, subtipo")
       .eq("id", id)
       .maybeSingle();
+    if (!solicitud) return { ok: false, error: "Solicitud no encontrada" };
+
+    // Solo el validador asignado del empleado puede denegarla.
+    if (!(await esValidadorAsignado(supabase, user.id, {
+      empresa_id: solicitud.empresa_id as string,
+      user_id: solicitud.user_id as string,
+      tipo: solicitud.tipo as SolicitudTipo,
+    }))) {
+      return { ok: false, error: "Solo el validador asignado de este empleado puede denegar esta solicitud." };
+    }
 
     const { error } = await supabase
       .from("solicitudes_personal")
@@ -1266,6 +1350,85 @@ export async function rechazarSolicitud(id: string, notasRevision?: string) {
     const msg = extractErrorMessage(err);
     console.error("[mi-panel] rechazarSolicitud:", msg);
     return { ok: false, error: msg };
+  }
+}
+
+// ─── TAREAS DE VALIDACIÓN (para el validador) ────────────────
+
+export interface TareasValidacion {
+  /** Si la empresa tiene activadas estas tareas (Ajustes → RRHH). */
+  activo: boolean;
+  ausencia: number;
+  trabajo: number;
+}
+
+/**
+ * Solicitudes pendientes que el usuario actual debe validar, agrupadas por tipo.
+ * Alimenta el recuadro de "tareas de validación" del Mi Panel. Se calcula en
+ * vivo: aparece cada día mientras haya pendientes y desaparece al resolverlas.
+ * Gobernado por el toggle `empresa_rrhh_config.tareas_validador_activo`.
+ */
+export async function getTareasValidacionPendientes(): Promise<{
+  ok: boolean;
+  data: TareasValidacion;
+  error?: string;
+}> {
+  const vacio: TareasValidacion = { activo: false, ausencia: 0, trabajo: 0 };
+  try {
+    const { supabase, user, empresaId } = await getContext();
+    if (!user || !empresaId) return { ok: true, data: vacio };
+
+    const { data: cfg } = await supabase
+      .from("empresa_rrhh_config")
+      .select("tareas_validador_activo")
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    // Default activo si no hay fila/columna (las empresas vienen sembradas).
+    const activo = cfg ? (cfg.tareas_validador_activo as boolean) !== false : true;
+    if (!activo) return { ok: true, data: { ...vacio, activo: false } };
+
+    const { data: miEmpleado } = await supabase
+      .from("empleados")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (!miEmpleado?.id) return { ok: true, data: { activo: true, ausencia: 0, trabajo: 0 } };
+    const miId = miEmpleado.id as string;
+
+    const { data: validados } = await supabase
+      .from("empleados")
+      .select("user_id, validador_trabajo_id, validador_ausencias_id")
+      .eq("empresa_id", empresaId)
+      .or(`validador_trabajo_id.eq.${miId},validador_ausencias_id.eq.${miId}`);
+    const usersTrabajo = (validados ?? [])
+      .filter((e) => e.validador_trabajo_id === miId)
+      .map((e) => e.user_id as string);
+    const usersAusencia = (validados ?? [])
+      .filter((e) => e.validador_ausencias_id === miId)
+      .map((e) => e.user_id as string);
+
+    const contar = async (userIds: string[], tipo: SolicitudTipo) => {
+      if (userIds.length === 0) return 0;
+      const { count } = await supabase
+        .from("solicitudes_personal")
+        .select("id", { count: "exact", head: true })
+        .eq("empresa_id", empresaId)
+        .eq("estado", "pendiente")
+        .eq("tipo", tipo)
+        .in("user_id", userIds);
+      return count ?? 0;
+    };
+    const [trabajo, ausencia] = await Promise.all([
+      contar(usersTrabajo, "trabajo"),
+      contar(usersAusencia, "ausencia"),
+    ]);
+
+    return { ok: true, data: { activo: true, ausencia, trabajo } };
+  } catch (err: unknown) {
+    const msg = extractErrorMessage(err);
+    console.error("[mi-panel] getTareasValidacionPendientes:", msg);
+    return { ok: false, data: vacio, error: msg };
   }
 }
 

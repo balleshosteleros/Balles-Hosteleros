@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Loader2, Save, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -28,6 +29,7 @@ export function RrhhConfigTab() {
   const [departamentos, setDepartamentos] = useState<DepartamentoOpt[]>([]);
   const [operativaId, setOperativaId] = useState<string>("");
   const [administrativaId, setAdministrativaId] = useState<string>("");
+  const [tareasActivo, setTareasActivo] = useState(true);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
 
@@ -40,6 +42,7 @@ export function RrhhConfigTab() {
       if (cfgRes.ok && cfgRes.data) {
         setOperativaId(cfgRes.data.validadorDeptoOperativaId ?? "");
         setAdministrativaId(cfgRes.data.validadorDeptoAdministrativaId ?? "");
+        setTareasActivo(cfgRes.data.tareasValidadorActivo);
       }
       setCargando(false);
     });
@@ -53,6 +56,7 @@ export function RrhhConfigTab() {
     const res = await saveRrhhConfig({
       validadorDeptoOperativaId: operativaId || null,
       validadorDeptoAdministrativaId: administrativaId || null,
+      tareasValidadorActivo: tareasActivo,
     });
     setGuardando(false);
     if (!res.ok) {
@@ -112,6 +116,18 @@ export function RrhhConfigTab() {
               </Select>
               <p className="text-xs text-muted-foreground">Por defecto: Dirección.</p>
             </div>
+          </div>
+
+          <div className="flex items-start justify-between gap-4 rounded-lg border bg-muted/20 p-3">
+            <div className="space-y-0.5">
+              <Label className="text-sm">Tarea de validación para el validador</Label>
+              <p className="text-xs text-muted-foreground">
+                Si se activa, al validador le aparece una tarea en su panel mientras
+                tenga solicitudes pendientes de aprobar o denegar. Se muestra cada día
+                hasta que la resuelve.
+              </p>
+            </div>
+            <Switch checked={tareasActivo} onCheckedChange={setTareasActivo} />
           </div>
 
           <div className="flex justify-end">

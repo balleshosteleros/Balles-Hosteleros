@@ -94,7 +94,6 @@ export function FichajeBar({
   // Punto de entrada del botón "Fichar": si el empleado puede teletrabajar le
   // preguntamos cómo quiere fichar; si no, va directo a presencial (con ubicación).
   function handleEntrada() {
-    console.log("[fichaje-debug] permiteTeletrabajo=", permiteTeletrabajo);
     if (permiteTeletrabajo) {
       setEligiendoModo(true);
       return;

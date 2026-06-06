@@ -6,6 +6,9 @@ CREATE TABLE IF NOT EXISTS public.empresa_rrhh_config (
   empresa_id  uuid NOT NULL UNIQUE REFERENCES public.empresas(id) ON DELETE CASCADE,
   validador_depto_operativa_id      uuid REFERENCES public.departamentos(id) ON DELETE SET NULL,
   validador_depto_administrativa_id uuid REFERENCES public.departamentos(id) ON DELETE SET NULL,
+  -- Si true, al validador le sale una tarea en Mi Panel mientras tenga
+  -- solicitudes pendientes de aprobar/denegar.
+  tareas_validador_activo boolean NOT NULL DEFAULT true,
   created_at  timestamptz NOT NULL DEFAULT now(),
   updated_at  timestamptz NOT NULL DEFAULT now()
 );
