@@ -27,6 +27,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { ValidadoresSolicitudesConfig } from "@/features/ajustes/components/RrhhConfigTab";
+import { FichajesConfigPanel } from "@/features/ajustes/components/FichajesConfigPanel";
 
 // ============================================================
 // Tarjetas de modo (las 4 modalidades) — UI muy visual
@@ -368,6 +369,8 @@ function SubmoduloRow({
         <div className="border-t px-3 py-3 space-y-3">
           {submodulo.key === "solicitudes" ? (
             <ValidadoresSolicitudesConfig embedded />
+          ) : submodulo.key === "fichajes" ? (
+            <FichajesConfigPanel embedded />
           ) : (
             <>
               {bloqueadoPorModulo && (

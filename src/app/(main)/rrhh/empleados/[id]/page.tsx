@@ -16,6 +16,7 @@ import { FirmasEmpleadoTab } from "@/features/rrhh/components/empleados/FirmasEm
 import { InspeccionesEmpleadoTab } from "@/features/rrhh/components/empleados/InspeccionesEmpleadoTab";
 import { CuestionariosEmpleadoTab } from "@/features/rrhh/components/empleados/CuestionariosEmpleadoTab";
 import { ValidadoresEmpleadoCard } from "@/features/rrhh/components/empleados/ValidadoresEmpleadoCard";
+import { CalendarioVacacionesEmpleadoCard } from "@/features/rrhh/components/empleados/CalendarioVacacionesEmpleadoCard";
 import {
   DatosPersonalesForm,
   type DatosPersonalesFormHandle,
@@ -84,6 +85,7 @@ type EmpleadoBD = {
   estado: string;
   validador_trabajo_id: string | null;
   validador_ausencias_id: string | null;
+  calendario_vacaciones_id: string | null;
   departamentos?: { nombre: string } | null;
 };
 
@@ -279,6 +281,12 @@ export default function FichaEmpleadoPage() {
               empleadoId={empleadoRegistro.id}
               validadorTrabajoId={empleadoRegistro.validador_trabajo_id}
               validadorAusenciasId={empleadoRegistro.validador_ausencias_id}
+              onSaved={cargarFicha}
+            />
+            <CalendarioVacacionesEmpleadoCard
+              empresaId={empleadoRegistro.empresa_id}
+              empleadoId={empleadoRegistro.id}
+              calendarioVacacionesId={empleadoRegistro.calendario_vacaciones_id}
               onSaved={cargarFicha}
             />
             <SolicitudesEmpleadoTab solicitudes={solicitudes} />

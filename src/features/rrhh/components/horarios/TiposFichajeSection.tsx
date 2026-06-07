@@ -10,14 +10,19 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Pencil, Trash2, Search, Fingerprint } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Fingerprint, Check } from "lucide-react";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { FICHAJE_COLOR_PALETTE, fichajeColorDot } from "@/features/rrhh/data/fichajes";
 
 type FormState = {
   nombre: string;
   codigo: string;
   descripcion: string;
   computa_tiempo: boolean;
+  color: string;
+  requiere_solicitud: boolean;
+  margen_antes_min: number;
+  margen_despues_min: number;
   activo: boolean;
 };
 
@@ -26,6 +31,10 @@ const EMPTY_FORM: FormState = {
   codigo: "",
   descripcion: "",
   computa_tiempo: true,
+  color: "sky",
+  requiere_solicitud: false,
+  margen_antes_min: 15,
+  margen_despues_min: 15,
   activo: true,
 };
 
@@ -46,6 +55,10 @@ export function TiposFichajeSection({ empresaId }: { empresaId: string }) {
           codigo: editando.codigo,
           descripcion: editando.descripcion ?? "",
           computa_tiempo: editando.computa_tiempo,
+          color: editando.color ?? "sky",
+          requiere_solicitud: editando.requiere_solicitud ?? false,
+          margen_antes_min: editando.margen_antes_min ?? 0,
+          margen_despues_min: editando.margen_despues_min ?? 0,
           activo: editando.activo,
         });
       } else {
@@ -98,7 +111,7 @@ export function TiposFichajeSection({ empresaId }: { empresaId: string }) {
             <TableRow>
               <TableHead>Tipo</TableHead>
               <TableHead>Código</TableHead>
-              <TableHead>Descripción</TableHead>
+              <TableHead>Modo</TableHead>
               <TableHead>Computa tiempo</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead className="text-right">Acciones</TableHead>
@@ -112,9 +125,22 @@ export function TiposFichajeSection({ empresaId }: { empresaId: string }) {
             ) : (
               filtrados.map(t => (
                 <TableRow key={t.id}>
-                  <TableCell className="font-medium text-sm">{t.nombre}</TableCell>
+                  <TableCell className="font-medium text-sm">
+                    <span className="flex items-center gap-2">
+                      <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${fichajeColorDot(t.color)}`} />
+                      {t.nombre}
+                    </span>
+                  </TableCell>
                   <TableCell><Badge variant="outline" className="text-xs font-mono">{t.codigo}</Badge></TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{t.descripcion}</TableCell>
+                  <TableCell>
+                    {t.requiere_solicitud ? (
+                      <Badge variant="outline" className="text-xs">Solo por solicitud</Badge>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">
+                        Normal · −{t.margen_antes_min ?? 0}/+{t.margen_despues_min ?? 0} min
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell><Badge variant={t.computa_tiempo ? "default" : "outline"} className="text-xs">{t.computa_tiempo ? "Sí" : "No"}</Badge></TableCell>
                   <TableCell>
                     <Switch
@@ -153,6 +179,61 @@ export function TiposFichajeSection({ empresaId }: { empresaId: string }) {
               <label className="text-sm font-medium">Descripción</label>
               <Input value={form.descripcion} onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))} placeholder="Descripción" />
             </div>
+
+            <div>
+              <label className="text-sm font-medium">Color</label>
+              <div className="mt-1.5 flex flex-wrap gap-2">
+                {FICHAJE_COLOR_PALETTE.map(c => (
+                  <button
+                    key={c.key}
+                    type="button"
+                    title={c.label}
+                    onClick={() => setForm(f => ({ ...f, color: c.key }))}
+                    className={`h-7 w-7 rounded-full flex items-center justify-center ${fichajeColorDot(c.key)} ${form.color === c.key ? "ring-2 ring-offset-2 ring-foreground/40" : ""}`}
+                  >
+                    {form.color === c.key && <Check className="h-3.5 w-3.5 text-white" />}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1">Color con el que se marca este tipo en la lista de fichajes.</p>
+            </div>
+
+            <div className="rounded-md border p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-sm font-medium">Solo por solicitud</span>
+                  <p className="text-[11px] text-muted-foreground">Si se activa, este tipo solo está disponible cuando el empleado tiene una solicitud de trabajo aprobada para ese día.</p>
+                </div>
+                <Switch checked={form.requiere_solicitud} onCheckedChange={v => setForm(f => ({ ...f, requiere_solicitud: v }))} />
+              </div>
+
+              {!form.requiere_solicitud && (
+                <div className="space-y-2 pt-1 border-t">
+                  <p className="text-[11px] text-muted-foreground pt-2">Fichaje normal: el empleado debe tener horario asignado ese día. Sin horario no podrá fichar con este tipo. Define el margen permitido respecto a su horario.</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-sm font-medium">Margen antes (min)</label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={form.margen_antes_min}
+                        onChange={e => setForm(f => ({ ...f, margen_antes_min: Math.max(0, Number(e.target.value) || 0) }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">Margen después (min)</label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={form.margen_despues_min}
+                        onChange={e => setForm(f => ({ ...f, margen_despues_min: Math.max(0, Number(e.target.value) || 0) }))}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="flex items-center justify-between"><span className="text-sm">Computa tiempo</span><Switch checked={form.computa_tiempo} onCheckedChange={v => setForm(f => ({ ...f, computa_tiempo: v }))} /></div>
             <div className="flex items-center justify-between"><span className="text-sm">Activo</span><Switch checked={form.activo} onCheckedChange={v => setForm(f => ({ ...f, activo: v }))} /></div>
             {!editando && (

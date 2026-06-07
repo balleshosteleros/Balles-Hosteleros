@@ -12,8 +12,11 @@ import {
   iniciarPausaPersonal,
   finalizarPausaPersonal,
   getMiConfigFichaje,
+  getTiposFichajeDisponibles,
   type ModoFichaje,
+  type TipoFichajeDisponible,
 } from "@/features/mi-panel/actions/mi-panel-actions";
+import { fichajeColorDot } from "@/features/rrhh/data/fichajes";
 import { enqueue } from "../lib/offline-fichaje-db";
 import { useOfflineFichajes } from "../hooks/use-offline-fichajes";
 
@@ -66,6 +69,9 @@ export function BigClockButton({ fichajeId, estado }: Props) {
   const [busy, setBusy] = useState(false);
   const [permiteTeletrabajo, setPermiteTeletrabajo] = useState(false);
   const [eligiendoModo, setEligiendoModo] = useState(false);
+  const [tiposDisponibles, setTiposDisponibles] = useState<TipoFichajeDisponible[]>([]);
+  const [eligiendoTipo, setEligiendoTipo] = useState(false);
+  const [tipoElegido, setTipoElegido] = useState<string | undefined>(undefined);
   const { online, pending: pendingOffline, flushing } = useOfflineFichajes(() => {
     startTransition(() => router.refresh());
   });
@@ -73,6 +79,9 @@ export function BigClockButton({ fichajeId, estado }: Props) {
   useEffect(() => {
     getMiConfigFichaje().then((res) => {
       if (res.ok) setPermiteTeletrabajo(res.permiteTeletrabajo);
+    });
+    getTiposFichajeDisponibles().then((res) => {
+      if (res.ok) setTiposDisponibles(res.data);
     });
   }, []);
 
@@ -95,8 +104,10 @@ export function BigClockButton({ fichajeId, estado }: Props) {
 
   // Fichaje de entrada con modo explícito. El teletrabajo no captura ubicación;
   // el presencial sí (y el server valida que estés dentro de un local).
-  const ficharEntrada = async (modo: ModoFichaje) => {
+  const ficharEntrada = async (modo: ModoFichaje, tipoCodigo?: string) => {
     setEligiendoModo(false);
+    setEligiendoTipo(false);
+    const codigo = tipoCodigo !== undefined ? tipoCodigo : tipoElegido;
     setBusy(true);
     try {
       const geo = modo === "presencial" ? await tryGetGeo() : null;
@@ -104,9 +115,22 @@ export function BigClockButton({ fichajeId, estado }: Props) {
         // Sin conexión se encola siempre como presencial (con la geo capturada).
         await enqueueOffline("entrada", geo);
       } else {
-        const res = await ficharEntradaPersonal(geo ?? undefined, modo);
-        if (!res.ok) toast.error(res.error || "No se pudo fichar la entrada");
-        else toast.success(modo === "teletrabajo" ? "Entrada registrada (teletrabajo)" : "Entrada registrada");
+        const res = await ficharEntradaPersonal(geo ?? undefined, modo, codigo);
+        if (!res.ok) {
+          if ((res as { fueraDeHora?: boolean }).fueraDeHora) {
+            toast.error(res.error || "Estás fuera de hora", {
+              duration: 9000,
+              action: {
+                label: "Ir a solicitudes",
+                onClick: () => router.push("/m/solicitudes"),
+              },
+            });
+          } else {
+            toast.error(res.error || "No se pudo fichar la entrada");
+          }
+        } else {
+          toast.success(modo === "teletrabajo" ? "Entrada registrada (teletrabajo)" : "Entrada registrada");
+        }
       }
     } finally {
       setBusy(false);
@@ -114,15 +138,30 @@ export function BigClockButton({ fichajeId, estado }: Props) {
     }
   };
 
+  // Tras elegir tipo (o si solo hay uno), preguntamos el modo si procede.
+  const iniciarFichajeEntrada = (tipoCodigo?: string) => {
+    setTipoElegido(tipoCodigo);
+    if (permiteTeletrabajo) {
+      setEligiendoModo(true);
+      return;
+    }
+    void ficharEntrada("presencial", tipoCodigo);
+  };
+
   const action = async () => {
     if (disabled) return;
-    // Entrada: si puede teletrabajar y hay conexión, preguntamos el modo.
+    // Entrada: sin conexión va directa (presencial, sin tipo). Con conexión,
+    // primero el tipo (si hay más de uno) y luego el modo (si teletrabaja).
     if (estado === "sin-fichar") {
-      if (online && permiteTeletrabajo) {
-        setEligiendoModo(true);
+      if (!online) {
+        await ficharEntrada("presencial");
         return;
       }
-      await ficharEntrada("presencial");
+      if (tiposDisponibles.length > 1) {
+        setEligiendoTipo(true);
+        return;
+      }
+      iniciarFichajeEntrada(tiposDisponibles[0]?.codigo);
       return;
     }
     setBusy(true);
@@ -212,6 +251,42 @@ export function BigClockButton({ fichajeId, estado }: Props) {
         >
           <Coffee className="h-4 w-4" /> Iniciar pausa
         </button>
+      )}
+
+      {/* Hoja de elección de tipo (solo si hay más de un tipo disponible hoy). */}
+      {eligiendoTipo && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+          onClick={() => setEligiendoTipo(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-t-3xl bg-background p-5 pb-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-muted" />
+            <h2 className="text-center text-lg font-semibold">¿Qué tipo de fichaje?</h2>
+            <p className="mt-1 mb-4 text-center text-sm text-muted-foreground">
+              Elige el tipo de jornada que vas a registrar.
+            </p>
+            <div className="grid gap-2">
+              {tiposDisponibles.map((t) => (
+                <button
+                  key={t.codigo}
+                  type="button"
+                  onClick={() => { setEligiendoTipo(false); iniciarFichajeEntrada(t.codigo); }}
+                  disabled={busy}
+                  className="flex items-center gap-3 rounded-2xl border-2 border-border bg-background p-4 text-left active:bg-muted disabled:opacity-60"
+                >
+                  <span className={cn("h-3.5 w-3.5 rounded-full shrink-0", fichajeColorDot(t.color))} />
+                  <span className="font-semibold">{t.nombre}</span>
+                  {t.requiere_solicitud && (
+                    <span className="ml-auto rounded-full border px-2 py-0.5 text-xs text-muted-foreground">Con solicitud</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Hoja de elección de modo (solo si el empleado puede teletrabajar). */}

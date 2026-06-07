@@ -6,16 +6,19 @@ import {
   formatTurnoHorario,
   TURNO_TONOS,
   type Turno,
+  type TipoJornada,
 } from "@/features/rrhh/data/horarios";
 import { listTurnos } from "@/features/rrhh/actions/turnos-actions";
 import {
   listPatrones,
   createPatron,
-  updatePatron,
+  crearVersionPatron,
+  getVersionesPatron,
   deletePatron,
   type PatronCompleto,
   type PatronTipo,
 } from "@/features/rrhh/actions/patrones-actions";
+import { listDepartamentos } from "@/features/rrhh/actions/empleados-actions";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import {
@@ -23,6 +26,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/shared/components/ui/dialog";
 import {
   Table,
@@ -53,31 +57,55 @@ import {
   CalendarSync,
   SlidersHorizontal,
   Loader2,
+  History,
+  Building2,
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import { toast } from "sonner";
 
 const DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
+/** Máximo de periodos (semanas) por patrón. */
+const MAX_SEMANAS = 5;
+
 type Vista =
   | { tipo: "lista" }
-  | { tipo: "editor"; patronTipo: PatronTipo; patron?: PatronCompleto };
+  | {
+      tipo: "editor";
+      patronTipo: PatronTipo;
+      patronJornada: TipoJornada;
+      patron?: PatronCompleto;
+    };
+
+const JORNADA_LABEL: Record<TipoJornada, string> = {
+  fijo: "Fija",
+  flexible: "Flexible",
+};
 
 export function PatronesSection({ empresaId }: { empresaId: string }) {
   const [vista, setVista] = useState<Vista>({ tipo: "lista" });
   const [patrones, setPatrones] = useState<PatronCompleto[]>([]);
   const [turnos, setTurnos] = useState<Turno[]>([]);
+  const [departamentos, setDepartamentos] = useState<string[]>([]);
   const [cargando, setCargando] = useState(true);
   useGlobalLoadingSync(cargando);
 
   const refrescar = useCallback(async () => {
     setCargando(true);
-    const [pr, tr] = await Promise.all([
+    const [pr, tr, dr] = await Promise.all([
       listPatrones(empresaId),
       listTurnos(empresaId),
+      listDepartamentos(),
     ]);
     if (pr.ok) setPatrones(pr.data);
     if (tr.ok) setTurnos(tr.data);
+    if (dr.ok) {
+      const nombres = Array.from(
+        new Set((dr.data ?? []).map((d) => d.nombre).filter(Boolean)),
+      ).sort((a, b) => a.localeCompare(b, "es"));
+      setDepartamentos(nombres);
+    }
     setCargando(false);
   }, [empresaId]);
 
@@ -90,7 +118,9 @@ export function PatronesSection({ empresaId }: { empresaId: string }) {
       <PatronEditor
         empresaId={empresaId}
         turnos={turnos}
+        departamentos={departamentos}
         patronTipo={vista.patronTipo}
+        patronJornada={vista.patronJornada}
         patron={vista.patron}
         onSalir={async (refrescarTras) => {
           if (refrescarTras) await refrescar();
@@ -107,8 +137,17 @@ export function PatronesSection({ empresaId }: { empresaId: string }) {
       patrones={patrones}
       cargando={cargando}
       onRefrescar={refrescar}
-      onCrear={(tipo) => setVista({ tipo: "editor", patronTipo: tipo })}
-      onEditar={(p) => setVista({ tipo: "editor", patronTipo: p.tipo, patron: p })}
+      onCrear={(tipo, jornada) =>
+        setVista({ tipo: "editor", patronTipo: tipo, patronJornada: jornada })
+      }
+      onEditar={(p) =>
+        setVista({
+          tipo: "editor",
+          patronTipo: p.tipo,
+          patronJornada: p.tipo_jornada,
+          patron: p,
+        })
+      }
     />
   );
 }
@@ -116,7 +155,7 @@ export function PatronesSection({ empresaId }: { empresaId: string }) {
 // --- Lista ----------------------------------------------------------------
 
 function ListaPatrones({
-  empresaId: _empresaId,
+  empresaId,
   turnos,
   patrones,
   cargando,
@@ -129,15 +168,32 @@ function ListaPatrones({
   patrones: PatronCompleto[];
   cargando: boolean;
   onRefrescar: () => Promise<void>;
-  onCrear: (tipo: PatronTipo) => void;
+  onCrear: (tipo: PatronTipo, jornada: TipoJornada) => void;
   onEditar: (p: PatronCompleto) => void;
 }) {
   const turnosById = useMemo(() => new Map(turnos.map((t) => [t.id, t])), [turnos]);
   const [busqueda, setBusqueda] = useState("");
+  const [deptoFiltro, setDeptoFiltro] = useState<string>("__todos__");
   const [showTipoSelector, setShowTipoSelector] = useState(false);
+  const [verVersiones, setVerVersiones] = useState<PatronCompleto | null>(null);
+
+  // Departamentos presentes en los patrones (para el filtro).
+  const departamentosFiltro = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          patrones
+            .map((p) => p.departamento?.trim())
+            .filter((d): d is string => !!d),
+        ),
+      ).sort((a, b) => a.localeCompare(b, "es")),
+    [patrones],
+  );
 
   const filtrados = patrones.filter(
-    (p) => !busqueda || p.nombre.toLowerCase().includes(busqueda.toLowerCase())
+    (p) =>
+      (!busqueda || p.nombre.toLowerCase().includes(busqueda.toLowerCase())) &&
+      (deptoFiltro === "__todos__" || p.departamento?.trim() === deptoFiltro),
   );
 
   const eliminar = async (id: string) => {
@@ -148,22 +204,45 @@ function ListaPatrones({
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-lg font-semibold">Patrones</h2>
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          <CalendarSync className="h-5 w-5 text-primary" />
+          Patrones
+        </h2>
         <p className="text-sm text-muted-foreground">
-          Configura tu patrón según tus necesidades y añade hasta un máximo de 30 periodos.
+          Configura tu patrón según tus necesidades y añade hasta un máximo de 5 periodos (5 semanas).
           Un patrón puede repetirse tantas veces como indiques cuando le asignes empleados.
         </p>
       </div>
 
       <div className="flex items-center justify-between gap-3">
-        <div className="relative max-w-sm flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar"
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            className="pl-9"
-          />
+        <div className="flex flex-1 items-center gap-2">
+          <div className="relative max-w-sm flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          {departamentosFiltro.length > 0 && (
+            <div className="relative">
+              <Building2 className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <select
+                value={deptoFiltro}
+                onChange={(e) => setDeptoFiltro(e.target.value)}
+                className="h-9 rounded-md border border-input bg-background pl-8 pr-3 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                aria-label="Filtrar patrones por departamento"
+              >
+                <option value="__todos__">Todos los departamentos</option>
+                {departamentosFiltro.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
         <Button variant="primary" size="sm" onClick={() => setShowTipoSelector(true)} className="gap-1.5">
           <Plus className="h-4 w-4" />
@@ -177,6 +256,7 @@ function ListaPatrones({
             <TableRow>
               <TableHead>Nombre</TableHead>
               <TableHead>Tipo</TableHead>
+              <TableHead>Departamento</TableHead>
               <TableHead>Empleados asignados</TableHead>
               <TableHead>Turnos del patrón</TableHead>
               <TableHead>Creador</TableHead>
@@ -186,14 +266,14 @@ function ListaPatrones({
           <TableBody>
             {cargando && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground text-sm">
+                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-sm">
                   <Loader2 className="h-4 w-4 animate-spin inline mr-2" /> Cargando…
                 </TableCell>
               </TableRow>
             )}
             {!cargando && filtrados.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground text-sm">
+                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-sm">
                   Sin patrones
                 </TableCell>
               </TableRow>
@@ -205,13 +285,44 @@ function ListaPatrones({
                   className="cursor-pointer"
                   onClick={() => onEditar(p)}
                 >
-                  <TableCell className="font-medium">{p.nombre}</TableCell>
-                  <TableCell>{p.tipo === "semanal" ? "Semanal" : "Libre"}</TableCell>
-                  <TableCell>
-                    <span className="text-primary underline">
-                      {p.empleadosAsignados}{" "}
-                      {p.empleadosAsignados === 1 ? "empleado" : "empleados"}
+                  <TableCell className="font-medium">
+                    <span className="flex items-center gap-1.5">
+                      {p.nombre}
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
+                        v{p.version}
+                      </span>
                     </span>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1.5">
+                      <span>{p.tipo === "semanal" ? "Semanal" : "Libre"}</span>
+                      <span
+                        className={cn(
+                          "text-[10px] font-medium px-1.5 py-0.5 rounded-full",
+                          p.tipo_jornada === "flexible"
+                            ? "bg-emerald-100 text-emerald-700"
+                            : "bg-sky-100 text-sky-700"
+                        )}
+                      >
+                        {JORNADA_LABEL[p.tipo_jornada]}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {p.departamento ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <span className="truncate">{p.departamento}</span>
+                      </span>
+                    ) : (
+                      <span className="text-amber-600 dark:text-amber-500">
+                        Sin asignar
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {p.empleadosAsignados}{" "}
+                    {p.empleadosAsignados === 1 ? "empleado" : "empleados"}
                   </TableCell>
                   <TableCell>
                     <TurnoBadges patron={p} turnosById={turnosById} />
@@ -227,6 +338,9 @@ function ListaPatrones({
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => onEditar(p)}>
                           <Pencil className="h-3.5 w-3.5 mr-2" /> Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setVerVersiones(p)}>
+                          <History className="h-3.5 w-3.5 mr-2" /> Ver versiones
                         </DropdownMenuItem>
                         <DropdownMenuItem>
                           <Copy className="h-3.5 w-3.5 mr-2" /> Duplicar
@@ -257,12 +371,122 @@ function ListaPatrones({
       <TipoSelectorDialog
         open={showTipoSelector}
         onOpenChange={setShowTipoSelector}
-        onElegir={(tipo) => {
+        onElegir={(tipo, jornada) => {
           setShowTipoSelector(false);
-          onCrear(tipo);
+          onCrear(tipo, jornada);
         }}
       />
+
+      {verVersiones && (
+        <VersionesPatronDialog
+          patron={verVersiones}
+          turnosById={turnosById}
+          onClose={() => setVerVersiones(null)}
+        />
+      )}
     </div>
+  );
+}
+
+// --- Diálogo: histórico de versiones de un patrón ------------------------
+
+function VersionesPatronDialog({
+  patron,
+  turnosById,
+  onClose,
+}: {
+  patron: PatronCompleto;
+  turnosById: Map<string, Turno>;
+  onClose: () => void;
+}) {
+  const [versiones, setVersiones] = useState<PatronCompleto[]>([]);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    let cancelado = false;
+    setCargando(true);
+    getVersionesPatron(patron.id).then((res) => {
+      if (cancelado) return;
+      if (res.ok) setVersiones(res.data);
+      setCargando(false);
+    });
+    return () => {
+      cancelado = true;
+    };
+  }, [patron.id]);
+
+  const fmtFecha = (iso: string) => {
+    const d = (iso ?? "").slice(0, 10).split("-");
+    return d.length === 3 ? `${d[2]}/${d[1]}/${d[0]}` : iso;
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Versiones · {patron.nombre}</DialogTitle>
+        </DialogHeader>
+
+        {cargando ? (
+          <div className="py-8 text-center text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin inline mr-2" /> Cargando…
+          </div>
+        ) : (
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {versiones.map((v) => {
+              const ids = v.semanas.flatMap((s) => s.dias).filter((id): id is string => !!id);
+              return (
+                <div
+                  key={v.id}
+                  className={cn(
+                    "rounded-lg border p-3",
+                    v.es_oficial && "border-primary/40 bg-primary/5",
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-sm flex items-center gap-1.5">
+                      v{v.version}
+                      {v.es_oficial && (
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
+                          Actual
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      Creada el {fmtFecha(v.created_at)}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-1">
+                    {ids.length === 0 ? (
+                      <span className="text-xs text-muted-foreground">Sin turnos</span>
+                    ) : (
+                      ids.slice(0, 10).map((id, i) => {
+                        const t = turnosById.get(id);
+                        return t ? (
+                          <span
+                            key={i}
+                            className={cn(
+                              "text-[10px] font-semibold px-2 py-0.5 rounded uppercase",
+                              TURNO_TONOS[t.color].pill,
+                            )}
+                          >
+                            {t.codigo}
+                          </span>
+                        ) : null;
+                      })
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cerrar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -311,18 +535,47 @@ function TipoSelectorDialog({
 }: {
   open: boolean;
   onOpenChange: (b: boolean) => void;
-  onElegir: (t: PatronTipo) => void;
+  onElegir: (t: PatronTipo, jornada: TipoJornada) => void;
 }) {
+  const [jornada, setJornada] = useState<TipoJornada>("fijo");
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="text-xl">Crear patrón</DialogTitle>
         </DialogHeader>
+
+        <div className="mt-1">
+          <label className="block text-sm font-medium mb-1.5">Tipo de jornada</label>
+          <div className="inline-flex rounded-lg border p-0.5 bg-muted/40">
+            {(["fijo", "flexible"] as const).map((j) => (
+              <button
+                key={j}
+                type="button"
+                onClick={() => setJornada(j)}
+                className={cn(
+                  "px-4 py-1.5 text-sm rounded-md transition-colors",
+                  jornada === j
+                    ? "bg-background shadow-sm font-medium"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {JORNADA_LABEL[j]}
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-1.5">
+            {jornada === "flexible"
+              ? "Sus celdas usarán turnos flexibles (horas objetivo por día)."
+              : "Sus celdas usarán turnos fijos (tramos horarios por día)."}{" "}
+            Un patrón no mezcla jornadas.
+          </p>
+        </div>
+
         <div className="grid grid-cols-2 gap-4 mt-2">
           <button
             type="button"
-            onClick={() => onElegir("semanal")}
+            onClick={() => onElegir("semanal", jornada)}
             className="flex flex-col items-center text-center gap-3 p-6 rounded-lg border-2 border-transparent hover:border-primary hover:bg-muted/40 transition-colors"
           >
             <div className="h-14 w-14 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center">
@@ -337,7 +590,7 @@ function TipoSelectorDialog({
           </button>
           <button
             type="button"
-            onClick={() => onElegir("libre")}
+            onClick={() => onElegir("libre", jornada)}
             className="flex flex-col items-center text-center gap-3 p-6 rounded-lg border-2 border-transparent hover:border-primary hover:bg-muted/40 transition-colors"
           >
             <div className="h-14 w-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
@@ -363,15 +616,28 @@ type CeldaSel = { semanaIdx: number; diaIdx: number } | { diaIdx: number } | nul
 type BorradorEditor = {
   nombre: string;
   tipo: PatronTipo;
+  departamento: string;                         // "" = sin asignar
+  vigenteDesde: string;                         // YYYY-MM-DD (fecha de inicio)
+  vigenteHasta: string;                         // YYYY-MM-DD o "" = sin fecha fin
   semanas: { dias: (string | null)[] }[];     // tipo "semanal"
   diasLibres: (string | null)[];               // tipo "libre"
 };
+
+function hoyISO(): string {
+  const d = new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
 
 function borradorDesdePatron(patron: PatronCompleto): BorradorEditor {
   if (patron.tipo === "semanal") {
     return {
       nombre: patron.nombre,
       tipo: "semanal",
+      departamento: patron.departamento ?? "",
+      vigenteDesde: patron.vigente_desde ?? hoyISO(),
+      vigenteHasta: patron.vigente_hasta ?? "",
       semanas:
         patron.semanas.length > 0
           ? patron.semanas.map((s) => ({ dias: [...s.dias] }))
@@ -382,6 +648,9 @@ function borradorDesdePatron(patron: PatronCompleto): BorradorEditor {
   return {
     nombre: patron.nombre,
     tipo: "libre",
+    departamento: patron.departamento ?? "",
+    vigenteDesde: patron.vigente_desde ?? hoyISO(),
+    vigenteHasta: patron.vigente_hasta ?? "",
     semanas: [],
     diasLibres: patron.semanas[0]?.dias ? [...patron.semanas[0].dias] : [null],
   };
@@ -392,6 +661,9 @@ function borradorVacio(tipo: PatronTipo): BorradorEditor {
     return {
       nombre: "Plantilla sin nombre",
       tipo: "semanal",
+      departamento: "",
+      vigenteDesde: hoyISO(),
+      vigenteHasta: "",
       semanas: [{ dias: [null, null, null, null, null, null, null] }],
       diasLibres: [],
     };
@@ -399,6 +671,9 @@ function borradorVacio(tipo: PatronTipo): BorradorEditor {
   return {
     nombre: "Plantilla sin nombre",
     tipo: "libre",
+    departamento: "",
+    vigenteDesde: hoyISO(),
+    vigenteHasta: "",
     semanas: [],
     diasLibres: [null],
   };
@@ -407,16 +682,23 @@ function borradorVacio(tipo: PatronTipo): BorradorEditor {
 function PatronEditor({
   empresaId,
   turnos,
+  departamentos,
   patronTipo,
+  patronJornada,
   patron,
   onSalir,
 }: {
   empresaId: string;
   turnos: Turno[];
+  departamentos: string[];
   patronTipo: PatronTipo;
+  patronJornada: TipoJornada;
   patron?: PatronCompleto;
   onSalir: (refrescar: boolean) => Promise<void>;
 }) {
+  // La jornada es inmutable una vez creado el patrón: al editar manda la del
+  // patrón; al crear, la elegida en el diálogo.
+  const jornada = patron?.tipo_jornada ?? patronJornada;
   const turnosById = useMemo(() => new Map(turnos.map((t) => [t.id, t])), [turnos]);
 
   const [borrador, setBorrador] = useState<BorradorEditor>(() =>
@@ -455,25 +737,47 @@ function PatronEditor({
         ? borrador.semanas.map((s, i) => ({ orden: i, dias: s.dias }))
         : [{ orden: 0, dias: borrador.diasLibres }];
 
-    if (patron) {
-      await updatePatron(patron.id, { nombre: borrador.nombre, semanas });
-    } else {
-      await createPatron(
-        {
+    const vigente_desde = borrador.vigenteDesde || undefined;
+    const vigente_hasta = borrador.vigenteHasta ? borrador.vigenteHasta : null;
+
+    // Editar un patrón existente NO se hace en sitio: crea una versión nueva
+    // (la anterior queda como histórico). Crear uno nuevo = versión 1.
+    const departamento = borrador.departamento.trim() || null;
+    const res = patron
+      ? await crearVersionPatron(patron.id, {
           nombre: borrador.nombre,
-          tipo: borrador.tipo,
+          tipo_jornada: jornada,
+          departamento,
           semanas,
-        },
-        empresaId,
-      );
-    }
+        })
+      : await createPatron(
+          {
+            nombre: borrador.nombre,
+            tipo: borrador.tipo,
+            tipo_jornada: jornada,
+            departamento,
+            semanas,
+            vigente_desde,
+            vigente_hasta,
+          },
+          empresaId,
+        );
     setGuardando(false);
+    if (!res?.ok) {
+      toast.error(res?.error || "No se pudo guardar el patrón");
+      return;
+    }
+    if (patron) toast.success("Nueva versión del patrón creada");
     await onSalir(true);
   };
+
+  const rangoInvalido =
+    !!borrador.vigenteHasta && borrador.vigenteHasta < borrador.vigenteDesde;
 
   const turnosFiltrados = turnos.filter(
     (t) =>
       t.activo &&
+      t.tipoJornada === jornada &&
       (!busquedaTurno ||
         t.nombre.toLowerCase().includes(busquedaTurno.toLowerCase()) ||
         t.codigo.toLowerCase().includes(busquedaTurno.toLowerCase()))
@@ -482,9 +786,12 @@ function PatronEditor({
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-lg font-semibold">Patrones</h2>
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          <CalendarSync className="h-5 w-5 text-primary" />
+          Patrones
+        </h2>
         <p className="text-sm text-muted-foreground">
-          Configura tu patrón según tus necesidades y añade hasta un máximo de 30 periodos.
+          Configura tu patrón según tus necesidades y añade hasta un máximo de 5 periodos (5 semanas).
           Un patrón puede repetirse tantas veces como indiques cuando le asignes empleados.
         </p>
       </div>
@@ -496,6 +803,8 @@ function PatronEditor({
         <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
         <span className="text-muted-foreground">
           Configurador de patrones {patronTipo === "semanal" ? "semanales" : "libres"}
+          {" · jornada "}
+          {JORNADA_LABEL[jornada].toLowerCase()}
         </span>
       </nav>
 
@@ -508,10 +817,61 @@ function PatronEditor({
           }
           className="text-xl font-semibold bg-transparent border-none focus:outline-none focus:ring-0 px-0 flex-1 min-w-0"
         />
-        <Button onClick={guardar} disabled={guardando}>
+        <Button onClick={guardar} disabled={guardando || rangoInvalido}>
           {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : "Guardar patrón"}
         </Button>
       </div>
+
+      <div className="flex flex-wrap items-end gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Departamento</label>
+          <div className="relative">
+            <Building2 className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <select
+              value={borrador.departamento}
+              onChange={(e) =>
+                setBorrador((prev) => ({ ...prev, departamento: e.target.value }))
+              }
+              className="h-9 w-52 rounded-md border border-input bg-background pl-8 pr-3 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            >
+              <option value="">Sin asignar</option>
+              {departamentos.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-1">
+            Agrupa y filtra el patrón, aunque tenga turnos de varios departamentos.
+          </p>
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Fecha de inicio</label>
+          <Input
+            type="date"
+            value={borrador.vigenteDesde}
+            onChange={(e) => setBorrador((prev) => ({ ...prev, vigenteDesde: e.target.value }))}
+            className="w-44"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Fecha de fin</label>
+          <Input
+            type="date"
+            value={borrador.vigenteHasta}
+            min={borrador.vigenteDesde || undefined}
+            onChange={(e) => setBorrador((prev) => ({ ...prev, vigenteHasta: e.target.value }))}
+            className="w-44"
+          />
+          <p className="text-[11px] text-muted-foreground mt-1">Vacío = sin fecha de fin.</p>
+        </div>
+      </div>
+      {rangoInvalido && (
+        <p className="text-xs text-destructive">
+          La fecha de fin no puede ser anterior a la de inicio.
+        </p>
+      )}
 
       <div className="grid grid-cols-[1fr_320px] gap-6 items-start">
         <div>
@@ -563,13 +923,17 @@ function SemanalGrid({
   asignarTurno: (id: string | null) => void;
 }) {
   const añadirSemana = () =>
-    setBorrador((prev) => ({
-      ...prev,
-      semanas: [
-        ...prev.semanas,
-        { dias: [null, null, null, null, null, null, null] },
-      ],
-    }));
+    setBorrador((prev) =>
+      prev.semanas.length >= MAX_SEMANAS
+        ? prev
+        : {
+            ...prev,
+            semanas: [
+              ...prev.semanas,
+              { dias: [null, null, null, null, null, null, null] },
+            ],
+          },
+    );
   const eliminarSemana = (idx: number) =>
     setBorrador((prev) => ({
       ...prev,
@@ -674,6 +1038,7 @@ function SemanalGrid({
       <Button
         variant="ghost"
         onClick={añadirSemana}
+        disabled={borrador.semanas.length >= MAX_SEMANAS}
         className="text-primary hover:text-primary"
       >
         <Plus className="h-4 w-4 mr-1" /> Añadir semana

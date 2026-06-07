@@ -52,6 +52,20 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   /** Callback tras guardar observaciones, resolver incidencia o fichar salida. */
   onUpdated: () => void;
+  /**
+   * Resuelve el aspecto del badge del tipo a partir de su código, usando el
+   * color configurado en `tipos_fichaje` de la empresa. Si no se pasa, se usa
+   * el fallback legacy por código.
+   */
+  tipoBadge?: (codigo?: string | null) => { className: string; label: string };
+}
+
+function legacyTipoBadge(codigo?: string | null): { className: string; label: string } {
+  const c = (codigo ?? "ENT") as TipoFichajeCodigo;
+  return {
+    className: TIPO_FICHAJE_BADGE[c] ?? TIPO_FICHAJE_BADGE.NOR,
+    label: TIPO_FICHAJE_LABEL[c] ?? String(codigo ?? ""),
+  };
 }
 
 /**
@@ -60,7 +74,8 @@ interface Props {
  * la tab Mapa que también necesita abrir este detalle al hacer click en un
  * pin. Maneja su propio estado interno de observaciones y loading.
  */
-export function FichajeDetalleDialog({ fichaje, open, onOpenChange, onUpdated }: Props) {
+export function FichajeDetalleDialog({ fichaje, open, onOpenChange, onUpdated, tipoBadge }: Props) {
+  const resolveTipo = tipoBadge ?? legacyTipoBadge;
   const [detalleNotas, setDetalleNotas] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -92,13 +107,13 @@ export function FichajeDetalleDialog({ fichaje, open, onOpenChange, onUpdated }:
               <div>
                 <span className="text-muted-foreground">Tipo:</span>
                 {(() => {
-                  const c = (fichaje.tipo ?? "ENT") as TipoFichajeCodigo;
+                  const tb = resolveTipo(fichaje.tipo);
                   return (
                     <Badge
                       variant="outline"
-                      className={`mt-1 text-xs ${TIPO_FICHAJE_BADGE[c]}`}
+                      className={`mt-1 text-xs ${tb.className}`}
                     >
-                      {TIPO_FICHAJE_LABEL[c]}
+                      {tb.label}
                     </Badge>
                   );
                 })()}

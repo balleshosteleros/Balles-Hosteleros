@@ -2,9 +2,10 @@
 
 import { useState, useMemo, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { ESTADO_FICHAJE_LABEL, ESTADO_FICHAJE_COLOR, TIPOS_INCIDENCIA_LABEL, TIPO_FICHAJE_LABEL, TIPO_FICHAJE_BADGE } from "@/features/rrhh/data/fichajes";
+import { ESTADO_FICHAJE_LABEL, ESTADO_FICHAJE_COLOR, TIPOS_INCIDENCIA_LABEL, TIPO_FICHAJE_LABEL, TIPO_FICHAJE_BADGE, fichajeColorBadge } from "@/features/rrhh/data/fichajes";
 import type { EstadoFichaje, Fichaje, LocalGeo, ConfigFichajes, TipoFichajeCodigo } from "@/features/rrhh/data/fichajes";
 import { listFichajes, crearFichajeManual } from "@/features/rrhh/actions/fichajes-actions";
+import { listTiposFichaje, type TipoFichajeRow } from "@/features/rrhh/actions/horarios-config-actions";
 import { listEmpleados } from "@/features/rrhh/actions/empleados-actions";
 import {
   getFichajeGeoStatus,
@@ -131,6 +132,7 @@ export function FichajesView() {
   const [manualForm, setManualForm] = useState(initialManualForm());
   const [savingManual, setSavingManual] = useState(false);
   const [locales, setLocales] = useState<LocalGeo[]>([]);
+  const [tiposFichaje, setTiposFichaje] = useState<TipoFichajeRow[]>([]);
   // Filtros geo (TASK-002.05). Se aplican sobre fichajesFiltrados y afectan
   // tanto a la tabla como a la tab Mapa porque ambas leen el mismo state.
   const [soloFuera, setSoloFuera] = useState(false);
@@ -179,6 +181,40 @@ export function FichajesView() {
     setFichajeModal(null);
     loadFichajes();
   }, [empresaActual.id, loadFichajes]);
+
+  // Catálogo de tipos de fichaje de la empresa (color + label por código) para
+  // pintar el badge de cada fichaje según el color configurado en su tipo.
+  useEffect(() => {
+    let cancelado = false;
+    const empresaId = empresaActual.id;
+    if (!empresaId) {
+      setTiposFichaje([]);
+      return;
+    }
+    listTiposFichaje(empresaId).then((res) => {
+      if (!cancelado && res.ok) setTiposFichaje(res.data);
+    });
+    return () => {
+      cancelado = true;
+    };
+  }, [empresaActual.id]);
+
+  // Mapa código → { color (clases badge), label } para resolver el aspecto del
+  // tipo. Fallback a las constantes legacy (ENT/SAL/…) si el código no está en
+  // el catálogo de la empresa.
+  const tipoBadge = useCallback(
+    (codigoRaw?: string | null): { className: string; label: string } => {
+      const codigo = (codigoRaw ?? "").toUpperCase();
+      const cfg = tiposFichaje.find((t) => t.codigo.toUpperCase() === codigo);
+      if (cfg) return { className: fichajeColorBadge(cfg.color), label: cfg.nombre };
+      const legacy = (codigoRaw ?? "ENT") as TipoFichajeCodigo;
+      return {
+        className: TIPO_FICHAJE_BADGE[legacy] ?? TIPO_FICHAJE_BADGE.NOR,
+        label: TIPO_FICHAJE_LABEL[legacy] ?? legacy,
+      };
+    },
+    [tiposFichaje],
+  );
 
   // Carga de locales con su geolocalización para pintar círculos en la tab Mapa.
   // Se re-carga al cambiar de empresa activa para preservar multi-tenant.
@@ -400,11 +436,11 @@ export function FichajesView() {
     tipo: {
       th: <TableHead key="tipo">Tipo</TableHead>,
       td: (f) => {
-        const codigo = (f.tipo ?? "ENT") as TipoFichajeCodigo;
+        const { className, label } = tipoBadge(f.tipo);
         return (
           <TableCell key="tipo">
-            <Badge variant="outline" className={`text-xs ${TIPO_FICHAJE_BADGE[codigo]}`}>
-              {TIPO_FICHAJE_LABEL[codigo]}
+            <Badge variant="outline" className={`text-xs ${className}`}>
+              {label}
             </Badge>
           </TableCell>
         );
@@ -622,7 +658,7 @@ export function FichajesView() {
               </TableHeader>
               <TableBody>
                 {[...fichajes].sort((a, b) => b.fecha.localeCompare(a.fecha)).map(f => {
-                  const codigo = (f.tipo ?? "ENT") as TipoFichajeCodigo;
+                  const tb = tipoBadge(f.tipo);
                   return (
                     <TableRow key={f.id}>
                       <TableCell className="font-medium text-sm">{f.empleadoNombre}</TableCell>
@@ -630,7 +666,7 @@ export function FichajesView() {
                       <TableCell className="text-sm">{formatHora(f.horaEntrada)}</TableCell>
                       <TableCell className="text-sm">{formatHora(f.horaSalida)}</TableCell>
                       <TableCell className="text-sm text-right">{f.horaSalida ? formatHorasDecimal(f.horasTotales) : "—"}</TableCell>
-                      <TableCell><Badge variant="outline" className={`text-xs ${TIPO_FICHAJE_BADGE[codigo]}`}>{TIPO_FICHAJE_LABEL[codigo]}</Badge></TableCell>
+                      <TableCell><Badge variant="outline" className={`text-xs ${tb.className}`}>{tb.label}</Badge></TableCell>
                       <TableCell className="text-sm">{f.incidencia ?? <span className="text-muted-foreground">—</span>}</TableCell>
                     </TableRow>
                   );
@@ -710,6 +746,7 @@ export function FichajesView() {
           if (!open) setFichajeModal(null);
         }}
         onUpdated={loadFichajes}
+        tipoBadge={tipoBadge}
       />
 
 

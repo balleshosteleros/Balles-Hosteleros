@@ -1,10 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import {
   TURNO_TONOS,
   formatTurnoHorario,
+  DIAS_SEMANA,
+  DIA_SEMANA_LABEL,
   type Descanso,
+  type DiaSemana,
+  type TipoJornada,
   type Turno,
   type TurnoTono,
   type TurnoTramo,
@@ -70,6 +75,10 @@ import {
   Building2,
   History,
   ChevronDown,
+  ArrowRight,
+  ArrowLeft,
+  CalendarClock,
+  Timer,
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
@@ -91,6 +100,17 @@ interface TurnoDraft {
   color: TurnoTono;
   departamento: string;
   empleadoIds: string[];
+  tipoJornada: TipoJornada;
+  dias: DiaSemana[];
+  flexHoras: Partial<Record<DiaSemana, number>>;
+  vigenteDesde: string;          // YYYY-MM-DD (fecha de inicio, por defecto hoy)
+  vigenteHasta: string;          // YYYY-MM-DD o "" = sin fecha de fin
+}
+
+const DIAS_LABORABLES_DEFECTO: DiaSemana[] = ["L", "M", "X", "J", "V"];
+
+function hoyISOTurno(): string {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function turnoToDraft(t: Turno | null, empleadoIds: string[] = []): TurnoDraft {
@@ -102,15 +122,25 @@ function turnoToDraft(t: Turno | null, empleadoIds: string[] = []): TurnoDraft {
       color: "emerald",
       departamento: "",
       empleadoIds,
+      tipoJornada: "fijo",
+      dias: [...DIAS_LABORABLES_DEFECTO],
+      flexHoras: {},
+      vigenteDesde: hoyISOTurno(),
+      vigenteHasta: "",
     };
   }
   return {
     nombre: t.nombre,
     codigo: t.codigo,
-    tramos: t.tramos.map((tr) => ({ ...tr })),
+    tramos: t.tramos.length ? t.tramos.map((tr) => ({ ...tr })) : [{ inicio: "09:00", fin: "17:00" }],
     color: t.color,
     departamento: t.departamento ?? "",
     empleadoIds,
+    tipoJornada: t.tipoJornada,
+    dias: t.dias.length ? [...t.dias] : [...DIAS_LABORABLES_DEFECTO],
+    flexHoras: { ...t.flexHoras },
+    vigenteDesde: t.vigenteDesde ?? hoyISOTurno(),
+    vigenteHasta: t.vigenteHasta ?? "",
   };
 }
 
@@ -131,6 +161,44 @@ function pluralDescansos(n: number) {
   return `${n} descansos`;
 }
 
+// Minutos de un tramo (admite tramos que cruzan medianoche).
+function minutosDeTramo(inicio: string, fin: string): number {
+  if (!inicio || !fin) return 0;
+  const [hi, mi] = inicio.split(":").map(Number);
+  const [hf, mf] = fin.split(":").map(Number);
+  let min = hf * 60 + mf - (hi * 60 + mi);
+  if (min < 0) min += 24 * 60;
+  return min;
+}
+
+// Horas a la semana calculadas en vivo desde el draft del modal.
+function horasSemanaDraft(draft: TurnoDraft): number {
+  if (draft.tipoJornada === "flexible") {
+    const total = draft.dias.reduce(
+      (acc, d) => acc + (draft.flexHoras[d] ?? 0),
+      0,
+    );
+    return Math.round(total * 100) / 100;
+  }
+  const minDia = draft.tramos.reduce(
+    (acc, t) => acc + minutosDeTramo(t.inicio, t.fin),
+    0,
+  );
+  const horasDia = minDia / 60;
+  return Math.round(horasDia * draft.dias.length * 100) / 100;
+}
+
+// "8" → "8h"; "8.5" → "8h 30min"; "0" → "0h".
+function fmtHoras(horas: number): string {
+  if (horas <= 0) return "0h";
+  const totalMin = Math.round(horas * 60);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (m === 0) return `${h}h`;
+  if (h === 0) return `${m}min`;
+  return `${h}h ${m}min`;
+}
+
 export function TurnosSection({ empresaId }: { empresaId: string }) {
   const [turnos, setTurnos] = useState<Turno[]>([]);
   const [descansos, setDescansos] = useState<Descanso[]>([]);
@@ -149,6 +217,9 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
   useGlobalLoadingSync(cargando || guardando);
   const [busqueda, setBusqueda] = useState("");
   const [showModal, setShowModal] = useState(false);
+  // En creación: true mientras se elige Fijo/Flexible (paso 1). En edición
+  // siempre false (se va directo a la configuración).
+  const [eligiendoTipo, setEligiendoTipo] = useState(false);
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [draft, setDraft] = useState<TurnoDraft>(() => turnoToDraft(null));
   const [verEmpleadosTurno, setVerEmpleadosTurno] = useState<Turno | null>(null);
@@ -246,13 +317,21 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
     setEmpBusqueda("");
     setEmpPanelOpen(false);
     setDraft(turnoToDraft(null));
+    setEligiendoTipo(true);
     setShowModal(true);
+  };
+
+  // Elegir tipo en el paso 1 fija el tipo de jornada y pasa a la configuración.
+  const elegirTipo = (tipo: TipoJornada) => {
+    setDraft((d) => ({ ...d, tipoJornada: tipo }));
+    setEligiendoTipo(false);
   };
 
   const abrirEditar = (t: Turno) => {
     setEditandoId(t.id);
     setEmpBusqueda("");
     setEmpPanelOpen(false);
+    setEligiendoTipo(false);
     const idsDirectos = (empleadosDirectosPorTurno[t.id] ?? []).map((e) => e.id);
     setDraft(turnoToDraft(t, idsDirectos));
     setShowModal(true);
@@ -266,6 +345,9 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
       tramos: t.tramos.map((tr) => ({ ...tr })),
       color: t.color,
       activo: true,
+      tipoJornada: t.tipoJornada,
+      dias: [...t.dias],
+      flexHoras: { ...t.flexHoras },
     });
     await refrescar();
     setGuardando(false);
@@ -273,7 +355,13 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
 
   const eliminar = async (id: string) => {
     setGuardando(true);
-    await deleteTurno(id);
+    const res = await deleteTurno(id);
+    if (!res.ok) {
+      // P. ej. turno en uso por un patrón: cambiar antes el patrón.
+      toast.error(res.error || "No se pudo eliminar el turno");
+      setGuardando(false);
+      return;
+    }
     await refrescar();
     setGuardando(false);
   };
@@ -283,8 +371,27 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
     const codigo = draft.codigo.trim().toUpperCase();
     const departamento = draft.departamento.trim();
     if (!nombre || !codigo || !departamento) return;
-    const tramos = draft.tramos.filter((tr) => tr.inicio && tr.fin);
-    if (tramos.length === 0) return;
+    if (draft.dias.length === 0) return;
+
+    const esFlexible = draft.tipoJornada === "flexible";
+    const tramos = esFlexible
+      ? []
+      : draft.tramos.filter((tr) => tr.inicio && tr.fin);
+    if (!esFlexible && tramos.length === 0) return;
+
+    // En flexible solo se guardan las horas de los días activos.
+    const flexHoras: Partial<Record<DiaSemana, number>> = {};
+    if (esFlexible) {
+      let algunaHora = false;
+      for (const dia of draft.dias) {
+        const h = draft.flexHoras[dia] ?? 0;
+        if (h > 0) {
+          flexHoras[dia] = h;
+          algunaHora = true;
+        }
+      }
+      if (!algunaHora) return;
+    }
 
     // Solo se persisten empleados que sigan perteneciendo al departamento del
     // turno (el vínculo manda; si alguien cambió de departamento, se descarta).
@@ -295,16 +402,33 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
     );
     const empleadoIds = draft.empleadoIds.filter((id) => idsDelDepto.has(id));
 
+    const vigenteDesde = draft.vigenteDesde || hoyISOTurno();
+    const vigenteHasta = draft.vigenteHasta ? draft.vigenteHasta : null;
+    if (vigenteHasta && vigenteHasta < vigenteDesde) {
+      toast.error("La fecha de fin del turno no puede ser anterior a la de inicio.");
+      return;
+    }
+
     setGuardando(true);
     let turnoId = editandoId;
     if (editandoId) {
-      await updateTurno(editandoId, {
+      const res = await updateTurno(editandoId, {
         nombre,
         codigo,
         tramos,
         color: draft.color,
         departamento,
+        dias: draft.dias,
+        flexHoras,
+        vigenteDesde,
+        vigenteHasta,
       });
+      if (!res.ok) {
+        // P. ej. turno en uso por un patrón: hay que cambiar antes el patrón.
+        toast.error(res.error || "No se pudo guardar el turno");
+        setGuardando(false);
+        return;
+      }
     } else {
       const res = await createTurno(empresaId, {
         nombre,
@@ -312,11 +436,28 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
         tramos,
         color: draft.color,
         departamento,
+        tipoJornada: draft.tipoJornada,
+        dias: draft.dias,
+        flexHoras,
+        vigenteDesde,
+        vigenteHasta,
       });
-      turnoId = res.ok ? res.id ?? null : null;
+      if (!res.ok) {
+        toast.error(res.error || "No se pudo crear el turno");
+        setGuardando(false);
+        return;
+      }
+      turnoId = res.id ?? null;
     }
     if (turnoId) {
-      await setEmpleadosDirectosTurno(empresaId, turnoId, empleadoIds);
+      const resAsig = await setEmpleadosDirectosTurno(empresaId, turnoId, empleadoIds);
+      if (!resAsig.ok) {
+        // P. ej. turno fuera de su vigencia: no se puede asignar hoy.
+        toast.error(resAsig.error || "No se pudieron asignar los empleados");
+        await refrescar();
+        setGuardando(false);
+        return;
+      }
     }
     await refrescar();
     setGuardando(false);
@@ -328,8 +469,30 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
     ? turnos.find((t) => t.id === editandoId) ?? null
     : null;
 
+  const esFlexible = draft.tipoJornada === "flexible";
+  const totalSemana = horasSemanaDraft(draft);
+
+  const toggleDia = (dia: DiaSemana) =>
+    setDraft((d) => ({
+      ...d,
+      dias: d.dias.includes(dia)
+        ? d.dias.filter((x) => x !== dia)
+        : [...DIAS_SEMANA.filter((x) => d.dias.includes(x) || x === dia)],
+    }));
+
   return (
     <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          <Clock className="h-5 w-5 text-primary" />
+          Turnos
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Crea los turnos de trabajo con su horario y descansos para asignarlos
+          a los empleados.
+        </p>
+      </div>
+
       <div className="flex items-center justify-between gap-3">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -383,8 +546,25 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
                     </span>
                     <span className="text-sm font-medium truncate">{t.nombre}</span>
                   </div>
-                  <div className="text-sm text-muted-foreground tabular-nums">
-                    {formatTurnoHorario(t)}
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium shrink-0",
+                        t.tipoJornada === "flexible"
+                          ? "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300"
+                          : "bg-stone-100 text-stone-600 dark:bg-stone-800/60 dark:text-stone-300",
+                      )}
+                    >
+                      {t.tipoJornada === "flexible" ? (
+                        <Timer className="h-3 w-3" />
+                      ) : (
+                        <CalendarClock className="h-3 w-3" />
+                      )}
+                      {t.tipoJornada === "flexible" ? "Flexible" : "Fijo"}
+                    </span>
+                    <span className="text-sm text-muted-foreground tabular-nums truncate">
+                      {formatTurnoHorario(t)}
+                    </span>
                   </div>
                   <div className="text-sm truncate pr-2">
                     {t.departamento ? (
@@ -477,13 +657,42 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
         open={showModal}
         onOpenChange={(open) => {
           setShowModal(open);
-          if (!open) setEditandoId(null);
+          if (!open) {
+            setEditandoId(null);
+            setEligiendoTipo(false);
+          }
         }}
       >
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editandoId ? "Editar turno" : "Crear turno"}</DialogTitle>
           </DialogHeader>
+
+          {eligiendoTipo && !editandoId ? (
+            <TipoJornadaChooser onElegir={elegirTipo} />
+          ) : (
+          <>
+          {/* Cabecera de tipo de jornada con opción de volver al paso 1. */}
+          <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2">
+            {esFlexible ? (
+              <Timer className="h-4 w-4 text-muted-foreground shrink-0" />
+            ) : (
+              <CalendarClock className="h-4 w-4 text-muted-foreground shrink-0" />
+            )}
+            <span className="text-sm font-medium">
+              {esFlexible ? "Horario flexible" : "Horario fijo"}
+            </span>
+            {!editandoId && (
+              <button
+                type="button"
+                onClick={() => setEligiendoTipo(true)}
+                className="ml-auto text-xs text-primary hover:underline inline-flex items-center gap-1"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Cambiar tipo
+              </button>
+            )}
+          </div>
 
           <div className="space-y-3">
             <div className="flex items-center gap-2">
@@ -567,10 +776,117 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
               </select>
             </div>
 
+            {/* Vigencia del turno: manda el turno (ningún patrón puede usarlo
+                fuera de estas fechas). Inicio por defecto hoy; fin opcional.
+                Solo aplica al horario fijo; el flexible no fija vigencia. */}
+            {!esFlexible && (
+            <div className="flex items-center gap-2">
+              <CalendarClock className="h-4 w-4 text-muted-foreground shrink-0" />
+              <div className="flex flex-1 flex-wrap items-end gap-3">
+                <div>
+                  <label className="block text-xs font-medium mb-1 text-muted-foreground">Fecha de inicio</label>
+                  <Input
+                    type="date"
+                    value={draft.vigenteDesde}
+                    onChange={(e) => setDraft((d) => ({ ...d, vigenteDesde: e.target.value }))}
+                    className="w-40"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1 text-muted-foreground">Fecha de fin</label>
+                  <Input
+                    type="date"
+                    value={draft.vigenteHasta}
+                    min={draft.vigenteDesde || undefined}
+                    onChange={(e) => setDraft((d) => ({ ...d, vigenteHasta: e.target.value }))}
+                    className="w-40"
+                  />
+                </div>
+                <span className="pb-2 text-[11px] text-muted-foreground">Vacío = sin fecha de fin.</span>
+              </div>
+            </div>
+            )}
+
+            {/* Días laborables (común a fijo y flexible). */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <CalendarClock className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Días laborables</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5 pl-6">
+                {DIAS_SEMANA.map((dia) => {
+                  const activo = draft.dias.includes(dia);
+                  return (
+                    <button
+                      key={dia}
+                      type="button"
+                      onClick={() => toggleDia(dia)}
+                      title={DIA_SEMANA_LABEL[dia]}
+                      className={cn(
+                        "h-9 w-9 rounded-full text-sm font-medium transition-colors",
+                        activo
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground hover:bg-muted/70",
+                      )}
+                    >
+                      {dia}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {esFlexible ? (
+              /* Jornada flexible: horas objetivo por cada día activo. */
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Timer className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">Horas por día</span>
+                </div>
+                {draft.dias.length === 0 ? (
+                  <p className="pl-6 text-xs text-amber-600 dark:text-amber-500">
+                    Selecciona al menos un día laborable.
+                  </p>
+                ) : (
+                  <div className="space-y-2 pl-6">
+                    {DIAS_SEMANA.filter((d) => draft.dias.includes(d)).map((dia) => (
+                      <div key={dia} className="flex items-center gap-2">
+                        <span className="w-24 text-sm text-muted-foreground">
+                          {DIA_SEMANA_LABEL[dia]}
+                        </span>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={24}
+                          step={0.5}
+                          value={draft.flexHoras[dia] ?? ""}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setDraft((d) => ({
+                              ...d,
+                              flexHoras: {
+                                ...d.flexHoras,
+                                [dia]:
+                                  v === ""
+                                    ? 0
+                                    : Math.max(0, Math.min(24, Number(v))),
+                              },
+                            }));
+                          }}
+                          placeholder="0"
+                          className="w-24"
+                        />
+                        <span className="text-sm text-muted-foreground">h</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Tramos horarios</span>
+                <span className="text-sm font-medium">Rangos horarios</span>
                 {!editandoId && (
                   <button
                     type="button"
@@ -583,7 +899,7 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
                     className="ml-auto text-sm text-primary hover:underline inline-flex items-center gap-1"
                   >
                     <Plus className="h-3.5 w-3.5" />
-                    Añadir
+                    Añadir rango
                   </button>
                 )}
               </div>
@@ -670,6 +986,17 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
                   </div>
                 </div>
               )}
+            </div>
+            )}
+
+            {/* Total de horas a la semana, calculado en vivo. */}
+            <div className="flex items-center justify-between rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+              <span className="text-muted-foreground">
+                Total de horas a la semana
+              </span>
+              <span className="font-semibold tabular-nums">
+                {fmtHoras(totalSemana)}
+              </span>
             </div>
 
             <div className="space-y-2">
@@ -783,12 +1110,18 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
                 guardando ||
                 !draft.nombre.trim() ||
                 !draft.codigo.trim() ||
-                !draft.departamento.trim()
+                !draft.departamento.trim() ||
+                draft.dias.length === 0 ||
+                (esFlexible
+                  ? !draft.dias.some((d) => (draft.flexHoras[d] ?? 0) > 0)
+                  : draft.tramos.filter((tr) => tr.inicio && tr.fin).length === 0)
               }
             >
               {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : "Guardar"}
             </Button>
           </DialogFooter>
+          </>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -959,6 +1292,60 @@ function DescansosTurnoDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Paso 1 de la creación: elegir entre jornada fija o flexible.
+function TipoJornadaChooser({
+  onElegir,
+}: {
+  onElegir: (tipo: TipoJornada) => void;
+}) {
+  const opciones: {
+    tipo: TipoJornada;
+    icono: typeof CalendarClock;
+    titulo: string;
+    descripcion: string;
+    ejemplo: string;
+  }[] = [
+    {
+      tipo: "fijo",
+      icono: CalendarClock,
+      titulo: "Horario fijo",
+      descripcion:
+        "La hora de entrada y salida es fija y común para todos los empleados que tengan este horario.",
+      ejemplo: "Ejemplo: de 09:00 a 17:00",
+    },
+    {
+      tipo: "flexible",
+      icono: Timer,
+      titulo: "Horario flexible",
+      descripcion:
+        "Se establece una cantidad de horas a realizar en un periodo de tiempo concreto.",
+      ejemplo: "Ejemplo: 40:00 horas semanales",
+    },
+  ];
+  return (
+    <div className="space-y-3">
+      {opciones.map((o) => (
+        <button
+          key={o.tipo}
+          type="button"
+          onClick={() => onElegir(o.tipo)}
+          className="group flex w-full items-center gap-4 rounded-lg border p-4 text-left transition-colors hover:border-primary hover:bg-primary/5"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary">
+            <o.icono className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">{o.titulo}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{o.descripcion}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{o.ejemplo}</p>
+          </div>
+          <ArrowRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+        </button>
+      ))}
+    </div>
   );
 }
 

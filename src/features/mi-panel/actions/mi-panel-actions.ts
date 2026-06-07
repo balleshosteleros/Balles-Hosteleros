@@ -23,6 +23,14 @@ import {
   getNiveles,
 } from "@/features/toques/services/toques.service";
 import { getEmpresaActivaId } from "@/features/empresa/actions/empresa-activa-actions";
+import { bloqueoSolapaRango } from "@/features/rrhh/data/calendarios-vacaciones";
+import {
+  ahoraEnMadrid,
+  getHorarioDia,
+  semanaDeFecha,
+  hhmmAMinutos,
+  minutosAHHMM,
+} from "@/features/rrhh/utils/horario-empleado";
 
 function extractErrorMessage(err: unknown): string {
   if (!err) return "Error desconocido";
@@ -134,6 +142,49 @@ async function autoCerrarFichajesHuerfanos(
   }
 }
 
+// Horas trabajadas por el empleado en el periodo (día o semana ISO según el
+// turno flexible), sumando los fichajes completados y el tiempo en curso de los
+// abiertos. Base del objetivo flexible: autocierre y bloqueo de re-fichaje.
+async function horasTrabajadasPeriodo(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  empresaId: string,
+  empleadoUserId: string,
+  fechaISO: string,
+  modo: "diario" | "semanal",
+  excluirFichajeId?: string,
+): Promise<number> {
+  let q = supabase
+    .from("fichajes")
+    .select("id, hora_entrada, hora_salida, horas_totales")
+    .eq("empresa_id", empresaId)
+    .eq("empleado_id", empleadoUserId);
+  if (modo === "semanal") {
+    const { lunes, domingo } = semanaDeFecha(fechaISO);
+    q = q.gte("fecha", lunes).lte("fecha", domingo);
+  } else {
+    q = q.eq("fecha", fechaISO);
+  }
+  const { data } = await q;
+  const now = Date.now();
+  let total = 0;
+  for (const f of data ?? []) {
+    if (excluirFichajeId && (f.id as string) === excluirFichajeId) continue;
+    if (f.hora_salida) {
+      total += Number(f.horas_totales ?? 0);
+    } else if (f.hora_entrada) {
+      total += Math.max(
+        0,
+        (now - new Date(f.hora_entrada as string).getTime()) / 3600000,
+      );
+    }
+  }
+  return total;
+}
+
+function fmtHorasObjetivo(h: number): string {
+  return `${Math.round(h * 100) / 100} h`;
+}
+
 export async function getMiFichajeHoy(): Promise<{
   ok: boolean;
   data: MiFichajeHoy | null;
@@ -154,20 +205,100 @@ export async function getMiFichajeHoy(): Promise<{
       .maybeSingle();
     if (error) throw error;
     if (!data) return { ok: true, data: null };
+
+    // ─── Jornada flexible: objetivo de horas + autocierre ──────────────────
+    // Si el empleado tiene hoy un turno flexible y su fichaje abierto ya
+    // alcanzó las horas que le quedaban del periodo (día o semana), se cierra
+    // automáticamente cuando se consulta el fichaje (red de seguridad servidor).
+    let registro: Record<string, unknown> = data;
+    let flexible = false;
+    let flexModo: "diario" | "semanal" | null = null;
+    let flexObjetivoHoras: number | null = null;
+    let flexRestanteHoras: number | null = null;
+
+    const fechaRef = data.fecha as string;
+    const { data: empRow } = await supabase
+      .from("empleados")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (empRow?.id) {
+      const horario = await getHorarioDia(
+        supabase,
+        empresaId,
+        empRow.id as string,
+        fechaRef,
+      );
+      if (horario.tipo === "flexible" && horario.objetivoHoras > 0) {
+        flexible = true;
+        flexModo = horario.modo;
+        flexObjetivoHoras = horario.objetivoHoras;
+
+        const abierto =
+          !data.hora_salida &&
+          (data.estado === "trabajando" || data.estado === "pausa");
+        const consumidoOtros = await horasTrabajadasPeriodo(
+          supabase,
+          empresaId,
+          user.id,
+          fechaRef,
+          horario.modo,
+          abierto ? (data.id as string) : undefined,
+        );
+        let restante = Math.max(0, horario.objetivoHoras - consumidoOtros);
+
+        if (abierto && data.hora_entrada) {
+          const entradaMs = new Date(data.hora_entrada as string).getTime();
+          const elapsed = (Date.now() - entradaMs) / 3600000;
+          if (elapsed >= restante - 1 / 3600) {
+            // Cierre automático capando las horas a las que quedaban.
+            const horas = Math.round(restante * 10000) / 10000;
+            const salidaISO = new Date(entradaMs + restante * 3600000).toISOString();
+            const incidencia =
+              (data.incidencia as string | null) ??
+              "Cierre automático: objetivo de horas flexible alcanzado";
+            await supabase
+              .from("fichajes")
+              .update({
+                hora_salida: salidaISO,
+                horas_totales: horas,
+                estado: "completado",
+                incidencia,
+              })
+              .eq("id", data.id as string);
+            registro = {
+              ...data,
+              hora_salida: salidaISO,
+              horas_totales: horas,
+              estado: "completado",
+              incidencia,
+            };
+            restante = 0;
+          }
+        }
+        flexRestanteHoras = restante;
+      }
+    }
+
     return {
       ok: true,
       data: {
-        id: data.id as string,
-        fecha: data.fecha as string,
-        horaEntrada: (data.hora_entrada as string | null) ?? null,
-        horaSalida: (data.hora_salida as string | null) ?? null,
-        pausaInicio: (data.pausa_inicio as string | null) ?? null,
-        pausaFin: (data.pausa_fin as string | null) ?? null,
-        horasTotales: (data.horas_totales as number | null) ?? 0,
-        estado: (data.estado as string | null) ?? "pendiente",
-        incidencia: (data.incidencia as string | null) ?? null,
-        modoTeletrabajo: Boolean(data.modo_teletrabajo),
-        local: (data.centro as string | null) ?? null,
+        id: registro.id as string,
+        fecha: registro.fecha as string,
+        horaEntrada: (registro.hora_entrada as string | null) ?? null,
+        horaSalida: (registro.hora_salida as string | null) ?? null,
+        pausaInicio: (registro.pausa_inicio as string | null) ?? null,
+        pausaFin: (registro.pausa_fin as string | null) ?? null,
+        horasTotales: (registro.horas_totales as number | null) ?? 0,
+        estado: (registro.estado as string | null) ?? "pendiente",
+        incidencia: (registro.incidencia as string | null) ?? null,
+        modoTeletrabajo: Boolean(registro.modo_teletrabajo),
+        local: (registro.centro as string | null) ?? null,
+        flexible,
+        flexModo,
+        flexObjetivoHoras,
+        flexRestanteHoras,
       },
     };
   } catch (err: unknown) {
@@ -201,7 +332,66 @@ export async function getMiConfigFichaje(): Promise<{ ok: boolean; permiteTeletr
   }
 }
 
-export async function ficharEntradaPersonal(geo?: GeoInput, modoSolicitado?: ModoFichaje) {
+export type TipoFichajeDisponible = {
+  codigo: string;
+  nombre: string;
+  color: string;
+  requiere_solicitud: boolean;
+};
+
+/**
+ * Tipos de fichaje que el empleado puede usar HOY: los de fichaje normal
+ * siempre, y los "solo por solicitud" únicamente si tiene una solicitud de
+ * trabajo aprobada vigente hoy. Sirve para que la UI muestre un selector.
+ */
+export async function getTiposFichajeDisponibles(): Promise<{
+  ok: boolean;
+  data: TipoFichajeDisponible[];
+  error?: string;
+}> {
+  try {
+    const { supabase, user, empresaId } = await getContext();
+    if (!user || !empresaId) return { ok: false, data: [], error: "No autenticado" };
+
+    const { data: tiposData } = await supabase
+      .from("tipos_fichaje")
+      .select("codigo, nombre, color, requiere_solicitud")
+      .eq("empresa_id", empresaId)
+      .eq("activo", true)
+      .order("orden", { ascending: true });
+    const tipos = (tiposData ?? []) as TipoFichajeDisponible[];
+
+    const necesitaSolicitud = tipos.some((t) => t.requiere_solicitud);
+    let tieneSolicitudHoy = false;
+    if (necesitaSolicitud) {
+      const { fecha: hoyMadrid } = ahoraEnMadrid();
+      const { data: sol } = await supabase
+        .from("solicitudes_personal")
+        .select("id")
+        .eq("empresa_id", empresaId)
+        .eq("user_id", user.id)
+        .eq("tipo", "trabajo")
+        .eq("estado", "aprobada")
+        .lte("fecha_inicio", hoyMadrid)
+        .or(`fecha_fin.is.null,fecha_fin.gte.${hoyMadrid}`)
+        .limit(1);
+      tieneSolicitudHoy = Boolean(sol && sol.length > 0);
+    }
+
+    const disponibles = tipos.filter((t) => !t.requiere_solicitud || tieneSolicitudHoy);
+    return { ok: true, data: disponibles };
+  } catch (err: unknown) {
+    const msg = extractErrorMessage(err);
+    console.error("[mi-panel] getTiposFichajeDisponibles:", msg);
+    return { ok: false, data: [], error: msg };
+  }
+}
+
+export async function ficharEntradaPersonal(
+  geo?: GeoInput,
+  modoSolicitado?: ModoFichaje,
+  tipoCodigo?: string,
+) {
   try {
     const { supabase, user, empresaId, nombre } = await getContext();
     if (!user || !empresaId) return { ok: false, error: "No autenticado" };
@@ -217,6 +407,141 @@ export async function ficharEntradaPersonal(geo?: GeoInput, modoSolicitado?: Mod
         ok: false,
         error: "Tu usuario no está vinculado a ningún empleado.",
       };
+    }
+
+    // ─── Tipo de fichaje + reglas de disponibilidad ────────────────────────
+    // Resuelve qué tipo se va a registrar y valida sus condiciones ANTES de
+    // pedir geolocalización, para fallar rápido con un mensaje claro.
+    const { fecha: hoyMadrid, minutos: ahoraMin } = ahoraEnMadrid();
+    // Si el redondeo aplica, la entrada se registra a la hora exacta del turno.
+    let horaEntradaOverrideISO: string | null = null;
+    const { data: tiposData } = await supabase
+      .from("tipos_fichaje")
+      .select("codigo, nombre, requiere_solicitud, margen_antes_min, margen_despues_min")
+      .eq("empresa_id", empresaId)
+      .eq("activo", true)
+      .order("orden", { ascending: true });
+    const tiposActivos = (tiposData ?? []) as {
+      codigo: string;
+      nombre: string;
+      requiere_solicitud: boolean;
+      margen_antes_min: number;
+      margen_despues_min: number;
+    }[];
+
+    let tipoSel = tipoCodigo
+      ? tiposActivos.find((t) => t.codigo.toUpperCase() === tipoCodigo.toUpperCase()) ?? null
+      : tiposActivos.find((t) => !t.requiere_solicitud) ?? null;
+
+    if (tipoCodigo && !tipoSel) {
+      return { ok: false, error: "El tipo de fichaje seleccionado no está disponible." };
+    }
+
+    if (tipoSel) {
+      if (tipoSel.requiere_solicitud) {
+        // Solo disponible si hay una solicitud de trabajo aprobada para hoy.
+        const { data: sol } = await supabase
+          .from("solicitudes_personal")
+          .select("id")
+          .eq("empresa_id", empresaId)
+          .eq("user_id", user.id)
+          .eq("tipo", "trabajo")
+          .eq("estado", "aprobada")
+          .lte("fecha_inicio", hoyMadrid)
+          .or(`fecha_fin.is.null,fecha_fin.gte.${hoyMadrid}`)
+          .limit(1);
+        if (!sol || sol.length === 0) {
+          return {
+            ok: false,
+            error: `Para fichar como "${tipoSel.nombre}" necesitas una solicitud de trabajo aprobada para hoy.`,
+          };
+        }
+      } else {
+        // Fichaje normal: exige horario asignado hoy. Si es FIJO, dentro de la
+        // ventana de Ajustes RRHH → Fichajes (respecto a la hora de inicio). Si
+        // es FLEXIBLE, sin ventana horaria, pero bloqueado si ya alcanzó su
+        // objetivo de horas del periodo (día o semana, según el turno).
+        const horario = await getHorarioDia(
+          supabase,
+          empresaId,
+          empleado.id,
+          hoyMadrid,
+        );
+
+        if (
+          horario.tipo === "ninguno" ||
+          (horario.tipo === "flexible" && horario.objetivoHoras <= 0)
+        ) {
+          return {
+            ok: false,
+            error: "No tienes horario asignado para hoy, así que no puedes fichar. Avisa a tu responsable.",
+          };
+        }
+
+        if (horario.tipo === "flexible") {
+          const consumido = await horasTrabajadasPeriodo(
+            supabase,
+            empresaId,
+            user.id,
+            hoyMadrid,
+            horario.modo,
+          );
+          // Margen de 1 s para evitar rebotes por redondeo.
+          if (consumido >= horario.objetivoHoras - 1 / 3600) {
+            return {
+              ok: false,
+              error:
+                horario.modo === "semanal"
+                  ? `Ya has completado tus ${fmtHorasObjetivo(horario.objetivoHoras)} de esta semana. Podrás volver a fichar el lunes que viene.`
+                  : `Ya has completado tus ${fmtHorasObjetivo(horario.objetivoHoras)} de hoy. Podrás volver a fichar mañana.`,
+            };
+          }
+          // Flexible: sin ventana ni redondeo; se registra la entrada directa.
+        } else {
+          // tipo "fijo": ventana horaria respecto a la hora de inicio del turno.
+          const tramos = horario.tramos;
+          const { data: cfg } = await supabase
+            .from("empresa_fichajes_config")
+            .select("*")
+            .eq("empresa_id", empresaId)
+            .maybeSingle();
+          const permitirAntes = cfg ? !!cfg.permitir_antes : true;
+          const permitirDespues = cfg ? !!cfg.permitir_despues : true;
+          const margenAntes = permitirAntes ? ((cfg?.margen_antes_min as number) ?? 15) : 0;
+          const margenDespues = permitirDespues ? ((cfg?.margen_despues_min as number) ?? 15) : 0;
+          const redondearAntes = cfg ? !!cfg.redondear_antes : true;
+          const redondearDespues = cfg ? !!cfg.redondear_despues : false;
+
+          // Hora de inicio del turno del día = el tramo más temprano.
+          const inicios = tramos
+            .map((t) => hhmmAMinutos(t.inicio))
+            .filter((m): m is number => m != null);
+          const startMin = inicios.length ? Math.min(...inicios) : 0;
+          const lower = startMin - margenAntes;
+          const upper = startMin + margenDespues;
+          const enVentana = (m: number) => m >= lower && m <= upper;
+          // Tolerancia de medianoche para turnos que empiezan cerca de las 00:00.
+          const dentro =
+            enVentana(ahoraMin) || enVentana(ahoraMin + 1440) || enVentana(ahoraMin - 1440);
+
+          if (!dentro) {
+            return {
+              ok: false,
+              fueraDeHora: true,
+              error: `No se te permite fichar: estás fuera de hora. Tu turno empieza a las ${minutosAHHMM(startMin)}. Si necesitas registrar estas horas, puedes pedir que las validen.`,
+            };
+          }
+
+          // Redondeo a la hora exacta del turno (si procede).
+          const llegaAntes = ahoraMin < startMin;
+          const llegaDespues = ahoraMin > startMin;
+          if ((llegaAntes && redondearAntes) || (llegaDespues && redondearDespues)) {
+            horaEntradaOverrideISO = new Date(
+              Date.now() - (ahoraMin - startMin) * 60000,
+            ).toISOString();
+          }
+        }
+      }
     }
 
     // Locales donde puede fichar EN ESTA empresa (tabla puente multi-local).
@@ -295,7 +620,7 @@ export async function ficharEntradaPersonal(geo?: GeoInput, modoSolicitado?: Mod
         empleado_id: user.id,
         empleado_nombre: nombre || "Sin nombre",
         fecha: todayISO(),
-        hora_entrada: ahora.toISOString(),
+        hora_entrada: horaEntradaOverrideISO ?? ahora.toISOString(),
         estado: "trabajando",
         local_id: localElegidoId,
         lat_entrada: geo?.lat ?? null,
@@ -303,6 +628,7 @@ export async function ficharEntradaPersonal(geo?: GeoInput, modoSolicitado?: Mod
         precision_entrada_metros: geo?.precision ?? null,
         modo_teletrabajo: modoTeletrabajo,
         centro,
+        tipo: tipoSel?.codigo ?? null,
       })
       .select()
       .single();
@@ -442,6 +768,10 @@ export async function listarMisFichajes(limite = 60): Promise<{
         incidencia: (f.incidencia as string | null) ?? null,
         modoTeletrabajo: Boolean(f.modo_teletrabajo),
         local: (f.centro as string | null) ?? null,
+        flexible: false,
+        flexModo: null,
+        flexObjetivoHoras: null,
+        flexRestanteHoras: null,
       })),
     };
   } catch (err: unknown) {
@@ -659,6 +989,113 @@ export interface NuevaSolicitudInput {
   motivo?: string;
 }
 
+export interface MiVacacionesInfo {
+  /** false = no tiene calendario asignado (no puede pedir vacaciones). */
+  tieneCalendario: boolean;
+  /** true = calendario predeterminado: aplica todos los años (bloqueos recurrentes). */
+  esPredeterminado: boolean;
+  calendarioNombre: string | null;
+  anio: number;
+  diasTotales: number;
+  diasGastados: number;
+  diasRestantes: number;
+  bloqueos: { fechaInicio: string; fechaFin: string; motivo: string | null }[];
+}
+
+/**
+ * Saldo de vacaciones del propio empleado (Mi Panel): días totales / gastados /
+ * restantes del año de su calendario + los periodos bloqueados, para mostrarlo
+ * y validarlo en el modal de solicitud antes de enviar.
+ */
+export async function getMiVacacionesInfo(): Promise<{
+  ok: boolean;
+  data: MiVacacionesInfo | null;
+  error?: string;
+}> {
+  try {
+    const { supabase, user, empresaId } = await getContext();
+    if (!user || !empresaId) return { ok: false, data: null, error: "No autenticado" };
+
+    const vacio: MiVacacionesInfo = {
+      tieneCalendario: false,
+      esPredeterminado: false,
+      calendarioNombre: null,
+      anio: new Date().getUTCFullYear(),
+      diasTotales: 0,
+      diasGastados: 0,
+      diasRestantes: 0,
+      bloqueos: [],
+    };
+
+    const { data: emp } = await supabase
+      .from("empleados")
+      .select("calendario_vacaciones_id")
+      .eq("empresa_id", empresaId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const calendarioId = (emp?.calendario_vacaciones_id as string | null) ?? null;
+    if (!calendarioId) return { ok: true, data: vacio };
+
+    const [{ data: cal }, { data: bloqueos }] = await Promise.all([
+      supabase
+        .from("rrhh_calendarios_vacaciones")
+        .select("nombre, anio, dias_totales")
+        .eq("id", calendarioId)
+        .maybeSingle(),
+      supabase
+        .from("rrhh_calendario_vacaciones_bloqueos")
+        .select("fecha_inicio, fecha_fin, motivo")
+        .eq("calendario_id", calendarioId)
+        .order("fecha_inicio", { ascending: true }),
+    ]);
+    if (!cal) return { ok: true, data: vacio };
+
+    // Predeterminado (anio null) → cuenta el año actual como referencia.
+    const esPredeterminado = (cal.anio as number | null) == null;
+    const anio = (cal.anio as number | null) ?? new Date().getUTCFullYear();
+    const diasTotales = cal.dias_totales as number;
+    const inicioAnio = `${anio}-01-01`;
+    const inicioAnioSig = `${anio + 1}-01-01`;
+    const { data: existentes } = await supabase
+      .from("solicitudes_personal")
+      .select("fecha_inicio, fecha_fin")
+      .eq("empresa_id", empresaId)
+      .eq("user_id", user.id)
+      .eq("tipo", "ausencia")
+      .eq("subtipo", "vacaciones")
+      .in("estado", ["pendiente", "aprobada"])
+      .lt("fecha_inicio", inicioAnioSig)
+      .or(`fecha_fin.gte.${inicioAnio},fecha_fin.is.null`);
+    const diasGastados = (existentes ?? []).reduce(
+      (acc: number, s: { fecha_inicio: string; fecha_fin: string | null }) =>
+        acc + diasSolicitudEnAnio(s.fecha_inicio, s.fecha_fin, anio),
+      0,
+    );
+
+    return {
+      ok: true,
+      data: {
+        tieneCalendario: true,
+        esPredeterminado,
+        calendarioNombre: cal.nombre as string,
+        anio,
+        diasTotales,
+        diasGastados,
+        diasRestantes: Math.max(0, diasTotales - diasGastados),
+        bloqueos: (bloqueos ?? []).map((b: { fecha_inicio: string; fecha_fin: string; motivo: string | null }) => ({
+          fechaInicio: b.fecha_inicio,
+          fechaFin: b.fecha_fin,
+          motivo: b.motivo ?? null,
+        })),
+      },
+    };
+  } catch (err: unknown) {
+    const msg = extractErrorMessage(err);
+    console.error("[mi-panel] getMiVacacionesInfo:", msg);
+    return { ok: false, data: null, error: msg };
+  }
+}
+
 type SupabaseAny = Awaited<ReturnType<typeof createClient>>;
 
 const SUBTIPO_AUSENCIA_KEYWORD: Record<
@@ -811,7 +1248,119 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
       return { ok: true, data: mapSolicitud(data as Record<string, unknown>) };
     }
 
-    if (input.tipo === "ausencia") {
+    // VACACIONES: se validan contra el calendario de vacaciones del empleado
+    // (días disponibles + periodos bloqueados). Es obligatorio tener uno.
+    if (input.tipo === "ausencia" && input.subtipo === "vacaciones") {
+      const { data: emp } = await supabase
+        .from("empleados")
+        .select("calendario_vacaciones_id")
+        .eq("empresa_id", empresaId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      const calendarioId = (emp?.calendario_vacaciones_id as string | null) ?? null;
+      if (!calendarioId) {
+        return {
+          ok: false,
+          error:
+            "No tienes un calendario de vacaciones asignado. Pídele a RRHH que te asigne uno antes de solicitar vacaciones.",
+        };
+      }
+
+      const { data: cal } = await supabase
+        .from("rrhh_calendarios_vacaciones")
+        .select("nombre, anio, dias_totales")
+        .eq("id", calendarioId)
+        .maybeSingle();
+      if (!cal) {
+        return {
+          ok: false,
+          error: "Tu calendario de vacaciones ya no está disponible. Contacta con RRHH.",
+        };
+      }
+
+      const inicio = input.fechaInicio;
+      const fin = input.fechaFin || input.fechaInicio;
+      if (fin < inicio) {
+        return { ok: false, error: "La fecha de fin no puede ser anterior a la fecha de inicio" };
+      }
+
+      // Calendario predeterminado (anio null) → aplica todos los años: el año de
+      // cómputo es el de la fecha solicitada y los bloqueos se repiten cada año.
+      const esPredeterminado = (cal.anio as number | null) == null;
+      const anio =
+        (cal.anio as number | null) ??
+        new Date(inicio + "T00:00:00Z").getUTCFullYear();
+      const diasTotales = cal.dias_totales as number;
+
+      // 1) Periodos bloqueados (recurrentes si el calendario es predeterminado).
+      const { data: bloqueos } = await supabase
+        .from("rrhh_calendario_vacaciones_bloqueos")
+        .select("fecha_inicio, fecha_fin, motivo")
+        .eq("calendario_id", calendarioId);
+      const choque = (bloqueos ?? []).find(
+        (b: { fecha_inicio: string; fecha_fin: string }) =>
+          bloqueoSolapaRango(
+            { fechaInicio: b.fecha_inicio, fechaFin: b.fecha_fin },
+            inicio,
+            fin,
+            esPredeterminado,
+          ),
+      ) as { fecha_inicio: string; fecha_fin: string; motivo: string | null } | undefined;
+      if (choque) {
+        return {
+          ok: false,
+          error:
+            `Esas fechas caen en un periodo bloqueado` +
+            (choque.motivo ? ` (${choque.motivo})` : "") +
+            (esPredeterminado
+              ? ` (se repite cada año, del ${formatFechaEs(choque.fecha_inicio).slice(0, 5)} al ${formatFechaEs(choque.fecha_fin).slice(0, 5)}).`
+              : `, del ${formatFechaEs(choque.fecha_inicio)} al ${formatFechaEs(choque.fecha_fin)}.`) +
+            ` No se pueden pedir vacaciones en esos días.`,
+        };
+      }
+
+      // 2) Días disponibles según el calendario.
+      const diasSolicitados = diasSolicitudEnAnio(inicio, fin, anio);
+      if (!esPredeterminado && diasSolicitados === 0) {
+        return {
+          ok: false,
+          error: `Tu calendario de vacaciones es del año ${anio}. Selecciona fechas dentro de ese año.`,
+        };
+      }
+
+      const inicioAnio = `${anio}-01-01`;
+      const inicioAnioSig = `${anio + 1}-01-01`;
+      const { data: existentes } = await supabase
+        .from("solicitudes_personal")
+        .select("fecha_inicio, fecha_fin")
+        .eq("empresa_id", empresaId)
+        .eq("user_id", user.id)
+        .eq("tipo", "ausencia")
+        .eq("subtipo", "vacaciones")
+        .in("estado", ["pendiente", "aprobada"])
+        .lt("fecha_inicio", inicioAnioSig)
+        .or(`fecha_fin.gte.${inicioAnio},fecha_fin.is.null`);
+      const diasUsados = (existentes ?? []).reduce(
+        (acc: number, s: { fecha_inicio: string; fecha_fin: string | null }) =>
+          acc + diasSolicitudEnAnio(s.fecha_inicio, s.fecha_fin, anio),
+        0,
+      );
+
+      if (diasUsados + diasSolicitados > diasTotales) {
+        const restantes = Math.max(0, diasTotales - diasUsados);
+        return {
+          ok: false,
+          error:
+            `Te queda${restantes === 1 ? "" : "n"} ${restantes} día${restantes === 1 ? "" : "s"} de vacaciones ` +
+            `de ${diasTotales} en ${anio} (ya llevas ${diasUsados} usado${diasUsados === 1 ? "" : "s"}) ` +
+            `y estás pidiendo ${diasSolicitados}. No se puede registrar la solicitud.`,
+        };
+      }
+    }
+
+    // Resto de ausencias (baja médica, permiso): límite anual de tipos_ausencia.
+    if (input.tipo === "ausencia" && input.subtipo !== "vacaciones") {
       const subtipoAus = input.subtipo as Exclude<
         SolicitudSubtipoAusencia,
         "baja_contrato"
