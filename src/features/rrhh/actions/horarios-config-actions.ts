@@ -45,6 +45,10 @@ export type TipoFichajeRow = {
   codigo: string;
   descripcion: string | null;
   computa_tiempo: boolean;
+  color: string;
+  requiere_solicitud: boolean;
+  margen_antes_min: number;
+  margen_despues_min: number;
   orden: number;
   activo: boolean;
   created_at: string;
@@ -71,6 +75,10 @@ export type TipoFichajeInput = {
   codigo: string;
   descripcion?: string | null;
   computa_tiempo?: boolean;
+  color?: string;
+  requiere_solicitud?: boolean;
+  margen_antes_min?: number;
+  margen_despues_min?: number;
   activo?: boolean;
 };
 
@@ -301,6 +309,10 @@ async function insertTipoFichaje(
         codigo,
         descripcion: input.descripcion?.toString().trim() || null,
         computa_tiempo: input.computa_tiempo ?? true,
+        color: input.color ?? "slate",
+        requiere_solicitud: input.requiere_solicitud ?? false,
+        margen_antes_min: Math.max(0, input.margen_antes_min ?? 0),
+        margen_despues_min: Math.max(0, input.margen_despues_min ?? 0),
         activo: input.activo ?? true,
         orden,
         created_by: userId,
@@ -327,6 +339,10 @@ export async function updateTipoFichaje(id: string, input: Partial<TipoFichajeIn
     if (input.codigo !== undefined) payload.codigo = input.codigo.trim().toUpperCase();
     if (input.descripcion !== undefined) payload.descripcion = input.descripcion?.toString().trim() || null;
     if (input.computa_tiempo !== undefined) payload.computa_tiempo = input.computa_tiempo;
+    if (input.color !== undefined) payload.color = input.color;
+    if (input.requiere_solicitud !== undefined) payload.requiere_solicitud = input.requiere_solicitud;
+    if (input.margen_antes_min !== undefined) payload.margen_antes_min = Math.max(0, input.margen_antes_min);
+    if (input.margen_despues_min !== undefined) payload.margen_despues_min = Math.max(0, input.margen_despues_min);
     if (input.activo !== undefined) payload.activo = input.activo;
     if (input.orden !== undefined) payload.orden = input.orden;
 

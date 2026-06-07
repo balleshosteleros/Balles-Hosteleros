@@ -32,6 +32,66 @@ export const TIPO_FICHAJE_BADGE: Record<TipoFichajeCodigo, string> = {
   NOR: "bg-sky-50 text-sky-700 border-sky-200",
 };
 
+// ─── Paleta de color de los tipos de fichaje (fuente única) ────────────────
+// Cada tipo (`tipos_fichaje.color`) guarda una CLAVE de esta paleta; de ella
+// se derivan tanto el punto (dot) como el badge (badge) para pintar el fichaje
+// según su tipo. No guardar clases Tailwind completas en BD: solo la clave.
+export type FichajeColorKey =
+  | "slate" | "sky" | "blue" | "indigo" | "violet" | "fuchsia"
+  | "rose" | "red" | "orange" | "amber" | "emerald" | "teal";
+
+export const FICHAJE_COLOR_PALETTE: { key: FichajeColorKey; label: string }[] = [
+  { key: "sky", label: "Azul cielo" },
+  { key: "blue", label: "Azul" },
+  { key: "indigo", label: "Índigo" },
+  { key: "violet", label: "Violeta" },
+  { key: "fuchsia", label: "Fucsia" },
+  { key: "rose", label: "Rosa" },
+  { key: "red", label: "Rojo" },
+  { key: "orange", label: "Naranja" },
+  { key: "amber", label: "Ámbar" },
+  { key: "emerald", label: "Verde" },
+  { key: "teal", label: "Turquesa" },
+  { key: "slate", label: "Gris" },
+];
+
+const FICHAJE_COLOR_DOT: Record<FichajeColorKey, string> = {
+  slate: "bg-slate-500", sky: "bg-sky-500", blue: "bg-blue-500",
+  indigo: "bg-indigo-500", violet: "bg-violet-500", fuchsia: "bg-fuchsia-500",
+  rose: "bg-rose-500", red: "bg-red-500", orange: "bg-orange-500",
+  amber: "bg-amber-500", emerald: "bg-emerald-500", teal: "bg-teal-500",
+};
+
+const FICHAJE_COLOR_BADGE: Record<FichajeColorKey, string> = {
+  slate: "bg-slate-50 text-slate-700 border-slate-200",
+  sky: "bg-sky-50 text-sky-700 border-sky-200",
+  blue: "bg-blue-50 text-blue-700 border-blue-200",
+  indigo: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  violet: "bg-violet-50 text-violet-700 border-violet-200",
+  fuchsia: "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200",
+  rose: "bg-rose-50 text-rose-700 border-rose-200",
+  red: "bg-red-50 text-red-700 border-red-200",
+  orange: "bg-orange-50 text-orange-700 border-orange-200",
+  amber: "bg-amber-50 text-amber-700 border-amber-200",
+  emerald: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  teal: "bg-teal-50 text-teal-700 border-teal-200",
+};
+
+function normalizeColorKey(color?: string | null): FichajeColorKey {
+  const k = (color ?? "").toLowerCase() as FichajeColorKey;
+  return k in FICHAJE_COLOR_DOT ? k : "slate";
+}
+
+/** Clase del punto de color (bg-*-500) para una clave de color de tipo. */
+export function fichajeColorDot(color?: string | null): string {
+  return FICHAJE_COLOR_DOT[normalizeColorKey(color)];
+}
+
+/** Clases del badge (bg-50 / text-700 / border-200) para una clave de color. */
+export function fichajeColorBadge(color?: string | null): string {
+  return FICHAJE_COLOR_BADGE[normalizeColorKey(color)];
+}
+
 /**
  * Local con geolocalización tal y como lo necesita la auditoría geográfica
  * de fichajes (PRP-037). Estructura camelCase y se construye en el server

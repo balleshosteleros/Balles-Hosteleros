@@ -2,11 +2,24 @@
 
 import { getAppContext } from "@/lib/supabase/get-context";
 import { revalidatePath } from "next/cache";
+import { getPatronesQueUsanTurno } from "@/features/rrhh/actions/patrones-actions";
 import type {
   Turno,
   TurnoTramo,
   TurnoTono,
+  TipoJornada,
+  DiaSemana,
 } from "@/features/rrhh/data/horarios";
+
+// Regla "manda el turno": un turno usado por uno o más patrones no puede
+// cambiarse ni borrarse hasta modificar antes esos patrones. Devuelve el
+// mensaje de bloqueo, o null si el turno no está en ningún patrón.
+async function bloqueoPorPatrones(turnoId: string): Promise<string | null> {
+  const res = await getPatronesQueUsanTurno(turnoId);
+  if (!res.ok || res.data.length === 0) return null;
+  const nombres = res.data.map((p) => `«${p.nombre}»`).join(", ");
+  return `Este turno está en uso por ${res.data.length === 1 ? "el patrón" : "los patrones"} ${nombres}. Modifica antes ${res.data.length === 1 ? "ese patrón" : "esos patrones"} y vuelve a intentarlo.`;
+}
 
 type Result<T> = { ok: true; data: T } | { ok: false; data: T; error: string };
 
@@ -20,10 +33,14 @@ function rowToTurno(r: Record<string, unknown>): Turno {
     activo: !!r.activo,
     centro: (r.centro as string | null) ?? undefined,
     departamento: (r.departamento as string | null) ?? undefined,
+    tipoJornada: (r.tipo_jornada as TipoJornada) ?? "fijo",
+    dias: (r.dias as DiaSemana[]) ?? [],
+    flexHoras: (r.flex_horas as Partial<Record<DiaSemana, number>>) ?? {},
     familiaId: (r.familia_id as string) ?? (r.id as string),
     version: (r.version as number) ?? 1,
     esOficial: r.es_oficial === undefined ? true : !!r.es_oficial,
     vigenteDesde: (r.vigente_desde as string | null) ?? undefined,
+    vigenteHasta: (r.vigente_hasta as string | null) ?? null,
   };
 }
 
@@ -69,6 +86,13 @@ export type TurnoInput = {
   color: TurnoTono;
   departamento?: string | null;
   activo?: boolean;
+  tipoJornada?: TipoJornada;
+  dias?: DiaSemana[];
+  flexHoras?: Partial<Record<DiaSemana, number>>;
+  /** Fecha de inicio de validez (YYYY-MM-DD). Por defecto hoy. */
+  vigenteDesde?: string;
+  /** Fecha de fin de validez (YYYY-MM-DD) o null = sin fecha final. */
+  vigenteHasta?: string | null;
 };
 
 function makeTurnoId(empresaId: string) {
@@ -94,13 +118,17 @@ export async function createTurno(
       familia_id: id,
       version: 1,
       es_oficial: true,
-      vigente_desde: new Date().toISOString().slice(0, 10),
+      vigente_desde: input.vigenteDesde || new Date().toISOString().slice(0, 10),
+      vigente_hasta: input.vigenteHasta ?? null,
       nombre: input.nombre.trim(),
       codigo: input.codigo.trim().toUpperCase(),
-      tramos: input.tramos,
+      tramos: input.tipoJornada === "flexible" ? [] : input.tramos,
       color: input.color,
       departamento: input.departamento?.trim() || null,
       activo: input.activo ?? true,
+      tipo_jornada: input.tipoJornada ?? "fijo",
+      dias: input.dias ?? [],
+      flex_horas: input.flexHoras ?? {},
     });
     if (error) throw error;
     revalidatePath("/rrhh/horarios");
@@ -118,6 +146,11 @@ export async function createTurno(
 export async function updateTurno(id: string, patch: Partial<TurnoInput>) {
   try {
     const { supabase } = await getAppContext();
+
+    // MANDA EL TURNO: si el turno está en un patrón, no se puede cambiar aquí.
+    const bloqueo = await bloqueoPorPatrones(id);
+    if (bloqueo) return { ok: false, error: bloqueo };
+
     const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (patch.nombre !== undefined) payload.nombre = patch.nombre.trim();
     if (patch.codigo !== undefined) payload.codigo = patch.codigo.trim().toUpperCase();
@@ -126,6 +159,21 @@ export async function updateTurno(id: string, patch: Partial<TurnoInput>) {
     if (patch.departamento !== undefined)
       payload.departamento = patch.departamento?.trim() || null;
     if (patch.activo !== undefined) payload.activo = patch.activo;
+    // tipo_jornada NO se edita en sitio (no se cambia un fijo a flexible aquí).
+    // dias y flex_horas sí: no están versionados, a diferencia de los tramos.
+    if (patch.dias !== undefined) payload.dias = patch.dias;
+    if (patch.flexHoras !== undefined) payload.flex_horas = patch.flexHoras;
+    // Rango de validez del turno (editable mientras no esté en un patrón).
+    if (patch.vigenteDesde !== undefined) payload.vigente_desde = patch.vigenteDesde;
+    if (patch.vigenteHasta !== undefined) payload.vigente_hasta = patch.vigenteHasta;
+    if (
+      payload.vigente_hasta &&
+      typeof payload.vigente_hasta === "string" &&
+      typeof payload.vigente_desde === "string" &&
+      (payload.vigente_hasta as string) < (payload.vigente_desde as string)
+    ) {
+      return { ok: false, error: "La fecha de fin del turno no puede ser anterior a la de inicio." };
+    }
 
     const { error } = await supabase.from("rrhh_turnos").update(payload).eq("id", id);
     if (error) throw error;
@@ -141,6 +189,24 @@ export async function updateTurno(id: string, patch: Partial<TurnoInput>) {
 export async function deleteTurno(id: string) {
   try {
     const { supabase } = await getAppContext();
+
+    // No se puede borrar un turno que esté en uso por algún patrón.
+    const bloqueo = await bloqueoPorPatrones(id);
+    if (bloqueo) return { ok: false, error: bloqueo };
+
+    // Tampoco si algún empleado lo tiene/tuvo asignado directamente: la versión
+    // debe quedar siempre almacenada como histórico.
+    const { count } = await supabase
+      .from("rrhh_turno_empleados")
+      .select("empleado_id", { count: "exact", head: true })
+      .eq("turno_id", id);
+    if ((count ?? 0) > 0) {
+      return {
+        ok: false,
+        error: "No se puede eliminar: hay empleados con este turno asignado. Debe conservarse como histórico.",
+      };
+    }
+
     const { error } = await supabase.from("rrhh_turnos").delete().eq("id", id);
     if (error) throw error;
     revalidatePath("/rrhh/horarios");
@@ -176,6 +242,11 @@ export async function crearVersionTurno(
     const { supabase, userId } = await getAppContext();
     const empresaId = await resolveEmpresaUuid(supabase, empresaIdOrSlug);
     if (!empresaId) return { ok: false, error: "Empresa no encontrada" };
+
+    // MANDA EL TURNO: cambiar el horario (nueva versión) también está bloqueado
+    // si el turno está en uso por un patrón.
+    const bloqueo = await bloqueoPorPatrones(input.turnoId);
+    if (bloqueo) return { ok: false, error: bloqueo };
 
     // Resolver la familia a partir del turno indicado.
     const { data: turnoRow, error: errTurno } = await supabase
@@ -309,6 +380,29 @@ export async function setEmpleadosDirectosTurno(
     if (!empresaId) return { ok: false, error: "Empresa no encontrada" };
 
     const idsUnicos = Array.from(new Set(empleadoIds.filter(Boolean)));
+
+    // MANDA EL TURNO: no se puede asignar a empleados un turno que hoy está
+    // fuera de su rango de validez (aún no empieza o ya terminó).
+    if (idsUnicos.length > 0) {
+      const hoy = new Date().toISOString().slice(0, 10);
+      const { data: turnoRow } = await supabase
+        .from("rrhh_turnos")
+        .select("nombre, vigente_desde, vigente_hasta")
+        .eq("id", turnoId)
+        .eq("empresa_id", empresaId)
+        .maybeSingle();
+      if (turnoRow) {
+        const tDesde = (turnoRow.vigente_desde as string | null) ?? null;
+        const tHasta = (turnoRow.vigente_hasta as string | null) ?? null;
+        const nombre = (turnoRow.nombre as string) ?? "turno";
+        if (tDesde && tDesde > hoy) {
+          return { ok: false, error: `El turno «${nombre}» aún no está vigente (empieza el ${tDesde.split("-").reverse().join("/")}). No puedes asignarlo todavía.` };
+        }
+        if (tHasta && tHasta < hoy) {
+          return { ok: false, error: `El turno «${nombre}» ya no está vigente (terminó el ${tHasta.split("-").reverse().join("/")}). Amplía su fecha de fin o usa otro turno.` };
+        }
+      }
+    }
 
     // Borra los que ya no estén seleccionados.
     const delQuery = supabase

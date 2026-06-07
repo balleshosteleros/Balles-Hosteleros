@@ -5,6 +5,11 @@ export interface TurnoTramo {
 
 export type TurnoTono = "stone" | "emerald" | "violet" | "rose" | "teal" | "sky" | "amber";
 
+// Tipo de jornada al crear el turno (estilo Sésamo):
+//  - fijo: días + tramo(s) horario(s) (partido = 2 tramos).
+//  - flexible: días + horas objetivo por día (flexHoras).
+export type TipoJornada = "fijo" | "flexible";
+
 export interface Turno {
   id: string;
   nombre: string;
@@ -14,11 +19,16 @@ export interface Turno {
   activo: boolean;
   centro?: string;
   departamento?: string;
+  // Jornada Fijo/Flexible (esencial primero).
+  tipoJornada: TipoJornada;
+  dias: DiaSemana[];
+  flexHoras: Partial<Record<DiaSemana, number>>;
   // Versionado (PRP-053): cada turno es una versión de una familia.
   familiaId: string;
   version: number;
   esOficial: boolean;
   vigenteDesde?: string; // ISO date desde la que rige esta versión
+  vigenteHasta?: string | null; // ISO date fin de validez; null/undef = sin fin
 }
 
 export const TURNO_TONOS: Record<TurnoTono, { pill: string; dot: string; label: string }> = {
@@ -32,6 +42,19 @@ export const TURNO_TONOS: Record<TurnoTono, { pill: string; dot: string; label: 
 };
 
 export type DiaSemana = "L" | "M" | "X" | "J" | "V" | "S" | "D";
+
+// Orden canónico de la semana (lunes → domingo) para selectores de días.
+export const DIAS_SEMANA: DiaSemana[] = ["L", "M", "X", "J", "V", "S", "D"];
+
+export const DIA_SEMANA_LABEL: Record<DiaSemana, string> = {
+  L: "Lunes",
+  M: "Martes",
+  X: "Miércoles",
+  J: "Jueves",
+  V: "Viernes",
+  S: "Sábado",
+  D: "Domingo",
+};
 
 export interface Descanso {
   id: string;
@@ -79,7 +102,21 @@ export function formatTramo(tramo: TurnoTramo): string {
   return `${tramo.inicio} - ${tramo.fin}`;
 }
 
+function formatHoras(horas: number): string {
+  if (horas <= 0) return "0h";
+  // 8 → "8h"; 8.5 → "8h 30min".
+  const totalMin = Math.round(horas * 60);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (m === 0) return `${h}h`;
+  if (h === 0) return `${m}min`;
+  return `${h}h ${m}min`;
+}
+
 export function formatTurnoHorario(turno: Turno): string {
+  if (turno.tipoJornada === "flexible") {
+    return `${formatHoras(totalHorasSemana(turno))}/sem`;
+  }
   return turno.tramos.map(formatTramo).join(" / ");
 }
 
@@ -95,4 +132,22 @@ function minutosTramo(tramo: TurnoTramo): number {
 export function calcularDuracionTurno(turno: Turno): number {
   const min = turno.tramos.reduce((acc, t) => acc + minutosTramo(t), 0);
   return Math.round((min / 60) * 100) / 100;
+}
+
+// Total de horas a la semana del turno:
+//  - fijo: duración de los tramos × número de días activos.
+//  - flexible: suma de las horas objetivo de los días activos.
+// Si un fijo no tiene días marcados (turnos antiguos), cae a la duración
+// de un día para no mostrar 0.
+export function totalHorasSemana(turno: Turno): number {
+  if (turno.tipoJornada === "flexible") {
+    const total = turno.dias.reduce(
+      (acc, d) => acc + (turno.flexHoras[d] ?? 0),
+      0,
+    );
+    return Math.round(total * 100) / 100;
+  }
+  const duracionDia = calcularDuracionTurno(turno);
+  const nDias = turno.dias.length || 1;
+  return Math.round(duracionDia * nDias * 100) / 100;
 }

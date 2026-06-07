@@ -15,10 +15,13 @@ import {
   finalizarPausaPersonal,
   getMiConfigFichaje,
   getMiFichajeHoy,
+  getTiposFichajeDisponibles,
   iniciarPausaPersonal,
   type ModoFichaje,
+  type TipoFichajeDisponible,
 } from "@/features/mi-panel/actions/mi-panel-actions";
 import { obtenerPosicionActual } from "@/features/rrhh/utils/geo";
+import { fichajeColorDot } from "@/features/rrhh/data/fichajes";
 import type { MiFichajeHoy } from "@/features/mi-panel/types";
 import { formatHorasDecimal } from "@/shared/lib/timeUtils";
 
@@ -59,6 +62,10 @@ export function FichajeBar({
   // Si el empleado puede teletrabajar, al fichar entrada le preguntamos el modo.
   const [permiteTeletrabajo, setPermiteTeletrabajo] = useState(false);
   const [eligiendoModo, setEligiendoModo] = useState(false);
+  // Tipos de fichaje disponibles hoy (normal + horas extras si hay solicitud).
+  const [tiposDisponibles, setTiposDisponibles] = useState<TipoFichajeDisponible[]>([]);
+  const [eligiendoTipo, setEligiendoTipo] = useState(false);
+  const [tipoElegido, setTipoElegido] = useState<string | undefined>(undefined);
 
   async function refresh() {
     const res = await getMiFichajeHoy();
@@ -70,6 +77,9 @@ export function FichajeBar({
     refresh();
     getMiConfigFichaje().then((res) => {
       if (res.ok) setPermiteTeletrabajo(res.permiteTeletrabajo);
+    });
+    getTiposFichajeDisponibles().then((res) => {
+      if (res.ok) setTiposDisponibles(res.data);
     });
   }, []);
 
@@ -83,6 +93,36 @@ export function FichajeBar({
   const trabajando = !!fichaje?.horaEntrada && !finalizado && !enPausa;
   const sinFichar = !fichaje;
 
+  // Autocierre de jornada flexible: cuando el tiempo trabajado alcanza el
+  // objetivo de horas restante, el servidor cierra el fichaje (getMiFichajeHoy).
+  // Programamos un refresco en ese instante para reflejarlo al momento y que el
+  // botón quede bloqueado hasta el siguiente periodo.
+  useEffect(() => {
+    if (
+      !trabajando ||
+      !fichaje?.flexible ||
+      fichaje.flexRestanteHoras == null ||
+      !fichaje.horaEntrada
+    ) {
+      return;
+    }
+    const objetivoMs =
+      new Date(fichaje.horaEntrada).getTime() + fichaje.flexRestanteHoras * 3600000;
+    const restanteMs = objetivoMs - Date.now();
+    const cerrar = async () => {
+      await refresh();
+      toast.info("Has alcanzado tu objetivo de horas: el fichaje se cerró automáticamente.");
+      onChange?.();
+    };
+    if (restanteMs <= 0) {
+      void cerrar();
+      return;
+    }
+    const id = setTimeout(() => void cerrar(), restanteMs + 500);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trabajando, fichaje?.flexible, fichaje?.flexRestanteHoras, fichaje?.horaEntrada]);
+
   async function intentarGeo() {
     try {
       return await obtenerPosicionActual();
@@ -91,24 +131,50 @@ export function FichajeBar({
     }
   }
 
-  // Punto de entrada del botón "Fichar": si el empleado puede teletrabajar le
-  // preguntamos cómo quiere fichar; si no, va directo a presencial (con ubicación).
+  // Punto de entrada del botón "Fichar": si hay más de un tipo de fichaje
+  // disponible hoy (p. ej. Normal + Horas extras con solicitud) preguntamos el
+  // tipo; luego, si el empleado puede teletrabajar, le preguntamos el modo; si
+  // no, va directo a presencial (con ubicación).
   function handleEntrada() {
+    if (tiposDisponibles.length > 1) {
+      setEligiendoTipo(true);
+      return;
+    }
+    iniciarFichaje(tiposDisponibles[0]?.codigo);
+  }
+
+  function iniciarFichaje(tipoCodigo?: string) {
+    setTipoElegido(tipoCodigo);
     if (permiteTeletrabajo) {
       setEligiendoModo(true);
       return;
     }
-    void ficharConModo("presencial");
+    void ficharConModo("presencial", tipoCodigo);
   }
 
-  async function ficharConModo(modo: ModoFichaje) {
+  async function ficharConModo(modo: ModoFichaje, tipoCodigo?: string) {
     setEligiendoModo(false);
+    setEligiendoTipo(false);
+    const codigo = tipoCodigo !== undefined ? tipoCodigo : tipoElegido;
     setWorking(true);
     // El teletrabajo no necesita ubicación; el presencial sí (se valida en server).
     const geo = modo === "presencial" ? await intentarGeo() : undefined;
-    const res = await ficharEntradaPersonal(geo, modo);
+    const res = await ficharEntradaPersonal(geo, modo, codigo);
     setWorking(false);
-    if (!res.ok) return toast.error(res.error || "No se pudo fichar entrada");
+    if (!res.ok) {
+      // Fuera de hora: solo avisar y, si procede, llevar a Solicitudes para
+      // que el empleado pida trabajar en un horario no asignado.
+      if ((res as { fueraDeHora?: boolean }).fueraDeHora) {
+        toast.error(res.error || "Estás fuera de hora", {
+          duration: 9000,
+          ...(onSolicitar
+            ? { action: { label: "Hacer solicitud", onClick: () => onSolicitar() } }
+            : {}),
+        });
+        return;
+      }
+      return toast.error(res.error || "No se pudo fichar entrada");
+    }
     toast.success(
       modo === "teletrabajo" ? "Entrada registrada (teletrabajo)" : "Entrada registrada",
     );
@@ -189,6 +255,15 @@ export function FichajeBar({
                 ? `${formatHorasDecimal(fichaje?.horasTotales)} trabajadas`
                 : calcHorasVivas(fichaje)}
             </div>
+            {fichaje?.flexible && fichaje.flexObjetivoHoras != null && (
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Jornada flexible · objetivo {fichaje.flexObjetivoHoras} h
+                {fichaje.flexModo === "semanal" ? " a la semana" : " al día"}
+                {!finalizado &&
+                  fichaje.flexRestanteHoras != null &&
+                  ` · te quedan ${Math.max(0, Math.round(fichaje.flexRestanteHoras * 10) / 10)} h`}
+              </div>
+            )}
           </div>
         </div>
 
@@ -265,6 +340,35 @@ export function FichajeBar({
           )}
         </div>
       </div>
+
+      {/* Elección de tipo: solo aparece si hay más de un tipo disponible hoy. */}
+      <Dialog open={eligiendoTipo} onOpenChange={(open) => { if (!open) setEligiendoTipo(false); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>¿Qué tipo de fichaje?</DialogTitle>
+            <DialogDescription>
+              Elige el tipo de jornada que vas a registrar.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2 pt-2">
+            {tiposDisponibles.map((t) => (
+              <button
+                key={t.codigo}
+                type="button"
+                onClick={() => { setEligiendoTipo(false); iniciarFichaje(t.codigo); }}
+                disabled={working}
+                className="flex items-center gap-3 rounded-xl border-2 p-4 text-left transition-colors hover:bg-muted/50 disabled:opacity-60"
+              >
+                <span className={`h-3.5 w-3.5 rounded-full shrink-0 ${fichajeColorDot(t.color)}`} />
+                <span className="font-semibold">{t.nombre}</span>
+                {t.requiere_solicitud && (
+                  <Badge variant="outline" className="ml-auto text-xs">Con solicitud</Badge>
+                )}
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Elección de modo: solo aparece si el empleado puede teletrabajar. */}
       <Dialog open={eligiendoModo} onOpenChange={(open) => { if (!open) setEligiendoModo(false); }}>

@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CalendarDays, Palmtree, PartyPopper, HeartPulse, FileCheck } from "lucide-react";
 import { CalendarioLaboral } from "@/features/rrhh/components/calendarios/CalendarioLaboral";
 import { CalendarioAusencias } from "@/features/rrhh/components/calendarios/CalendarioAusencias";
+import { CalendariosVacacionesPanel } from "@/features/rrhh/components/calendarios/CalendariosVacacionesPanel";
 
 export function CalendariosRRHHView() {
   const { empresaActual } = useEmpresa();
@@ -61,15 +62,25 @@ export function CalendariosRRHHView() {
           <CalendarioLaboral empresaId={empresaActual.id} />
         </TabsContent>
 
-        <TabsContent value="vacaciones">
-          <CalendarioAusencias
-            empresaId={empresaActual.id}
-            modalidad="vacaciones"
-            titulo="Vacaciones"
-            items={vacaciones}
-            botonNuevo="Registrar vacaciones"
-            columnaExtra={{ header: "Días", render: item => <span className="font-semibold">{item.detalle}</span> }}
-          />
+        <TabsContent value="vacaciones" className="space-y-8">
+          <CalendariosVacacionesPanel empresaId={empresaActual.id} />
+
+          <div className="space-y-3 border-t pt-6">
+            <div>
+              <h3 className="text-sm font-semibold">Vacaciones solicitadas</h3>
+              <p className="text-sm text-muted-foreground">
+                Vacaciones registradas de los empleados.
+              </p>
+            </div>
+            <CalendarioAusencias
+              empresaId={empresaActual.id}
+              modalidad="vacaciones"
+              titulo="Vacaciones"
+              items={vacaciones}
+              botonNuevo="Registrar vacaciones"
+              columnaExtra={{ header: "Días", render: item => <span className="font-semibold">{item.detalle}</span> }}
+            />
+          </div>
         </TabsContent>
 
         <TabsContent value="festivos">

@@ -38,6 +38,14 @@ export interface MiFichajeHoy {
   modoTeletrabajo: boolean;
   /** Nombre del local donde fichó (presencial). En teletrabajo no aplica. */
   local: string | null;
+  /** Jornada flexible hoy: objetivo de horas con autocierre y bloqueo. */
+  flexible: boolean;
+  /** Ámbito del objetivo flexible: 'diario' o 'semanal'. */
+  flexModo: "diario" | "semanal" | null;
+  /** Objetivo de horas del periodo (día o semana) si la jornada es flexible. */
+  flexObjetivoHoras: number | null;
+  /** Horas que aún puede acumular este fichaje antes del autocierre. */
+  flexRestanteHoras: number | null;
 }
 
 export interface DiaCalendario {

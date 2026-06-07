@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -14,9 +14,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { Loader2, ChevronLeft, AlertTriangle } from "lucide-react";
+import { Loader2, ChevronLeft, AlertTriangle, Palmtree, CalendarOff } from "lucide-react";
 import { toast } from "sonner";
-import { crearSolicitudPersonal } from "@/features/mi-panel/actions/mi-panel-actions";
+import {
+  crearSolicitudPersonal,
+  getMiVacacionesInfo,
+  type MiVacacionesInfo,
+} from "@/features/mi-panel/actions/mi-panel-actions";
+import { bloqueoSolapaRango } from "@/features/rrhh/data/calendarios-vacaciones";
 import type {
   SolicitudSubtipo,
   SolicitudSubtipoAusencia,
@@ -58,6 +63,12 @@ function formatFechaEs(iso: string): string {
   return `${d}/${m}/${y}`;
 }
 
+// Para bloqueos recurrentes (calendario predeterminado) solo importan día y mes.
+function fechaBloqueoLabel(iso: string, recurrente: boolean): string {
+  const [y, m, d] = iso.split("-");
+  return recurrente ? `${d}/${m}` : `${d}/${m}/${y}`;
+}
+
 export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModalProps) {
   const [paso, setPaso] = useState<Paso>("tipo");
   const [tipo, setTipo] = useState<SolicitudTipo | null>(null);
@@ -70,6 +81,25 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
 
   const [avisoOpen, setAvisoOpen] = useState(false);
   const [enviando, setEnviando] = useState(false);
+
+  // Info de vacaciones del empleado (saldo + periodos bloqueados). Se carga al
+  // entrar en el detalle de una solicitud de vacaciones.
+  const [vacInfo, setVacInfo] = useState<MiVacacionesInfo | null>(null);
+  const [vacCargando, setVacCargando] = useState(false);
+
+  useEffect(() => {
+    if (paso !== "detalle" || subtipo !== "vacaciones") return;
+    let activo = true;
+    setVacCargando(true);
+    getMiVacacionesInfo().then((res) => {
+      if (!activo) return;
+      setVacInfo(res.ok ? res.data : null);
+      setVacCargando(false);
+    });
+    return () => {
+      activo = false;
+    };
+  }, [paso, subtipo]);
 
   // Guarda contra el "ghost click" táctil de iOS: al cambiar de paso el
   // contenido se re-renderiza y el click sintético que el navegador dispara
@@ -96,6 +126,8 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
     setAvisoOpen(false);
     setEnviando(false);
     setNavLock(false);
+    setVacInfo(null);
+    setVacCargando(false);
     if (navLockTimer.current) clearTimeout(navLockTimer.current);
   }
 
@@ -196,6 +228,27 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
     { value: "horas_extras", label: "Horas extras", desc: "Horas trabajadas fuera de tu jornada habitual" },
     { value: "dia_trabajado", label: "Día trabajado", desc: "Día de trabajo no fichado (excepcional)" },
   ];
+
+  // Bloqueo de envío en cliente para vacaciones: sin calendario, fechas en un
+  // periodo bloqueado, o más días de los que quedan. El servidor revalida igual.
+  const vacEnvioBloqueado = (() => {
+    if (subtipo !== "vacaciones" || !vacInfo) return false;
+    if (!vacInfo.tieneCalendario) return true;
+    const inicio = fechaInicio;
+    if (!inicio) return false;
+    const fin = fechaFin || fechaInicio;
+    const diasSel =
+      fin >= inicio
+        ? Math.floor(
+            (Date.parse(fin + "T00:00:00Z") - Date.parse(inicio + "T00:00:00Z")) / 86400000,
+          ) + 1
+        : 0;
+    const choque = vacInfo.bloqueos.some((b) =>
+      bloqueoSolapaRango(b, inicio, fin, vacInfo.esPredeterminado),
+    );
+    const excede = diasSel > 0 && diasSel > vacInfo.diasRestantes;
+    return choque || excede;
+  })();
 
   return (
     <>
@@ -410,6 +463,105 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
                 )}
               </div>
 
+              {subtipo === "vacaciones" && (() => {
+                if (vacCargando) {
+                  return (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Comprobando tus días de vacaciones…
+                    </p>
+                  );
+                }
+                if (!vacInfo) return null;
+                if (!vacInfo.tieneCalendario) {
+                  return (
+                    <div className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900">
+                      <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                      <p className="text-xs leading-relaxed">
+                        Todavía no tienes un calendario de vacaciones asignado, así que
+                        no puedes solicitar vacaciones. Habla con RRHH para que te asignen
+                        uno.
+                      </p>
+                    </div>
+                  );
+                }
+                const inicio = fechaInicio;
+                const fin = fechaFin || fechaInicio;
+                const diasSel =
+                  inicio && fin >= inicio
+                    ? Math.floor(
+                        (new Date(fin + "T00:00:00Z").getTime() -
+                          new Date(inicio + "T00:00:00Z").getTime()) /
+                          86400000,
+                      ) + 1
+                    : 0;
+                const choque = inicio
+                  ? vacInfo.bloqueos.find((b) =>
+                      bloqueoSolapaRango(b, inicio, fin, vacInfo.esPredeterminado),
+                    )
+                  : undefined;
+                const excede = diasSel > 0 && diasSel > vacInfo.diasRestantes;
+                return (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-3 gap-2 rounded-lg border bg-muted/30 p-3 text-center">
+                      <div>
+                        <p className="text-base font-semibold">{vacInfo.diasTotales}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {vacInfo.esPredeterminado ? "Totales / año" : `Totales ${vacInfo.anio}`}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-base font-semibold text-amber-600">{vacInfo.diasGastados}</p>
+                        <p className="text-[11px] text-muted-foreground">Gastados</p>
+                      </div>
+                      <div>
+                        <p className="text-base font-semibold text-emerald-600">{vacInfo.diasRestantes}</p>
+                        <p className="text-[11px] text-muted-foreground">Restantes</p>
+                      </div>
+                    </div>
+
+                    {diasSel > 0 && !choque && !excede && (
+                      <p className="text-xs font-medium text-emerald-700 flex items-center gap-1.5">
+                        <Palmtree className="h-3.5 w-3.5" />
+                        Pides {diasSel} día{diasSel === 1 ? "" : "s"}. Te quedarían{" "}
+                        {Math.max(0, vacInfo.diasRestantes - diasSel)}.
+                      </p>
+                    )}
+                    {excede && (
+                      <p className="text-xs font-medium text-rose-600 flex items-center gap-1.5">
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                        Pides {diasSel} día{diasSel === 1 ? "" : "s"} pero solo te quedan{" "}
+                        {vacInfo.diasRestantes}.
+                      </p>
+                    )}
+                    {choque && (
+                      <p className="text-xs font-medium text-rose-600 flex items-center gap-1.5">
+                        <CalendarOff className="h-3.5 w-3.5" />
+                        Esas fechas están bloqueadas
+                        {choque.motivo ? ` (${choque.motivo})` : ""}: del{" "}
+                        {fechaBloqueoLabel(choque.fechaInicio, vacInfo.esPredeterminado)} al{" "}
+                        {fechaBloqueoLabel(choque.fechaFin, vacInfo.esPredeterminado)}
+                        {vacInfo.esPredeterminado ? " (cada año)" : ""}.
+                      </p>
+                    )}
+                    {vacInfo.bloqueos.length > 0 && !choque && (
+                      <p className="text-[11px] text-muted-foreground">
+                        Periodos bloqueados{vacInfo.esPredeterminado ? " (cada año)" : ""}:{" "}
+                        {vacInfo.bloqueos
+                          .map(
+                            (b) =>
+                              fechaBloqueoLabel(b.fechaInicio, vacInfo.esPredeterminado) +
+                              (b.fechaFin !== b.fechaInicio
+                                ? `–${fechaBloqueoLabel(b.fechaFin, vacInfo.esPredeterminado)}`
+                                : ""),
+                          )
+                          .join(", ")}
+                        .
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+
               <div className="space-y-1.5">
                 <Label htmlFor="motivo">Motivo o detalles</Label>
                 <Textarea
@@ -436,7 +588,7 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
             {paso === "detalle" && (
               <Button
                 onClick={enviar}
-                disabled={enviando}
+                disabled={enviando || vacEnvioBloqueado}
                 className="active:bg-blue-600"
               >
                 {enviando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
