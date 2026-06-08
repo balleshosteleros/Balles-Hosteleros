@@ -99,9 +99,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const profile = auth?.profile;
   const roles = auth?.roles ?? [];
   const signOut = auth?.signOut ?? (() => {});
-  const permisosLoaded = auth?.permisosLoaded ?? false;
-  const puedeVer = auth?.puedeVer ?? (() => false);
-  const hasRole = auth?.hasRole ?? (() => false);
 
   const devBypass = process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true";
   const [isDemoHost, setIsDemoHost] = useState(false);
@@ -159,7 +156,17 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       .catch((e) => console.error("[layout] accesos:", e));
     return () => { alive = false; };
   }, [empresaActual.id]);
-  const accesosApps = accesosAppsRaw.filter((a) => a.estado === "Activo");
+  // Visibilidad por rol: dirección/admin ven todo; el resto solo las apps cuyo
+  // rol_label esté en roles_autorizados. Apps sin roles = solo dirección.
+  const esDirectorGlobal = roles.includes("director") || roles.includes("admin");
+  const userRolLabel = (profile?.rol_label ?? "").trim().toLowerCase();
+  const accesosApps = accesosAppsRaw
+    .filter((a) => a.estado === "Activo")
+    .filter((a) => {
+      if (esDirectorGlobal) return true;
+      if (!a.rolesAutorizados || a.rolesAutorizados.length === 0) return false;
+      return a.rolesAutorizados.some((r) => r.trim().toLowerCase() === userRolLabel);
+    });
   const appsCategories = Array.from(new Set(accesosApps.map((a) => a.categoria)));
   const { mode: viewMode, setMode: setViewMode } = useViewMode();
 
@@ -294,7 +301,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     {/* Separador visual */}
                     <span className="w-px h-5 bg-border mx-0.5" />
 
-                    {/* Accesos a apps externas */}
+                    {/* Accesos a apps externas — solo si el rol tiene HERR_APLICACIONES */}
+                    {puedeVer("HERR_APLICACIONES") && (
                     <DropdownMenu open={appsMenuOpen} onOpenChange={setAppsMenuOpen}>
                       <DropdownMenuTrigger asChild>
                         <Button
@@ -323,9 +331,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                             {accesosApps
                               .filter((a) => a.categoria === cat)
                               .map((app) => {
-                                const pwdVisible = !!visiblePasswords[app.id];
-                                const tieneUsuario = !!app.usuario;
-                                const tieneContrasena = !!app.contrasena;
+                                const accesos = app.accesos?.length
+                                  ? app.accesos
+                                  : app.usuario || app.contrasena
+                                    ? [{ etiqueta: "", usuario: app.usuario, contrasena: app.contrasena }]
+                                    : [];
                                 return (
                                   <div
                                     key={app.id}
@@ -365,108 +375,106 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                                       <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
                                     </button>
 
-                                    <div className="mt-1.5 ml-6 space-y-1">
-                                      <div className="flex items-center gap-1.5 text-[11px]">
-                                        <span className="text-muted-foreground w-16 shrink-0">
-                                          Usuario
-                                        </span>
-                                        {tieneUsuario ? (
-                                          <>
-                                            <span className="font-mono flex-1 truncate text-foreground/80 select-all">
-                                              {app.usuario}
-                                            </span>
-                                            <button
-                                              type="button"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                copyToClipboard(app.usuario, `${app.id}:user`);
-                                              }}
-                                              className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
-                                              title="Copiar usuario"
-                                              aria-label="Copiar usuario"
-                                            >
-                                              {copiedField === `${app.id}:user` ? (
-                                                <Check className="h-3 w-3 text-emerald-600" />
-                                              ) : (
-                                                <Copy className="h-3 w-3" />
-                                              )}
-                                            </button>
-                                          </>
-                                        ) : (
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setAppsMenuOpen(false);
-                                              router.push("/accesos");
-                                            }}
-                                            className="flex-1 text-left italic text-muted-foreground/70 hover:text-primary hover:underline truncate"
-                                            title="Configurar credenciales en Accesos"
-                                          >
-                                            sin definir — añadir
-                                          </button>
-                                        )}
-                                      </div>
-                                      <div className="flex items-center gap-1.5 text-[11px]">
-                                        <span className="text-muted-foreground w-16 shrink-0">
-                                          Contraseña
-                                        </span>
-                                        {tieneContrasena ? (
-                                          <>
-                                            <span className="font-mono flex-1 truncate text-foreground/80 select-all">
-                                              {pwdVisible ? app.contrasena : maskPassword(app.contrasena)}
-                                            </span>
-                                            <button
-                                              type="button"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                setVisiblePasswords((prev) => ({
-                                                  ...prev,
-                                                  [app.id]: !prev[app.id],
-                                                }));
-                                              }}
-                                              className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
-                                              title={pwdVisible ? "Ocultar contraseña" : "Mostrar contraseña"}
-                                              aria-label={pwdVisible ? "Ocultar contraseña" : "Mostrar contraseña"}
-                                            >
-                                              {pwdVisible ? (
-                                                <EyeOff className="h-3 w-3" />
-                                              ) : (
-                                                <Eye className="h-3 w-3" />
-                                              )}
-                                            </button>
-                                            <button
-                                              type="button"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                copyToClipboard(app.contrasena, `${app.id}:pwd`);
-                                              }}
-                                              className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
-                                              title="Copiar contraseña"
-                                              aria-label="Copiar contraseña"
-                                            >
-                                              {copiedField === `${app.id}:pwd` ? (
-                                                <Check className="h-3 w-3 text-emerald-600" />
-                                              ) : (
-                                                <Copy className="h-3 w-3" />
-                                              )}
-                                            </button>
-                                          </>
-                                        ) : (
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setAppsMenuOpen(false);
-                                              router.push("/accesos");
-                                            }}
-                                            className="flex-1 text-left italic text-muted-foreground/70 hover:text-primary hover:underline truncate"
-                                            title="Configurar credenciales en Accesos"
-                                          >
-                                            sin definir — añadir
-                                          </button>
-                                        )}
-                                      </div>
+                                    <div className="mt-1.5 ml-6 space-y-2">
+                                      {accesos.length === 0 ? (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setAppsMenuOpen(false);
+                                            router.push("/accesos");
+                                          }}
+                                          className="text-left text-[11px] italic text-muted-foreground/70 hover:text-primary hover:underline"
+                                          title="Configurar credenciales en Accesos"
+                                        >
+                                          sin definir — añadir
+                                        </button>
+                                      ) : (
+                                        accesos.map((acc, idx) => {
+                                          const pwdKey = `${app.id}:${idx}`;
+                                          const pwdVisible = !!visiblePasswords[pwdKey];
+                                          return (
+                                            <div key={idx} className="space-y-1">
+                                              {acc.etiqueta ? (
+                                                <p className="text-[10px] font-semibold text-muted-foreground/90">
+                                                  {acc.etiqueta}
+                                                </p>
+                                              ) : null}
+                                              {acc.usuario ? (
+                                                <div className="flex items-center gap-1.5 text-[11px]">
+                                                  <span className="text-muted-foreground w-16 shrink-0">
+                                                    Usuario
+                                                  </span>
+                                                  <span className="font-mono flex-1 truncate text-foreground/80 select-all">
+                                                    {acc.usuario}
+                                                  </span>
+                                                  <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      copyToClipboard(acc.usuario, `${pwdKey}:user`);
+                                                    }}
+                                                    className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                                                    title="Copiar usuario"
+                                                    aria-label="Copiar usuario"
+                                                  >
+                                                    {copiedField === `${pwdKey}:user` ? (
+                                                      <Check className="h-3 w-3 text-emerald-600" />
+                                                    ) : (
+                                                      <Copy className="h-3 w-3" />
+                                                    )}
+                                                  </button>
+                                                </div>
+                                              ) : null}
+                                              {acc.contrasena ? (
+                                                <div className="flex items-center gap-1.5 text-[11px]">
+                                                  <span className="text-muted-foreground w-16 shrink-0">
+                                                    Contraseña
+                                                  </span>
+                                                  <span className="font-mono flex-1 truncate text-foreground/80 select-all">
+                                                    {pwdVisible ? acc.contrasena : maskPassword(acc.contrasena)}
+                                                  </span>
+                                                  <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      setVisiblePasswords((prev) => ({
+                                                        ...prev,
+                                                        [pwdKey]: !prev[pwdKey],
+                                                      }));
+                                                    }}
+                                                    className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                                                    title={pwdVisible ? "Ocultar contraseña" : "Mostrar contraseña"}
+                                                    aria-label={pwdVisible ? "Ocultar contraseña" : "Mostrar contraseña"}
+                                                  >
+                                                    {pwdVisible ? (
+                                                      <EyeOff className="h-3 w-3" />
+                                                    ) : (
+                                                      <Eye className="h-3 w-3" />
+                                                    )}
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      copyToClipboard(acc.contrasena, `${pwdKey}:pwd`);
+                                                    }}
+                                                    className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                                                    title="Copiar contraseña"
+                                                    aria-label="Copiar contraseña"
+                                                  >
+                                                    {copiedField === `${pwdKey}:pwd` ? (
+                                                      <Check className="h-3 w-3 text-emerald-600" />
+                                                    ) : (
+                                                      <Copy className="h-3 w-3" />
+                                                    )}
+                                                  </button>
+                                                </div>
+                                              ) : null}
+                                            </div>
+                                          );
+                                        })
+                                      )}
                                     </div>
                                   </div>
                                 );
@@ -482,6 +490,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
+                    )}
                   </div>
 
                   {/* Bloque final: empresa + nombre + ajustes + avatar — todo en un pill */}

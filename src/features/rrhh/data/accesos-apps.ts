@@ -6,6 +6,16 @@ export type EstadoApp = "Activo" | "Inactivo" | "Archivado";
 export type NivelPermiso = "ver_enlace" | "ver_usuario" | "ver_credenciales" | "editar";
 export type TipoIntegracion = "enlace" | "embebido" | "sso" | "oauth";
 
+/** Un acceso = una pareja usuario/contraseña con etiqueta opcional (ej: "Gerencia"). */
+export interface AccesoCredencial {
+  etiqueta: string;
+  usuario: string;
+  contrasena: string;
+}
+
+/** Máximo de accesos (usuario/contraseña) por app. No se muestra en UI; se aplica en silencio. */
+export const MAX_ACCESOS_POR_APP = 10;
+
 export interface AccesoApp {
   id: string;
   nombre: string;
@@ -16,6 +26,9 @@ export interface AccesoApp {
   categoria: string;
   departamentos: string[];
   rolesAutorizados: string[];
+  /** Varias parejas usuario/contraseña (máx. MAX_ACCESOS_POR_APP). */
+  accesos: AccesoCredencial[];
+  /** Legacy — se mantiene sincronizado con accesos[0] para compatibilidad. */
   usuario: string;
   contrasena: string;
   estado: EstadoApp;
@@ -26,26 +39,29 @@ export interface AccesoApp {
   ultimaActualizacion: string;
 }
 
+/**
+ * Catálogo fijo de categorías que da el software por defecto. NO editable:
+ * 6 categorías genéricas que engloban cualquier tipo de app, presente o futura.
+ */
 export const CATEGORIAS_APP = [
-  "Sistemas de gestión",
   "Banca y finanzas",
-  "Redes sociales",
-  "Presencia digital",
-  "Fichaje y control horario",
-  "Nóminas y RRHH",
-  "Contabilidad y finanzas",
-  "Marketing y redes",
-  "Diseño y contenido",
-  "Comunicación",
-  "Almacenamiento y docs",
-  "Gestión y ERP",
-  "Logística y proveedores",
-  "Legal y compliance",
-  "Hosting y web",
-  "Marketplace y servicios",
-  "IA y productividad",
+  "Redes sociales y marketing",
+  "Web y presencia digital",
+  "Gestión y operaciones",
+  "Comunicación y correo",
   "Otros",
 ];
+
+/** Devuelve la URL del favicon del dominio de una URL (icono automático de la app). */
+export function faviconDesdeUrl(url: string): string {
+  try {
+    const host = new URL(url.startsWith("http") ? url : `https://${url}`).hostname;
+    if (!host) return "";
+    return `https://www.google.com/s2/favicons?domain=${host}&sz=64`;
+  } catch {
+    return "";
+  }
+}
 
 export const DEPARTAMENTOS = [
   "Dirección",

@@ -2,7 +2,11 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { AccesoApp } from "@/features/rrhh/data/accesos-apps";
+import {
+  type AccesoApp,
+  type AccesoCredencial,
+  MAX_ACCESOS_POR_APP,
+} from "@/features/rrhh/data/accesos-apps";
 
 type Row = {
   id: string;
@@ -16,6 +20,7 @@ type Row = {
   categoria: string;
   departamentos: string[];
   roles_autorizados: string[];
+  accesos: AccesoCredencial[] | null;
   usuario: string;
   contrasena: string;
   estado: AccesoApp["estado"];
@@ -25,7 +30,24 @@ type Row = {
   updated_at: string;
 };
 
+/** Normaliza la lista de accesos: filtra vacíos y aplica el tope de 10. */
+function normalizarAccesos(accesos?: AccesoCredencial[] | null): AccesoCredencial[] {
+  const list = (accesos ?? [])
+    .map((a) => ({
+      etiqueta: (a.etiqueta ?? "").trim(),
+      usuario: (a.usuario ?? "").trim(),
+      contrasena: a.contrasena ?? "",
+    }))
+    .filter((a) => a.etiqueta || a.usuario || a.contrasena);
+  return list.slice(0, MAX_ACCESOS_POR_APP);
+}
+
 function rowToApp(r: Row): AccesoApp {
+  const accesos = normalizarAccesos(r.accesos);
+  // Compat: si no hay array pero sí columnas legacy, materializa un acceso.
+  if (accesos.length === 0 && (r.usuario || r.contrasena)) {
+    accesos.push({ etiqueta: "", usuario: r.usuario, contrasena: r.contrasena });
+  }
   return {
     id: r.id,
     empresaId: r.empresa_slug,
@@ -37,8 +59,9 @@ function rowToApp(r: Row): AccesoApp {
     categoria: r.categoria,
     departamentos: r.departamentos ?? [],
     rolesAutorizados: r.roles_autorizados ?? [],
-    usuario: r.usuario,
-    contrasena: r.contrasena,
+    accesos,
+    usuario: accesos[0]?.usuario ?? r.usuario ?? "",
+    contrasena: accesos[0]?.contrasena ?? r.contrasena ?? "",
     estado: r.estado,
     responsable: r.responsable,
     notas: r.notas,
@@ -48,6 +71,7 @@ function rowToApp(r: Row): AccesoApp {
 }
 
 function appToRow(a: Partial<AccesoApp> & { id: string; empresaId: string }) {
+  const accesos = normalizarAccesos(a.accesos);
   return {
     id: a.id,
     empresa_slug: a.empresaId,
@@ -56,11 +80,13 @@ function appToRow(a: Partial<AccesoApp> & { id: string; empresaId: string }) {
     url: a.url ?? "",
     icono: a.icono ?? "🔗",
     logo_url: a.logoUrl ?? null,
-    categoria: a.categoria ?? "Sistemas de gestión",
+    categoria: a.categoria ?? "Otros",
     departamentos: a.departamentos ?? [],
     roles_autorizados: a.rolesAutorizados ?? [],
-    usuario: a.usuario ?? "",
-    contrasena: a.contrasena ?? "",
+    accesos,
+    // Legacy sincronizado con el primer acceso (compatibilidad).
+    usuario: accesos[0]?.usuario ?? a.usuario ?? "",
+    contrasena: accesos[0]?.contrasena ?? a.contrasena ?? "",
     estado: a.estado ?? "Activo",
     responsable: a.responsable ?? "",
     notas: a.notas ?? "",
@@ -95,7 +121,7 @@ async function userTieneRolAdminODirector(userId: string): Promise<boolean> {
   // Roles son globales (no por empresa) — leer con service role es seguro.
   const admin = createAdminClient();
   const { data } = await admin
-    .from("user_roles")
+    .from("usuario_roles")
     .select("role")
     .eq("user_id", userId);
   const roles = (data ?? []).map((r) => r.role as string);

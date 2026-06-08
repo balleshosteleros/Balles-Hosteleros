@@ -88,10 +88,6 @@ function ListView({
     () => [...new Set(puestos.map((p) => p.departamento))].sort(),
     [puestos],
   );
-  const jornadas = useMemo(
-    () => [...new Set(puestos.map((p) => p.jornadaContrato))].sort(),
-    [puestos],
-  );
 
   const acceso = (p: PuestoSalarial, campo: string): unknown => {
     if (campo === "departamento") return p.departamento;

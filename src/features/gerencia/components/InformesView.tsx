@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import {
-  Plus, FileText, Download, Trash2, BarChart3, List, TrendingUp,
+  FileText, Download, Trash2, BarChart3, List, TrendingUp,
   ArrowUpFromLine, ArrowDownToLine,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
