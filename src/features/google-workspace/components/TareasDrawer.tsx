@@ -28,6 +28,7 @@ import {
   syncTareasCronogramaRange,
   getRolesCronograma,
   getDepartamentosVisibles,
+  usuarioTienePuestos,
   listCronogramasPorRol,
   getPorNecesidadHechas,
   togglePorNecesidadHecha,
@@ -308,6 +309,9 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
   const [availableRoles, setAvailableRoles] = useState<string[]>([]);
   const [moduloPropio, setModuloPropio] = useState<string | null>(null);
   const [modulosVisibles, setModulosVisibles] = useState<string[] | null>(null);
+  // Modelo nuevo: si el empleado tiene puestos, sus tareas YA son las de sus
+  // puestos → no se filtran por módulo del rol (ve todas las de sus puestos).
+  const [tienePuestos, setTienePuestos] = useState(false);
   const [selectedRol, setSelectedRol] = useState<string>("default");
   const [infoTareas, setInfoTareas] = useState<InfoTarea[]>([]);
   const [validacion, setValidacion] = useState<TareasValidacion>({ activo: false, ausencia: 0, trabajo: 0 });
@@ -330,14 +334,15 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
   // 1. Efecto para Cargar Roles + permisos del usuario (al abrir)
   useEffect(() => {
     if (!open) return;
-    Promise.all([getRolesCronograma(), getDepartamentosVisibles()]).then(
-      ([resRoles, resDept]) => {
+    Promise.all([getRolesCronograma(), getDepartamentosVisibles(), usuarioTienePuestos()]).then(
+      ([resRoles, resDept, resPuestos]) => {
         if (resRoles.ok) setAvailableRoles(resRoles.data);
         else toast.error("Error al cargar roles: " + resRoles.error);
         if (resDept.ok) {
           setModuloPropio(resDept.data.moduloPropio);
           setModulosVisibles(resDept.data.modulosVisibles);
         }
+        setTienePuestos(resPuestos === true);
       },
     );
   }, [open]);
@@ -536,6 +541,7 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
       // usuario tiene en su rol. Encargos y personales (no-sistema) siempre.
       return list.filter((t) => {
         if (t.tipo !== "sistema") return true;
+        if (tienePuestos) return true; // modelo nuevo: todas las tareas de sus puestos
         if (modulosVisiblesNorm.size === 0) return false; // aún cargando permisos
         return puedeVerRol(refRol(t));
       });

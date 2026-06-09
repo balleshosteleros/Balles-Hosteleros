@@ -28,11 +28,12 @@ import {
 } from "@/components/ui/dialog";
 import {
   listDepartamentos,
-  updateEmpleado,
   updateEmpleadoEmpresasAcceso,
   setEmpleadoEstado,
   type EstadoEmpleado,
 } from "@/features/rrhh/actions/empleados-actions";
+import { listPuestosCatalogo } from "@/features/rrhh/actions/vacantes-actions";
+import { getPuestosDeEmpleado, setPuestosDeEmpleado } from "@/features/rrhh/actions/empleado-puestos-actions";
 import {
   getDependientesValidador,
   reasignarValidadorYDesactivar,
@@ -81,8 +82,13 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
   const [localesSeleccionados, setLocalesSeleccionados] = useState<string[]>([]);
   const [empresasDisponibles, setEmpresasDisponibles] = useState<EmpresaAccesible[]>([]);
   const [empresasMarcadas, setEmpresasMarcadas] = useState<string[]>(initial.empresasAcceso);
-  const [departamentoId, setDepartamentoId] = useState(initial.departamentoId ?? "__none__");
-  const [puesto, setPuesto] = useState(initial.puesto ?? "");
+  // Un empleado puede ocupar VARIOS puestos del catálogo; uno es el principal
+  // (de él cuelga el departamento + puesto-texto legacy). El departamento ya no
+  // se edita a mano: se hereda de los puestos.
+  const [puestosCatalogo, setPuestosCatalogo] = useState<Array<{ id: string; nombre: string; departamento_id: string | null }>>([]);
+  const [puestosSel, setPuestosSel] = useState<string[]>([]);
+  const [principalPuestoId, setPrincipalPuestoId] = useState<string>("");
+  const [fechaInicioHorario, setFechaInicioHorario] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [permiteTeletrabajo, setPermiteTeletrabajo] = useState(Boolean(initial.permiteTeletrabajo));
   const [estado, setEstado] = useState<EstadoEmpleado>(initial.estado);
   const [fechaBaja, setFechaBaja] = useState(initial.fechaBaja ?? "");
@@ -101,6 +107,14 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
     listDepartamentos().then((res) => {
       setDepartamentos((res.data ?? []) as DepartamentoOpt[]);
     });
+    listPuestosCatalogo().then((res) => {
+      setPuestosCatalogo((res.data ?? []) as Array<{ id: string; nombre: string; departamento_id: string | null }>);
+    });
+    getPuestosDeEmpleado(empleadoId).then((rows) => {
+      setPuestosSel(rows.map((r) => r.puestoId));
+      const pr = rows.find((r) => r.esPrincipal);
+      setPrincipalPuestoId(pr?.puestoId ?? rows[0]?.puestoId ?? "");
+    });
     getEmpresasAccesibles().then((res) => {
       setEmpresasDisponibles(res.ok ? res.data : []);
     });
@@ -111,12 +125,24 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
 
   useEffect(() => {
     setEmpresasMarcadas(initial.empresasAcceso);
-    setDepartamentoId(initial.departamentoId ?? "__none__");
-    setPuesto(initial.puesto ?? "");
     setPermiteTeletrabajo(Boolean(initial.permiteTeletrabajo));
     setEstado(initial.estado);
     setFechaBaja(initial.fechaBaja ?? "");
   }, [initial]);
+
+  function togglePuesto(id: string, checked: boolean) {
+    setPuestosSel((prev) => {
+      const next = checked
+        ? (prev.includes(id) ? prev : [...prev, id])
+        : prev.filter((x) => x !== id);
+      setPrincipalPuestoId((cur) => {
+        if (checked) return cur || id;
+        if (cur === id) return next[0] ?? "";
+        return cur;
+      });
+      return next;
+    });
+  }
 
   // Carga (perezosa) de los locales de cada empresa marcada.
   useEffect(() => {
@@ -175,10 +201,11 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
     }
 
     const [resEmpleado, resLocal, resTeletrabajo, resEmpresas] = await Promise.all([
-      updateEmpleado(empleadoId, {
-        departamentoId: departamentoId === "__none__" ? null : departamentoId,
-        puesto: puesto.trim() || null,
-      }),
+      // Reconcilia los puestos (M:N): asigna la plantilla de horario de cada uno,
+      // marca el principal y propaga su departamento + puesto-texto a `empleados`.
+      setPuestosDeEmpleado(
+        empleadoId, puestosSel, principalPuestoId || puestosSel[0] || null, fechaInicioHorario,
+      ),
       setLocalesEmpleado(empleadoId, localesSeleccionados),
       setEmpleadoTeletrabajo(empleadoId, permiteTeletrabajo),
       updateEmpleadoEmpresasAcceso({ empleadoId, empresaIds: empresasMarcadas }),
@@ -294,25 +321,60 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label>Departamento</Label>
-            <Select value={departamentoId} onValueChange={setDepartamentoId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Sin asignar" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">Sin asignar</SelectItem>
-                {departamentos.map((d) => (
-                  <SelectItem key={d.id} value={d.id}>{d.nombre}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Puesto</Label>
-            <Input value={puesto} onChange={(e) => setPuesto(e.target.value)} placeholder="ej. Camarero/a" />
-          </div>
+        <div className="space-y-1.5">
+          <Label>
+            Puestos
+            <span className="text-muted-foreground/70 font-normal"> (uno o varios; marca el principal)</span>
+          </Label>
+          {puestosCatalogo.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No hay puestos — créalos en RRHH → Salarios.</p>
+          ) : (
+            <div className="grid gap-1.5 sm:grid-cols-2">
+              {puestosCatalogo.map((p) => {
+                const marcado = puestosSel.includes(p.id);
+                const esPrincipal = principalPuestoId === p.id;
+                const dep = departamentos.find((d) => d.id === p.departamento_id)?.nombre;
+                return (
+                  <div key={p.id} className="flex items-center justify-between gap-2 rounded-md border bg-card px-3 py-2">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer min-w-0">
+                      <Checkbox checked={marcado} onCheckedChange={(v) => togglePuesto(p.id, v === true)} />
+                      <span className="truncate">{p.nombre}</span>
+                      {dep && <span className="text-[11px] text-muted-foreground truncate">· {dep}</span>}
+                    </label>
+                    {marcado && (
+                      esPrincipal ? (
+                        <span className="text-[10px] font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded shrink-0">
+                          Principal
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setPrincipalPuestoId(p.id)}
+                          className="text-[10px] text-muted-foreground hover:text-foreground underline shrink-0"
+                        >
+                          Principal
+                        </button>
+                      )
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <p className="text-[11px] text-muted-foreground">
+            El departamento se hereda de cada puesto. Cada puesto aporta su propio horario y condiciones.
+          </p>
+          {puestosSel.length > 0 && (
+            <div className="flex items-center gap-2 pt-1">
+              <Label className="text-xs text-muted-foreground">Inicio del horario</Label>
+              <Input
+                type="date"
+                value={fechaInicioHorario}
+                onChange={(e) => setFechaInicioHorario(e.target.value)}
+                className="w-44 h-9"
+              />
+            </div>
+          )}
         </div>
 
         <div className="space-y-2">
