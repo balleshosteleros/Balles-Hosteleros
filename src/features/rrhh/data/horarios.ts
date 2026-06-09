@@ -30,6 +30,13 @@ export interface Turno {
   // Jornada Fijo/Flexible (esencial primero).
   tipoJornada: TipoJornada;
   dias: DiaSemana[];
+  /**
+   * Horas/día del flexible (modelo nuevo, sin días): el turno solo indica horas
+   * y el día lo pone el patrón o la asignación directa. `null` en los fijos y en
+   * flexibles legacy que aún usan `flexHoras`.
+   */
+  flexHorasDia: number | null;
+  /** Legacy: horas objetivo por día concreto (flexibles antiguos). */
   flexHoras: Partial<Record<DiaSemana, number>>;
   // Versionado (PRP-053): cada turno es una versión de una familia.
   familiaId: string;
@@ -163,6 +170,10 @@ export function formatHoras(horas: number): string {
 
 export function formatTurnoHorario(turno: Turno): string {
   if (turno.tipoJornada === "flexible") {
+    // Modelo nuevo (sin días): el turno solo indica horas/día.
+    if (turno.flexHorasDia != null) {
+      return `${formatHoras(turno.flexHorasDia)}/día`;
+    }
     return `${formatHoras(totalHorasSemana(turno))}/sem`;
   }
   return turno.tramos.map(formatTramo).join(" / ");
@@ -189,6 +200,10 @@ export function calcularDuracionTurno(turno: Turno): number {
 // de un día para no mostrar 0.
 export function totalHorasSemana(turno: Turno): number {
   if (turno.tipoJornada === "flexible") {
+    // Modelo nuevo (sin días): no hay semana, el objetivo es por día.
+    if (turno.flexHorasDia != null) {
+      return Math.round(turno.flexHorasDia * 100) / 100;
+    }
     const total = turno.dias.reduce(
       (acc, d) => acc + (turno.flexHoras[d] ?? 0),
       0,

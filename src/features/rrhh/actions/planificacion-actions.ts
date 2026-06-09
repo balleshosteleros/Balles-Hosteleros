@@ -37,7 +37,9 @@ export interface PlanTurno {
   departamento: string | null;
   /** Jornada fija (con tramos) o flexible (horas objetivo por día). */
   tipoJornada: TipoJornada;
-  /** Horas objetivo por día de la semana cuando la jornada es flexible. */
+  /** Horas/día del flexible (modelo nuevo, sin días). null = legacy o fijo. */
+  flexHorasDia: number | null;
+  /** Legacy: horas objetivo por día concreto (flexibles antiguos). */
   flexHoras: Partial<Record<DiaSemana, number>>;
 }
 
@@ -237,7 +239,7 @@ export async function getPlanificacionHorarios(
     // 2b) Catálogo de turnos (oficiales y activos).
     const { data: turnosRows } = await supabase
       .from("rrhh_turnos")
-      .select("id, codigo, nombre, tramos, dias, departamento, tipo_jornada, flex_horas")
+      .select("id, codigo, nombre, tramos, dias, departamento, tipo_jornada, flex_horas, flex_horas_dia")
       .eq("empresa_id", empresaId)
       .eq("es_oficial", true)
       .eq("activo", true);
@@ -252,6 +254,8 @@ export async function getPlanificacionHorarios(
         dias: (t.dias as DiaSemana[]) ?? [],
         departamento,
         tipoJornada: ((t.tipo_jornada as TipoJornada) ?? "fijo") as TipoJornada,
+        flexHorasDia:
+          t.flex_horas_dia == null ? null : Number(t.flex_horas_dia),
         flexHoras:
           (t.flex_horas as Partial<Record<DiaSemana, number>>) ?? {},
       };

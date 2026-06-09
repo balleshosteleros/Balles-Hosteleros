@@ -499,7 +499,10 @@ function TurnoPill({
 }) {
   const quitable = !!asignacionId && !!onQuitar;
   const esFlexible = turno.tipoJornada === "flexible";
-  const horasDia = esFlexible ? turno.flexHoras[diaLetra] ?? 0 : 0;
+  // Modelo nuevo: el flexible indica horas/día (flexHorasDia). Legacy: por día.
+  const horasDia = esFlexible
+    ? turno.flexHorasDia ?? turno.flexHoras[diaLetra] ?? 0
+    : 0;
   // Turno partido = más de un tramo el mismo día → se apilan entrada/salida.
   const tramos = turno.tramos;
   const titulo = `${turno.codigo} · ${turno.nombre}${

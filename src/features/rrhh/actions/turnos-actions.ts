@@ -38,6 +38,7 @@ function rowToTurno(r: Record<string, unknown>): Turno {
     departamento: (r.departamento as string | null) ?? undefined,
     tipoJornada: (r.tipo_jornada as TipoJornada) ?? "fijo",
     dias: (r.dias as DiaSemana[]) ?? [],
+    flexHorasDia: r.flex_horas_dia == null ? null : Number(r.flex_horas_dia),
     flexHoras: (r.flex_horas as Partial<Record<DiaSemana, number>>) ?? {},
     familiaId: (r.familia_id as string) ?? (r.id as string),
     version: (r.version as number) ?? 1,
@@ -126,6 +127,8 @@ export type TurnoInput = {
   activo?: boolean;
   tipoJornada?: TipoJornada;
   dias?: DiaSemana[];
+  /** Horas/día del flexible (modelo nuevo, sin días). */
+  flexHorasDia?: number | null;
   flexHoras?: Partial<Record<DiaSemana, number>>;
   /** Fecha de inicio de validez (YYYY-MM-DD). Por defecto hoy. */
   vigenteDesde?: string;
@@ -167,6 +170,7 @@ export async function createTurno(
       tipo_jornada: input.tipoJornada ?? "fijo",
       dias: input.dias ?? [],
       flex_horas: input.flexHoras ?? {},
+      flex_horas_dia: input.flexHorasDia ?? null,
     });
     if (error) throw error;
     revalidatePath("/rrhh/horarios");
@@ -201,6 +205,7 @@ export async function updateTurno(id: string, patch: Partial<TurnoInput>) {
     // dias y flex_horas sí: no están versionados, a diferencia de los tramos.
     if (patch.dias !== undefined) payload.dias = patch.dias;
     if (patch.flexHoras !== undefined) payload.flex_horas = patch.flexHoras;
+    if (patch.flexHorasDia !== undefined) payload.flex_horas_dia = patch.flexHorasDia;
     // Rango de validez del turno (editable mientras no esté en un patrón).
     if (patch.vigenteDesde !== undefined) payload.vigente_desde = patch.vigenteDesde;
     if (patch.vigenteHasta !== undefined) payload.vigente_hasta = patch.vigenteHasta;

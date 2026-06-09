@@ -65,6 +65,8 @@ type TurnoAplicable = {
   tramos: Tramo[];
   tipoJornada: "fijo" | "flexible";
   flexHoras: Record<string, number>;
+  /** Horas/día del flexible (modelo nuevo, sin días). null = legacy. */
+  flexHorasDia: number | null;
   flexModo: "diario" | "semanal";
   dias: string[];
 };
@@ -148,7 +150,7 @@ async function turnosAplicablesDia(
 
   const { data: turnos } = await supabase
     .from("rrhh_turnos")
-    .select("id, tramos, activo, tipo_jornada, flex_horas, flex_modo, dias")
+    .select("id, tramos, activo, tipo_jornada, flex_horas, flex_horas_dia, flex_modo, dias")
     .eq("empresa_id", empresaId)
     .eq("activo", true)
     .in("id", Array.from(todosIds));
@@ -160,6 +162,7 @@ async function turnosAplicablesDia(
       tramos?: { inicio?: string; fin?: string }[];
       tipo_jornada?: string;
       flex_horas?: Record<string, number> | null;
+      flex_horas_dia?: number | string | null;
       flex_modo?: string | null;
       dias?: string[] | null;
     };
@@ -167,12 +170,17 @@ async function turnosAplicablesDia(
     const dias = (row.dias as string[] | null) ?? [];
 
     // Aplicabilidad: explícito (planif/patrón) cuenta siempre; directo cuenta si
-    // es fijo, o si es flexible y hoy es uno de sus días marcados.
+    // es fijo, o si es flexible y hoy es uno de sus días marcados. En el modelo
+    // nuevo el flexible no tiene días (dias=[]) → aplica cualquier día asignado
+    // directamente (el día concreto se decide por patrón o planificación).
     const esExplicito = idsExplicitos.has(row.id);
     const esDirecto = idsDirectos.has(row.id);
     const aplica =
       esExplicito ||
-      (esDirecto && (tipoJornada !== "flexible" || dias.includes(letra)));
+      (esDirecto &&
+        (tipoJornada !== "flexible" ||
+          dias.length === 0 ||
+          dias.includes(letra)));
     if (!aplica) continue;
 
     const tramos: Tramo[] = [];
@@ -184,6 +192,8 @@ async function turnosAplicablesDia(
       tramos,
       tipoJornada,
       flexHoras: (row.flex_horas as Record<string, number> | null) ?? {},
+      flexHorasDia:
+        row.flex_horas_dia == null ? null : Number(row.flex_horas_dia),
       flexModo: (row.flex_modo as "diario" | "semanal") ?? "diario",
       dias,
     });
@@ -223,11 +233,16 @@ export async function getHorarioDia(
   const flex = turnos.find((t) => t.tipoJornada === "flexible");
   if (flex) {
     const letra = LETRAS_DIA[indexLunes(fechaISO)];
+    // Modelo nuevo (sin días): el objetivo es flex_horas_dia, siempre diario.
+    // Legacy: por día (diario) o suma de la semana (semanal).
     const objetivoHoras =
-      flex.flexModo === "semanal"
-        ? Object.values(flex.flexHoras).reduce((a, b) => a + (Number(b) || 0), 0)
-        : Number(flex.flexHoras[letra] ?? 0);
-    return { tipo: "flexible", modo: flex.flexModo, objetivoHoras, tramos: [] };
+      flex.flexHorasDia != null
+        ? flex.flexHorasDia
+        : flex.flexModo === "semanal"
+          ? Object.values(flex.flexHoras).reduce((a, b) => a + (Number(b) || 0), 0)
+          : Number(flex.flexHoras[letra] ?? 0);
+    const modo = flex.flexHorasDia != null ? "diario" : flex.flexModo;
+    return { tipo: "flexible", modo, objetivoHoras, tramos: [] };
   }
   return { tipo: "ninguno" };
 }
