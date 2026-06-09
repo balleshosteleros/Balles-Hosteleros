@@ -158,6 +158,7 @@ export const rrhhSubs: SubItem[] = [
   { title: "BONUS", url: "/rrhh/bonus", icon: Gift },
   { title: "POINTS", url: "/rrhh/points", icon: Trophy },
   { title: "PAGOS", url: "/rrhh/pagos", icon: HandCoins },
+  { title: "SALARIOS", url: "/rrhh/salarios", icon: Banknote },
   { title: "FORMACIÓN", url: "/rrhh/formacion", icon: GraduationCap },
   { title: "ENCUESTAS", url: "/rrhh/encuestas", icon: ClipboardList },
 ];
