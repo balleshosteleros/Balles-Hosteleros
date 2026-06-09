@@ -75,9 +75,14 @@ export function AgendaMobile() {
   const cargar = useCallback(async () => {
     try {
       setCargando(true);
-      const [c, e] = await Promise.all([listContactos(), listEtiquetas()]);
+      // Independientes: si fallan las etiquetas, los contactos igualmente se ven.
+      const c = await listContactos();
       setContactos(c);
-      setEtiquetas(e);
+      try {
+        setEtiquetas(await listEtiquetas());
+      } catch {
+        setEtiquetas([]);
+      }
     } catch {
       toast.error("Error al cargar contactos");
     } finally {

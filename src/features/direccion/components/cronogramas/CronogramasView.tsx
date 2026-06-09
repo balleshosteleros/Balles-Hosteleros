@@ -43,6 +43,7 @@ import {
 } from "../../data/cronogramaAreas";
 import { cn } from "@/lib/utils";
 import { listDepartamentos, type DepartamentoRow } from "@/features/ajustes/actions/departamentos-actions";
+import { crearCronogramaParaPuesto, listPuestosParaCronograma } from "@/features/rrhh/actions/vacantes-actions";
 import { getUserPermisos } from "@/features/auth/actions/permisos-actions";
 
 const ORDERED_FREQUENCIES: Frecuencia[] = [
@@ -525,26 +526,16 @@ export function CronogramasView() {
    * del grupo (no se pregunta), porque rol/departamento son compartidos.
    * Lo único que se replica es la tarea inicial vacía.
    */
-  const handleCreatePuesto = async (puesto: string, departamentoNombre: string) => {
-    const res = await addTareaMulti({
-      base: {
-        rol: puesto,
-        departamento: departamentoNombre,
-        tarea: "Añadir misión de " + puesto,
-        frecuencia: "OTRO",
-        tiempo_requerido: "",
-        id_visible: "1",
-        orden: 1,
-        parent_id: null,
-      },
-      empresaIds: todosDbIds,
-    });
+  const handleCreatePuesto = async (puestoId: string) => {
+    const res = await crearCronogramaParaPuesto(puestoId);
     if (!res.ok) {
-      toast.error(res.error);
+      toast.error(("error" in res ? res.error : undefined) ?? "No se pudo crear el cronograma");
       return;
     }
-    setSelectedRol(puesto);
+    toast.success(res.yaExistia ? "Ese puesto ya tenía cronograma" : "Cronograma creado");
+    if (res.rol) setSelectedRol(res.rol);
     setShowNewDialog(false);
+    refresh();
   };
 
   const handleDeleteRolCompleto = () => {
@@ -586,7 +577,6 @@ export function CronogramasView() {
         <NuevoPuestoDialog
           open={showNewDialog}
           onOpenChange={setShowNewDialog}
-          departamentos={departamentos}
           onCreate={handleCreatePuesto}
         />
         {pendingSelector && (
@@ -900,7 +890,6 @@ export function CronogramasView() {
       <NuevoPuestoDialog
         open={showNewDialog}
         onOpenChange={setShowNewDialog}
-        departamentos={departamentos}
         onCreate={handleCreatePuesto}
       />
 
@@ -1270,46 +1259,34 @@ function DetalleTareaDialog({
 function NuevoPuestoDialog({
   open,
   onOpenChange,
-  departamentos,
   onCreate,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  departamentos: DepartamentoRow[];
-  onCreate: (puesto: string, departamentoNombre: string) => Promise<void>;
+  onCreate: (puestoId: string) => Promise<void>;
 }) {
-  const [departamentoId, setDepartamentoId] = useState<string>("");
-  const [puesto, setPuesto] = useState("");
+  const [puestos, setPuestos] = useState<Array<{ id: string; nombre: string; departamento: string; tieneCronograma: boolean }>>([]);
+  const [puestoId, setPuestoId] = useState("");
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (open) {
-      setDepartamentoId("");
-      setPuesto("");
-    }
+    if (!open) return;
+    setPuestoId("");
+    setLoading(true);
+    listPuestosParaCronograma()
+      .then((r) => { if (r.ok) setPuestos(r.data); })
+      .finally(() => setLoading(false));
   }, [open]);
 
-  const departamentoSel = departamentos.find((d) => d.id === departamentoId) ?? null;
-
-  const grupos = useMemo(() => {
-    const op: DepartamentoRow[] = [];
-    const ad: DepartamentoRow[] = [];
-    for (const d of departamentos) {
-      if (d.area === "OPERATIVA") op.push(d);
-      else ad.push(d);
-    }
-    op.sort((a, b) => a.nombre.localeCompare(b.nombre));
-    ad.sort((a, b) => a.nombre.localeCompare(b.nombre));
-    return { OPERATIVA: op, ADMINISTRATIVA: ad };
-  }, [departamentos]);
-
-  const puedeCrear = !!departamentoSel && puesto.trim().length > 0 && !saving;
+  const sel = puestos.find((p) => p.id === puestoId) ?? null;
+  const puedeCrear = !!sel && !sel.tieneCronograma && !saving;
 
   const submit = async () => {
-    if (!departamentoSel || !puesto.trim()) return;
+    if (!sel) return;
     setSaving(true);
     try {
-      await onCreate(puesto.trim().toUpperCase(), departamentoSel.nombre);
+      await onCreate(sel.id);
     } finally {
       setSaving(false);
     }
@@ -1323,64 +1300,36 @@ function NuevoPuestoDialog({
         </DialogHeader>
         <div className="py-4 space-y-4">
           <div>
-            <Label>Departamento</Label>
-            <Select value={departamentoId} onValueChange={setDepartamentoId}>
+            <Label>Puesto</Label>
+            <Select value={puestoId} onValueChange={setPuestoId}>
               <SelectTrigger className="mt-2">
-                <SelectValue placeholder="Selecciona el departamento" />
+                <SelectValue placeholder={loading ? "Cargando puestos…" : "Selecciona el puesto"} />
               </SelectTrigger>
               <SelectContent>
-                {grupos.OPERATIVA.length > 0 && (
-                  <SelectGroup>
-                    <SelectLabel className={cn("text-[10px] font-semibold uppercase tracking-wider", AREA_BADGE_CLASS.OPERATIVA)}>
-                      {AREA_LABEL.OPERATIVA}
-                    </SelectLabel>
-                    {grupos.OPERATIVA.map((d) => (
-                      <SelectItem key={d.id} value={d.id}>{d.nombre}</SelectItem>
-                    ))}
-                  </SelectGroup>
-                )}
-                {grupos.OPERATIVA.length > 0 && grupos.ADMINISTRATIVA.length > 0 && <SelectSeparator />}
-                {grupos.ADMINISTRATIVA.length > 0 && (
-                  <SelectGroup>
-                    <SelectLabel className={cn("text-[10px] font-semibold uppercase tracking-wider", AREA_BADGE_CLASS.ADMINISTRATIVA)}>
-                      {AREA_LABEL.ADMINISTRATIVA}
-                    </SelectLabel>
-                    {grupos.ADMINISTRATIVA.map((d) => (
-                      <SelectItem key={d.id} value={d.id}>{d.nombre}</SelectItem>
-                    ))}
-                  </SelectGroup>
+                {puestos.length === 0 && !loading ? (
+                  <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                    No hay puestos. Créalos en RRHH → Salarios.
+                  </div>
+                ) : (
+                  puestos.map((p) => (
+                    <SelectItem key={p.id} value={p.id} disabled={p.tieneCronograma}>
+                      {p.nombre}{p.tieneCronograma ? " · ya tiene cronograma" : ""}
+                    </SelectItem>
+                  ))
                 )}
               </SelectContent>
             </Select>
 
-            {departamentoSel && (
-              <div className="mt-2">
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    "text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5",
-                    AREA_BADGE_CLASS[departamentoSel.area as AreaCronograma],
-                  )}
-                >
-                  Área · {AREA_LABEL[departamentoSel.area as AreaCronograma]}
-                </Badge>
-              </div>
+            {sel && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Departamento: <span className="font-medium text-foreground">{sel.departamento || "—"}</span> (automático)
+              </p>
             )}
           </div>
 
-          <div>
-            <Label>Nombre del puesto</Label>
-            <Input
-              value={puesto}
-              onChange={(e) => setPuesto(e.target.value.toUpperCase())}
-              className="mt-2"
-              placeholder="Ej. COCTELERO"
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && puedeCrear) submit();
-              }}
-            />
-          </div>
+          <p className="text-xs text-muted-foreground">
+            El cronograma queda ligado al puesto (uno por puesto). Los puestos se dan de alta en RRHH → Salarios.
+          </p>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>

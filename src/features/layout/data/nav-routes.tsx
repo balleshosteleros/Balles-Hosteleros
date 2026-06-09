@@ -158,7 +158,7 @@ export const rrhhSubs: SubItem[] = [
   { title: "BONUS", url: "/rrhh/bonus", icon: Gift },
   { title: "POINTS", url: "/rrhh/points", icon: Trophy },
   { title: "PAGOS", url: "/rrhh/pagos", icon: HandCoins },
-  { title: "SALARIOS", url: "/rrhh/salarios", icon: Banknote },
+  { title: "PUESTOS", url: "/rrhh/salarios", icon: Banknote },
   { title: "FORMACIÓN", url: "/rrhh/formacion", icon: GraduationCap },
   { title: "ENCUESTAS", url: "/rrhh/encuestas", icon: ClipboardList },
 ];
@@ -254,7 +254,7 @@ const EXTRA_ROUTES: Record<string, { title: string; icon?: IconType }> = {
   "/marketing/campanas/meta": { title: "CAMPAÑAS — META", icon: Send },
   "/marketing/campanas/whatsapp": { title: "CAMPAÑAS — WHATSAPP", icon: MessageSquare },
   "/rrhh/comunicados": { title: "COMUNICADOS", icon: Megaphone },
-  "/rrhh/salarios": { title: "SALARIOS", icon: Banknote },
+  "/rrhh/salarios": { title: "PUESTOS", icon: Banknote },
 };
 
 // ─── Índice unificado: url → { title, icon } ───────────────────────────────

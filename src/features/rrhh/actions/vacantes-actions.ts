@@ -221,10 +221,90 @@ export async function createPuesto(input: { nombre: string; departamento_id?: st
       .select()
       .single();
     if (error) throw error;
+
+    // Cronograma 1:1 con el puesto: se crea AL MOMENTO (idempotente).
+    await crearCronogramaParaPuesto(data.id);
+
+    revalidatePath("/rrhh/salarios");
     return { ok: true, data };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[rrhh] createPuesto:", msg);
     return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Crea (si no existe) el cronograma operativo pendiente del puesto. Idempotente:
+ * SOLO puede haber UN cronograma por puesto. Devuelve `yaExistia` si ya lo tenía.
+ */
+export async function crearCronogramaParaPuesto(puestoId: string) {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    const { data: puesto } = await supabase
+      .from("puestos")
+      .select("nombre, departamentos(nombre)")
+      .eq("id", puestoId)
+      .maybeSingle();
+    if (!puesto) return { ok: false, error: "Puesto no encontrado" };
+    const rol = (puesto.nombre as string).trim();
+
+    const { data: existe } = await supabase
+      .from("cronogramas_operativos")
+      .select("id")
+      .eq("puesto_id", puestoId)
+      .limit(1)
+      .maybeSingle();
+    if (existe?.id) return { ok: true, yaExistia: true, rol };
+
+    const deptNombre = (puesto.departamentos as { nombre?: string } | null)?.nombre ?? "";
+    const { error } = await supabase.from("cronogramas_operativos").insert({
+      empresa_id: empresaId,
+      puesto_id: puestoId,
+      rol,
+      departamento: deptNombre,
+      tarea: "Añadir misión de " + rol,
+      frecuencia: "OTRO",
+      tiempo_requerido: "",
+      id_visible: "1",
+      orden: 1,
+      parent_id: null,
+    });
+    if (error) throw error;
+
+    revalidatePath("/direccion/cronogramas");
+    return { ok: true, yaExistia: false, rol };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[rrhh] crearCronogramaParaPuesto:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/** Puestos de la empresa para el desplegable de "Nuevo cronograma". */
+export async function listPuestosParaCronograma(): Promise<{
+  ok: boolean;
+  data: Array<{ id: string; nombre: string; departamento: string; tieneCronograma: boolean }>;
+}> {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, data: [] };
+    const [puestosRes, cronosRes] = await Promise.all([
+      supabase.from("puestos").select("id, nombre, departamentos(nombre)").eq("empresa_id", empresaId).order("nombre"),
+      supabase.from("cronogramas_operativos").select("puesto_id").eq("empresa_id", empresaId).not("puesto_id", "is", null),
+    ]);
+    const conCrono = new Set((cronosRes.data ?? []).map((c) => (c as { puesto_id: string }).puesto_id));
+    const data = (puestosRes.data ?? []).map((p) => ({
+      id: p.id as string,
+      nombre: p.nombre as string,
+      departamento: ((p as { departamentos?: { nombre?: string } | null }).departamentos)?.nombre ?? "",
+      tieneCronograma: conCrono.has(p.id as string),
+    }));
+    return { ok: true, data };
+  } catch (err) {
+    console.error("[rrhh] listPuestosParaCronograma:", err);
+    return { ok: false, data: [] };
   }
 }
