@@ -98,6 +98,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const user = auth?.user;
   const profile = auth?.profile;
   const roles = auth?.roles ?? [];
+  const puedeVer = auth?.puedeVer ?? (() => false);
   const signOut = auth?.signOut ?? (() => {});
 
   const devBypass = process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true";

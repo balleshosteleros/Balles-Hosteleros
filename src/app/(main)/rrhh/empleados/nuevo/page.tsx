@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import {
   createEmpleado, listDepartamentos, guardarPerfilEmpleado,
 } from "@/features/rrhh/actions/empleados-actions";
+import { listPuestosCatalogo } from "@/features/rrhh/actions/vacantes-actions";
 import { getEmpresasAccesibles, type EmpresaAccesible } from "@/features/empresa/actions/empresas-accesibles-actions";
 import { listLocales } from "@/features/ajustes/actions/locales-actions";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
@@ -111,6 +112,8 @@ export default function NuevoEmpleadoPage() {
   const [localesSeleccionados, setLocalesSeleccionados] = useState<string[]>([]);
   const [departamentoId, setDepartamentoId] = useState<string>("");
   const [puesto, setPuesto] = useState<string>("");
+  const [puestoId, setPuestoId] = useState<string>("");
+  const [puestos, setPuestos] = useState<Array<{ id: string; nombre: string; departamento_id: string | null }>>([]);
   const [saving, setSaving] = useState(false);
   const [credenciales, setCredenciales] = useState<CredencialesAlta | null>(null);
   const [copiado, setCopiado] = useState(false);
@@ -119,6 +122,9 @@ export default function NuevoEmpleadoPage() {
   useEffect(() => {
     listDepartamentos().then((res) => {
       setDepartamentos((res.data ?? []) as Array<{ id: string; nombre: string }>);
+    });
+    listPuestosCatalogo().then((res) => {
+      setPuestos((res.data ?? []) as Array<{ id: string; nombre: string; departamento_id: string | null }>);
     });
     getEmpresasAccesibles().then((res) => {
       if (res.ok) setEmpresas(res.data);
@@ -305,28 +311,34 @@ export default function NuevoEmpleadoPage() {
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-1.5">
             <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-              Departamento <span className="text-rose-500">*</span>
+              Puesto <span className="text-rose-500">*</span>
             </Label>
-            <Select value={departamentoId} onValueChange={setDepartamentoId}>
-              <SelectTrigger><SelectValue placeholder="Seleccionar departamento" /></SelectTrigger>
+            <Select
+              value={puestoId}
+              onValueChange={(id) => {
+                setPuestoId(id);
+                const p = puestos.find((x) => x.id === id);
+                setPuesto(p?.nombre ?? "");
+                setDepartamentoId(p?.departamento_id ?? "");
+              }}
+            >
+              <SelectTrigger><SelectValue placeholder="Seleccionar puesto" /></SelectTrigger>
               <SelectContent>
-                {departamentos.length === 0
-                  ? <SelectItem value="__none__" disabled>No hay departamentos</SelectItem>
-                  : departamentos.map((d) => (
-                      <SelectItem key={d.id} value={d.id}>{d.nombre}</SelectItem>
+                {puestos.length === 0
+                  ? <SelectItem value="__none__" disabled>No hay puestos — créalos en RRHH → Salarios</SelectItem>
+                  : puestos.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>
                     ))}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-              Puesto <span className="text-rose-500">*</span>
+              Departamento <span className="text-muted-foreground/60 normal-case">(automático)</span>
             </Label>
-            <Input
-              value={puesto}
-              onChange={(e) => setPuesto(e.target.value)}
-              placeholder="ej. Camarero/a"
-            />
+            <div className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
+              {departamentos.find((d) => d.id === departamentoId)?.nombre ?? "Se rellena al elegir el puesto"}
+            </div>
           </div>
         </div>
       </div>
