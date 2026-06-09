@@ -356,9 +356,11 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
     const codigo = draft.codigo.trim().toUpperCase();
     const departamento = draft.departamento.trim();
     if (!nombre || !codigo || !departamento) return;
-    if (draft.dias.length === 0) return;
 
     const esFlexible = draft.tipoJornada === "flexible";
+    // Los turnos FIJOS no llevan días: el día lo pone el patrón (cada turno en
+    // su casilla del día). Solo el flexible necesita días para sus horas/día.
+    if (esFlexible && draft.dias.length === 0) return;
     const tramos = esFlexible
       ? []
       : draft.tramos.filter((tr) => tr.inicio && tr.fin);
@@ -387,6 +389,9 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
     );
     const empleadoIds = draft.empleadoIds.filter((id) => idsDelDepto.has(id));
 
+    // El día solo existe en el flexible; el fijo se guarda sin días.
+    const diasGuardar = esFlexible ? draft.dias : [];
+
     const vigenteDesde = draft.vigenteDesde || hoyISOTurno();
     const vigenteHasta = draft.vigenteHasta ? draft.vigenteHasta : null;
     if (vigenteHasta && vigenteHasta < vigenteDesde) {
@@ -403,7 +408,7 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
         tramos,
         color: draft.color,
         departamento,
-        dias: draft.dias,
+        dias: diasGuardar,
         flexHoras,
         vigenteDesde,
         vigenteHasta,
@@ -422,7 +427,7 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
         color: draft.color,
         departamento,
         tipoJornada: draft.tipoJornada,
-        dias: draft.dias,
+        dias: diasGuardar,
         flexHoras,
         vigenteDesde,
         vigenteHasta,
@@ -456,6 +461,11 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
 
   const esFlexible = draft.tipoJornada === "flexible";
   const totalSemana = horasSemanaDraft(draft);
+  // Duración diaria del turno fijo (suma de tramos): el fijo no tiene días, así
+  // que su métrica es las horas que dura el turno en un día (partido incluido).
+  const duracionDia =
+    draft.tramos.reduce((acc, t) => acc + minutosDeTramo(t.inicio, t.fin), 0) /
+    60;
 
   const toggleDia = (dia: DiaSemana) =>
     setDraft((d) => ({
@@ -789,7 +799,9 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
             </div>
             )}
 
-            {/* Días laborables (común a fijo y flexible). */}
+            {/* Días laborables: SOLO en flexible (define para qué días hay horas
+                objetivo). En fijo no existe el día: lo pone el patrón. */}
+            {esFlexible && (
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <CalendarClock className="h-4 w-4 text-muted-foreground" />
@@ -817,6 +829,16 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
                 })}
               </div>
             </div>
+            )}
+
+            {!esFlexible && (
+              <p className="flex items-start gap-1.5 rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                <CalendarClock className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                Este turno no tiene día propio: el día se decide en el patrón
+                (colocas el turno en cada día de la semana) y el patrón marca
+                desde qué día empieza.
+              </p>
+            )}
 
             {esFlexible ? (
               /* Jornada flexible: horas objetivo por cada día activo. */
@@ -971,13 +993,14 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
             </div>
             )}
 
-            {/* Total de horas a la semana, calculado en vivo. */}
+            {/* Total en vivo: el flexible suma horas a la semana; el fijo (sin
+                días) muestra la duración del turno en un día. */}
             <div className="flex items-center justify-between rounded-lg border bg-muted/40 px-3 py-2 text-sm">
               <span className="text-muted-foreground">
-                Total de horas a la semana
+                {esFlexible ? "Total de horas a la semana" : "Duración del turno"}
               </span>
               <span className="font-semibold tabular-nums">
-                {fmtHoras(totalSemana)}
+                {fmtHoras(esFlexible ? totalSemana : duracionDia)}
               </span>
             </div>
 
@@ -1093,9 +1116,9 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
                 !draft.nombre.trim() ||
                 !draft.codigo.trim() ||
                 !draft.departamento.trim() ||
-                draft.dias.length === 0 ||
                 (esFlexible
-                  ? !draft.dias.some((d) => (draft.flexHoras[d] ?? 0) > 0)
+                  ? draft.dias.length === 0 ||
+                    !draft.dias.some((d) => (draft.flexHoras[d] ?? 0) > 0)
                   : draft.tramos.filter((tr) => tr.inicio && tr.fin).length === 0)
               }
             >
