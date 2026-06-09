@@ -2,7 +2,7 @@
 
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
 import type { EscandalloImport } from "@/features/logistica/types/import";
-import type { EscandalloRow, NecesidadCompraRow } from "@/features/logistica/types/db";
+import type { NecesidadCompraRow } from "@/features/logistica/types/db";
 
 async function getContext() {
   const { supabase, userId, empresaId } = await getLogisticaContext();

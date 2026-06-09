@@ -18,7 +18,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  CANCELACION_HORAS_DEFAULT,
   CANCELACION_HORAS_MAX,
   CANCELACION_HORAS_MIN,
   CANCELACION_IMPORTE_DEFAULT,

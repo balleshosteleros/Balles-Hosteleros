@@ -3,8 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   Video,
-  FileText,
-  Play,
   Sparkles,
   Loader2,
   Calendar,
@@ -14,7 +12,7 @@ import {
   Search,
   ExternalLink,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,7 +25,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import {

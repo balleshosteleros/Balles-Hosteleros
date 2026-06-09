@@ -1,11 +1,10 @@
-import { useState } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Upload, Trash2, Link2 } from "lucide-react";
+import { Upload, Link2 } from "lucide-react";
 
 export function DatosEmpresaConfig() {
   const { empresaActual } = useEmpresa();

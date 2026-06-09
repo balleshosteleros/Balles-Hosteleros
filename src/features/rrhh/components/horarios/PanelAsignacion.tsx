@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { X, GripVertical, Clock, Layers } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import { TURNO_TONOS, DIAS_SEMANA } from "@/features/rrhh/data/horarios";
+import { pillStyleDepartamento, DIAS_SEMANA } from "@/features/rrhh/data/horarios";
 import type {
   PlanTurno,
   PlanPatron,
@@ -173,7 +173,6 @@ function TurnoCard({ turno }: { turno: PlanTurno }) {
     id: `turno:${turno.id}`,
     data: { kind: "turno", id: turno.id, etiqueta: turno.codigo } as DragData,
   });
-  const tono = TURNO_TONOS[turno.color];
   return (
     <div
       ref={setNodeRef}
@@ -186,10 +185,8 @@ function TurnoCard({ turno }: { turno: PlanTurno }) {
     >
       <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" />
       <span
-        className={cn(
-          "inline-flex h-6 min-w-[42px] items-center justify-center rounded-full px-2 text-[11px] font-semibold tracking-wide",
-          tono.pill,
-        )}
+        className="inline-flex h-6 min-w-[42px] items-center justify-center rounded-full px-2 text-[11px] font-semibold tracking-wide"
+        style={pillStyleDepartamento(turno.colorHex)}
       >
         {turno.codigo}
       </span>
@@ -237,15 +234,15 @@ function PatronCard({
         {DIAS_SEMANA.map((dia, i) => {
           const turnoId = patron.diasSemana1[i] ?? null;
           const turno = turnoId ? turnoById.get(turnoId) : null;
-          const tono = turno ? TURNO_TONOS[turno.color] : null;
           return (
             <div key={dia} className="text-center">
               <div className="text-[8px] text-muted-foreground">{dia}</div>
               <div
                 className={cn(
                   "mt-0.5 flex h-4 items-center justify-center rounded text-[8px] font-semibold",
-                  tono ? tono.pill : "bg-muted text-muted-foreground/40",
+                  !turno && "bg-muted text-muted-foreground/40",
                 )}
+                style={turno ? pillStyleDepartamento(turno.colorHex) : undefined}
               >
                 {turno?.codigo?.slice(0, 3) ?? "·"}
               </div>

@@ -71,6 +71,7 @@ const PLAN_VACIO: Planificacion = {
   turnos: [],
   patrones: [],
   celdas: {},
+  coloresDepartamento: {},
 };
 
 function rangoDe(periodo: Periodo, refDate: Date) {

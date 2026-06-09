@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Mail, MessageCircle, Smartphone, Eye, Send, Calendar, Link2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { SubmoduleToolbar, coincideBusquedaUniversal, type ToolbarColumna, type ToolbarColumnaVisible } from "@/shared/components/SubmoduleToolbar";
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";

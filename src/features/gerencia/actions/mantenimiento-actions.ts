@@ -14,7 +14,7 @@ async function getContext() {
 
   const { data } = await supabase
 
-    .from("profiles")
+    .from("usuarios")
 
     .select("nombre, apellidos")
 

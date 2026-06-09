@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Pencil, Mail, Eye, Copy, Search, ChevronRight, Clock,
-  Variable, CheckCircle2, XCircle, Sparkles, RefreshCw, Loader2, Trash2,
+  Variable, CheckCircle2, XCircle, Sparkles, Loader2, Trash2,
 } from "lucide-react";
 import {
   FASES_PRINCIPALES_ORDER,

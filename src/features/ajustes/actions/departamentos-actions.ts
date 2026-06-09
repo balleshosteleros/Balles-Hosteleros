@@ -31,7 +31,7 @@ async function resolveEmpresaId(empresaIdParam?: string): Promise<string> {
 
     if (empresaIdParam) {
       const { data: acceso } = await supabase
-        .from('user_empresas')
+        .from('usuario_empresas')
         .select('empresa_id')
         .eq('user_id', user.id)
         .eq('empresa_id', empresaIdParam)
@@ -39,7 +39,7 @@ async function resolveEmpresaId(empresaIdParam?: string): Promise<string> {
       if (acceso) return empresaIdParam
 
       const { data: profile } = await supabase
-        .from('profiles')
+        .from('usuarios')
         .select('empresa_id')
         .eq('user_id', user.id)
         .maybeSingle()
@@ -47,7 +47,7 @@ async function resolveEmpresaId(empresaIdParam?: string): Promise<string> {
     }
 
     const { data: profile } = await supabase
-      .from('profiles')
+      .from('usuarios')
       .select('empresa_id')
       .eq('user_id', user.id)
       .single()

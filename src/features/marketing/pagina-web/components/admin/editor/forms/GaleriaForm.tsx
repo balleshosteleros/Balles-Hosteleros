@@ -166,7 +166,7 @@ async function obtenerEmpresaId(): Promise<string | null> {
     } = await supabase.auth.getUser();
     if (!user) return null;
     const { data } = await supabase
-      .from("profiles")
+      .from("usuarios")
       .select("empresa_id")
       .eq("user_id", user.id)
       .single();

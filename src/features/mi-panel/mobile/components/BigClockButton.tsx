@@ -25,6 +25,8 @@ type Estado = "sin-fichar" | "trabajando" | "pausa" | "completado";
 interface Props {
   fichajeId: string | null;
   estado: Estado;
+  /** Se llama tras una acción de fichaje (entrada/salida/pausa) con éxito o no. */
+  onAction?: () => void;
 }
 
 const STYLES: Record<Estado, { label: string; bg: string; icon: typeof Fingerprint }> = {
@@ -63,7 +65,7 @@ async function tryGetGeo() {
   }
 }
 
-export function BigClockButton({ fichajeId, estado }: Props) {
+export function BigClockButton({ fichajeId, estado, onAction }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState(false);
@@ -134,6 +136,7 @@ export function BigClockButton({ fichajeId, estado }: Props) {
       }
     } finally {
       setBusy(false);
+      onAction?.();
       startTransition(() => router.refresh());
     }
   };
@@ -256,7 +259,7 @@ export function BigClockButton({ fichajeId, estado }: Props) {
       {/* Hoja de elección de tipo (solo si hay más de un tipo disponible hoy). */}
       {eligiendoTipo && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+          className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40"
           onClick={() => setEligiendoTipo(false)}
         >
           <div
@@ -292,7 +295,7 @@ export function BigClockButton({ fichajeId, estado }: Props) {
       {/* Hoja de elección de modo (solo si el empleado puede teletrabajar). */}
       {eligiendoModo && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+          className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40"
           onClick={() => setEligiendoModo(false)}
         >
           <div

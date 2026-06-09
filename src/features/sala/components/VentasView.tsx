@@ -265,7 +265,6 @@ export function VentasView() {
 
   useEffect(() => {
     cargar(rango.from, rango.to);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rango.from, rango.to]);
 
   const handleChange = (p: VentasPreset, from: string, to: string) => {

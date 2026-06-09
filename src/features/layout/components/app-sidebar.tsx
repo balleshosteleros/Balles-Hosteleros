@@ -57,7 +57,7 @@ function SubMenu({ items, collapsed }: { items: SubItem[]; collapsed: boolean })
 function CollapsibleSection({
   icon: Icon,
   label,
-  prefix,
+  prefix: _prefix,
   items,
   collapsed,
   linkTo,

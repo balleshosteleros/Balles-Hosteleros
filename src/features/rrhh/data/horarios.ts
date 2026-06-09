@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 export interface TurnoTramo {
   inicio: string;
   fin: string;
@@ -15,7 +17,13 @@ export interface Turno {
   nombre: string;
   codigo: string;
   tramos: TurnoTramo[];
+  /**
+   * Color legacy (paleta TurnoTono). Ya no se elige al crear el turno: el tinte
+   * real viene del departamento (`colorHex`). Se conserva por compatibilidad.
+   */
   color: TurnoTono;
+  /** Color hex del departamento del turno (fuente única del tinte). */
+  colorHex: string;
   activo: boolean;
   centro?: string;
   departamento?: string;
@@ -40,6 +48,46 @@ export const TURNO_TONOS: Record<TurnoTono, { pill: string; dot: string; label: 
   sky: { pill: "bg-sky-100 text-sky-800", dot: "bg-sky-400", label: "Cielo" },
   amber: { pill: "bg-amber-100 text-amber-800", dot: "bg-amber-400", label: "Ámbar" },
 };
+
+// ─── Color por departamento (tinte de los turnos en el cuadrante) ─────────
+// El color del departamento (hex) es ahora la fuente única del tinte de un
+// turno: todos los turnos del mismo departamento se pintan igual. Estos helpers
+// derivan estilos legibles (fondo claro + texto/realce del propio color) a
+// partir del hex, sin depender de la paleta fija TurnoTono.
+
+export const COLOR_DEPARTAMENTO_FALLBACK = "#6b7280";
+
+/** Normaliza un hex a "#rrggbb"; cae al neutro si no es válido. */
+function hexValido(hex?: string | null): string {
+  const v = (hex ?? "").trim();
+  if (/^#([0-9a-fA-F]{6})$/.test(v)) return v.toLowerCase();
+  if (/^#([0-9a-fA-F]{3})$/.test(v)) {
+    return (
+      "#" +
+      v
+        .slice(1)
+        .split("")
+        .map((c) => c + c)
+        .join("")
+    ).toLowerCase();
+  }
+  return COLOR_DEPARTAMENTO_FALLBACK;
+}
+
+/** Estilo del pill de turno: fondo tenue del color + texto del color oscuro. */
+export function pillStyleDepartamento(hex?: string | null): CSSProperties {
+  const c = hexValido(hex);
+  return {
+    backgroundColor: `${c}26`, // ~15% alpha → pastel
+    color: c,
+    boxShadow: `inset 0 0 0 1px ${c}33`,
+  };
+}
+
+/** Estilo de un punto/badge sólido del color del departamento. */
+export function dotStyleDepartamento(hex?: string | null): CSSProperties {
+  return { backgroundColor: hexValido(hex) };
+}
 
 export type DiaSemana = "L" | "M" | "X" | "J" | "V" | "S" | "D";
 
@@ -102,7 +150,7 @@ export function formatTramo(tramo: TurnoTramo): string {
   return `${tramo.inicio} - ${tramo.fin}`;
 }
 
-function formatHoras(horas: number): string {
+export function formatHoras(horas: number): string {
   if (horas <= 0) return "0h";
   // 8 → "8h"; 8.5 → "8h 30min".
   const totalMin = Math.round(horas * 60);

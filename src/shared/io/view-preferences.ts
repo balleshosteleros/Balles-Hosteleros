@@ -21,7 +21,7 @@ export interface ViewPrefs {
   columnsOrder?: string[];
 }
 
-const TABLE = "user_view_preferences";
+const TABLE = "usuario_preferencias_vista";
 
 /**
  * Lee la preferencia guardada para esta vista. Devuelve `null` si no

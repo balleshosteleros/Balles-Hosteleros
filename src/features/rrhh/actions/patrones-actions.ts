@@ -438,7 +438,7 @@ export async function createPatron(
 
     // Snapshot del nombre del usuario en este momento (no cambia si se da de baja).
     const { data: profile } = await supabase
-      .from("profiles")
+      .from("usuarios")
       .select("nombre, apellidos")
       .eq("user_id", userId)
       .single();
@@ -704,7 +704,7 @@ export async function crearVersionPatron(
     const nuevaVersion = ((maxRow?.version as number | undefined) ?? 1) + 1;
 
     const { data: profile } = await supabase
-      .from("profiles")
+      .from("usuarios")
       .select("nombre, apellidos")
       .eq("user_id", userId)
       .single();

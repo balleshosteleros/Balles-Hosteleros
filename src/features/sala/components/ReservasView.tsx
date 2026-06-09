@@ -11,17 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useSidebar } from "@/components/ui/sidebar";
-import { Plus, Search, ChevronLeft, ChevronRight, ListPlus, ListFilter, Check, ChevronDown, Map as MapIcon, List as ListIcon } from "lucide-react";
+import { Plus, Search, ChevronLeft, ChevronRight, ListPlus, ListFilter, Check, Map as MapIcon, List as ListIcon } from "lucide-react";
 // Configuración solo se carga cuando el usuario pulsa "Configuración" — fuera del bundle inicial.
 const ConfigReservasView = dynamic(
   () =>
@@ -51,7 +43,6 @@ import {
   listReservas,
   createReserva,
   updateReserva,
-  deleteReserva,
   notificarReservaCreadaPorEmail,
 } from "@/features/sala/actions/reservas-actions";
 import { listReservaEtiquetas } from "@/features/sala/actions/reserva-etiquetas-actions";
@@ -73,7 +64,6 @@ import {
   type Sala as SalaConfig,
   type LocalMin,
   type Zona as ZonaReal,
-  type Mesa as MesaConfig,
   type Plano as PlanoConfig,
   type PlanoMesaPosicion,
   type SalaDecoracion,
@@ -1094,23 +1084,6 @@ function NuevaListaEsperaForm({
   );
 }
 
-function renderZoneLabels(filtro: ZonaSala[]) {
-  const zones: { zona: ZonaSala; x: number; y: number }[] = [
-    { zona: "SALA", x: 78, y: 1 },
-    { zona: "BARRA", x: 83, y: 48 },
-    { zona: "TERRAZA_INTERIOR", x: 48, y: 1 },
-    { zona: "TERRAZA_EXTERIOR", x: 15, y: 1 },
-    { zona: "PRIVADO", x: 60, y: 68 },
-  ];
-  return zones
-    .filter(z => filtro.includes(z.zona))
-    .map(z => (
-      <div key={z.zona} className="absolute text-[11px] font-bold text-primary tracking-wide" style={{ left: `${z.x}%`, top: `${z.y}%` }}>
-        {ZONAS_LABELS[z.zona]}
-      </div>
-    ));
-}
-
 function mapDbToReserva(row: Record<string, unknown>): Reserva {
   return {
     id: row.id as string,
@@ -1841,7 +1814,7 @@ export function ReservasView() {
   const { empresaActual } = useEmpresa();
   const [mesas, setMesas] = useState<Mesa[]>(SAMPLE_MESAS);
   const [reservas, setReservas] = useState<Reserva[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [fecha, setFecha] = useState(new Date().toISOString().split("T")[0]);
   const [turno, setTurno] = useState<TurnoReserva>("CENA");
   const [busqueda, setBusqueda] = useState("");
@@ -1954,11 +1927,6 @@ export function ReservasView() {
     })();
     return () => { cancelled = true; };
   }, [empresaActual.id, localId, posicionesRefresh]);
-
-  const salaActual = useMemo(
-    () => salasLocal.find((s) => s.id === salaActualId) ?? null,
-    [salasLocal, salaActualId],
-  );
 
   // Índice de la sala activa + siguiente sala en la dirección actual.
   // Cuando estamos en un extremo, la flecha invierte su sentido para indicar el final.

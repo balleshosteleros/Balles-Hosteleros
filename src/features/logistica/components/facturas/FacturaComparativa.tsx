@@ -57,7 +57,7 @@ export function FacturaComparativa({ lineas, comparativa, onResolver, busy }: Pr
   if (!comparativa) {
     return (
       <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-        Sube la factura del proveedor y pulsa "Comparar con OCR" para ver las discrepancias.
+        Sube la factura del proveedor y pulsa «Comparar con OCR» para ver las discrepancias.
       </div>
     );
   }

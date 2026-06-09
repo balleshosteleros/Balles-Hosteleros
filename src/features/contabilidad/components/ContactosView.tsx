@@ -51,11 +51,11 @@ function mapDbToContacto(row: Record<string, unknown>): ContactoContable {
 }
 
 export function ContactosView() {
-  const { empresaActual } = useEmpresa();
+  useEmpresa();
   const [tab, setTab] = useState("TODOS");
   const [busqueda, setBusqueda] = useState("");
   const [contactos, setContactos] = useState<ContactoContable[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});

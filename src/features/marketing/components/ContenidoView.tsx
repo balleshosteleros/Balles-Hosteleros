@@ -135,7 +135,7 @@ function ContenidoModal({ open, onClose, onSave, item, tipo, empresaId }: {
 export function ContenidoView() {
   const { empresaActual } = useEmpresa();
   const [items, setItems] = useState<ContenidoItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [tab, setTab] = useState<TipoContenido>("guion");
   const [search, setSearch] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);

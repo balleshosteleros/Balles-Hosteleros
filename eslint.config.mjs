@@ -11,6 +11,12 @@ export default [
       "react-hooks/refs": "warn",
       "react-hooks/immutability": "warn",
       "react-hooks/preserve-manual-memoization": "warn",
+      // Permite patrones idiomáticos `cond && fn()` y `cond ? a() : b()` como
+      // sentencia (p.ej. toggle en un Set: `s.has(x) ? s.delete(x) : s.add(x)`).
+      "@typescript-eslint/no-unused-expressions": [
+        "warn",
+        { allowShortCircuit: true, allowTernary: true, allowTaggedTemplates: true },
+      ],
       // Variables/argumentos prefijados con "_" son intencionalmente sin usar.
       "@typescript-eslint/no-unused-vars": [
         "warn",

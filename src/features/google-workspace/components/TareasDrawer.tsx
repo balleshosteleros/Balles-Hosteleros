@@ -4,8 +4,8 @@ import { ReactNode, useState, useEffect, useCallback, useMemo, useRef } from "re
 import Link from "next/link";
 import {
   CheckSquare2, Square, Plus, Trash2, ChevronLeft, ChevronRight, Link2, Sparkles,
-  CalendarClock, Info, AlertTriangle, Users, RefreshCw, Clock, Lock,
-  ClipboardCheck, CalendarX, Briefcase,
+  CalendarClock, RefreshCw, Clock, Lock,
+  ClipboardCheck, CalendarX, Briefcase, Info, AlertTriangle,
 } from "lucide-react";
 import { PosponerTareaDialog } from "./PosponerTareaDialog";
 import {
@@ -29,6 +29,8 @@ import {
   getRolesCronograma,
   getDepartamentosVisibles,
   listCronogramasPorRol,
+  getPorNecesidadHechas,
+  togglePorNecesidadHecha,
   type TareaRow,
 } from "@/features/tareas/actions/tareas-actions";
 import {
@@ -45,7 +47,74 @@ import {
   type TareasValidacion,
 } from "@/features/mi-panel/actions/mi-panel-actions";
 
-type InfoTarea = { id: string; tarea?: string; resumen?: string };
+type InfoTarea = {
+  id: string;
+  rol?: string | null;
+  tarea?: string;
+  resumen?: string | null;
+  parent_id?: string | null;
+  frecuencia?: string | null;
+  orden?: number | null;
+};
+
+type AclaracionesMap = Record<string, InfoTarea[]>;
+
+/**
+ * Icono ℹ️ que despliega, en un pequeño globo, las aclaraciones/sub-pasos de una
+ * tarea (filas de cronograma con parent_id apuntando a esta tarea). Popover propio
+ * sin portal para no chocar con el Sheet (Radix Popover dentro de Dialog da problemas).
+ */
+function InfoPopover({ aclaraciones }: { aclaraciones?: InfoTarea[] }) {
+  const [open, setOpen] = useState(false);
+  if (!aclaraciones || aclaraciones.length === 0) return null;
+  return (
+    <span className="relative shrink-0 inline-flex">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          setOpen((o) => !o);
+        }}
+        title="Ver aclaraciones"
+        className="inline-flex items-center gap-0.5 rounded-full px-1 h-5 text-violet-500 hover:bg-violet-100 hover:text-violet-700 transition-colors"
+      >
+        <Info className="h-3.5 w-3.5" />
+        <span className="text-[9px] font-bold leading-none">{aclaraciones.length}</span>
+      </button>
+      {open && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              setOpen(false);
+            }}
+          />
+          <div className="absolute right-0 top-7 z-50 w-72 rounded-lg border border-violet-100 bg-white p-3 shadow-xl text-left">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-violet-700 mb-2">
+              Aclaraciones
+            </p>
+            <ul className="space-y-1.5">
+              {aclaraciones.map((a) => (
+                <li key={a.id} className="flex gap-1.5 text-xs text-slate-700">
+                  <span className="text-violet-400 leading-5">•</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="break-words">{a.tarea}</p>
+                    {a.resumen && (
+                      <p className="text-[11px] text-slate-400 break-words">{a.resumen}</p>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </>
+      )}
+    </span>
+  );
+}
 
 // Tipo legacy mantenido por compatibilidad con otras importaciones.
 export interface Tarea {
@@ -75,6 +144,7 @@ function TareaItem({
   deleteTarea,
   posponerTarea,
   setOpen,
+  aclaracionesMap,
 }: {
   t: TareaRow;
   compact?: boolean;
@@ -82,9 +152,11 @@ function TareaItem({
   deleteTarea: (id: string) => void;
   posponerTarea: (t: TareaRow) => void;
   setOpen: (open: boolean) => void;
+  aclaracionesMap?: AclaracionesMap;
 }) {
   const esReceta = t.tipo === "nueva_receta_fase";
   const esCronograma = t.tipo === "sistema";
+  const aclaraciones = t.ref_id ? aclaracionesMap?.[t.ref_id] : undefined;
   const esEncargo =
     !esCronograma && t.created_by != null && t.user_id != null && t.created_by !== t.user_id;
   const icon = esReceta ? <Sparkles className="h-3 w-3 text-violet-600" /> : null;
@@ -133,6 +205,7 @@ function TareaItem({
           </span>
         )}
       </span>
+      <InfoPopover aclaraciones={aclaraciones} />
       <span
         className={`${
           compact ? "text-[9px]" : "text-[10px]"
@@ -238,11 +311,21 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
   const [selectedRol, setSelectedRol] = useState<string>("default");
   const [infoTareas, setInfoTareas] = useState<InfoTarea[]>([]);
   const [validacion, setValidacion] = useState<TareasValidacion>({ activo: false, ausencia: 0, trabajo: 0 });
+  // Ids de cronograma "por necesidad" marcados como hechos en la fecha activa.
+  const [pnHechas, setPnHechas] = useState<Set<string>>(new Set());
 
   const cargar = useCallback(async () => {
     const res = await listTareasMias();
-    if (res.ok) setTareas(res.data);
+    // Las marcas diarias de "por necesidad" (ref_tabla ..._pn:) NO van en la lista
+    // normal: solo alimentan el estado de la sección roja de excepciones.
+    if (res.ok) {
+      setTareas(res.data.filter((t) => !(t.ref_tabla ?? "").startsWith("cronogramas_operativos_pn")));
+    }
   }, []);
+
+  // Fecha sobre la que operan las excepciones "por necesidad": hoy en la pestaña
+  // Hoy; el día seleccionado en Semana/Mes.
+  const fechaActivaIso = format(tab === "hoy" ? new Date() : refDate, "yyyy-MM-dd");
 
   // 1. Efecto para Cargar Roles + permisos del usuario (al abrir)
   useEffect(() => {
@@ -353,6 +436,42 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
     return () => { cancelled = true; };
   }, [open, cargar, selectedRol, rolUsuario, tab, refDate]);
 
+  // 4. Excepciones "por necesidad" marcadas como hechas en la fecha activa.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    getPorNecesidadHechas(fechaActivaIso).then((res) => {
+      if (!cancelled && res.ok) setPnHechas(new Set(res.data));
+    });
+    return () => { cancelled = true; };
+  }, [open, fechaActivaIso]);
+
+  const togglePorNecesidad = async (it: InfoTarea) => {
+    const fecha = fechaActivaIso;
+    const yaHecha = pnHechas.has(it.id);
+    // Optimista
+    setPnHechas((prev) => {
+      const next = new Set(prev);
+      if (yaHecha) next.delete(it.id); else next.add(it.id);
+      return next;
+    });
+    const res = await togglePorNecesidadHecha({
+      cronogramaId: it.id,
+      rol: (it.rol ?? selectedRol ?? "").toString(),
+      titulo: it.tarea ?? "",
+      fechaIso: fecha,
+    });
+    if (!res.ok) {
+      // Revertir
+      setPnHechas((prev) => {
+        const next = new Set(prev);
+        if (yaHecha) next.add(it.id); else next.delete(it.id);
+        return next;
+      });
+      toast.error(res.error);
+    }
+  };
+
   const addTarea = async () => {
     const titulo = newTitulo.trim();
     if (!titulo) return;
@@ -384,8 +503,8 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
     await cargar();
   };
 
-  // Normaliza acentos/mayúsculas para que "DIRECCION" (guardado en ref_tabla)
-  // case con "DIRECCIÓN" (rol_label del perfil).
+  // Normaliza acentos/mayúsculas para comparar módulos/roles de forma robusta:
+  // "GERENCIA" (permiso) ≡ "Gerencia" (cronograma) ≡ "DIRECCION" ≡ "DIRECCIÓN".
   const norm = (s: string | null | undefined) =>
     (s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().trim();
 
@@ -396,15 +515,29 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
     return i >= 0 ? rt.slice(i + 1) : "";
   };
 
+  // Conjunto de módulos que el usuario tiene en su rol (permisos con ver:true),
+  // más su puesto propio. Es lo que gobierna qué tareas ve por defecto.
+  const modulosVisiblesNorm = useMemo(() => {
+    const set = new Set<string>();
+    for (const m of modulosVisibles ?? []) set.add(norm(m));
+    if (moduloPropio) set.add(norm(moduloPropio));
+    if (rolUsuario) set.add(norm(getModuloForCronograma(rolUsuario)));
+    return set;
+  }, [modulosVisibles, moduloPropio, rolUsuario]);
+
+  // ¿El usuario puede ver las tareas de cronograma de este rol? = el módulo al
+  // que pertenece está entre los módulos de su rol.
+  const puedeVerRol = (rolCronograma: string) =>
+    modulosVisiblesNorm.has(norm(getModuloForCronograma(rolCronograma)));
+
   const filterBySelectedRol = (list: TareaRow[]) => {
     if (selectedRol === "default") {
-      // Vista por defecto: las tareas de cronograma se limitan a TU puesto.
-      // Los encargos y personales (no-sistema) siempre se muestran.
-      const propio = norm(rolUsuario);
+      // Vista por defecto: tareas de cronograma de los departamentos que el
+      // usuario tiene en su rol. Encargos y personales (no-sistema) siempre.
       return list.filter((t) => {
         if (t.tipo !== "sistema") return true;
-        if (!propio) return false;
-        return norm(refRol(t)) === propio;
+        if (modulosVisiblesNorm.size === 0) return false; // aún cargando permisos
+        return puedeVerRol(refRol(t));
       });
     }
     const target = norm(selectedRol);
@@ -420,7 +553,39 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
 
   const handlePosponer = (t: TareaRow) => setTareaPosponer(t);
 
-  const itemProps = { toggleHecha, deleteTarea, posponerTarea: handlePosponer, setOpen };
+  // Aclaraciones = filas de cronograma con parent_id. Se muestran con el icono ℹ️
+  // dentro de su tarea padre (la tarea sincronizada guarda ref_id = id del cronograma padre).
+  const aclaracionesMap = useMemo<AclaracionesMap>(() => {
+    const m: AclaracionesMap = {};
+    for (const it of infoTareas) {
+      if (it.parent_id) (m[it.parent_id] ??= []).push(it);
+    }
+    for (const k of Object.keys(m)) {
+      m[k].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+    }
+    return m;
+  }, [infoTareas]);
+
+  // "Otros / sin fecha": filas raíz OTRO (encabezados y tareas aún sin frecuencia).
+  const sinFechaTareas = useMemo(
+    () =>
+      infoTareas
+        .filter((it) => !it.parent_id && (it.frecuencia ?? "").toUpperCase() === "OTRO")
+        .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)),
+    [infoTareas],
+  );
+
+  // "Por necesidad": sin fecha fija; salen TODOS los días como excepciones (rojo)
+  // y se marcan por día solo si tocó hacerlas.
+  const porNecesidadTareas = useMemo(
+    () =>
+      infoTareas
+        .filter((it) => !it.parent_id && (it.frecuencia ?? "").toUpperCase() === "POR NECESIDAD")
+        .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)),
+    [infoTareas],
+  );
+
+  const itemProps = { toggleHecha, deleteTarea, posponerTarea: handlePosponer, setOpen, aclaracionesMap };
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -458,9 +623,8 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
                 {rolUsuario ?? "Cargando…"}
               </SelectItem>
               {(() => {
-                const visibles = modulosVisibles ?? [];
                 const items = availableRoles.filter((r) =>
-                  visibles.length === 0 ? true : visibles.includes(getModuloForCronograma(r)),
+                  modulosVisiblesNorm.size === 0 ? true : puedeVerRol(r),
                 );
                 if (availableRoles.length === 0) {
                   return (
@@ -634,7 +798,8 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
                         </>
                       )}
 
-                      <SeccionInformativa infoTareas={infoTareas} selectedRol={selectedRol} />
+                      <SeccionSinFecha items={sinFechaTareas} aclaracionesMap={aclaracionesMap} />
+                      <SeccionPorNecesidad items={porNecesidadTareas} hechas={pnHechas} aclaracionesMap={aclaracionesMap} onToggle={togglePorNecesidad} />
 
                       {encargos.length > 0 && (
                         <>
@@ -744,7 +909,8 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
                         </div>
                       );
                     })}
-                    <SeccionInformativa infoTareas={infoTareas} selectedRol={selectedRol} />
+                    <SeccionSinFecha items={sinFechaTareas} aclaracionesMap={aclaracionesMap} />
+                    <SeccionPorNecesidad items={porNecesidadTareas} hechas={pnHechas} aclaracionesMap={aclaracionesMap} onToggle={togglePorNecesidad} />
                   </>
                 )}
               </div>
@@ -843,7 +1009,8 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
                     tareasForDay(refDate).map((t) => <TareaItem key={t.id} t={t} {...itemProps} />)
                   )}
                 </div>
-                <SeccionInformativa infoTareas={infoTareas} selectedRol={selectedRol} />
+                <SeccionSinFecha items={sinFechaTareas} aclaracionesMap={aclaracionesMap} />
+                <SeccionPorNecesidad items={porNecesidadTareas} hechas={pnHechas} aclaracionesMap={aclaracionesMap} onToggle={togglePorNecesidad} />
               </div>
             </>
           )}
@@ -861,33 +1028,94 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
   );
 }
 
-function SeccionInformativa({ infoTareas, selectedRol }: { infoTareas: InfoTarea[], selectedRol: string }) {
-  if (!infoTareas || infoTareas.length === 0) return null;
+/**
+ * Tareas sin fecha fija (frecuencia OTRO / POR NECESIDAD que no son hijas de otra
+ * tarea). Sus aclaraciones, si las tienen, se ven con el icono ℹ️.
+ */
+function SeccionSinFecha({
+  items,
+  aclaracionesMap,
+}: {
+  items: InfoTarea[];
+  aclaracionesMap: AclaracionesMap;
+}) {
+  if (!items || items.length === 0) return null;
   return (
     <>
-      <div className="px-5 py-2 bg-amber-50/70 border-b border-amber-100 flex items-center gap-2 mt-4">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-amber-800">
-          Información de Apoyo / Otros
+      <div className="px-5 py-2 bg-muted/30 border-b flex items-center gap-2 mt-4">
+        <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+        <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+          Por necesidad · sin fecha fija
         </span>
       </div>
-      <div className="bg-amber-50/20 divide-y divide-amber-100/50 pb-10">
-        {infoTareas.map((it) => (
-          <div key={it.id} className="px-5 py-2.5 flex items-start gap-3 group">
-            <div className="mt-1">
-              <div className="h-2 w-2 rounded-full bg-amber-400" />
-            </div>
+      <div className="divide-y pb-10">
+        {items.map((it) => (
+          <div key={it.id} className="px-5 py-2.5 flex items-start gap-3">
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-amber-900 leading-snug">
-                {it.tarea}
-              </p>
+              <p className="text-sm leading-snug">{it.tarea}</p>
               {it.resumen && (
-                <p className="text-[10px] text-amber-700/70 mt-0.5 line-clamp-2">
+                <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">
                   {it.resumen}
                 </p>
               )}
             </div>
+            <InfoPopover aclaraciones={aclaracionesMap[it.id]} />
           </div>
         ))}
+      </div>
+    </>
+  );
+}
+
+/**
+ * Tareas "por necesidad": sin fecha fija, salen TODOS los días como excepciones
+ * (en rojo) al final del panel. Se marcan por día solo si tocó hacerlas; sin
+ * marcar no cuentan como pendientes.
+ */
+function SeccionPorNecesidad({
+  items,
+  hechas,
+  aclaracionesMap,
+  onToggle,
+}: {
+  items: InfoTarea[];
+  hechas: Set<string>;
+  aclaracionesMap: AclaracionesMap;
+  onToggle: (it: InfoTarea) => void;
+}) {
+  if (!items || items.length === 0) return null;
+  return (
+    <>
+      <div className="px-5 py-2 bg-red-50 border-y border-red-100 flex items-center gap-2 mt-4">
+        <AlertTriangle className="h-3.5 w-3.5 text-red-600" />
+        <span className="text-[11px] font-bold uppercase tracking-wider text-red-700">
+          Por necesidad · excepciones del día
+        </span>
+        <span className="ml-auto text-[10px] text-red-500/80">solo si toca</span>
+      </div>
+      <div className="divide-y divide-red-100/60 bg-red-50/40 pb-10">
+        {items.map((it) => {
+          const done = hechas.has(it.id);
+          return (
+            <div key={it.id} className="px-5 py-2.5 flex items-start gap-3">
+              <button
+                onClick={() => onToggle(it)}
+                className="shrink-0 mt-0.5"
+                title={done ? "Hecha hoy — desmarcar" : "Marcar como hecha hoy"}
+              >
+                {done ? (
+                  <CheckSquare2 className="h-5 w-5 text-red-600" />
+                ) : (
+                  <Square className="h-5 w-5 text-red-300" />
+                )}
+              </button>
+              <p className={`flex-1 min-w-0 text-sm leading-snug ${done ? "line-through opacity-50" : "text-red-900"}`}>
+                {it.tarea}
+              </p>
+              <InfoPopover aclaraciones={aclaracionesMap[it.id]} />
+            </div>
+          );
+        })}
       </div>
     </>
   );

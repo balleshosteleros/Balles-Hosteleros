@@ -65,6 +65,7 @@ export async function syncDepartamentosAEmpresa(
       descripcion: d.descripcion,
       area: d.area,
       estado: d.estado,
+      color: d.color,
     }));
 
   if (aCrear.length === 0) return { creados: 0 };

@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { ExternalLink, Link2, AlertCircle, CheckCircle2, Clock, Plus } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, Plus } from "lucide-react";
 
 export function PublicacionesPortalesConfig() {
   const portales = [

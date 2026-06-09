@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
   calcularTotalesLineas,
-  ESTADOS_PEDIDO, PROVEEDORES, PROVEEDOR_EMAILS,
+  ESTADOS_PEDIDO, PROVEEDOR_EMAILS,
   type Pedido, type Albaran, type EstadoPedido, type EstadoAlbaran,
 } from "@/features/logistica/data/pedidos";
 import { listPedidos, getPedido, createPedido, updatePedidoEstado as serverUpdatePedidoEstado, deletePedido as serverDeletePedido } from "@/features/logistica/actions/pedidos-actions";
@@ -21,7 +21,7 @@ import { listFacturas, crearFacturaDesdeAlbaran } from "@/features/logistica/act
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import {
   Copy, Pencil, Trash2, Printer, MoreHorizontal, ClipboardList, Truck,
   ChevronDown, Package, Settings, Receipt,

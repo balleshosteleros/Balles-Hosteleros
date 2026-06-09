@@ -1,11 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Download } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { IMPUESTOS_INGRESOS, IMPUESTOS_GASTOS, FilaImpuesto } from "@/features/contabilidad/data/contabilidad";
 
 const fmt = (n: number) => n.toLocaleString("es-ES", { minimumFractionDigits: 2 }) + " €";
@@ -40,7 +38,6 @@ function TotalFila({ filas, label }: { filas: FilaImpuesto[]; label: string }) {
 }
 
 export function ImpuestosView() {
-  const { empresaActual } = useEmpresa();
   const [periodo, setPeriodo] = useState("TRIMESTRAL");
 
   return (

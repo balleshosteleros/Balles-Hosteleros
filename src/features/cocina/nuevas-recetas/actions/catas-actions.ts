@@ -8,7 +8,7 @@ async function getNombreUsuario() {
   const { supabase, userId } = await getAppContext();
   if (!userId) return null;
   const { data } = await supabase
-    .from("profiles")
+    .from("usuarios")
     .select("nombre, apellidos")
     .eq("user_id", userId)
     .single();

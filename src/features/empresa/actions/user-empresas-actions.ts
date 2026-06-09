@@ -23,7 +23,7 @@ export async function listEmpresasDeUsuario(userId?: string): Promise<string[]> 
   }
 
   const { data, error } = await supabase
-    .from("user_empresas")
+    .from("usuario_empresas")
     .select("empresa_id")
     .eq("user_id", targetUserId);
 
@@ -48,7 +48,7 @@ export async function setEmpresasDeUsuario(input: {
 
     // Borra todos los accesos previos del usuario
     const { error: delErr } = await supabase
-      .from("user_empresas")
+      .from("usuario_empresas")
       .delete()
       .eq("user_id", input.userId);
     if (delErr) throw delErr;
@@ -61,7 +61,7 @@ export async function setEmpresasDeUsuario(input: {
     }));
 
     const { error: insErr } = await supabase
-      .from("user_empresas")
+      .from("usuario_empresas")
       .insert(rows);
     if (insErr) throw insErr;
 
@@ -83,7 +83,7 @@ export async function addAccesoEmpresa(input: {
   try {
     const supabase = await createClient();
     const { error } = await supabase
-      .from("user_empresas")
+      .from("usuario_empresas")
       .insert({ user_id: input.userId, empresa_id: input.empresaId });
     if (error && error.code !== "23505") throw error; // ignora duplicados
     return { ok: true };
@@ -104,7 +104,7 @@ export async function removeAccesoEmpresa(input: {
   try {
     const supabase = await createClient();
     const { error } = await supabase
-      .from("user_empresas")
+      .from("usuario_empresas")
       .delete()
       .eq("user_id", input.userId)
       .eq("empresa_id", input.empresaId);
@@ -131,7 +131,7 @@ export async function listAllUserEmpresas(): Promise<Record<string, string[]>> {
 
   const admin = createAdminClient();
   const { data: roles } = await admin
-    .from("user_roles")
+    .from("usuario_roles")
     .select("role")
     .eq("user_id", user.id);
   const appRoles = (roles ?? []).map((r) => r.role as string);
@@ -140,7 +140,7 @@ export async function listAllUserEmpresas(): Promise<Record<string, string[]>> {
   }
 
   const { data, error } = await admin
-    .from("user_empresas")
+    .from("usuario_empresas")
     .select("user_id, empresa_id");
 
   if (error) {

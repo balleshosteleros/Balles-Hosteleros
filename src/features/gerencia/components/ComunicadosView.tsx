@@ -3,7 +3,6 @@
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { getComunicadosByEmpresa, type Comunicado, ESTADO_COMUNICADO_LABELS, RECURRENCIA_LABELS, type EstadoComunicado, type Recurrencia } from "@/features/rrhh/data/comunicados";
-import { DEPARTAMENTOS } from "@/features/rrhh/data/rrhh";
 import {
   listComunicados,
   createComunicado,
@@ -27,7 +26,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  Search, Plus, CalendarDays, MoreHorizontal, Eye, Copy, Clock, Archive,
+  CalendarDays, MoreHorizontal, Eye, Copy, Clock, Archive,
   Trash2, FileText, Users, Building2, ArrowLeft, Save, Upload, X, AlertTriangle, ImageIcon, Bell,
   ChevronLeft, ChevronRight, Settings,
 } from "lucide-react";
@@ -70,16 +69,6 @@ function AlcanceCircle({ pct }: { pct: number }) {
       <span className="text-sm font-medium">{pct}%</span>
     </div>
   );
-}
-
-function PrioridadBadge({ p }: { p: string }) {
-  const m: Record<string, string> = {
-    baja: "bg-muted text-muted-foreground",
-    normal: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-    alta: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
-    urgente: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-  };
-  return <Badge className={`${m[p] || m.normal} border-0 text-xs`}>{p.charAt(0).toUpperCase() + p.slice(1)}</Badge>;
 }
 
 const ROLES_DISPONIBLES = [
@@ -597,7 +586,7 @@ export function ComunicadosView() {
   const empresaId = empresaActual?.id || "habana";
   const [comunicados, setComunicados] = useState<Comunicado[]>([]);
   const [empleadosReales, setEmpleadosReales] = useState<EmpleadoSelector[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
 
   const loadComunicados = useCallback(async () => {
     setLoading(true);

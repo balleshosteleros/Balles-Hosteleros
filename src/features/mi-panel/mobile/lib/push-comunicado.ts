@@ -31,7 +31,7 @@ async function resolverDestinatariosUserIds(comunicadoId: string): Promise<{
 
   if (c.toda_empresa === true) {
     const { data: rows } = await supabase
-      .from("profiles")
+      .from("usuarios")
       .select("user_id")
       .eq("empresa_id", empresaId);
     (rows ?? []).forEach((r) => r.user_id && ids.add(r.user_id as string));
@@ -43,7 +43,7 @@ async function resolverDestinatariosUserIds(comunicadoId: string): Promise<{
   const departamentos = (c.departamentos_destinatarios as string[] | null) ?? [];
   if (departamentos.length > 0) {
     const { data: rows } = await supabase
-      .from("profiles")
+      .from("usuarios")
       .select("user_id")
       .eq("empresa_id", empresaId)
       .in("departamento", departamentos);
@@ -53,7 +53,7 @@ async function resolverDestinatariosUserIds(comunicadoId: string): Promise<{
   const roles = (c.roles_destinatarios as string[] | null) ?? [];
   if (roles.length > 0) {
     const { data: rows } = await supabase
-      .from("profiles")
+      .from("usuarios")
       .select("user_id")
       .eq("empresa_id", empresaId)
       .in("rol_label", roles);

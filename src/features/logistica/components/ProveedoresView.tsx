@@ -7,7 +7,7 @@ import {
   ESTADOS_PROVEEDOR, CATEGORIAS_PROVEEDOR, DIAS_REPARTO, VIAS_PAGO, PLAZOS_PAGO,
   type Proveedor, type EstadoProveedor,
 } from "@/features/logistica/data/proveedores";
-import { listProveedores, createProveedor, updateProveedor, deleteProveedor } from "@/features/logistica/actions/proveedores-actions";
+import { listProveedores, createProveedor, updateProveedor } from "@/features/logistica/actions/proveedores-actions";
 import {
   listCategoriasProveedor,
   createCategoriaProveedor,
@@ -63,7 +63,6 @@ function EstadoBadge({ value }: { value: EstadoProveedor }) {
   const cls: Record<string, string> = {
     Activo: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400",
     Inactivo: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
-    Archivado: "bg-slate-100 text-slate-600 dark:bg-slate-800/30 dark:text-slate-400",
   };
   return <Badge className={`${cls[value] || ""} border-0 text-[11px]`}>{value}</Badge>;
 }
@@ -122,7 +121,7 @@ export function ProveedoresView() {
 
   const { empresaActual } = useEmpresa();
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
@@ -239,8 +238,6 @@ export function ProveedoresView() {
     lista = aplicarOrdenToolbar(lista, orden, acceso);
     return lista;
   }, [proveedores, search, filtros, orden]);
-
-  const stats = { total: proveedores.length, activos: proveedores.filter((p) => p.estado === "Activo").length, inactivos: proveedores.filter((p) => p.estado === "Inactivo").length };
 
   const handleSave = async (item: Proveedor): Promise<boolean> => {
     const exists = proveedores.find((p) => p.id === item.id);

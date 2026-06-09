@@ -160,7 +160,7 @@ export async function createEmpresa(input: {
     // y pueda activarla (sin esto la cookie no cambia y se sirve la empresa
     // anterior — apariencia de fuga de datos entre empresas).
     const { error: linkErr } = await admin
-      .from("user_empresas")
+      .from("usuario_empresas")
       .insert({ user_id: user.id, empresa_id: nueva.id });
     if (linkErr && linkErr.code !== "23505") {
       console.error("[empresas] link user_empresas:", linkErr.message);

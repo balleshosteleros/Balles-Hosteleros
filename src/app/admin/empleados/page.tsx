@@ -9,7 +9,7 @@ export default async function EmpleadosPage() {
   if (!user) redirect('/')
 
   const { data: profile } = await supabase
-    .from('profiles')
+    .from('usuarios')
     .select('role')
     .eq('id', user.id)
     .single()

@@ -139,6 +139,9 @@ export interface Fichaje {
   local?: LocalGeo | null;
   distanciaEntradaMetros?: number | null;
   distanciaSalidaMetros?: number | null;
+  // ─── Paralización (cierre anticipado manual) ──────────────────────
+  cierreAnticipado?: boolean;
+  cierreAnticipadoMotivo?: string | null;
 }
 
 export interface IncidenciaFichaje {

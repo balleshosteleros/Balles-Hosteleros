@@ -5,10 +5,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { Plus, GraduationCap, Milestone, ShieldCheck, UserCog, Zap, Settings, FileText, Power, PowerOff, KeyRound, Eye, PenLine } from "lucide-react";
+import { Plus, GraduationCap, ShieldCheck, UserCog, Zap, Settings, Power, PowerOff, KeyRound, Eye, PenLine } from "lucide-react";
 import type { FichaEmpleado } from "@/features/rrhh/data/empleados-ficha";
-import { getAccesoDeEmpleado, AccesoPortal, ROLES_PORTAL, permisosDesdeRol } from "@/features/rrhh/data/accesos-portal";
+import { getAccesoDeEmpleado } from "@/features/rrhh/data/accesos-portal";
 import { toast } from "sonner";
 
 function Campo({ label, value }: { label: string; value: string }) {

@@ -18,7 +18,7 @@ export async function getEmpresaActivaForUser(
   const cookieEmpresa = store.get(COOKIE_NAME)?.value;
   if (cookieEmpresa && UUID_RE.test(cookieEmpresa)) {
     const { data: linked } = await supabase
-      .from("user_empresas")
+      .from("usuario_empresas")
       .select("empresa_id")
       .eq("user_id", userId)
       .eq("empresa_id", cookieEmpresa)
@@ -26,7 +26,7 @@ export async function getEmpresaActivaForUser(
     if (linked) return cookieEmpresa;
   }
   const { data } = await supabase
-    .from("profiles")
+    .from("usuarios")
     .select("empresa_id")
     .eq("user_id", userId)
     .single();

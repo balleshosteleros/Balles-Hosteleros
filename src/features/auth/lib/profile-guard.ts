@@ -20,7 +20,7 @@ export async function checkProfileGuard(
   userId: string,
 ): Promise<ProfileGuardResult> {
   const { data: profile } = await supabase
-    .from('profiles')
+    .from('usuarios')
     .select('estado_acceso, empresa_id, rol_label')
     .eq('user_id', userId)
     .maybeSingle()

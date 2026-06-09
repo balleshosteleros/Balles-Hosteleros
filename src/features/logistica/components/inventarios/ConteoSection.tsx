@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { type Conteo, type LineaConteo } from "@/features/logistica/data/inventarios";
+import { type Conteo } from "@/features/logistica/data/inventarios";
 import { type ProductoStock } from "@/features/logistica/data/stock";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

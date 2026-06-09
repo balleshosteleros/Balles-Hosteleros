@@ -6,7 +6,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -16,7 +15,7 @@ import {
 } from "@/features/rrhh/data/roles-empresa";
 import { TIPO_JORNADA_LABELS, type TipoJornada, type EstadoPublicacion } from "@/features/rrhh/data/reclutamiento";
 import {
-  Building2, User, MapPin, Clock, DollarSign, FileText,
+  Building2, MapPin, DollarSign, FileText,
   Briefcase, Globe, AlertCircle, CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";

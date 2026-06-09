@@ -23,11 +23,11 @@ export async function getEmpresasAccesibles(): Promise<{
 
     const [ueRes, profRes] = await Promise.all([
       supabase
-        .from("user_empresas")
+        .from("usuario_empresas")
         .select("empresa_id")
         .eq("user_id", userId),
       supabase
-        .from("profiles")
+        .from("usuarios")
         .select("empresa_id")
         .eq("user_id", userId)
         .maybeSingle(),

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useMarketing } from "@/features/marketing/contexts/marketing-context";
-import { ItemCalendario, REDES_SOCIALES, RedSocial, EstadoPublicacion, ESTADOS_PUBLICACION } from "@/features/marketing/data/marketing";
+import { ItemCalendario, REDES_SOCIALES, EstadoPublicacion, ESTADOS_PUBLICACION } from "@/features/marketing/data/marketing";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -54,7 +54,7 @@ interface Props {
   onNew: () => void;
 }
 
-export function CalendarioView({ onSelect, onNew }: Props) {
+export function CalendarioView({ onSelect }: Props) {
   const { empresaActual } = useEmpresa();
   const { getItems } = useMarketing();
   const items = getItems(empresaActual.id);

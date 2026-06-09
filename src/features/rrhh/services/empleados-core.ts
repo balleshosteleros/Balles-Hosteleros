@@ -26,7 +26,7 @@ export async function requireAdminUser(opts?: { empresaIds?: string[] }) {
   if (!user) throw new Error("No autenticado");
 
   const { data: rolesRows } = await supabase
-    .from("user_roles")
+    .from("usuario_roles")
     .select("role")
     .eq("user_id", user.id);
   const roles = (rolesRows ?? []).map((r: { role: string }) => r.role);
@@ -46,7 +46,7 @@ export async function requireAdminUser(opts?: { empresaIds?: string[] }) {
       throw new Error("Sin permisos: empresas no válidas");
     }
     const { data: rels } = await supabase
-      .from("user_empresas")
+      .from("usuario_empresas")
       .select("empresa_id")
       .eq("user_id", user.id)
       .in("empresa_id", empresasReq);
@@ -121,7 +121,7 @@ export async function altaUsuarioEmpleado(
   // 2. Completar profile (el trigger handle_new_user crea la fila base).
   //    profiles.id === profiles.user_id === auth.users.id (migración 002).
   await admin
-    .from("profiles")
+    .from("usuarios")
     .update({
       empresa_id: input.empresaPrincipalId,
       full_name: input.fullName,
@@ -134,7 +134,7 @@ export async function altaUsuarioEmpleado(
     .eq("id", userId);
 
   // 3. Rol RBAC base
-  await admin.from("user_roles").insert({ user_id: userId, role: "empleado" });
+  await admin.from("usuario_roles").insert({ user_id: userId, role: "empleado" });
 
   // 4. Acceso multi-empresa (rollback si falla)
   const accesosRows = input.empresasAcceso.map((eid) => ({
@@ -142,7 +142,7 @@ export async function altaUsuarioEmpleado(
     empresa_id: eid,
   }));
   const { error: accesoErr } = await admin
-    .from("user_empresas")
+    .from("usuario_empresas")
     .upsert(accesosRows, { onConflict: "user_id,empresa_id" });
   if (accesoErr) {
     await admin.auth.admin.deleteUser(userId);

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getEmpleadoGuardStatus } from "@/features/primer-acceso/data/empleado-status";
 import { PWARegister } from "@/features/mi-panel/mobile/components/PWARegister";
 import { MobileBottomNav } from "@/features/mi-panel/mobile/components/MobileBottomNav";
+import { MobileFichajeProvider } from "@/features/mi-panel/mobile/components/MobileFichajeProvider";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +59,7 @@ export default async function MobileLayout({ children }: { children: React.React
       <PWARegister />
       <main className="mx-auto w-full max-w-screen-sm pb-24">{children}</main>
       <MobileBottomNav />
+      <MobileFichajeProvider />
     </div>
   );
 }

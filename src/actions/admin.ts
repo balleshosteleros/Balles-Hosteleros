@@ -59,7 +59,7 @@ async function requireAdmin() {
   if (!user) throw new Error('Not authenticated')
 
   const { data: roles } = await supabase
-    .from('user_roles')
+    .from('usuario_roles')
     .select('role')
     .eq('user_id', user.id)
 
@@ -95,7 +95,7 @@ export async function createEmployee(formData: FormData) {
   const supabase = await createClient()
   const { data: { user: invoker } } = await supabase.auth.getUser()
   const { data: invokerProfile } = invoker
-    ? await admin.from('profiles').select('empresa_id').eq('user_id', invoker.id).maybeSingle()
+    ? await admin.from('usuarios').select('empresa_id').eq('user_id', invoker.id).maybeSingle()
     : { data: null }
   const empresaId = invokerProfile?.empresa_id
   if (!empresaId) return { error: 'No se pudo determinar la empresa del invocador.' }
@@ -137,7 +137,7 @@ export async function createEmployee(formData: FormData) {
   if (departamento) profilePatch.departamento = departamento
 
   const { error: profileError } = await admin
-    .from('profiles')
+    .from('usuarios')
     .update(profilePatch)
     .eq('id', data.user.id)
 
@@ -145,7 +145,7 @@ export async function createEmployee(formData: FormData) {
 
   // Asignar rol RBAC en user_roles (para autorización)
   const { error: roleError } = await admin
-    .from('user_roles')
+    .from('usuario_roles')
     .insert({ user_id: data.user.id, role })
 
   if (roleError) return { error: friendlyError(roleError) }
@@ -160,7 +160,7 @@ export async function createEmployee(formData: FormData) {
   const finalEmpresaIds = empresaIds.length > 0 ? empresaIds : [empresaId]
 
   const { error: empresasError } = await admin
-    .from('user_empresas')
+    .from('usuario_empresas')
     .insert(finalEmpresaIds.map((eid) => ({ user_id: data.user.id, empresa_id: eid })))
 
   if (empresasError) return { error: friendlyError(empresasError) }
@@ -182,14 +182,14 @@ export async function getEmployees() {
   }
 
   const { data: profiles, error } = await admin
-    .from('profiles')
+    .from('usuarios')
     .select('*')
     .order('created_at', { ascending: false })
 
   if (error) return { error: friendlyError(error), data: [] }
 
   const { data: roles } = await admin
-    .from('user_roles')
+    .from('usuario_roles')
     .select('user_id, role')
 
   const rolesByUser = new Map<string, string>()
@@ -260,7 +260,7 @@ export async function sendPasswordResetEmail(profileId: string) {
   }
 
   const { data: profile, error: pErr } = await admin
-    .from('profiles')
+    .from('usuarios')
     .select('email, nombre, apellidos, full_name, empresa_id')
     .eq('id', profileId)
     .maybeSingle()
@@ -338,7 +338,7 @@ export async function updateEmployeeStatus(profileId: string, estado: 'Activo' |
   }
 
   const { error } = await admin
-    .from('profiles')
+    .from('usuarios')
     .update({ estado_acceso: estado })
     .eq('id', profileId)
 
@@ -354,7 +354,7 @@ export async function getEmpleadosSinAcceso() {
   if (!user) return { data: [] }
 
   const { data: profile } = await supabase
-    .from('profiles')
+    .from('usuarios')
     .select('empresa_id')
     .eq('user_id', user.id)
     .single()
@@ -413,10 +413,10 @@ export async function updateEmployeeProfile(
       const supabase = await createClient()
       const { data: { user: invoker } } = await supabase.auth.getUser()
       const { data: invokerProfile } = invoker
-        ? await admin.from('profiles').select('empresa_id').eq('user_id', invoker.id).maybeSingle()
+        ? await admin.from('usuarios').select('empresa_id').eq('user_id', invoker.id).maybeSingle()
         : { data: null }
       const { data: target } = await admin
-        .from('profiles')
+        .from('usuarios')
         .select('empresa_id')
         .eq('id', profileId)
         .maybeSingle()
@@ -443,7 +443,7 @@ export async function updateEmployeeProfile(
 
   if (Object.keys(profileUpdate).length > 0) {
     const { error } = await admin
-      .from('profiles')
+      .from('usuarios')
       .update(profileUpdate)
       .eq('id', profileId)
     if (error) return { error: friendlyError(error) }
@@ -453,14 +453,14 @@ export async function updateEmployeeProfile(
   if (patch.role !== undefined) {
     const role = inferAppRoleFromLabel(patch.role)
     const { data: profile } = await admin
-      .from('profiles')
+      .from('usuarios')
       .select('user_id')
       .eq('id', profileId)
       .maybeSingle()
     const userId = profile?.user_id
     if (userId) {
-      await admin.from('user_roles').delete().eq('user_id', userId)
-      const { error } = await admin.from('user_roles').insert({ user_id: userId, role })
+      await admin.from('usuario_roles').delete().eq('user_id', userId)
+      const { error } = await admin.from('usuario_roles').insert({ user_id: userId, role })
       if (error) return { error: friendlyError(error) }
     }
   }
@@ -516,18 +516,18 @@ export async function deleteEmployee(userId: string) {
   // el usuario en auth.users. Si dejamos que la cascada del FK lo haga, corre
   // como `supabase_auth_admin`, que NO tiene DELETE sobre estas tablas y el
   // borrado falla con "permission denied for table empleados".
-  const cleanups: { table: 'empleados' | 'user_empresas' | 'user_roles'; column: string }[] = [
+  const cleanups: { table: 'empleados' | 'usuario_empresas' | 'usuario_roles'; column: string }[] = [
     { table: 'empleados', column: 'user_id' },
-    { table: 'user_empresas', column: 'user_id' },
-    { table: 'user_roles', column: 'user_id' },
+    { table: 'usuario_empresas', column: 'user_id' },
+    { table: 'usuario_roles', column: 'user_id' },
   ]
   for (const { table, column } of cleanups) {
     const { error: cleanErr } = await admin.from(table).delete().eq(column, userId)
     if (cleanErr) return { error: friendlyError(cleanErr) }
   }
   // profiles.id == auth.user.id en este proyecto (mismo UUID); cubrimos también user_id por legacy.
-  await admin.from('profiles').delete().eq('id', userId)
-  await admin.from('profiles').delete().eq('user_id', userId)
+  await admin.from('usuarios').delete().eq('id', userId)
+  await admin.from('usuarios').delete().eq('user_id', userId)
 
   const { error } = await admin.auth.admin.deleteUser(userId)
 

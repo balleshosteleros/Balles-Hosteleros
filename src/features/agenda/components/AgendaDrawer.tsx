@@ -339,7 +339,7 @@ export function AgendaDrawer({ children }: { children: ReactNode }) {
             </SheetTitle>
             <Button
               size="sm"
-              className="h-7 gap-1 bg-teal-600 hover:bg-teal-700"
+              className="h-7 gap-1 bg-yellow-400 text-yellow-950 hover:bg-yellow-500"
               onClick={abrirNuevo}
             >
               <Plus className="h-3.5 w-3.5" />
@@ -473,28 +473,41 @@ export function AgendaDrawer({ children }: { children: ReactNode }) {
               const Icon = CATEGORIA_ICON[c.categoria];
               const et = c.etiqueta_id ? etiquetaById.get(c.etiqueta_id) : null;
               const etColors = et ? COLOR_CHIP[et.color] ?? COLOR_CHIP.slate : null;
+              // Edición solo de contactos manuales: empleados/proveedores se
+              // editan en su ficha original; emergencias son fijas. Aquí, el
+              // resto es solo consulta + acción rápida (llamar / email).
+              const editable = c.origen === "manual";
+              const esAutomatico = !editable;
               return (
                 <li
                   key={c.id}
-                  className="bg-background px-4 py-3 hover:bg-muted/20 transition-colors"
+                  className="bg-background px-3 py-2 hover:bg-muted/20 transition-colors"
                 >
-                  <div className="flex items-start gap-3">
-                    <div className={`shrink-0 rounded-lg p-2 ${CATEGORIA_TINT[c.categoria]}`}>
-                      <Icon className="h-4 w-4" />
+                  <div className="flex items-start gap-2.5">
+                    <div className={`shrink-0 rounded-md p-1.5 ${CATEGORIA_TINT[c.categoria]}`}>
+                      <Icon className="h-3.5 w-3.5" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold truncate text-foreground">
+                          <p className="text-[13px] font-semibold leading-tight truncate text-foreground">
                             {c.nombre}
                           </p>
-                          {c.empresa_contacto && (
+                          {c.empresa_contacto && c.empresa_contacto !== c.nombre && (
                             <p className="text-[11px] text-muted-foreground truncate">
                               {c.empresa_contacto}
                             </p>
                           )}
                         </div>
-                        <div className="flex shrink-0 flex-wrap items-center gap-1">
+                        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+                          {!c.activo && (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] bg-gray-100 text-gray-600 border-gray-200"
+                            >
+                              {c.estado_origen ?? "Inactivo"}
+                            </Badge>
+                          )}
                           {et && etColors && (
                             <Badge
                               variant="outline"
@@ -510,17 +523,46 @@ export function AgendaDrawer({ children }: { children: ReactNode }) {
                           >
                             {CATEGORIA_LABELS[c.categoria]}
                           </Badge>
+                          <Badge
+                            variant="outline"
+                            className={`text-[10px] ${
+                              esAutomatico
+                                ? "bg-slate-100 text-slate-600 border-slate-200"
+                                : "bg-yellow-50 text-yellow-700 border-yellow-200"
+                            }`}
+                          >
+                            {esAutomatico ? "Automático" : "Manual"}
+                          </Badge>
                         </div>
                       </div>
 
-                      <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                      {c.direccion && (
+                        <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-muted-foreground truncate">
+                          <MapPin className="h-3 w-3 shrink-0" />
+                          {c.direccion}
+                        </p>
+                      )}
+
+                      {/* Acciones rápidas: llamar / email / WhatsApp */}
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                         {c.telefono && (
                           <a
                             href={`tel:${c.telefono}`}
-                            className="inline-flex items-center gap-1 text-foreground hover:text-teal-700"
+                            title={`Llamar a ${c.telefono}`}
+                            className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700"
                           >
-                            <Phone className="h-3 w-3 text-muted-foreground" />
+                            <Phone className="h-3 w-3" />
                             {c.telefono}
+                          </a>
+                        )}
+                        {c.email && (
+                          <a
+                            href={`mailto:${c.email}`}
+                            title={`Enviar email a ${c.email}`}
+                            className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700"
+                          >
+                            <Mail className="h-3 w-3" />
+                            Email
                           </a>
                         )}
                         {c.whatsapp && (
@@ -528,55 +570,43 @@ export function AgendaDrawer({ children }: { children: ReactNode }) {
                             href={`https://wa.me/${c.whatsapp.replace(/[^\d]/g, "")}`}
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-foreground hover:text-teal-700"
+                            title="Abrir WhatsApp"
+                            className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
                           >
-                            <MessageCircle className="h-3 w-3 text-muted-foreground" />
+                            <MessageCircle className="h-3 w-3" />
                             WhatsApp
                           </a>
                         )}
-                        {c.email && (
-                          <a
-                            href={`mailto:${c.email}`}
-                            className="inline-flex items-center gap-1 text-foreground hover:text-teal-700 truncate max-w-full"
-                          >
-                            <Mail className="h-3 w-3 text-muted-foreground" />
-                            <span className="truncate">{c.email}</span>
-                          </a>
-                        )}
-                        {c.direccion && (
-                          <span className="inline-flex items-center gap-1 text-muted-foreground">
-                            <MapPin className="h-3 w-3" />
-                            {c.direccion}
+
+                        {editable && (
+                          <span className="ml-auto inline-flex items-center gap-0.5">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => abrirEditar(c)}
+                              title="Editar"
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-destructive hover:text-destructive"
+                              onClick={() => eliminar(c.id)}
+                              title="Eliminar"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
                           </span>
                         )}
                       </div>
 
                       {c.notas && (
-                        <p className="mt-2 rounded-md bg-muted/50 p-2 text-[11px] text-muted-foreground">
+                        <p className="mt-1.5 rounded-md bg-muted/50 p-1.5 text-[11px] text-muted-foreground">
                           {c.notas}
                         </p>
                       )}
-
-                      <div className="mt-1 flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => abrirEditar(c)}
-                          title="Editar"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={() => eliminar(c.id)}
-                          title="Eliminar"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
                     </div>
                   </div>
                 </li>

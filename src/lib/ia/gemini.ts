@@ -78,7 +78,7 @@ export async function geminiJSON<T = unknown>(
   let data: T;
   try {
     data = JSON.parse(text) as T;
-  } catch (err) {
+  } catch {
     console.error("[gemini] JSON parse error. Raw output:", text);
     throw new Error("El modelo no devolvió un JSON válido.");
   }

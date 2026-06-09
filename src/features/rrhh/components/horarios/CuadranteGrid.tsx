@@ -20,9 +20,12 @@ import {
   SelectValue,
 } from "@/shared/components/ui/select";
 import {
-  TURNO_TONOS,
   formatTramo,
+  formatHoras,
+  pillStyleDepartamento,
+  dotStyleDepartamento,
   DIAS_SEMANA,
+  type DiaSemana,
 } from "@/features/rrhh/data/horarios";
 import type {
   Planificacion,
@@ -97,7 +100,7 @@ export function CuadranteGrid({
   interactivo,
   onQuitar,
 }: CuadranteGridProps) {
-  const { empleados, turnos, celdas } = planificacion;
+  const { empleados, turnos, celdas, coloresDepartamento } = planificacion;
   const turnoById = useMemo(
     () => new Map(turnos.map((t) => [t.id, t])),
     [turnos],
@@ -226,6 +229,7 @@ export function CuadranteGrid({
               dias={dias}
               celdas={celdas}
               turnoById={turnoById}
+              coloresDepartamento={coloresDepartamento}
               agrupacion={agrupacion}
               hoyISO={hoyISO}
               colWidth={colWidth}
@@ -472,38 +476,65 @@ function FiltrosMenu({
   );
 }
 
+/** Letra de día (L…D) a partir de "YYYY-MM-DD" (lunes = 0). */
+function letraDeFecha(iso: string): DiaSemana {
+  const d = new Date(`${iso}T12:00:00`);
+  return DIAS_SEMANA[(d.getDay() + 6) % 7];
+}
+
 // ─── Pill de turno ──────────────────────────────────────────────────────
 function TurnoPill({
   turno,
   compacto,
+  diaLetra,
   asignacionId,
   onQuitar,
 }: {
   turno: PlanTurno;
   compacto: boolean;
+  /** Día de la semana de la casilla, para el total de horas del flexible. */
+  diaLetra: DiaSemana;
   asignacionId?: string;
   onQuitar?: (asignacionId: string) => void;
 }) {
-  const tono = TURNO_TONOS[turno.color];
   const quitable = !!asignacionId && !!onQuitar;
+  const esFlexible = turno.tipoJornada === "flexible";
+  const horasDia = esFlexible ? turno.flexHoras[diaLetra] ?? 0 : 0;
+  // Turno partido = más de un tramo el mismo día → se apilan entrada/salida.
+  const tramos = turno.tramos;
+  const titulo = `${turno.codigo} · ${turno.nombre}${
+    esFlexible
+      ? horasDia > 0
+        ? " · " + formatHoras(horasDia)
+        : ""
+      : tramos.length
+        ? " · " + tramos.map(formatTramo).join(" / ")
+        : ""
+  }`;
   return (
     <div
-      className={cn(
-        "group/pill relative rounded-md px-1.5 py-1 text-center leading-tight",
-        tono.pill,
-      )}
-      title={`${turno.codigo} · ${turno.nombre}${
-        turno.tramos.length ? " · " + turno.tramos.map(formatTramo).join(" / ") : ""
-      }`}
+      className="group/pill relative rounded-md px-1.5 py-1 text-center leading-tight"
+      style={pillStyleDepartamento(turno.colorHex)}
+      title={titulo}
     >
       <span className="block text-[11px] font-semibold tracking-wide truncate">
         {turno.codigo}
       </span>
-      {!compacto && turno.tramos[0] && (
-        <span className="block text-[10px] opacity-80 tabular-nums truncate">
-          {turno.tramos[0].inicio}–{turno.tramos[0].fin}
+      {!compacto && esFlexible && horasDia > 0 && (
+        <span className="block text-[10px] font-medium opacity-90 tabular-nums truncate">
+          {formatHoras(horasDia)}
         </span>
       )}
+      {!compacto &&
+        !esFlexible &&
+        tramos.map((tr, i) => (
+          <span
+            key={i}
+            className="block text-[10px] opacity-80 tabular-nums truncate"
+          >
+            {tr.inicio}–{tr.fin}
+          </span>
+        ))}
       {quitable && (
         <button
           type="button"
@@ -551,6 +582,7 @@ function Celda({
   const items = (celdasTurno ?? [])
     .map((c) => ({ turno: turnoById.get(c.turnoId), celda: c }))
     .filter((x) => x.turno) as { turno: PlanTurno; celda: TurnoCelda }[];
+  const diaLetra = letraDeFecha(dropData.fecha);
   return (
     <div
       ref={setNodeRef}
@@ -566,6 +598,7 @@ function Celda({
           key={turno.id}
           turno={turno}
           compacto={compacto}
+          diaLetra={diaLetra}
           asignacionId={celda.asignacionId}
           onQuitar={dndActivo ? onQuitar : undefined}
         />
@@ -585,6 +618,7 @@ function EmpleadosBody({
   dias,
   celdas,
   turnoById,
+  coloresDepartamento,
   agrupacion,
   hoyISO,
   colWidth,
@@ -597,6 +631,7 @@ function EmpleadosBody({
   dias: DiaCol[];
   celdas: Planificacion["celdas"];
   turnoById: Map<string, PlanTurno>;
+  coloresDepartamento: Record<string, string>;
   agrupacion: Agrupacion;
   hoyISO: string;
   colWidth: string;
@@ -715,7 +750,14 @@ function EmpleadosBody({
                       plegado && "-rotate-90",
                     )}
                   />
-                  <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  {dep !== SIN_DEPTO ? (
+                    <span
+                      className="h-3 w-3 shrink-0 rounded-full"
+                      style={dotStyleDepartamento(coloresDepartamento[dep])}
+                    />
+                  ) : (
+                    <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  )}
                   <span className="text-sm font-semibold truncate">{dep}</span>
                   <span className="text-xs text-muted-foreground shrink-0">
                     · {emps.length}
@@ -830,7 +872,6 @@ function TurnosBody({
   return (
     <>
       {turnosFiltrados.map((t) => {
-        const tono = TURNO_TONOS[t.color];
         return (
           <div key={t.id} className="flex border-b hover:bg-muted/30 group">
             <div
@@ -840,10 +881,8 @@ function TurnosBody({
               )}
             >
               <span
-                className={cn(
-                  "inline-flex h-6 min-w-[42px] items-center justify-center rounded-full px-2 text-[11px] font-semibold tracking-wide",
-                  tono.pill,
-                )}
+                className="inline-flex h-6 min-w-[42px] items-center justify-center rounded-full px-2 text-[11px] font-semibold tracking-wide"
+                style={pillStyleDepartamento(t.colorHex)}
               >
                 {t.codigo}
               </span>

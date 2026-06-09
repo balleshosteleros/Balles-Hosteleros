@@ -198,19 +198,6 @@ export function UsuariosTab() {
 
   const rolesEmpresa = useMemo(() => rolesData.map((r) => r.nombre), [rolesData]);
 
-  // Mapa rol → lista de departamentos visibles (módulos con `ver: true`,
-  // excluyendo "AJUSTES" que es el panel de configuración, no un departamento).
-  const departamentosPorRol = useMemo(() => {
-    const map = new Map<string, string[]>();
-    for (const r of rolesData) {
-      const deps = r.permisos
-        .filter((p) => p.ver && p.modulo.toUpperCase() !== "AJUSTES")
-        .map((p) => p.modulo);
-      map.set(r.nombre.trim().toLowerCase(), deps);
-    }
-    return map;
-  }, [rolesData]);
-
   // Mapa rol → nº de módulos con acceso. La pestaña Roles tiene UN único toggle
   // por módulo ("ACCESO"), así que aquí contamos módulos con `ver = true`.
   // El total fijo es 12 (11 departamentos del sidebar + AJUSTES), igual que en

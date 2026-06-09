@@ -7,7 +7,7 @@ async function getContext() {
   let nombre: string | null = null;
   if (userId) {
     const { data } = await supabase
-      .from("profiles")
+      .from("usuarios")
       .select("nombre, apellidos")
       .eq("user_id", userId)
       .single();

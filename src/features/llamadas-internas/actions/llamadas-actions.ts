@@ -81,7 +81,7 @@ export async function createLlamada(
     // cerrada o el móvil bloqueado (suena/vibra; al tocar abre la llamada).
     try {
       const { data: caller } = await supabase
-        .from("profiles")
+        .from("usuarios")
         .select("nombre, apellidos")
         .eq("user_id", userId)
         .maybeSingle();
@@ -194,7 +194,7 @@ export async function listHistorialLlamadas(
     const nombres = new Map<string, { nombre: string; avatar: string | null }>();
     if (contraparteIds.length > 0) {
       const { data: profs } = await supabase
-        .from("profiles")
+        .from("usuarios")
         .select("user_id, nombre, apellidos, avatar_url")
         .in("user_id", contraparteIds);
       for (const p of (profs ?? []) as Row[]) {
@@ -243,8 +243,8 @@ export async function listLlamables(): Promise<{
     // Verificar que el solicitante pertenece a la empresa activa (lecturas self,
     // permitidas por RLS) antes de resolver el roster con admin.
     const [{ data: selfProf }, { data: selfUE }] = await Promise.all([
-      supabase.from("profiles").select("empresa_id").eq("user_id", userId).maybeSingle(),
-      supabase.from("user_empresas").select("empresa_id").eq("user_id", userId),
+      supabase.from("usuarios").select("empresa_id").eq("user_id", userId).maybeSingle(),
+      supabase.from("usuario_empresas").select("empresa_id").eq("user_id", userId),
     ]);
     const empresasDelSolicitante = new Set<string>([
       ...(selfProf?.empresa_id ? [selfProf.empresa_id as string] : []),
@@ -262,7 +262,7 @@ export async function listLlamables(): Promise<{
 
     // Empleados con acceso a la empresa activa: empresa_id propio O user_empresas.
     const { data: accesosUE } = await admin
-      .from("user_empresas")
+      .from("usuario_empresas")
       .select("user_id")
       .eq("empresa_id", empresaId);
     const userIdsConAcceso = ((accesosUE ?? []) as Row[]).map((r) => r.user_id as string);

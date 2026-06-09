@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Inbox, ChevronRight, X, Megaphone } from "lucide-react";
+import { Loader2, ChevronRight, X, Megaphone } from "lucide-react";
 import {
   listarComunicadosVisibles,
   type ComunicadoVisible,

@@ -52,11 +52,11 @@ function mapDbToFactura(row: Record<string, unknown>): FacturaContable {
 }
 
 export function FacturasView() {
-  const { empresaActual } = useEmpresa();
+  useEmpresa();
   const [tab, setTab] = useState("TODAS");
   const [busqueda, setBusqueda] = useState("");
   const [facturas, setFacturas] = useState<FacturaContable[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});

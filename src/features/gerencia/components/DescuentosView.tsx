@@ -59,7 +59,7 @@ export function DescuentosView() {
   const { empresaActual } = useEmpresa();
   const [descuentos, setDescuentos] = useState<Descuento[]>([]);
   const [resultados, setResultados] = useState<ResultadoMensual[]>(() => getResultados(empresaActual.id));
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);

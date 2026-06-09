@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Fingerprint, LayoutGrid, MessageCircle, Phone } from "lucide-react";
+import { Home, CheckSquare2, MessageCircle, Phone } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 
 type NavItem = {
@@ -15,9 +15,8 @@ type NavItem = {
 const items: readonly NavItem[] = [
   { href: "/m", label: "Inicio", icon: Home },
   { href: "/m/llamar", label: "Llamar", icon: Phone },
-  { href: "/m/fichar", label: "Fichar", icon: Fingerprint, primary: true },
+  { href: "/m/tareas", label: "Tareas", icon: CheckSquare2, primary: true },
   { href: "/m/comunicacion", label: "Chat", icon: MessageCircle },
-  { href: "/m/mas", label: "Más", icon: LayoutGrid },
 ];
 
 export function MobileBottomNav() {

@@ -15,7 +15,7 @@ import {
 import type { DatosPersonalesInput, DatosPersonalesCompletos } from "@/features/mi-panel/actions/datos-personales-actions";
 import type { SolicitudPersonal, SolicitudSubtipo, SolicitudTipo, SolicitudEstado } from "@/features/mi-panel/types";
 
-export type EstadoEmpleado = "Activo" | "Desactivado";
+export type EstadoEmpleado = "Activo" | "Inactivo";
 
 const FALLBACK_DEPARTAMENTOS = [
   "DIRECCIÓN", "SALA", "COCINA", "GERENCIA", "CAMAREROS",
@@ -51,7 +51,7 @@ export async function listEmpleados() {
     // Devolvemos todos esos empleados con un flag `es_principal` para la UI.
 
     const { data: accesosUE } = await admin
-      .from("user_empresas")
+      .from("usuario_empresas")
       .select("user_id")
       .eq("empresa_id", empresaId);
     const userIdsConAcceso = (accesosUE ?? []).map((r) => r.user_id as string);
@@ -84,7 +84,7 @@ export async function listEmpleados() {
     let empresasPorUser: Record<string, Array<{ id: string; nombre: string }>> = {};
     if (userIds.length > 0) {
       const { data: rels } = await admin
-        .from("user_empresas")
+        .from("usuario_empresas")
         .select("user_id, empresas:empresa_id(id, nombre)")
         .in("user_id", userIds);
       empresasPorUser = (rels ?? []).reduce<Record<string, Array<{ id: string; nombre: string }>>>(
@@ -220,7 +220,7 @@ export async function getEmpleadosActivos(
     if (!empresaId) return { ok: false, data: [] };
 
     const { data: accesosUE } = await supabase
-      .from("user_empresas")
+      .from("usuario_empresas")
       .select("user_id")
       .eq("empresa_id", empresaId);
     const userIdsConAcceso = (accesosUE ?? []).map((r) => r.user_id as string);
@@ -432,7 +432,7 @@ export async function updateEmpleadoEmpresasAcceso(input: {
     catch { return { ok: false, error: "Supabase admin no configurado." }; }
 
     const { error: deleteErr } = await admin
-      .from("user_empresas")
+      .from("usuario_empresas")
       .delete()
       .eq("user_id", empleado.user_id);
     if (deleteErr) throw deleteErr;
@@ -442,7 +442,7 @@ export async function updateEmpleadoEmpresasAcceso(input: {
       empresa_id,
     }));
     const { error: insertErr } = await admin
-      .from("user_empresas")
+      .from("usuario_empresas")
       .insert(rows);
     if (insertErr) throw insertErr;
 
@@ -524,7 +524,7 @@ export async function updateEmpleado(id: string, updates: UpdateEmpleadoInput) {
 /**
  * Cambia el estado del empleado. Validaciones (también las hace el constraint
  * `empleados_estado_check` en BD, esto es solo para dar errores legibles):
- *   - Para 'Desactivado' es obligatorio `fechaBaja`.
+ *   - Para 'Inactivo' es obligatorio `fechaBaja`.
  *   - Para 'Activo' se limpia automáticamente la `fechaBaja`.
  *
  * Al guardar, el trigger `empleados_sync_estado_acceso` actualiza
@@ -619,7 +619,7 @@ export async function getEmpleadoConPerfil(empleadoId: string) {
     let perfil: Record<string, unknown> | null = null;
     if (emp.user_id) {
       const { data: p } = await supabase
-        .from("profiles")
+        .from("usuarios")
         .select(
           "nombre, apellidos, email, tipo_documento, dni_nie, fecha_nacimiento, nacionalidad, genero, estado_civil, numero_ss, telefono, telefono_empresa, email_personal, email_empresa, direccion, codigo_postal, ciudad, provincia, pais, iban, banco_codigo, banco_nombre, titular_cuenta, iban_verificado, emergencia_nombre, emergencia_relacion, emergencia_telefono, talla_camiseta, talla_pantalon",
         )
@@ -664,7 +664,7 @@ export async function getEmpleadoConPerfil(empleadoId: string) {
     let empresasAcceso: Array<{ id: string; nombre: string; esPrincipal: boolean }> = [];
     if (emp.user_id) {
       const { data: rels } = await supabase
-        .from("user_empresas")
+        .from("usuario_empresas")
         .select("empresas:empresa_id(id, nombre)")
         .eq("user_id", emp.user_id);
       empresasAcceso = (rels ?? [])
@@ -862,7 +862,7 @@ export async function guardarPerfilEmpleado(
     };
 
     const { error: updErr } = await admin
-      .from("profiles")
+      .from("usuarios")
       .update(payload)
       .eq("id", emp.user_id);
     if (updErr) return { ok: false, error: friendlyError(updErr) };

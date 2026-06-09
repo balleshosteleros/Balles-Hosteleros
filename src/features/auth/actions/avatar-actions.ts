@@ -33,7 +33,7 @@ export async function uploadAvatar(userId: string, formData: FormData): Promise<
   const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(path);
 
   const { error: dbError } = await supabase
-    .from("profiles")
+    .from("usuarios")
     .update({
       avatar_url: publicUrl,
       avatar_obligatorio: false,

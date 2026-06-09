@@ -118,7 +118,7 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
-    const { empresa_slug: empresaSlug, empresa_id: empresaId, oferta_id: ofertaId,
+    const { empresa_id: empresaId, oferta_id: ofertaId,
             nombre, apellidos, email, telefono, carta_presentacion: cartaPresentacion } = parsed.data;
 
     if (cv && cv.size > MAX_CV_BYTES) {

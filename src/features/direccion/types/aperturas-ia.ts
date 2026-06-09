@@ -10,7 +10,6 @@ import type {
   BloqueLocal,
   ImagenMarcaEstudio,
   PropuestaGastronomica,
-  BloqueOcupacion,
   EstructuraCostes,
   EstructuraFacturacion,
   LineaProcedencia,

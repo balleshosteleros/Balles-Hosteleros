@@ -9,7 +9,6 @@ import {
   type MetricaRegla,
   type ReglaInput,
   type ReglaRow,
-  type TurnoRegla,
   rowToRegla,
   vigenciaToCampos,
 } from "../data/reglas";

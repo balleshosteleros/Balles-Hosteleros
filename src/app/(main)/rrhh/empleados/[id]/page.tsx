@@ -99,7 +99,7 @@ function bdToEmpleadoUI(emp: EmpleadoBD): EmpleadoUI {
     id: emp.id,
     nombre: emp.nombre ?? "",
     apellidos: emp.apellidos ?? "",
-    estado: emp.estado === "Activo" ? "Activo" : "Desactivado",
+    estado: emp.estado === "Activo" ? "Activo" : "Inactivo",
     horarioTipo: "—",
     horarioSemanal: "—",
     horasHoy: "—",
@@ -261,7 +261,7 @@ export default function FichaEmpleadoPage() {
                 puesto: empleadoRegistro.puesto,
                 localId: empleadoRegistro.local_id,
                 permiteTeletrabajo: empleadoRegistro.permite_teletrabajo,
-                estado: empleadoRegistro.estado === "Activo" ? "Activo" : "Desactivado",
+                estado: empleadoRegistro.estado === "Activo" ? "Activo" : "Inactivo",
                 fechaBaja: empleadoRegistro.fecha_baja,
               }}
               onUpdated={cargarFicha}

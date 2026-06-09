@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useAyuda } from "@/features/ajustes/contexts/ayuda-context";
 import { ArticuloAyuda, MODULOS_AYUDA, ModuloAyuda } from "@/features/ajustes/data/ayuda";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,19 +16,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { BookPlus, Eye, CheckCircle2, Clock } from "lucide-react";
 import { toast } from "sonner";
-import {
-  SubmoduleToolbar,
-  aplicarFiltrosToolbar,
-  aplicarOrdenToolbar,
-  type ToolbarFiltroActivo,
-  type ToolbarOrdenActivo,
-  type ToolbarColumnaVisible,
-} from "@/shared/components/SubmoduleToolbar";
 
 const ROLES = ["Director", "Gerencia", "Contabilidad", "Gestoría", "Jurídico", "Recursos Humanos", "Logística", "Marketing", "Solo lectura"];
 
 export function ConsultasPendientesView() {
-  const { consultas, resolverConsulta, articulos, setArticulos } = useAyuda();
+  const { consultas, resolverConsulta, setArticulos } = useAyuda();
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);

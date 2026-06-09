@@ -124,7 +124,7 @@ export function MapPicker({
   codigoPostal,
   pais,
   onChange,
-  onRadioChange,
+  onRadioChange: _onRadioChange,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);

@@ -54,7 +54,7 @@ async function requireAdmin(): Promise<{ userId: string; userName: string; empre
   if (!user) throw new Error("No autenticado");
 
   const { data: roles } = await supabase
-    .from("user_roles")
+    .from("usuario_roles")
     .select("role")
     .eq("user_id", user.id);
   const ok = (roles ?? []).some((r: { role: string }) =>

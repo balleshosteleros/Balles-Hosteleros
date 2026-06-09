@@ -72,7 +72,7 @@ export function AntiguedadEmpleadosPanel() {
         return;
       }
       const { data, error: errD } = await supabase
-        .from("profiles")
+        .from("usuarios")
         .select("user_id, full_name, nombre, email, departamento, fecha_alta, created_at")
         .eq("empresa_id", eId)
         .order("full_name", { ascending: true });

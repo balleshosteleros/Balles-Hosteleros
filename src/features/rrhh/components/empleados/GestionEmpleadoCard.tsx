@@ -422,7 +422,7 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
           <div className="space-y-1">
             <h4 className="text-sm font-semibold text-foreground">Estado y acceso al sistema</h4>
             <p className="text-sm text-muted-foreground">
-              Al marcar <strong className="text-foreground">Desactivado</strong> el empleado deja de poder
+              Al marcar <strong className="text-foreground">Inactivo</strong> el empleado deja de poder
               entrar al sistema con sus credenciales: pierde el acceso a <strong className="text-foreground">Mi Panel</strong>{" "}
               y a <strong className="text-foreground">Mis Departamentos</strong>. La fecha de baja queda siempre
               reflejada. Para darle de alta de nuevo basta con cambiar el estado a{" "}
@@ -443,7 +443,7 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="Activo">Activo</SelectItem>
-                <SelectItem value="Desactivado">Desactivado</SelectItem>
+                <SelectItem value="Inactivo">Inactivo</SelectItem>
               </SelectContent>
             </Select>
           </div>

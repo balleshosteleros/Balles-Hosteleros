@@ -429,8 +429,6 @@ function DetalleEncuesta({
   );
 }
 
-const CHART_COLORS = ["hsl(var(--primary))", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316"];
-
 function ResultadosTab({ encuesta, empleados }: { encuesta: Encuesta; empleados: EmpleadoActivo[] }) {
   const totalDest = encuesta.destinatarios.tipo === "todos" ? empleados.length : (encuesta.destinatarios.ids.length || empleados.length);
   const totalResp = encuesta.respuestas.length;
@@ -586,7 +584,7 @@ export function EncuestasView() {
     };
   }, [empresaActual.dbId]);
   const [encuestas, setEncuestas] = useState<Encuesta[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Encuesta | null>(null);
 
   const loadEncuestas = useCallback(async () => {

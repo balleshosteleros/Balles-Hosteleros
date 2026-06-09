@@ -25,7 +25,7 @@ export interface UserInformation {
 }
 
 // ---------- HealthCheck ----------
-export interface HealthCheckRequest {}
+export type HealthCheckRequest = Record<string, never>;
 export interface HealthCheckResponse {
   operation_succeeded: boolean;
 }
@@ -122,7 +122,7 @@ export interface SetMarketingPreferenceRequest {
   is_opted_in: boolean;
 }
 
-export interface SetMarketingPreferenceResponse {}
+export type SetMarketingPreferenceResponse = Record<string, never>;
 
 // ---------- Util ----------
 export const RWG_EXTERNAL_ORIGEN = "GOOGLE_RWG" as const;

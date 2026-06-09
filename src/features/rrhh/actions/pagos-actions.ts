@@ -17,7 +17,7 @@ export async function listEmpleadosParaPagos(): Promise<{ ok: boolean; data: Emp
     if (!empresaId) return { ok: false, data: [] };
 
     const { data: accesosUE } = await supabase
-      .from("user_empresas")
+      .from("usuario_empresas")
       .select("user_id")
       .eq("empresa_id", empresaId);
     const userIdsConAcceso = (accesosUE ?? []).map((r) => r.user_id as string);

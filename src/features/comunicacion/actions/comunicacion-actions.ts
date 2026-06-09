@@ -12,7 +12,7 @@ async function getContext() {
 
   const { data } = await supabase
 
-    .from("profiles")
+    .from("usuarios")
 
     .select("nombre, apellidos")
 
@@ -78,7 +78,7 @@ async function getAccesoCtx(
   empresaId: string,
 ): Promise<AccesoCtx> {
   const { data: rolesRows } = await supabase
-    .from("user_roles")
+    .from("usuario_roles")
     .select("role")
     .eq("user_id", userId);
   const appRoles = (rolesRows ?? []).map((r) => r.role as string);
@@ -87,7 +87,7 @@ async function getAccesoCtx(
   const candidatos: string[] = [];
   if (!esAdmin) {
     const { data: profile } = await supabase
-      .from("profiles")
+      .from("usuarios")
       .select("rol_label, departamento")
       .eq("user_id", userId)
       .maybeSingle();

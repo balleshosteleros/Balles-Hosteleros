@@ -55,7 +55,7 @@ export async function getMobileHomeData(): Promise<MobileHomeData> {
   let nombre = "";
   if (user) {
     const { data: profile } = await supabase
-      .from("profiles")
+      .from("usuarios")
       .select("nombre, apellidos")
       .eq("user_id", user.id)
       .maybeSingle();

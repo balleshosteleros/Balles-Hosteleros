@@ -8,6 +8,7 @@ import {
   Layers,
   Fingerprint,
   CalendarOff,
+  Palette,
   ArrowLeft,
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
@@ -18,10 +19,12 @@ import { DescansosSection } from "@/features/rrhh/components/horarios/DescansosS
 import { PatronesSection } from "@/features/rrhh/components/horarios/PatronesSection";
 import { TiposFichajeSection } from "@/features/rrhh/components/horarios/TiposFichajeSection";
 import { TiposAusenciaSection } from "@/features/rrhh/components/horarios/TiposAusenciaSection";
+import { ColoresDepartamentoSection } from "@/features/rrhh/components/horarios/ColoresDepartamentoSection";
 
 const SECCIONES = [
   { id: "turnos", label: "Turnos", icon: Clock },
   { id: "patrones", label: "Patrones", icon: Layers },
+  { id: "colores", label: "Colores de departamento", icon: Palette },
   { id: "descansos", label: "Descansos", icon: Coffee },
   { id: "cuadrantes", label: "Cuadrantes", icon: LayoutGrid },
   { id: "fichaje", label: "Tipos de fichaje", icon: Fingerprint },
@@ -47,6 +50,8 @@ export function ConfiguracionHorariosSheet({
         return <TurnosSection empresaId={empresaId} />;
       case "patrones":
         return <PatronesSection empresaId={empresaId} />;
+      case "colores":
+        return <ColoresDepartamentoSection empresaId={empresaId} />;
       case "descansos":
         return <DescansosSection empresaId={empresaId} />;
       case "cuadrantes":

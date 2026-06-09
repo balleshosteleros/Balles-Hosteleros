@@ -84,6 +84,16 @@ export async function createContacto(input: ContactoInput): Promise<{ ok: boolea
 export async function updateContacto(id: string, input: ContactoInput): Promise<{ ok: boolean; error?: string }> {
   try {
     const supabase = await createClient();
+    // Los contactos automáticos (emergencias, empleados, proveedores) no se
+    // editan aquí: sus datos se gestionan en su ficha original.
+    const { data: existente } = await supabase
+      .from("contactos_agenda")
+      .select("protegido")
+      .eq("id", id)
+      .single();
+    if (existente?.protegido) {
+      return { ok: false, error: "Este contacto es automático: edítalo en su ficha original." };
+    }
     const { error } = await supabase
       .from("contactos_agenda")
       .update({
@@ -104,6 +114,16 @@ export async function updateContacto(id: string, input: ContactoInput): Promise<
 export async function deleteContacto(id: string): Promise<{ ok: boolean; error?: string }> {
   try {
     const supabase = await createClient();
+    // Los contactos protegidos (emergencias por defecto y los sincronizados desde
+    // empleados/proveedores) no se pueden borrar a mano: se gestionan en su origen.
+    const { data: existente } = await supabase
+      .from("contactos_agenda")
+      .select("protegido")
+      .eq("id", id)
+      .single();
+    if (existente?.protegido) {
+      return { ok: false, error: "Este contacto no se puede eliminar (se gestiona desde su origen)." };
+    }
     const { error } = await supabase
       .from("contactos_agenda")
       .delete()

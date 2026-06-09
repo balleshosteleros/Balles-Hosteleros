@@ -33,7 +33,7 @@ export function CalendarioMarketingView({ embedded }: { embedded?: boolean } = {
   const [editItem, setEditItem] = useState<ItemCalendario | null>(null);
   const [detalleItem, setDetalleItem] = useState<ItemCalendario | null>(null);
   const [detalleOpen, setDetalleOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;

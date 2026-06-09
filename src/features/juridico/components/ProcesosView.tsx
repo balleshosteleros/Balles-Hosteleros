@@ -31,8 +31,6 @@ import {
 } from "@/shared/components/SubmoduleToolbar";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 
-const ALL = "__ALL__";
-
 function mapDbToProceso(row: Record<string, unknown>, empresa: string, empresaId: string): ProcesoJuridico {
   const docsDb = Array.isArray(row.documentos) ? (row.documentos as Array<Record<string, unknown>>) : [];
   const actsDb = Array.isArray(row.actualizaciones) ? (row.actualizaciones as Array<Record<string, unknown>>) : [];
@@ -75,7 +73,7 @@ export function ProcesosView() {
   useEffect(() => { sessionStorage.setItem("juridico_last", pathname); }, [pathname]);
   const { empresaActual } = useEmpresa();
   const [data, setData] = useState<ProcesoJuridico[]>(() => getProcesosPorEmpresa(empresaActual.id));
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);

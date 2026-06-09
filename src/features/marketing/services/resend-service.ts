@@ -36,7 +36,7 @@ async function obtenerDestinatarios(empresaId: string, segmento: string): Promis
 
   // 1. Perfiles internos
   const { data: profiles } = await admin
-    .from("profiles")
+    .from("usuarios")
     .select("email")
     .eq("empresa_id", empresaId)
     .limit(500);

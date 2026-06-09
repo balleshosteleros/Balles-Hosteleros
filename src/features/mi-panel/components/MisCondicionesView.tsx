@@ -1,13 +1,14 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { getSalariosEmpresa, type PuestoSalarial } from "@/features/rrhh/data/salarios";
+import { type PuestoSalarial } from "@/features/rrhh/data/salarios";
+import { listSalariosEmpresa } from "@/features/rrhh/actions/salarios-actions";
 import { getBonusPorEmpresa, PERIODICIDAD_LABEL, type Bonus } from "@/features/rrhh/data/bonus";
 import {
   Calendar,
@@ -106,10 +107,17 @@ export function MisCondicionesView() {
   const nombreCompleto = [profile?.nombre, profile?.apellidos].filter(Boolean).join(" ") || "—";
   const email = profile?.email || user?.email || "—";
 
-  const puesto = useMemo(() => {
-    const data = getSalariosEmpresa(empresaActual.id);
-    return buscarPuestoUsuario(data.puestos, nombreCompleto, email, roles);
-  }, [empresaActual.id, nombreCompleto, email, roles]);
+  const [puestos, setPuestos] = useState<PuestoSalarial[]>([]);
+  useEffect(() => {
+    let activo = true;
+    listSalariosEmpresa().then((res) => { if (activo) setPuestos(res.puestos); });
+    return () => { activo = false; };
+  }, [empresaActual.id]);
+
+  const puesto = useMemo(
+    () => buscarPuestoUsuario(puestos, nombreCompleto, email, roles),
+    [puestos, nombreCompleto, email, roles],
+  );
 
   const generales = useMemo(() => getDatosGenerales(puesto), [puesto]);
   const bonusAplicables = useMemo(

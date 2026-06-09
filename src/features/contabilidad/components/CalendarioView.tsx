@@ -33,7 +33,7 @@ const tipoColor: Record<string, string> = {
 };
 
 export function CalendarioView() {
-  const { empresaActual } = useEmpresa();
+  useEmpresa();
   const [mes, setMes] = useState(3); // Abril = 3 (0-indexed)
   const [ano, setAno] = useState(2026);
 

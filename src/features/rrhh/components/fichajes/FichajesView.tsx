@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { ESTADO_FICHAJE_LABEL, ESTADO_FICHAJE_COLOR, TIPOS_INCIDENCIA_LABEL, TIPO_FICHAJE_LABEL, TIPO_FICHAJE_BADGE, fichajeColorBadge } from "@/features/rrhh/data/fichajes";
+import { ESTADO_FICHAJE_LABEL, TIPOS_INCIDENCIA_LABEL, TIPO_FICHAJE_LABEL, TIPO_FICHAJE_BADGE, fichajeColorBadge } from "@/features/rrhh/data/fichajes";
 import type { EstadoFichaje, Fichaje, LocalGeo, ConfigFichajes, TipoFichajeCodigo } from "@/features/rrhh/data/fichajes";
 import { listFichajes, crearFichajeManual } from "@/features/rrhh/actions/fichajes-actions";
 import { listTiposFichaje, type TipoFichajeRow } from "@/features/rrhh/actions/horarios-config-actions";
@@ -106,6 +106,8 @@ function mapDbToFichaje(row: Record<string, unknown>): Fichaje {
     local,
     distanciaEntradaMetros: (row.distancia_entrada_metros as number | null) ?? null,
     distanciaSalidaMetros: (row.distancia_salida_metros as number | null) ?? null,
+    cierreAnticipado: Boolean(row.cierre_anticipado),
+    cierreAnticipadoMotivo: (row.cierre_anticipado_motivo as string | null) ?? null,
   };
 }
 
@@ -113,7 +115,7 @@ export function FichajesView() {
   const { empresaActual } = useEmpresa();
   const empresaActivaRef = useRef(empresaActual.id);
   const [fichajes, setFichajes] = useState<Fichaje[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [config, setConfig] = useState<ConfigFichajes>({
     permitirManual: true,
     requiereValidacion: true,
@@ -310,7 +312,7 @@ export function FichajesView() {
     resuelta: false,
   })), [fichajes]);
 
-  const dptos = useMemo(() => [...new Set(fichajes.map(f => f.departamento))].sort(), [fichajes]);
+  const _dptos = useMemo(() => [...new Set(fichajes.map(f => f.departamento))].sort(), [fichajes]);
 
   const acceso = (f: Fichaje, campo: string): unknown => {
     if (campo === "estado") return ESTADO_FICHAJE_LABEL[f.estado];
@@ -400,7 +402,20 @@ export function FichajesView() {
     empleado: {
       th: <TableHead key="empleado">Empleado</TableHead>,
       td: (f) => (
-        <TableCell key="empleado"><div><p className="font-medium text-sm">{f.empleadoNombre}</p><p className="text-xs text-muted-foreground">{f.departamento}</p></div></TableCell>
+        <TableCell key="empleado">
+          <div>
+            <p className="flex items-center gap-1.5 font-medium text-sm">
+              {f.cierreAnticipado && (
+                <AlertTriangle
+                  className="h-4 w-4 shrink-0 text-amber-500"
+                  aria-label="Fichaje paralizado antes de tiempo — a revisar"
+                />
+              )}
+              {f.empleadoNombre}
+            </p>
+            <p className="text-xs text-muted-foreground">{f.departamento}</p>
+          </div>
+        </TableCell>
       ),
     },
     fecha: {

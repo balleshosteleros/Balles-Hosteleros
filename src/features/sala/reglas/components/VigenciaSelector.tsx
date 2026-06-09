@@ -70,7 +70,7 @@ export function VigenciaSelector({ value, onChange, hideHoy, hideSiempre }: Prop
           fechaDesde: value.fechaDesde ?? new Date().toISOString().slice(0, 10),
           fechaHasta:
             value.fechaHasta ??
-            new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+            new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
         });
         return;
       case "fechas":

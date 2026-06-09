@@ -73,7 +73,7 @@ export function TransaccionesView() {
   const [tab, setTab] = useState("TODAS");
   const [busqueda, setBusqueda] = useState("");
   const [txs, setTxs] = useState<TransaccionEnriquecida[]>([]);
-  const [_loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
