@@ -317,6 +317,10 @@ export async function contarPendientesHoy(): Promise<{ ok: boolean; data: number
     }
     if (rolLabel) visibles.add(norm(getModuloForCronograma(rolLabel)));
 
+    // Modelo nuevo: si el empleado tiene puestos, sus tareas de sistema YA son
+    // las de los cronogramas de sus puestos → todas cuentan, sin filtro de módulo.
+    const tienePuestos = (await getPuestoIdsDelUsuario()).length > 0;
+
     const { data, error } = await supabase
       .from("tareas")
       .select("tipo, ref_tabla")
@@ -327,6 +331,7 @@ export async function contarPendientesHoy(): Promise<{ ok: boolean; data: number
 
     const count = (data ?? []).filter((t) => {
       if (t.tipo !== "sistema") return true;
+      if (tienePuestos) return true;
       if (visibles.size === 0) return false;
       const rt = (t.ref_tabla as string | null) ?? "";
       const i = rt.indexOf(":");
@@ -534,6 +539,50 @@ async function getCronogramasParaSync(rol: string): Promise<CronogramaTareaRow[]
   } catch (err) {
     console.error("[getCronogramasParaSync] Fatal:", err);
     return [];
+  }
+}
+
+/**
+ * IDs de los puestos que ocupa el usuario actual (modelo nuevo M:N). Un empleado
+ * tiene UNA ficha (UNIQUE user_id) que puede ocupar varios puestos; sus tareas
+ * son las de los cronogramas de TODOS ellos. Vacío = aún sin puestos asignados.
+ */
+async function getPuestoIdsDelUsuario(): Promise<string[]> {
+  try {
+    const { supabase, userId } = await getAppContext();
+    if (!userId) return [];
+    const { data: emps } = await supabase.from("empleados").select("id").eq("user_id", userId);
+    const empIds = (emps ?? []).map((e) => e.id as string);
+    if (empIds.length === 0) return [];
+    const { data: eps } = await supabase
+      .from("empleado_puestos").select("puesto_id").in("empleado_id", empIds);
+    return Array.from(new Set((eps ?? []).map((r) => r.puesto_id as string))).filter(Boolean);
+  } catch (err) {
+    console.error("[getPuestoIdsDelUsuario]", err);
+    return [];
+  }
+}
+
+/** ¿El usuario tiene puestos asignados? (modelo nuevo activo para él). */
+export async function usuarioTienePuestos(): Promise<boolean> {
+  return (await getPuestoIdsDelUsuario()).length > 0;
+}
+
+/**
+ * Cronogramas del usuario por sus puestos (modelo nuevo). Devuelve null si el
+ * empleado todavía no tiene puestos: el llamador cae al modelo antiguo por rol.
+ */
+async function getCronogramasPorPuestosUsuario(): Promise<CronogramaTareaRow[] | null> {
+  const puestoIds = await getPuestoIdsDelUsuario();
+  if (puestoIds.length === 0) return null;
+  try {
+    const { supabase } = await getAppContext();
+    const { data } = await supabase
+      .from("cronogramas_operativos").select("*").in("puesto_id", puestoIds);
+    return (data ?? []) as CronogramaTareaRow[];
+  } catch (err) {
+    console.error("[getCronogramasPorPuestosUsuario]", err);
+    return null;
   }
 }
 
@@ -802,29 +851,36 @@ export async function syncTareasCronograma(dateIso?: string, forcedRol?: string)
       return { ok: true, data: { rol: null, insertadas: 0, yaExistian: 0 } };
     }
 
+    // Modelo nuevo: las tareas del empleado son las de los cronogramas de TODOS
+    // sus puestos. Si aún no tiene puestos, caemos al modelo antiguo por rol.
+    const porPuestos = forcedRol ? null : await getCronogramasPorPuestosUsuario();
+
     let rol = forcedRol;
-    if (!rol) {
-      // Preferimos profiles.rol_label / departamento (claves de cronogramas_operativos.rol)
-      // sobre user_roles.role (que es el rol RBAC del sistema: empleado/admin/etc).
-      const { data: prof } = await supabase
-        .from("usuarios")
-        .select("rol_label, departamento")
-        .eq("user_id", userId)
-        .maybeSingle();
-      rol = (prof?.rol_label as string | null)?.trim()
-        || (prof?.departamento as string | null)?.trim()
-        || undefined;
+    let candidatos: CronogramaTareaRow[];
+    if (porPuestos && porPuestos.length > 0) {
+      candidatos = porPuestos;
+      rol = rol ?? "Mis puestos";
+    } else {
       if (!rol) {
-        const { data: rData } = await supabase.from("usuario_roles").select("role").eq("user_id", userId);
-        const roles = rData?.map(r => r.role as string) || [];
-        rol = roles.includes("admin") ? "Dirección" : (roles[0] || "Dirección");
+        // Preferimos rol_label / departamento (claves de cronogramas_operativos.rol)
+        // sobre usuario_roles.role (rol RBAC del sistema: empleado/admin/etc).
+        const { data: prof } = await supabase
+          .from("usuarios")
+          .select("rol_label, departamento")
+          .eq("user_id", userId)
+          .maybeSingle();
+        rol = (prof?.rol_label as string | null)?.trim()
+          || (prof?.departamento as string | null)?.trim()
+          || undefined;
+        if (!rol) {
+          const { data: rData } = await supabase.from("usuario_roles").select("role").eq("user_id", userId);
+          const roles = rData?.map(r => r.role as string) || [];
+          rol = roles.includes("admin") ? "Dirección" : (roles[0] || "Dirección");
+        }
       }
+      if (!rol) return { ok: true, data: { rol: null, insertadas: 0, yaExistian: 0 } };
+      candidatos = await getCronogramasParaSync(rol);
     }
-
-    if (!rol) return { ok: true, data: { rol: null, insertadas: 0, yaExistian: 0 } };
-
-    // Búsqueda más flexible
-    const candidatos = await getCronogramasParaSync(rol);
     const targetDate = dateIso ? parseISO(dateIso) : new Date();
     const targetIso = ymd(targetDate);
 
@@ -905,30 +961,38 @@ export async function syncTareasCronogramaRange(dates: string[], forcedRol?: str
     const { supabase, userId, empresaId } = await getAppContext();
     if (!userId || !empresaId) return { ok: true, data: undefined };
 
+    // Modelo nuevo: fuente = cronogramas de los puestos del empleado (fallback a rol).
+    const porPuestos = forcedRol ? null : await getCronogramasPorPuestosUsuario();
+
     let rol = forcedRol;
-    if (!rol) {
-      const { data: prof } = await supabase
-        .from("usuarios")
-        .select("rol_label, departamento")
-        .eq("user_id", userId)
-        .maybeSingle();
-      rol = (prof?.rol_label as string | null)?.trim()
-        || (prof?.departamento as string | null)?.trim()
-        || undefined;
+    let candidatos: CronogramaTareaRow[];
+    if (porPuestos && porPuestos.length > 0) {
+      candidatos = porPuestos;
+      rol = rol ?? "Mis puestos";
+    } else {
       if (!rol) {
-        const { data: rData } = await supabase
-          .from("usuario_roles")
-          .select("role")
-          .eq("user_id", userId);
-        const roles = rData?.map(r => r.role as string) || [];
-        rol = roles.includes("admin") ? "Dirección" : (roles[0] || "Dirección");
+        const { data: prof } = await supabase
+          .from("usuarios")
+          .select("rol_label, departamento")
+          .eq("user_id", userId)
+          .maybeSingle();
+        rol = (prof?.rol_label as string | null)?.trim()
+          || (prof?.departamento as string | null)?.trim()
+          || undefined;
+        if (!rol) {
+          const { data: rData } = await supabase
+            .from("usuario_roles")
+            .select("role")
+            .eq("user_id", userId);
+          const roles = rData?.map(r => r.role as string) || [];
+          rol = roles.includes("admin") ? "Dirección" : (roles[0] || "Dirección");
+        }
       }
+      if (!rol) return { ok: true, data: undefined };
+      candidatos = await getCronogramasParaSync(rol);
     }
 
     console.log(`[sync] Iniciando para rol: ${rol}, fechas: ${dates.length}`);
-    if (!rol) return { ok: true, data: undefined };
-
-    const candidatos = await getCronogramasParaSync(rol);
     if (candidatos.length === 0) return { ok: true, data: undefined };
 
     const toInsert: Record<string, unknown>[] = [];
