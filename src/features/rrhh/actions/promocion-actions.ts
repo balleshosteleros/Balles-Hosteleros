@@ -64,7 +64,7 @@ async function getActor() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { user: null, empresaId: null as string | null };
   const { data: profile } = await supabase
-    .from("profiles")
+    .from("usuarios")
     .select("full_name, email")
     .eq("user_id", user.id)
     .single();
@@ -86,7 +86,7 @@ async function notificarRRHH(
 ) {
   // Buscar destinatarios: usuarios con rol director/admin/gerencia en la empresa
   const { data: profiles } = await admin
-    .from("profiles")
+    .from("usuarios")
     .select("user_id, rol_label, empresa_id")
     .eq("empresa_id", empresaId);
 
@@ -151,7 +151,7 @@ async function registrarAuditoria(
 }
 
 export async function promoverCandidato(input: PromoverInput): Promise<PromoverResult> {
-  const { user, empresaId, actorEmail, actorName } = await getActor();
+  const { user, empresaId, actorEmail } = await getActor();
   if (!user || !empresaId) return { ok: false, error: "No autenticado" };
 
   // Autorización: solo admin/director con acceso a la empresa (GAP authz —
@@ -254,7 +254,7 @@ export async function promoverCandidato(input: PromoverInput): Promise<PromoverR
     // user_empresas (gap histórico de la promoción). Idempotente.
     if (empleadoExistente.user_id) {
       await admin
-        .from("user_empresas")
+        .from("usuario_empresas")
         .upsert(
           { user_id: empleadoExistente.user_id, empresa_id: empresaId },
           { onConflict: "user_id,empresa_id" },

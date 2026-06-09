@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { listVacantesConCandidatos, seedVacantesDesdeOrganigrama } from "@/features/rrhh/actions/reclutamiento-actions";
 import {
@@ -214,6 +213,69 @@ function VacanteCard({
   );
 }
 
+// ─── All Candidates Tab ─────────────────────────────────────────
+// Vista de "todos los candidatos" preparada pero aún no enlazada en la UI.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function AllCandidatosView({ vacantes }: { vacantes: Vacante[] }) {
+  const [search, setSearch] = useState("");
+  const [selectedCandidato, setSelectedCandidato] = useState<Candidato | null>(null);
+
+  const allCandidatos = useMemo(() => vacantes.flatMap((v) => v.candidatos.map((c) => ({ ...c, puesto: v.puesto }))), [vacantes]);
+
+  const filtered = useMemo(() => {
+    if (!search) return allCandidatos;
+    const s = search.toLowerCase();
+    return allCandidatos.filter((c) => `${c.nombre} ${c.apellidos} ${c.email} ${c.puesto}`.toLowerCase().includes(s));
+  }, [allCandidatos, search]);
+
+  return (
+    <div className="space-y-4">
+      <div className="relative max-w-xs">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input placeholder="Buscar candidato..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
+      </div>
+      <Card>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Candidato</TableHead>
+              <TableHead>Vacante</TableHead>
+              <TableHead>Fase</TableHead>
+              <TableHead>Teléfono</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Origen</TableHead>
+              <TableHead>Reclutador</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filtered.map((c) => (
+              <TableRow key={c.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedCandidato(c)}>
+                <TableCell>
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-xs">{c.nombre[0]}{c.apellidos[0]}</div>
+                    <span className="font-medium">{c.nombre} {c.apellidos}</span>
+                  </div>
+                </TableCell>
+                <TableCell className="font-medium">{c.puesto}</TableCell>
+                <TableCell>
+                  <Badge variant="outline" className="text-[11px]" style={{ borderColor: FASES_CONFIG[c.fase].color, color: FASES_CONFIG[c.fase].color }}>
+                    {FASES_CONFIG[c.fase].label}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-muted-foreground">{c.telefono}</TableCell>
+                <TableCell className="text-muted-foreground">{c.email}</TableCell>
+                <TableCell className="text-muted-foreground">{ORIGEN_LABELS[c.origen]}</TableCell>
+                <TableCell className="text-muted-foreground">{c.reclutadorAsignado}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Card>
+      <CandidatoDialog candidato={selectedCandidato} open={!!selectedCandidato} onOpenChange={(o) => !o && setSelectedCandidato(null)} />
+    </div>
+  );
+}
+
 // ─── Candidate Detail Dialog ────────────────────────────────────
 function CandidatoDialog({ candidato, open, onOpenChange }: { candidato: Candidato | null; open: boolean; onOpenChange: (o: boolean) => void }) {
   if (!candidato) return null;
@@ -366,71 +428,9 @@ function CandidatosView({ vacante, faseInicial, onBack }: { vacante: Vacante; fa
   );
 }
 
-// ─── All Candidates Tab ─────────────────────────────────────────
-function _AllCandidatosView({ vacantes }: { vacantes: Vacante[] }) {
-  const [search, setSearch] = useState("");
-  const [selectedCandidato, setSelectedCandidato] = useState<Candidato | null>(null);
-
-  const allCandidatos = useMemo(() => vacantes.flatMap((v) => v.candidatos.map((c) => ({ ...c, puesto: v.puesto }))), [vacantes]);
-
-  const filtered = useMemo(() => {
-    if (!search) return allCandidatos;
-    const s = search.toLowerCase();
-    return allCandidatos.filter((c) => `${c.nombre} ${c.apellidos} ${c.email} ${c.puesto}`.toLowerCase().includes(s));
-  }, [allCandidatos, search]);
-
-  return (
-    <div className="space-y-4">
-      <div className="relative max-w-xs">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Buscar candidato..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
-      </div>
-      <Card>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Candidato</TableHead>
-              <TableHead>Vacante</TableHead>
-              <TableHead>Fase</TableHead>
-              <TableHead>Teléfono</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Origen</TableHead>
-              <TableHead>Reclutador</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.map((c) => (
-              <TableRow key={c.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedCandidato(c)}>
-                <TableCell>
-                  <div className="flex items-center gap-2.5">
-                    <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-xs">{c.nombre[0]}{c.apellidos[0]}</div>
-                    <span className="font-medium">{c.nombre} {c.apellidos}</span>
-                  </div>
-                </TableCell>
-                <TableCell className="font-medium">{c.puesto}</TableCell>
-                <TableCell>
-                  <Badge variant="outline" className="text-[11px]" style={{ borderColor: FASES_CONFIG[c.fase].color, color: FASES_CONFIG[c.fase].color }}>
-                    {FASES_CONFIG[c.fase].label}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-muted-foreground">{c.telefono}</TableCell>
-                <TableCell className="text-muted-foreground">{c.email}</TableCell>
-                <TableCell className="text-muted-foreground">{ORIGEN_LABELS[c.origen]}</TableCell>
-                <TableCell className="text-muted-foreground">{c.reclutadorAsignado}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Card>
-      <CandidatoDialog candidato={selectedCandidato} open={!!selectedCandidato} onOpenChange={(o) => !o && setSelectedCandidato(null)} />
-    </div>
-  );
-}
-
 // ─── Main Page ──────────────────────────────────────────────────
 export function ReclutamientoView() {
   const { empresaActual } = useEmpresa();
-  const _router = useRouter();
   const [vacantes, setVacantes] = useState<Vacante[]>([]);
   const [loading, setLoading] = useState(true);
   useGlobalLoadingSync(loading);

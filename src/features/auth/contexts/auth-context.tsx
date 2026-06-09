@@ -199,7 +199,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const loadFreshAuth = async (attempt: number) => {
             const [profileRes, permisosRes] = await Promise.all([
               supabase
-                .from("profiles")
+                .from("usuarios")
                 .select("nombre, apellidos, email, empresa_id, avatar_url, avatar_obligatorio, rol_label, departamento")
                 .eq("user_id", userId)
                 .single(),

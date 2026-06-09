@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   calcularDuracionTurno,
   formatTurnoHorario,
-  TURNO_TONOS,
+  pillStyleDepartamento,
   type Turno,
   type TipoJornada,
 } from "@/features/rrhh/data/horarios";
@@ -155,7 +155,7 @@ export function PatronesSection({ empresaId }: { empresaId: string }) {
 // --- Lista ----------------------------------------------------------------
 
 function ListaPatrones({
-  empresaId,
+  empresaId: _empresaId,
   turnos,
   patrones,
   cargando,
@@ -465,10 +465,8 @@ function VersionesPatronDialog({
                         return t ? (
                           <span
                             key={i}
-                            className={cn(
-                              "text-[10px] font-semibold px-2 py-0.5 rounded uppercase",
-                              TURNO_TONOS[t.color].pill,
-                            )}
+                            className="text-[10px] font-semibold px-2 py-0.5 rounded uppercase"
+                            style={pillStyleDepartamento(t.colorHex)}
                           >
                             {t.codigo}
                           </span>
@@ -510,10 +508,8 @@ function TurnoBadges({
         return (
           <span
             key={i}
-            className={cn(
-              "text-[10px] font-semibold px-2 py-0.5 rounded uppercase",
-              TURNO_TONOS[t.color].pill
-            )}
+            className="text-[10px] font-semibold px-2 py-0.5 rounded uppercase"
+            style={pillStyleDepartamento(t.colorHex)}
           >
             {t.codigo}
           </span>
@@ -1000,10 +996,8 @@ function SemanalGrid({
                       {turno ? (
                         <div className="space-y-1">
                           <span
-                            className={cn(
-                              "inline-block text-[10px] font-bold px-1.5 py-0.5 rounded uppercase",
-                              TURNO_TONOS[turno.color].pill
-                            )}
+                            className="inline-block text-[10px] font-bold px-1.5 py-0.5 rounded uppercase"
+                            style={pillStyleDepartamento(turno.colorHex)}
                           >
                             {turno.codigo}
                           </span>
@@ -1103,10 +1097,8 @@ function LibreGrid({
               {turno ? (
                 <div className="flex items-center justify-center gap-2">
                   <span
-                    className={cn(
-                      "text-[10px] font-bold px-1.5 py-0.5 rounded uppercase",
-                      TURNO_TONOS[turno.color].pill
-                    )}
+                    className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase"
+                    style={pillStyleDepartamento(turno.colorHex)}
                   >
                     {turno.codigo}
                   </span>
@@ -1210,10 +1202,8 @@ function TurnosPanel({
           >
             <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
             <span
-              className={cn(
-                "text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 uppercase",
-                TURNO_TONOS[t.color].pill
-              )}
+              className="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 uppercase"
+              style={pillStyleDepartamento(t.colorHex)}
             >
               {t.codigo}
             </span>

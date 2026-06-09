@@ -209,7 +209,7 @@ const evalSinVacacionesTrimestre: Evaluator = async (sb, empresaId, fecha) => {
   const trimInicio = inicioTrimestreDe(fecha);
   // Todos los profiles activos de la empresa
   const { data: profs, error: errP } = await sb
-    .from("profiles")
+    .from("usuarios")
     .select("user_id, full_name, nombre")
     .eq("empresa_id", empresaId);
   if (errP) throw new Error(`sin_vacaciones_trimestre/profiles: ${errP.message}`);
@@ -256,7 +256,7 @@ async function fillEmpleadoNombre(
   const sinNombre = cands.filter((c) => !c.empleadoNombre).map((c) => c.userId);
   if (!sinNombre.length) return cands;
   const { data } = await sb
-    .from("profiles")
+    .from("usuarios")
     .select("user_id, full_name, nombre")
     .in("user_id", sinNombre);
   const map = new Map<string, string>();
@@ -285,7 +285,7 @@ function fechaAniversarioMensual(fechaAlta: string, n: number): string {
 
 async function cargarPerfiles(admin: SupabaseClient, empresaId: string): Promise<PerfilAntiguedad[]> {
   const { data, error } = await admin
-    .from("profiles")
+    .from("usuarios")
     .select("user_id, empresa_id, full_name, nombre, fecha_alta, created_at")
     .eq("empresa_id", empresaId);
   if (error) throw new Error(`profiles: ${error.message}`);

@@ -13,7 +13,7 @@ async function getContext() {
   if (!user) return { supabase, user: null, empresaId: null, nombre: null };
   const empresaId = await getEmpresaActivaForUser(supabase as unknown as SupabaseClient, user.id);
   const { data } = await supabase
-    .from("profiles")
+    .from("usuarios")
     .select("nombre, apellidos")
     .eq("user_id", user.id)
     .single();

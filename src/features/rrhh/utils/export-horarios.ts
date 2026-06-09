@@ -2,7 +2,7 @@ import { jsPDF } from "jspdf";
 import autoTable, { type CellDef, type RowInput } from "jspdf-autotable";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { DIAS_SEMANA, type TurnoTono } from "@/features/rrhh/data/horarios";
+import { DIAS_SEMANA } from "@/features/rrhh/data/horarios";
 import type {
   Planificacion,
   PlanEmpleado,
@@ -12,16 +12,25 @@ import type { Agrupacion } from "@/features/rrhh/components/horarios/CuadranteGr
 
 const SIN_DEPTO = "Sin departamento";
 
-// Paleta de turnos → RGB del PDF (réplica de TURNO_TONOS de la rejilla).
-const TONO_PDF: Record<TurnoTono, { fill: [number, number, number]; text: [number, number, number] }> = {
-  stone: { fill: [231, 229, 228], text: [68, 64, 60] },
-  emerald: { fill: [167, 243, 208], text: [6, 95, 70] },
-  violet: { fill: [221, 214, 254], text: [91, 33, 182] },
-  rose: { fill: [254, 205, 211], text: [159, 18, 57] },
-  teal: { fill: [204, 251, 241], text: [17, 94, 89] },
-  sky: { fill: [224, 242, 254], text: [7, 89, 133] },
-  amber: { fill: [254, 243, 199], text: [146, 64, 14] },
-};
+type RGB = [number, number, number];
+
+/** "#rrggbb" → RGB. Cae a un gris neutro si el hex no es válido. */
+function hexToRgb(hex?: string | null): RGB {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec((hex ?? "").trim());
+  if (!m) return [107, 114, 128];
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/**
+ * Color hex del departamento → relleno tenue + texto del color, replicando el
+ * pastel de la rejilla (fondo = 15 % del color sobre blanco).
+ */
+function pdfTonoDeHex(hex?: string | null): { fill: RGB; text: RGB } {
+  const [r, g, b] = hexToRgb(hex);
+  const mix = (c: number) => Math.round(c + (255 - c) * 0.85);
+  return { fill: [mix(r), mix(g), mix(b)], text: [r, g, b] };
+}
 
 const MUTED: [number, number, number] = [241, 245, 249]; // slate-100 (cabeceras de grupo)
 const HEAD: [number, number, number] = [226, 232, 240]; // slate-200 (cabecera de tabla)
@@ -146,7 +155,7 @@ export function exportarCuadrantePDF(opts: ExportCuadranteOpts) {
           : `${t.codigo}\n${tramo.inicio}-${tramo.fin}`;
       })
       .join("\n");
-    const tono = TONO_PDF[items[0].color] ?? TONO_PDF.stone;
+    const tono = pdfTonoDeHex(items[0].colorHex);
     return {
       content,
       styles: { fillColor: tono.fill, textColor: tono.text, fontStyle: "bold" },
@@ -164,7 +173,7 @@ export function exportarCuadrantePDF(opts: ExportCuadranteOpts) {
       }
     }
     for (const t of ordenados) {
-      const tono = TONO_PDF[t.color] ?? TONO_PDF.stone;
+      const tono = pdfTonoDeHex(t.colorHex);
       const fila: CellDef[] = [
         {
           content: `${t.codigo}  ${t.nombre}`,

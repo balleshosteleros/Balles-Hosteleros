@@ -3,7 +3,6 @@
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import type {
   ToolNotifKey,
-  ToolNotifConfig,
   AgendaNotifConfig,
   NotificacionesConfig,
 } from "@/features/ajustes/data/ajustes";

@@ -2428,7 +2428,6 @@ function DetalleEstudio({
 
 /* ── Bloque desplegable de pilar con sus partidas ── */
 function PilarBloque({
-  pilarKey,
   label,
   pilar,
   ventas,

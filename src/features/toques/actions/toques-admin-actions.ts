@@ -26,7 +26,7 @@ async function getAdminSession() {
   if (!user) return { user: null, empresaId: null, isAdmin: false };
   const empresaId = await getEmpresaActivaForUser(supabase, user.id);
   const { data: roles } = await supabase
-    .from("user_roles")
+    .from("usuario_roles")
     .select("role")
     .eq("user_id", user.id);
   const adminRoles = new Set(["admin", "director", "gerencia", "responsable"]);
@@ -227,7 +227,7 @@ export async function actualizarFechaAlta(
 
     // Verificar que el destinatario pertenece a la misma empresa
     const { data: dest, error: errD } = await admin
-      .from("profiles")
+      .from("usuarios")
       .select("user_id, empresa_id")
       .eq("user_id", parsed.data.userId)
       .maybeSingle();
@@ -235,7 +235,7 @@ export async function actualizarFechaAlta(
     if (dest.empresa_id !== empresaId) return { ok: false, error: "Empleado de otra empresa" };
 
     const { error } = await admin
-      .from("profiles")
+      .from("usuarios")
       .update({ fecha_alta: parsed.data.fechaAlta })
       .eq("user_id", parsed.data.userId);
     if (error) {

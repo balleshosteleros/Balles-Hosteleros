@@ -7,7 +7,7 @@ import {
   TIPOS_VENCIMIENTO, LOCALES_VENCIMIENTO, RESPONSABLES, calcularEstado,
   CategoriaVencimiento, EstadoVencimiento, Frecuencia,
 } from "@/features/gerencia/data/vencimientos";
-import { listVencimientos, createVencimiento, updateVencimiento } from "@/features/gerencia/actions/vencimientos-actions";
+import { listVencimientos, createVencimiento } from "@/features/gerencia/actions/vencimientos-actions";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  CalendarDays, List, Plus, Search, ChevronLeft, ChevronRight, Clock, FileText, History,
+  CalendarDays, List, Plus, Search, ChevronLeft, ChevronRight, FileText, History,
   AlertTriangle, CheckCircle2, Timer, Eye,
 } from "lucide-react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isSameDay, parseISO } from "date-fns";
@@ -79,7 +79,7 @@ const calDotColor: Record<EstadoVencimiento, string> = {
 export function VencimientosView() {
   const { empresaActual } = useEmpresa();
   const [datos, setDatosState] = useState<Vencimiento[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const setDatos = (fn: (prev: Vencimiento[]) => Vencimiento[]) => setDatosState((prev) => fn(prev));
 
   const loadVencimientos = useCallback(async () => {

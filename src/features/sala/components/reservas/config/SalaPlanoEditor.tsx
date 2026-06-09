@@ -586,8 +586,8 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
       const sin = Math.sin(rad);
       const localDx = cos * dx + sin * dy;
       const localDy = -sin * dx + cos * dy;
-      let newW = Math.max(MIN_DECO_SIZE, drag.startW + localDx);
-      let newH = Math.max(MIN_DECO_SIZE, drag.startH + localDy);
+      const newW = Math.max(MIN_DECO_SIZE, drag.startW + localDx);
+      const newH = Math.max(MIN_DECO_SIZE, drag.startH + localDy);
       const cx0 = drag.startX + drag.startW / 2;
       const cy0 = drag.startY + drag.startH / 2;
       const tlX = cx0 + cos * (-drag.startW / 2) - sin * (-drag.startH / 2);

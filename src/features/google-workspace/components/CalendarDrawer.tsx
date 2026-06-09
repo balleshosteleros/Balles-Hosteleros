@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useEffect, useMemo, useState } from "react";
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -227,6 +227,55 @@ function isoDate(d: Date): string {
   return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, "0")}-${d.getDate().toString().padStart(2, "0")}`;
 }
 
+// ─── Helpers de hora (HH:mm ↔ minutos desde medianoche) ──────
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+function hmAMin(s: string): number {
+  const [h, m] = s.split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+function minAHM(min: number): string {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
+}
+function fmtReloj(d: Date): string {
+  return `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
+}
+function fmtDuracion(min: number): string {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  if (h === 0) return `${m} min`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}min`;
+}
+// Date local (zona del navegador) a las HH:mm del día indicado.
+function fechaDesde(dayIso: string, min: number): Date {
+  const d = new Date(`${dayIso}T00:00:00`);
+  d.setMinutes(d.getMinutes() + min);
+  return d;
+}
+// Recalcula los campos derivados de un evento tras moverlo/redimensionarlo.
+function aplicarHorario(
+  ev: Evento,
+  dayIso: string,
+  inicioMin: number,
+  durMin: number,
+): Evento {
+  const start = fechaDesde(dayIso, inicioMin);
+  const fin = new Date(start.getTime() + durMin * 60000);
+  return {
+    ...ev,
+    inicio: start.toISOString(),
+    fin: fin.toISOString(),
+    hora: fmtReloj(start),
+    duracion: fmtDuracion(durMin),
+    fechaDia: isoDate(start),
+    inicioMin: start.getHours() * 60 + start.getMinutes(),
+    duracionMin: durMin,
+  };
+}
+
 type Form = {
   id?: string;
   calendarId: string;
@@ -274,6 +323,24 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
     startMin: number;
     endMin: number;
   } | null>(null);
+  // Mover / redimensionar un evento existente (arrastre del propio recuadro).
+  const movRef = useRef<{
+    evId: string;
+    calendarId: string;
+    modo: "mover" | "top" | "bottom";
+    origDayIso: string;
+    origInicioMin: number;
+    origDurMin: number;
+    startY: number;
+    dragged: boolean;
+    visMarked: boolean;
+    prevDayIso: string;
+    prevInicioMin: number;
+    prevDurMin: number;
+  } | null>(null);
+  const [arrastrando, setArrastrando] = useState<string | null>(null);
+  const [moviendoVis, setMoviendoVis] = useState<string | null>(null);
+  const clickSupRef = useRef(false);
   const nowTime = useNow();
 
   // Huso secundario guardado por usuario (persiste tras logout y entre
@@ -412,6 +479,126 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
     return () => window.removeEventListener("mouseup", cancel);
   }, [drag]);
 
+  // Calendarios donde el usuario puede escribir (para permitir mover eventos).
+  const calsWritable = useMemo(() => {
+    const s = new Set<string>();
+    calendarios.forEach((c) => {
+      if (c.rol === "owner" || c.rol === "writer") s.add(c.id);
+    });
+    return s;
+  }, [calendarios]);
+  function puedeEditarEv(ev: Evento): boolean {
+    return calsWritable.size === 0 || calsWritable.has(ev.calendarId);
+  }
+
+  // Mover el recuadro (cambia día/hora) o tirar de un borde (cambia duración).
+  function iniciarMovimiento(
+    ev: Evento,
+    dayIso: string,
+    modo: "mover" | "top" | "bottom",
+    e: React.PointerEvent,
+  ) {
+    if (e.button !== 0 || !puedeEditarEv(ev)) return;
+    const seg = segmentoEnDia(ev, dayIso);
+    if (!seg || !seg.esInicio || !seg.esFin) return; // solo eventos de un único día
+    e.preventDefault();
+    e.stopPropagation();
+    movRef.current = {
+      evId: ev.id,
+      calendarId: ev.calendarId,
+      modo,
+      origDayIso: dayIso,
+      origInicioMin: seg.inicioMin,
+      origDurMin: seg.duracionMin,
+      startY: e.clientY,
+      dragged: false,
+      visMarked: false,
+      prevDayIso: dayIso,
+      prevInicioMin: seg.inicioMin,
+      prevDurMin: seg.duracionMin,
+    };
+    setArrastrando(ev.id);
+  }
+
+  // Listeners globales mientras se arrastra un evento. Actualiza el estado
+  // de forma optimista (snap a 15 min) y persiste en Google al soltar.
+  useEffect(() => {
+    if (!arrastrando) return;
+    function onMove(e: PointerEvent) {
+      const m = movRef.current;
+      if (!m) return;
+      const dy = e.clientY - m.startY;
+      const deltaMin = Math.round((dy / HORA_PX) * 4) * 15; // snap a 15 min
+      let dayIso = m.origDayIso;
+      let inicioMin = m.origInicioMin;
+      let durMin = m.origDurMin;
+      if (m.modo === "mover") {
+        const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+        const col = el?.closest("[data-day]") as HTMLElement | null;
+        if (col?.dataset.day) dayIso = col.dataset.day;
+        inicioMin = clamp(m.origInicioMin + deltaMin, 0, 24 * 60 - m.origDurMin);
+      } else if (m.modo === "bottom") {
+        durMin = clamp(m.origDurMin + deltaMin, 15, 24 * 60 - m.origInicioMin);
+      } else {
+        inicioMin = clamp(m.origInicioMin + deltaMin, 0, m.origInicioMin + m.origDurMin - 15);
+        durMin = m.origInicioMin + m.origDurMin - inicioMin;
+      }
+      if (deltaMin !== 0 || dayIso !== m.origDayIso) m.dragged = true;
+      // Marca visual de arrastre (pointer-events:none) solo cuando hay movimiento real,
+      // para no desviar el click de selección en un click simple.
+      if (m.dragged && !m.visMarked) {
+        m.visMarked = true;
+        setMoviendoVis(m.evId);
+      }
+      if (dayIso === m.prevDayIso && inicioMin === m.prevInicioMin && durMin === m.prevDurMin) return;
+      m.prevDayIso = dayIso;
+      m.prevInicioMin = inicioMin;
+      m.prevDurMin = durMin;
+      setEventos((prev) =>
+        prev.map((x) => (x.id === m.evId ? aplicarHorario(x, dayIso, inicioMin, durMin) : x)),
+      );
+    }
+    async function onUp() {
+      const m = movRef.current;
+      setArrastrando(null);
+      setMoviendoVis(null);
+      movRef.current = null;
+      if (!m || !m.dragged) return;
+      clickSupRef.current = true; // evita que el click posterior abra el detalle
+      const start = fechaDesde(m.prevDayIso, m.prevInicioMin);
+      const fin = new Date(start.getTime() + m.prevDurMin * 60000);
+      try {
+        const res = await fetch("/api/google/calendar/update", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: m.evId,
+            calendarId: m.calendarId,
+            inicio: start.toISOString(),
+            fin: fin.toISOString(),
+          }),
+        });
+        if (!res.ok) throw new Error();
+        toast.success("Evento actualizado");
+      } catch {
+        toast.error("No se pudo mover el evento");
+        setEventos((prev) =>
+          prev.map((x) =>
+            x.id === m.evId ? aplicarHorario(x, m.origDayIso, m.origInicioMin, m.origDurMin) : x,
+          ),
+        );
+        recargarEventos();
+      }
+    }
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arrastrando]);
+
   // Navegación
   function navegar(delta: number) {
     const nueva = new Date(fechaRef);
@@ -488,6 +675,10 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
   async function guardar() {
     if (!form || !form.titulo) {
       toast.error("Falta el título");
+      return;
+    }
+    if (!form.allDay && hmAMin(form.fin) <= hmAMin(form.inicio)) {
+      toast.error("La hora de fin debe ser posterior a la de inicio");
       return;
     }
     setGuardando(true);
@@ -575,6 +766,28 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
       norm(ev.lugar || "").includes(norm(q))
     );
   }
+
+  // Rueda del ratón sobre los campos de hora: ±15 min sin tener que pinchar.
+  // Al mover el inicio se conserva la duración (arrastra el fin con él).
+  const stepInicio = useCallback((dir: number) => {
+    setForm((f) => {
+      if (!f) return f;
+      const ini = hmAMin(f.inicio);
+      const dur = Math.max(15, hmAMin(f.fin) - ini);
+      const nIni = clamp(ini + dir * 15, 0, 24 * 60 - 15);
+      return { ...f, inicio: minAHM(nIni), fin: minAHM(Math.min(24 * 60, nIni + dur)) };
+    });
+  }, []);
+  const stepFin = useCallback((dir: number) => {
+    setForm((f) => {
+      if (!f) return f;
+      const ini = hmAMin(f.inicio);
+      const nFin = clamp(hmAMin(f.fin) + dir * 15, ini + 15, 24 * 60);
+      return { ...f, fin: minAHM(nFin) };
+    });
+  }, []);
+  const horasInvalidas =
+    !!form && !form.allDay && hmAMin(form.fin) <= hmAMin(form.inicio);
 
   const eventosTimed = eventos.filter((e) => !e.allDay);
   const eventosAllDay = eventos.filter((e) => e.allDay);
@@ -828,6 +1041,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                   return (
                     <div
                       key={diaIdx}
+                      data-day={dayIso}
                       className="relative flex flex-1 flex-col border-r"
                       style={{ height: GRID_PX }}
                       onMouseMove={(e) => handleColumnMouseMove(d, e)}
@@ -889,35 +1103,35 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                             ? `calc(${((lay.cols - lay.col - 1) / lay.cols) * 100}% + ${lay.col === lay.cols - 1 ? 2 : gap / 2}px)`
                             : undefined;
                         return (
-                          <button
+                          <EventoBox
                             key={`${ev.id}-${dayIso}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
+                            ev={ev}
+                            vista="week"
+                            top={top}
+                            height={height}
+                            left={left}
+                            right={right}
+                            bg={bg}
+                            txt={txt}
+                            soloCol={lay.cols === 1}
+                            esInicio={seg.esInicio}
+                            esFin={seg.esFin}
+                            finalizado={finalizado}
+                            enCurso={enCurso}
+                            atenuado={!!q && !coincide(ev)}
+                            editable={puedeEditarEv(ev) && seg.esInicio && seg.esFin}
+                            arrastrandoEste={moviendoVis === ev.id}
+                            subLabel={seg.esInicio ? ev.hora : "continúa"}
+                            mostrarLugar={false}
+                            onSelect={() => {
+                              if (clickSupRef.current) {
+                                clickSupRef.current = false;
+                                return;
+                              }
                               setEventoSel(ev);
                             }}
-                            className={cn(
-                              "absolute z-10 overflow-hidden px-1.5 py-0.5 text-left text-[11px] leading-tight transition-shadow hover:z-20 hover:shadow-md",
-                              lay.cols === 1 && "left-0.5 right-0.5",
-                              seg.esInicio && "rounded-t-[4px]",
-                              seg.esFin && "rounded-b-[4px]",
-                              finalizado && "opacity-70",
-                              enCurso && "ring-2 ring-red-400",
-                              q && !coincide(ev) && "opacity-20",
-                            )}
-                            style={{
-                              top,
-                              height,
-                              left,
-                              right,
-                              backgroundColor: bg,
-                              color: txt,
-                            }}
-                          >
-                            <p className="truncate font-semibold">{ev.titulo}</p>
-                            <p className="truncate text-[10px] opacity-90">
-                              {seg.esInicio ? ev.hora : "continúa"}
-                            </p>
-                          </button>
+                            onIniciarMov={(modo, e) => iniciarMovimiento(ev, dayIso, modo, e)}
+                          />
                         );
                         });
                       })()}
@@ -967,6 +1181,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
               <div ref={setScrollContainer} className="flex flex-1 min-h-0 overflow-y-auto">
                 <ColumnaHoras tzSecundaria={tzSecundaria} fechaRef={fechaRef} />
                 <div
+                  data-day={dayIso}
                   className="relative flex flex-1 flex-col border-r"
                   style={{ height: GRID_PX }}
                   onMouseMove={(e) => handleColumnMouseMove(fechaRef, e)}
@@ -1031,36 +1246,35 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                         ? `calc(${((lay.cols - lay.col - 1) / lay.cols) * 100}% + ${lay.col === lay.cols - 1 ? 4 : gap / 2}px)`
                         : undefined;
                     return (
-                      <button
+                      <EventoBox
                         key={`${ev.id}-${dayIso}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
+                        ev={ev}
+                        vista="day"
+                        top={top}
+                        height={height}
+                        left={left}
+                        right={right}
+                        bg={bg}
+                        txt={txt}
+                        soloCol={lay.cols === 1}
+                        esInicio={seg.esInicio}
+                        esFin={seg.esFin}
+                        finalizado={finalizado}
+                        enCurso={enCurso}
+                        atenuado={!!q && !coincide(ev)}
+                        editable={puedeEditarEv(ev) && seg.esInicio && seg.esFin}
+                        arrastrandoEste={moviendoVis === ev.id}
+                        subLabel={seg.esInicio ? `${ev.hora} · ${ev.duracion}` : "continúa"}
+                        mostrarLugar
+                        onSelect={() => {
+                          if (clickSupRef.current) {
+                            clickSupRef.current = false;
+                            return;
+                          }
                           setEventoSel(ev);
                         }}
-                        className={cn(
-                          "absolute z-10 overflow-hidden px-2 py-1 text-left text-xs leading-tight transition-shadow hover:z-20 hover:shadow-md",
-                          lay.cols === 1 && "left-1 right-1",
-                          seg.esInicio && "rounded-t-[4px]",
-                          seg.esFin && "rounded-b-[4px]",
-                          finalizado && "opacity-70",
-                          enCurso && "ring-2 ring-red-400",
-                          q && !coincide(ev) && "opacity-20",
-                        )}
-                        style={{
-                          top,
-                          height,
-                          left,
-                          right,
-                          backgroundColor: bg,
-                          color: txt,
-                        }}
-                      >
-                        <p className="truncate font-semibold">{ev.titulo}</p>
-                        <p className="truncate text-[10px] opacity-90">
-                          {seg.esInicio ? `${ev.hora} · ${ev.duracion}` : "continúa"}
-                        </p>
-                        {ev.lugar && <p className="truncate text-[10px] opacity-90">📍 {ev.lugar}</p>}
-                      </button>
+                        onIniciarMov={(modo, e) => iniciarMovimiento(ev, dayIso, modo, e)}
+                      />
                     );
                     });
                   })()}
@@ -1227,25 +1441,37 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                   />
                 </div>
                 {!form.allDay && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label className="text-[11px]">Inicio</Label>
-                      <Input
-                        type="time"
-                        value={form.inicio}
-                        onChange={(e) => setForm({ ...form, inicio: e.target.value })}
-                        className="mt-1"
-                      />
+                  <div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-[11px]">Inicio</Label>
+                        <TimeInput
+                          value={form.inicio}
+                          onChange={(v) => setForm({ ...form, inicio: v })}
+                          onStep={stepInicio}
+                          invalido={horasInvalidas}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-[11px]">Fin</Label>
+                        <TimeInput
+                          value={form.fin}
+                          onChange={(v) => setForm({ ...form, fin: v })}
+                          onStep={stepFin}
+                          invalido={horasInvalidas}
+                          className="mt-1"
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <Label className="text-[11px]">Fin</Label>
-                      <Input
-                        type="time"
-                        value={form.fin}
-                        onChange={(e) => setForm({ ...form, fin: e.target.value })}
-                        className="mt-1"
-                      />
-                    </div>
+                    {horasInvalidas && (
+                      <p className="mt-1.5 text-[11px] text-destructive">
+                        La hora de fin debe ser posterior a la de inicio.
+                      </p>
+                    )}
+                    <p className="mt-1 text-[10px] text-muted-foreground">
+                      Gira la rueda del ratón sobre la hora para ajustarla.
+                    </p>
                   </div>
                 )}
                 <div>
@@ -1275,7 +1501,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                   size="sm"
                   className="bg-blue-600 hover:bg-blue-700"
                   onClick={guardar}
-                  disabled={guardando}
+                  disabled={guardando || horasInvalidas}
                 >
                   {guardando ? (
                     <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
@@ -1290,6 +1516,132 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
         )}
       </SheetContent>
     </Sheet>
+  );
+}
+
+// ─── Campo de hora con rueda del ratón (±15 min sin pinchar) ──
+function TimeInput({
+  value,
+  onChange,
+  onStep,
+  invalido,
+  className,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onStep: (dir: number) => void;
+  invalido?: boolean;
+  className?: string;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  // Listener no pasivo: React monta wheel como pasivo y no deja preventDefault.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const handler = (e: WheelEvent) => {
+      e.preventDefault();
+      onStep(e.deltaY < 0 ? 1 : -1);
+    };
+    el.addEventListener("wheel", handler, { passive: false });
+    return () => el.removeEventListener("wheel", handler);
+  }, [onStep]);
+  return (
+    <Input
+      ref={ref}
+      type="time"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={cn(invalido && "border-destructive focus-visible:ring-destructive", className)}
+    />
+  );
+}
+
+// ─── Recuadro de evento (arrastrable y redimensionable) ──────
+type EventoBoxProps = {
+  ev: Evento;
+  vista: "week" | "day";
+  top: number;
+  height: number;
+  left?: string;
+  right?: string;
+  bg: string;
+  txt: string;
+  soloCol: boolean;
+  esInicio: boolean;
+  esFin: boolean;
+  finalizado: boolean;
+  enCurso: boolean;
+  atenuado: boolean;
+  editable: boolean;
+  arrastrandoEste: boolean;
+  subLabel: string;
+  mostrarLugar: boolean;
+  onSelect: () => void;
+  onIniciarMov: (modo: "mover" | "top" | "bottom", e: React.PointerEvent) => void;
+};
+
+function EventoBox({
+  ev,
+  vista,
+  top,
+  height,
+  left,
+  right,
+  bg,
+  txt,
+  soloCol,
+  esInicio,
+  esFin,
+  finalizado,
+  enCurso,
+  atenuado,
+  editable,
+  arrastrandoEste,
+  subLabel,
+  mostrarLugar,
+  onSelect,
+  onIniciarMov,
+}: EventoBoxProps) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onPointerDown={(e) => onIniciarMov("mover", e)}
+      onClick={onSelect}
+      className={cn(
+        "absolute z-10 select-none overflow-hidden text-left leading-tight transition-shadow hover:z-20 hover:shadow-md",
+        vista === "week" ? "px-1.5 py-0.5 text-[11px]" : "px-2 py-1 text-xs",
+        soloCol && (vista === "week" ? "left-0.5 right-0.5" : "left-1 right-1"),
+        esInicio && "rounded-t-[4px]",
+        esFin && "rounded-b-[4px]",
+        finalizado && "opacity-70",
+        enCurso && "ring-2 ring-red-400",
+        atenuado && "opacity-20",
+        editable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
+        arrastrandoEste && "pointer-events-none opacity-90 shadow-lg ring-2 ring-blue-400",
+      )}
+      style={{ top, height, left, right, backgroundColor: bg, color: txt }}
+    >
+      {editable && esInicio && (
+        <div
+          onPointerDown={(e) => onIniciarMov("top", e)}
+          className="absolute inset-x-0 top-0 z-10 h-1.5 cursor-ns-resize"
+          title="Cambiar hora de inicio"
+        />
+      )}
+      <p className="truncate font-semibold">{ev.titulo}</p>
+      <p className="truncate text-[10px] opacity-90">{subLabel}</p>
+      {mostrarLugar && ev.lugar && (
+        <p className="truncate text-[10px] opacity-90">📍 {ev.lugar}</p>
+      )}
+      {editable && esFin && (
+        <div
+          onPointerDown={(e) => onIniciarMov("bottom", e)}
+          className="absolute inset-x-0 bottom-0 z-10 h-1.5 cursor-ns-resize"
+          title="Cambiar hora de fin"
+        />
+      )}
+    </div>
   );
 }
 

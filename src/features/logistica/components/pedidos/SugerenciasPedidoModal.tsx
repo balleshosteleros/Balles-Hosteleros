@@ -31,7 +31,6 @@ import {
   getSugerenciasPorStock,
   getSugerenciasPorVentas,
   getCatalogoProveedor,
-  type SugerenciaProveedorGrupo,
   type SugerenciaLinea,
   type CatalogoProductoProveedor,
 } from "@/features/logistica/actions/sugerencias-actions";

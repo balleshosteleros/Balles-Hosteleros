@@ -15,7 +15,7 @@ export default async function AyudaPage() {
   if (!user) redirect("/");
 
   const { data: rolesData } = await supabase
-    .from("user_roles")
+    .from("usuario_roles")
     .select("role")
     .eq("user_id", user.id);
   const roles = (rolesData ?? []).map((r: { role: string }) => r.role);

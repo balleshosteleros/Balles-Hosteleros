@@ -1,15 +1,15 @@
 import { useState, useMemo } from "react";
 import {
   Megaphone, TrendingUp, TrendingDown, Users, MessageCircle,
-  Eye, Share2, Link, BarChart3, ArrowUpRight, ArrowDownRight, Minus,
-  Filter, CalendarDays
+  BarChart3, ArrowUpRight, ArrowDownRight,
+  Filter
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { REDES_SOCIALES, type RedSocial } from "@/features/marketing/data/marketing";
-import { buildMarketingAnalytics, type MarketingAnalytics } from "@/features/marketing/data/marketing-analytics";
+import { buildMarketingAnalytics } from "@/features/marketing/data/marketing-analytics";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend, LineChart, Line,

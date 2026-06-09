@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/client";
  * migrar nada. Persisten tras logout y en cualquier dispositivo (van atadas
  * a la cuenta, no al navegador).
  */
-const TABLE = "user_preferences";
+const TABLE = "usuario_preferencias";
 
 export async function loadUserPref(key: string): Promise<string | null> {
   const supabase = createClient();

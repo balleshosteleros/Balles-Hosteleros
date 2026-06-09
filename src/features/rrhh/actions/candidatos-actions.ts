@@ -182,7 +182,7 @@ export async function iniciarOffboarding(empleadoId: string) {
     await supabase
       .from("empleados")
       .update({
-        estado: "Desactivado",
+        estado: "Inactivo",
         fecha_baja: new Date().toISOString().slice(0, 10),
       })
       .eq("id", empleadoId)

@@ -25,7 +25,7 @@ async function requireAdminFichajes(opts?: { empresaIds?: string[] }) {
   if (!user) throw new Error("No autenticado");
 
   const { data: rolesRows } = await supabase
-    .from("user_roles")
+    .from("usuario_roles")
     .select("role")
     .eq("user_id", user.id);
   const roles = (rolesRows ?? []).map((r: { role: string }) => r.role);
@@ -50,7 +50,7 @@ async function requireAdminFichajes(opts?: { empresaIds?: string[] }) {
       throw new Error("Sin permisos: empresas no válidas");
     }
     const { data: rels } = await supabase
-      .from("user_empresas")
+      .from("usuario_empresas")
       .select("empresa_id")
       .eq("user_id", user.id)
       .in("empresa_id", empresasReq);
@@ -100,7 +100,7 @@ async function getContext() {
   if (!user) return { supabase, user: null, empresaId: null, nombre: null };
 
   const { data: profile } = await supabase
-    .from("profiles")
+    .from("usuarios")
     .select("nombre, apellidos")
     .eq("user_id", user.id)
     .single();
@@ -108,7 +108,7 @@ async function getContext() {
   let empresaId = await getEmpresaActivaId();
   if (!empresaId) {
     const { data: link } = await supabase
-      .from("user_empresas")
+      .from("usuario_empresas")
       .select("empresa_id")
       .eq("user_id", user.id)
       .limit(1)

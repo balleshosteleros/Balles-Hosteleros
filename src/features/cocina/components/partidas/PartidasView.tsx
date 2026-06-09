@@ -244,17 +244,6 @@ function PartidaDetail({ partida, onBack, empleados, config }: {
   );
 }
 
-const defaultConfig: ConfigPartidas = {
-  areas: ["COCINA", "BARRA"],
-  partidas: ["FRIO + POSTRES", "FUEGOS + HORNO", "PLANCHA + FREIDORA"],
-  categorias: [
-    "PARA EMPEZAR", "ARROCES", "PRA VEGANOS", "DE LA MAR",
-    "DE LA TIERRA", "MOMENTOS DULCES", "PARA NIÑOS",
-  ],
-  gruposMise: ["SECOS", "SALSAS", "FRESCOS", "CONGELADOS"],
-  estados: ["activa", "inactiva", "en_revision"],
-};
-
 function mapRowToPartida(r: PartidaRow): Partida {
   return {
     id: r.id,

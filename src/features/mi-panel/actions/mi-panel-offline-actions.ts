@@ -70,7 +70,7 @@ export async function sincronizarFichajesOffline(
   if (!empresaId) return { ok: false, results: [], error: "Sin empresa activa" };
 
   const { data: profile } = await supabase
-    .from("profiles")
+    .from("usuarios")
     .select("nombre, apellidos")
     .eq("user_id", user.id)
     .maybeSingle();

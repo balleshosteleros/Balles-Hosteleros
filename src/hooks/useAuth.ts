@@ -15,7 +15,7 @@ export function useAuth() {
 
     async function getProfile(userId: string) {
       const { data } = await supabase
-        .from('profiles')
+        .from('usuarios')
         .select('*')
         .eq('id', userId)
         .single()

@@ -18,17 +18,15 @@ import {
   aplicarOrdenToolbar,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
-  type ToolbarColumnaVisible,
 } from "@/shared/components/SubmoduleToolbar";
 import { IOActions } from "@/shared/io";
 import { reglasIO } from "@/features/contabilidad/io/reglas.io";
 
 export function ReglasView() {
-  const { empresaActual } = useEmpresa();
+  useEmpresa();
   const [busqueda, setBusqueda] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
-  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [reglas, setReglas] = useState(SAMPLE_REGLAS);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [showConfig, setShowConfig] = useState(false);

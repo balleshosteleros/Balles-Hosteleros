@@ -26,7 +26,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  ArrowLeft, Phone, Mail, CalendarDays, MapPin, User, FileText,
+  ArrowLeft, Phone, Mail, CalendarDays, MapPin, User,
   GripVertical, Clock, History, Send, X,
 } from "lucide-react";
 import { toast } from "sonner";

@@ -88,13 +88,13 @@ export async function guardarDatosPersonales(
     // de un trabajador caiga en la cuenta de otro por error o suplantación.
     if (iban) {
       const { data: profile } = await supabase
-        .from("profiles")
+        .from("usuarios")
         .select("empresa_id")
         .eq("user_id", user.id)
         .single();
       if (profile?.empresa_id) {
         const { data: choque } = await supabase
-          .from("profiles")
+          .from("usuarios")
           .select("user_id, nombre, apellidos")
           .eq("empresa_id", profile.empresa_id)
           .eq("iban", iban)
@@ -143,7 +143,7 @@ export async function guardarDatosPersonales(
     };
 
     const { error } = await supabase
-      .from("profiles")
+      .from("usuarios")
       .update(payload)
       .eq("user_id", user.id);
 
@@ -201,7 +201,7 @@ export async function cargarDatosPersonales(): Promise<DatosPersonalesCompletos 
     } = await supabase.auth.getUser();
     if (!user) return null;
     const { data, error } = await supabase
-      .from("profiles")
+      .from("usuarios")
       .select(
         "nombre, apellidos, email, tipo_documento, dni_nie, fecha_nacimiento, nacionalidad, genero, estado_civil, numero_ss, telefono, telefono_empresa, email_personal, email_empresa, direccion, codigo_postal, ciudad, provincia, pais, iban, banco_codigo, banco_nombre, titular_cuenta, iban_verificado, emergencia_nombre, emergencia_relacion, emergencia_telefono, talla_camiseta, talla_pantalon",
       )

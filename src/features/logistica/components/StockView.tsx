@@ -82,7 +82,7 @@ export function StockView() {
   const [tipoActivo, setTipoActivo] = useState<"compra" | "elaboracion">("compra");
   const [stockPorTipo, setStockPorTipo] = useState<{ compra: ProductoStock[]; elaboracion: ProductoStock[] }>({ compra: [], elaboracion: [] });
   const [temporadas, setTemporadas] = useState<TemporadaStock[]>([]);
-  const [loadingStock, setLoadingStock] = useState(true);
+  const [, setLoadingStock] = useState(true);
 
   const stock = tipoActivo === "compra" ? stockPorTipo.compra : stockPorTipo.elaboracion;
   const setStock = useCallback((updater: ProductoStock[] | ((prev: ProductoStock[]) => ProductoStock[])) => {

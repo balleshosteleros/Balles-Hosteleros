@@ -13,7 +13,7 @@ import {
   ESTADO_ESCANDALLO_LABELS, DEFAULT_ALERGENOS, DEFAULT_RECOMENDACIONES, DEFAULT_PARTIDAS, DEFAULT_MENAJE,
 } from "@/features/cocina/data/escandallos";
 import {
-  listEscandallos, createEscandallo, updateEscandallo, deleteEscandallo,
+  listEscandallos, createEscandallo, updateEscandallo,
   listEmpleadosCreadores,
 } from "@/features/cocina/actions/escandallos-actions";
 import { useEscandallosConfig, type EscandalloConfigItem, type GrupoCodigo } from "@/features/cocina/hooks/useEscandallosConfig";
@@ -36,9 +36,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  Search, Plus, Settings, Euro, Percent,
-  Copy, Archive, Trash2, GripVertical, Printer, Download,
-  Share2, Link2, LinkIcon, ImageIcon, Upload, X, FileDown, Check,
+  Plus, Settings, Euro, Percent,
+  Copy, Archive, Trash2, Printer,
+  Share2, Link2, LinkIcon, ImageIcon, Upload, X, FileDown,
   Video as VideoIcon, Pencil, ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -434,7 +434,7 @@ function EscandalloDetalle({
   const singular = routeMeta.title.replace(/S$/, "");
   const [form, setForm] = useState<Escandallo | null>(null);
   const [productosDisponibles, setProductosDisponibles] = useState<Producto[]>([]);
-  useMemo(() => {
+  useEffect(() => {
     if (!escandallo) return;
     const inicial: Escandallo = { ...escandallo };
     // Si no hay pasos pero sí texto legacy, lo migramos a un único paso.
@@ -815,7 +815,7 @@ function EscandalloDetalle({
                     <SelectContent>
                       {productosMenaje.length === 0 ? (
                         <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                          Sin productos en la categoría "Menaje".
+                          Sin productos en la categoría «Menaje».
                         </div>
                       ) : (
                         productosMenaje.map((p) => (

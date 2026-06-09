@@ -10,7 +10,6 @@ import type {
 } from "@/features/logistica/types/importador-catalogo-ia";
 import {
   createCategoriaProducto,
-  listCategoriasProducto,
 } from "@/features/logistica/actions/categorias-producto-actions";
 import {
   createCategoriaProveedor,

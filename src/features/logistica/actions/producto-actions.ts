@@ -111,7 +111,7 @@ async function requireManagement() {
   if (!user) throw new Error("No autenticado");
 
   const { data: rolesData } = await supabase
-    .from("user_roles")
+    .from("usuario_roles")
     .select("role")
     .eq("user_id", user.id);
 
@@ -130,7 +130,7 @@ async function requireManagement() {
 async function getUserEmpresaId(userId: string): Promise<string | null> {
   const supabase = await createClient();
   const { data } = await supabase
-    .from("profiles")
+    .from("usuarios")
     .select("empresa_id")
     .eq("user_id", userId)
     .single();

@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
-import { LineaProcedencia, ORIGENES_CAPITAL, OrigenCapital } from "@/features/direccion/data/aperturas";
+import { LineaProcedencia, ORIGENES_CAPITAL } from "@/features/direccion/data/aperturas";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 const COLORS = ["hsl(210 70% 55%)", "hsl(150 60% 45%)", "hsl(40 90% 55%)", "hsl(340 65% 55%)", "hsl(270 60% 55%)", "hsl(20 80% 55%)", "hsl(180 60% 45%)", "hsl(0 60% 55%)"];

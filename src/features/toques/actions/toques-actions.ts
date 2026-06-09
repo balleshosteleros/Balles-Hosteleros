@@ -25,12 +25,12 @@ async function getSession() {
   } = await supabase.auth.getUser();
   if (!user) return { supabase, user: null, empresaId: null, nombre: "", isAdmin: false };
   const { data: profile } = await supabase
-    .from("profiles")
+    .from("usuarios")
     .select("full_name, nombre")
     .eq("user_id", user.id)
     .maybeSingle();
   const { data: roles } = await supabase
-    .from("user_roles")
+    .from("usuario_roles")
     .select("role")
     .eq("user_id", user.id);
   const adminRoles = new Set(["admin", "director", "gerencia", "responsable"]);
@@ -337,7 +337,7 @@ export async function otorgarToqueManual(
 
     // Verificar que el destinatario es de la misma empresa
     const { data: dest, error: errD } = await admin
-      .from("profiles")
+      .from("usuarios")
       .select("user_id, empresa_id, full_name, nombre")
       .eq("user_id", parsed.data.userId)
       .maybeSingle();

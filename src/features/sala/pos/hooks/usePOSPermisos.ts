@@ -18,7 +18,7 @@ export async function getPOSPermisos(): Promise<{
   if (!userId) return { allowed: false, userId: null, roles: [], reason: "No autenticado" };
 
   const { data: roles, error } = await supabase
-    .from("user_roles")
+    .from("usuario_roles")
     .select("role")
     .eq("user_id", userId);
 

@@ -63,7 +63,7 @@ async function getContext() {
     };
   }
   const { data } = await supabase
-    .from("profiles")
+    .from("usuarios")
     .select("empresa_id, nombre, apellidos, departamento, rol_label")
     .eq("user_id", user.id)
     .single();
@@ -75,7 +75,7 @@ async function getContext() {
   let empresaId = await getEmpresaActivaId();
   if (!empresaId) {
     const { data: link } = await supabase
-      .from("user_empresas")
+      .from("usuario_empresas")
       .select("empresa_id")
       .eq("user_id", user.id)
       .limit(1)
@@ -429,7 +429,7 @@ export async function ficharEntradaPersonal(
       margen_despues_min: number;
     }[];
 
-    let tipoSel = tipoCodigo
+    const tipoSel = tipoCodigo
       ? tiposActivos.find((t) => t.codigo.toUpperCase() === tipoCodigo.toUpperCase()) ?? null
       : tiposActivos.find((t) => !t.requiere_solicitud) ?? null;
 
@@ -698,6 +698,83 @@ export async function ficharSalidaPersonal(fichajeId: string, geo?: GeoInput) {
   } catch (err: unknown) {
     const msg = extractErrorMessage(err);
     console.error("[mi-panel] ficharSalidaPersonal:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Paralización manual del fichaje (cierre anticipado).
+ * El empleado para su jornada antes de que se cierre por horario/autocierre.
+ * Se exige un motivo, que queda guardado y vinculado al fichaje, y el fichaje
+ * se marca para revisión (icono de alerta en la gestión de fichajes).
+ */
+export async function paralizarFichajePersonal(
+  fichajeId: string,
+  motivo: string,
+  geo?: GeoInput,
+) {
+  try {
+    const motivoLimpio = (motivo ?? "").trim();
+    if (!motivoLimpio) {
+      return { ok: false, error: "Indica el motivo de la paralización." };
+    }
+    const { supabase } = await getContext();
+    const { data: fichaje, error: fetchErr } = await supabase
+      .from("fichajes")
+      .select("hora_entrada, local_id, modo_teletrabajo")
+      .eq("id", fichajeId)
+      .single();
+    if (fetchErr) throw fetchErr;
+
+    if (!fichaje.modo_teletrabajo && fichaje.local_id) {
+      if (!geo) {
+        return { ok: false, error: "Activa la geolocalización para paralizar el fichaje." };
+      }
+      const { data: local, error: localErr } = await supabase
+        .from("locales")
+        .select("lat, lng, radio_metros, nombre")
+        .eq("id", fichaje.local_id)
+        .single();
+      if (localErr) throw localErr;
+      if (local && local.lat != null && local.lng != null) {
+        const dist = distanciaMetros(geo.lat, geo.lng, local.lat, local.lng);
+        if (dist > local.radio_metros) {
+          return {
+            ok: false,
+            error: `Estás a ${Math.round(dist)} m de "${local.nombre}". Acércate al local para paralizar el fichaje.`,
+          };
+        }
+      }
+    }
+
+    const ahora = new Date();
+    let horasTotales = 0;
+    if (fichaje?.hora_entrada) {
+      const entrada = new Date(fichaje.hora_entrada as string);
+      horasTotales =
+        Math.round(((ahora.getTime() - entrada.getTime()) / 3600000) * 10000) / 10000;
+    }
+    const { error } = await supabase
+      .from("fichajes")
+      .update({
+        hora_salida: ahora.toISOString(),
+        horas_totales: horasTotales,
+        estado: "completado",
+        lat_salida: geo?.lat ?? null,
+        lng_salida: geo?.lng ?? null,
+        precision_salida_metros: geo?.precision ?? null,
+        cierre_anticipado: true,
+        cierre_anticipado_motivo: motivoLimpio,
+        requiere_revision: true,
+        revision_motivo: `Paralización antes de horario: ${motivoLimpio}`,
+        incidencia: "Fichaje paralizado por el empleado antes de su horario",
+      })
+      .eq("id", fichajeId);
+    if (error) throw error;
+    return { ok: true, data: { horas_totales: horasTotales } };
+  } catch (err: unknown) {
+    const msg = extractErrorMessage(err);
+    console.error("[mi-panel] paralizarFichajePersonal:", msg);
     return { ok: false, error: msg };
   }
 }
@@ -1145,7 +1222,7 @@ function diasSolicitudEnAnio(inicio: string, fin: string | null, anio: number): 
 
 async function userTieneRolDirector(supabase: SupabaseAny, userId: string): Promise<boolean> {
   const { data } = await supabase
-    .from("user_roles")
+    .from("usuario_roles")
     .select("role")
     .eq("user_id", userId);
   return (data ?? []).some((r: { role: string }) =>

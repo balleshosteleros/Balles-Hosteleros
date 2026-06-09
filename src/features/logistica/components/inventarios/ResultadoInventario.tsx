@@ -9,8 +9,6 @@ interface Props {
   resultados: ResultadoLinea[];
 }
 
-const ALL = "__ALL__";
-
 export default function ResultadoInventario({ resultados }: Props) {
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"producto" | "diferencia">("producto");

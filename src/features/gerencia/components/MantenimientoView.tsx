@@ -53,9 +53,9 @@ function mapDbToIncidencia(row: Record<string, unknown>): Incidencia {
 }
 
 export function MantenimientoView() {
-  const { datos: contextData, setDatos: setContextData } = useEmpresa();
+  const { setDatos: setContextData } = useEmpresa();
   const [data, setData] = useState<Incidencia[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterLocal, setFilterLocal] = useState(ALL);
   const [filterEstado, setFilterEstado] = useState(ALL);

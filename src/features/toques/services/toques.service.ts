@@ -306,7 +306,7 @@ export async function getRanking(
   let profilesById: Record<string, { avatar: string | null; departamento: string | null }> = {};
   if (userIds.length) {
     const { data: profData } = await supabase
-      .from("profiles")
+      .from("usuarios")
       .select("user_id, avatar_url, departamento")
       .in("user_id", userIds);
     if (profData) {

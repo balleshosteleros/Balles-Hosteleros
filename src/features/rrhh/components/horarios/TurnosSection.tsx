@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-  TURNO_TONOS,
+  pillStyleDepartamento,
   formatTurnoHorario,
   DIAS_SEMANA,
   DIA_SEMANA_LABEL,
@@ -53,11 +53,6 @@ import {
   DropdownMenuTrigger,
 } from "@/shared/components/ui/dropdown-menu";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/shared/components/ui/popover";
-import {
   Plus,
   Pencil,
   Copy,
@@ -82,16 +77,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
-
-const TONO_KEYS: TurnoTono[] = [
-  "stone",
-  "emerald",
-  "violet",
-  "rose",
-  "teal",
-  "sky",
-  "amber",
-];
 
 interface TurnoDraft {
   nombre: string;
@@ -526,7 +511,6 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
           )}
           {!cargando &&
             filtrados.map((t) => {
-              const tono = TURNO_TONOS[t.color];
               const descansosDelTurno = descansosPorTurno.get(t.id) ?? [];
               const empleadosDelTurno =
                 empleadosCombinadosPorTurno.get(t.id) ?? [];
@@ -537,10 +521,8 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <span
-                      className={cn(
-                        "inline-flex h-6 min-w-[44px] items-center justify-center rounded-full px-2 text-[11px] font-semibold tracking-wide",
-                        tono.pill,
-                      )}
+                      className="inline-flex h-6 min-w-[44px] items-center justify-center rounded-full px-2 text-[11px] font-semibold tracking-wide"
+                      style={pillStyleDepartamento(t.colorHex)}
                     >
                       {t.codigo}
                     </span>
@@ -714,10 +696,6 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
                   </button>
                 )}
               </div>
-              <ColorPicker
-                value={draft.color}
-                onChange={(c) => setDraft((d) => ({ ...d, color: c }))}
-              />
             </div>
 
             <div className="flex items-center gap-2">
@@ -775,6 +753,10 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
                 ))}
               </select>
             </div>
+            <p className="pl-6 text-xs text-muted-foreground">
+              El color del turno lo define su departamento (se edita en
+              Configuración → Colores de departamento).
+            </p>
 
             {/* Vigencia del turno: manda el turno (ningún patrón puede usarlo
                 fuera de estas fechas). Inicio por defecto hoy; fin opcional.
@@ -1178,18 +1160,15 @@ function EmpleadosTurnoDialog({
   empleados: EmpleadoConOrigen[];
   onClose: () => void;
 }) {
-  const tono = turno ? TURNO_TONOS[turno.color] : null;
   return (
     <Dialog open={!!turno} onOpenChange={(v) => (!v ? onClose() : null)}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            {turno && tono && (
+            {turno && (
               <span
-                className={cn(
-                  "inline-flex h-6 min-w-[44px] items-center justify-center rounded-full px-2 text-[11px] font-semibold tracking-wide",
-                  tono.pill,
-                )}
+                className="inline-flex h-6 min-w-[44px] items-center justify-center rounded-full px-2 text-[11px] font-semibold tracking-wide"
+                style={pillStyleDepartamento(turno.colorHex)}
               >
                 {turno.codigo}
               </span>
@@ -1247,18 +1226,15 @@ function DescansosTurnoDialog({
   descansos: Descanso[];
   onClose: () => void;
 }) {
-  const tono = turno ? TURNO_TONOS[turno.color] : null;
   return (
     <Dialog open={!!turno} onOpenChange={(v) => (!v ? onClose() : null)}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            {turno && tono && (
+            {turno && (
               <span
-                className={cn(
-                  "inline-flex h-6 min-w-[44px] items-center justify-center rounded-full px-2 text-[11px] font-semibold tracking-wide",
-                  tono.pill,
-                )}
+                className="inline-flex h-6 min-w-[44px] items-center justify-center rounded-full px-2 text-[11px] font-semibold tracking-wide"
+                style={pillStyleDepartamento(turno.colorHex)}
               >
                 {turno.codigo}
               </span>
@@ -1349,46 +1325,3 @@ function TipoJornadaChooser({
   );
 }
 
-function ColorPicker({
-  value,
-  onChange,
-}: {
-  value: TurnoTono;
-  onChange: (c: TurnoTono) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            "h-7 w-12 rounded-md border transition-shadow hover:shadow-sm",
-            TURNO_TONOS[value].pill,
-          )}
-          aria-label="Seleccionar color"
-        />
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-auto p-2">
-        <div className="flex gap-1.5">
-          {TONO_KEYS.map((tono) => (
-            <button
-              key={tono}
-              type="button"
-              onClick={() => {
-                onChange(tono);
-                setOpen(false);
-              }}
-              className={cn(
-                "h-6 w-6 rounded-full border-2 transition-transform hover:scale-110",
-                TURNO_TONOS[tono].dot,
-                value === tono ? "border-foreground" : "border-transparent",
-              )}
-              title={TURNO_TONOS[tono].label}
-            />
-          ))}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}

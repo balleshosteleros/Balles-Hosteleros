@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
+import { useState, useMemo, useEffect, type ReactNode } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
@@ -27,8 +27,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Plus, ShoppingCart, Store, Settings,
-  ArrowLeft, Pencil, Trash2, AlertTriangle, X, FlaskConical,
+  ShoppingCart, Store, Settings,
+  ArrowLeft, Trash2, AlertTriangle, FlaskConical,
 } from "lucide-react";
 import { toast } from "sonner";
 import { IOActions } from "@/shared/io";
@@ -165,8 +165,7 @@ function ProductoDetalle({
   const [unidad, setUnidad] = useState(producto?.unidad || "ud");
   const [estado, setEstado] = useState<EstadoProducto>(producto?.estado ?? "Activo");
   const [proveedor, setProveedor] = useState(producto?.proveedor ?? "");
-  const [precioCompra, setPrecioCompra] = useState(producto?.precioCompra ?? "");
-  const [precioVenta, setPrecioVenta] = useState(producto?.precioVenta ?? "");
+  const [precioVenta, _setPrecioVenta] = useState(producto?.precioVenta ?? "");
   const [coste, setCoste] = useState(producto?.coste ?? "");
   const [iva, setIva] = useState(producto?.iva ?? "");
   const [formato, setFormato] = useState(producto?.formato ?? "");
@@ -1277,87 +1276,6 @@ function TablaProductos({
   );
 }
 
-/* ─── PIPELINE ─── */
-function PipelineProductos({ tipo, onCardClick, reloadKey }: {
-  tipo: TipoProducto;
-  onCardClick: (p: Producto) => void;
-  reloadKey: number;
-}) {
-  const [productos, setProductos] = useState<Producto[]>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    listProductos(tipo).then((data) => { if (!cancelled) setProductos(data); });
-    return () => { cancelled = true; };
-  }, [tipo, reloadKey]);
-
-  const categorias = useMemo(() => {
-    const set = new Set<string>();
-    productos.forEach((p) => { if (p.categoria) set.add(p.categoria); });
-    return Array.from(set).sort();
-  }, [productos]);
-
-  const grouped = useMemo(() => {
-    const map: Record<string, Producto[]> = {};
-    for (const cat of categorias) map[cat] = [];
-    for (const p of productos) {
-      if (!map[p.categoria]) map[p.categoria] = [];
-      map[p.categoria].push(p);
-    }
-    return map;
-  }, [productos, categorias]);
-
-  return (
-    <div className="flex gap-4 overflow-x-auto pb-4">
-      {categorias.length === 0 && (
-        <div className="w-full text-center py-10 text-muted-foreground text-sm">No hay productos para mostrar.</div>
-      )}
-      {categorias.map((cat) => {
-        const items = grouped[cat] ?? [];
-        return (
-          <div key={cat} className="min-w-[280px] max-w-[300px] shrink-0">
-            <div className="flex items-center justify-between mb-3 px-1">
-              <h4 className="text-xs font-bold text-foreground tracking-wide uppercase">{cat}</h4>
-              <Badge variant="secondary" className="text-[10px]">{items.length}</Badge>
-            </div>
-            <div className="space-y-2">
-              {items.map((p) => (
-                <div key={p.id}
-                  className="bg-card border rounded-lg p-3 hover:shadow-sm transition-shadow cursor-pointer"
-                  onClick={() => onCardClick(p)}>
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-medium text-foreground leading-tight">{p.nombre}</p>
-                    <EstadoBadge estado={p.estado} />
-                  </div>
-                  {tipo !== "venta" && p.conservacion && (
-                    <p className="text-xs text-muted-foreground mt-1">{p.conservacion}</p>
-                  )}
-                  <div className="flex items-center justify-between mt-2">
-                    {tipo === "compra" ? (
-                      <span className="text-xs font-semibold text-foreground">{p.precioCompra ?? "—"}</span>
-                    ) : (
-                      <span className="text-xs font-semibold text-foreground">{p.precioVenta ?? "—"}</span>
-                    )}
-                    {tipo === "compra" && p.proveedor && (
-                      <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">{p.proveedor}</span>
-                    )}
-                    {tipo === "venta" && p.coste && (
-                      <span className="text-[10px] text-muted-foreground">Coste: {p.coste}</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {items.length === 0 && (
-                <div className="text-center py-8 text-xs text-muted-foreground border border-dashed rounded-lg">Sin productos</div>
-              )}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 /* ─── CONFIGURACIÓN ─── */
 /* ─── HOOK: config persistente en Supabase ─── */
 function useProductConfig(tipo: TipoProducto) {
@@ -1400,91 +1318,6 @@ function useProductConfig(tipo: TipoProducto) {
   };
 
   return { categorias, reloadCategorias, estados, setEstados, umbralVerde, umbralNaranja, setUmbrales };
-}
-
-/* ─── LIST MANAGER: sección editable (categorías / estados) ─── */
-function ListManager({ title, items, onChange, readOnly = false }: {
-  title: string;
-  items: string[];
-  onChange: (v: string[]) => void;
-  readOnly?: boolean;
-}) {
-  const [editIdx, setEditIdx] = useState<number | null>(null);
-  const [editVal, setEditVal] = useState("");
-  const [newVal, setNewVal] = useState("");
-
-  const startEdit = (i: number) => { setEditIdx(i); setEditVal(items[i]); };
-  const confirmEdit = () => {
-    if (editIdx === null) return;
-    const trimmed = capitalizeText(editVal.trim());
-    if (!trimmed) return;
-    const next = [...items];
-    next[editIdx] = trimmed;
-    onChange(next);
-    setEditIdx(null);
-  };
-  const remove = (i: number) => onChange(items.filter((_, idx) => idx !== i));
-  const add = () => {
-    const trimmed = capitalizeText(newVal.trim());
-    if (!trimmed || items.includes(trimmed)) return;
-    onChange([...items, trimmed]);
-    setNewVal("");
-  };
-
-  return (
-    <div className="space-y-2">
-      <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{title}</h4>
-      <div className="rounded-md border divide-y">
-        {items.map((item, i) => (
-          <div key={i} className="flex items-center gap-2 px-3 py-1.5">
-            {!readOnly && editIdx === i ? (
-              <>
-                <Input
-                  autoFocus
-                  value={editVal}
-                  onChange={(e) => setEditVal(capitalizeText(e.target.value))}
-                  onKeyDown={(e) => { if (e.key === "Enter") confirmEdit(); if (e.key === "Escape") setEditIdx(null); }}
-                  className="h-7 text-sm flex-1"
-                />
-                <Button size="sm" className="h-7 px-2 text-xs" onClick={confirmEdit}>Guardar</Button>
-                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setEditIdx(null)}>
-                  <X className="h-3 w-3" />
-                </Button>
-              </>
-            ) : (
-              <>
-                <span className="flex-1 text-sm">{item}</span>
-                {!readOnly && (
-                  <>
-                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => startEdit(i)}>
-                      <Pencil className="h-3 w-3" />
-                    </Button>
-                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => remove(i)}>
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </>
-                )}
-              </>
-            )}
-          </div>
-        ))}
-        {!readOnly && (
-          <div className="flex items-center gap-2 px-3 py-1.5">
-            <Input
-              value={newVal}
-              onChange={(e) => setNewVal(capitalizeText(e.target.value))}
-              onKeyDown={(e) => { if (e.key === "Enter") add(); }}
-              placeholder={`Nueva ${title.toLowerCase().replace(/s$/, "")}…`}
-              className="h-7 text-sm flex-1"
-            />
-            <Button size="sm" className="h-7 px-3 text-xs gap-1" onClick={add}>
-              <Plus className="h-3 w-3" /> Añadir
-            </Button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
 }
 
 function UmbralCosteEditor({
@@ -1772,8 +1605,6 @@ export function ProductosView() {
 
   // Deep-link: ?p=<id> abre la ficha del producto. Usado por enlaces desde Alérgenos origen.
   const searchParams = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
   useEffect(() => {
     const pid = searchParams.get("p");
     if (!pid || detalle?.id === pid) return;

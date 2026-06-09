@@ -98,7 +98,7 @@ export function BoardingView() {
 
   const [procesos, setProcesos] = useState<ProcesoBoarding[]>([]);
   const [plantillas, setPlantillas] = useState<PlantillaBoarding[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
 
   const [vista, setVista] = useState<"listado" | "plantillas" | "detalle">("listado");
   const [procesoActivo, setProcesoActivo] = useState<ProcesoBoarding | null>(null);

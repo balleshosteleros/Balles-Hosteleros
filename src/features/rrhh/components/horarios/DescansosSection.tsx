@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  TURNO_TONOS,
+  pillStyleDepartamento,
+  dotStyleDepartamento,
   type Descanso,
   type DiaSemana,
   type Turno,
@@ -716,7 +717,6 @@ function TurnosSelectDialog({
           {seleccionadosTurnos.length > 0 && (
             <div className="grid grid-cols-2 gap-2">
               {seleccionadosTurnos.map((t) => {
-                const tono = TURNO_TONOS[t.color];
                 return (
                   <div
                     key={t.id}
@@ -724,10 +724,8 @@ function TurnosSelectDialog({
                   >
                     <div className="flex items-center gap-2">
                       <div
-                        className={cn(
-                          "h-6 w-6 rounded-full text-[10px] font-bold flex items-center justify-center",
-                          tono.pill,
-                        )}
+                        className="h-6 w-6 rounded-full text-[10px] font-bold flex items-center justify-center"
+                        style={pillStyleDepartamento(t.colorHex)}
                       >
                         {t.codigo.slice(0, 2)}
                       </div>
@@ -752,7 +750,6 @@ function TurnosSelectDialog({
             </p>
             {filtrados.map((t) => {
               const checked = seleccionados.includes(t.id);
-              const tono = TURNO_TONOS[t.color];
               const tramosTxt = t.tramos
                 .map((tr) => `${tr.inicio}–${tr.fin}`)
                 .join(" / ");
@@ -767,7 +764,10 @@ function TurnosSelectDialog({
                       checked={checked}
                       onChange={() => toggle(t.id)}
                     />
-                    <div className={cn("h-3 w-3 rounded-full shrink-0", tono.dot)} />
+                    <div
+                      className="h-3 w-3 rounded-full shrink-0"
+                      style={dotStyleDepartamento(t.colorHex)}
+                    />
                     <span className="text-sm truncate">{t.nombre}</span>
                     <span className="text-xs text-muted-foreground shrink-0">
                       {tramosTxt}

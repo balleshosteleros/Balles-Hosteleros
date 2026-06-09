@@ -3,7 +3,7 @@
 import { createHash } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { getAppContext } from "@/lib/supabase/get-context";
-import type { ModeloAeat, SnapshotEmpresa } from "../types/modelos";
+import type { SnapshotEmpresa } from "../types/modelos";
 
 async function getContext() {
   const { supabase, userId, empresaId } = await getAppContext();

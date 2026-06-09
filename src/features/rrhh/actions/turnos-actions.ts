@@ -10,6 +10,8 @@ import type {
   TipoJornada,
   DiaSemana,
 } from "@/features/rrhh/data/horarios";
+import { COLOR_DEPARTAMENTO_FALLBACK } from "@/features/rrhh/data/horarios";
+import { normalizeDeptoNombre } from "@/lib/seeds/departamentos";
 
 // Regla "manda el turno": un turno usado por uno o más patrones no puede
 // cambiarse ni borrarse hasta modificar antes esos patrones. Devuelve el
@@ -30,6 +32,7 @@ function rowToTurno(r: Record<string, unknown>): Turno {
     codigo: r.codigo as string,
     tramos: (r.tramos as TurnoTramo[]) ?? [],
     color: (r.color as TurnoTono) ?? "stone",
+    colorHex: COLOR_DEPARTAMENTO_FALLBACK, // se resuelve por departamento en la capa que lista
     activo: !!r.activo,
     centro: (r.centro as string | null) ?? undefined,
     departamento: (r.departamento as string | null) ?? undefined,
@@ -57,6 +60,36 @@ async function resolveEmpresaUuid(
   return (data?.id as string | undefined) ?? null;
 }
 
+/** Resuelve el color hex de cada turno a partir del color de su departamento. */
+async function aplicarColoresDepartamento(
+  supabase: Awaited<ReturnType<typeof getAppContext>>["supabase"],
+  empresaId: string,
+  turnos: Turno[],
+): Promise<Turno[]> {
+  if (turnos.length === 0) return turnos;
+  const { data: deptRows } = await supabase
+    .from("departamentos")
+    .select("nombre, color")
+    .eq("empresa_id", empresaId);
+  const colorPorDepto = new Map<string, string>();
+  for (const d of deptRows ?? []) {
+    const nombre = (d.nombre as string | null) ?? "";
+    if (nombre) {
+      colorPorDepto.set(
+        normalizeDeptoNombre(nombre),
+        (d.color as string | null) || COLOR_DEPARTAMENTO_FALLBACK,
+      );
+    }
+  }
+  return turnos.map((t) => ({
+    ...t,
+    colorHex:
+      (t.departamento &&
+        colorPorDepto.get(normalizeDeptoNombre(t.departamento))) ||
+      COLOR_DEPARTAMENTO_FALLBACK,
+  }));
+}
+
 export async function listTurnos(empresaIdOrSlug: string): Promise<Result<Turno[]>> {
   try {
     const { supabase } = await getAppContext();
@@ -71,7 +104,12 @@ export async function listTurnos(empresaIdOrSlug: string): Promise<Result<Turno[
       .eq("es_oficial", true)
       .order("nombre", { ascending: true });
     if (error) throw error;
-    return { ok: true, data: (data ?? []).map(rowToTurno) };
+    const turnos = await aplicarColoresDepartamento(
+      supabase,
+      empresaId,
+      (data ?? []).map(rowToTurno),
+    );
+    return { ok: true, data: turnos };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[turnos] listTurnos:", msg);
@@ -306,7 +344,12 @@ export async function getVersionesTurno(
       .eq("familia_id", turnoRow.familia_id as string)
       .order("version", { ascending: false });
     if (error) throw error;
-    return { ok: true, data: (data ?? []).map(rowToTurno) };
+    const turnos = await aplicarColoresDepartamento(
+      supabase,
+      empresaId,
+      (data ?? []).map(rowToTurno),
+    );
+    return { ok: true, data: turnos };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[turnos] getVersionesTurno:", msg);

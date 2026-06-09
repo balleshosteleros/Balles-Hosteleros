@@ -1,11 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { EstadoPedidoBadge } from "./BadgesPedido";
 import { ESTADOS_PEDIDO, PROVEEDOR_EMAILS, calcularTotalesLineas, type Pedido, type Albaran } from "@/features/logistica/data/pedidos";
 import { ArrowLeft, FileText, Send, CheckCircle2, AlertTriangle, PackageCheck, Mail } from "lucide-react";
-import { toast } from "sonner";
 
 interface Props {
   pedido: Pedido;

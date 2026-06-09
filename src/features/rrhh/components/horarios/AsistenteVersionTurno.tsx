@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  TURNO_TONOS,
+  pillStyleDepartamento,
   formatTurnoHorario,
   type Turno,
   type TurnoTramo,
@@ -306,7 +306,10 @@ export function HistorialVersionesTurno({
     };
   }, [empresaId, turno]);
 
-  const tono = useMemo(() => (turno ? TURNO_TONOS[turno.color] : null), [turno]);
+  const pillStyle = useMemo(
+    () => (turno ? pillStyleDepartamento(turno.colorHex) : undefined),
+    [turno],
+  );
 
   return (
     <Dialog open={!!turno} onOpenChange={(v) => (!v ? onClose() : null)}>
@@ -337,10 +340,8 @@ export function HistorialVersionesTurno({
                     className="flex items-center gap-3 px-3 py-2.5 text-sm"
                   >
                     <span
-                      className={cn(
-                        "inline-flex h-6 min-w-[44px] items-center justify-center rounded-full px-2 text-[11px] font-semibold",
-                        tono?.pill,
-                      )}
+                      className="inline-flex h-6 min-w-[44px] items-center justify-center rounded-full px-2 text-[11px] font-semibold"
+                      style={pillStyle}
                     >
                       v{v.version}
                     </span>

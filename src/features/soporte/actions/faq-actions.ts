@@ -33,7 +33,7 @@ async function requireAdminOrDirector() {
   if (!user) throw new Error("No autenticado");
 
   const { data: rolesData } = await supabase
-    .from("user_roles")
+    .from("usuario_roles")
     .select("role")
     .eq("user_id", user.id);
 

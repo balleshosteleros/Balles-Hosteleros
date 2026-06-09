@@ -21,7 +21,7 @@ export async function setEmpresaActiva(
   if (!user) return { ok: false, error: "No autenticado" };
 
   const { data: linked } = await supabase
-    .from("user_empresas")
+    .from("usuario_empresas")
     .select("empresa_id")
     .eq("user_id", user.id)
     .eq("empresa_id", empresaId)
@@ -30,7 +30,7 @@ export async function setEmpresaActiva(
   let allowed = !!linked;
   if (!allowed) {
     const { data: prof } = await supabase
-      .from("profiles")
+      .from("usuarios")
       .select("empresa_id")
       .eq("user_id", user.id)
       .single();

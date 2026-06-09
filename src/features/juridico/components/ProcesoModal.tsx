@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ProcesoJuridico, EstadoProceso, GravedadProceso, TipoProceso } from "@/features/juridico/data/procesos-juridicos";
+import type { ProcesoJuridico, EstadoProceso, GravedadProceso } from "@/features/juridico/data/procesos-juridicos";
 import { ESTADOS_PROCESO, GRAVEDADES_PROCESO, TIPOS_PROCESO, JURIDICOS } from "@/features/juridico/data/procesos-juridicos";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";

@@ -1,9 +1,7 @@
 import { z } from "zod";
 import type { ModuleIO, RowSchema } from "@/shared/io";
-import {
-  getSalariosEmpresa,
-  type PuestoSalarial,
-} from "@/features/rrhh/data/salarios";
+import { type PuestoSalarial } from "@/features/rrhh/data/salarios";
+import { listSalariosEmpresa } from "@/features/rrhh/actions/salarios-actions";
 
 const salarioSchema = z.object({
   id: z.string(),
@@ -49,8 +47,7 @@ export const salariosIO: ModuleIO<PuestoSalarial> = {
     { key: "updatedAt", label: "Actualizado", hideInImport: true },
     { key: "horarioSemanal", label: "Horario semanal", hideInExport: true, hideInImport: true },
   ],
-  fetchAll: async (ctx) => {
-    const empresaId = (ctx.empresaId as string) ?? "";
-    return getSalariosEmpresa(empresaId).puestos ?? [];
+  fetchAll: async () => {
+    return (await listSalariosEmpresa()).puestos;
   },
 };

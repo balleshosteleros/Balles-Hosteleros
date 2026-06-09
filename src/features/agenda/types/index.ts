@@ -48,6 +48,8 @@ export interface EtiquetaInput {
   color: EtiquetaColor;
 }
 
+export type ContactoOrigen = "manual" | "sistema" | "empleado" | "proveedor";
+
 export interface Contacto {
   id: string;
   empresa_id: string | null;
@@ -60,6 +62,12 @@ export interface Contacto {
   whatsapp: string | null;
   direccion: string | null;
   notas: string | null;
+  origen: ContactoOrigen;
+  protegido: boolean;
+  activo: boolean;
+  estado_origen: string | null;
+  empleado_id: string | null;
+  proveedor_id: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;

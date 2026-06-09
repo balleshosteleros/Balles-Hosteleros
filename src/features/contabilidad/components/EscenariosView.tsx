@@ -1,21 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Settings, BarChart3, Table2, Wallet, ArrowUpRight, ArrowDownRight, TrendingUp, Landmark } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SAMPLE_ESCENARIO } from "@/features/contabilidad/data/contabilidad";
-import { BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, ReferenceLine, Cell } from "recharts";
+import { Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart } from "recharts";
 
 const TABS = [{ id: "ESCENARIOS", label: "Escenarios" }, { id: "SALDOS", label: "Saldos" }];
 
 const fmt = (n: number) => n.toLocaleString("es-ES", { minimumFractionDigits: 0 }) + " €";
 
 export function EscenariosView() {
-  const { empresaActual } = useEmpresa();
   const [tab, setTab] = useState("ESCENARIOS");
   const data = SAMPLE_ESCENARIO;
 

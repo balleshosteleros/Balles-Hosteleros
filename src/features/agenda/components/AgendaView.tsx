@@ -255,19 +255,40 @@ export function AgendaView() {
                       <p className="font-semibold leading-tight text-foreground">
                         {c.nombre}
                       </p>
-                      {c.empresa_contacto && (
-                        <p className="text-xs text-muted-foreground">
-                          {c.empresa_contacto}
-                        </p>
-                      )}
+                      {c.empresa_contacto &&
+                        c.empresa_contacto !== c.nombre && (
+                          <p className="text-xs text-muted-foreground">
+                            {c.empresa_contacto}
+                          </p>
+                        )}
                     </div>
                   </div>
-                  <Badge
-                    variant="outline"
-                    className={`text-[10px] ${CATEGORIA_COLOR[c.categoria]}`}
-                  >
-                    {CATEGORIA_LABELS[c.categoria]}
-                  </Badge>
+                  <div className="flex flex-col items-end gap-1">
+                    <Badge
+                      variant="outline"
+                      className={`text-[10px] ${CATEGORIA_COLOR[c.categoria]}`}
+                    >
+                      {CATEGORIA_LABELS[c.categoria]}
+                    </Badge>
+                    <Badge
+                      variant="outline"
+                      className={`text-[10px] ${
+                        c.origen === "manual"
+                          ? "bg-yellow-50 text-yellow-700 border-yellow-200"
+                          : "bg-slate-100 text-slate-600 border-slate-200"
+                      }`}
+                    >
+                      {c.origen === "manual" ? "Manual" : "Automático"}
+                    </Badge>
+                    {!c.activo && (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] bg-gray-100 text-gray-600 border-gray-200"
+                      >
+                        {c.estado_origen ?? "Inactivo"}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-1.5 text-sm">
@@ -314,24 +335,43 @@ export function AgendaView() {
                   </p>
                 )}
 
-                <div className="flex justify-end gap-1 pt-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => abrirEditar(c)}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-destructive hover:text-destructive"
-                    onClick={() => eliminar(c.id)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
+                {(() => {
+                  const sincronizado =
+                    c.origen === "empleado" || c.origen === "proveedor";
+                  // Sincronizados: solo lectura (se gestionan en su origen).
+                  // Emergencias por defecto: editables pero no se pueden borrar.
+                  if (sincronizado) {
+                    return (
+                      <p className="pt-1 text-right text-[11px] text-muted-foreground">
+                        {c.origen === "empleado"
+                          ? "Sincronizado desde Empleados"
+                          : "Sincronizado desde Proveedores"}
+                      </p>
+                    );
+                  }
+                  return (
+                    <div className="flex justify-end gap-1 pt-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => abrirEditar(c)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      {!c.protegido && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          onClick={() => eliminar(c.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })()}
               </CardContent>
             </Card>
           );

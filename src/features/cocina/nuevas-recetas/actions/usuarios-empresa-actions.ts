@@ -16,7 +16,7 @@ export async function listUsuariosEmpresa(): Promise<ActionResult<UsuarioEmpresa
     const { supabase, empresaId } = await getAppContext();
     if (!empresaId) return { ok: true, data: [] };
     const { data, error } = await supabase
-      .from("profiles")
+      .from("usuarios")
       .select("user_id, nombre, apellidos, email")
       .eq("empresa_id", empresaId)
       .order("nombre", { ascending: true });

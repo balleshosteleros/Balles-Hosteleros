@@ -50,7 +50,7 @@ export function OtorgarToqueDialog({ open, onOpenChange, empresaId, onOtorgado }
   useEffect(() => {
     if (!open || !empresaId) return;
     void supabase
-      .from("profiles")
+      .from("usuarios")
       .select("user_id, full_name, nombre")
       .eq("empresa_id", empresaId)
       .order("full_name", { ascending: true })

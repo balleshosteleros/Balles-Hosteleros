@@ -7,13 +7,13 @@ import type { ProveedorImport } from "../types/import";
 import type { ProveedorEstado } from "../types/db";
 import { readSheet, getField, parseStringArray } from "./parser-excel";
 
-const ESTADOS_VALIDOS: ProveedorEstado[] = ["Activo", "Inactivo", "Archivado"];
+const ESTADOS_VALIDOS: ProveedorEstado[] = ["Activo", "Inactivo"];
 
 function normalizeEstado(raw: string | null): ProveedorEstado {
   if (!raw) return "Activo";
   const lower = raw.toLowerCase();
-  if (lower.startsWith("inactiv")) return "Inactivo";
-  if (lower.startsWith("archiv")) return "Archivado";
+  // "archivado" de importaciones antiguas se mapea a Inactivo.
+  if (lower.startsWith("inactiv") || lower.startsWith("archiv")) return "Inactivo";
   return "Activo";
 }
 

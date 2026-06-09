@@ -555,7 +555,6 @@ function VideoPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "video" }> }
             title="Video"
           />
         ) : (
-          /* eslint-disable-next-line jsx-a11y/media-has-caption */
           <video
             src={url}
             controls

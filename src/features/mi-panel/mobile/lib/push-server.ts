@@ -49,7 +49,7 @@ export async function sendPushToUser(args: {
 
   // Filtrar por opt-in del canal en profiles.
   const { data: profile } = await supabase
-    .from("profiles")
+    .from("usuarios")
     .select("push_solicitudes, push_comunicados, push_cronograma, push_llamadas")
     .eq("user_id", args.userId)
     .maybeSingle();

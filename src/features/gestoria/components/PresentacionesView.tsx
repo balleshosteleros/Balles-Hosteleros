@@ -8,7 +8,7 @@ import {
   DOCUMENTOS_TRIMESTRALES_BASE, DOCUMENTOS_ANUALES_BASE, TIPOS_DOCUMENTO_GESTORIA,
   PeriodoTrimestral, PeriodoAnual, DocumentoRequerido, DocumentoComplementario, EstadoPresentacion,
 } from "@/features/gestoria/data/gestoria-presentaciones";
-import { listPresentaciones, createPresentacion, updatePresentacion } from "@/features/gestoria/actions/presentaciones-actions";
+import { listPresentaciones } from "@/features/gestoria/actions/presentaciones-actions";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -30,16 +30,6 @@ function EstadoBadge({ estado }: { estado: EstadoPresentacion }) {
   const cfg = ESTADOS_PRESENTACION.find((e) => e.value === estado);
   if (!cfg) return null;
   return <Badge className={`${cfg.color} border text-xs font-medium`}>{cfg.label}</Badge>;
-}
-
-function EstadoIcon({ estado }: { estado: EstadoPresentacion }) {
-  switch (estado) {
-    case "completo": return <CheckCircle2 className="h-5 w-5 text-emerald-600" />;
-    case "pendiente": return <Clock className="h-5 w-5 text-amber-500" />;
-    case "fuera_de_plazo": return <XCircle className="h-5 w-5 text-red-500" />;
-    case "en_revision": return <Info className="h-5 w-5 text-blue-500" />;
-    case "incompleto": return <AlertTriangle className="h-5 w-5 text-orange-500" />;
-  }
 }
 
 function progreso(docs: DocumentoRequerido[]): number {
@@ -316,8 +306,8 @@ export function PresentacionesView() {
   useEffect(() => { sessionStorage.setItem("gestoria_last", pathname); }, [pathname]);
   const { empresaActual } = useEmpresa();
   const [anioFilter, setAnioFilter] = useState<string>("2026");
-  const [loading, setLoading] = useState(true);
-  const [dbPresentaciones, setDbPresentaciones] = useState<Record<string, unknown>[]>([]);
+  const [, setLoading] = useState(true);
+  const [, setDbPresentaciones] = useState<Record<string, unknown>[]>([]);
 
   const loadPresentaciones = useCallback(async () => {
     setLoading(true);

@@ -89,7 +89,7 @@ export function ToquesView() {
       setUserId(user.id);
 
       const { data: profile } = await supabase
-        .from("profiles")
+        .from("usuarios")
         .select("fecha_alta")
         .eq("user_id", user.id)
         .maybeSingle();

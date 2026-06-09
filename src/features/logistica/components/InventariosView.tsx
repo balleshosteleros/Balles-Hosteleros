@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import {
-  getInventariosPorEmpresa,
   getTiposPorEmpresa,
   getPlantillasPorEmpresa,
   type Inventario,
@@ -56,7 +55,7 @@ export function InventariosView() {
   const [stock, setStock] = useState<ProductoStock[]>([]);
   const [tipos, setTipos] = useState<TipoInventario[]>([]);
   const [plantillas, setPlantillas] = useState<PlantillaInventario[]>([]);
-  const [loadingInv, setLoadingInv] = useState(true);
+  const [, setLoadingInv] = useState(true);
 
   const loadInventarios = useCallback(async () => {
     setLoadingInv(true);
@@ -175,20 +174,6 @@ export function InventariosView() {
     else toast.error(res.error ?? "Error al crear inventario");
   };
 
-  const handleDelete = () => {
-    const toDelete = [...selected].filter((id) => {
-      const inv = inventarios.find((i) => i.id === id);
-      return inv && inv.estado === "Borrador";
-    });
-    if (toDelete.length === 0) {
-      toast.error("Solo se pueden eliminar inventarios en estado Borrador");
-      return;
-    }
-    setInventarios((prev) => prev.filter((i) => !toDelete.includes(i.id)));
-    setSelected(new Set());
-    toast.success(`${toDelete.length} inventario(s) eliminado(s)`);
-  };
-
   const handleConfirmar = async (inv: Inventario) => {
     const now = new Date().toISOString();
     setInventarios((prev) => prev.map((i) =>
@@ -265,9 +250,6 @@ export function InventariosView() {
       </div>
     );
   }
-
-  const borradorCount = inventarios.filter((i) => i.estado === "Borrador").length;
-  const confirmadoCount = inventarios.filter((i) => i.estado === "Confirmado").length;
 
   const columnasDef: ToolbarColumna[] = [
     { campo: "fecha", label: "Fecha", bloqueada: true },

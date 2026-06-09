@@ -81,7 +81,7 @@ type EmpleadoConAcceso = EmpleadoUI & {
 };
 
 function normalizarEstadoEmpleado(estado: string): EmpleadoUI["estado"] {
-  return estado === "Activo" ? "Activo" : "Desactivado";
+  return estado === "Activo" ? "Activo" : "Inactivo";
 }
 
 function bdToEmpleado(row: EmpleadoBDRow): EmpleadoConAcceso {

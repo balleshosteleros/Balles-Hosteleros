@@ -15,12 +15,12 @@ async function getContext() {
   const [empresaId, { data: profile }, { data: roles }] = await Promise.all([
     getEmpresaActivaForUser(supabase as unknown as SupabaseClient, user.id),
     supabase
-      .from("profiles")
+      .from("usuarios")
       .select("role")
       .eq("user_id", user.id)
       .single(),
     supabase
-      .from("user_roles")
+      .from("usuario_roles")
       .select("role")
       .eq("user_id", user.id),
   ]);
@@ -62,7 +62,7 @@ async function resolveEmpresaAutorizada(
 
   const supabase = await createClient();
   const { data: acceso } = await supabase
-    .from("user_empresas")
+    .from("usuario_empresas")
     .select("empresa_id")
     .eq("user_id", userId)
     .eq("empresa_id", target)
@@ -340,7 +340,7 @@ export async function setLocalesEmpleado(empleadoId: string, localIds: string[])
         .eq("id", empleadoId)
         .maybeSingle();
       const { data: accesos } = await supabase
-        .from("user_empresas")
+        .from("usuario_empresas")
         .select("empresa_id")
         .eq("user_id", emp?.user_id ?? "");
       const empresasEmpleado = new Set((accesos ?? []).map((a) => a.empresa_id));

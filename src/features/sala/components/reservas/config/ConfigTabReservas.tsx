@@ -226,7 +226,7 @@ export function ConfigTabReservas() {
                 </Label>
                 <p className="text-[10px] text-muted-foreground">
                   Toma como referencia los días seleccionados arriba (no 24 h
-                  fijas). Ej.: con la opción "3 días antes", una reserva que
+                  fijas). Ej.: con la opción «3 días antes», una reserva que
                   entra a 2 días: si está activo recibe la reconfirmación a la
                   vez que la confirmación; si está apagado no recibe
                   reconfirmación. Las reservas con antelación igual o mayor a

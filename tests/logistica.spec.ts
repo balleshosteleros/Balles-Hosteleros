@@ -32,12 +32,6 @@ async function esperarSinLoader(page: Page, timeout = 5_000) {
   });
 }
 
-/** Verifica que aparezca un toast (éxito o error) — no silencio */
-async function verificarToast(page: Page) {
-  const toast = page.locator("[data-sonner-toast]").first();
-  await expect(toast).toBeVisible({ timeout: 5_000 });
-}
-
 /** Navega a una ruta de logística y espera que cargue */
 async function irA(page: Page, ruta: string) {
   await page.goto(ruta);
@@ -200,7 +194,7 @@ test.describe("Logística — Stock", () => {
     const btnExport = page.getByRole("button", { name: /exportar|csv|descargar/i }).first();
     if (await btnExport.isVisible()) {
       // Escuchar descarga
-      const [download] = await Promise.all([
+      const [_download] = await Promise.all([
         page.waitForEvent("download", { timeout: 5_000 }).catch(() => null),
         btnExport.click(),
       ]);

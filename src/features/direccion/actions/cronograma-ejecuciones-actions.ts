@@ -76,7 +76,7 @@ export async function getEmpleadosEmpresa(): Promise<
     if (!empresaId) return { ok: false, error: "Sin empresa activa" };
 
     const { data, error } = await supabase
-      .from("profiles")
+      .from("usuarios")
       .select("user_id, nombre, apellidos, full_name, departamento, role")
       .eq("empresa_id", empresaId)
       .order("nombre", { ascending: true });

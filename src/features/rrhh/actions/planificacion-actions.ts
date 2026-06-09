@@ -14,10 +14,14 @@ import { getAppContext } from "@/lib/supabase/get-context";
 import { getEmpleadosActivos } from "@/features/rrhh/actions/empleados-actions";
 import type {
   DiaSemana,
-  TurnoTono,
+  TipoJornada,
   TurnoTramo,
 } from "@/features/rrhh/data/horarios";
-import { DIAS_SEMANA } from "@/features/rrhh/data/horarios";
+import {
+  DIAS_SEMANA,
+  COLOR_DEPARTAMENTO_FALLBACK,
+} from "@/features/rrhh/data/horarios";
+import { normalizeDeptoNombre } from "@/lib/seeds/departamentos";
 
 type Result<T> = { ok: true; data: T } | { ok: false; data: T; error: string };
 
@@ -25,11 +29,16 @@ export interface PlanTurno {
   id: string;
   codigo: string;
   nombre: string;
-  color: TurnoTono;
+  /** Color hex del departamento del turno (tinte único en el cuadrante). */
+  colorHex: string;
   tramos: TurnoTramo[];
   dias: DiaSemana[];
   /** Departamento asociado al turno (texto libre), o null si no tiene. */
   departamento: string | null;
+  /** Jornada fija (con tramos) o flexible (horas objetivo por día). */
+  tipoJornada: TipoJornada;
+  /** Horas objetivo por día de la semana cuando la jornada es flexible. */
+  flexHoras: Partial<Record<DiaSemana, number>>;
 }
 
 export interface PlanEmpleado {
@@ -67,6 +76,8 @@ export interface Planificacion {
   patrones: PlanPatron[];
   /** empleadoId → fechaISO → celdas de turno del día. */
   celdas: Record<string, Record<string, TurnoCelda[]>>;
+  /** Nombre de departamento → color hex (tinte del departamento). */
+  coloresDepartamento: Record<string, string>;
 }
 
 const VACIA: Planificacion = {
@@ -74,6 +85,7 @@ const VACIA: Planificacion = {
   turnos: [],
   patrones: [],
   celdas: {},
+  coloresDepartamento: {},
 };
 
 async function resolveEmpresaUuid(
@@ -202,26 +214,52 @@ export async function getPlanificacionHorarios(
     }
     const empleadoIds = empleados.map((e) => e.empleadoId);
 
-    // 2) Catálogo de turnos (oficiales y activos).
+    // 2a) Colores por departamento (fuente única del tinte de los turnos).
+    const { data: deptColorRows } = await supabase
+      .from("departamentos")
+      .select("nombre, color")
+      .eq("empresa_id", empresaId);
+    const colorPorDepto = new Map<string, string>();
+    const coloresDepartamento: Record<string, string> = {};
+    for (const d of deptColorRows ?? []) {
+      const nombre = (d.nombre as string | null) ?? "";
+      if (nombre) {
+        const color = (d.color as string | null) || COLOR_DEPARTAMENTO_FALLBACK;
+        colorPorDepto.set(normalizeDeptoNombre(nombre), color);
+        coloresDepartamento[nombre] = color;
+      }
+    }
+    const colorDeDepto = (departamento: string | null): string =>
+      (departamento &&
+        colorPorDepto.get(normalizeDeptoNombre(departamento))) ||
+      COLOR_DEPARTAMENTO_FALLBACK;
+
+    // 2b) Catálogo de turnos (oficiales y activos).
     const { data: turnosRows } = await supabase
       .from("rrhh_turnos")
-      .select("id, codigo, nombre, color, tramos, dias, departamento")
+      .select("id, codigo, nombre, tramos, dias, departamento, tipo_jornada, flex_horas")
       .eq("empresa_id", empresaId)
       .eq("es_oficial", true)
       .eq("activo", true);
-    const turnos: PlanTurno[] = (turnosRows ?? []).map((t) => ({
-      id: t.id as string,
-      codigo: (t.codigo as string) ?? "",
-      nombre: (t.nombre as string) ?? "",
-      color: ((t.color as TurnoTono) ?? "stone") as TurnoTono,
-      tramos: (t.tramos as TurnoTramo[]) ?? [],
-      dias: (t.dias as DiaSemana[]) ?? [],
-      departamento: (t.departamento as string | null) ?? null,
-    }));
+    const turnos: PlanTurno[] = (turnosRows ?? []).map((t) => {
+      const departamento = (t.departamento as string | null) ?? null;
+      return {
+        id: t.id as string,
+        codigo: (t.codigo as string) ?? "",
+        nombre: (t.nombre as string) ?? "",
+        colorHex: colorDeDepto(departamento),
+        tramos: (t.tramos as TurnoTramo[]) ?? [],
+        dias: (t.dias as DiaSemana[]) ?? [],
+        departamento,
+        tipoJornada: ((t.tipo_jornada as TipoJornada) ?? "fijo") as TipoJornada,
+        flexHoras:
+          (t.flex_horas as Partial<Record<DiaSemana, number>>) ?? {},
+      };
+    });
     const turnoById = new Map(turnos.map((t) => [t.id, t]));
 
     if (empleadoIds.length === 0) {
-      return { ok: true, data: { ...VACIA, turnos } };
+      return { ok: true, data: { ...VACIA, turnos, coloresDepartamento } };
     }
 
     // 3) Asignación directa: empleado → [{turnoId, vigenteDesde}].
@@ -371,7 +409,10 @@ export async function getPlanificacionHorarios(
       celdas[empId] = out;
     }
 
-    return { ok: true, data: { empleados, turnos, patrones, celdas } };
+    return {
+      ok: true,
+      data: { empleados, turnos, patrones, celdas, coloresDepartamento },
+    };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[planificacion] getPlanificacionHorarios:", msg);

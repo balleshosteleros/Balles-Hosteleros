@@ -121,7 +121,7 @@ export async function abrirDocumento(token: string): Promise<AbrirDocumentoResul
       .eq("id", doc.empresa_id)
       .maybeSingle();
     const { data: enviadoPorUser } = await admin
-      .from("profiles")
+      .from("usuarios")
       .select("full_name, email")
       .eq("id", doc.enviado_por)
       .maybeSingle();
@@ -442,7 +442,7 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
       .eq("id", doc.empresa_id)
       .maybeSingle();
     const { data: enviadoPorUser } = await admin
-      .from("profiles")
+      .from("usuarios")
       .select("full_name, email")
       .eq("id", doc.enviado_por)
       .maybeSingle();

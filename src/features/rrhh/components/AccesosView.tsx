@@ -40,7 +40,7 @@ const tipoBadge: Record<string, string> = {
 };
 
 // Componente de logo con fallback a avatar de letra
-function AppLogo({ nombre, logoUrl, icono, size = "sm" }: {
+function AppLogo({ nombre, logoUrl, icono: _icono, size = "sm" }: {
   nombre: string;
   logoUrl?: string;
   icono: string;
@@ -96,7 +96,7 @@ function PasswordCell({ value, canView }: { value: string; canView: boolean }) {
 export function AccesosView() {
   const { empresaActual } = useEmpresa();
   const [apps, setApps] = useState<AccesoApp[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
 
   useEffect(() => {
     let alive = true;

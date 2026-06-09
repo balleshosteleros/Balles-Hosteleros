@@ -55,7 +55,7 @@ async function obtenerTelefonos(empresaId: string, segmento: string): Promise<st
   // Fallback: teléfonos en profiles
   if (telefonos.size === 0) {
     const { data: profiles } = await admin
-      .from("profiles")
+      .from("usuarios")
       .select("telefono")
       .eq("empresa_id", empresaId)
       .limit(500);

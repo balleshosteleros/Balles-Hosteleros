@@ -276,10 +276,6 @@ export function DocumentacionView() {
   const usoPct = uso ? Math.min(100, Math.round((uso.bytes_total / uso.max_bytes) * 100)) : 0;
   const usoColor = usoPct >= 90 ? "bg-red-500" : usoPct >= 70 ? "bg-amber-500" : "bg-emerald-500";
 
-  const totalActual = nivel === 0
-    ? carpetasVisibles.length
-    : carpetasVisibles.length + documentosVisibles.length;
-
   return (
     <div className="p-6 space-y-4 max-w-[1400px] mx-auto">
       {/* Breadcrumb */}

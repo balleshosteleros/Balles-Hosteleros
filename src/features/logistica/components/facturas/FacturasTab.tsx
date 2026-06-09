@@ -41,10 +41,10 @@ const ESTADO_COLOR: Record<string, string> = {
 
 export function FacturasTab({ openFacturaId, onOpened }: Props) {
   const [facturas, setFacturas] = useState<Factura[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
-  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [orden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [showConfig, setShowConfig] = useState(false);

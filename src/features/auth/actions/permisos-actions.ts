@@ -29,12 +29,12 @@ export async function getUserPermisos(): Promise<UserPermisos> {
 
     const [{ data: profile }, { data: rolesRows }] = await Promise.all([
       admin
-        .from('profiles')
+        .from('usuarios')
         .select('rol_label, empresa_id, departamento')
         .eq('user_id', user.id)
         .single(),
       admin
-        .from('user_roles')
+        .from('usuario_roles')
         .select('role')
         .eq('user_id', user.id),
     ])

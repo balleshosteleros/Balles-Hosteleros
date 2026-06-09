@@ -1,15 +1,6 @@
-import { MasGrid } from "@/features/mi-panel/mobile/components/MasGrid";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
+// "Más" se fusionó dentro de Inicio.
 export default function MasPage() {
-  return (
-    <>
-      <header className="px-5 pt-[max(env(safe-area-inset-top),12px)] pb-3">
-        <h1 className="text-xl font-semibold">Mis Paneles</h1>
-        <p className="text-sm text-muted-foreground">Todas tus secciones</p>
-      </header>
-      <MasGrid />
-    </>
-  );
+  redirect("/m");
 }

@@ -25,7 +25,7 @@ export async function generarQrUpload(input: {
     const { empresaId } = await getAppContext();
     if (!empresaId) return { ok: false, error: "Sin empresa" };
 
-    const token = crypto.randomBytes(24).toString("hex");
+    const _token = crypto.randomBytes(24).toString("hex");
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
     // Guardamos el token en una tabla ligera (creada on-demand vía upsert seguro)

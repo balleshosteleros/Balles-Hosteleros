@@ -47,7 +47,7 @@ export async function listEmpleadosParaComunicado(): Promise<{
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, data: [], error: "No autenticado" };
     const { data, error } = await supabase
-      .from("profiles")
+      .from("usuarios")
       .select("user_id, nombre, apellidos, rol_label, departamento")
       .eq("empresa_id", empresaId)
       .order("nombre", { ascending: true });

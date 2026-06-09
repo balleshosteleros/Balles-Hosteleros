@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Copy, Upload, Trash2, ExternalLink, Eye, Palette, Globe, Code, Image, Type } from "lucide-react";
+import { Copy, Upload, Trash2, ExternalLink, Eye, Palette, Globe, Code, Image as ImageIcon, Type } from "lucide-react";
 import { toast } from "sonner";
 
 export function PortalEmpleoConfig() {
@@ -119,7 +119,7 @@ export function PortalEmpleoConfig() {
       {/* ── Imagen al compartir ──────────────────────── */}
       <Card>
         <div className="px-5 py-3 border-b border-border bg-primary/5 flex items-center gap-2">
-          <Image className="h-4 w-4 text-primary" />
+          <ImageIcon className="h-4 w-4 text-primary" />
           <span className="text-sm font-semibold text-foreground">Imagen al compartir</span>
         </div>
         <CardContent className="p-5 space-y-3">

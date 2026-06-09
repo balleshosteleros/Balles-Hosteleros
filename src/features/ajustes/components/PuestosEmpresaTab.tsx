@@ -14,7 +14,7 @@ import {
   validarVacante,
 } from "@/features/ajustes/data/roles-empresa";
 import { TIPO_JORNADA_LABELS, ESTADO_PUBLICACION_LABELS, type TipoJornada, type EstadoPublicacion } from "@/features/rrhh/data/reclutamiento";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,7 +27,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Search, Plus, Briefcase, ChevronRight, Info, Building2,
-  MapPin, Clock, Users, FileText, Globe, Save, AlertCircle,
+  MapPin, FileText, Save, AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 

@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { LineaAmortizacion, TIPOS_AMORTIZACION, TipoAmortizacion, MESES, TRIMESTRES } from "@/features/direccion/data/aperturas";
+import { LineaAmortizacion, TIPOS_AMORTIZACION, MESES, TRIMESTRES } from "@/features/direccion/data/aperturas";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 function fmt(n: number) { return n.toLocaleString("es-ES", { maximumFractionDigits: 2 }); }

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useMemo, type ReactNode } from "react";
+import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useTabQuery } from "@/shared/hooks/use-tab-query";
-import { getSalariosEmpresa, type PuestoSalarial, type NormaSalarial, DEPARTAMENTOS_DISPONIBLES } from "@/features/rrhh/data/salarios";
+import { type PuestoSalarial, type NormaSalarial, NORMAS_BASE, DEPARTAMENTOS_DISPONIBLES } from "@/features/rrhh/data/salarios";
+import { listSalariosEmpresa } from "@/features/rrhh/actions/salarios-actions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +13,7 @@ import { ConfigButton } from "@/shared/components/config-button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   ArrowLeft, Plus, Eye, Settings, Settings2, DollarSign, Clock, Calendar,
-  Briefcase, ChevronDown, ChevronRight, Target, AlertTriangle, FileText,
+  Briefcase, ChevronDown, ChevronRight, Target, AlertTriangle, FileText, Pencil,
 } from "lucide-react";
 import {
   SubmoduleToolbar,
@@ -27,6 +28,7 @@ import {
 } from "@/shared/components/SubmoduleToolbar";
 import { IOActions } from "@/shared/io";
 import { salariosIO } from "@/features/rrhh/io/salarios.io";
+import { PuestoSalarioDialog } from "./PuestoSalarioDialog";
 
 const estadoBadge = (e: string) => {
   switch (e) {
@@ -40,7 +42,17 @@ const eur = (n: number) => n.toLocaleString("es-ES", { style: "currency", curren
 
 export function SalariosView() {
   const { empresaActual } = useEmpresa();
-  const data = useMemo(() => getSalariosEmpresa(empresaActual.id), [empresaActual.id]);
+  const [data, setData] = useState<{ puestos: PuestoSalarial[]; normas: NormaSalarial[] }>(
+    { puestos: [], normas: NORMAS_BASE },
+  );
+  const reload = useCallback(() => {
+    listSalariosEmpresa().then(setData);
+  }, []);
+  useEffect(() => {
+    let activo = true;
+    listSalariosEmpresa().then((res) => { if (activo) setData(res); });
+    return () => { activo = false; };
+  }, [empresaActual.id]);
 
   type View = "list" | "detail" | "config" | "normas";
   const [view, setView] = useState<View>("list");
@@ -58,6 +70,7 @@ export function SalariosView() {
       onDetail={(id) => { setSelectedId(id); setView("detail"); }}
       onConfig={() => setView("config")}
       onNormas={() => setView("normas")}
+      onChanged={reload}
       empresaId={empresaActual.id}
     />
   );
@@ -68,14 +81,18 @@ function ListView({
   onDetail,
   onConfig,
   onNormas,
+  onChanged,
   empresaId,
 }: {
   puestos: PuestoSalarial[];
   onDetail: (id: string) => void;
   onConfig: () => void;
   onNormas: () => void;
+  onChanged: () => void;
   empresaId: string;
 }) {
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingPuesto, setEditingPuesto] = useState<PuestoSalarial | null>(null);
   const [busqueda, setBusqueda] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
@@ -211,7 +228,8 @@ function ListView({
         busqueda={busqueda}
         onBusquedaChange={setBusqueda}
         placeholderBusqueda="Buscar"
-        onNuevo={() => { /* TODO: abrir crear puesto */ }}
+        textoNuevo="Nuevo puesto"
+        onNuevo={() => { setEditingPuesto(null); setDialogOpen(true); }}
         filtros={filtros}
         onFiltrosChange={setFiltros}
         orden={orden}
@@ -273,7 +291,10 @@ function ListView({
                     {items.map((p) => (
                       <TableRow key={p.id} className="hover:bg-muted/30">
                         {columnasRender.map((c) => columnDefs[c.campo]?.td(p))}
-                        <TableCell className="text-right">
+                        <TableCell className="text-right whitespace-nowrap">
+                          <Button variant="ghost" size="sm" onClick={() => { setEditingPuesto(p); setDialogOpen(true); }}>
+                            <Pencil className="h-4 w-4 mr-1" /> Editar
+                          </Button>
                           <Button variant="ghost" size="sm" onClick={() => onDetail(p.id)}>
                             <Eye className="h-4 w-4 mr-1" /> Ver detalle
                           </Button>
@@ -287,6 +308,13 @@ function ListView({
           </Card>
         );
       })}
+
+      <PuestoSalarioDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        editing={editingPuesto}
+        onSaved={onChanged}
+      />
     </div>
   );
 }

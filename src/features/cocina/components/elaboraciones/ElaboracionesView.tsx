@@ -269,7 +269,7 @@ export function ElaboracionesView() {
   if (loading) return <LoadingSpinner className="p-4 md:p-6 min-h-[300px]" size="lg" />;
 
   const today = new Date().toISOString().slice(0, 10);
-  const dosDias = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
+  const dosDias = new Date(new Date().getTime() + 2 * 86400000).toISOString().slice(0, 10);
 
   const columnasDef: ToolbarColumna[] = [
     { campo: "producto", label: "Elaboración", bloqueada: true },

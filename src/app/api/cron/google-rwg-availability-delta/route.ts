@@ -18,7 +18,6 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const TZ_DEFAULT = "Europe/Madrid";
 const HORA_DEFAULT_COMIDA = "14:00";
 const HORA_DEFAULT_CENA = "21:00";
 const DURATION_SEC = 5400;

@@ -225,7 +225,7 @@ export function TicketProductoForm({ producto, onSaved, onCancel }: Props) {
               </Label>
               <p className="text-[10px] text-muted-foreground">
                 Cuando se vende todo el stock, el producto desaparece del listado público.
-                Si está desactivado, sigue visible con badge "Agotado" sin permitir compra.
+                Si está desactivado, sigue visible con badge «Agotado» sin permitir compra.
               </p>
             </div>
             <Switch

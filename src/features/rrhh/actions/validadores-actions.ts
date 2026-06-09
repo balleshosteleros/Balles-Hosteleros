@@ -64,7 +64,7 @@ async function empleadosActivosConRol(
   const rolPorUser = new Map<string, string>();
   if (userIds.length > 0) {
     const { data: profs } = await admin
-      .from("profiles")
+      .from("usuarios")
       .select("user_id, rol_label")
       .in("user_id", userIds);
     for (const p of profs ?? []) {
@@ -376,7 +376,7 @@ export async function reasignarValidadorYDesactivar(input: {
 
     const { error: errE } = await admin
       .from("empleados")
-      .update({ estado: "Desactivado", fecha_baja: fechaBaja })
+      .update({ estado: "Inactivo", fecha_baja: fechaBaja })
       .eq("id", empleadoId);
     if (errE) throw errE;
 

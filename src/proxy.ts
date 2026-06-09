@@ -98,16 +98,16 @@ export async function proxy(request: NextRequest) {
 
   const [{ data: profile }, { data: rolesRows }] = await Promise.all([
     admin
-      .from('profiles')
+      .from('usuarios')
       .select('rol_label, empresa_id, estado_acceso')
       .eq('user_id', user.id)
       .maybeSingle(),
     admin
-      .from('user_roles')
+      .from('usuario_roles')
       .select('role')
       .eq('user_id', user.id),
     admin
-      .from('profiles')
+      .from('usuarios')
       .update({ ultima_actividad: ahora })
       .eq('user_id', user.id)
       .or(`ultima_actividad.is.null,ultima_actividad.lt.${cutoff}`),
@@ -134,7 +134,7 @@ export async function proxy(request: NextRequest) {
   // este bypass desaparece a favor de has_empresa_role(empresa_id, 'director').
   if (appRoles.includes('director') && empresaId) {
     const { data: membership } = await admin
-      .from('user_empresas')
+      .from('usuario_empresas')
       .select('user_id')
       .eq('user_id', user.id)
       .eq('empresa_id', empresaId)

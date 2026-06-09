@@ -154,7 +154,7 @@ export async function marcarTarea(id: string, hecha: boolean): Promise<Result> {
       .eq("id", id);
     if (error) throw error;
     return { ok: true, data: undefined };
-  } catch (err) {
+  } catch (_err) {
     return { ok: false, error: "No se pudo actualizar la tarea" };
   }
 }
@@ -273,20 +273,68 @@ export async function posponerTarea(input: {
   }
 }
 
-/** Cuenta tareas pendientes de hoy para el badge del header */
+/**
+ * Cuenta tareas pendientes de hoy para el badge del header.
+ *
+ * Las tareas de cronograma (tipo "sistema") solo cuentan si pertenecen a un
+ * módulo que el usuario tiene en su rol (permisos con ver:true) — mismo criterio
+ * que la vista por defecto del cajón. Las de otros puestos previsualizados en el
+ * filtro "por puesto" no deben inflar el contador. Encargos y personales
+ * (no-sistema) siempre cuentan.
+ */
 export async function contarPendientesHoy(): Promise<{ ok: boolean; data: number }> {
   try {
-    const { supabase, userId } = await getAppContext();
+    const { supabase, userId, empresaId } = await getAppContext();
     if (!userId) return { ok: true, data: 0 };
     const hoy = new Date().toISOString().split("T")[0];
-    const { count, error } = await supabase
+
+    const norm = (s: string | null | undefined) =>
+      (s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().trim();
+
+    // Módulos visibles = permisos del rol del usuario (ver:true) + su puesto.
+    const { data: prof } = await supabase
+      .from("usuarios")
+      .select("rol_label, departamento")
+      .eq("user_id", userId)
+      .maybeSingle();
+    const rolLabel =
+      (prof?.rol_label as string | null)?.trim()
+      || (prof?.departamento as string | null)?.trim()
+      || "";
+
+    const visibles = new Set<string>();
+    if (rolLabel && empresaId) {
+      const { data: rolRow } = await supabase
+        .from("empresa_roles")
+        .select("permisos")
+        .eq("empresa_id", empresaId)
+        .ilike("nombre", rolLabel)
+        .maybeSingle();
+      const permisos = (rolRow?.permisos ?? []) as Array<{ modulo: string; ver: boolean }>;
+      for (const p of permisos) {
+        if (p.ver && p.modulo) visibles.add(norm(getModuloForCronograma(p.modulo)));
+      }
+    }
+    if (rolLabel) visibles.add(norm(getModuloForCronograma(rolLabel)));
+
+    const { data, error } = await supabase
       .from("tareas")
-      .select("*", { count: "exact", head: true })
+      .select("tipo, ref_tabla")
       .eq("user_id", userId)
       .eq("fecha", hoy)
       .eq("hecha", false);
     if (error) throw error;
-    return { ok: true, data: count ?? 0 };
+
+    const count = (data ?? []).filter((t) => {
+      if (t.tipo !== "sistema") return true;
+      if (visibles.size === 0) return false;
+      const rt = (t.ref_tabla as string | null) ?? "";
+      const i = rt.indexOf(":");
+      const rol = i >= 0 ? rt.slice(i + 1) : "";
+      return visibles.has(norm(getModuloForCronograma(rol)));
+    }).length;
+
+    return { ok: true, data: count };
   } catch {
     return { ok: true, data: 0 };
   }
@@ -564,7 +612,7 @@ export async function getDepartamentosVisibles(): Promise<
     }
 
     const { data: profile } = await supabase
-      .from("profiles")
+      .from("usuarios")
       .select("rol_label")
       .eq("user_id", userId)
       .maybeSingle();
@@ -572,7 +620,7 @@ export async function getDepartamentosVisibles(): Promise<
 
     // Director del SaaS: bypass — ve todo.
     const { data: rolesRows } = await supabase
-      .from("user_roles")
+      .from("usuario_roles")
       .select("role")
       .eq("user_id", userId);
     const appRoles = (rolesRows ?? []).map((r) => r.role as string);
@@ -600,7 +648,11 @@ export async function getDepartamentosVisibles(): Promise<
         .map((m) => getModuloForCronograma(m));
     }
 
-    if (esDirectorGlobal) {
+    // El director SOLO cae al set completo si su rol no tiene permisos
+    // configurados (red de seguridad para no dejarlo sin nada). Si los tiene,
+    // se respetan: así puede quitar un módulo (p.ej. Gerencia) de su rol y
+    // dejar de ver sus tareas.
+    if (esDirectorGlobal && modulosVisibles.length === 0) {
       modulosVisibles = [
         "Dirección", "Gerencia", "RRHH", "Logística", "Cocina",
         "Sala", "Calidad", "Contabilidad", "Gestoría", "Jurídico", "Marketing",
@@ -643,19 +695,102 @@ export async function getDepartamentosVisibles(): Promise<
 
 export async function listCronogramasPorRol(rol: string): Promise<Result<Record<string, unknown>[]>> {
   try {
-    const { supabase } = await getAppContext();
-    // No filtramos por frecuencia para que el usuario vea TODO lo disponible para ese rol
-    // en la sección de información de apoyo.
-    const { data, error } = await supabase
+    const { supabase, empresaId } = await getAppContext();
+    // Devolvemos TODAS las filas del rol (padres + hijos). El cliente las usa para:
+    //  · construir el mapa de aclaraciones (filas con parent_id) que se muestran con el
+    //    icono ℹ️ dentro de su tarea padre, y
+    //  · listar las tareas sin fecha fija (parent_id null + frecuencia OTRO/POR NECESIDAD).
+    let query = supabase
       .from("cronogramas_operativos")
-      .select("*")
+      .select("id, rol, tarea, resumen, frecuencia, parent_id, orden")
       .ilike("rol", rol.trim());
-    
+    // Multi-empresa: limitar a la empresa activa para no mezclar filas de otras empresas.
+    const esUuid = empresaId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(empresaId);
+    if (esUuid) query = query.eq("empresa_id", empresaId);
+    const { data, error } = await query;
+
     if (error) throw error;
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[listCronogramasPorRol]", err);
     return { ok: false, error: "Error al cargar información del rol" };
+  }
+}
+
+// Marcador en `tareas.ref_tabla` para las marcas diarias de tareas "por necesidad".
+// Se distingue de las rutinarias (`cronogramas_operativos:ROL`) por el sufijo `_pn`.
+const PN_REF_PREFIX = "cronogramas_operativos_pn";
+
+/**
+ * Devuelve los ids de cronograma "por necesidad" que el usuario marcó como hechos
+ * en una fecha concreta (las excepciones del día). Materialización perezosa: solo
+ * existe fila en `tareas` cuando se marcó.
+ */
+export async function getPorNecesidadHechas(fechaIso: string): Promise<Result<string[]>> {
+  try {
+    const { supabase, userId } = await getAppContext();
+    if (!userId) return { ok: true, data: [] };
+    const { data, error } = await supabase
+      .from("tareas")
+      .select("ref_id")
+      .eq("user_id", userId)
+      .eq("fecha", fechaIso)
+      .eq("hecha", true)
+      .like("ref_tabla", `${PN_REF_PREFIX}:%`);
+    if (error) throw error;
+    return { ok: true, data: (data ?? []).map((r) => r.ref_id as string).filter(Boolean) };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Error" };
+  }
+}
+
+/**
+ * Marca/desmarca una tarea "por necesidad" como hecha en una fecha. Crea la fila
+ * en `tareas` al marcar y la borra al desmarcar. Devuelve el nuevo estado (hecha).
+ */
+export async function togglePorNecesidadHecha(input: {
+  cronogramaId: string;
+  rol: string;
+  titulo: string;
+  fechaIso: string;
+}): Promise<Result<boolean>> {
+  try {
+    const { supabase, userId, empresaId } = await getAppContext();
+    if (!userId) return { ok: false, error: "No autenticado" };
+    const refTabla = `${PN_REF_PREFIX}:${input.rol}`;
+    const { data: existing } = await supabase
+      .from("tareas")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("fecha", input.fechaIso)
+      .eq("ref_tabla", refTabla)
+      .eq("ref_id", input.cronogramaId)
+      .maybeSingle();
+
+    if (existing) {
+      const { error } = await supabase.from("tareas").delete().eq("id", existing.id);
+      if (error) throw error;
+      return { ok: true, data: false };
+    }
+
+    const esUuid =
+      empresaId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(empresaId);
+    const { error } = await supabase.from("tareas").insert({
+      empresa_id: esUuid ? empresaId : null,
+      user_id: userId,
+      titulo: input.titulo,
+      fecha: input.fechaIso,
+      hecha: true,
+      prioridad: "alta" as TareaPrioridad,
+      tipo: "sistema" as TareaTipo,
+      ref_tabla: refTabla,
+      ref_id: input.cronogramaId,
+      created_by: userId,
+    });
+    if (error) throw error;
+    return { ok: true, data: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Error" };
   }
 }
 
@@ -672,7 +807,7 @@ export async function syncTareasCronograma(dateIso?: string, forcedRol?: string)
       // Preferimos profiles.rol_label / departamento (claves de cronogramas_operativos.rol)
       // sobre user_roles.role (que es el rol RBAC del sistema: empleado/admin/etc).
       const { data: prof } = await supabase
-        .from("profiles")
+        .from("usuarios")
         .select("rol_label, departamento")
         .eq("user_id", userId)
         .maybeSingle();
@@ -680,7 +815,7 @@ export async function syncTareasCronograma(dateIso?: string, forcedRol?: string)
         || (prof?.departamento as string | null)?.trim()
         || undefined;
       if (!rol) {
-        const { data: rData } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+        const { data: rData } = await supabase.from("usuario_roles").select("role").eq("user_id", userId);
         const roles = rData?.map(r => r.role as string) || [];
         rol = roles.includes("admin") ? "Dirección" : (roles[0] || "Dirección");
       }
@@ -773,7 +908,7 @@ export async function syncTareasCronogramaRange(dates: string[], forcedRol?: str
     let rol = forcedRol;
     if (!rol) {
       const { data: prof } = await supabase
-        .from("profiles")
+        .from("usuarios")
         .select("rol_label, departamento")
         .eq("user_id", userId)
         .maybeSingle();
@@ -782,7 +917,7 @@ export async function syncTareasCronogramaRange(dates: string[], forcedRol?: str
         || undefined;
       if (!rol) {
         const { data: rData } = await supabase
-          .from("user_roles")
+          .from("usuario_roles")
           .select("role")
           .eq("user_id", userId);
         const roles = rData?.map(r => r.role as string) || [];

@@ -148,7 +148,7 @@ export async function getMiCronograma(): Promise<MiCronogramaResult> {
     }
 
     const { data: profile } = await supabase
-      .from("profiles")
+      .from("usuarios")
       .select("rol_label, departamento")
       .eq("user_id", userId)
       .maybeSingle();

@@ -168,7 +168,7 @@ export async function updateProfile(formData: FormData) {
   }
 
   const { error } = await supabase
-    .from('profiles')
+    .from('usuarios')
     .update({
       full_name: formData.get('full_name') as string,
       updated_at: new Date().toISOString(),

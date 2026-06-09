@@ -11,7 +11,7 @@ import {
   calcularPuntuacionMaxima,
   CATEGORIA_CUESTIONARIO_LABEL,
 } from "@/features/calidad/data/cuestionarios";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
