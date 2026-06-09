@@ -3,7 +3,7 @@
 import {
   Briefcase, Calculator, FileText, Scale, User, UsersRound, Truck, Camera,
   Wrench, Settings, CalendarDays, ChefHat, UserCheck, ClipboardList, ClipboardCheck,
-  Gift, Crown, Network, PercentDiamond, TrendingUp, FolderOpen, Clock, Calendar,
+  Gift, Crown, Network, PercentDiamond, TrendingUp, FolderOpen, Calendar,
   Timer, UserRoundSearch, HandCoins, Megaphone, Package, FileArchive, Files,
   KeyRound, Gavel, FileUp, ShoppingCart, Warehouse, FlaskConical, GraduationCap,
   UtensilsCrossed, BookOpen, Contact, Thermometer, Sparkles, FileSearch, PenLine,
@@ -204,7 +204,7 @@ export const allSections: Section[] = [
   { key: "cocina", modulo: "COCINA", icon: ChefHat, label: "COCINA", prefix: "/cocina", items: cocinaSubs, linkTo: "/cocina" },
   { key: "logistica", modulo: "LOGÍSTICA", icon: Package, label: "LOGÍSTICA", prefix: "/logistica", items: logisticaSubs, linkTo: "/logistica" },
   { key: "gerencia", modulo: "GERENCIA", icon: Briefcase, label: "GERENCIA", prefix: "/gerencia", items: gerenciaSubs, linkTo: "/gerencia" },
-  { key: "rrhh", modulo: "RRHH", icon: User, label: "RECURSOS HUMANOS", prefix: "/rrhh", items: rrhhSubs, linkTo: "/rrhh" },
+  { key: "rrhh", modulo: "RECURSOS HUMANOS", icon: User, label: "RECURSOS HUMANOS", prefix: "/rrhh", items: rrhhSubs, linkTo: "/rrhh" },
   { key: "marketing", modulo: "MARKETING", icon: Camera, label: "MARKETING", prefix: "/marketing", items: marketingSubs, linkTo: "/marketing" },
   { key: "contabilidad", modulo: "CONTABILIDAD", icon: Calculator, label: "CONTABILIDAD", prefix: "/contabilidad", items: contabilidadSubs, linkTo: "/contabilidad" },
   { key: "calidad", modulo: "CALIDAD", icon: CheckCircle2, label: "CALIDAD", prefix: "/calidad", items: calidadSubs, linkTo: "/calidad" },

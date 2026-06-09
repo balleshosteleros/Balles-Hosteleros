@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Incidencia, LOCALES, ESTADOS, GRAVEDADES, AREAS, REPARADORES, Estado, Gravedad } from "@/features/empresa/data/mantenimiento";
+import { Incidencia, LOCALES, ESTADOS, GRAVEDADES, AREAS, REPARADORES } from "@/features/empresa/data/mantenimiento";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";

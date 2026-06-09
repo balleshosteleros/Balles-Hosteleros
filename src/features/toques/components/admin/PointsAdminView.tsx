@@ -1,7 +1,7 @@
 "use client";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Award, Cake, Crown, Gift, ShoppingBag } from "lucide-react";
+import { Gift, ShoppingBag } from "lucide-react";
 import { CanjesAdminView } from "./CanjesAdminView";
 import { ToquesAdminTab } from "./ToquesAdminTab";
 

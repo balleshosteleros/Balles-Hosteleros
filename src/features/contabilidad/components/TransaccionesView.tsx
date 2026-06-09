@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
-import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Paperclip, MoreVertical, Settings } from "lucide-react";
@@ -71,11 +70,10 @@ function mapBankTxToTransaccion(row: Record<string, unknown>): TransaccionEnriqu
 }
 
 export function TransaccionesView() {
-  const { empresaActual } = useEmpresa();
   const [tab, setTab] = useState("TODAS");
   const [busqueda, setBusqueda] = useState("");
   const [txs, setTxs] = useState<TransaccionEnriquecida[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
@@ -104,10 +102,6 @@ export function TransaccionesView() {
     loadTransacciones();
   }, [loadTransacciones]);
 
-  const bancosUsados = useMemo(
-    () => [...new Set(txs.map(t => t.banco).filter(Boolean))].sort(),
-    [txs],
-  );
 
   const acceso = (t: TransaccionEnriquecida, campo: string): unknown => {
     if (campo === "tipo") return t.tipo;

@@ -30,13 +30,6 @@ import { Plus, Pencil, Trash2, Eye, EyeOff, Copy, ExternalLink, Search, ChevronD
 import { toast } from "sonner";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
-const TIPO_INTEGRACION_LABELS: Record<TipoIntegracion, string> = {
-  enlace: "Abrir como página web",
-  sso: "Entrar con un solo clic",
-  oauth: "Conectar pidiendo permiso",
-  embebido: "Verlo dentro de la app",
-};
-
 const emptyApp: Omit<AccesoApp, "id" | "ultimaActualizacion"> = {
   nombre: "",
   descripcion: "",

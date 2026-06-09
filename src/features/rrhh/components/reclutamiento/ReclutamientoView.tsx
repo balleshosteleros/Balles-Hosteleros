@@ -25,10 +25,6 @@ import {
   type FasePrincipal,
   type EstadoReclutamiento,
 } from "@/features/rrhh/data/reclutamiento";
-import {
-  getVacantesDesdeRoles,
-  getRolesPorEmpresa,
-} from "@/features/rrhh/data/roles-empresa";
 import { KanbanPipeline } from "@/features/rrhh/components/reclutamiento/KanbanPipeline";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -52,8 +48,6 @@ import {
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
 } from "@/shared/components/SubmoduleToolbar";
-import { IOActions } from "@/shared/io";
-import { reclutamientoIO } from "@/features/rrhh/io/reclutamiento.io";
 import { ReclutamientoConfigView } from "@/features/rrhh/components/reclutamiento/config/ReclutamientoConfigView";
 import { CandidatosRealesTab } from "@/features/rrhh/components/reclutamiento/CandidatosRealesTab";
 import { OfertaFormDialog } from "@/features/rrhh/components/reclutamiento/OfertaFormDialog";
@@ -373,7 +367,7 @@ function CandidatosView({ vacante, faseInicial, onBack }: { vacante: Vacante; fa
 }
 
 // ─── All Candidates Tab ─────────────────────────────────────────
-function AllCandidatosView({ vacantes }: { vacantes: Vacante[] }) {
+function _AllCandidatosView({ vacantes }: { vacantes: Vacante[] }) {
   const [search, setSearch] = useState("");
   const [selectedCandidato, setSelectedCandidato] = useState<Candidato | null>(null);
 
@@ -436,7 +430,7 @@ function AllCandidatosView({ vacantes }: { vacantes: Vacante[] }) {
 // ─── Main Page ──────────────────────────────────────────────────
 export function ReclutamientoView() {
   const { empresaActual } = useEmpresa();
-  const router = useRouter();
+  const _router = useRouter();
   const [vacantes, setVacantes] = useState<Vacante[]>([]);
   const [loading, setLoading] = useState(true);
   useGlobalLoadingSync(loading);
@@ -520,7 +514,6 @@ export function ReclutamientoView() {
   const [showConfig, setShowConfig] = useState(false);
   const [showCandidatos, setShowCandidatos] = useState(false);
 
-  const categorias = useMemo(() => [...new Set(vacantes.map((v) => v.categoria))], [vacantes]);
 
   const acceso = (v: Vacante, campo: string): unknown => {
     if (campo === "estadoPublicacion") return ESTADO_PUBLICACION_LABELS[v.estadoPublicacion];
@@ -619,8 +612,6 @@ export function ReclutamientoView() {
     );
   }
 
-  const totalCandidatos = vacantes.reduce((a, v) => a + v.candidatos.length, 0);
-  const vacantesAbiertas = vacantes.filter((v) => v.estadoPublicacion === "publicada").length;
 
   // Render condicional según el modo (vacantes / candidatos / config)
   if (showConfig) {

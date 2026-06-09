@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Trophy, Zap, Megaphone, Users, Clock, ChevronRight } from "lucide-react";
+import { Trophy, Zap, Megaphone, Users, ChevronRight } from "lucide-react";
 import type { MobileHomeData } from "../lib/mobile-home-data";
 
 interface Props {

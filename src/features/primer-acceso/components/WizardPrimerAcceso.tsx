@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Loader2, Check, ChevronRight, ChevronLeft, User, Home,
-  CreditCard, Heart, Shirt, Upload, Sparkles,
+  CreditCard, Heart, Shirt, Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

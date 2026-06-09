@@ -93,7 +93,7 @@ function rangeMonths(mode: CalendarRangeMode, anchor: Date): { year: number; mon
   return [{ year: anchor.getFullYear(), month: anchor.getMonth() }];
 }
 
-export function CalendarioAusencias({ modalidad, titulo, items, botonNuevo, columnaExtra, empresaId }: Props) {
+export function CalendarioAusencias({ modalidad, items, botonNuevo, columnaExtra, empresaId }: Props) {
   const [busqueda, setBusqueda] = useState("");
   const [vista, setVista] = useState<"calendario" | "lista">("calendario");
   const [showConfig, setShowConfig] = useState(false);
@@ -298,7 +298,6 @@ function FestivoMarker({ empresaId, fechaISO, compact }: { empresaId?: string; f
 function VistaDiaria({
   anchor,
   eventosPorFecha,
-  empresaId,
 }: {
   anchor: Date;
   eventosPorFecha: Map<string, AusenciaItem[]>;

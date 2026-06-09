@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -27,9 +26,11 @@ import {
 } from "lucide-react";
 import {
   CATEGORIAS_APP,
+  MAX_ACCESOS_POR_APP,
+  faviconDesdeUrl,
   type AccesoApp,
+  type AccesoCredencial,
   type EstadoApp,
-  type TipoIntegracion,
 } from "@/features/rrhh/data/accesos-apps";
 import {
   listAllAccesosApps,
@@ -46,9 +47,10 @@ const emptyApp: Omit<AccesoApp, "id" | "ultimaActualizacion"> = {
   url: "",
   icono: "🔗",
   logoUrl: "",
-  categoria: "Sistemas de gestión",
+  categoria: "Otros",
   departamentos: [],
   rolesAutorizados: [],
+  accesos: [{ etiqueta: "", usuario: "", contrasena: "" }],
   usuario: "",
   contrasena: "",
   estado: "Activo",
@@ -157,6 +159,26 @@ export function AplicacionesTab() {
     });
   };
 
+  const updateAcceso = (idx: number, patch: Partial<AccesoCredencial>) => {
+    setForm((p) => ({
+      ...p,
+      accesos: p.accesos.map((a, i) => (i === idx ? { ...a, ...patch } : a)),
+    }));
+  };
+  const addAcceso = () => {
+    setForm((p) =>
+      p.accesos.length >= MAX_ACCESOS_POR_APP
+        ? p
+        : { ...p, accesos: [...p.accesos, { etiqueta: "", usuario: "", contrasena: "" }] },
+    );
+  };
+  const removeAcceso = (idx: number) => {
+    setForm((p) => {
+      const next = p.accesos.filter((_, i) => i !== idx);
+      return { ...p, accesos: next.length ? next : [{ etiqueta: "", usuario: "", contrasena: "" }] };
+    });
+  };
+
   const filteredApps = apps.filter((a) => {
     if (filtroEmpresa !== "todas" && a.empresaId !== filtroEmpresa) return false;
     if (filtroCategoria !== "todas" && a.categoria !== filtroCategoria) return false;
@@ -167,7 +189,7 @@ export function AplicacionesTab() {
 
   const openCreate = () => {
     setEditingId(null);
-    setForm(emptyApp);
+    setForm({ ...emptyApp, empresaId: empresaActual.id });
     setModalOpen(true);
   };
   const openEdit = (app: AccesoApp) => {
@@ -181,6 +203,7 @@ export function AplicacionesTab() {
       categoria: app.categoria,
       departamentos: app.departamentos,
       rolesAutorizados: app.rolesAutorizados,
+      accesos: app.accesos.length ? app.accesos : [{ etiqueta: "", usuario: "", contrasena: "" }],
       usuario: app.usuario,
       contrasena: app.contrasena,
       estado: app.estado,
@@ -199,18 +222,14 @@ export function AplicacionesTab() {
     }
     setSavingApp(true);
     try {
+      // Icono automático: favicon del dominio de la URL.
+      const payload = { ...form, logoUrl: faviconDesdeUrl(form.url) || undefined };
       if (editingId) {
-        const updated = await updateAccesoApp(editingId, {
-          ...form,
-          logoUrl: form.logoUrl || undefined,
-        });
+        const updated = await updateAccesoApp(editingId, payload);
         setApps((prev) => prev.map((a) => (a.id === editingId ? updated : a)));
         toast.success(`Acceso "${updated.nombre}" actualizado`);
       } else {
-        const created = await createAccesoApp({
-          ...form,
-          logoUrl: form.logoUrl || undefined,
-        });
+        const created = await createAccesoApp(payload);
         setApps((prev) => [...prev, created]);
         toast.success(`Acceso "${created.nombre}" creado`);
       }
@@ -397,38 +416,6 @@ export function AplicacionesTab() {
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs font-semibold">URL del logo</Label>
-              <Input
-                value={form.logoUrl || ""}
-                onChange={(e) => setForm((p) => ({ ...p, logoUrl: e.target.value }))}
-                placeholder="https://logo.clearbit.com/…"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold">Emoji / icono fallback</Label>
-              <Input
-                value={form.icono}
-                onChange={(e) => setForm((p) => ({ ...p, icono: e.target.value }))}
-                placeholder="🔗"
-                maxLength={4}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold">Empresa</Label>
-              <Select value={form.empresaId} onValueChange={(v) => setForm((p) => ({ ...p, empresaId: v }))}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {empresasOptions.map((e) => (
-                    <SelectItem key={e.id} value={e.id}>
-                      {e.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
               <Label className="text-xs font-semibold">Categoría</Label>
               <Select value={form.categoria} onValueChange={(v) => setForm((p) => ({ ...p, categoria: v }))}>
                 <SelectTrigger>
@@ -444,23 +431,6 @@ export function AplicacionesTab() {
               </Select>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs font-semibold">Tipo integración</Label>
-              <Select
-                value={form.tipoIntegracion}
-                onValueChange={(v) => setForm((p) => ({ ...p, tipoIntegracion: v as TipoIntegracion }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="enlace">Enlace</SelectItem>
-                  <SelectItem value="sso">SSO</SelectItem>
-                  <SelectItem value="oauth">OAuth</SelectItem>
-                  <SelectItem value="embebido">Embebido</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
               <Label className="text-xs font-semibold">Estado</Label>
               <Select value={form.estado} onValueChange={(v) => setForm((p) => ({ ...p, estado: v as EstadoApp }))}>
                 <SelectTrigger>
@@ -469,37 +439,68 @@ export function AplicacionesTab() {
                 <SelectContent>
                   <SelectItem value="Activo">Activo</SelectItem>
                   <SelectItem value="Inactivo">Inactivo</SelectItem>
-                  <SelectItem value="Archivado">Archivado</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold">Usuario / Login</Label>
-              <Input
-                value={form.usuario}
-                onChange={(e) => setForm((p) => ({ ...p, usuario: e.target.value }))}
-                placeholder="usuario@empresa.es"
-                autoComplete="off"
-              />
+
+            {/* Icono automático (favicon del dominio) */}
+            <div className="space-y-1 sm:col-span-2">
+              <Label className="text-xs font-semibold">Icono</Label>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <AppLogo nombre={form.nombre || "?"} logoUrl={faviconDesdeUrl(form.url) || undefined} />
+                <span>Se obtiene automáticamente de la URL.</span>
+              </div>
             </div>
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold">Contraseña</Label>
-              <Input
-                value={form.contrasena}
-                onChange={(e) => setForm((p) => ({ ...p, contrasena: e.target.value }))}
-                placeholder="Contraseña visible para admin"
-                type="text"
-                autoComplete="new-password"
-              />
+
+            {/* Accesos: varias parejas usuario/contraseña */}
+            <div className="space-y-2 sm:col-span-2">
+              <Label className="text-xs font-semibold">Accesos (usuario y contraseña)</Label>
+              <div className="space-y-2">
+                {form.accesos.map((acc, idx) => (
+                  <div key={idx} className="flex items-start gap-2 rounded-md border border-border/60 p-2">
+                    <div className="grid flex-1 grid-cols-1 sm:grid-cols-3 gap-2">
+                      <Input
+                        value={acc.etiqueta}
+                        onChange={(e) => updateAcceso(idx, { etiqueta: e.target.value })}
+                        placeholder="Etiqueta (ej: Gerencia)"
+                        className="h-8 text-xs"
+                      />
+                      <Input
+                        value={acc.usuario}
+                        onChange={(e) => updateAcceso(idx, { usuario: e.target.value })}
+                        placeholder="usuario@empresa.es"
+                        autoComplete="off"
+                        className="h-8 text-xs"
+                      />
+                      <Input
+                        value={acc.contrasena}
+                        onChange={(e) => updateAcceso(idx, { contrasena: e.target.value })}
+                        placeholder="Contraseña"
+                        type="text"
+                        autoComplete="new-password"
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => removeAcceso(idx)}
+                      title="Quitar acceso"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              {form.accesos.length < MAX_ACCESOS_POR_APP && (
+                <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={addAcceso}>
+                  <Plus className="h-3.5 w-3.5" />Añadir acceso
+                </Button>
+              )}
             </div>
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold">Responsable</Label>
-              <Input
-                value={form.responsable}
-                onChange={(e) => setForm((p) => ({ ...p, responsable: e.target.value }))}
-                placeholder="Nombre del responsable"
-              />
-            </div>
+
             <div className="space-y-1 sm:col-span-2">
               <Label className="text-xs font-semibold">
                 Roles autorizados{" "}
@@ -576,16 +577,6 @@ export function AplicacionesTab() {
                   </div>
                 </PopoverContent>
               </Popover>
-            </div>
-            <div className="space-y-1 sm:col-span-2">
-              <Label className="text-xs font-semibold">Notas internas</Label>
-              <Textarea
-                value={form.notas}
-                onChange={(e) => setForm((p) => ({ ...p, notas: e.target.value }))}
-                placeholder="Notas sobre este acceso…"
-                rows={2}
-                className="resize-none"
-              />
             </div>
           </div>
           <DialogFooter>

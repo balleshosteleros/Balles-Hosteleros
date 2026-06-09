@@ -384,12 +384,32 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
     await cargar();
   };
 
+  // Normaliza acentos/mayúsculas para que "DIRECCION" (guardado en ref_tabla)
+  // case con "DIRECCIÓN" (rol_label del perfil).
+  const norm = (s: string | null | undefined) =>
+    (s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().trim();
+
+  // Extrae el rol de un ref_tabla "cronogramas_operativos:GERENTE" → "GERENTE".
+  const refRol = (t: TareaRow) => {
+    const rt = t.ref_tabla ?? "";
+    const i = rt.indexOf(":");
+    return i >= 0 ? rt.slice(i + 1) : "";
+  };
+
   const filterBySelectedRol = (list: TareaRow[]) => {
-    if (selectedRol === "default") return list;
-    const target = selectedRol.toUpperCase();
-    return list.filter(t => 
-      t.tipo === "sistema" && 
-      t.ref_tabla?.toUpperCase() === `CRONOGRAMAS_OPERATIVOS:${target}`
+    if (selectedRol === "default") {
+      // Vista por defecto: las tareas de cronograma se limitan a TU puesto.
+      // Los encargos y personales (no-sistema) siempre se muestran.
+      const propio = norm(rolUsuario);
+      return list.filter((t) => {
+        if (t.tipo !== "sistema") return true;
+        if (!propio) return false;
+        return norm(refRol(t)) === propio;
+      });
+    }
+    const target = norm(selectedRol);
+    return list.filter(
+      (t) => t.tipo === "sistema" && norm(refRol(t)) === target,
     );
   };
 

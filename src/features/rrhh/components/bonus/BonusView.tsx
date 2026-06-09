@@ -34,7 +34,6 @@ import {
   aplicarOrdenToolbar,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
-  type ToolbarColumnaVisible,
 } from "@/shared/components/SubmoduleToolbar";
 import { IOActions } from "@/shared/io";
 import { bonusIO } from "@/features/rrhh/io/bonus.io";
@@ -59,10 +58,6 @@ function ListadoBonus({ bonus, onSelect, onCrear, empresaId }: {
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [showConfig, setShowConfig] = useState(false);
 
-  const tiposUsados = useMemo(
-    () => [...new Set(bonus.map((b) => b.tipo))].sort(),
-    [bonus],
-  );
 
   const acceso = (b: Bonus, campo: string): unknown => {
     if (campo === "estado") return ESTADO_BONUS_LABEL[b.estado];

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Button } from "@/components/ui/button";
 import { Search, ArrowLeftRight, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -11,7 +10,6 @@ import { SubmoduleToolbar } from "@/shared/components/SubmoduleToolbar";
 const TABS = [{ id: "PENDIENTE", label: "Para conciliar" }, { id: "CONCILIADA", label: "Conciliadas" }];
 
 export function ConciliacionView() {
-  const { empresaActual } = useEmpresa();
   const [tab, setTab] = useState("PENDIENTE");
   const [busqueda, setBusqueda] = useState("");
   const [showConfig, setShowConfig] = useState(false);

@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, CheckCircle2, Package, FileWarning, Info } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Package, Info } from "lucide-react";
 import type { AnalisisAlbaran } from "@/features/logistica/data/pedidos";
 
 interface Props {
