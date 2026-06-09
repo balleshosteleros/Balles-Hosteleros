@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { getHorarioDia, type Tramo } from "@/features/rrhh/utils/horario-empleado";
 
@@ -58,6 +59,12 @@ export async function getMobileInicioData(): Promise<MobileInicioData> {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Las lecturas del propio perfil/empresa van por el cliente admin: la RLS de
+  // `empresas` (user_has_empresa_access) solo mira usuario_empresas y se deja
+  // fuera la empresa principal del perfil, así que con el cliente del usuario
+  // la empresa no se leía. Es el dato del propio usuario autenticado.
+  const admin = createAdminClient();
+
   const vacio: MobileInicioData = {
     nombre: "Empleado",
     rolLabel: null,
@@ -68,15 +75,15 @@ export async function getMobileInicioData(): Promise<MobileInicioData> {
   };
   if (!user) return vacio;
 
-  const empresaActivaId = await getEmpresaActivaForUser(supabase, user.id);
+  const empresaActivaId = await getEmpresaActivaForUser(admin, user.id);
 
   const [{ data: profile }, { data: linkRows }] = await Promise.all([
-    supabase
+    admin
       .from("usuarios")
       .select("nombre, apellidos, avatar_url, rol_label, empresa_id")
       .eq("user_id", user.id)
       .maybeSingle(),
-    supabase.from("usuario_empresas").select("empresa_id").eq("user_id", user.id),
+    admin.from("usuario_empresas").select("empresa_id").eq("user_id", user.id),
   ]);
 
   let nombre = `${profile?.nombre ?? ""} ${profile?.apellidos ?? ""}`.trim();
@@ -89,7 +96,7 @@ export async function getMobileInicioData(): Promise<MobileInicioData> {
 
   let empresas: InicioEmpresa[] = [];
   if (idsEmpresa.size > 0) {
-    const { data: empRows } = await supabase
+    const { data: empRows } = await admin
       .from("empresas")
       .select("id, nombre, logo_url, isotipo_url, color")
       .in("id", Array.from(idsEmpresa));
@@ -113,7 +120,7 @@ export async function getMobileInicioData(): Promise<MobileInicioData> {
   let jornadaHoy: JornadaHoy = { tipo: "desconocida" };
   const empresaParaHorario = empresaActual?.id ?? empresaActivaId;
   if (empresaParaHorario) {
-    const { data: empleado } = await supabase
+    const { data: empleado } = await admin
       .from("empleados")
       .select("id")
       .eq("user_id", user.id)
@@ -121,7 +128,7 @@ export async function getMobileInicioData(): Promise<MobileInicioData> {
     if (empleado?.id) {
       try {
         const horario = await getHorarioDia(
-          supabase,
+          admin,
           empresaParaHorario,
           empleado.id as string,
           todayISO(),

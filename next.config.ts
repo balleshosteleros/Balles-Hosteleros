@@ -43,6 +43,9 @@ const nextConfig: NextConfig = {
       {
         source: '/',
         has: [{ type: 'header', key: 'user-agent', value: MOBILE_UA_REGEX }],
+        // Tras cerrar sesión llegamos a "/?logout=1": NO redirigimos a /m (que
+        // exige sesión y rebota a "/"), así el login es alcanzable en móvil.
+        missing: [{ type: 'query', key: 'logout' }],
         destination: '/m',
         permanent: false,
       },

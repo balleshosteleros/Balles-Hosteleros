@@ -2,16 +2,33 @@
 
 import { useState } from "react";
 import { LogOut, Loader2 } from "lucide-react";
-import { useAuth } from "@/features/auth/contexts/auth-context";
+import { createClient as createBrowserClient } from "@/lib/supabase/client";
 
 /**
  * Botón de cerrar sesión para el Inicio móvil. Con confirmación para evitar
- * salidas accidentales; `signOut` limpia la sesión y redirige a "/".
+ * salidas accidentales. Hace el logout a mano y navega a "/?logout=1": en
+ * móvil "/" redirige a /m (que exige sesión y rebotaría a "/"), así que el
+ * sufijo ?logout=1 evita ese rebote y deja ver el login.
  */
 export function CerrarSesionButton() {
-  const { signOut } = useAuth();
   const [confirmando, setConfirmando] = useState(false);
   const [saliendo, setSaliendo] = useState(false);
+
+  const cerrarSesion = async () => {
+    setSaliendo(true);
+    try {
+      const supabase = createBrowserClient();
+      await supabase.auth.signOut();
+    } catch {
+      /* seguimos: limpiamos también en el servidor */
+    }
+    try {
+      await fetch("/api/auth/signout", { method: "POST", credentials: "include" });
+    } catch {
+      /* si falla, igual navegamos al login */
+    }
+    window.location.href = "/?logout=1";
+  };
 
   return (
     <>
@@ -46,10 +63,7 @@ export function CerrarSesionButton() {
 
             <button
               type="button"
-              onClick={async () => {
-                setSaliendo(true);
-                await signOut();
-              }}
+              onClick={cerrarSesion}
               disabled={saliendo}
               className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-rose-500 text-sm font-semibold text-white active:bg-rose-600 disabled:opacity-60"
             >
