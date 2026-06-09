@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 import { getEmpleadoGuardStatus } from "@/features/primer-acceso/data/empleado-status";
 import { PWARegister } from "@/features/mi-panel/mobile/components/PWARegister";
 import { MobileBottomNav } from "@/features/mi-panel/mobile/components/MobileBottomNav";
@@ -49,6 +50,18 @@ export const viewport: Viewport = {
 };
 
 export default async function MobileLayout({ children }: { children: React.ReactNode }) {
+  // Guardia de sesión propia: en producción el middleware no llega a proteger
+  // /m, así que un usuario sin sesión (o con la sesión caducada) veía un panel
+  // vacío en vez de ir al login. Aquí lo mandamos a iniciar sesión. El sufijo
+  // ?auth=1 evita el rebote del redirect móvil "/"→"/m" (ver next.config).
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    redirect("/?auth=1");
+  }
+
   // Mismo guard de primer acceso que desktop.
   const { shouldShowWizard } = await getEmpleadoGuardStatus();
   if (shouldShowWizard) {

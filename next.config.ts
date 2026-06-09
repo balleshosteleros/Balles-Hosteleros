@@ -43,9 +43,13 @@ const nextConfig: NextConfig = {
       {
         source: '/',
         has: [{ type: 'header', key: 'user-agent', value: MOBILE_UA_REGEX }],
-        // Tras cerrar sesión llegamos a "/?logout=1": NO redirigimos a /m (que
-        // exige sesión y rebota a "/"), así el login es alcanzable en móvil.
-        missing: [{ type: 'query', key: 'logout' }],
+        // "/?logout=1" (tras cerrar sesión) y "/?auth=1" (sesión caducada / sin
+        // sesión, desde la guardia de /m): NO redirigimos a /m (que exige sesión
+        // y rebotaría a "/"), así el login es alcanzable en móvil.
+        missing: [
+          { type: 'query', key: 'logout' },
+          { type: 'query', key: 'auth' },
+        ],
         destination: '/m',
         permanent: false,
       },
