@@ -6,9 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/shared/components/ui/checkbox";
@@ -18,7 +15,7 @@ import {
   createEmpleado, listDepartamentos, guardarPerfilEmpleado,
 } from "@/features/rrhh/actions/empleados-actions";
 import { listPuestosCatalogo } from "@/features/rrhh/actions/vacantes-actions";
-import { asignarPlantillaPuestoAEmpleado } from "@/features/rrhh/actions/puesto-horario-actions";
+import { setPuestosDeEmpleado } from "@/features/rrhh/actions/empleado-puestos-actions";
 import { getEmpresasAccesibles, type EmpresaAccesible } from "@/features/empresa/actions/empresas-accesibles-actions";
 import { listLocales } from "@/features/ajustes/actions/locales-actions";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
@@ -111,9 +108,10 @@ export default function NuevoEmpleadoPage() {
   const [empresaFichajeId, setEmpresaFichajeId] = useState<string | null>(null);
   const [localesPorEmpresa, setLocalesPorEmpresa] = useState<Record<string, LocalOpt[]>>({});
   const [localesSeleccionados, setLocalesSeleccionados] = useState<string[]>([]);
-  const [departamentoId, setDepartamentoId] = useState<string>("");
-  const [puesto, setPuesto] = useState<string>("");
-  const [puestoId, setPuestoId] = useState<string>("");
+  // Un empleado puede ocupar VARIOS puestos; uno es el principal (de él cuelgan
+  // departamento + puesto-texto legacy). Cada puesto aporta su propio horario.
+  const [puestosSel, setPuestosSel] = useState<string[]>([]);
+  const [principalPuestoId, setPrincipalPuestoId] = useState<string>("");
   const [puestos, setPuestos] = useState<Array<{ id: string; nombre: string; departamento_id: string | null }>>([]);
   const [fechaInicioHorario, setFechaInicioHorario] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = useState(false);
@@ -157,6 +155,20 @@ export default function NuevoEmpleadoPage() {
     });
   }
 
+  function togglePuesto(id: string, checked: boolean) {
+    setPuestosSel((prev) => {
+      const next = checked
+        ? (prev.includes(id) ? prev : [...prev, id])
+        : prev.filter((x) => x !== id);
+      setPrincipalPuestoId((cur) => {
+        if (checked) return cur || id;          // primer puesto marcado = principal
+        if (cur === id) return next[0] ?? "";   // si quitan el principal, el siguiente
+        return cur;
+      });
+      return next;
+    });
+  }
+
   function toggleEmpresa(id: string, checked: boolean) {
     setEmpresasMarcadas((prev) => {
       if (checked) {
@@ -192,8 +204,7 @@ export default function NuevoEmpleadoPage() {
     for (const [campo, label] of PERFIL_REQUERIDOS) {
       if (!String(payload[campo] ?? "").trim()) faltan.push(label);
     }
-    if (!departamentoId) faltan.push("Departamento");
-    if (!puesto.trim()) faltan.push("Puesto");
+    if (puestosSel.length === 0) faltan.push("Puesto");
     if (empresasMarcadas.length === 0) faltan.push("Empresa");
     if (!empresaFichajeId) faltan.push("Empresa donde ficha");
     const sinLocal = empresasSinLocalSeleccionado(
@@ -209,12 +220,13 @@ export default function NuevoEmpleadoPage() {
     }
 
     setSaving(true);
+    const principal = puestos.find((p) => p.id === (principalPuestoId || puestosSel[0]));
     const empresasOrdenadas = ordenarEmpresasConFichaje(empresasMarcadas, empresaFichajeId);
     const res = await createEmpleado({
       nombre: payload.nombre ?? "",
       apellidos: payload.apellidos ?? undefined,
-      departamentoId,
-      puesto: puesto.trim(),
+      departamentoId: principal?.departamento_id ?? "",
+      puesto: principal?.nombre ?? "",
       emailEmpresa: payload.email_empresa ?? undefined,
       emailPersonal: payload.email_personal ?? "",
       telefono: payload.telefono ?? undefined,
@@ -243,11 +255,14 @@ export default function NuevoEmpleadoPage() {
         }
         return;
       }
-      // Vincular la plantilla de horario del puesto (si la tiene) desde la fecha indicada.
-      if (puestoId) {
-        const plantRes = await asignarPlantillaPuestoAEmpleado(res.empleadoId, puestoId, fechaInicioHorario);
+      // Vincular TODOS los puestos del empleado (M:N): cada uno asigna su plantilla
+      // de horario vigente desde la fecha indicada, y marca el principal.
+      if (puestosSel.length > 0) {
+        const plantRes = await setPuestosDeEmpleado(
+          res.empleadoId, puestosSel, principalPuestoId || puestosSel[0], fechaInicioHorario,
+        );
         if (!plantRes.ok) {
-          toast.error("Empleado creado, pero no se pudo vincular la plantilla de horario. Asígnala desde su ficha.");
+          toast.error("Empleado creado, pero no se pudieron vincular los puestos/horarios. Asígnalos desde su ficha.");
         }
       }
     }
@@ -317,40 +332,51 @@ export default function NuevoEmpleadoPage() {
           <Briefcase className="h-4 w-4 text-muted-foreground" />
           <h2 className="text-sm font-semibold text-foreground">Datos laborales</h2>
         </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-              Puesto <span className="text-rose-500">*</span>
-            </Label>
-            <Select
-              value={puestoId}
-              onValueChange={(id) => {
-                setPuestoId(id);
-                const p = puestos.find((x) => x.id === id);
-                setPuesto(p?.nombre ?? "");
-                setDepartamentoId(p?.departamento_id ?? "");
-              }}
-            >
-              <SelectTrigger><SelectValue placeholder="Seleccionar puesto" /></SelectTrigger>
-              <SelectContent>
-                {puestos.length === 0
-                  ? <SelectItem value="__none__" disabled>No hay puestos — créalos en RRHH → Salarios</SelectItem>
-                  : puestos.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>
-                    ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-              Departamento <span className="text-muted-foreground/60 normal-case">(automático)</span>
-            </Label>
-            <div className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
-              {departamentos.find((d) => d.id === departamentoId)?.nombre ?? "Se rellena al elegir el puesto"}
+        <div className="space-y-1.5">
+          <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+            Puestos <span className="text-rose-500">*</span>
+            <span className="text-muted-foreground/60 normal-case"> (uno o varios; marca el principal)</span>
+          </Label>
+          {puestos.length === 0 ? (
+            <p className="text-xs text-rose-600">No hay puestos — créalos en RRHH → Salarios.</p>
+          ) : (
+            <div className="grid gap-1.5 sm:grid-cols-2">
+              {puestos.map((p) => {
+                const marcado = puestosSel.includes(p.id);
+                const esPrincipal = principalPuestoId === p.id;
+                const dep = departamentos.find((d) => d.id === p.departamento_id)?.nombre;
+                return (
+                  <div key={p.id} className="flex items-center justify-between gap-2 rounded-md border bg-card px-3 py-2">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer min-w-0">
+                      <Checkbox checked={marcado} onCheckedChange={(v) => togglePuesto(p.id, v === true)} />
+                      <span className="truncate">{p.nombre}</span>
+                      {dep && <span className="text-[11px] text-muted-foreground truncate">· {dep}</span>}
+                    </label>
+                    {marcado && (
+                      esPrincipal ? (
+                        <span className="text-[10px] font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded shrink-0">
+                          Principal
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setPrincipalPuestoId(p.id)}
+                          className="text-[10px] text-muted-foreground hover:text-foreground underline shrink-0"
+                        >
+                          Principal
+                        </button>
+                      )
+                    )}
+                  </div>
+                );
+              })}
             </div>
-          </div>
+          )}
+          <p className="text-[11px] text-muted-foreground">
+            El departamento se hereda de cada puesto. El principal define el departamento y el puesto por defecto.
+          </p>
         </div>
-        {puestoId && (
+        {puestosSel.length > 0 && (
           <div className="space-y-1.5">
             <Label className="text-xs uppercase tracking-wide text-muted-foreground">
               Inicio del horario <span className="text-rose-500">*</span>
