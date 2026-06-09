@@ -29,6 +29,7 @@ import {
 import { IOActions } from "@/shared/io";
 import { salariosIO } from "@/features/rrhh/io/salarios.io";
 import { PuestoSalarioDialog } from "./PuestoSalarioDialog";
+import { PuestoHorarioDialog } from "./PuestoHorarioDialog";
 
 const estadoBadge = (e: string) => {
   switch (e) {
@@ -93,6 +94,8 @@ function ListView({
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPuesto, setEditingPuesto] = useState<PuestoSalarial | null>(null);
+  const [horarioOpen, setHorarioOpen] = useState(false);
+  const [horarioPuesto, setHorarioPuesto] = useState<PuestoSalarial | null>(null);
   const [busqueda, setBusqueda] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
@@ -295,6 +298,9 @@ function ListView({
                           <Button variant="ghost" size="sm" onClick={() => { setEditingPuesto(p); setDialogOpen(true); }}>
                             <Pencil className="h-4 w-4 mr-1" /> Editar
                           </Button>
+                          <Button variant="ghost" size="sm" onClick={() => { setHorarioPuesto(p); setHorarioOpen(true); }}>
+                            <Calendar className="h-4 w-4 mr-1" /> Horario
+                          </Button>
                           <Button variant="ghost" size="sm" onClick={() => onDetail(p.id)}>
                             <Eye className="h-4 w-4 mr-1" /> Ver detalle
                           </Button>
@@ -314,6 +320,12 @@ function ListView({
         onOpenChange={setDialogOpen}
         editing={editingPuesto}
         onSaved={onChanged}
+      />
+
+      <PuestoHorarioDialog
+        open={horarioOpen}
+        onOpenChange={setHorarioOpen}
+        puesto={horarioPuesto}
       />
     </div>
   );
