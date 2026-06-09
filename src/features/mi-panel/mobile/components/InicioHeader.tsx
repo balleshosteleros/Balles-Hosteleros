@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { EmpresaSwitcherMobile } from "./EmpresaSwitcherMobile";
+import { CerrarSesionButton } from "./CerrarSesionButton";
 import type { MobileInicioData } from "../lib/mobile-inicio-data";
 
 /** Iniciales del nombre para el avatar de respaldo. */
@@ -21,9 +22,10 @@ export function InicioHeader({ data }: { data: MobileInicioData }) {
         className="pointer-events-none absolute inset-x-0 -top-24 h-56 bg-gradient-to-b from-primary/15 via-primary/5 to-transparent blur-2xl"
       />
 
-      {/* Fila superior: selector / logo de empresa */}
+      {/* Fila superior: selector / logo de empresa + cerrar sesión */}
       <div className="relative flex items-center justify-between">
         <EmpresaSwitcherMobile empresaActual={empresaActual} empresas={empresas} />
+        <CerrarSesionButton />
       </div>
 
       {/* Identidad: avatar centrado + nombre + rol */}
