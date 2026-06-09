@@ -1,0 +1,239 @@
+# Ágora POS — Estado de la integración y plan de corrección
+
+> **Fecha:** 2026-06-09
+> **Repo / HEAD:** Balles-Hosteleros · `main` @ `f698193`
+> **Origen:** handoff tras estudio del código heredado + la "Guía del Integrador" de Ágora (v8.6.0) + la conversación con el equipo técnico de Ágora (2026-06-09).
+> **Relacionado:** `.claude/PRPs/PRP-024-auditoria-tecnica-logistica-agora-pos.md`, `.claude/memory/feedback/regla_seguridad_agora.md`
+> **Estado:** integración **construida y commiteada en `main`**, pero **NUNCA conectada a un Ágora real**. No tocar código hasta validar conectividad (Fase A).
+
+---
+
+## 1. Resumen ejecutivo
+
+El colaborador anterior dejó una integración con Ágora POS **bastante completa y bien arquitecturada** (validación Zod, tabla de auditoría con RLS, reintentos, UI con la "Regla de Seguridad Ágora", cron diario y 384 líneas de tests). Todo está **commiteado y limpio en `main`**.
+
+**El problema:** el código apunta a **endpoints, parámetros y formatos de respuesta que NO coinciden con la API HTTP real de Ágora** (la documentada en la propia Guía del Integrador). Es un andamiaje sólido cableado a un contrato **supuesto**. Nunca se probó contra un servidor real (las env vars `AGORA_*` están sin configurar y los fallos de los tests son por `npm run dev` caído, no por el código).
+
+La conversación de hoy con Ágora aporta justo lo que faltaba (URL ACMS, puerto, token, versión), así que **ahora es posible hacerlo real** — pero antes hay que corregir el código a los endpoints reales y resolver un posible bloqueo de red (un cron en Vercel tiene que poder alcanzar el servidor del restaurante).
+
+---
+
+## ✅ Resultados Fase A — conectividad (2026-06-09)
+
+Ejecutado `~/agora-connectivity.sh` (GET **sin token**, solo lectura) desde fuera de la LAN:
+
+- **DNS:** `habanabacanaliictpv.ddns.me` → `88.2.231.217` (IP pública, ISP español). DDNS vivo.
+- **Servidor alcanzable desde internet:** `GET http://…:8984/` → `200 OK`, `Server: Microsoft-HTTPAPI/2.0`, body = web de Administración de Ágora ("IGT Microelectronics"). **→ Resuelve el riesgo #1: el cron de Vercel SÍ puede alcanzarlo** (respuesta en ~0,17s).
+- **API HTTP activa y ruta válida:** `GET /api/export-master/?filter=Products` (sin token) → `401 "Falta la cabecera api-token"` con header **`Api-Version: 8.5.5`**.
+  - La ruta `/api/export-master/?filter=Products` es correcta (no 404 → 401 pidiendo token).
+  - La cabecera esperada es **`api-token`** (minúsculas) → el `api-token` del código heredado era correcto.
+  - **Versión real = 8.5.5** (no 6.0.6). Equivale al manual 8.6.0 → endpoints documentados disponibles.
+
+**✅ Token RESUELTO (2026-06-09):** el token válido del ACMS central es el **CIF de BACANAL System S.L. sin la letra = `‹TOKEN_BACANAL›`** (¡no el de Habana ni el de la matriz! — Ágora informó mal: dijo "CIF de Habana"). Probados: Gourmet `56558109`→401, Bacanal `‹TOKEN_BACANAL›`→**200**, Habana `88599592`→401. Va en `AGORA_POS_TOKEN` (env), nunca en código.
+
+### Esquema real confirmado (leído del servidor, 2026-06-09)
+
+**Catálogo** `GET /api/export-master/?filter=Products` → `{ "Products": [ {...} ] }`. **1253 productos** (639 activos, sin `DeletionDate`), `Id` 1..2622. Campos por producto: `Id` (int), `Name`, `FamilyId`, `VatId`, `Prices:[{PriceListId, MainPrice}]`, `CostPrices:[{WarehouseId, CostPrice}]`, `DeletionDate` (los borrados lo traen), `IsMenu`.
+
+**Ventas** `GET /api/export/?business-day=YYYY-MM-DD&filter=Invoices` → `{ "Invoices": [ { Serie, Number, BusinessDay, Workplace:{Id,Name}, DocumentType:"BasicInvoice", InvoiceItems:[ { GlobalId, Guests, SaleCenter, Lines:[ {...} ] } ] } ] }`. Muestra 2026-06-06: **123 facturas, 617 líneas**.
+
+**Línea de venta** (`InvoiceItems[].Lines[]`) — campos confirmados:
+`Type` ("Standard" | "MenuHeader"), `ParentIndex`, **`ProductId`** (int, clave de cruce), `ProductName`, **`Quantity`** (decimal), `UnitPrice`, `TotalAmount`, `ProductCostPrice`, `FamilyId`/`FamilyName`, `PreparationTypeName`, `SaleFormatId`/`SaleFormatName`/`SaleFormatRatio`, `VatRate`, `OfferId`, `DiscountRate`.
+
+**Hallazgos que reescriben el plan:**
+1. **Estructura real = `Invoices → InvoiceItems → Lines`** (no `{Tickets:[{Lines}]}`). Cantidad = **`Quantity`**, clave de producto = **`ProductId`**.
+2. **El ACMS devuelve Habana Y Bacanal juntos** en la misma respuesta: `Workplace.Id` **1 = HABANA FUENLABRADA**, **4 = BACANAL FUENLABRADA**. → Hay que **enrutar cada factura a su empresa Balles por `Workplace.Id`** (o filtrar con `?workplaces=`). HABANA empresa_id=`00000000-…-0001`, BACANAL=`fe2ea3c4-…`.
+3. **Cruce 100% sano:** de los 117 `ProductId` vendidos ese día, **los 117 están en el catálogo**. `ProductId` (ventas) == `Product.Id` (catálogo). Mapeo: `productos.agora_id (string) == ProductId (int→string)`.
+4. **Escala real:** 639 productos activos, no 74. Balles solo tiene 74 con `agora_id` → la mayoría de lo vendido **no casaría hoy** → no se descontaría. El Flujo A debe **importar/alinear el catálogo real** y hace falta **escandallo** para los productos vendidos.
+5. **Menús:** existen líneas `Type:"MenuHeader"` (ej. "MENU BACANAL", `ProductId` 2576) con hijos (`ParentIndex`). Para stock probablemente descontar los **componentes**, no la cabecera. Verificar con una muestra que contenga menús antes de implementar.
+
+### 🔎 Reconciliación dry-run (2026-06-09) — qué falta DE VERDAD
+
+Cruzado catálogo + ventas reales (3 días: 06-06/07/08) contra Balles, vía `scripts/agora/reconcile.mjs` (solo lectura, no escribe). Estado real de la BD verificado con `scripts/agora/db-recon.mjs`:
+
+- **Empresas reales:** HABANA `00000000-…-0001`, BACANAL `fe2ea3c4-…`. Tabla de recetas real = **`producto_composicion`** (208 filas; `escandallos`=8 es legado). **`stock` VACÍO.**
+
+**BACANAL (Workplace 4):** 74 productos vendidos · 270 en Balles.
+- **2** ya enlazados por `agora_id` · **30 emparejables por nombre** (solo falta poner el id) · **42 sin equivalente** (crear).
+- De los emparejados, solo **12 descontarían** (compra 1:1 o venta con receta); **20 son venta sin receta** (se omitirían) — varios son bebidas (Alhambra, San Miguel, Tinto de Verano) **mal clasificadas como "venta"** en lugar de "compra".
+
+**HABANA (Workplace 1):** 67 productos vendidos · **0 en Balles** → todo por crear (Brugal, Mojito Habanero, Shisha, Coco Colado…). **Greenfield.**
+
+**Conclusión:** el código es la parte pequeña; el grueso es **datos** (enlazar `agora_id`, reclasificar bebidas, cargar recetas y cargar inventario inicial), y **Habana está vacío** — decisión de alcance. El descuento real no aportará nada hasta que exista stock.
+
+**Orden de trabajo sugerido (datos):** (1) auto-enlazar por nombre los 30 de Bacanal (seguro, reversible: solo pone `agora_id`); (2) reclasificar bebidas venta→compra; (3) cargar recetas de los elaborados que se venden; (4) cargar inventario inicial; (5) decidir si Habana entra y, si sí, sembrar su catálogo desde Ágora.
+
+### 🧩 ¿Qué expone Ágora? (verificado 2026-06-09 · `scripts/agora/probe-stock-recipe.mjs`)
+
+- **Catálogo (Products):** completo. Claves: `Id, Name, FamilyId, VatId, Prices[], CostPrice, CostPrices[]` (por almacén), `StorageOptions[]` (min/max por almacén), `IsMenu`… **NO trae la receta/ingredientes** (Ágora la usa internamente para el coste, pero no la exporta vía export-master).
+- **Stock actual (`filter=Stocks`): SÍ** — 804 filas `{WarehouseId, ProductId, Quantity}`, cantidades fraccionadas (3,9 / 1,01) → Ágora **lleva stock a nivel de ingrediente** por almacén. ⇒ el inventario de Balles puede **sembrarse/reflejarse desde Ágora**, sin conteo manual.
+- **Almacenes (`filter=Warehouses`): 5** — 1 HABANA FUENLABRADA, 2 almacen 2, 3 HABANA GETAFE, 4 BACANAL FUENLABRADA, 5 HABANA ALCORCON. ⚠️ Hay **más sedes** (Getafe, Alcorcón) que las 2 empresas de Balles.
+- **Familias (`filter=Families`): 58** con nombre → resuelve `FamilyId`→categoría.
+
+**🔑 Implicación estratégica (replantea el enfoque):** como Ágora YA lleva el stock por ingrediente, el camino más robusto puede ser que **Balles REFLEJE el stock de Ágora** (`filter=Stocks`, espejo diario) en vez de **recalcular** el descuento desde ventas+recetas. Elimina la dependencia de recetas (lo único que Ágora no exporta) y el inventario manual; usa el dato real de Ágora. El enfoque "ventas→receta→descuento" solo es necesario si Balles debe llevar un control de stock **independiente** de Ágora. Además, las sedes de Getafe/Alcorcón sugieren revisar el mapa Workplace/Almacén→empresa antes de cualquier escritura.
+
+### ✅ DECISIÓN: Opción A (Balles refleja Ágora) — 2026-06-09
+
+Elegido **A**: Ágora es la fuente de verdad de **catálogo Y stock**; Balles los **refleja** (no recalcula con recetas). Mapeo piloto: **Almacén Ágora 4 (BACANAL FUENLABRADA) → empresa BACANAL**. Habana (almacenes 1/3/5 = Fuenlabrada/Getafe/Alcorcón) y "almacen 2" pendientes de decidir alcance.
+
+**Dry-run espejo de stock (Bacanal, almacén 4)** · `scripts/agora/stock-mirror-dryrun.mjs`: 201 líneas de stock; solo **12 emparejan** con productos de Balles, **189 no existen** en Balles (Cocacola, aguas, refrescos, panes, bases…). ⇒ el catálogo de Balles (270, con 208 recetas) se construyó **independiente** y casi no solapa con Ágora (solo 12 coinciden).
+
+**Plan A (pilot Bacanal):** (1) sincronizar catálogo Ágora → Balles (crear faltantes + enlazar por nombre + poner `agora_id`); (2) reflejar stock (`filter=Stocks` almacén 4 → tabla `stock`). Todo desde Ágora, sin entrada manual. **Dry-run con lista revisable antes de escribir.** Las 208 recetas y el catálogo viejo de Balles quedan como food-cost/secundario (no se usan para A).
+
+### ✅ EJECUTADO — Espejo de stock Bacanal (2026-06-09)
+
+`scripts/agora/sync-bacanal.mjs --write` (token = CIF Bacanal `‹TOKEN_BACANAL›`, almacén Ágora 4 → empresa BACANAL):
+- **Enlazados 16** (nombre exacto + 4 difusos aprobados, incl. "Filete de vaca"="Filete de ternera") + **creados 185** → Bacanal pasa a **208 productos con `agora_id`** (de 455 totales). Creados con `tipo=compra`, categoría de Ágora, `observaciones='Importado de Agora (espejo stock) 2026-06-09'` (tag de rollback).
+- **201 filas de stock** reflejadas en `stock` (Bacanal) con la cantidad real de Ágora. Verificado (Pan gua bao 950, Croquetas 456, Tarta de queso 175…); 8 negativos sin regularizar reflejados tal cual.
+- **Idempotente** (re-ejecutar no duplica) y **reversible** (rollback = borrar `stock` de Bacanal + `productos` con ese `observaciones`).
+- Scripts: `db-recon.mjs`, `reconcile.mjs`, `probe-stock-recipe.mjs`, `stock-mirror-dryrun.mjs`, `catalog-sync-dryrun.mjs`, `sync-bacanal.mjs`, `verify-bacanal.mjs` (todos en `scripts/agora/`).
+
+**Pendiente:** (1) verlo en la UI de logística; (2) **recurrencia** — hoy es one-shot; falta portar la lógica a la app + env `AGORA_POS_*` en Vercel + cron/job diario (el cron heredado `/api/cron/agora-sync` se puede reusar/reemplazar); (3) **Habana** (greenfield, mismo método, almacenes 1/3/5 → decidir alcance); (4) limpieza: el código heredado ventas→descuento queda **superado** por A; revisar duplicados con el catálogo viejo (sin borrar: marcar `Descatalogado`); afinar unidades (algunos productos son kg/L, no `ud`).
+
+### ⚠️ Nota de entorno (2026-06-09): clon local desactualizado
+
+La BD `sxjtubzdpfmlmwqtsgro` (la del `.env.local`, confirmada por el otro dev) es la **correcta** → el espejo de stock está bien puesto, **no rehacer**. Pero el clon local de Fernando va **49 commits por detrás** de `origin/main`: su código usa los nombres de tabla **viejos** (`.from("profiles")` ×140, `usuarios` ×0), mientras `origin/main` ya renombró a `usuarios` (×153) para cuadrar con una migración de la BD. Por eso **el dev server de ese clon no muestra datos tras login** (pide `profiles`, que ya no existe). **Fix para ver en local: `git pull` de los 49 commits** (gestionar antes el WIP de reservas/sala sin commitear). El otro dev (código al día) ya ve el stock. Las tablas de auth no se exponen por PostgREST; usar Management API (`SUPABASE_ACCESS_TOKEN`).
+
+---
+
+## 2. Inventario: qué hay y dónde
+
+| Archivo | Rol |
+|---|---|
+| `src/features/logistica/types/agora.ts` | Schemas Zod (`agoraVentaRawSchema`), tipos, `validarLoteAgora()` |
+| `src/features/logistica/services/agora-sync.ts` | **Flujo A — Sync de catálogo**: fetch → validar → upsert en `productos` por `agora_id`. Reintentos backoff. |
+| `src/features/logistica/services/agora-ventas-sync.ts` | **Flujo B — Ventas→stock**: fetch tickets del día → mapear `agora_id`→`producto_id` → descontar stock |
+| `src/features/logistica/actions/agora-actions.ts` | Server actions: `syncVentasAgoraAction`, `getLastSyncLog`, `getSyncLogHistory`, `syncVentasYDescontarStockAction` |
+| `src/features/logistica/components/AgoraSyncStatus.tsx` | UI: estado del último sync + botón "Sincronizar" + diálogo Regla de Seguridad |
+| `src/app/api/cron/agora-sync/route.ts` | Cron (Vercel, diario 08:00) que dispara el Flujo B; fail-closed con `CRON_SECRET` |
+| `supabase/migrations/016_agora_sync_log.sql` | Tabla `agora_sync_log` (auditoría de cada sync) + RLS por empresa |
+| `tests/agora-sync.spec.ts` | 14 tests E2E Playwright (UI + fail-safe) |
+| `src/features/sala/pos/services/descontar-stock-por-ventas.ts` | Servicio **compartido** (POS propio + Ágora) que aplica el delta de stock |
+
+**Commits que lo introdujeron** (ancestros de `main` y `origin/main`; también en rama `rrhh-sync-origin-c4da3ca`):
+- `e0cafd2` — base (types, agora-sync, actions, UI, migración 016, tests, PRP-024, regla seguridad)
+- `80531e4` — "Fase 4 — Ágora tickets → descuento stock automático" (agora-ventas-sync, cron, vercel.json, migración 024)
+- `4829a9a` — cron fail-closed si falta `CRON_SECRET`
+
+**Cableado real:** `<AgoraSyncStatus />` se renderiza en `src/app/(main)/logistica/page.tsx:143`. El cron está en `vercel.json` (`/api/cron/agora-sync`, `0 8 * * *`).
+
+---
+
+## 3. Cómo funciona hoy (3 caminos)
+
+1. **Botón "Sincronizar" (UI)** → `syncVentasAgoraAction` → `syncVentasAgora` (Flujo A, catálogo). Hace `fetch(AGORA_API_URL)` esperando un **array plano** `{agora_id, nombre, categoria, precio_venta}`.
+2. **Cron 08:00** → `descontarStockPorVentasAgora` (Flujo B). Hace `GET {AGORA_API_URL}/api/export/tickets?businessDay=YYYYMMDD` con header `api-token`, espera `{ "Tickets": [{ "Lines": [{ProductId, Quantity}] }] }`.
+3. **`syncVentasYDescontarStockAction` (manual)** → existe en `agora-actions.ts` pero **NO está referenciado por ninguna UI** → hoy es código muerto (solo correría el cron).
+
+El descuento real lo hace `descontarStockPorVentas(supabase, {empresaId, lineas, signo})`: por cada línea, si el producto de venta tiene escandallo descuenta cada ingrediente `cantidad × cantidadEscandallo × (1 + merma%)`; producto de compra sin escandallo, 1:1; venta sin escandallo, se omite. **No tiene guardia anti-doble-descuento** en el camino Ágora (el camino POS sí, vía flag `stock_descontado` en `pos_tickets`).
+
+---
+
+## 4. Diagnóstico: por qué NO funciona contra Ágora real
+
+Cotejando el código con la sección **"Integración mediante API HTTP"** de la Guía del Integrador (págs. 196-211):
+
+| Aspecto | Código actual | API real de Ágora | Veredicto |
+|---|---|---|---|
+| Base / puerto | `AGORA_API_URL` (sin valor) | `http://SERVIDOR:8984/` | ✅ coincide con `habanabacanaliictpv.ddns.me:8984` |
+| Header auth | `api-token` | `Api-Token` | ✅ OK (HTTP ignora mayúsculas) |
+| **Endpoint ventas** | `/api/export/tickets?...` | `/api/export/tickets/` devuelve **tickets ABIERTOS ahora**, no ventas cerradas | ❌ endpoint equivocado |
+| **Ventas del día** | (no se usa) | `GET /api/export/?business-day=YYYY-MM-DD&filter=Invoices,DeliveryNotes,SalesOrders` | ⬅️ esto es lo correcto |
+| **Parámetro fecha** | `businessDay=20260608` | `business-day=2026-06-08` (kebab + ISO) | ❌ nombre y formato |
+| **Día consultado** | el cron pide **hoy** | para "lo vendido ayer" hay que pedir **ayer** | ❌ |
+| **Formato respuesta** | `{Tickets:[{Lines:[{ProductId,Quantity}]}]}` | `{Invoices:[...]}` / `DeliveryNotes` / `SalesOrders` con sus `Item`/líneas | ❌ el parser no encontraría líneas |
+| **Catálogo (Flujo A)** | array plano inventado | `GET /api/export-master/?filter=Products` → `{Products:[{Id,Name,FamilyId,...}]}` | ❌ contrato imaginario |
+| Idempotencia | ninguna en el cron | `/api/doc/processed` + `include-processed=false` | ❌ riesgo de doble descuento |
+
+**Efecto neto hoy:** a las 08:00 el cron pediría "tickets abiertos de hoy" (vacío) con un parámetro que Ágora ni reconoce → descuento de **0**. Solo se explica si nunca se probó en vivo.
+
+---
+
+## 5. Datos reales de conexión (conversación 2026-06-09)
+
+**Válido y aplicable (Ágora TPV):**
+- **Despliegue:** LOCAL. Versión **6.0.6+** confirmada (⚠️ el manual es 8.6.0; revisar que los endpoints usados existan en 6.x).
+- **Integración por ACMS (central):** URL `http://habanabacanaliictpv.ddns.me:8984/`, **token = CIF de EMPRESA HABANA sin la letra**.
+- **Integración por LOCAL:** IP pública de cada local + **CIF de cada local sin la letra** como token.
+- El equipo de Ágora dijo: *"desconocemos lo que quieren integrar y qué datos necesitan sacar/meter"* → el endpoint/los datos los definimos **nosotros**.
+
+**⚠️ NO aplica / confusión a evitar (Agora.io vídeo):**
+- `AGORA_APP_ID`, `AGORA_APP_CERT`, `CUSTOMER_KEY/SECRET` que aparecen en la conversación son credenciales de **Agora.io** (SDK de videollamadas), **otra empresa**. No existen en el repo ni tienen que ver con el TPV.
+- En `.env.example` las vars `AGORA_API_URL` / `AGORA_API_TOKEN` están etiquetadas como **"Agora (videollamadas)"** y el código del TPV las **reutiliza** → colisión de nombres. **Renombrar** a `AGORA_POS_URL` / `AGORA_POS_TOKEN`.
+
+---
+
+## 6. La API real de Ágora (resumen útil del PDF)
+
+- Base: `http://SERVIDOR:8984/`. Cabeceras: `Api-Token: <token>`, `Accept: application/json`, `Content-Type: application/json; charset=utf-8` (en POST). Respuesta 200 OK + cabecera `Api-Version`.
+- **Ventas/compras del día:** `GET /api/export/?business-day=YYYY-MM-DD` con `filter` opcional (`Invoices`, `DeliveryNotes`, `SalesOrders`, `PosCloseOuts`, `PurchaseInvoices`…), `workplaces=ids`, `include-processed=true|false`.
+- **Tickets abiertos (ahora):** `GET /api/export/tickets/` (filtros `sale-center-id`+`sale-location-name`, `ticket-global-id`, `ticket-barcode`).
+- **Maestros (catálogo):** `GET /api/export-master/?filter=Products` (también `Stocks`, `Families`, `PriceLists`, `Customers`…; filtros `where-product-category-id`, `where-stock-warehouse-id`).
+- **Marcar procesados (idempotencia):** `POST /api/doc/processed` con body `[{"Serie":"F","Number":121}, ...]`.
+- **Documento por GlobalId:** `GET /api/document/?globalId=<guid>`.
+- **ACMS (central→locales):** `POST /api/hub/generate-data/?workplaces=1,3`.
+- Decimales con `.`, fechas `aaaa-mm-dd` (o `aaaa-mm-ddThh:mm:ss`). Soporta XML y JSON (JSON por defecto).
+- Texto completo del manual extraído en `/tmp/agora_guia.txt` (WSL) para referencia.
+
+---
+
+## 7. Plan de corrección por fases
+
+### Fase A — Conectividad y muestras reales (SIN tocar código de negocio) 🔴 primero
+1. **Decidir topología:** ACMS (un único endpoint central, token = CIF HABANA) vs por-local (un endpoint por local). La conversación apunta a **ACMS**; confirmar con el cliente.
+2. ~~**Resolver el bloqueo de red**~~ **✅ CONFIRMADO alcanzable (2026-06-09):** el servidor `:8984` responde `200 OK` desde fuera de la LAN (IP pública `88.2.231.217`), así que el cron de Vercel puede alcanzarlo. (Si en el futuro cambia la IP del DDNS o el cliente cierra el puerto, volvería a ser un bloqueo.)
+3. **Smoke de solo lectura** (seguro, no escribe nada) antes de programar nada:
+   ```bash
+   # Catálogo de productos
+   curl -H "Api-Token: <CIF_HABANA_sin_letra>" -H "Accept: application/json" \
+     "http://habanabacanaliictpv.ddns.me:8984/api/export-master/?filter=Products"
+   # Ventas de un día concreto
+   curl -H "Api-Token: <CIF_HABANA_sin_letra>" -H "Accept: application/json" \
+     "http://habanabacanaliictpv.ddns.me:8984/api/export/?business-day=2026-06-08&filter=Invoices"
+   ```
+   Esto valida URL + puerto + token + versión + accesibilidad externa de una sola vez.
+4. **Guardar muestras reales** del JSON (1 producto, 1 factura con líneas) para fijar el parser con datos reales, no supuestos. Anotar los nombres EXACTOS de los campos de línea (`ProductId`/`Reference`/`Quantity`…).
+
+### Fase B — Configuración
+- Añadir env **renombradas** `AGORA_POS_URL`, `AGORA_POS_TOKEN` (separadas del Agora.io vídeo) en `.env.local` (dev) y Vercel (prod). Actualizar `.env.example` con el bloque correcto. **No commitear valores.**
+- Verificar que la **migración 016** está aplicada en la Supabase real (es prerrequisito de los tests y del runtime; no consta que se aplicara).
+
+### Fase C — Corregir Flujo A (catálogo, `agora-sync.ts`)
+- Cambiar el fetch a `GET {url}/api/export-master/?filter=Products` con header `Api-Token`.
+- Adaptar el parser a `{ "Products": [{ Id, Name, FamilyId/CategoryId, ... }] }` (PascalCase). Mapear `Id→agora_id`, `Name→nombre`. Resolver `categoria`: en Ágora es un **id numérico** (`FamilyId`/`CategoryId`), no el string actual ("Para empezar"); decidir si se resuelve el nombre (otra llamada `filter=Families`) o se guarda el id.
+- Mantener el Zod, alimentándolo desde el objeto ya normalizado (el `Id` numérico de Ágora encaja con el regex `^\d+$`).
+- Resultado: el botón "Sincronizar" de la UI pasa a traer el catálogo real.
+
+### Fase D — Corregir Flujo B (ventas→stock, `agora-ventas-sync.ts`)
+- **Endpoint:** de `/api/export/tickets?businessDay=` a **`GET /api/export/?business-day=YYYY-MM-DD&filter=<lo que el cliente considere "venta">`** (probablemente `Invoices`; confirmar en Fase A si son `Invoices`, `DeliveryNotes` o ambos).
+- **Fecha:** formato ISO con guiones y el cron debe pedir **ayer** (cierre del día anterior), no hoy.
+- **Parser:** navegar `{Invoices:[{Items|Lines:[{ProductId/Reference, Quantity}]}]}` según la muestra real de Fase A. Reaprovechar la lógica de agregación por `agora_id` ya existente.
+- **Idempotencia (crítico):** tras un descuento OK, `POST /api/doc/processed` con las series+números procesados y pedir el export con `include-processed=false` (default). Así Ágora no reexporta lo ya consumido y se evita el doble descuento en re-ejecuciones. Defensa adicional: registrar GlobalId/serie-número en `agora_sync_log`.
+- **Mapeo de ids:** verificar que `Product.Id` de Ágora == los `agora_id` ya sembrados (los 74 hardcodeados tipo "1833" en `data-productos-venta.ts`). Si no coinciden, **re-sembrar el catálogo** desde Fase C para alinear.
+
+### Fase E — Limpieza y coherencia
+- `syncVentasYDescontarStockAction`: o se le da un **botón manual** en logística ("Procesar ventas del día", supervisado, cumpliendo la Regla de Seguridad) o se elimina como código muerto.
+- Migración 016 tiene columnas `error_message` y `sales_data` sin usar: aprovechar `sales_data` para guardar el payload crudo (oro puro para depurar formato real).
+
+### Fase F — Validación
+- typecheck + build.
+- Suite Playwright con `npm run dev` levantado (los fallos actuales eran por server caído).
+- **Smoke real supervisado:** un día de prueba en Habana, comparar stock antes/después manualmente antes de confiar en el automático. Cumplir la Regla de Seguridad Ágora (ante error: parar, mostrar error exacto, pedir aprobación).
+
+---
+
+## 8. Preguntas abiertas para Ágora / el cliente
+
+1. ~~¿ACMS o por-local?~~ **✅ ACMS central** (`:8984`), token = CIF de **Bacanal** sin letra `‹TOKEN_BACANAL›`. Devuelve Habana + Bacanal (enrutar por `Workplace.Id`).
+2. **¿Qué documento es "una venta"?** En la muestra, `filter=Invoices` (`DocumentType: BasicInvoice`) trae los tickets cerrados con líneas. **Confirmar** si hay ventas que salgan como `DeliveryNotes`/`SalesOrders` (delivery/takeaway) y haya que sumarlas también.
+3. ~~¿El servidor `:8984` es accesible desde internet?~~ **✅ RESUELTO 2026-06-09: SÍ** (`200 OK` desde fuera de la LAN).
+4. ~~¿Coinciden los ids?~~ **✅ Sí** (`ProductId` ventas == `Product.Id` catálogo). Pero solo 74/639 productos están en Balles → **re-sembrar catálogo completo + definir escandallos** de lo que se vende.
+5. ~~Versión exacta~~ **✅ RESUELTO: `Api-Version: 8.5.5`** (no 6.0.6). Endpoints del manual 8.6.0 disponibles.
+
+---
+
+## 9. Notas de seguridad
+
+- Regla de Seguridad Ágora (`.claude/memory/feedback/regla_seguridad_agora.md`): ante cualquier error con Ágora o de persistencia, **parar, mostrar el error exacto, pedir aprobación**. Nunca reintentar/autocorregir solo. Aplica a todo el plan.
+- Nada de credenciales en commits. El token es el CIF sin letra → tratarlo como secreto igualmente.
+- Empezar **siempre por solo-lectura** (`export`/`export-master`). No usar `/api/import/`, `/api/doc/processed` ni `/api/hub/generate-data/` hasta tener el flujo de lectura validado y aprobado.
