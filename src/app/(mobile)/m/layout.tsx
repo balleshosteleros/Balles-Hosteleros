@@ -4,6 +4,7 @@ import { getEmpleadoGuardStatus } from "@/features/primer-acceso/data/empleado-s
 import { PWARegister } from "@/features/mi-panel/mobile/components/PWARegister";
 import { MobileBottomNav } from "@/features/mi-panel/mobile/components/MobileBottomNav";
 import { MobileFichajeProvider } from "@/features/mi-panel/mobile/components/MobileFichajeProvider";
+import { VersionAutoUpdate } from "@/features/mi-panel/mobile/components/VersionAutoUpdate";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +58,7 @@ export default async function MobileLayout({ children }: { children: React.React
   return (
     <div className="min-h-dvh bg-background text-foreground antialiased">
       <PWARegister />
+      <VersionAutoUpdate />
       <main className="mx-auto w-full max-w-screen-sm pb-24">{children}</main>
       <MobileBottomNav />
       <MobileFichajeProvider />

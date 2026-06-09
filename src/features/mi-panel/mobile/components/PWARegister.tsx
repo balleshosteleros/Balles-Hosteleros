@@ -16,7 +16,12 @@ export function PWARegister() {
 
     const register = () => {
       navigator.serviceWorker
-        .register("/sw.js", { scope: "/" })
+        // updateViaCache 'none': el navegador no cachea sw.js, así detecta
+        // cambios del worker sin servir una copia vieja.
+        .register("/sw.js", { scope: "/", updateViaCache: "none" })
+        .then((reg) => {
+          reg.update().catch(() => {});
+        })
         .catch(() => {
           /* silencioso: el registro fallido no debe romper la app */
         });

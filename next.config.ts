@@ -7,6 +7,12 @@ const MOBILE_UA_REGEX =
   '.*(iPhone|iPod|Android.*Mobile|BlackBerry|IEMobile|Opera Mini|webOS|Windows Phone).*'
 
 const nextConfig: NextConfig = {
+  // Versión del build horneada en el bundle del cliente. El auto-actualizador
+  // de la PWA (VersionAutoUpdate) la compara contra /api/version para recargar
+  // cuando hay un deploy nuevo, sin que el usuario reinstale nada.
+  env: {
+    NEXT_PUBLIC_BUILD_SHA: process.env.VERCEL_GIT_COMMIT_SHA ?? 'dev',
+  },
   // Módulos nativos (bindings .node) que Turbopack no puede empaquetar en
   // chunks ESM: se cargan en runtime desde node_modules. `ssh2` lo arrastra
   // `ssh2-sftp-client`, usado solo en el cron server-only de canales-google-rwg.
