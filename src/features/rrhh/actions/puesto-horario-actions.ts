@@ -81,6 +81,41 @@ export async function getPlantillaPuesto(puestoId: string): Promise<{
   }
 }
 
+/**
+ * Asigna la plantilla de horario VIGENTE del puesto al empleado, desde la fecha
+ * indicada. Si el puesto no tiene plantilla todavía, no hace nada (ok).
+ */
+export async function asignarPlantillaPuestoAEmpleado(
+  empleadoId: string,
+  puestoId: string,
+  vigenteDesde: string,
+) {
+  try {
+    const { supabase, user, empresaId } = await getContext();
+    if (!empresaId || !user) return { ok: false, error: "No autenticado" };
+
+    const { data: pat } = await supabase
+      .from("rrhh_patrones")
+      .select("id")
+      .eq("puesto_id", puestoId)
+      .eq("es_oficial", true)
+      .maybeSingle();
+    if (!pat?.id) return { ok: true, sinPlantilla: true };
+
+    const { error } = await supabase
+      .from("rrhh_patron_empleados")
+      .upsert(
+        { patron_id: pat.id, empleado_id: empleadoId, vigente_desde: vigenteDesde, asignado_por_user_id: user.id },
+        { onConflict: "patron_id,empleado_id" },
+      );
+    if (error) throw error;
+    return { ok: true };
+  } catch (err) {
+    console.error("[rrhh] asignarPlantillaPuestoAEmpleado:", err);
+    return { ok: false, error: "No se pudo asignar la plantilla" };
+  }
+}
+
 /** Crea o reemplaza la plantilla semanal (7 turnos) del puesto. */
 export async function guardarPlantillaPuesto(
   puestoId: string,
@@ -144,5 +179,93 @@ export async function guardarPlantillaPuesto(
   } catch (err) {
     console.error("[rrhh] guardarPlantillaPuesto:", err);
     return { ok: false, error: "No se pudo guardar la plantilla" };
+  }
+}
+
+/**
+ * Crea una NUEVA VERSIÓN de la plantilla del puesto (cambio de horario), desde
+ * la fecha indicada. La versión anterior pasa a histórico (con su vigente_hasta)
+ * y los empleados asignados se arrastran a la nueva versión (no se rompe el
+ * fichaje). Si el puesto aún no tiene plantilla, crea la primera (v1).
+ */
+export async function crearVersionPlantillaPuesto(
+  puestoId: string,
+  dias: (string | null)[],
+  vigenteDesde: string,
+) {
+  try {
+    const { supabase, user, empresaId } = await getContext();
+    if (!empresaId || !user) return { ok: false, error: "No autenticado" };
+
+    const semana = normaDias(dias);
+
+    const { data: actual } = await supabase
+      .from("rrhh_patrones")
+      .select("id, familia_id, nombre, empresa_id")
+      .eq("puesto_id", puestoId)
+      .eq("es_oficial", true)
+      .maybeSingle();
+
+    // Sin plantilla previa → la primera versión es un guardado normal.
+    if (!actual?.id) return guardarPlantillaPuesto(puestoId, dias);
+
+    const familiaId = actual.familia_id as string;
+    const { data: maxRow } = await supabase
+      .from("rrhh_patrones")
+      .select("version")
+      .eq("familia_id", familiaId)
+      .eq("empresa_id", empresaId)
+      .order("version", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const nuevaVersion = ((maxRow?.version as number | undefined) ?? 1) + 1;
+
+    const { data: usuario } = await supabase
+      .from("usuarios").select("nombre, full_name").eq("user_id", user.id).maybeSingle();
+    const autor = (usuario?.nombre as string | null) ?? (usuario?.full_name as string | null) ?? "—";
+
+    // 1) La versión anterior deja de ser oficial y se cierra en la fecha de cambio.
+    await supabase
+      .from("rrhh_patrones")
+      .update({ es_oficial: false, vigente_hasta: vigenteDesde })
+      .eq("id", actual.id);
+
+    // 2) Nueva versión oficial (conserva familia + puesto).
+    const { data: nuevo, error: insErr } = await supabase
+      .from("rrhh_patrones")
+      .insert({
+        empresa_id: empresaId,
+        puesto_id: puestoId,
+        familia_id: familiaId,
+        version: nuevaVersion,
+        es_oficial: true,
+        nombre: actual.nombre as string,
+        tipo: "semanal",
+        creado_por_nombre: autor,
+        creado_por_user_id: user.id,
+        vigente_desde: vigenteDesde,
+      })
+      .select("id")
+      .single();
+    if (insErr) {
+      // Revertir el flag oficial si falla.
+      await supabase.from("rrhh_patrones").update({ es_oficial: true, vigente_hasta: null }).eq("id", actual.id);
+      throw insErr;
+    }
+
+    // 3) Semana de la nueva versión.
+    await supabase.from("rrhh_patron_semanas").insert({ patron_id: nuevo.id, orden: 0, dias: semana });
+
+    // 4) Arrastrar empleados asignados a la nueva versión.
+    await supabase
+      .from("rrhh_patron_empleados")
+      .update({ patron_id: nuevo.id as string })
+      .eq("patron_id", actual.id);
+
+    revalidatePath("/rrhh/salarios");
+    return { ok: true, plantillaId: nuevo.id as string, version: nuevaVersion };
+  } catch (err) {
+    console.error("[rrhh] crearVersionPlantillaPuesto:", err);
+    return { ok: false, error: "No se pudo crear la versión" };
   }
 }

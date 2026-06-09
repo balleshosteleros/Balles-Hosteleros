@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { getPlantillaPuesto, guardarPlantillaPuesto, type PatronAplicable } from "@/features/rrhh/actions/puesto-horario-actions";
+import { getPlantillaPuesto, guardarPlantillaPuesto, crearVersionPlantillaPuesto, type PatronAplicable } from "@/features/rrhh/actions/puesto-horario-actions";
 import type { Turno } from "@/features/rrhh/data/horarios";
 import type { PuestoSalarial } from "@/features/rrhh/data/salarios";
 
@@ -26,6 +26,8 @@ export function PuestoHorarioDialog({ open, onOpenChange, puesto, onSaved }: Pro
   const [patrones, setPatrones] = useState<PatronAplicable[]>([]);
   const [dias, setDias] = useState<(string | null)[]>([null, null, null, null, null, null, null]);
   const [activeTurno, setActiveTurno] = useState<string | null>(null);
+  const [tienePlantilla, setTienePlantilla] = useState(false);
+  const [versionDesde, setVersionDesde] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -34,9 +36,28 @@ export function PuestoHorarioDialog({ open, onOpenChange, puesto, onSaved }: Pro
     setLoading(true);
     setActiveTurno(null);
     getPlantillaPuesto(puesto.id)
-      .then((res) => { setTurnos(res.turnos); setPatrones(res.patrones); setDias(res.dias); })
+      .then((res) => {
+        setTurnos(res.turnos);
+        setPatrones(res.patrones);
+        setDias(res.dias);
+        setTienePlantilla(res.plantillaId !== null);
+      })
       .finally(() => setLoading(false));
   }, [open, puesto]);
+
+  const handleNuevaVersion = async () => {
+    if (!puesto) return;
+    setSaving(true);
+    try {
+      const res = await crearVersionPlantillaPuesto(puesto.id, dias, versionDesde);
+      if (!res.ok) { toast.error(("error" in res ? res.error : undefined) ?? "No se pudo crear la versión"); return; }
+      toast.success("Nueva versión de la plantilla creada");
+      onSaved?.();
+      onOpenChange(false);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const aplicarPatron = (p: PatronAplicable) => {
     setDias([...p.dias]);
@@ -192,9 +213,31 @@ export function PuestoHorarioDialog({ open, onOpenChange, puesto, onSaved }: Pro
           </div>
         )}
 
+        {tienePlantilla && !loading && (
+          <div className="rounded-md border border-dashed p-3 space-y-2 text-xs">
+            <p className="font-medium">¿Cambió el horario del puesto?</p>
+            <p className="text-muted-foreground">
+              Crea una nueva versión desde una fecha: la anterior queda en histórico y los empleados pasan a la nueva.
+            </p>
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={versionDesde}
+                onChange={(e) => setVersionDesde(e.target.value)}
+                className="flex h-9 w-40 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+              />
+              <Button size="sm" variant="secondary" onClick={handleNuevaVersion} disabled={saving}>
+                Crear nueva versión
+              </Button>
+            </div>
+          </div>
+        )}
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={saving || loading}>{saving ? "Guardando…" : "Guardar plantilla"}</Button>
+          <Button onClick={handleSave} disabled={saving || loading}>
+            {saving ? "Guardando…" : tienePlantilla ? "Guardar (versión actual)" : "Guardar plantilla"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

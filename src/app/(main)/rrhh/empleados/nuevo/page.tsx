@@ -18,6 +18,7 @@ import {
   createEmpleado, listDepartamentos, guardarPerfilEmpleado,
 } from "@/features/rrhh/actions/empleados-actions";
 import { listPuestosCatalogo } from "@/features/rrhh/actions/vacantes-actions";
+import { asignarPlantillaPuestoAEmpleado } from "@/features/rrhh/actions/puesto-horario-actions";
 import { getEmpresasAccesibles, type EmpresaAccesible } from "@/features/empresa/actions/empresas-accesibles-actions";
 import { listLocales } from "@/features/ajustes/actions/locales-actions";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
@@ -114,6 +115,7 @@ export default function NuevoEmpleadoPage() {
   const [puesto, setPuesto] = useState<string>("");
   const [puestoId, setPuestoId] = useState<string>("");
   const [puestos, setPuestos] = useState<Array<{ id: string; nombre: string; departamento_id: string | null }>>([]);
+  const [fechaInicioHorario, setFechaInicioHorario] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = useState(false);
   const [credenciales, setCredenciales] = useState<CredencialesAlta | null>(null);
   const [copiado, setCopiado] = useState(false);
@@ -241,6 +243,13 @@ export default function NuevoEmpleadoPage() {
         }
         return;
       }
+      // Vincular la plantilla de horario del puesto (si la tiene) desde la fecha indicada.
+      if (puestoId) {
+        const plantRes = await asignarPlantillaPuestoAEmpleado(res.empleadoId, puestoId, fechaInicioHorario);
+        if (!plantRes.ok) {
+          toast.error("Empleado creado, pero no se pudo vincular la plantilla de horario. Asígnala desde su ficha.");
+        }
+      }
     }
     setSaving(false);
 
@@ -341,6 +350,22 @@ export default function NuevoEmpleadoPage() {
             </div>
           </div>
         </div>
+        {puestoId && (
+          <div className="space-y-1.5">
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+              Inicio del horario <span className="text-rose-500">*</span>
+            </Label>
+            <Input
+              type="date"
+              value={fechaInicioHorario}
+              onChange={(e) => setFechaInicioHorario(e.target.value)}
+              className="w-48"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Desde esta fecha se le aplica la plantilla de horario del puesto (si la tiene).
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Acceso a empresas y locales de fichaje */}
