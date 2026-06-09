@@ -3,8 +3,14 @@
  *
  * Allowlist permisiva con tablas, estilos inline y tags legacy de email
  * (font, center), pero bloquea ejecución (script, iframe, on*, javascript:).
+ *
+ * Usa `dompurify` (build de navegador) en vez de `isomorphic-dompurify`: este
+ * HTML solo se renderiza en el cliente (GmailDrawer), así que no hace falta el
+ * DOM de servidor. `isomorphic-dompurify` arrastra `jsdom`, que en producción
+ * rompe el SSR del layout de escritorio (require() de un módulo ESM). En SSR
+ * devolvemos "" y el cliente sanitiza al hidratar.
  */
-import DOMPurify from "isomorphic-dompurify";
+import DOMPurify from "dompurify";
 
 const EMAIL_CONFIG = {
   ALLOWED_TAGS: [
@@ -50,6 +56,10 @@ function ensureHook() {
 
 export function sanitizeEmailHtml(html: string | null | undefined): string {
   if (!html || typeof html !== "string") return "";
+  // En SSR no hay DOM ni DOMPurify operativo: el cliente sanitiza al hidratar.
+  if (typeof window === "undefined" || typeof DOMPurify.sanitize !== "function") {
+    return "";
+  }
   ensureHook();
   return DOMPurify.sanitize(html, EMAIL_CONFIG);
 }
