@@ -18,72 +18,73 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-type Item = { href: string; label: string; icon: LucideIcon };
-type Grupo = { titulo: string; items: Item[] };
+/**
+ * Tono azulado de marca. `hue` se usa para teñir el icono y el recuadro;
+ * todos viven en el rango azul→violeta para mantener el aire futurista. El
+ * color agrupa visualmente los accesos afines sin necesidad de títulos.
+ */
+type Item = { href: string; label: string; icon: LucideIcon; hue: number };
 
-const GRUPOS: Grupo[] = [
-  {
-    titulo: "Mi día",
-    items: [
-      { href: "/m/fichajes", label: "Fichajes", icon: Fingerprint },
-      { href: "/m/cronograma", label: "Cronograma", icon: CalendarClock },
-      { href: "/m/horario", label: "Horario", icon: Timer },
-      { href: "/m/calendario", label: "Calendario", icon: CalendarDays },
-    ],
-  },
-  {
-    titulo: "Mi nómina",
-    items: [
-      { href: "/m/condiciones", label: "Condiciones", icon: ClipboardCheck },
-      { href: "/m/documentos", label: "Documentos", icon: Files },
-      { href: "/m/solicitudes", label: "Solicitudes", icon: Inbox },
-    ],
-  },
-  {
-    titulo: "Comunicación",
-    items: [
-      { href: "/m/comunicados", label: "Comunicados", icon: Megaphone },
-      { href: "/m/encuestas", label: "Encuestas", icon: ClipboardList },
-      { href: "/m/cuestionarios", label: "Cuestionarios", icon: FileQuestion },
-      { href: "/m/inspecciones", label: "Inspecciones", icon: FileSearch },
-    ],
-  },
-  {
-    titulo: "Equipo",
-    items: [
-      { href: "/m/equipo", label: "Equipo", icon: Network },
-      { href: "/m/formacion", label: "Formación", icon: GraduationCap },
-      { href: "/m/perfil", label: "Perfil", icon: UserCircle },
-      { href: "/m/points", label: "Points", icon: Trophy },
-    ],
-  },
+// Mismo orden de antes, ahora en una sola rejilla plana. El `hue` agrupa por
+// color: día (azul), nómina (cian), comunicación (índigo), equipo (violeta).
+const ITEMS: Item[] = [
+  { href: "/m/fichajes", label: "Fichajes", icon: Fingerprint, hue: 211 },
+  { href: "/m/cronograma", label: "Cronograma", icon: CalendarClock, hue: 211 },
+  { href: "/m/horario", label: "Horario", icon: Timer, hue: 211 },
+  { href: "/m/calendario", label: "Calendario", icon: CalendarDays, hue: 211 },
+  { href: "/m/condiciones", label: "Condiciones", icon: ClipboardCheck, hue: 192 },
+  { href: "/m/documentos", label: "Documentos", icon: Files, hue: 192 },
+  { href: "/m/solicitudes", label: "Solicitudes", icon: Inbox, hue: 192 },
+  { href: "/m/comunicados", label: "Comunicados", icon: Megaphone, hue: 231 },
+  { href: "/m/encuestas", label: "Encuestas", icon: ClipboardList, hue: 231 },
+  { href: "/m/cuestionarios", label: "Cuestionarios", icon: FileQuestion, hue: 231 },
+  { href: "/m/inspecciones", label: "Inspecciones", icon: FileSearch, hue: 231 },
+  { href: "/m/equipo", label: "Equipo", icon: Network, hue: 252 },
+  { href: "/m/formacion", label: "Formación", icon: GraduationCap, hue: 252 },
+  { href: "/m/perfil", label: "Perfil", icon: UserCircle, hue: 252 },
+  { href: "/m/points", label: "Points", icon: Trophy, hue: 252 },
 ];
 
 export function MasGrid() {
   return (
-    <div className="space-y-5 px-5 pt-3">
-      {GRUPOS.map((grupo) => (
-        <section key={grupo.titulo}>
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {grupo.titulo}
-          </h2>
-          <div className="grid grid-cols-3 gap-2.5">
-            {grupo.items.map((it) => {
-              const Icon = it.icon;
-              return (
-                <Link
-                  key={it.href}
-                  href={it.href}
-                  className="flex aspect-square flex-col items-center justify-center gap-2 rounded-2xl border border-border/60 bg-card text-center text-xs font-medium active:opacity-70"
-                >
-                  <Icon className="h-6 w-6" strokeWidth={2} />
-                  <span className="px-1 leading-tight">{it.label}</span>
-                </Link>
-              );
-            })}
-          </div>
-        </section>
-      ))}
+    <div className="grid grid-cols-3 gap-2.5 px-5 pt-2">
+      {ITEMS.map((it) => {
+        const Icon = it.icon;
+        return (
+          <Link
+            key={it.href}
+            href={it.href}
+            className="group relative flex aspect-square flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl border text-center text-xs font-medium shadow-sm transition-all active:scale-[0.97]"
+            style={{
+              borderColor: `hsl(${it.hue} 60% 60% / 0.25)`,
+              background: `linear-gradient(160deg, hsl(${it.hue} 70% 97%) 0%, hsl(${it.hue} 65% 92%) 100%)`,
+              boxShadow: `0 1px 8px -2px hsl(${it.hue} 60% 50% / 0.18)`,
+            }}
+          >
+            {/* Brillo futurista superior */}
+            <span
+              aria-hidden
+              className="pointer-events-none absolute -top-6 left-1/2 h-12 w-20 -translate-x-1/2 rounded-full blur-xl"
+              style={{ background: `hsl(${it.hue} 80% 70% / 0.35)` }}
+            />
+            <span
+              className="relative flex h-11 w-11 items-center justify-center rounded-xl text-white shadow-sm"
+              style={{
+                background: `linear-gradient(145deg, hsl(${it.hue} 75% 58%) 0%, hsl(${it.hue} 70% 46%) 100%)`,
+                boxShadow: `0 3px 10px -2px hsl(${it.hue} 70% 45% / 0.5)`,
+              }}
+            >
+              <Icon className="h-5 w-5" strokeWidth={2.1} />
+            </span>
+            <span
+              className="relative px-1 leading-tight"
+              style={{ color: `hsl(${it.hue} 45% 28%)` }}
+            >
+              {it.label}
+            </span>
+          </Link>
+        );
+      })}
     </div>
   );
 }
