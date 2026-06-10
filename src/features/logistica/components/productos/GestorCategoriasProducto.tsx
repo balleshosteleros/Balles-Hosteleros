@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useTransition } from "react";
-import { Check, Pencil, Plus, Sparkles, Trash2, X } from "lucide-react";
+import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -13,13 +13,17 @@ import {
   updateCategoriaProducto,
   type CategoriaProductoRow,
 } from "@/features/logistica/actions/categorias-producto-actions";
-import { ImportadorIACatalogoDialog } from "@/features/logistica/components/ImportadorIACatalogoDialog";
-import {
-  analizarCategoriasProductoIA,
-  guardarCategoriasProductoIA,
-} from "@/features/logistica/actions/importador-catalogos-ia-actions";
-import type { ImportadorEntityConfig } from "@/features/logistica/types/importador-catalogo-ia";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface GestorCategoriasProductoProps {
   tipo: TipoProducto;
@@ -28,11 +32,14 @@ interface GestorCategoriasProductoProps {
 }
 
 /**
- * CRUD de categorías de producto contra la tabla `categorias_producto`.
- * - Crear: input + botón "+ Añadir".
- * - Renombrar: click en lápiz, edita inline, Enter o ✓ confirma.
- * - Borrar: botón papelera con confirm; el server rechaza si hay productos
- *   usando la categoría.
+ * CRUD de categorías de producto contra la tabla `categorias_producto`
+ * (fuente única: todo lo que lea categorías parte de aquí).
+ * - Cabecera: solo el título + botón "Nuevo" a la derecha.
+ * - Crear: el botón "Nuevo" revela un input inline.
+ * - Editar: se clica el nombre y se edita directamente; al guardar, el nuevo
+ *   nombre se propaga retroactivamente a todos los productos que la usan
+ *   (cascade en el server action).
+ * - Borrar: papelera con confirm; el server rechaza si hay productos usándola.
  */
 export function GestorCategoriasProducto({
   tipo,
@@ -41,22 +48,12 @@ export function GestorCategoriasProducto({
   const [items, setItems] = useState<CategoriaProductoRow[]>([]);
   const [cargando, setCargando] = useState(true);
   useGlobalLoadingSync(cargando);
+  const [creando, setCreando] = useState(false);
   const [nuevoNombre, setNuevoNombre] = useState("");
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [editandoValor, setEditandoValor] = useState("");
-  const [iaDialogOpen, setIaDialogOpen] = useState(false);
+  const [pendiente, setPendiente] = useState<{ id: string; nombre: string } | null>(null);
   const [isPending, startTransition] = useTransition();
-
-  const iaConfig: ImportadorEntityConfig = {
-    titulo: `Importar categorías de ${labelTipo(tipo)} con IA`,
-    subtitulo:
-      "Sube un PDF, foto de carta o lista. La IA extraerá los nombres de categoría únicos y los podrás revisar antes de añadir al catálogo.",
-    campos: [
-      { key: "nombre", label: "Nombre de la categoría", obligatorio: true, tipo: "texto" },
-    ],
-    analyze: (payload) => analizarCategoriasProductoIA(payload, tipo),
-    save: (rows) => guardarCategoriasProductoIA(rows, tipo),
-  };
 
   const recargar = useCallback(() => {
     setCargando(true);
@@ -81,6 +78,7 @@ export function GestorCategoriasProducto({
       }
       toast.success(`Categoría "${nombre}" creada`);
       setNuevoNombre("");
+      setCreando(false);
       recargar();
       onChanged?.();
     });
@@ -96,7 +94,7 @@ export function GestorCategoriasProducto({
           toast.error(res.error);
           return;
         }
-        toast.success("Categoría renombrada");
+        toast.success("Categoría actualizada");
         setEditandoId(null);
         setEditandoValor("");
         recargar();
@@ -108,7 +106,6 @@ export function GestorCategoriasProducto({
 
   const onDelete = useCallback(
     (id: string, nombre: string) => {
-      if (!confirm(`¿Borrar la categoría "${nombre}"?`)) return;
       startTransition(async () => {
         const res = await deleteCategoriaProducto(id);
         if (!res.ok) {
@@ -125,47 +122,59 @@ export function GestorCategoriasProducto({
 
   return (
     <div className="space-y-3">
-      <div>
-        <label className="text-xs font-semibold text-foreground mb-1.5 block">
-          Categorías
-        </label>
-        <p className="text-[11px] text-muted-foreground mb-2">
-          Las categorías aquí son las únicas que se pueden usar al crear o importar productos.
-          Para añadir una nueva, créala desde esta pantalla.
-        </p>
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-semibold text-foreground">Categorías</label>
+        <Button
+          size="sm"
+          onClick={() => {
+            setCreando((v) => !v);
+            setNuevoNombre("");
+          }}
+          className="gap-1 h-8 shrink-0"
+        >
+          <Plus className="h-3.5 w-3.5" /> Nuevo
+        </Button>
       </div>
 
-      <div className="flex gap-2">
-        <Input
-          value={nuevoNombre}
-          onChange={(e) => setNuevoNombre(e.target.value)}
-          placeholder="Nombre de la nueva categoría"
-          className="h-8 text-xs"
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              onAdd();
-            }
-          }}
-        />
-        <Button
-          size="sm"
-          onClick={onAdd}
-          disabled={!nuevoNombre.trim() || isPending}
-          className="gap-1 h-8"
-        >
-          <Plus className="h-3.5 w-3.5" /> Añadir
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => setIaDialogOpen(true)}
-          className="gap-1 h-8"
-          title="Importar varias categorías desde un archivo"
-        >
-          <Sparkles className="h-3.5 w-3.5 text-amber-500" /> Importar con IA
-        </Button>
-      </div>
+      {creando && (
+        <div className="flex gap-2">
+          <Input
+            value={nuevoNombre}
+            onChange={(e) => setNuevoNombre(e.target.value)}
+            placeholder="Nombre de la nueva categoría"
+            className="h-8 text-xs flex-1"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                onAdd();
+              } else if (e.key === "Escape") {
+                setCreando(false);
+                setNuevoNombre("");
+              }
+            }}
+          />
+          <Button
+            size="sm"
+            onClick={onAdd}
+            disabled={!nuevoNombre.trim() || isPending}
+            className="gap-1 h-8 shrink-0"
+          >
+            <Check className="h-3.5 w-3.5" /> Añadir
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setCreando(false);
+              setNuevoNombre("");
+            }}
+            className="h-8 shrink-0"
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      )}
 
       <div className="rounded-lg border">
         {cargando ? (
@@ -174,7 +183,7 @@ export function GestorCategoriasProducto({
           </div>
         ) : items.length === 0 ? (
           <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-            No hay categorías creadas para este tipo de producto. Añade la primera arriba.
+            No hay categorías. Crea la primera con el botón “Nuevo”.
           </div>
         ) : (
           <ul className="divide-y">
@@ -233,14 +242,14 @@ export function GestorCategoriasProducto({
                         setEditandoValor(cat.nombre);
                       }}
                       className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                      title="Renombrar"
-                      aria-label="Renombrar"
+                      title="Editar"
+                      aria-label="Editar"
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
                     <button
                       type="button"
-                      onClick={() => onDelete(cat.id, cat.nombre)}
+                      onClick={() => setPendiente({ id: cat.id, nombre: cat.nombre })}
                       disabled={isPending}
                       className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
                       title="Borrar"
@@ -256,26 +265,25 @@ export function GestorCategoriasProducto({
         )}
       </div>
 
-      <ImportadorIACatalogoDialog
-        open={iaDialogOpen}
-        onOpenChange={setIaDialogOpen}
-        config={iaConfig}
-        onImportSuccess={() => {
-          recargar();
-          onChanged?.();
-        }}
-      />
+      <AlertDialog open={!!pendiente} onOpenChange={(o) => !o && setPendiente(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Borrar la categoría “{pendiente?.nombre}”?</AlertDialogTitle>
+            <AlertDialogDescription>Esta acción no se puede deshacer.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendiente) onDelete(pendiente.id, pendiente.nombre);
+                setPendiente(null);
+              }}
+            >
+              Borrar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
-}
-
-function labelTipo(t: TipoProducto): string {
-  switch (t) {
-    case "compra":
-      return "compra";
-    case "venta":
-      return "venta";
-    case "elaboracion":
-      return "elaboración";
-  }
 }

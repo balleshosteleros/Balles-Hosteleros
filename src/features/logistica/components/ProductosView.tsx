@@ -1461,15 +1461,14 @@ function ConfigProductos({
         titulo="Unidades de medida"
         hint="Unidades base con las que se miden los productos (kg, L, ud…). Vienen 3 estándar; añade más si las necesitas."
         campos={[
-          { key: "codigo", label: "Código (kg, L, ud…)", obligatorio: true, ancho: "w-32" },
-          { key: "label", label: "Etiqueta visible", ancho: "flex-1" },
+          { key: "codigo", label: "Unidad (kg, L, ud…)", obligatorio: true, ancho: "flex-1" },
         ]}
         itemPrincipal={(it) => it.codigo}
-        itemSecundario={(it) => (it.label !== it.codigo ? it.label : null)}
-        itemAPatch={(it) => ({ codigo: it.codigo, label: it.label })}
+        itemSecundario={() => null}
+        itemAPatch={(it) => ({ codigo: it.codigo })}
         list={listUnidadesMedida}
-        create={(input) => createUnidadMedida({ codigo: input.codigo, label: input.label || input.codigo })}
-        update={(id, patch) => updateUnidadMedida(id, patch)}
+        create={(input) => createUnidadMedida({ codigo: input.codigo, label: input.codigo })}
+        update={(id, patch) => updateUnidadMedida(id, { codigo: patch.codigo, label: patch.codigo })}
         remove={deleteUnidadMedida}
         iaConfig={{
           titulo: "Importar unidades de medida con IA",
@@ -1486,28 +1485,26 @@ function ConfigProductos({
         titulo="IVA"
         hint="Tipos impositivos aplicables. España viene con los 4 estándar; añade otros si vendes en otros países."
         campos={[
-          { key: "codigo", label: "Código (21%)", obligatorio: true, ancho: "w-24" },
-          { key: "porcentaje", label: "Porcentaje (21)", obligatorio: true, ancho: "w-28" },
-          { key: "label", label: "Etiqueta", ancho: "flex-1" },
+          { key: "porcentaje", label: "IVA (ej: 10)", obligatorio: true, ancho: "w-32" },
+          { key: "label", label: "Etiqueta (ej: Reducido)", ancho: "flex-1" },
         ]}
-        itemPrincipal={(it) => it.codigo}
+        itemPrincipal={(it) => `${it.porcentaje}%`}
         itemSecundario={(it) => it.label}
-        itemAPatch={(it) => ({ codigo: it.codigo, porcentaje: String(it.porcentaje), label: it.label ?? "" })}
+        itemAPatch={(it) => ({ porcentaje: String(it.porcentaje), label: it.label ?? "" })}
         list={listIvas}
-        create={(input) =>
-          createIva({
-            codigo: input.codigo,
-            porcentaje: parseFloat(input.porcentaje.replace(",", ".")) || 0,
-            label: input.label,
-          })
-        }
-        update={(id, patch) =>
-          updateIva(id, {
-            codigo: patch.codigo,
-            porcentaje: patch.porcentaje ? parseFloat(patch.porcentaje.replace(",", ".")) : undefined,
+        create={(input) => {
+          const pct = parseFloat(input.porcentaje.replace(",", ".")) || 0;
+          return createIva({ codigo: `${pct}%`, porcentaje: pct, label: input.label });
+        }}
+        update={(id, patch) => {
+          const pct =
+            patch.porcentaje !== undefined ? parseFloat(patch.porcentaje.replace(",", ".")) : undefined;
+          return updateIva(id, {
+            codigo: pct !== undefined ? `${pct}%` : undefined,
+            porcentaje: pct,
             label: patch.label || null,
-          })
-        }
+          });
+        }}
         remove={deleteIva}
         iaConfig={{
           titulo: "Importar tipos de IVA con IA",
@@ -1673,9 +1670,6 @@ export function ProductosView() {
 
       {showConfig ? (
         <div className="bg-card border rounded-lg p-5">
-          <h3 className="text-sm font-bold text-foreground mb-4">
-            CONFIGURACIÓN — {tipoActivo === "compra" ? "PRODUCTOS DE COMPRA" : tipoActivo === "venta" ? "PRODUCTOS DE VENTA" : "ELABORACIONES"}
-          </h3>
           <ConfigProductos
             tipo={tipoActivo}
             onCategoriasChanged={config.reloadCategorias}

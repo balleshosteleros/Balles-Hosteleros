@@ -26,36 +26,53 @@ export async function getOrganigrama(empresaSlug: string): Promise<OrgChart | nu
   }
 }
 
+export interface EstructuraEtiquetas {
+  /** UPPER(nombre departamento) → puestos de ese departamento. */
+  puestosPorDepto: Record<string, string[]>;
+  /** Nombres de departamento reales en MAYÚSCULAS (para distinguir cajas). */
+  departamentos: string[];
+}
+
 /**
- * Puestos reales agrupados por nombre de departamento (en MAYÚSCULAS, para
- * casar con las etiquetas de las cajas del organigrama). Alimenta el
- * desplegable de puestos de cada departamento.
+ * Etiquetas reales de la estructura para pintar el organigrama: nombres de
+ * departamento (para distinguir qué cajas son departamentos) y los puestos de
+ * cada uno (para el desplegable). Todo en MAYÚSCULAS para casar con las cajas.
  */
-export async function getPuestosPorDepartamento(
+export async function getEstructuraEtiquetas(
   empresaId: string,
-): Promise<Record<string, string[]>> {
+): Promise<EstructuraEtiquetas> {
   try {
     const supabase = createAdminClient();
-    const { data, error } = await supabase
-      .from("puestos")
-      .select("nombre, estado, departamento:departamentos(nombre)")
-      .eq("empresa_id", empresaId);
-    if (error) throw error;
-    const mapa: Record<string, string[]> = {};
-    for (const row of data ?? []) {
+    const [{ data: puestos }, { data: deptos }] = await Promise.all([
+      supabase
+        .from("puestos")
+        .select("nombre, estado, departamento:departamentos(nombre)")
+        .eq("empresa_id", empresaId),
+      supabase.from("departamentos").select("nombre").eq("empresa_id", empresaId),
+    ]);
+
+    const puestosPorDepto: Record<string, string[]> = {};
+    for (const row of puestos ?? []) {
       const r = row as { nombre: string; estado: string | null; departamento: unknown };
       if ((r.estado ?? "") === "inactivo") continue;
       const depRel = r.departamento;
       const dep = (Array.isArray(depRel) ? depRel[0] : depRel) as { nombre?: string } | null;
       const key = (dep?.nombre ?? "").trim().toUpperCase();
       if (!key) continue;
-      (mapa[key] ??= []).push(r.nombre);
+      (puestosPorDepto[key] ??= []).push(r.nombre);
     }
-    for (const k of Object.keys(mapa)) mapa[k].sort((a, b) => a.localeCompare(b, "es"));
-    return mapa;
+    for (const k of Object.keys(puestosPorDepto)) {
+      puestosPorDepto[k].sort((a, b) => a.localeCompare(b, "es"));
+    }
+
+    const departamentos = (deptos ?? [])
+      .map((d) => ((d as { nombre?: string }).nombre ?? "").trim().toUpperCase())
+      .filter(Boolean);
+
+    return { puestosPorDepto, departamentos };
   } catch (err) {
-    console.error("[organigrama] getPuestosPorDepartamento:", err);
-    return {};
+    console.error("[organigrama] getEstructuraEtiquetas:", err);
+    return { puestosPorDepto: {}, departamentos: [] };
   }
 }
 

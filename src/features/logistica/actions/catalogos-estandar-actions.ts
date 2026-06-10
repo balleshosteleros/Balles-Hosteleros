@@ -129,8 +129,11 @@ export async function updateUnidadMedida(id: string, patch: Partial<{ codigo: st
     }
 
     if (before?.codigo && patch.codigo !== undefined && patch.codigo.trim() && patch.codigo.trim() !== before.codigo) {
-      await supabase.from("productos").update({ unidad: patch.codigo.trim() })
+      const nuevoCodigo = patch.codigo.trim();
+      await supabase.from("productos").update({ unidad: nuevoCodigo })
         .eq("empresa_id", empresaId).eq("unidad", before.codigo as string);
+      await supabase.from("productos").update({ unidad_uso: nuevoCodigo })
+        .eq("empresa_id", empresaId).eq("unidad_uso", before.codigo as string);
     }
 
     revalidatePath("/logistica/productos");
