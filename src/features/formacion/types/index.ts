@@ -2,28 +2,15 @@
 // Curso → Secciones → Lecciones (cada lección es un vídeo + recursos).
 // El portal del empleado y el panel admin de RRHH consumen los mismos tipos.
 
-export type Puesto =
-  | "CAMARERO"
-  | "JEFE DE SALA"
-  | "COCINERO"
-  | "JEFE DE COCINA"
-  | "CACHIMBERO"
-  | "ARTISTA"
-  | "MANTENIMIENTO"
-  | "GERENTE"
-  | "CONTABLE";
+// Un "puesto" es ahora el nombre real de un puesto de la tabla `puestos`
+// (antes era un enum hardcodeado; ahora se carga de BD por empresa).
+export type Puesto = string;
 
-export const PUESTOS: Puesto[] = [
-  "CAMARERO",
-  "JEFE DE SALA",
-  "COCINERO",
-  "JEFE DE COCINA",
-  "CACHIMBERO",
-  "ARTISTA",
-  "MANTENIMIENTO",
-  "GERENTE",
-  "CONTABLE",
-];
+/** Puesto real de la empresa (id + nombre): fuente de los cursos por puesto. */
+export interface PuestoRef {
+  id: string;
+  nombre: string;
+}
 
 export type Ambito = "general" | "puesto";
 
@@ -46,8 +33,10 @@ export interface Curso {
   cover?: string;
   categoria: CategoriaCurso;
   ambito: Ambito;
-  /** Sólo si ambito === "puesto" */
+  /** Sólo si ambito === "puesto": nombre del puesto (para mostrar/filtrar). */
   puesto?: Puesto;
+  /** Sólo si ambito === "puesto": id real del puesto (vínculo de BD). */
+  puestoId?: string;
   empresaId: string;
   orden: number;
   /** ISO yyyy-mm-dd — usado para destacar como novedad en los últimos 3 meses. */
@@ -86,6 +75,9 @@ export interface Leccion {
   duracionMin: number;
   orden: number;
   fechaSubida: string;
+  /** Documento adjunto (uno por tarea) en el bucket privado `formacion-docs`. */
+  documentoPath?: string;
+  documentoNombre?: string;
   recursos: RecursoLeccion[];
 }
 

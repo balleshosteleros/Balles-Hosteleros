@@ -4,7 +4,8 @@
 // recursos descargables (PDF, enlaces, imágenes...).
 
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Paperclip, Trash2, Loader2, FileText } from "lucide-react";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -17,7 +18,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useFormacionStore } from "../../store/use-formacion-store";
-import type { Leccion, RecursoLeccion } from "../../types";
+import { uploadFormacionDoc } from "../../actions/formacion-actions";
+import type { Leccion } from "../../types";
 
 type Mode =
   | { mode: "new"; seccionId: string }
@@ -27,10 +29,6 @@ interface Props {
   cursoId: string;
   mode: Mode;
   onClose: () => void;
-}
-
-function genId(prefix: string) {
-  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
 export function LeccionFormDialog({ cursoId, mode, onClose }: Props) {
@@ -44,63 +42,62 @@ export function LeccionFormDialog({ cursoId, mode, onClose }: Props) {
 
   const [titulo, setTitulo] = useState(editing?.titulo ?? "");
   const [descripcion, setDescripcion] = useState(editing?.descripcion ?? "");
-  const [url, setUrl] = useState(
-    editing?.url ??
-      "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-  );
+  const [url, setUrl] = useState(editing?.url ?? "");
   const [duracionMin, setDuracionMin] = useState<number>(
     editing?.duracionMin ?? 5,
   );
   const [fechaSubida, setFechaSubida] = useState(editing?.fechaSubida ?? today);
-  const [recursos, setRecursos] = useState<RecursoLeccion[]>(
-    editing?.recursos ?? [],
-  );
+  const [documentoPath, setDocumentoPath] = useState(editing?.documentoPath ?? "");
+  const [documentoNombre, setDocumentoNombre] = useState(editing?.documentoNombre ?? "");
+  const [subiendo, setSubiendo] = useState(false);
 
-  function añadirRecurso() {
-    setRecursos((curr) => [
-      ...curr,
-      { id: genId("r"), titulo: "", url: "", tipo: "pdf" },
-    ]);
+  async function onElegirDocumento(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // permite re-elegir el mismo archivo
+    if (!file) return;
+    setSubiendo(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await uploadFormacionDoc(fd);
+    setSubiendo(false);
+    if (res.ok && res.path) {
+      setDocumentoPath(res.path);
+      setDocumentoNombre(res.nombre ?? file.name);
+    } else {
+      toast.error(res.error ?? "No se pudo subir el documento");
+    }
   }
-  function patchRecurso(id: string, patch: Partial<RecursoLeccion>) {
-    setRecursos((curr) =>
-      curr.map((r) => (r.id === id ? { ...r, ...patch } : r)),
-    );
-  }
-  function quitarRecurso(id: string) {
-    setRecursos((curr) => curr.filter((r) => r.id !== id));
+
+  function quitarDocumento() {
+    setDocumentoPath("");
+    setDocumentoNombre("");
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!titulo.trim() || !url.trim()) return;
 
-    const recursosLimpios = recursos
-      .map((r) => ({ ...r, titulo: r.titulo.trim(), url: r.url.trim() }))
-      .filter((r) => r.titulo && r.url);
+    const comun = {
+      titulo: titulo.trim(),
+      descripcion: descripcion.trim(),
+      url: url.trim(),
+      duracionMin: Math.max(1, Number(duracionMin) || 1),
+      fechaSubida,
+      documentoPath: documentoPath || undefined,
+      documentoNombre: documentoNombre || undefined,
+    };
 
     if (editing) {
-      updateLeccion(editing.id, {
-        titulo: titulo.trim(),
-        descripcion: descripcion.trim(),
-        url: url.trim(),
-        duracionMin: Math.max(1, Number(duracionMin) || 1),
-        fechaSubida,
-        recursos: recursosLimpios,
-      });
+      updateLeccion(editing.id, comun);
     } else {
       const ordenSiguiente =
         lecciones.filter((l) => l.seccionId === seccionId).length + 1;
       addLeccion({
         cursoId,
         seccionId,
-        titulo: titulo.trim(),
-        descripcion: descripcion.trim(),
-        url: url.trim(),
-        duracionMin: Math.max(1, Number(duracionMin) || 1),
         orden: ordenSiguiente,
-        fechaSubida,
-        recursos: recursosLimpios,
+        recursos: [],
+        ...comun,
       });
     }
 
@@ -175,60 +172,36 @@ export function LeccionFormDialog({ cursoId, mode, onClose }: Props) {
             </div>
           </div>
 
-          {/* Recursos */}
+          {/* Documento adjunto (uno por tarea) */}
           <div className="space-y-2 rounded-md border bg-muted/40 p-3">
-            <div className="flex items-center justify-between">
-              <Label>Recursos descargables (opcional)</Label>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={añadirRecurso}
-              >
-                <Plus className="mr-1 h-3.5 w-3.5" />
-                Añadir recurso
-              </Button>
-            </div>
-            {recursos.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                Sin recursos. Puedes añadir PDFs, enlaces, imágenes…
-              </p>
+            <Label>Documento adjunto (opcional)</Label>
+            {documentoPath ? (
+              <div className="flex items-center gap-2 rounded-md border bg-background px-3 py-2">
+                <FileText className="h-4 w-4 shrink-0 text-primary" />
+                <span className="min-w-0 flex-1 truncate text-sm">{documentoNombre}</span>
+                <Button type="button" variant="ghost" size="sm" onClick={quitarDocumento}>
+                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                </Button>
+              </div>
             ) : (
-              <ul className="space-y-2">
-                {recursos.map((r) => (
-                  <li key={r.id} className="grid gap-2 sm:grid-cols-[1fr,1fr,90px,auto]">
-                    <Input
-                      value={r.titulo}
-                      onChange={(e) =>
-                        patchRecurso(r.id, { titulo: e.target.value })
-                      }
-                      placeholder="Título del recurso"
-                      className="bg-background"
-                    />
-                    <Input
-                      value={r.url}
-                      onChange={(e) => patchRecurso(r.id, { url: e.target.value })}
-                      placeholder="URL"
-                      className="bg-background"
-                    />
-                    <Input
-                      value={r.tipo}
-                      onChange={(e) => patchRecurso(r.id, { tipo: e.target.value })}
-                      placeholder="pdf"
-                      className="bg-background"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => quitarRecurso(r.id)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                    </Button>
-                  </li>
-                ))}
-              </ul>
+              <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed bg-background px-3 py-2 text-sm text-muted-foreground hover:border-primary/40">
+                {subiendo ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Paperclip className="h-4 w-4" />
+                )}
+                {subiendo ? "Subiendo…" : "Adjuntar documento (PDF, Word, imagen…)"}
+                <input
+                  type="file"
+                  className="hidden"
+                  disabled={subiendo}
+                  onChange={onElegirDocumento}
+                />
+              </label>
             )}
+            <p className="text-[11px] text-muted-foreground">
+              Se guarda en privado; el empleado lo descarga desde la tarea.
+            </p>
           </div>
 
           <DialogFooter>

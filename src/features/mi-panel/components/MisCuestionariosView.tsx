@@ -1,16 +1,17 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { useAuth } from "@/features/auth/contexts/auth-context";
+import { useState, useEffect, useCallback } from "react";
+import { toast } from "sonner";
 import {
   type Cuestionario,
   type PreguntaCuestionario,
   type RespuestaEmpleadoCuestionario,
-  getCuestionariosPorEmpresa,
-  calcularPuntuacionMaxima,
   CATEGORIA_CUESTIONARIO_LABEL,
 } from "@/features/calidad/data/cuestionarios";
+import {
+  listMisCuestionarios,
+  submitCuestionario,
+} from "@/features/mi-panel/actions/mis-cuestionarios-actions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -156,16 +157,14 @@ function ListadoMisCuestionarios({
 }
 
 function ResolverCuestionario({
-  cuestionario, onBack,
+  cuestionario, onBack, onSubmitted,
 }: {
   cuestionario: Cuestionario;
   onBack: () => void;
+  onSubmitted: () => void;
 }) {
-  const preguntasPlanas = useMemo(
-    () => cuestionario.bloques.flatMap((b) => b.preguntas.map((p) => ({ ...p, bloque: b.titulo }))),
-    [cuestionario],
-  );
   const [respuestas, setRespuestas] = useState<Record<string, string | string[]>>({});
+  const [enviando, setEnviando] = useState(false);
   const [resultado, setResultado] = useState<{
     puntos: number;
     sobre: number;
@@ -188,27 +187,21 @@ function ResolverCuestionario({
     setRespuestas((prev) => ({ ...prev, [preguntaId]: valor }));
   };
 
-  const enviar = () => {
-    let puntos = 0;
-    const sobre = calcularPuntuacionMaxima(cuestionario);
-    preguntasPlanas.forEach((p) => {
-      const r = respuestas[p.id];
-      if (p.tipo === "unica" || p.tipo === "verdadero_falso") {
-        const correctaId = p.opciones.find((o) => o.correcta)?.id;
-        if (correctaId && r === correctaId) puntos += p.puntos;
-      } else if (p.tipo === "multiple") {
-        const correctas = p.opciones.filter((o) => o.correcta).map((o) => o.id).sort();
-        const seleccionadas = ((r as string[]) ?? []).slice().sort();
-        if (
-          correctas.length === seleccionadas.length &&
-          correctas.every((id, i) => id === seleccionadas[i])
-        ) {
-          puntos += p.puntos;
-        }
-      }
-    });
-    const pct = sobre > 0 ? (puntos / sobre) * 100 : 0;
-    setResultado({ puntos, sobre, aprobado: pct >= cuestionario.notaCorte });
+  const enviar = async () => {
+    setEnviando(true);
+    // La corrección la hace el servidor (autoritativo) y persiste el envío.
+    const res = await submitCuestionario(cuestionario.id, respuestas);
+    setEnviando(false);
+    if (res.ok) {
+      setResultado({
+        puntos: res.puntos ?? 0,
+        sobre: res.sobre ?? 0,
+        aprobado: res.aprobado ?? false,
+      });
+      onSubmitted();
+    } else {
+      toast.error(res.error ?? "No se pudo enviar el cuestionario");
+    }
   };
 
   if (resultado) {
@@ -303,7 +296,9 @@ function ResolverCuestionario({
       </div>
 
       <div className="flex justify-end">
-        <Button onClick={enviar} size="lg">Enviar respuestas</Button>
+        <Button onClick={enviar} size="lg" disabled={enviando}>
+          {enviando ? "Enviando…" : "Enviar respuestas"}
+        </Button>
       </div>
     </div>
   );
@@ -387,30 +382,30 @@ function PreguntaItem({
 }
 
 export function MisCuestionariosView() {
-  const { empresaActual } = useEmpresa();
-  const { profile } = useAuth();
   const [activo, setActivo] = useState<Cuestionario | null>(null);
+  const [items, setItems] = useState<
+    { cuestionario: Cuestionario; respondido: boolean; respuesta: RespuestaEmpleadoCuestionario | null }[]
+  >([]);
+  const [cargando, setCargando] = useState(true);
 
-  const empleadoId = profile?.email ?? "";
+  const cargar = useCallback(async () => {
+    setCargando(true);
+    const res = await listMisCuestionarios();
+    setItems(res.ok ? res.data : []);
+    setCargando(false);
+  }, []);
 
-  const { pendientes, completados } = useMemo(() => {
-    const todos = getCuestionariosPorEmpresa(empresaActual.id).filter((c) => c.estado === "activo");
-    const pend: { c: Cuestionario }[] = [];
-    const comp: { c: Cuestionario; respuesta: RespuestaEmpleadoCuestionario }[] = [];
-    todos.forEach((c) => {
-      const misRespuestas = c.respuestas.filter((r) => r.empleadoId === empleadoId);
-      // Un solo envío: en cuanto el empleado lo rellena queda completado y
-      // congelado (solo lectura). No hay reintentos; lo único que se puede
-      // reenviar mientras siga sin rellenar es un recordatorio.
-      if (misRespuestas.length > 0) {
-        const aprobada = misRespuestas.find((r) => r.aprobado) ?? misRespuestas[0];
-        comp.push({ c, respuesta: aprobada });
-      } else {
-        pend.push({ c });
-      }
-    });
-    return { pendientes: pend, completados: comp };
-  }, [empresaActual.id, empleadoId]);
+  useEffect(() => {
+    void cargar();
+  }, [cargar]);
+
+  // Un solo envío: una vez respondido queda completado y congelado.
+  const pendientes: { c: Cuestionario }[] = [];
+  const completados: { c: Cuestionario; respuesta: RespuestaEmpleadoCuestionario }[] = [];
+  for (const it of items) {
+    if (it.respondido && it.respuesta) completados.push({ c: it.cuestionario, respuesta: it.respuesta });
+    else pendientes.push({ c: it.cuestionario });
+  }
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-5">
@@ -422,7 +417,13 @@ export function MisCuestionariosView() {
       </div>
 
       {activo ? (
-        <ResolverCuestionario cuestionario={activo} onBack={() => setActivo(null)} />
+        <ResolverCuestionario
+          cuestionario={activo}
+          onBack={() => setActivo(null)}
+          onSubmitted={cargar}
+        />
+      ) : cargando ? (
+        <Card className="p-8 text-center text-sm text-muted-foreground">Cargando…</Card>
       ) : (
         <ListadoMisCuestionarios pendientes={pendientes} completados={completados} onAbrir={setActivo} />
       )}

@@ -1,22 +1,38 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search, ChevronRight, UserRound, GraduationCap } from "lucide-react";
+import { Search, ChevronRight, UserRound, GraduationCap, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { FaqAdminPanel } from "./faq-admin-panel";
+import { ConocimientoAdminPanel } from "./conocimiento-admin-panel";
 import { SoporteDrawer } from "./soporte-drawer";
 import { FormacionRolViewer } from "@/features/formacion/components/FormacionRolViewer";
-import type { Faq, FaqsByCategory } from "@/features/soporte/types";
+import type { Faq, FaqsByCategory, ConocimientoChunk } from "@/features/soporte/types";
+
+interface EstadoIndice {
+  total: number;
+  porFuente: Record<string, number>;
+  porModulo: Record<string, number>;
+  sinEmbedding: number;
+}
 
 interface AyudaPortalProps {
   viewerData: FaqsByCategory[];
   adminData: Faq[] | null; // null si el usuario no puede editar
   userRoles?: string[];    // roles del usuario para filtrar formación
+  conocimiento?: ConocimientoChunk[] | null; // base del asistente (solo admin)
+  estadoConocimiento?: EstadoIndice | null;
 }
 
-export function AyudaPortal({ viewerData, adminData, userRoles = [] }: AyudaPortalProps) {
+export function AyudaPortal({
+  viewerData,
+  adminData,
+  userRoles = [],
+  conocimiento = null,
+  estadoConocimiento = null,
+}: AyudaPortalProps) {
   const canEdit = adminData !== null;
 
   return (
@@ -31,6 +47,12 @@ export function AyudaPortal({ viewerData, adminData, userRoles = [] }: AyudaPort
           {canEdit && (
             <TabsTrigger value="gestionar">Editar contenido</TabsTrigger>
           )}
+          {canEdit && (
+            <TabsTrigger value="asistente" className="gap-1.5">
+              <Sparkles className="h-3.5 w-3.5" />
+              Base del asistente
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="ver" className="mt-0">
@@ -44,6 +66,22 @@ export function AyudaPortal({ viewerData, adminData, userRoles = [] }: AyudaPort
         {canEdit && (
           <TabsContent value="gestionar" className="mt-0">
             <FaqAdminPanel initialFaqs={adminData!} />
+          </TabsContent>
+        )}
+
+        {canEdit && (
+          <TabsContent value="asistente" className="mt-0">
+            <ConocimientoAdminPanel
+              initialChunks={conocimiento ?? []}
+              estado={
+                estadoConocimiento ?? {
+                  total: 0,
+                  porFuente: {},
+                  porModulo: {},
+                  sinEmbedding: 0,
+                }
+              }
+            />
           </TabsContent>
         )}
       </Tabs>

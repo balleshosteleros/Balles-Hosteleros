@@ -24,11 +24,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useFormacionStore } from "../../store/use-formacion-store";
+import { usePuestosEmpresa } from "../../hooks/use-puestos-empresa";
 import {
-  PUESTOS,
   type CategoriaCurso,
   type Curso,
-  type Puesto,
 } from "../../types";
 
 const CATEGORIAS: CategoriaCurso[] = [
@@ -95,6 +94,7 @@ export function CursoFormDialog({ empresaId, curso, onClose, onSaved }: Props) {
   const addCurso = useFormacionStore((s) => s.addCurso);
   const updateCurso = useFormacionStore((s) => s.updateCurso);
   const cursos = useFormacionStore((s) => s.cursos);
+  const { puestos } = usePuestosEmpresa();
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -109,9 +109,7 @@ export function CursoFormDialog({ empresaId, curso, onClose, onSaved }: Props) {
   const [ambito, setAmbito] = useState<"general" | "puesto">(
     curso?.ambito ?? "general",
   );
-  const [puesto, setPuesto] = useState<Puesto>(
-    (curso?.puesto ?? PUESTOS[0]) as Puesto,
-  );
+  const [puestoId, setPuestoId] = useState<string>(curso?.puestoId ?? "");
   const [autor, setAutor] = useState(curso?.autor ?? "RRHH");
   const [fechaPublicacion, setFechaPublicacion] = useState(
     curso?.fechaPublicacion ?? today,
@@ -125,13 +123,15 @@ export function CursoFormDialog({ empresaId, curso, onClose, onSaved }: Props) {
     const ordenSiguiente =
       cursos.filter((c) => c.empresaId === empresaId).length + 1;
 
+    const puestoSel = puestos.find((p) => p.id === puestoId);
     const payload: Omit<Curso, "id"> = {
       titulo: titulo.trim(),
       descripcion: descripcion.trim(),
       cover,
       categoria,
       ambito,
-      puesto: ambito === "puesto" ? puesto : undefined,
+      puesto: ambito === "puesto" ? puestoSel?.nombre : undefined,
+      puestoId: ambito === "puesto" ? (puestoId || undefined) : undefined,
       empresaId,
       orden: curso?.orden ?? ordenSiguiente,
       fechaPublicacion,
@@ -239,17 +239,14 @@ export function CursoFormDialog({ empresaId, curso, onClose, onSaved }: Props) {
             {ambito === "puesto" && (
               <div className="grid gap-2">
                 <Label>Puesto</Label>
-                <Select
-                  value={puesto}
-                  onValueChange={(v) => setPuesto(v as Puesto)}
-                >
+                <Select value={puestoId} onValueChange={setPuestoId}>
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Selecciona un puesto" />
                   </SelectTrigger>
                   <SelectContent>
-                    {PUESTOS.map((p) => (
-                      <SelectItem key={p} value={p}>
-                        {p}
+                    {puestos.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.nombre}
                       </SelectItem>
                     ))}
                   </SelectContent>

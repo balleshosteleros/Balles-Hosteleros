@@ -7,11 +7,13 @@ import { getEmpleadosActivos, type EmpleadoActivo } from "@/features/rrhh/action
 import {
   type Encuesta, type GrupoPreguntas, type PreguntaEncuesta, type OpcionRespuesta,
   type TipoPregunta, type EstadoEncuesta,
-  getEncuestasPorEmpresa, crearEncuestaVacia,
+  crearEncuestaVacia,
   ESTADO_ENCUESTA_LABEL, ESTADO_ENCUESTA_COLOR,
   TIPO_PREGUNTA_LABEL, COLORES_OPCIONES,
 } from "@/features/rrhh/data/encuestas";
-import { listEncuestas, createEncuesta } from "@/features/gerencia/actions/encuestas-actions";
+import {
+  listEncuestas, createEncuesta, saveEncuesta, deleteEncuesta,
+} from "@/features/gerencia/actions/encuestas-actions";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,12 +42,13 @@ import {
 } from "lucide-react";
 
 function ListadoEncuestas({
-  encuestas, empleados, onSelect, onCrear,
+  encuestas, empleados, onSelect, onCrear, onEliminar,
 }: {
   encuestas: Encuesta[];
   empleados: EmpleadoActivo[];
   onSelect: (e: Encuesta) => void;
   onCrear: () => void;
+  onEliminar: (id: string) => void;
 }) {
   const [busq, setBusq] = useState("");
   const [filtro, setFiltro] = useState<"todos" | EstadoEncuesta>("todos");
@@ -136,10 +139,12 @@ function ListadoEncuestas({
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => onSelect(enc)}>Editar</DropdownMenuItem>
-                          <DropdownMenuItem>Duplicar</DropdownMenuItem>
-                          <DropdownMenuItem>Finalizar</DropdownMenuItem>
-                          <DropdownMenuItem>Archivar</DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive">Eliminar</DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-destructive"
+                            onClick={() => onEliminar(enc.id)}
+                          >
+                            Eliminar
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -155,15 +160,32 @@ function ListadoEncuestas({
 }
 
 function DetalleEncuesta({
-  encuesta: initial, empleados, onBack,
+  encuesta: initial, empleados, onBack, onSaved,
 }: {
   encuesta: Encuesta;
   empleados: EmpleadoActivo[];
   onBack: () => void;
+  onSaved?: () => void;
 }) {
   const [enc, setEnc] = useState<Encuesta>({ ...initial, grupos: initial.grupos.map((g) => ({ ...g, preguntas: g.preguntas.map((p) => ({ ...p, opciones: [...p.opciones] })) })) });
   const [tab, setTab] = useState("cuestionario");
   const [grupoSel, setGrupoSel] = useState(0);
+  const [guardando, setGuardando] = useState(false);
+
+  // Persiste el modelo rico completo en BD con el estado indicado.
+  const persist = async (estado: EstadoEncuesta) => {
+    const next = { ...enc, estado };
+    setEnc(next);
+    setGuardando(true);
+    const res = await saveEncuesta(next);
+    setGuardando(false);
+    if (res.ok) {
+      toast.success(estado === "activa" ? "Encuesta publicada" : "Borrador guardado");
+      onSaved?.();
+    } else {
+      toast.error(res.error ?? "Error al guardar");
+    }
+  };
 
   const totalPreguntas = enc.grupos.reduce((s, g) => s + g.preguntas.length, 0);
   const update = (partial: Partial<Encuesta>) => setEnc((prev) => ({ ...prev, ...partial }));
@@ -221,8 +243,8 @@ function DetalleEncuesta({
             {enc.fechaCierre && <span className="text-xs text-muted-foreground flex items-center gap-1"><AlertCircle className="h-3 w-3" />Cierre: {enc.fechaCierre}</span>}
           </div>
         </div>
-        <Button variant="outline" onClick={() => update({ estado: "borrador" })}>Guardar borrador</Button>
-        <Button onClick={() => update({ estado: "activa" })}>Publicar</Button>
+        <Button variant="outline" disabled={guardando} onClick={() => persist("borrador")}>Guardar borrador</Button>
+        <Button disabled={guardando} onClick={() => persist("activa")}>Publicar</Button>
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
@@ -591,18 +613,13 @@ export function EncuestasView() {
     setLoading(true);
     try {
       const res = await listEncuestas();
-      if (res.ok && res.data.length > 0) {
-        // DB has data - but the shape is flat; fall back to mock for rich nested data for now
-        setEncuestas(getEncuestasPorEmpresa(eId));
-      } else {
-        setEncuestas(getEncuestasPorEmpresa(eId));
-      }
+      setEncuestas(res.ok ? res.data : []);
     } catch {
-      setEncuestas(getEncuestasPorEmpresa(eId));
+      setEncuestas([]);
     } finally {
       setLoading(false);
     }
-  }, [eId]);
+  }, []);
 
   useEffect(() => {
     loadEncuestas();
@@ -611,24 +628,42 @@ export function EncuestasView() {
   const handleCrear = async () => {
     const primera = empleados[0];
     const nueva = crearEncuestaVacia(eId, primera?.empleadoId || "", primera ? `${primera.nombre} ${primera.apellidos}` : "Sistema");
-    setEncuestas((prev) => [nueva, ...prev]);
-    setSelected(nueva);
-    const res = await createEncuesta({ titulo: nueva.nombre || "Nueva encuesta", descripcion: "" });
-    if (res.ok) toast.success("Encuesta creada");
-    else toast.error(res.error ?? "Error al crear encuesta");
+    const res = await createEncuesta(nueva);
+    if (res.ok && res.data) {
+      setEncuestas((prev) => [res.data!, ...prev]);
+      setSelected(res.data);
+      toast.success("Encuesta creada");
+    } else {
+      toast.error(res.error ?? "Error al crear encuesta");
+    }
+  };
+
+  const handleEliminar = async (id: string) => {
+    const res = await deleteEncuesta(id);
+    if (res.ok) {
+      setEncuestas((prev) => prev.filter((e) => e.id !== id));
+      toast.success("Encuesta eliminada");
+    } else {
+      toast.error(res.error ?? "Error al eliminar");
+    }
   };
 
   if (selected) {
     return (
       <div className="p-6 max-w-6xl mx-auto">
-        <DetalleEncuesta encuesta={selected} empleados={empleados} onBack={() => setSelected(null)} />
+        <DetalleEncuesta
+          encuesta={selected}
+          empleados={empleados}
+          onBack={() => setSelected(null)}
+          onSaved={loadEncuestas}
+        />
       </div>
     );
   }
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <ListadoEncuestas encuestas={encuestas} empleados={empleados} onSelect={setSelected} onCrear={handleCrear} />
+      <ListadoEncuestas encuestas={encuestas} empleados={empleados} onSelect={setSelected} onCrear={handleCrear} onEliminar={handleEliminar} />
     </div>
   );
 }

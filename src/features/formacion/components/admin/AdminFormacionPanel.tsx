@@ -5,7 +5,7 @@
 // Pestañas: Novedades · Cursos. Desde Cursos se entra al editor anidado del
 // curso (secciones + lecciones).
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import {
   Bell,
   Edit2,
@@ -13,6 +13,7 @@ import {
   EyeOff,
   Plus,
   RefreshCw,
+  Sparkles,
   Trash2,
 } from "lucide-react";
 import {
@@ -52,6 +53,7 @@ import {
   useFormacionStore,
   leccionesOrdenadas,
 } from "../../store/use-formacion-store";
+import { sincronizarFormacion } from "@/features/soporte/actions/indexar-formacion";
 import type { Curso, NovedadFormacion } from "../../types";
 import { NovedadFormDialog } from "./NovedadFormDialog";
 import { CursoFormDialog } from "./CursoFormDialog";
@@ -86,6 +88,23 @@ export function AdminFormacionPanel() {
   const [deleteConfirm, setDeleteConfirm] = useState<
     { type: "novedad" | "curso"; id: string; titulo: string } | null
   >(null);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [isSyncing, startSync] = useTransition();
+
+  function sincronizarAsistente() {
+    setSyncMsg(null);
+    startSync(async () => {
+      const res = await sincronizarFormacion({ cursos, secciones, lecciones });
+      if (res.error) {
+        setSyncMsg(`Error: ${res.error}`);
+        return;
+      }
+      setSyncMsg(
+        `Asistente actualizado: ${res.indexados ?? 0} contenidos indexados` +
+          (res.borrados ? `, ${res.borrados} retirados` : ""),
+      );
+    });
+  }
 
   const cursosEmpresa = useMemo(
     () =>
@@ -139,22 +158,37 @@ export function AdminFormacionPanel() {
             {empresaActual.nombre}
           </Badge>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            if (
-              confirm(
-                "¿Restaurar contenido de ejemplo? Se perderán los cambios manuales.",
-              )
-            ) {
-              resetSeed();
-            }
-          }}
-        >
-          <RefreshCw className="mr-2 h-3.5 w-3.5" />
-          Restaurar ejemplo
-        </Button>
+        <div className="flex items-center gap-2">
+          {syncMsg && (
+            <span className="text-xs text-muted-foreground">{syncMsg}</span>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={sincronizarAsistente}
+            disabled={isSyncing}
+            title="Indexa los cursos y lecciones para que el asistente de soporte pueda responder con ellos"
+          >
+            <Sparkles className="mr-2 h-3.5 w-3.5" />
+            {isSyncing ? "Sincronizando…" : "Sincronizar asistente"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (
+                confirm(
+                  "¿Restaurar contenido de ejemplo? Se perderán los cambios manuales.",
+                )
+              ) {
+                resetSeed();
+              }
+            }}
+          >
+            <RefreshCw className="mr-2 h-3.5 w-3.5" />
+            Restaurar ejemplo
+          </Button>
+        </div>
       </CardHeader>
 
       <CardContent>

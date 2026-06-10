@@ -4,6 +4,10 @@ import {
   listFaqsForCurrentUser,
   listAllFaqs,
 } from "@/features/soporte/actions/faq-actions";
+import {
+  listConocimiento,
+  estadoIndice,
+} from "@/features/soporte/actions/conocimiento-actions";
 import { AyudaPortal } from "@/features/soporte/components";
 
 export default async function AyudaPage() {
@@ -29,13 +33,32 @@ export default async function AyudaPage() {
   }
 
   let adminData: Awaited<ReturnType<typeof listAllFaqs>> | null = null;
+  let conocimiento: Awaited<ReturnType<typeof listConocimiento>> | null = null;
+  let estadoConocimiento: Awaited<ReturnType<typeof estadoIndice>> | null = null;
   if (canEdit) {
     try {
       adminData = await listAllFaqs();
     } catch {
       adminData = null;
     }
+    try {
+      [conocimiento, estadoConocimiento] = await Promise.all([
+        listConocimiento(),
+        estadoIndice(),
+      ]);
+    } catch {
+      conocimiento = null;
+      estadoConocimiento = null;
+    }
   }
 
-  return <AyudaPortal viewerData={viewerData} adminData={adminData} userRoles={roles} />;
+  return (
+    <AyudaPortal
+      viewerData={viewerData}
+      adminData={adminData}
+      userRoles={roles}
+      conocimiento={conocimiento}
+      estadoConocimiento={estadoConocimiento}
+    />
+  );
 }

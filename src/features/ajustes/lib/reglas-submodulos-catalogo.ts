@@ -337,7 +337,6 @@ export const CATALOGO: ModuloDef[] = [
           avanzado: todos(CAMPOS_COMUNICADOS),
         },
       },
-      placeholder("encuestas", "Encuestas"),
     ],
   },
 

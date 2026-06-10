@@ -136,7 +136,6 @@ export const gerenciaSubs: SubItem[] = [
   { title: "INFORMES", url: "/gerencia/informes", icon: BarChart3 },
   { title: "RATIOS", url: "/gerencia/ratios", icon: TrendingUp },
   { title: "COMUNICADOS", url: "/gerencia/comunicados", icon: Megaphone },
-  { title: "ENCUESTAS", url: "/gerencia/encuestas", icon: ClipboardList },
 ];
 
 export const calidadSubs: SubItem[] = [

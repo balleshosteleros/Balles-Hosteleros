@@ -6,7 +6,7 @@
 // - Grid de tarjetas: cursos generales + cursos del puesto del empleado
 // El detalle de cada curso vive en /mi-panel/formacion/curso/[cursoId].
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   GraduationCap,
   Sparkles,
@@ -31,7 +31,8 @@ import {
   leccionesOrdenadas,
 } from "../store/use-formacion-store";
 import { usePuestoActual } from "../hooks/use-puesto";
-import { PUESTOS, type Puesto } from "../types";
+import { usePuestosEmpresa } from "../hooks/use-puestos-empresa";
+import type { Puesto } from "../types";
 import { NovedadesPanel } from "./NovedadesPanel";
 import { CursoCard } from "./CursoCard";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
@@ -43,11 +44,18 @@ export function PortalFormacionView() {
   const { empresaActual } = useEmpresa();
   const userKey = profile?.email ?? "anon";
   const { puesto, setPuesto, ready } = usePuestoActual(userKey);
+  const { puestos: puestosEmpresa } = usePuestosEmpresa();
 
   const cursos = useFormacionStore((s) => s.cursos);
   const secciones = useFormacionStore((s) => s.secciones);
   const lecciones = useFormacionStore((s) => s.lecciones);
   const completadas = useFormacionStore((s) => s.completadas);
+  const hydrate = useFormacionStore((s) => s.hydrate);
+
+  // Carga el módulo desde BD al entrar (y cuando cambia el usuario).
+  useEffect(() => {
+    void hydrate(userKey);
+  }, [hydrate, userKey]);
 
   const visibles = useMemo(
     () => cursosVisibles(cursos, empresaActual.id, puesto),
@@ -117,17 +125,17 @@ export function PortalFormacionView() {
                 <UserSquare2 className="h-4 w-4 text-muted-foreground" />
                 <span className="text-muted-foreground">Tu puesto:</span>
                 <Select
-                  value={puesto}
+                  value={puesto ?? ""}
                   onValueChange={(v) => setPuesto(v as Puesto)}
-                  disabled={!esResponsableODirector}
+                  disabled={!esResponsableODirector || puestosEmpresa.length === 0}
                 >
                   <SelectTrigger className="h-8 w-[180px] text-sm font-semibold">
-                    <SelectValue />
+                    <SelectValue placeholder="Sin puesto" />
                   </SelectTrigger>
                   <SelectContent>
-                    {PUESTOS.map((p) => (
-                      <SelectItem key={p} value={p}>
-                        {p}
+                    {puestosEmpresa.map((p) => (
+                      <SelectItem key={p.id} value={p.nombre}>
+                        {p.nombre}
                       </SelectItem>
                     ))}
                   </SelectContent>

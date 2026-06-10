@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { toast } from "sonner";
 import {
   ChevronRight,
   FileText,
@@ -10,56 +11,95 @@ import {
   Folder,
   Inbox,
   ArrowLeft,
+  Download,
+  Loader2,
   type LucideIcon,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
-
-type CarpetaId = "nominas" | "contratos" | "justificantes" | "registros-jornada";
+import {
+  listMisDocumentos,
+  getDocumentoEmpleadoUrl,
+  type CategoriaDocumento,
+  type DocumentoEmpleado,
+} from "@/features/mi-panel/actions/mis-documentos-actions";
 
 interface Carpeta {
-  id: CarpetaId;
+  id: CategoriaDocumento;
   nombre: string;
   icon: LucideIcon;
   color: string;
   bg: string;
 }
 
+// Taxonomía fija (coincide con el CHECK de `documentos_empleado`).
 const CARPETAS: Carpeta[] = [
-  {
-    id: "nominas",
-    nombre: "Nóminas",
-    icon: FileText,
-    color: "text-blue-600",
-    bg: "bg-blue-50",
-  },
-  {
-    id: "contratos",
-    nombre: "Contratos",
-    icon: FileSignature,
-    color: "text-emerald-600",
-    bg: "bg-emerald-50",
-  },
-  {
-    id: "justificantes",
-    nombre: "Justificantes",
-    icon: Receipt,
-    color: "text-amber-600",
-    bg: "bg-amber-50",
-  },
-  {
-    id: "registros-jornada",
-    nombre: "Registros de jornada",
-    icon: Clock,
-    color: "text-violet-600",
-    bg: "bg-violet-50",
-  },
+  { id: "nominas", nombre: "Nóminas", icon: FileText, color: "text-blue-600", bg: "bg-blue-50" },
+  { id: "contratos", nombre: "Contratos", icon: FileSignature, color: "text-emerald-600", bg: "bg-emerald-50" },
+  { id: "justificantes", nombre: "Justificantes", icon: Receipt, color: "text-amber-600", bg: "bg-amber-50" },
+  { id: "registros-jornada", nombre: "Registros de jornada", icon: Clock, color: "text-violet-600", bg: "bg-violet-50" },
 ];
+
+function tamanoLegible(bytes: number | null): string {
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function FilaDocumento({ doc }: { doc: DocumentoEmpleado }) {
+  const [bajando, setBajando] = useState(false);
+
+  const descargar = async () => {
+    setBajando(true);
+    const res = await getDocumentoEmpleadoUrl(doc.id);
+    setBajando(false);
+    if (res.ok && res.url) {
+      window.open(res.url, "_blank", "noopener,noreferrer");
+    } else {
+      toast.error(res.error ?? "No se pudo abrir el documento");
+    }
+  };
+
+  return (
+    <button
+      onClick={descargar}
+      className="flex items-center gap-3 w-full p-3 rounded-lg border bg-card hover:border-primary/40 hover:shadow-sm transition-all text-left"
+    >
+      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium truncate">{doc.nombre}</p>
+        <p className="text-xs text-muted-foreground">
+          {doc.fecha}
+          {doc.tamanoBytes ? ` · ${tamanoLegible(doc.tamanoBytes)}` : ""}
+        </p>
+      </div>
+      {bajando ? (
+        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
+      ) : (
+        <Download className="h-4 w-4 text-muted-foreground shrink-0" />
+      )}
+    </button>
+  );
+}
 
 export function MisDocumentosView() {
   const [carpetaActiva, setCarpetaActiva] = useState<Carpeta | null>(null);
+  const [docs, setDocs] = useState<Record<CategoriaDocumento, DocumentoEmpleado[]> | null>(null);
+
+  const cargar = useCallback(async () => {
+    const res = await listMisDocumentos();
+    setDocs(res.ok ? res.data : null);
+  }, []);
+
+  useEffect(() => {
+    void cargar();
+  }, [cargar]);
+
+  const conteo = (id: CategoriaDocumento) => docs?.[id]?.length ?? 0;
 
   if (carpetaActiva) {
     const Icon = carpetaActiva.icon;
+    const lista = docs?.[carpetaActiva.id] ?? [];
     return (
       <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-4">
         <div className="flex items-center gap-2 text-sm">
@@ -80,18 +120,28 @@ export function MisDocumentosView() {
           </div>
           <div>
             <h2 className="text-xl font-semibold">{carpetaActiva.nombre}</h2>
-            <p className="text-xs text-muted-foreground">0 archivos</p>
+            <p className="text-xs text-muted-foreground">
+              {lista.length} {lista.length === 1 ? "archivo" : "archivos"}
+            </p>
           </div>
         </div>
 
-        <Card className="p-10 flex flex-col items-center justify-center text-center text-muted-foreground">
-          <Inbox className="h-8 w-8 mb-2" />
-          <p className="text-sm font-medium">Esta carpeta está vacía</p>
-          <p className="text-xs mt-1 max-w-sm">
-            Cuando RRHH publique documentos en {carpetaActiva.nombre.toLowerCase()},
-            aparecerán aquí para descarga.
-          </p>
-        </Card>
+        {lista.length === 0 ? (
+          <Card className="p-10 flex flex-col items-center justify-center text-center text-muted-foreground">
+            <Inbox className="h-8 w-8 mb-2" />
+            <p className="text-sm font-medium">Esta carpeta está vacía</p>
+            <p className="text-xs mt-1 max-w-sm">
+              Cuando RRHH publique documentos en {carpetaActiva.nombre.toLowerCase()},
+              aparecerán aquí para descarga.
+            </p>
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {lista.map((d) => (
+              <FilaDocumento key={d.id} doc={d} />
+            ))}
+          </div>
+        )}
       </div>
     );
   }
@@ -111,6 +161,7 @@ export function MisDocumentosView() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
         {CARPETAS.map((c) => {
           const Icon = c.icon;
+          const n = conteo(c.id);
           return (
             <button
               key={c.id}
@@ -122,7 +173,9 @@ export function MisDocumentosView() {
               </div>
               <div className="min-w-0 w-full">
                 <p className="text-sm font-semibold truncate">{c.nombre}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">0 archivos</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {docs === null ? "…" : `${n} ${n === 1 ? "archivo" : "archivos"}`}
+                </p>
               </div>
               <ChevronRight className="absolute top-4 right-4 h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
             </button>

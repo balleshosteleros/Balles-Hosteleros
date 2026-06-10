@@ -14,6 +14,7 @@ import {
   HelpCircle,
   ChevronDown,
   ChevronRight,
+  Link2,
 } from "lucide-react";
 import {
   Sheet,
@@ -29,6 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { FormacionRolViewer } from "@/features/formacion/components/FormacionRolViewer";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import type { RecursoRespuesta } from "@/features/soporte/types";
 
 interface SoporteDrawerProps {
   children: ReactNode;
@@ -46,6 +48,7 @@ type Mensaje = {
   id: string;
   rol: "user" | "ai" | "humano";
   texto: string;
+  recursos?: RecursoRespuesta[];
 };
 
 export function SoporteDrawer({ children }: SoporteDrawerProps) {
@@ -122,6 +125,7 @@ export function SoporteDrawer({ children }: SoporteDrawerProps) {
         id: `a-${Date.now()}`,
         rol: data.escalar ? "humano" : "ai",
         texto: data.respuesta,
+        recursos: Array.isArray(data.recursos) ? data.recursos : [],
       };
       setMensajes((prev) => [...prev, ai]);
       if (data.escalar) setEscalado(true);
@@ -417,6 +421,29 @@ export function SoporteDrawer({ children }: SoporteDrawerProps) {
                       </p>
                     )}
                     <p className="whitespace-pre-wrap">{m.texto}</p>
+                    {m.recursos && m.recursos.length > 0 && (
+                      <div className="mt-2 space-y-1.5">
+                        {m.recursos.map((r, i) => (
+                          <a
+                            key={i}
+                            href={r.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-2 rounded-lg border bg-background px-2.5 py-1.5 text-xs transition-colors hover:border-primary"
+                          >
+                            {r.tipo === "video" ? (
+                              <Video className="h-3.5 w-3.5 shrink-0 text-red-600" />
+                            ) : (
+                              <Link2 className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+                            )}
+                            <span className="flex-1 truncate font-medium text-foreground">
+                              {r.titulo}
+                            </span>
+                            <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                          </a>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

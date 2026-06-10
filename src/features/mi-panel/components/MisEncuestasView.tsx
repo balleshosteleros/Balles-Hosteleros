@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { useAuth } from "@/features/auth/contexts/auth-context";
+import { useState, useEffect, useCallback } from "react";
+import { toast } from "sonner";
 import {
   type Encuesta,
   type PreguntaEncuesta,
-  getEncuestasPorEmpresa,
 } from "@/features/rrhh/data/encuestas";
+import {
+  listEncuestasActivasEmpleado,
+  submitRespuestaEncuesta,
+} from "@/features/gerencia/actions/encuestas-actions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -125,13 +127,30 @@ function ListadoMisEncuestas({
 }
 
 function ResponderEncuesta({
-  encuesta, onBack,
+  encuesta, onBack, onSubmitted,
 }: {
   encuesta: Encuesta;
   onBack: () => void;
+  onSubmitted: () => void;
 }) {
-  const [respuestas, setRespuestas] = useState<Record<string, string | string[] | number>>({});
+  // Si ya respondió y puede modificar, partimos de sus respuestas previas.
+  const [respuestas, setRespuestas] = useState<Record<string, string | string[] | number>>(
+    () => encuesta.respuestas[0]?.respuestas ?? {},
+  );
   const [enviada, setEnviada] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+
+  const enviar = async () => {
+    setEnviando(true);
+    const res = await submitRespuestaEncuesta(encuesta.id, respuestas);
+    setEnviando(false);
+    if (res.ok) {
+      setEnviada(true);
+      onSubmitted();
+    } else {
+      toast.error(res.error ?? "No se pudo enviar la encuesta");
+    }
+  };
 
   const setUnica = (id: string, valor: string) => {
     setRespuestas((prev) => ({ ...prev, [id]: valor }));
@@ -222,7 +241,9 @@ function ResponderEncuesta({
       </div>
 
       <div className="flex justify-end">
-        <Button onClick={() => setEnviada(true)} size="lg">Enviar respuestas</Button>
+        <Button onClick={enviar} size="lg" disabled={enviando}>
+          {enviando ? "Enviando…" : "Enviar respuestas"}
+        </Button>
       </div>
     </div>
   );
@@ -355,23 +376,28 @@ function PreguntaItem({
 }
 
 export function MisEncuestasView() {
-  const { empresaActual } = useEmpresa();
-  const { profile } = useAuth();
   const [activa, setActiva] = useState<Encuesta | null>(null);
+  const [encuestas, setEncuestas] = useState<Encuesta[]>([]);
+  const [cargando, setCargando] = useState(true);
 
-  const empleadoId = profile?.email ?? "";
+  const cargar = useCallback(async () => {
+    setCargando(true);
+    const res = await listEncuestasActivasEmpleado();
+    setEncuestas(res.ok ? res.data : []);
+    setCargando(false);
+  }, []);
 
-  const { pendientes, completadas } = useMemo(() => {
-    const todas = getEncuestasPorEmpresa(empresaActual.id).filter((e) => e.estado === "activa");
-    const pend: Encuesta[] = [];
-    const comp: Encuesta[] = [];
-    todas.forEach((e) => {
-      const yaRespondi = e.respuestas.some((r) => r.empleadoId === empleadoId);
-      if (yaRespondi && !e.modificarRespuesta) comp.push(e);
-      else pend.push(e);
-    });
-    return { pendientes: pend, completadas: comp };
-  }, [empresaActual.id, empleadoId]);
+  useEffect(() => {
+    void cargar();
+  }, [cargar]);
+
+  const pendientes: Encuesta[] = [];
+  const completadas: Encuesta[] = [];
+  for (const e of encuestas) {
+    const yaRespondi = e.respuestas.length > 0;
+    if (yaRespondi && !e.modificarRespuesta) completadas.push(e);
+    else pendientes.push(e);
+  }
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-5">
@@ -383,7 +409,13 @@ export function MisEncuestasView() {
       </div>
 
       {activa ? (
-        <ResponderEncuesta encuesta={activa} onBack={() => setActiva(null)} />
+        <ResponderEncuesta
+          encuesta={activa}
+          onBack={() => setActiva(null)}
+          onSubmitted={cargar}
+        />
+      ) : cargando ? (
+        <Card className="p-8 text-center text-sm text-muted-foreground">Cargando…</Card>
       ) : (
         <ListadoMisEncuestas pendientes={pendientes} completadas={completadas} onAbrir={setActiva} />
       )}

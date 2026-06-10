@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/features/auth/contexts/auth-context";
+import { toast } from "sonner";
 import {
   useFormacionStore,
   avanceCurso,
@@ -34,9 +35,16 @@ import {
   leccionesDeCurso,
   leccionesOrdenadas,
 } from "../store/use-formacion-store";
+import { getDocumentoLeccionUrl } from "../actions/formacion-actions";
 
 interface Props {
   cursoId: string;
+}
+
+async function abrirDocumento(path: string) {
+  const res = await getDocumentoLeccionUrl(path);
+  if (res.ok && res.url) window.open(res.url, "_blank", "noopener,noreferrer");
+  else toast.error(res.error ?? "No se pudo abrir el documento");
 }
 
 export function CursoVista({ cursoId }: Props) {
@@ -51,6 +59,13 @@ export function CursoVista({ cursoId }: Props) {
   const completadas = useFormacionStore((s) => s.completadas);
   const marcarCompletada = useFormacionStore((s) => s.marcarCompletada);
   const desmarcarCompletada = useFormacionStore((s) => s.desmarcarCompletada);
+  const hydrate = useFormacionStore((s) => s.hydrate);
+  const hydrated = useFormacionStore((s) => s.hydrated);
+
+  // Si se entra directo a la URL del curso, carga el módulo desde BD.
+  useEffect(() => {
+    if (!hydrated) void hydrate(userKey);
+  }, [hydrated, hydrate, userKey]);
 
   const curso = cursos.find((c) => c.id === cursoId);
   const ordenadas = useMemo(
@@ -193,6 +208,22 @@ export function CursoVista({ cursoId }: Props) {
                   <p className="text-sm text-muted-foreground leading-relaxed">
                     {activa.descripcion}
                   </p>
+                )}
+
+                {activa.documentoPath && (
+                  <button
+                    type="button"
+                    onClick={() => abrirDocumento(activa.documentoPath!)}
+                    className="flex w-full items-center gap-2 rounded-md border bg-card px-3 py-2 text-left text-sm hover:border-primary"
+                  >
+                    <FileDown className="h-4 w-4 text-primary" />
+                    <span className="flex-1 truncate">
+                      {activa.documentoNombre ?? "Documento adjunto"}
+                    </span>
+                    <Badge variant="outline" className="text-[10px]">
+                      Descargar
+                    </Badge>
+                  </button>
                 )}
 
                 {activa.recursos.length > 0 && (

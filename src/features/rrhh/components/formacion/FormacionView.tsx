@@ -28,7 +28,8 @@ import {
   useFormacionStore,
   leccionesOrdenadas,
 } from "@/features/formacion/store/use-formacion-store";
-import { PUESTOS, type Puesto } from "@/features/formacion/types";
+import { usePuestosEmpresa } from "@/features/formacion/hooks/use-puestos-empresa";
+import { syncCursosPorPuesto } from "@/features/formacion/actions/formacion-actions";
 import { getEmpleadosActivos, type EmpleadoActivo } from "@/features/rrhh/actions/empleados-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -42,19 +43,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AdminFormacionPanel } from "@/features/formacion/components/admin/AdminFormacionPanel";
-
-// Mapa de departamento de RRHH a "puesto" del modelo de formación.
-// Los departamentos sin equivalente (DIRECCIÓN, RRPP) sólo verán cursos generales.
-const DEPARTAMENTO_A_PUESTO: Record<string, Puesto> = {
-  CAMAREROS: "CAMARERO",
-  "JEFE DE SALA": "JEFE DE SALA",
-  COCINA: "COCINERO",
-  CACHIMBEROS: "CACHIMBERO",
-  ARTISTAS: "ARTISTA",
-  MANTENIMIENTO: "MANTENIMIENTO",
-  GERENTE: "GERENTE",
-  ADMINISTRATIVO: "CONTABLE",
-};
 
 function formatFecha(iso: string): string {
   return new Date(iso).toLocaleDateString("es-ES", {
@@ -70,6 +58,20 @@ export function FormacionView() {
   const secciones = useFormacionStore((s) => s.secciones);
   const lecciones = useFormacionStore((s) => s.lecciones);
   const novedades = useFormacionStore((s) => s.novedades);
+  const hydrate = useFormacionStore((s) => s.hydrate);
+  const { puestos } = usePuestosEmpresa();
+
+  // Al entrar al panel admin: garantiza un curso por puesto real y carga de BD.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      await syncCursosPorPuesto();
+      if (alive) await hydrate("");
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [hydrate, empresaActual.id]);
 
   // OLA2-01: empleados reales (fuente única). Antes venían del mock data/rrhh.ts.
   const [empleados, setEmpleados] = useState<EmpleadoActivo[]>([]);
@@ -115,12 +117,12 @@ export function FormacionView() {
 
   // ─── Por puesto ─────────────────────────────────────────────
   const filasPuesto = useMemo(() => {
-    return PUESTOS.map((puesto) => {
+    return puestos.map((p) => {
       const cursosGenerales = cursosEmpresa.filter(
         (c) => c.ambito === "general",
       );
       const cursosEspecificos = cursosEmpresa.filter(
-        (c) => c.ambito === "puesto" && c.puesto === puesto,
+        (c) => c.ambito === "puesto" && c.puestoId === p.id,
       );
       const cursosDisponibles = [...cursosGenerales, ...cursosEspecificos];
       const totalLecciones = cursosDisponibles.reduce(
@@ -128,20 +130,15 @@ export function FormacionView() {
           acc + leccionesOrdenadas(secciones, lecciones, c.id).length,
         0,
       );
-      const empleadosPuesto = empleados.filter(
-        (e) => DEPARTAMENTO_A_PUESTO[e.departamento ?? ""] === puesto,
-      ).length;
-
       return {
-        puesto,
-        empleados: empleadosPuesto,
+        puesto: p.nombre,
         cursosTotales: cursosDisponibles.length,
         cursosPublicados: cursosDisponibles.filter((c) => c.publicado).length,
         cursosEspecificos: cursosEspecificos.length,
         totalLecciones,
       };
-    }).filter((f) => f.empleados > 0 || f.cursosEspecificos > 0);
-  }, [cursosEmpresa, secciones, lecciones, empleados]);
+    });
+  }, [puestos, cursosEmpresa, secciones, lecciones]);
 
   // ─── Catálogo de cursos ─────────────────────────────────────
   const catalogo = useMemo(() => {
@@ -161,11 +158,6 @@ export function FormacionView() {
         return a.curso.orden - b.curso.orden;
       });
   }, [cursosEmpresa, secciones, lecciones]);
-
-  // ─── Empleados sin puesto reconocido ────────────────────────
-  const empleadosSinPuesto = empleados.filter(
-    (e) => !DEPARTAMENTO_A_PUESTO[e.departamento ?? ""],
-  ).length;
 
   return (
     <div className="p-4 md:p-6 space-y-4">
@@ -218,7 +210,7 @@ export function FormacionView() {
             label: "Empleados",
             value: empleados.length,
             icon: Users,
-            sub: `${empleadosSinPuesto} sin puesto formativo`,
+            sub: `${puestos.length} puestos`,
           },
         ].map((kpi) => (
           <Card key={kpi.label} className="border bg-card">
@@ -298,7 +290,6 @@ export function FormacionView() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Puesto</TableHead>
-                  <TableHead className="text-center">Empleados</TableHead>
                   <TableHead className="text-center">Cursos disponibles</TableHead>
                   <TableHead className="text-center">Específicos</TableHead>
                   <TableHead className="text-center">Lecciones</TableHead>
@@ -309,7 +300,6 @@ export function FormacionView() {
                 {filasPuesto.map((f) => (
                   <TableRow key={f.puesto}>
                     <TableCell className="font-medium">{f.puesto}</TableCell>
-                    <TableCell className="text-center">{f.empleados}</TableCell>
                     <TableCell className="text-center">
                       {f.cursosTotales}
                     </TableCell>

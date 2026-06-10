@@ -24,8 +24,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useFormacionStore } from "../../store/use-formacion-store";
+import { usePuestosEmpresa } from "../../hooks/use-puestos-empresa";
 import {
-  PUESTOS,
   type Curso,
   type Leccion,
   type NovedadFormacion,
@@ -52,6 +52,7 @@ export function NovedadFormDialog({
 }: Props) {
   const addNovedad = useFormacionStore((s) => s.addNovedad);
   const updateNovedad = useFormacionStore((s) => s.updateNovedad);
+  const { puestos } = usePuestosEmpresa();
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -195,13 +196,13 @@ export function NovedadFormDialog({
             </label>
             {!audienciaTodos && (
               <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/30 p-3 sm:grid-cols-3">
-                {PUESTOS.map((p) => (
-                  <label key={p} className="flex items-center gap-2 text-xs">
+                {puestos.map((p) => (
+                  <label key={p.id} className="flex items-center gap-2 text-xs">
                     <Checkbox
-                      checked={audienciaPuestos.includes(p)}
-                      onCheckedChange={() => togglePuesto(p)}
+                      checked={audienciaPuestos.includes(p.nombre)}
+                      onCheckedChange={() => togglePuesto(p.nombre)}
                     />
-                    {p}
+                    {p.nombre}
                   </label>
                 ))}
               </div>
