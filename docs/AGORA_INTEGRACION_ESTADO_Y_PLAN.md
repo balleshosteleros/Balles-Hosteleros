@@ -106,6 +106,92 @@ El otro dev (vía su agente) ejecutó una **migración total del catálogo** con
 
 ---
 
+## 1bis. ESCRITURA hacia Ágora — confirmado por el manual (desbloquea la Opción B / precios desde Balles)
+
+> **Fuente:** "Guía del Integrador" de Ágora **v8.6.0** (PDF del dueño), págs. 12-13, 49-60 y 208-210. Leído el 2026-06-10.
+> **Pregunta que resuelve:** ¿puede **Balles escribir** el precio de venta en Ágora y que el TPV lo cobre? → **SÍ**, por la **misma API HTTP `:8984` y el mismo `Api-Token`** que ya usamos para leer. No hace falta preguntar a Ágora; está documentado. Solo queda confirmar que el token tiene el permiso de importación activado en *esta* instalación.
+
+### Endpoints de escritura (mismo servidor y token que la lectura)
+
+| Endpoint | Método | Para qué |
+|---|---|---|
+| `/api/import/` | POST | Importar **ventas, compras Y datos maestros** (productos, precios, tarifas, familias, clientes…). Cuerpo XML o JSON. |
+| `/api/hub/generate-data/?workplaces=1,3` | POST | (Solo ACMS centralizado) Empuja datos de la **Central a los Locales** para que las cajas físicas reciban el cambio. |
+| `/api/print/` | POST | Imprimir texto libre en una impresora del local (notificaciones). |
+| `/api/document/?globalId=…` | GET | Recuperar un documento por su GlobalId. |
+
+Cabeceras de un `POST /api/import/` (pág. 208), misma estructura que la lectura:
+
+```
+Api-Token: ‹TOKEN_BACANAL›
+Accept: application/json
+Content-Type: application/json; charset=utf-8
+```
+
+### El precio de venta = `MainPrice` por tarifa (`PriceListId`)
+
+El precio **no es global**: va por **tarifa** (lista de precios). Un producto se escribe así (págs. 49-60):
+
+```xml
+<Products>
+  <Product Id="200" Name="Ron Brugal" FamilyId="101" VatId="3">
+    <Prices>
+      <Price PriceListId="10" MainPrice="2.50"/>
+      <Price PriceListId="11" MainPrice="3.00"/>
+    </Prices>
+  </Product>
+</Products>
+```
+
+- `MainPrice` *[Obligatorio]* = *"Precio de venta como producto principal. El precio será **con impuestos incluidos**"* (pág. 60).
+- `PriceListId` = a qué **tarifa** aplica (normal, terraza, hora feliz…). Los `<SaleCenter>` declaran su `PriceListId`/`CurrentPriceListId`; hay que **mapear qué tarifa usa cada local** leyendo el `export-master` real **antes** de escribir.
+
+### Comportamiento del importador — parcial y NO destructivo (clave de seguridad, pág. 12)
+
+Ágora procesa cada registro **por su `Id`**: no existe → lo **crea**; existe → lo **actualiza** (sobreescribe); trae `DeletionDate` → lo **marca borrado** (sin ese campo y estaba borrado → lo reactiva).
+
+Citas literales (para enseñar al dueño/colaborador):
+> *"Ágora **no realizará ninguna acción** sobre la información existente en Ágora que **no aparezca** en el fichero de datos importados."*
+> *"La información recibida en el fichero **siempre sobreescribe** la información existente en Ágora."*
+> Campos opcionales: *si no aparecen en el fichero se mantiene el valor actual de Ágora; si aparecen, se sobreescriben.*
+
+**Implicación:** se puede mandar **solo los productos cuyo precio cambió**, con **solo su `Id` + `<Prices>`**, y Ágora **no toca nada más** (ni los demás productos, ni el nombre/familia del propio producto). Es "cambiar este precio y punto", reversible (rollback = reenviar el precio anterior).
+
+> ⚠️ La otra cara, citada por el manual: *"si se modifica un precio en Ágora y luego se vuelve a importar un fichero con el precio original, se perderá la modificación realizada en Ágora."* → En cuanto Balles sea dueño del precio, **NO se debe tocar el precio en Ágora a mano** (lo pisaría el siguiente envío). Es exactamente lo que pidió el dueño ("Ágora ya no se toca").
+
+### El "botón Comunicar a Ágora" = 2 llamadas encadenadas
+
+Como Habana+Bacanal es **instalación centralizada (ACMS)**:
+1. `POST /api/import/` (a la central) con los productos+precios cambiados.
+2. `POST /api/hub/generate-data/?workplaces=<ids>` para propagar de la Central a las cajas.
+
+→ La caja empieza a cobrar el precio nuevo. Ejemplo cURL del manual (pág. 210):
+
+```
+curl -X POST http://habanabacanaliictpv.ddns.me:8984/api/hub/generate-data/ -H 'Api-Token: ‹TOKEN_BACANAL›'
+```
+
+### Arquitectura objetivo (lo que pidió el dueño, ahora viable)
+
+**Balles = back-office** (dueño de catálogo, precios, recetas, coste; con histórico de precios y márgenes) · **Ágora = caja que ejecuta.** El precio se edita en Balles → botón manual → `import` + `generate-data` → la caja cobra. Las ventas vuelven a Balles para reporting (eso es la lectura de la Opción A).
+
+### Riesgos / requisitos antes de implementar la escritura
+
+1. **Primera escritura sobre el sistema de caja vivo.** Regla de Seguridad Ágora a tope: empezar por **1 producto de prueba**, confirmar en la caja, log de lo enviado, rollback preparado. Nunca el lote completo a la primera.
+2. **Tarifas:** mapear `PriceListId` por local/centro de venta (puede haber varias) leyendo `export-master`. Cambiar "el precio" puede implicar varias tarifas.
+3. **Encadenar `import` + `generate-data`** (sin propagar, la caja no se entera).
+4. **Confirmar permiso de IMPORT del token** en esta instalación (la capacidad está documentada; falta que el módulo de escritura esté activado para el token). Se valida con un import de prueba de 1 producto o preguntando a Ágora/Klaus.
+5. **Fuente única:** desde la activación, el precio se edita SOLO en Balles.
+
+### Estado de las preguntas abiertas tras este hallazgo
+
+- **B (¿escribir precios?)** → ✅ **Resuelta por el manual: SÍ.** Ya no hay que preguntarla a Ágora (solo confirmar el permiso del token).
+- **A (visibilidad de ventas / histórico en Balles)** → camino rápido y sin riesgo (solo lectura). El import de ventas heredado apunta a un endpoint inventado (`/api/export/tickets?businessDay=`); el real es `/api/export/?business-day=YYYY-MM-DD&filter=Invoices` (ya validado: 123 facturas / 617 líneas el 06-jun). Falta una pantalla "Ventas Ágora" con histórico por día.
+
+> **Nota:** el PDF está en `~/Downloads` del equipo de Fernando (`Guía del Integrador.pdf`). Secciones útiles para implementar: **Productos** (págs. 47-68), **Tarifas/PriceLists** (págs. 42-45), **API HTTP** (págs. 196-210).
+
+---
+
 ## 2. Inventario: qué hay y dónde
 
 | Archivo | Rol |
