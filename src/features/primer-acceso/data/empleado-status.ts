@@ -32,19 +32,21 @@ async function getCtx() {
   return { supabase, user };
 }
 
-export const getEmpleadoGuardStatus = cache(async (): Promise<{ shouldShowWizard: boolean }> => {
-  const { supabase, user } = await getCtx();
-  if (!user) return { shouldShowWizard: false };
+export const getEmpleadoGuardStatus = cache(
+  async (): Promise<{ shouldShowWizard: boolean; hasUser: boolean }> => {
+    const { supabase, user } = await getCtx();
+    if (!user) return { shouldShowWizard: false, hasUser: false };
 
-  const { data: empleado } = await supabase
-    .from("empleados")
-    .select("perfil_completado")
-    .eq("user_id", user.id)
-    .maybeSingle();
+    const { data: empleado } = await supabase
+      .from("empleados")
+      .select("perfil_completado")
+      .eq("user_id", user.id)
+      .maybeSingle();
 
-  if (!empleado) return { shouldShowWizard: false };
-  return { shouldShowWizard: !empleado.perfil_completado };
-});
+    if (!empleado) return { shouldShowWizard: false, hasUser: true };
+    return { shouldShowWizard: !empleado.perfil_completado, hasUser: true };
+  },
+);
 
 export const getEmpleadoStatus = cache(async (): Promise<EmpleadoStatus> => {
   const { supabase, user } = await getCtx();

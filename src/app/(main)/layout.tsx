@@ -5,8 +5,13 @@ import { getEmpleadoGuardStatus } from "@/features/primer-acceso/data/empleado-s
 export const dynamic = "force-dynamic";
 
 export default async function MainLayout({ children }: { children: React.ReactNode }) {
-  // Guard: si el usuario es empleado con perfil_completado=false → wizard bloqueante
-  const { shouldShowWizard } = await getEmpleadoGuardStatus();
+  const { shouldShowWizard, hasUser } = await getEmpleadoGuardStatus();
+  // Sin sesión → login. Refuerza al middleware, que en producción deja pasar
+  // las rutas de módulo sin sesión (fail-open). ?auth=1 evita el rebote móvil.
+  if (!hasUser) {
+    redirect("/?auth=1");
+  }
+  // Empleado con perfil_completado=false → wizard bloqueante.
   if (shouldShowWizard) {
     redirect("/primer-acceso");
   }
