@@ -1,10 +1,10 @@
 # Ágora POS — Estado de la integración y plan de corrección
 
-> **Fecha:** 2026-06-09
-> **Repo / HEAD:** Balles-Hosteleros · `main` @ `f698193`
+> **Fecha:** 2026-06-09 · actualizado **2026-06-10**
+> **Repo / HEAD:** Balles-Hosteleros · `main` @ `c777d6f`
 > **Origen:** handoff tras estudio del código heredado + la "Guía del Integrador" de Ágora (v8.6.0) + la conversación con el equipo técnico de Ágora (2026-06-09).
 > **Relacionado:** `.claude/PRPs/PRP-024-auditoria-tecnica-logistica-agora-pos.md`, `.claude/memory/feedback/regla_seguridad_agora.md`
-> **Estado:** integración **construida y commiteada en `main`**, pero **NUNCA conectada a un Ágora real**. No tocar código hasta validar conectividad (Fase A).
+> **Estado:** catálogo+stock de **ambas empresas migrados desde Ágora el 2026-06-10** por el otro dev (`migrar-catalogo.mjs`, Excel curado). El espejo del 09-06 de este doc quedó **supersedido** (ver "ACTUALIZACIÓN 2026-06-10"). Abierto: recurrencia, sedes Getafe/Alcorcón, recetas reales.
 
 ---
 
@@ -93,6 +93,16 @@ Elegido **A**: Ágora es la fuente de verdad de **catálogo Y stock**; Balles lo
 ### ⚠️ Nota de entorno (2026-06-09): clon local desactualizado
 
 La BD `sxjtubzdpfmlmwqtsgro` (la del `.env.local`, confirmada por el otro dev) es la **correcta** → el espejo de stock está bien puesto, **no rehacer**. Pero el clon local de Fernando va **49 commits por detrás** de `origin/main`: su código usa los nombres de tabla **viejos** (`.from("profiles")` ×140, `usuarios` ×0), mientras `origin/main` ya renombró a `usuarios` (×153) para cuadrar con una migración de la BD. Por eso **el dev server de ese clon no muestra datos tras login** (pide `profiles`, que ya no existe). **Fix para ver en local: `git pull` de los 49 commits** (gestionar antes el WIP de reservas/sala sin commitear). El otro dev (código al día) ya ve el stock. Las tablas de auth no se exponen por PostgREST; usar Management API (`SUPABASE_ACCESS_TOKEN`).
+
+### 🔁 ACTUALIZACIÓN 2026-06-10 — el espejo del 09-06 quedó SUPERSEDIDO por una migración completa del equipo
+
+El otro dev (vía su agente) ejecutó una **migración total del catálogo** con `scripts/agora/migrar-catalogo.mjs` (añadido en `c777d6f`, construido sobre este handoff y el tooling de `scripts/agora/`). Verificado en BD el 10-jun (timestamps 03:57–04:09 UTC):
+
+- **Borró TODO el catálogo de BACANAL y HABANA** (`delete … eq(empresa_id)`; el CASCADE se llevó recetas/stock/precios — incluidos el espejo del 09-06 **y el catálogo viejo de Balles**) y **reimportó desde un Excel curado** (`/tmp/migracion.json`: empresa, `tipo` venta/compra, categoría, `precio_venta`, flag `ambos`), enriquecido desde Ágora (coste por almacén `CostPrices`, unidad kg/ud según `IsSoldByWeight`, stock `filter=Stocks`).
+- **Resultado actual:** BACANAL **495** productos · HABANA **472**, todos con `agora_id` y `observaciones='Importado de Agora 2026-06-10'`. Stock: **151 (Bacanal) + 145 (Habana)** filas (solo `tipo=compra` con existencias en Ágora). Almacenes usados: **4→Bacanal, 1→Habana**; Getafe (3), Alcorcón (5) y "almacen 2" siguen fuera.
+- **Recetas:** las 208 filas reales de `producto_composicion` (multi-ingrediente) se borraron en cascada; se recrearon **203 triviales 1:1** (venta→compra de los `ambos`, cantidad 1, merma 0). Las recetas reales antiguas **no están en la BD**: el comentario del script menciona "backup Bacanal en `backup_agora`", pero **esa tabla no existe en ningún schema** (verificado vía Management API el 10-jun) → si hay backup, es externo al proyecto (preguntar al otro dev dónde lo guardó).
+- **Consecuencias:** la sección "EJECUTADO 09-06" de arriba queda como historia. **NO volver a ejecutar `sync-bacanal.mjs`**: crearía productos fuera de la curación del Excel y pisaría su formato de stock. Su script usa env **`AGORA_API_URL` / `AGORA_API_TOKEN`** (≠ de los `AGORA_POS_*` propuestos aquí — unificar nombres al portar a la app).
+- **Sigue abierto:** (1) **recurrencia** — la migración es one-shot y el cron heredado `/api/cron/agora-sync` sigue corriendo a diario en vacío (`agora_sync_log` lleva desde abril en "ok" con 0 registros); (2) sedes **Getafe/Alcorcón/almacén 2**; (3) **food-cost real** (recetas multi-ingrediente); (4) el código heredado ventas→descuento sigue **superado** y sin retirar.
 
 ---
 
