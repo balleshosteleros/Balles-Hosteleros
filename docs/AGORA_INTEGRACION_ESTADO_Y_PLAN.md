@@ -180,12 +180,12 @@ curl -X POST http://habanabacanaliictpv.ddns.me:8984/api/hub/generate-data/ -H '
 1. **Primera escritura sobre el sistema de caja vivo.** Regla de Seguridad Ágora a tope: empezar por **1 producto de prueba**, confirmar en la caja, log de lo enviado, rollback preparado. Nunca el lote completo a la primera.
 2. **Tarifas:** mapear `PriceListId` por local/centro de venta (puede haber varias) leyendo `export-master`. Cambiar "el precio" puede implicar varias tarifas.
 3. **Encadenar `import` + `generate-data`** (sin propagar, la caja no se entera).
-4. **Confirmar permiso de IMPORT del token** en esta instalación (la capacidad está documentada; falta que el módulo de escritura esté activado para el token). Se valida con un import de prueba de 1 producto o preguntando a Ágora/Klaus.
+4. ~~Confirmar permiso de IMPORT del token~~ → ✅ **CONFIRMADO (2026-06-10)**: `POST /api/import/` con cuerpo vacío `{}` respondió **200 OK** (Api-Version 8.5.5) con el token actual (CIF Bacanal). El token **ya tiene permiso de escritura**; no hay que pedir nada a Ágora. Prueba de riesgo cero: sin registros en el cuerpo → no se modificó ningún dato.
 5. **Fuente única:** desde la activación, el precio se edita SOLO en Balles.
 
 ### Estado de las preguntas abiertas tras este hallazgo
 
-- **B (¿escribir precios?)** → ✅ **Resuelta por el manual: SÍ.** Ya no hay que preguntarla a Ágora (solo confirmar el permiso del token).
+- **B (¿escribir precios?)** → ✅ **Resuelta y PROBADA en vivo: SÍ.** El manual lo documenta y, además, el token tiene **permiso de escritura confirmado** (200 OK a `POST /api/import/` el 2026-06-10, sin tocar datos). No hay que pedir nada a Ágora. La Opción B es viable end-to-end con lo que tenemos.
 - **A (visibilidad de ventas / histórico en Balles)** → camino rápido y sin riesgo (solo lectura). El import de ventas heredado apunta a un endpoint inventado (`/api/export/tickets?businessDay=`); el real es `/api/export/?business-day=YYYY-MM-DD&filter=Invoices` (ya validado: 123 facturas / 617 líneas el 06-jun). Falta una pantalla "Ventas Ágora" con histórico por día.
 
 > **Nota:** el PDF está en `~/Downloads` del equipo de Fernando (`Guía del Integrador.pdf`). Secciones útiles para implementar: **Productos** (págs. 47-68), **Tarifas/PriceLists** (págs. 42-45), **API HTTP** (págs. 196-210).
