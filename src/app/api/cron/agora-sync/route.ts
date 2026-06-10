@@ -1,16 +1,24 @@
 /**
- * Cron endpoint: descuenta stock por ventas del día anterior en Ágora POS.
+ * Cron endpoint: espejo de stock Ágora → Balles.
  *
- * Se ejecuta cada día a las 08:00 (configurado en vercel.json).
- * Solo acepta llamadas con el header correcto de autorización de Vercel Cron
- * o con CRON_SECRET definido como variable de entorno.
+ * Se ejecuta cada día a las 08:00 UTC (configurado en vercel.json) y refleja
+ * en la tabla `stock` las existencias actuales que lleva Ágora por almacén
+ * (Opción A: Ágora es la fuente de verdad de catálogo y stock).
  *
- * También puede llamarse manualmente desde el panel de logística.
+ * Sustituye al flujo heredado ventas→descuento (2026-06-10): aquel apuntaba a
+ * un endpoint inexistente y quedó superado por el espejo. Ver
+ * docs/AGORA_INTEGRACION_ESTADO_Y_PLAN.md.
+ *
+ * Solo acepta llamadas con `Authorization: Bearer CRON_SECRET` (fail-closed).
+ * También puede dispararse manualmente desde el panel de logística (server action).
  */
 
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import { descontarStockPorVentasAgora } from "@/features/logistica/services/agora-ventas-sync";
+import {
+  ALMACEN_AGORA_POR_EMPRESA,
+  espejoStockAgora,
+  espejoStockAgoraTodas,
+} from "@/features/logistica/services/agora-stock-mirror";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -27,75 +35,42 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
-  // ─── Obtener empresa_id de query param o env ───────────────────────────────
+  // ─── Empresa concreta (query param) o todas las mapeadas ──────────────────
   const { searchParams } = new URL(request.url);
-  const fecha = searchParams.get("fecha") ?? undefined; // YYYY-MM-DD, opcional
   const empresaIdParam = searchParams.get("empresa_id");
 
-  // Si no se pasa empresa_id en el cron, buscar todas las empresas activas
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  if (empresaIdParam && !ALMACEN_AGORA_POR_EMPRESA[empresaIdParam]) {
+    return NextResponse.json(
+      { error: `La empresa ${empresaIdParam} no tiene almacén de Ágora asociado.` },
+      { status: 400 }
+    );
+  }
 
-  let empresaIds: string[] = [];
-
-  if (empresaIdParam) {
-    empresaIds = [empresaIdParam];
-  } else {
-    // Buscar todas las empresas activas que tengan productos con agora_id
-    const { data: empresas } = await supabase
-      .from("productos")
-      .select("empresa_id")
-      .not("agora_id", "is", null)
-      .limit(100);
-
-    const uniqueIds = new Set<string>();
-    for (const e of empresas ?? []) {
-      if (e.empresa_id) uniqueIds.add(e.empresa_id);
+  try {
+    if (empresaIdParam) {
+      const result = await espejoStockAgora(empresaIdParam, null);
+      return NextResponse.json(
+        {
+          ok: result.success,
+          ejecutadoEn: new Date().toISOString(),
+          resultados: [{ empresaId: empresaIdParam, ...result }],
+        },
+        { status: result.success ? 200 : 207 }
+      );
     }
-    empresaIds = Array.from(uniqueIds);
+
+    const { ok, resultados } = await espejoStockAgoraTodas(null);
+    return NextResponse.json(
+      { ok, ejecutadoEn: new Date().toISOString(), resultados },
+      { status: ok ? 200 : 207 }
+    );
+  } catch (err) {
+    // Regla Seguridad Ágora: error exacto, sin reintentos automáticos
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[cron/agora-sync] Error inesperado:", err);
+    return NextResponse.json(
+      { ok: false, ejecutadoEn: new Date().toISOString(), error: msg },
+      { status: 500 }
+    );
   }
-
-  if (empresaIds.length === 0) {
-    return NextResponse.json({
-      ok: true,
-      mensaje: "Sin empresas con integración Ágora activa.",
-      resultados: [],
-    });
-  }
-
-  // ─── Ejecutar descuento para cada empresa ─────────────────────────────────
-  const resultados = [];
-  let hayErrores = false;
-
-  for (const empresaId of empresaIds) {
-    try {
-      const result = await descontarStockPorVentasAgora(empresaId, null, fecha);
-      resultados.push({
-        empresaId,
-        ...result,
-      });
-      if (!result.success) hayErrores = true;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      hayErrores = true;
-      resultados.push({
-        empresaId,
-        success: false,
-        error: msg,
-      });
-      console.error(`[cron/agora-sync] Error en empresa ${empresaId}:`, err);
-    }
-  }
-
-  const httpStatus = hayErrores ? 207 : 200;
-  return NextResponse.json(
-    {
-      ok: !hayErrores,
-      ejecutadoEn: new Date().toISOString(),
-      resultados,
-    },
-    { status: httpStatus }
-  );
 }

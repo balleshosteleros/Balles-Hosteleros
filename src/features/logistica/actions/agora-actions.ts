@@ -15,7 +15,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
-import { syncVentasAgora } from "@/features/logistica/services/agora-sync";
+import { espejoStockAgora } from "@/features/logistica/services/agora-stock-mirror";
 import { descontarStockPorVentasAgora } from "@/features/logistica/services/agora-ventas-sync";
 import type { AgoraSyncStatus } from "@/features/logistica/types/agora";
 
@@ -46,7 +46,8 @@ export interface AgoraSyncLog {
 // ─── INICIAR SINCRONIZACIÓN ───────────────────────────────────────────────────
 
 /**
- * Dispara una sincronización de ventas con Ágora POS.
+ * Dispara el espejo de stock Ágora → Balles para la empresa del usuario.
+ * (Sustituye al sync de ventas heredado, superado por la Opción A el 2026-06-10.)
  *
  * Si falla, devuelve el error exacto sin intentar arreglarlo.
  * El componente AgoraSyncStatus mostrará el error al usuario y pedirá aprobación.
@@ -56,8 +57,23 @@ export interface AgoraSyncLog {
 export async function syncVentasAgoraAction(
   esReintentoAprobado = false
 ): Promise<AgoraSyncActionResult> {
+  void esReintentoAprobado; // el espejo nunca reintenta solo; el botón ya es el reintento manual
   try {
-    const result = await syncVentasAgora(esReintentoAprobado);
+    const { empresaId, userId } = await getLogisticaContext();
+
+    if (!empresaId) {
+      return {
+        ok: false,
+        status: "error",
+        mensaje: "No se pudo obtener el empresa_id del usuario autenticado.",
+        totalRecords: 0,
+        okRecords: 0,
+        errorRecords: 0,
+        retryCount: 0,
+      };
+    }
+
+    const result = await espejoStockAgora(empresaId, userId ?? null);
 
     revalidatePath("/logistica");
 
@@ -66,19 +82,22 @@ export async function syncVentasAgoraAction(
       return {
         ok: false,
         status: result.status,
-        mensaje: result.errorMessage ?? "Error desconocido en la sincronización con Ágora.",
+        mensaje: result.errorMessage ?? "Error desconocido en el espejo de stock con Ágora.",
         totalRecords: result.totalRecords,
         okRecords: result.okRecords,
         errorRecords: result.errorRecords,
         retryCount: result.retryCount,
-        errorDetail: result.errorDetail,
       };
     }
 
+    const notaOmitidos =
+      result.omitidosSinProducto > 0
+        ? ` (${result.omitidosSinProducto} posiciones de Ágora sin producto equivalente en Balles, omitidas)`
+        : "";
     const mensajeExito =
       result.status === "ok"
-        ? `Sincronización completada: ${result.okRecords} productos actualizados.`
-        : `Sincronización parcial: ${result.okRecords} de ${result.totalRecords} registros procesados. ${result.errorRecords} con errores.`;
+        ? `Espejo de stock completado: ${result.okRecords} posiciones actualizadas desde Ágora.${notaOmitidos}`
+        : `Espejo parcial: ${result.okRecords} de ${result.totalRecords} posiciones reflejadas. ${result.errorRecords} con errores.${notaOmitidos}`;
 
     return {
       ok: true,
@@ -88,7 +107,6 @@ export async function syncVentasAgoraAction(
       okRecords: result.okRecords,
       errorRecords: result.errorRecords,
       retryCount: result.retryCount,
-      errorDetail: result.errorDetail,
     };
   } catch (err) {
     // Error inesperado — Regla Seguridad Ágora: mostrar error exacto
@@ -96,7 +114,7 @@ export async function syncVentasAgoraAction(
     return {
       ok: false,
       status: "error",
-      mensaje: `Error inesperado al sincronizar con Ágora: ${errorMessage}`,
+      mensaje: `Error inesperado en el espejo de stock con Ágora: ${errorMessage}`,
       totalRecords: 0,
       okRecords: 0,
       errorRecords: 0,
