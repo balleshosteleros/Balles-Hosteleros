@@ -133,6 +133,24 @@ Aclarada con Fernando tras la conversación del equipo sobre precios:
 
 **Roadmap re-priorizado:** Fase 2 (ventas a la vista) → recetas reales → descuento por ventas en Balles (apagar espejo) → precios desde Balles (Opción B, §1bis).
 
+### 📕 CIERRE DE SESIÓN 2026-06-10 (Fernando + Claude)
+
+**Commits de la sesión (cronológico):**
+| Commit | Qué cambió |
+|---|---|
+| `da0ce4e` | Handoff al día tras descubrir la migración completa del catálogo del otro dev (verificada en BD: Bacanal 495 + Habana 472, recetas 208→203 triviales, sin backup en BD) |
+| `a7dc275` | §1bis: API de ESCRITURA de Ágora documentada desde el manual v8.6.0 (`/api/import/`, `MainPrice` por tarifa, `hub/generate-data`, importador parcial no destructivo) |
+| `ba16b7e` | Permiso de escritura del token **probado en vivo** (200 OK a `POST /api/import/` con cuerpo vacío, sin tocar datos) |
+| `e43411d` | **Fase 1**: `agora-stock-mirror.ts` + cron 08:00 reenchufado + botón del panel reapuntado + `.env.example` corregido |
+| `092ed3f` | Recurrencia documentada (validación y pendiente Vercel) |
+| `b780787` | **Decisión de arquitectura**: Balles maestro / Ágora solo caja; espejo=transición; preguntas actualizadas |
+
+**Validaciones ejecutadas:** typecheck ✅ · build limpio ✅ · smoke E2E con `next start` + cron real (guard 401 sin token ✓; espejo **Bacanal 151/151 · Habana 145/145 · 0 errores**) ✅ · probe de permiso de escritura 200 OK ✅. Incidencia: un build quedó 47 min en thrashing por RAM (WSL 3,8 GB vs heap 8 GB) — matado y relanzado en solitario, OK.
+
+**Bloqueos / pendientes:** respuestas del dueño (regla de oro, quién registra compras, ¿Getafe/Alcorcón?) y del otro dev (**backup de las 208 recetas reales** — bloqueante, env `AGORA_API_*` en Vercel + redeploy, coordinación). **Fase 2 (import de ventas + pantalla "Ventas Ágora") decidida y NO arrancada** (a la espera del OK y de coordinar con el otro dev). Usuario demo `agora.demo@…` sigue activo (borrar con `scripts/agora/delete-dev-user.mjs` cuando sobre). Stash ajeno `stash@{0}` (WIP reservas/sala) intacto.
+
+**Dónde retomar:** este documento (secciones "DECISIÓN DE ARQUITECTURA" y "RECURRENCIA") + las preguntas vigentes de arriba. Siguiente paso al volver: enviar preguntas → con respuestas, arrancar **Fase 2** (endpoint real ya validado: `GET /api/export/?business-day=YYYY-MM-DD&filter=Invoices`, enrutar por `Workplace.Id` 1=Habana/4=Bacanal).
+
 ---
 
 ## 1bis. ESCRITURA hacia Ágora — confirmado por el manual (desbloquea la Opción B / precios desde Balles)
