@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, createContext, useContext } from "react";
 import {
   ReactFlow,
   Background,
@@ -43,6 +43,7 @@ import {
 import {
   getOrganigrama,
   saveOrganigrama,
+  getPuestosPorDepartamento,
 } from "@/features/direccion/actions/organigrama-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,7 +63,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Trash2, Save, X, Loader2, Info } from "lucide-react";
+import { Plus, Trash2, Save, X, Loader2, Info, ChevronDown, Briefcase } from "lucide-react";
+
+/**
+ * Puestos reales por nombre de departamento (MAYÚSCULAS). Lo provee
+ * EstructuraView y lo consume cada caja de departamento para su desplegable.
+ */
+const PuestosDeptContext = createContext<Record<string, string[]>>({});
 
 const AREA_LABELS: Record<string, string> = {
   administrativa: "Área Administrativa",
@@ -174,7 +181,64 @@ function OrgChartNode({ id, data, selected }: NodeProps) {
             aria-label="Tiene descripción"
           />
         )}
+        <PuestosDesplegable label={data.label as string} ring={palette.ring} bg={palette.bg} />
       </div>
+    </>
+  );
+}
+
+/**
+ * Desplegable de puestos colgando del departamento. Plegado por defecto; al
+ * abrirlo muestra los puestos reales de ese departamento como una lista bajo
+ * la caja (overlay, no altera el layout del organigrama).
+ */
+function PuestosDesplegable({ label, ring, bg }: { label: string; ring: string; bg: string }) {
+  const mapa = useContext(PuestosDeptContext);
+  const [open, setOpen] = useState(false);
+  const puestos = mapa[(label ?? "").trim().toUpperCase()] ?? [];
+  if (puestos.length === 0) return null;
+  return (
+    <>
+      {/* Pestaña inferior con el contador (clase nodrag para no arrastrar el nodo al pulsar) */}
+      <button
+        type="button"
+        className="nodrag nopan absolute -bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border bg-white px-2 py-0.5 text-[10px] font-semibold shadow"
+        style={{ color: bg, borderColor: ring }}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
+        title={open ? "Ocultar puestos" : "Ver puestos"}
+      >
+        <Briefcase className="h-3 w-3" />
+        {puestos.length}
+        <ChevronDown
+          className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <div
+          className="nodrag nopan absolute left-1/2 top-full z-20 mt-3 w-max max-w-[220px] -translate-x-1/2 rounded-lg border bg-white p-1.5 shadow-xl"
+          style={{ borderColor: ring }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-1.5 pb-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+            Puestos
+          </div>
+          <ul className="space-y-0.5">
+            {puestos.map((p) => (
+              <li
+                key={p}
+                className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[11px] font-medium text-foreground"
+              >
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: bg }} />
+                {p}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </>
   );
 }
@@ -353,6 +417,7 @@ export function EstructuraView() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [puestosMap, setPuestosMap] = useState<Record<string, string[]>>({});
   const idCounter = useRef(100);
   const skipDirtyRef = useRef(true);
 
@@ -403,6 +468,22 @@ export function EstructuraView() {
       cancelled = true;
     };
   }, [key, setNodes, setEdges]);
+
+  // Puestos reales por departamento (para el desplegable de cada caja).
+  useEffect(() => {
+    const dbId = (empresaActual as { dbId?: string } | null)?.dbId;
+    if (!dbId) {
+      setPuestosMap({});
+      return;
+    }
+    let cancelled = false;
+    getPuestosPorDepartamento(dbId).then((m) => {
+      if (!cancelled) setPuestosMap(m);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [empresaActual]);
 
   // Marcar dirty ante cualquier cambio del usuario (drag, edit, add, delete, connect…)
   useEffect(() => {
@@ -510,6 +591,7 @@ export function EstructuraView() {
     (selectedNode?.data as { fixed?: boolean } | undefined)?.fixed === true;
 
   return (
+    <PuestosDeptContext.Provider value={puestosMap}>
     <div className="flex flex-col h-[calc(100vh-3.5rem)]">
       {/* Toolbar */}
       <div className="flex items-center gap-3 px-4 py-3 border-b bg-card shrink-0">
@@ -761,5 +843,6 @@ export function EstructuraView() {
         </DialogContent>
       </Dialog>
     </div>
+    </PuestosDeptContext.Provider>
   );
 }

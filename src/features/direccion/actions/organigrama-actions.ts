@@ -26,6 +26,39 @@ export async function getOrganigrama(empresaSlug: string): Promise<OrgChart | nu
   }
 }
 
+/**
+ * Puestos reales agrupados por nombre de departamento (en MAYÚSCULAS, para
+ * casar con las etiquetas de las cajas del organigrama). Alimenta el
+ * desplegable de puestos de cada departamento.
+ */
+export async function getPuestosPorDepartamento(
+  empresaId: string,
+): Promise<Record<string, string[]>> {
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("puestos")
+      .select("nombre, estado, departamento:departamentos(nombre)")
+      .eq("empresa_id", empresaId);
+    if (error) throw error;
+    const mapa: Record<string, string[]> = {};
+    for (const row of data ?? []) {
+      const r = row as { nombre: string; estado: string | null; departamento: unknown };
+      if ((r.estado ?? "") === "inactivo") continue;
+      const depRel = r.departamento;
+      const dep = (Array.isArray(depRel) ? depRel[0] : depRel) as { nombre?: string } | null;
+      const key = (dep?.nombre ?? "").trim().toUpperCase();
+      if (!key) continue;
+      (mapa[key] ??= []).push(r.nombre);
+    }
+    for (const k of Object.keys(mapa)) mapa[k].sort((a, b) => a.localeCompare(b, "es"));
+    return mapa;
+  } catch (err) {
+    console.error("[organigrama] getPuestosPorDepartamento:", err);
+    return {};
+  }
+}
+
 export async function getAllOrganigramas(): Promise<Record<string, OrgChart>> {
   try {
     const supabase = createAdminClient();
