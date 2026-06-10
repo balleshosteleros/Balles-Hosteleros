@@ -4,7 +4,7 @@
 > **Repo / HEAD:** Balles-Hosteleros · `main` @ `c777d6f`
 > **Origen:** handoff tras estudio del código heredado + la "Guía del Integrador" de Ágora (v8.6.0) + la conversación con el equipo técnico de Ágora (2026-06-09).
 > **Relacionado:** `.claude/PRPs/PRP-024-auditoria-tecnica-logistica-agora-pos.md`, `.claude/memory/feedback/regla_seguridad_agora.md`
-> **Estado:** catálogo+stock de **ambas empresas migrados desde Ágora el 2026-06-10** por el otro dev (`migrar-catalogo.mjs`, Excel curado). El espejo del 09-06 de este doc quedó **supersedido** (ver "ACTUALIZACIÓN 2026-06-10"). Abierto: recurrencia, sedes Getafe/Alcorcón, recetas reales.
+> **Estado:** catálogo+stock de **ambas empresas migrados desde Ágora el 2026-06-10** por el otro dev (`migrar-catalogo.mjs`, Excel curado). El espejo del 09-06 quedó **supersedido**. **Recurrencia implementada** (`e43411d`): cron 08:00 + botón manual reflejan el stock de Ágora a diario — falta solo añadir `AGORA_API_URL`/`AGORA_API_TOKEN` en Vercel. **Escritura hacia Ágora confirmada y probada** (§1bis). Abierto: env en Vercel, sedes Getafe/Alcorcón, recetas reales/food-cost.
 
 ---
 
@@ -102,7 +102,19 @@ El otro dev (vía su agente) ejecutó una **migración total del catálogo** con
 - **Resultado actual:** BACANAL **495** productos · HABANA **472**, todos con `agora_id` y `observaciones='Importado de Agora 2026-06-10'`. Stock: **151 (Bacanal) + 145 (Habana)** filas (solo `tipo=compra` con existencias en Ágora). Almacenes usados: **4→Bacanal, 1→Habana**; Getafe (3), Alcorcón (5) y "almacen 2" siguen fuera.
 - **Recetas:** las 208 filas reales de `producto_composicion` (multi-ingrediente) se borraron en cascada; se recrearon **203 triviales 1:1** (venta→compra de los `ambos`, cantidad 1, merma 0). Las recetas reales antiguas **no están en la BD**: el comentario del script menciona "backup Bacanal en `backup_agora`", pero **esa tabla no existe en ningún schema** (verificado vía Management API el 10-jun) → si hay backup, es externo al proyecto (preguntar al otro dev dónde lo guardó).
 - **Consecuencias:** la sección "EJECUTADO 09-06" de arriba queda como historia. **NO volver a ejecutar `sync-bacanal.mjs`**: crearía productos fuera de la curación del Excel y pisaría su formato de stock. Su script usa env **`AGORA_API_URL` / `AGORA_API_TOKEN`** (≠ de los `AGORA_POS_*` propuestos aquí — unificar nombres al portar a la app).
-- **Sigue abierto:** (1) **recurrencia** — la migración es one-shot y el cron heredado `/api/cron/agora-sync` sigue corriendo a diario en vacío (`agora_sync_log` lleva desde abril en "ok" con 0 registros); (2) sedes **Getafe/Alcorcón/almacén 2**; (3) **food-cost real** (recetas multi-ingrediente); (4) el código heredado ventas→descuento sigue **superado** y sin retirar.
+- **Sigue abierto:** (1) ~~recurrencia~~ → ✅ **RESUELTA en código (2026-06-10, commit `e43411d`)**, ver sección siguiente; falta solo la config en Vercel; (2) sedes **Getafe/Alcorcón/almacén 2**; (3) **food-cost real** (recetas multi-ingrediente); (4) el código heredado ventas→descuento sigue **superado** y sin retirar (`agora-sync.ts` y `agora-ventas-sync.ts` ya no tienen consumidores reales).
+
+### ✅ RECURRENCIA implementada — espejo de stock en la app (2026-06-10, `e43411d`)
+
+**Qué hay:** servicio `src/features/logistica/services/agora-stock-mirror.ts` (espejo Ágora→Balles), el cron `/api/cron/agora-sync` (diario 08:00 UTC, vercel.json) **reenchufado** a él, y el botón "Sincronizar" del panel de logística (`syncVentasAgoraAction`) reapuntado también. Registra cada ejecución en `agora_sync_log` (visible en `AgoraSyncStatus`).
+
+**Política del espejo:** NO crea productos (el catálogo lo gobierna la curación del Excel); NO borra filas de stock ni pisa `unidad`/`cantidad_minima`/`cantidad_maxima`; actualiza `cantidad_actual`+`ultimo_movimiento` de filas existentes y solo crea filas nuevas para `tipo=compra` sin fila. Una sola petición a Ágora, sin reintentos automáticos (Regla de Seguridad). Mapa almacén→empresa en `ALMACEN_AGORA_POR_EMPRESA` (4→Bacanal, 1→Habana).
+
+**Detalle clave aprendido:** los "ambos" del Excel crean DOS productos con el **mismo `agora_id`** (gemelas venta/compra); el stock vive en la gemela de **compra** — el espejo la prefiere al resolver `agora_id→producto`. Otro dato: Ágora inventaría **los mismos 201 productos en los 4 almacenes activos** (804 filas = 4×201); cambian las cantidades, no la lista.
+
+**Validado (smoke E2E local, `next start`+cron real):** guard 401 sin token ✓ · Bacanal **151/151** posiciones actualizadas · Habana **145/145** · 0 errores (omitidos = posiciones de Ágora fuera de la curación, correcto).
+
+**⛔ Pendiente para que corra en producción:** añadir en Vercel (Production) las env `AGORA_API_URL` y `AGORA_API_TOKEN` y redesplegar. **No hay sesión de Vercel en la máquina de Fernando** (ni Windows ni WSL) → o `vercel login` (si su cuenta es del equipo) o pedírselo al otro dev. `CRON_SECRET` ya está configurado en prod (el cron lleva meses autenticando). Hasta entonces, el cron diario registrará en `agora_sync_log` el error exacto "AGORA_API_URL o AGORA_API_TOKEN no están configuradas" — inofensivo y visible.
 
 ---
 
