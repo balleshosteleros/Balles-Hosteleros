@@ -116,6 +116,23 @@ El otro dev (vía su agente) ejecutó una **migración total del catálogo** con
 
 **⛔ Pendiente para que corra en producción:** añadir en Vercel (Production) las env `AGORA_API_URL` y `AGORA_API_TOKEN` y redesplegar. **No hay sesión de Vercel en la máquina de Fernando** (ni Windows ni WSL) → o `vercel login` (si su cuenta es del equipo) o pedírselo al otro dev. `CRON_SECRET` ya está configurado en prod (el cron lleva meses autenticando). Hasta entonces, el cron diario registrará en `agora_sync_log` el error exacto "AGORA_API_URL o AGORA_API_TOKEN no están configuradas" — inofensivo y visible.
 
+### 🧭 DECISIÓN DE ARQUITECTURA (2026-06-10, tarde) — Balles manda; de Ágora solo entran VENTAS
+
+Aclarada con Fernando tras la conversación del equipo sobre precios:
+
+- **Balles = sistema maestro** (back-office): catálogo, precios, recetas y stock se gestionan en Balles. **Ágora = la caja que ejecuta.** Regla de oro operativa: **en Ágora no se toca nada a mano** (cualquier cambio manual allí lo pisará el siguiente envío desde Balles — lo dice su propio manual, pág. 12).
+- Flujos permanentes: **Ágora → Balles: SOLO ventas** (Fase 2). **Balles → Ágora: SOLO precios** (botón de §1bis, ya desbloqueado y probado).
+- La migración del Excel (10-jun) fue la **siembra inicial** de Balles, no una sincronización permanente.
+- **El espejo de stock (`e43411d`) es una herramienta de TRANSICIÓN, no el destino**: mantiene el stock de Balles veraz **mientras** Balles no pueda auto-gestionarlo. Se **apaga** cuando existan (a) import de ventas, (b) recetas reales, y (c) compras/albaranes registrándose en Balles — desde entonces el stock lo calcula Balles (ventas×recetas + compras + inventarios) y el espejo queda solo como resiembra/cuadre manual. **No configurarlo mentalmente como permanente.**
+- **Prerrequisitos para que Balles sea dueño del stock:** (1) Fase 2 — ventas; (2) **recetas multi-ingrediente** (las 208 reales se borraron en la migración → preguntar al otro dev por el backup; AHORA ES BLOQUEANTE); (3) compromiso operativo de registrar las entradas de mercancía en Balles (decisión del dueño).
+
+**Preguntas vigentes (2026-06-10):**
+- *Al dueño:* (1) confirmar la regla de oro "todo desde Balles, en Ágora no se toca"; (2) ¿quién y desde cuándo registrará las compras/albaranes en Balles?; (3) ¿entran las ventas de Getafe/Alcorcón o solo Fuenlabrada?
+- *Al otro dev:* (1) **¿dónde está el backup de las 208 recetas reales?** (¿en el Excel?); (2) añadir `AGORA_API_URL`/`AGORA_API_TOKEN` en Vercel Production + redeploy; (3) coordinación: Fernando arranca Fase 2 (import ventas + pantalla "Ventas Ágora").
+- *Resueltas/desaparecidas:* frecuencia del stock (espejo=transición, diario por defecto), limpieza del catálogo viejo (la migración lo borró), permiso de escritura de Ágora (probado: SÍ).
+
+**Roadmap re-priorizado:** Fase 2 (ventas a la vista) → recetas reales → descuento por ventas en Balles (apagar espejo) → precios desde Balles (Opción B, §1bis).
+
 ---
 
 ## 1bis. ESCRITURA hacia Ágora — confirmado por el manual (desbloquea la Opción B / precios desde Balles)
