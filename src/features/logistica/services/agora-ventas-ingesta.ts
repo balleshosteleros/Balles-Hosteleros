@@ -73,7 +73,9 @@ export async function ingerirVentasAgoraDia(
       total: toNum(t.GrossAmount),
       abierto_at: f.Date,
       cerrado_at: `${f.BusinessDay}T12:00:00`,
-      stock_descontado: true,
+      // El descuento de stock lo hace el cron tras ingerir, solo desde la fecha de corte
+      // (empresas.stock_descuento_desde). Aquí NO se marca como descontado. PRP-057.
+      stock_descontado: false,
       notas: `Ágora ${f.Serie}-${f.Number}`,
     };
   });
