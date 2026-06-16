@@ -46,6 +46,7 @@ import {
   getEstructuraEtiquetas,
   type EstructuraEtiquetas,
 } from "@/features/direccion/actions/organigrama-actions";
+import { allSections } from "@/features/layout/data/nav-routes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -87,6 +88,10 @@ function normNombre(s: string): string {
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, "");
 }
+
+/** Icono por departamento, tomado del índice de módulos (nav-routes). */
+const DEPT_ICON: Record<string, React.ElementType> = {};
+for (const s of allSections) DEPT_ICON[normNombre(s.modulo)] = s.icon;
 
 /** Abreviaturas comunes de departamento → nombre normalizado real. */
 const DEPT_ALIAS: Record<string, string> = {
@@ -183,6 +188,7 @@ function OrgChartNode({ id, data, selected }: NodeProps) {
   // cargado se trata como departamento para no convertir todo en puestos.
   const deptName = resolverDepartamento(label, departamentos);
   const esDepartamento = departamentos.length === 0 || deptName !== null;
+  const DeptIcon = DEPT_ICON[normNombre(deptName ?? label)] ?? Users;
   const handleStyle: React.CSSProperties = {
     background: "#ffffff",
     border: `2px solid ${palette.ring}`,
@@ -241,7 +247,7 @@ function OrgChartNode({ id, data, selected }: NodeProps) {
         <Handle id="l" type="source" position={Position.Left} style={handleStyle} />
         <Handle id="r" type="source" position={Position.Right} style={handleStyle} />
         {esDepartamento ? (
-          <Users className="h-3.5 w-3.5 shrink-0 opacity-80" />
+          <DeptIcon className="h-3.5 w-3.5 shrink-0 opacity-80" />
         ) : (
           <UserRound className="h-3.5 w-3.5 shrink-0 opacity-80" />
         )}

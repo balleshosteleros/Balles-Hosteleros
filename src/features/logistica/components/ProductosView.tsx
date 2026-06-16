@@ -17,6 +17,7 @@ import {
   getProductoConfigSection, saveProductoConfigSection,
 } from "@/features/logistica/actions/config-actions";
 import { EscandalloEditor } from "@/features/logistica/components/EscandalloEditor";
+import { MovimientosStockSection } from "@/features/logistica/components/productos/MovimientosStockSection";
 import { getAlergenosDerivados, getAlergenosDerivadosOrigen, getCosteEscandallo, type AlergenoOrigen } from "@/features/logistica/actions/escandallos-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -837,6 +838,11 @@ function ProductoDetalle({
       {/* Tarifas — solo productos de venta ya creados */}
       {!isNew && esVenta && (
         <TarifaPreciosSection productoId={producto!.id} />
+      )}
+
+      {/* Movimientos de stock (kardex) — productos ya creados */}
+      {!isNew && (
+        <MovimientosStockSection productoId={producto!.id} unidad={unidad} />
       )}
 
       {!isNew && (

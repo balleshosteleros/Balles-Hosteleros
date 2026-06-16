@@ -1,6 +1,10 @@
 "use server";
 
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
+import {
+  aplicarEntradasAlbaran,
+  revertirEntradasAlbaran,
+} from "@/features/logistica/services/entradas-stock-por-albaran";
 
 async function getContext() {
   const { supabase, userId, empresaId } = await getLogisticaContext();
@@ -120,12 +124,34 @@ export async function updateAlbaranNumeroProveedor(id: string, numeroProveedor: 
 
 export async function updateAlbaranEstado(id: string, estado: string) {
   try {
-    const { supabase } = await getContext();
+    const { supabase, user } = await getContext();
+
+    // Estado anterior para decidir si hay que mover stock (entrar/salir de "Recibido").
+    const { data: previo } = await supabase
+      .from("albaranes")
+      .select("estado")
+      .eq("id", id)
+      .maybeSingle();
+    const estadoAnterior = (previo?.estado as string | undefined) ?? null;
+
     const { error } = await supabase
       .from("albaranes")
       .update({ estado, updated_at: new Date().toISOString() })
       .eq("id", id);
     if (error) throw error;
+
+    // Movimientos de stock por recepción (PRP-057). Idempotente.
+    if (estado === "Recibido" && estadoAnterior !== "Recibido") {
+      const res = await aplicarEntradasAlbaran(id, user?.id ?? null);
+      if (!res.ok) {
+        // Regla de seguridad: no tragarse el error de stock, pero el estado ya cambió.
+        return { ok: true, stockAviso: res.error };
+      }
+    } else if (estado !== "Recibido" && estadoAnterior === "Recibido") {
+      // Se revierte la recepción → devolver el stock.
+      await revertirEntradasAlbaran(id);
+    }
+
     return { ok: true };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";

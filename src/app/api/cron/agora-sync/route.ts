@@ -1,30 +1,29 @@
 /**
- * Cron endpoint: espejo de stock Ágora → Balles.
+ * Cron diario: ingiere las ventas del día anterior de Ágora POS hacia
+ * pos_tickets / pos_ticket_lineas (visibles en /sala/ventas) y recalcula el
+ * precio de venta medio ponderado. PRP-056.
  *
- * Se ejecuta cada día a las 08:00 UTC (configurado en vercel.json) y refleja
- * en la tabla `stock` las existencias actuales que lleva Ágora por almacén
- * (Opción A: Ágora es la fuente de verdad de catálogo y stock).
+ * Configurado en vercel.json (tras el cierre de caja). Fail-closed con CRON_SECRET.
+ * Puede llamarse manual con ?fecha=YYYY-MM-DD (reprocesa ese business-day).
  *
- * Sustituye al flujo heredado ventas→descuento (2026-06-10): aquel apuntaba a
- * un endpoint inexistente y quedó superado por el espejo. Ver
- * docs/AGORA_INTEGRACION_ESTADO_Y_PLAN.md.
- *
- * Solo acepta llamadas con `Authorization: Bearer CRON_SECRET` (fail-closed).
- * También puede dispararse manualmente desde el panel de logística (server action).
+ * ⚠️ Producción: requiere AGORA_API_URL / AGORA_API_TOKEN en Vercel (pendientes).
  */
-
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import {
-  ALMACEN_AGORA_POR_EMPRESA,
-  espejoStockAgora,
-  espejoStockAgoraTodas,
-} from "@/features/logistica/services/agora-stock-mirror";
+  ingerirVentasAgoraDia,
+  EMPRESA_WORKPLACE,
+} from "@/features/logistica/services/agora-ventas-ingesta";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+function ayerIso(): string {
+  const d = new Date(Date.now() - 86_400_000);
+  return d.toISOString().slice(0, 10);
+}
+
 export async function GET(request: Request) {
-  // ─── Validar autorización del cron (fail-closed) ──────────────────────────
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) {
@@ -35,42 +34,59 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
-  // ─── Empresa concreta (query param) o todas las mapeadas ──────────────────
   const { searchParams } = new URL(request.url);
-  const empresaIdParam = searchParams.get("empresa_id");
+  const businessDay = searchParams.get("fecha") ?? ayerIso();
+  const empresaFiltro = searchParams.get("empresa_id");
 
-  if (empresaIdParam && !ALMACEN_AGORA_POR_EMPRESA[empresaIdParam]) {
-    return NextResponse.json(
-      { error: `La empresa ${empresaIdParam} no tiene almacén de Ágora asociado.` },
-      { status: 400 }
-    );
-  }
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } },
+  );
 
-  try {
-    if (empresaIdParam) {
-      const result = await espejoStockAgora(empresaIdParam, null);
-      return NextResponse.json(
-        {
-          ok: result.success,
-          ejecutadoEn: new Date().toISOString(),
-          resultados: [{ empresaId: empresaIdParam, ...result }],
-        },
-        { status: result.success ? 200 : 207 }
-      );
+  const empresaIds = (empresaFiltro ? [empresaFiltro] : Object.keys(EMPRESA_WORKPLACE)).filter(
+    (id) => EMPRESA_WORKPLACE[id] != null,
+  );
+
+  const resultados: Array<Record<string, unknown>> = [];
+  let hayErrores = false;
+
+  for (const empresaId of empresaIds) {
+    try {
+      const r = await ingerirVentasAgoraDia(supabase, empresaId, businessDay);
+      await supabase.from("agora_sync_log").insert({
+        empresa_id: empresaId,
+        status: "ok",
+        total_records: r.facturas,
+        ok_records: r.facturas,
+        error_records: 0,
+        sales_data: { dia: businessDay, facturas: r.facturas, lineas: r.lineas, lineas_sin_producto: r.sinProducto },
+      });
+      resultados.push({ empresaId, ...r });
+    } catch (err) {
+      hayErrores = true;
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[cron/agora-sync] empresa ${empresaId}:`, msg);
+      await supabase.from("agora_sync_log").insert({
+        empresa_id: empresaId,
+        status: "error",
+        error_message: msg,
+        sales_data: { dia: businessDay },
+      });
+      resultados.push({ empresaId, error: msg });
     }
-
-    const { ok, resultados } = await espejoStockAgoraTodas(null);
-    return NextResponse.json(
-      { ok, ejecutadoEn: new Date().toISOString(), resultados },
-      { status: ok ? 200 : 207 }
-    );
-  } catch (err) {
-    // Regla Seguridad Ágora: error exacto, sin reintentos automáticos
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[cron/agora-sync] Error inesperado:", err);
-    return NextResponse.json(
-      { ok: false, ejecutadoEn: new Date().toISOString(), error: msg },
-      { status: 500 }
-    );
   }
+
+  // Recalcular precio de venta medio (ventana 12 meses) tras la ingesta
+  let precioMedioActualizados: number | null = null;
+  if (!hayErrores) {
+    const { data, error } = await supabase.rpc("recalcular_precio_venta_medio");
+    if (error) console.error("[cron/agora-sync] recalcular_precio_venta_medio:", error.message);
+    else precioMedioActualizados = data as number;
+  }
+
+  return NextResponse.json(
+    { ok: !hayErrores, businessDay, ejecutadoEn: new Date().toISOString(), precioMedioActualizados, resultados },
+    { status: hayErrores ? 207 : 200 },
+  );
 }

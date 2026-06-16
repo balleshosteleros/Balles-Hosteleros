@@ -48,6 +48,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getVentasDashboard } from "@/features/sala/actions/ventas-actions";
+import { AgoraExtraccionesPanel } from "@/features/sala/components/AgoraExtraccionesPanel";
 import type {
   VentasDashboard,
   VentasPreset,
@@ -343,11 +344,12 @@ export function VentasView() {
 
         {/* Tabs */}
         <Tabs defaultValue="resumen" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 md:w-auto md:grid-cols-4">
+          <TabsList className="grid w-full grid-cols-2 md:w-auto md:grid-cols-5">
             <TabsTrigger value="resumen">Resumen</TabsTrigger>
             <TabsTrigger value="productos">Productos</TabsTrigger>
             <TabsTrigger value="categorias">Categorías</TabsTrigger>
             <TabsTrigger value="menu-engineering">Menu Engineering</TabsTrigger>
+            <TabsTrigger value="agora">Extracciones Ágora</TabsTrigger>
           </TabsList>
 
           {/* ─── Resumen ─────────────────────────────────────── */}
@@ -640,6 +642,10 @@ export function VentasView() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="agora" className="mt-4">
+            <AgoraExtraccionesPanel />
           </TabsContent>
         </Tabs>
       </div>
