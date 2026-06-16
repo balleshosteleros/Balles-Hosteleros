@@ -48,6 +48,12 @@ import {
 import { toast } from "sonner";
 import { AuthContext } from "@/features/auth/contexts/auth-context";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import {
+  listCamaras,
+  createCamara,
+  updateCamara,
+  deleteCamara,
+} from "@/features/camaras/actions/camaras-actions";
 
 type Camara = {
   id: string;
@@ -65,29 +71,6 @@ const LAYOUTS: Array<{ key: LayoutKey; label: string; capacity: number }> = [
   { key: "1+5", label: "1 grande + 5", capacity: 6 },
 ];
 
-function storageKey(empresaId: string) {
-  return `bh_camaras_${empresaId}`;
-}
-
-function loadCamaras(empresaId: string): Camara[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(storageKey(empresaId));
-    return raw ? (JSON.parse(raw) as Camara[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveCamaras(empresaId: string, camaras: Camara[]) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(storageKey(empresaId), JSON.stringify(camaras));
-  } catch {
-    // quota — ignoramos
-  }
-}
-
 export function CamarasDrawer({ children }: { children: ReactNode }) {
   const auth = useContext(AuthContext);
   const puedeVer = auth?.puedeVer("CÁMARAS") ?? false;
@@ -97,6 +80,8 @@ export function CamarasDrawer({ children }: { children: ReactNode }) {
 
   const [open, setOpen] = useState(false);
   const [camaras, setCamaras] = useState<Camara[]>([]);
+  const [cargando, setCargando] = useState(false);
+  const [guardando, setGuardando] = useState(false);
   const [seleccionadas, setSeleccionadas] = useState<Set<string>>(new Set());
   const [layout, setLayout] = useState<LayoutKey>("2x2");
   const [fullscreen, setFullscreen] = useState(false);
@@ -107,9 +92,32 @@ export function CamarasDrawer({ children }: { children: ReactNode }) {
 
   const viewerRef = useRef<HTMLDivElement | null>(null);
 
-  // Carga inicial al abrir el drawer
+  // Carga inicial desde BD al abrir el drawer
   useEffect(() => {
-    if (open && empresaDbId) setCamaras(loadCamaras(empresaDbId));
+    if (!open || !empresaDbId) return;
+    let cancelado = false;
+    setCargando(true);
+    listCamaras()
+      .then((res) => {
+        if (cancelado) return;
+        if (res.ok) {
+          setCamaras(
+            res.data.map((c) => ({
+              id: c.id,
+              nombre: c.nombre,
+              ubicacion: c.ubicacion ?? "",
+            })),
+          );
+        } else if (res.error) {
+          toast.error(res.error);
+        }
+      })
+      .finally(() => {
+        if (!cancelado) setCargando(false);
+      });
+    return () => {
+      cancelado = true;
+    };
   }, [open, empresaDbId]);
 
   // Si la selección queda vacía y hay cámaras, marcamos la primera por defecto
@@ -169,26 +177,53 @@ export function CamarasDrawer({ children }: { children: ReactNode }) {
     setDialogOpen(true);
   }
 
-  function guardarCamara() {
+  async function guardarCamara() {
     const nombre = formNombre.trim();
     const ubicacion = formUbicacion.trim();
     if (!nombre) {
       toast.error("El nombre es obligatorio");
       return;
     }
-    const next = editId
-      ? camaras.map((c) => (c.id === editId ? { ...c, nombre, ubicacion } : c))
-      : [...camaras, { id: `cam-${Date.now()}`, nombre, ubicacion }];
-    setCamaras(next);
-    if (empresaDbId) saveCamaras(empresaDbId, next);
-    setDialogOpen(false);
-    toast.success(editId ? "Cámara actualizada" : "Cámara añadida");
+    setGuardando(true);
+    try {
+      if (editId) {
+        const res = await updateCamara(editId, { nombre, ubicacion });
+        if (!res.ok) {
+          toast.error(res.error);
+          return;
+        }
+        setCamaras((prev) =>
+          prev.map((c) => (c.id === editId ? { ...c, nombre, ubicacion } : c)),
+        );
+        toast.success("Cámara actualizada");
+      } else {
+        const res = await createCamara({ nombre, ubicacion });
+        if (!res.ok) {
+          toast.error(res.error);
+          return;
+        }
+        const nueva: Camara = {
+          id: res.data.id,
+          nombre: res.data.nombre,
+          ubicacion: res.data.ubicacion ?? "",
+        };
+        setCamaras((prev) => [...prev, nueva]);
+        setSeleccionadas((prev) => new Set(prev).add(nueva.id));
+        toast.success("Cámara añadida");
+      }
+      setDialogOpen(false);
+    } finally {
+      setGuardando(false);
+    }
   }
 
-  function eliminarCamara(id: string) {
-    const next = camaras.filter((c) => c.id !== id);
-    setCamaras(next);
-    if (empresaDbId) saveCamaras(empresaDbId, next);
+  async function eliminarCamara(id: string) {
+    const res = await deleteCamara(id);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    setCamaras((prev) => prev.filter((c) => c.id !== id));
     setSeleccionadas((prev) => {
       const n = new Set(prev);
       n.delete(id);
@@ -282,7 +317,11 @@ export function CamarasDrawer({ children }: { children: ReactNode }) {
                 )}
               </div>
 
-              {camaras.length === 0 ? (
+              {cargando ? (
+                <p className="px-3 py-4 text-[11px] text-muted-foreground">
+                  Cargando cámaras…
+                </p>
+              ) : camaras.length === 0 ? (
                 <p className="px-3 py-4 text-[11px] text-muted-foreground leading-relaxed">
                   Aún no hay cámaras configuradas en este local. Usa
                   «Nueva cámara» para añadir la primera.
@@ -434,15 +473,16 @@ export function CamarasDrawer({ children }: { children: ReactNode }) {
             </p>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={guardando}>
               <X className="h-4 w-4 mr-1" />
               Cancelar
             </Button>
             <Button
               className="bg-teal-600 hover:bg-teal-700"
               onClick={guardarCamara}
+              disabled={guardando}
             >
-              Guardar
+              {guardando ? "Guardando…" : "Guardar"}
             </Button>
           </DialogFooter>
         </DialogContent>
