@@ -16,6 +16,10 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  registrarMovimiento,
+  revertirMovimientosPorDocumento,
+} from "@/features/logistica/services/kardex";
 
 // ─── TIPOS PÚBLICOS ──────────────────────────────────────────────────────────
 
@@ -237,13 +241,24 @@ export async function descontarStockPorVentas(
   return { ingredientesAfectados, lineasProcesadas, lineasOmitidas, errores };
 }
 
-// ─── FUNCIÓN DE CONVENIENCIA: descontar por ticket POS ──────────────────────
+// ─── FUNCIÓN DE CONVENIENCIA: descontar por ticket POS/Ágora (vía KARDEX) ────
 
 /**
- * Descuenta stock a partir de un ticket POS cerrado.
- * Carga las líneas del ticket desde BD y delega en `descontarStockPorVentas`.
+ * Descuenta (o revierte) el stock de un ticket POS/Ágora a través del KARDEX (PRP-057).
  *
- * @param signo - 1 descontar (default), -1 revertir (para anulación)
+ * Cada ingrediente consumido genera un movimiento `salida` en `stock_movimientos`
+ * con la referencia a la factura (`numero`, p. ej. "AG-A-1043") y a la línea de venta
+ * (`origen_linea_id`), de modo que cada `-1` es rastreable hasta su factura. El saldo
+ * de `stock.cantidad_actual` se mantiene materializado por el propio kardex.
+ *
+ *   - Producto de venta con escandallo (`producto_composicion`) → un movimiento por
+ *     ingrediente: consumo = cantidadVendida × cantidadReceta × (1 + merma/100).
+ *   - Producto de compra vendido directo (sin escandallo) → movimiento 1:1 sobre sí mismo.
+ *   - Producto de venta sin escandallo → se omite (pendiente de dar de alta su receta).
+ *
+ * Idempotente por `(origen_linea_id, producto_id)` en el kardex + guardia `stock_descontado`.
+ *
+ * @param signo - 1 descontar (default), -1 revertir (anulación / reproceso del día).
  */
 export async function descontarStockPorTicket(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -251,74 +266,151 @@ export async function descontarStockPorTicket(
   ticketId: string,
   signo: 1 | -1 = 1
 ): Promise<DescuentoStockOutput> {
+  const vacio = (errores: string[]): DescuentoStockOutput => ({
+    ingredientesAfectados: 0,
+    lineasProcesadas: 0,
+    lineasOmitidas: 0,
+    errores,
+  });
+
   const { data: ticket, error: errTicket } = await supabase
     .from("pos_tickets")
-    .select("id, empresa_id, estado, stock_descontado")
+    .select("id, empresa_id, numero, estado, stock_descontado, cerrado_at")
     .eq("id", ticketId)
     .single();
 
   if (errTicket || !ticket) {
-    return {
-      ingredientesAfectados: 0,
-      lineasProcesadas: 0,
-      lineasOmitidas: 0,
-      errores: [`Ticket ${ticketId} no encontrado: ${errTicket?.message ?? ""}`],
-    };
+    return vacio([`Ticket ${ticketId} no encontrado: ${errTicket?.message ?? ""}`]);
   }
 
-  // Guardia anti-doble-descuento / anti-doble-reversión
-  if (signo === 1 && ticket.stock_descontado) {
-    return {
-      ingredientesAfectados: 0,
-      lineasProcesadas: 0,
-      lineasOmitidas: 0,
-      errores: [`Ticket ${ticketId} ya tenía stock descontado — omitido.`],
-    };
+  // ─── Reversión: deshacer TODOS los movimientos del ticket ────────────────
+  if (signo === -1) {
+    if (!ticket.stock_descontado) {
+      return vacio([`Ticket ${ticketId} no tenía stock descontado — nada que revertir.`]);
+    }
+    const { revertidos } = await revertirMovimientosPorDocumento({
+      empresaId: ticket.empresa_id,
+      documentoTipo: "pos_ticket",
+      documentoId: ticketId,
+    });
+    await supabase.from("pos_tickets").update({ stock_descontado: false }).eq("id", ticketId);
+    return { ingredientesAfectados: revertidos, lineasProcesadas: 0, lineasOmitidas: 0, errores: [] };
   }
-  if (signo === -1 && !ticket.stock_descontado) {
-    return {
-      ingredientesAfectados: 0,
-      lineasProcesadas: 0,
-      lineasOmitidas: 0,
-      errores: [`Ticket ${ticketId} no tenía stock descontado — nada que revertir.`],
-    };
+
+  // ─── Descuento ───────────────────────────────────────────────────────────
+  if (ticket.stock_descontado) {
+    return vacio([`Ticket ${ticketId} ya tenía stock descontado — omitido.`]);
   }
 
   const { data: lineasDb, error: errLineas } = await supabase
     .from("pos_ticket_lineas")
-    .select("producto_id, nombre, cantidad")
+    .select("id, producto_id, nombre, cantidad")
     .eq("ticket_id", ticketId);
 
   if (errLineas) {
-    return {
-      ingredientesAfectados: 0,
-      lineasProcesadas: 0,
-      lineasOmitidas: 0,
-      errores: [`Error cargando líneas del ticket: ${errLineas.message}`],
-    };
+    return vacio([`Error cargando líneas del ticket: ${errLineas.message}`]);
   }
 
-  const lineas: LineaVentaResuelta[] = (lineasDb ?? [])
-    .filter((l) => l.producto_id)
-    .map((l) => ({
-      productoId: l.producto_id as string,
-      nombre: l.nombre ?? "",
-      cantidad: Number(l.cantidad ?? 0),
-    }));
+  const lineas = (lineasDb ?? []).filter((l) => l.producto_id) as {
+    id: string;
+    producto_id: string;
+    nombre: string | null;
+    cantidad: number | null;
+  }[];
 
-  const out = await descontarStockPorVentas(supabase, {
-    empresaId: ticket.empresa_id,
-    lineas,
-    signo,
-  });
-
-  // Marcar flag sólo si no hubo errores graves (algunas líneas omitidas son aceptables)
-  if (out.lineasProcesadas > 0 || lineas.length === 0) {
-    await supabase
-      .from("pos_tickets")
-      .update({ stock_descontado: signo === 1 })
-      .eq("id", ticketId);
+  // Tipo de cada producto vendido (para distinguir venta con receta vs compra directa).
+  const productoIds = Array.from(new Set(lineas.map((l) => l.producto_id)));
+  const tipoById = new Map<string, string>();
+  if (productoIds.length > 0) {
+    const { data: productos } = await supabase
+      .from("productos")
+      .select("id, tipo")
+      .eq("empresa_id", ticket.empresa_id)
+      .in("id", productoIds);
+    for (const p of productos ?? []) tipoById.set(p.id, p.tipo);
   }
 
-  return out;
+  // Escandallos (producto_composicion) de los productos de venta vendidos.
+  const ventaIds = productoIds.filter((id) => tipoById.get(id) === "venta");
+  const compByVenta = new Map<
+    string,
+    { ingrediente_id: string; cantidad: number; merma_pct: number }[]
+  >();
+  if (ventaIds.length > 0) {
+    const { data: comp } = await supabase
+      .from("producto_composicion")
+      .select("producto_venta_id, ingrediente_id, cantidad, merma_pct")
+      .in("producto_venta_id", ventaIds);
+    for (const c of comp ?? []) {
+      const arr = compByVenta.get(c.producto_venta_id) ?? [];
+      arr.push({
+        ingrediente_id: c.ingrediente_id,
+        cantidad: Number(c.cantidad ?? 0),
+        merma_pct: Number(c.merma_pct ?? 0),
+      });
+      compByVenta.set(c.producto_venta_id, arr);
+    }
+  }
+
+  const referencia = (ticket.numero as string | null) ?? null;
+  const fecha = (ticket.cerrado_at as string | null) ?? undefined;
+  const errores: string[] = [];
+  let lineasProcesadas = 0;
+  let lineasOmitidas = 0;
+  let ingredientesAfectados = 0;
+
+  for (const l of lineas) {
+    const cant = Number(l.cantidad ?? 0);
+    const motivo = `Venta: ${l.nombre ?? ""}`.trim();
+    const comp = compByVenta.get(l.producto_id);
+    try {
+      if (comp && comp.length > 0) {
+        for (const ing of comp) {
+          const consumo = cant * ing.cantidad * (1 + ing.merma_pct / 100);
+          if (consumo <= 0) continue;
+          await registrarMovimiento({
+            empresaId: ticket.empresa_id,
+            productoId: ing.ingrediente_id,
+            tipo: "salida",
+            cantidad: consumo,
+            referencia,
+            documentoTipo: "pos_ticket",
+            documentoId: ticketId,
+            origenLineaId: l.id,
+            motivo,
+            fecha,
+          });
+          ingredientesAfectados++;
+        }
+        lineasProcesadas++;
+      } else if (tipoById.get(l.producto_id) === "compra") {
+        await registrarMovimiento({
+          empresaId: ticket.empresa_id,
+          productoId: l.producto_id,
+          tipo: "salida",
+          cantidad: cant,
+          referencia,
+          documentoTipo: "pos_ticket",
+          documentoId: ticketId,
+          origenLineaId: l.id,
+          motivo,
+          fecha,
+        });
+        ingredientesAfectados++;
+        lineasProcesadas++;
+      } else {
+        lineasOmitidas++;
+        errores.push(`"${l.nombre}" (venta) sin escandallo — omitido.`);
+      }
+    } catch (e) {
+      errores.push(`Error en línea "${l.nombre}": ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  // Marcar el ticket como descontado salvo que no se procesara ninguna línea con datos.
+  if (lineasProcesadas > 0 || lineas.length === 0) {
+    await supabase.from("pos_tickets").update({ stock_descontado: true }).eq("id", ticketId);
+  }
+
+  return { ingredientesAfectados, lineasProcesadas, lineasOmitidas, errores };
 }
