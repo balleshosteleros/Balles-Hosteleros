@@ -1,6 +1,12 @@
 # PRP-058: Tipos de movimiento, submódulo Mermas y registro de inventarios en el kardex
 
-> **Estado**: EN CURSO (web). **Fase 4 — Mermas en móvil: DIFERIDA** por decisión del dueño (2026-06-17): se va a rediseñar gran parte de la app móvil, así que el botón/pantalla de Mermas en móvil se hará en ese rediseño. Se construyen las fases web (1,2,3,5,6).
+> **Estado**: WEB IMPLEMENTADO (2026-06-17) — Fases 1,2,3,5,6 hechas (typecheck 0, build OK, ruta /cocina/mermas generada). **Fase 4 — Mermas en móvil: DIFERIDA** (rediseño móvil).
+>
+> **Aprendizajes:**
+> - Fase 1: migración `mermas_inventario_kardex_prp058` (CHECK documento_tipo ampliado a inventario/merma, tabla `mermas` con RLS, `lineas_inventario.producto_id`). Labels en `data/kardex.ts`: Compra/Venta/Inventario/Merma/Ajuste.
+> - Fase 2: `MovimientosStockSection` con icono+color por tipo (mapa ICONO_TIPO) y caso inventario cantidad 0 → "Sin cambios".
+> - Fase 3: submódulo `/cocina/mermas` (`MermasView` + `mermas-actions.ts`), modal tipo→producto→unidad auto→cantidad→motivo OBLIGATORIO; al guardar inserta en `mermas` + `registrarMovimiento` salida tipo merma (respeta controla_stock). Añadido a `cocinaSubs` (nav).
+> - Fase 5: `confirmarInventarioKardex`/`revertirInventarioKardex` en inventarios-actions, cableados en InventariosView (confirmar/deshacer). **GAP conocido:** el inventario hoy trabaja sobre estado local (`inv.conteos`), NO persiste a `lineas_inventario` ni a la tabla `stock` real → mis acciones son no-op seguro hasta que el inventario persista líneas con `producto_id`. Pendiente: completar la persistencia del inventario (parte de Fase 4/futuro).
 > **Fecha**: 2026-06-17
 > **Proyecto**: Balles-Hosteleros
 > **Construye sobre**: PRP-056 (ingesta ventas Ágora) y PRP-057 (kardex de stock + descuento por escandallo)
