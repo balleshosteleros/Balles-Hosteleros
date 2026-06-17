@@ -132,6 +132,11 @@ export async function ingerirVentasAgoraDia(
           precio_unitario: toNum(ln.UnitPrice),
           iva_pct: Math.round(toNum(ln.VatRate) * 100),
           descuento_pct: Math.round(toNum(ln.DiscountRate) * 100),
+          // Formato de venta de Ágora: ratio = fracción del producto base consumida. PRP-057.
+          // El COSTE no se toma de Ágora (mal calculado): el coste vive en Balles.
+          sale_format_id: ln.SaleFormatId ?? null,
+          sale_format_nombre: ln.SaleFormatName ?? null,
+          sale_format_ratio: toNum(ln.SaleFormatRatio) || 1,
         });
       }
     }
@@ -152,6 +157,9 @@ type AgoraLine = {
   UnitPrice?: number;
   VatRate?: number;
   DiscountRate?: number;
+  SaleFormatId?: number | null;
+  SaleFormatName?: string;
+  SaleFormatRatio?: number;
 };
 type AgoraInvoiceItem = { Guests?: number; Lines?: AgoraLine[] };
 type AgoraInvoice = {

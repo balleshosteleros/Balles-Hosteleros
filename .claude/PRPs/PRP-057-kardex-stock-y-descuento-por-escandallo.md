@@ -169,6 +169,12 @@ Hechas sin colisionar con la sesión paralela (Fernando, ahora ya commiteada). t
 - **MENÚS/COMBOS — verificado en datos reales (Bacanal):** al vender "MENU BACANAL" el ticket trae la **cabecera** (línea "MENU BACANAL", `producto_id=null`, lleva el PRECIO) **y los COMPONENTES como líneas separadas a precio 0** (Tortilla trufada, Bao-cadillo, Costillas, cafés…). ⇒ Para STOCK **NO hace falta receta del menú**: se descuentan los componentes (ya itemizados); la cabecera se ignora sola (sin `producto_id`). Implicación Fase 2: descontar líneas con `producto_id`; ignorar cabeceras de menú (null). Los cócteles/"combinados" SÍ vienen como una sola línea → esos sí necesitan escandallo.
 - **Gap de alineación:** algunos componentes de menú no están casados en Balles (p.ej. "Ensalada de Tomate y Ventresca", "Alcachofas con Guacamole y Ají Amarillo") → sin `agora_id` no descuentan. Parte de la alineación de catálogo pendiente. Bacanal: 50.359 líneas de venta, 3.038 sin `producto_id`, 146 productos distintos vendidos.
 
+### 2026-06-17: Interruptor "Controlar stock" por producto (Sí/No)
+- Columna `productos.controla_stock` (default true). Si false → el producto **no suma por albaranes ni descuenta por ventas**.
+- **Candado centralizado en `kardex.registrarMovimiento`**: si `controla_stock=false`, no inserta movimiento ni toca stock. Cubre entradas Y salidas sin tocar la lógica de descuento ya commiteada.
+- Acciones `getControlaStock`/`setControlaStock` en `kardex-actions.ts`. Toggle (select Sí/No) en la cabecera de `MovimientosStockSection` con `AlertDialog` de aviso.
+- **DECISIÓN de comportamiento al cambiar (NO destructivo):** Sí→No **conserva** el histórico (no borra), lo **congela** y oculta la sección; No→Sí reaparece y reanuda. Borrar sería irreversible (auditoría); ocultar es reversible. Aviso de confirmación en ambos sentidos.
+
 ### PENDIENTE (Fase 2, diferida hasta `git pull` de lo de Fernando)
 - Descuento venta→escandallo (evolucionar `descontar-stock-por-ventas.ts` para emitir movimientos vía `services/kardex.ts`, que ya está listo para que lo llamen) + honrar `descuenta_stock_directo` (1:1) + arreglar el `stock_descontado=true` falso de PRP-056. Toca archivos de Ágora → esperar coordinación.
 - Clasificar los 108 productos sin escandallo (cuáles 1:1, cuáles receta). Tarta de queso: receta manual.

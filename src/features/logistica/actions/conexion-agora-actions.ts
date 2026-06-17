@@ -8,6 +8,8 @@ export interface ConexionAgora {
   nombreAgora: string | null;
   vendidoEnAgora: boolean;
   unidadesVendidas: number;
+  /** Fecha de la última venta en Ágora (ISO) o null. Detecta productos descatalogados. */
+  ultimaVenta: string | null;
 }
 
 /**
@@ -16,7 +18,7 @@ export interface ConexionAgora {
  * ingeridas, no de una llamada a Ágora) y si realmente se ha vendido.
  */
 export async function getConexionAgora(productoId: string): Promise<ConexionAgora> {
-  const vacio: ConexionAgora = { agoraId: null, nombreAgora: null, vendidoEnAgora: false, unidadesVendidas: 0 };
+  const vacio: ConexionAgora = { agoraId: null, nombreAgora: null, vendidoEnAgora: false, unidadesVendidas: 0, ultimaVenta: null };
   try {
     const { supabase } = await getLogisticaContext();
 
@@ -27,23 +29,31 @@ export async function getConexionAgora(productoId: string): Promise<ConexionAgor
       .maybeSingle();
     const agoraId = (prod?.agora_id as string | null) ?? null;
 
-    // Nombre y unidades desde las ventas reales (pos_ticket_lineas de PRP-056).
+    // Nombre, unidades y fecha desde las ventas reales (pos_ticket_lineas de PRP-056).
     const { data: lineas } = await supabase
       .from("pos_ticket_lineas")
-      .select("nombre, cantidad")
+      .select("nombre, cantidad, pos_tickets(cerrado_at)")
       .eq("producto_id", productoId)
-      .limit(500);
+      .limit(1000);
 
     if (!lineas || lineas.length === 0) {
-      return { agoraId, nombreAgora: null, vendidoEnAgora: false, unidadesVendidas: 0 };
+      return { agoraId, nombreAgora: null, vendidoEnAgora: false, unidadesVendidas: 0, ultimaVenta: null };
     }
 
-    // Nombre más frecuente + suma de unidades.
+    // Nombre más frecuente + suma de unidades + última venta.
     const cuenta = new Map<string, number>();
     let unidades = 0;
-    for (const l of lineas as { nombre: string | null; cantidad: number | null }[]) {
+    let ultimaVenta: string | null = null;
+    for (const l of lineas as {
+      nombre: string | null;
+      cantidad: number | null;
+      pos_tickets: { cerrado_at: string | null } | { cerrado_at: string | null }[] | null;
+    }[]) {
       unidades += Number(l.cantidad ?? 0);
       if (l.nombre) cuenta.set(l.nombre, (cuenta.get(l.nombre) ?? 0) + 1);
+      const t = Array.isArray(l.pos_tickets) ? l.pos_tickets[0] : l.pos_tickets;
+      const cerrado = t?.cerrado_at ?? null;
+      if (cerrado && (!ultimaVenta || cerrado > ultimaVenta)) ultimaVenta = cerrado;
     }
     let nombreAgora: string | null = null;
     let max = 0;
@@ -54,7 +64,7 @@ export async function getConexionAgora(productoId: string): Promise<ConexionAgor
       }
     }
 
-    return { agoraId, nombreAgora, vendidoEnAgora: true, unidadesVendidas: unidades };
+    return { agoraId, nombreAgora, vendidoEnAgora: true, unidadesVendidas: unidades, ultimaVenta };
   } catch (err) {
     console.error("[conexion-agora] getConexionAgora:", err);
     return vacio;

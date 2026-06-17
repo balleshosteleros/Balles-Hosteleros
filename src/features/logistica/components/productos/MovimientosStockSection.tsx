@@ -3,8 +3,22 @@
 import { Fragment, useEffect, useState, useCallback } from "react";
 import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { listMovimientosProducto } from "@/features/logistica/actions/kardex-actions";
+import {
+  getControlaStock,
+  setControlaStock,
+} from "@/features/logistica/actions/kardex-actions";
 import {
   DOCUMENTO_TIPO_LABEL,
   type StockMovimiento,
@@ -18,7 +32,8 @@ function fmtNum(n: number): string {
   return Number(n).toLocaleString("es-ES", { maximumFractionDigits: 2 });
 }
 
-/** Histórico de movimientos (kardex) dentro de la ficha del producto. SIN columna de almacén. */
+/** Histórico de movimientos (kardex) dentro de la ficha del producto. SIN columna de almacén.
+ *  Incluye el interruptor "Controlar stock" (Sí/No) con aviso y conservación del histórico. */
 export function MovimientosStockSection({
   productoId,
   unidad,
@@ -32,6 +47,11 @@ export function MovimientosStockSection({
   const [loading, setLoading] = useState(true);
   const [abierta, setAbierta] = useState<string | null>(null);
 
+  const [controla, setControla] = useState<boolean | null>(null);
+  const [nMovs, setNMovs] = useState(0);
+  const [pendiente, setPendiente] = useState<boolean | null>(null); // valor al que se quiere cambiar
+  const [guardando, setGuardando] = useState(false);
+
   const cargar = useCallback(() => {
     setLoading(true);
     listMovimientosProducto(productoId, { desde: desde || null, hasta: hasta || null }).then((res) => {
@@ -44,45 +64,90 @@ export function MovimientosStockSection({
     cargar();
   }, [cargar]);
 
+  useEffect(() => {
+    getControlaStock(productoId).then((r) => {
+      setControla(r.controlaStock);
+      setNMovs(r.movimientos);
+    });
+  }, [productoId]);
+
+  async function confirmarCambio() {
+    if (pendiente === null) return;
+    setGuardando(true);
+    const res = await setControlaStock(productoId, pendiente);
+    setGuardando(false);
+    if (res.ok) {
+      setControla(pendiente);
+    }
+    setPendiente(null);
+  }
+
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">Movimientos de stock</CardTitle>
-        <div className="mt-2 flex flex-wrap items-end gap-3">
-          <label className="text-xs text-muted-foreground">
-            Desde
-            <input
-              type="date"
-              value={desde}
-              onChange={(e) => setDesde(e.target.value)}
-              className="mt-1 block rounded-md border border-input bg-background px-2 py-1 text-sm"
-            />
-          </label>
-          <label className="text-xs text-muted-foreground">
-            Hasta
-            <input
-              type="date"
-              value={hasta}
-              onChange={(e) => setHasta(e.target.value)}
-              className="mt-1 block rounded-md border border-input bg-background px-2 py-1 text-sm"
-            />
-          </label>
-          {(desde || hasta) && (
-            <button
-              type="button"
-              onClick={() => {
-                setDesde("");
-                setHasta("");
-              }}
-              className="pb-1 text-xs text-muted-foreground underline hover:text-foreground"
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <CardTitle className="text-base">Movimientos de stock</CardTitle>
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            Controlar stock
+            <select
+              value={controla === null ? "" : controla ? "si" : "no"}
+              disabled={controla === null}
+              onChange={(e) => setPendiente(e.target.value === "si")}
+              className="rounded-md border border-input bg-background px-2 py-1 text-sm"
             >
-              Limpiar
-            </button>
-          )}
+              <option value="si">Sí</option>
+              <option value="no">No</option>
+            </select>
+          </label>
         </div>
+
+        {controla && (
+          <div className="mt-2 flex flex-wrap items-end gap-3">
+            <label className="text-xs text-muted-foreground">
+              Desde
+              <input
+                type="date"
+                value={desde}
+                onChange={(e) => setDesde(e.target.value)}
+                className="mt-1 block rounded-md border border-input bg-background px-2 py-1 text-sm"
+              />
+            </label>
+            <label className="text-xs text-muted-foreground">
+              Hasta
+              <input
+                type="date"
+                value={hasta}
+                onChange={(e) => setHasta(e.target.value)}
+                className="mt-1 block rounded-md border border-input bg-background px-2 py-1 text-sm"
+              />
+            </label>
+            {(desde || hasta) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDesde("");
+                  setHasta("");
+                }}
+                className="pb-1 text-xs text-muted-foreground underline hover:text-foreground"
+              >
+                Limpiar
+              </button>
+            )}
+          </div>
+        )}
       </CardHeader>
       <CardContent>
-        {loading ? (
+        {controla === false ? (
+          <div className="rounded-md border border-amber-300 bg-amber-50/60 p-4 text-sm dark:border-amber-900/50 dark:bg-amber-950/30">
+            <p className="font-medium text-foreground">Control de stock desactivado</p>
+            <p className="mt-1 text-muted-foreground">
+              Este producto no suma por albaranes ni descuenta por ventas.
+              {nMovs > 0
+                ? ` Su histórico (${nMovs} ${nMovs === 1 ? "movimiento" : "movimientos"}) se conserva y reaparecerá si vuelves a activarlo.`
+                : ""}
+            </p>
+          </div>
+        ) : loading ? (
           <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Cargando movimientos…
           </div>
@@ -165,6 +230,29 @@ export function MovimientosStockSection({
           </div>
         )}
       </CardContent>
+
+      <AlertDialog open={pendiente !== null} onOpenChange={(o) => !o && setPendiente(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendiente ? "Activar control de stock" : "Desactivar control de stock"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendiente
+                ? "Este producto volverá a controlar stock desde ahora: sumará por albaranes y descontará por ventas. Si tenía histórico anterior, reaparece (no se había borrado)."
+                : nMovs > 0
+                  ? `Este producto dejará de sumar por albaranes y de descontar por ventas. Su histórico (${nMovs} ${nMovs === 1 ? "movimiento" : "movimientos"}) NO se borra: se conserva y se oculta hasta que vuelvas a activarlo.`
+                  : "Este producto no sumará por albaranes ni descontará por ventas."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={guardando}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmarCambio} disabled={guardando}>
+              {guardando ? "Guardando…" : pendiente ? "Activar" : "Desactivar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }

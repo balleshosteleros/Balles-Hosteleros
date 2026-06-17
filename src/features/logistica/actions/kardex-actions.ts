@@ -3,6 +3,54 @@
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
 import type { StockMovimiento } from "@/features/logistica/data/kardex";
 
+/** Lee si un producto controla stock (Sí/No) + cuántos movimientos tiene en histórico. */
+export async function getControlaStock(
+  productoId: string,
+): Promise<{ controlaStock: boolean; movimientos: number }> {
+  try {
+    const { supabase } = await getLogisticaContext();
+    const { data: prod } = await supabase
+      .from("productos")
+      .select("controla_stock")
+      .eq("id", productoId)
+      .maybeSingle();
+    const { count } = await supabase
+      .from("stock_movimientos")
+      .select("id", { count: "exact", head: true })
+      .eq("producto_id", productoId);
+    return { controlaStock: (prod?.controla_stock as boolean) ?? true, movimientos: count ?? 0 };
+  } catch (err) {
+    console.error("[kardex] getControlaStock:", err);
+    return { controlaStock: true, movimientos: 0 };
+  }
+}
+
+/**
+ * Cambia el interruptor "Controlar stock" de un producto.
+ * NO destructivo: al poner No, el histórico de movimientos se conserva (solo se congela);
+ * el producto deja de sumar por albaranes y de descontar por ventas (candado en el kardex).
+ */
+export async function setControlaStock(
+  productoId: string,
+  controla: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { supabase, empresaId } = await getLogisticaContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+    const { error } = await supabase
+      .from("productos")
+      .update({ controla_stock: controla })
+      .eq("id", productoId)
+      .eq("empresa_id", empresaId);
+    if (error) throw error;
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[kardex] setControlaStock:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
 export interface FacturaAgora {
   id: string;
   numero: string | null;

@@ -34,6 +34,7 @@ export interface MovimientoResultado {
   saldoAnterior: number;
   saldoResultante: number;
   duplicado: boolean; // true si el origen ya estaba registrado (idempotencia)
+  omitido?: boolean; // true si el producto no controla stock (no se registró nada)
 }
 
 /** Lee el saldo actual del producto (0 si no tiene fila de stock todavía). */
@@ -98,6 +99,19 @@ export async function registrarMovimiento(
   const fechaISO = input.fecha ?? new Date().toISOString();
   const signo = signoDeTipo(input.tipo);
   const cantidad = Math.abs(Number(input.cantidad));
+
+  // Candado "Controlar stock": si el producto tiene controla_stock=false, NO se
+  // registra movimiento ni se toca el stock (ni entradas ni salidas). El histórico
+  // previo se conserva (solo se congela). Centralizado aquí → cubre todos los caminos.
+  const { data: prodCtrl } = await admin
+    .from("productos")
+    .select("controla_stock")
+    .eq("id", input.productoId)
+    .maybeSingle();
+  if (prodCtrl && prodCtrl.controla_stock === false) {
+    const { saldo } = await leerSaldo(admin, input.empresaId, input.productoId);
+    return { saldoAnterior: saldo, saldoResultante: saldo, duplicado: false, omitido: true };
+  }
 
   // Guardia de idempotencia por origen.
   if (input.origenLineaId) {

@@ -86,7 +86,8 @@ async function ingerirDiaEmpresa(dia, wpId, invoices, prodMap) {
       // cerrado_at = business-day (a mediodía) para que Ventas agrupe por jornada de
       // Ágora, no por fecha natural (un club vende de madrugada = jornada anterior).
       cerrado_at: `${f.BusinessDay}T12:00:00`,
-      stock_descontado: true,
+      // El descuento de stock lo decide el cron desde la fecha de corte; aquí no se marca. PRP-057.
+      stock_descontado: false,
       notas: `Ágora ${f.Serie}-${f.Number}`,
     };
   });
@@ -125,6 +126,10 @@ async function ingerirDiaEmpresa(dia, wpId, invoices, prodMap) {
           precio_unitario: toNum(ln.UnitPrice),
           iva_pct: Math.round(toNum(ln.VatRate) * 100),
           descuento_pct: Math.round(toNum(ln.DiscountRate) * 100),
+          // Formato de venta de Ágora: ratio = fracción del producto base consumida (PRP-057).
+          sale_format_id: ln.SaleFormatId ?? null,
+          sale_format_nombre: ln.SaleFormatName ?? null,
+          sale_format_ratio: toNum(ln.SaleFormatRatio) || 1,
         });
       }
     }

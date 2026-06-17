@@ -101,6 +101,18 @@ export function ConexionAgoraSection({ productoId }: { productoId: string }) {
                   <Badge variant="secondary">Todavía no</Badge>
                 )}
               </div>
+              {info?.ultimaVenta && (
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">Última venta:</span>
+                  <span className="font-medium">
+                    {new Date(info.ultimaVenta).toLocaleDateString("es-ES", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </span>
+                </div>
+              )}
             </div>
 
             {!info?.agoraId && (
