@@ -9,11 +9,10 @@ import {
 
 // "Tripas" de la migración de Ágora: estado, log de sincronizaciones y facturas crudas. PRP-057.
 
-export type MigracionLog = {
-  sync_at: string;
-  status: string;
+export type MigracionDia = {
+  dia: string;
+  facturas: number;
   total: number;
-  resumen: string;
 };
 
 export type MigracionFacturaLinea = {
@@ -43,7 +42,7 @@ export type MigracionEstado = {
   tickets: number;
   primerDia: string | null;
   ultimoDia: string | null;
-  log: MigracionLog[];
+  dias: MigracionDia[];
   facturas: MigracionFactura[];
 };
 
@@ -80,27 +79,15 @@ export async function getMigracionAgoraEstado(): Promise<
       .order("cerrado_at", { ascending: false })
       .limit(1);
 
-    const { data: logRows } = await supabase
-      .from("agora_sync_log")
-      .select("sync_at, status, total_records, sales_data, error_message")
-      .eq("empresa_id", empresaId)
-      .order("sync_at", { ascending: false })
-      .limit(15);
-
-    const log: MigracionLog[] = (logRows ?? []).map((r) => {
-      const sd = (r.sales_data ?? {}) as Record<string, unknown>;
-      const resumen =
-        r.status === "error"
-          ? String(r.error_message ?? "error")
-          : `${sd.dia ?? ""} · ${sd.facturas ?? 0} fact. · ${sd.lineas ?? 0} líneas` +
-            (sd.lineas_sin_producto ? ` · ${sd.lineas_sin_producto} sin producto` : "");
-      return {
-        sync_at: String(r.sync_at),
-        status: String(r.status),
-        total: Number(r.total_records ?? 0),
-        resumen,
-      };
-    });
+    // Relación diaria (de hoy hacia atrás) construida con los datos REALES en Balles.
+    const { data: diasRows } = await supabase.rpc("extracciones_agora_resumen", { p_empresa: empresaId });
+    const dias: MigracionDia[] = (diasRows ?? [])
+      .map((r: Record<string, unknown>) => ({
+        dia: String(r.dia),
+        facturas: Number(r.facturas) || 0,
+        total: num(r.total),
+      }))
+      .sort((a: MigracionDia, b: MigracionDia) => (a.dia < b.dia ? 1 : -1));
 
     // Facturas crudas recientes con sus líneas (incluye formato/ratio).
     const { data: tks } = await supabase
@@ -150,7 +137,7 @@ export async function getMigracionAgoraEstado(): Promise<
       tickets: tickets ?? 0,
       primerDia: (rango?.[0]?.cerrado_at as string | null) ?? null,
       ultimoDia: (rangoMax?.[0]?.cerrado_at as string | null) ?? null,
-      log,
+      dias,
       facturas,
     };
   } catch (err) {

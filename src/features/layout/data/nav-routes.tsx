@@ -11,7 +11,7 @@ import {
   Apple, CreditCard, Presentation, QrCode, Globe, Send, Wallet, Fingerprint,
   Inbox, FileSignature, Trophy, UserCircle, LayoutDashboard, FileQuestion,
   LayoutGrid, CalendarClock, AlertTriangle, HelpCircle, MessageSquareWarning,
-  Video, Mail, MessageSquare, Banknote, Building2, Smartphone,
+  Video, Mail, MessageSquare, Banknote, Building2, Smartphone, Trash2,
 } from "lucide-react";
 
 // ─── Icons custom ──────────────────────────────────────────────────────────
@@ -117,6 +117,7 @@ export const cocinaSubs: SubItem[] = [
   { title: "ESCANDALLOS", url: "/cocina/escandallos", icon: EscandalloIcon },
   { title: "ELABORACIONES", url: "/cocina/elaboraciones", icon: FlaskConical },
   { title: "PARTIDAS", url: "/cocina/partidas", icon: LayoutGrid },
+  { title: "MERMAS", url: "/cocina/mermas", icon: Trash2 },
   { title: "TEMPERATURAS", url: "/cocina/temperaturas", icon: Thermometer },
 ];
 

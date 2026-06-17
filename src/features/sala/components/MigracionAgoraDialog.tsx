@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Database, Loader2, RefreshCw, ChevronRight, ChevronDown, CheckCircle2, XCircle } from "lucide-react";
+import { Database, Loader2, RefreshCw, ChevronRight, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -117,25 +117,21 @@ export function MigracionAgoraDialog() {
               </div>
             </div>
 
-            {/* Log de sincronizaciones */}
+            {/* Migraciones por día (de hoy hacia atrás) */}
             <div>
-              <p className="mb-2 text-sm font-medium">Últimas sincronizaciones</p>
-              {estado.log.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Aún no hay registros de sincronización.</p>
+              <p className="mb-2 text-sm font-medium">Migraciones por día (de hoy hacia atrás)</p>
+              {estado.dias.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Aún no hay días traídos de Ágora.</p>
               ) : (
-                <ul className="space-y-1">
-                  {estado.log.map((l, i) => (
-                    <li key={i} className="flex items-center gap-2 text-xs">
-                      {l.status === "error" ? (
-                        <XCircle className="h-3.5 w-3.5 text-destructive shrink-0" />
-                      ) : (
-                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                      )}
-                      <span className="text-muted-foreground">{l.sync_at.replace("T", " ").slice(0, 16)}</span>
-                      <span className="flex-1">{l.resumen}</span>
-                    </li>
+                <div className="rounded-lg border divide-y">
+                  {estado.dias.map((d) => (
+                    <div key={d.dia} className="flex items-center gap-2 px-3 py-1.5 text-xs">
+                      <span className="font-medium w-28">{d.dia}</span>
+                      <span className="text-muted-foreground">{d.facturas} facturas</span>
+                      <span className="ml-auto font-semibold tabular-nums">{eur(d.total)}</span>
+                    </div>
                   ))}
-                </ul>
+                </div>
               )}
             </div>
 
