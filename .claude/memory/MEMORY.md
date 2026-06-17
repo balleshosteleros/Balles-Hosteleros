@@ -10,6 +10,8 @@
 - [Protocolo Guardado Supabase](feedback/protocolo_guardado_supabase.md) — try/catch + logs en toda escritura; localStorage prohibido para datos críticos
 - [Regla Seguridad Ágora](feedback/regla_seguridad_agora.md) — ante error con Ágora o fallo BD: detenerse, mostrar error exacto, pedir aprobación antes de actuar
 - [Regla de Oro — Balles fuente de verdad](feedback/regla_oro_balles_fuente_verdad.md) — producto/catálogo/precios/stock viven en Balles; Ágora solo cobra. Ventas se importan para descontar mercancía (recetas) y sacar informes por plato. Descuentos de ticket afectan al importe, NO al stock
+- [Ágora — solo Habana y Bacanal, aisladas](project/agora_ingesta_habana_bacanal_aislada.md) — de Ágora solo entran los 2 locales de Fuenlabrada (Getafe/Alcorcón fuera); Habana y Bacanal NO comparten ningún dato; ingesta filtra por Workplace (BACANAL=4, HABANA=1) y match por empresa_id+agora_id
+- [Entrada de stock por OCR de albaranes](project/albaranes_ocr_entrada_stock.md) — futura feature (PRP pendiente): empleados fotografían el albarán del proveedor y Balles lo digitaliza por OCR; al activarse hay que apagar/reconciliar el espejo de stock matinal
 - [Reglas PedidoModal](feedback/pedido_modal_reglas.md) — Combobox Popover (no input libre), IVA desde ficha (no editable), resumen IVA diferenciado, proveedor obligatorio, notas NOT NULL
 - [Flujo Logística](LOGISTICA_PROCESO.md) — flujo completo de compra/stock/Ágora, dead ends activos y reglas de negocio confirmadas
 - [Spec Logística COMPLETA](project/logistica_spec_completa.md) — plan 6 fases: F1-F3 ✅, F4 ✅ (Ágora activo 2026-04-14), F5 pendiente, F6 pendiente
