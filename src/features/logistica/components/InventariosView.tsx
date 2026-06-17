@@ -13,7 +13,7 @@ import {
   type PlantillaInventario,
 } from "@/features/logistica/data/inventarios";
 import { getStockPorEmpresa, type ProductoStock } from "@/features/logistica/data/stock";
-import { listInventarios as listInventariosAction, createInventario as createInventarioAction, updateInventarioEstado as updateInventarioEstadoAction } from "@/features/logistica/actions/inventarios-actions";
+import { listInventarios as listInventariosAction, createInventario as createInventarioAction, updateInventarioEstado as updateInventarioEstadoAction, confirmarInventarioKardex, revertirInventarioKardex } from "@/features/logistica/actions/inventarios-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -180,6 +180,8 @@ export function InventariosView() {
       i.id === inv.id ? { ...i, estado: "Confirmado" as const, confirmadoAt: now, confirmadoPor: usuarioNombre } : i
     ));
     await updateInventarioEstadoAction(inv.id, "Confirmado");
+    // PRP-058: registra los ajustes en el kardex (no-op si aún no hay líneas persistidas con producto_id).
+    await confirmarInventarioKardex(inv.id);
 
     const realMap: Record<string, number> = {};
     for (const conteo of inv.conteos) {
@@ -208,6 +210,7 @@ export function InventariosView() {
       i.id === inv.id ? { ...i, estado: "Borrador" as const, confirmadoAt: undefined, confirmadoPor: undefined } : i
     ));
     await updateInventarioEstadoAction(inv.id, "Borrador");
+    await revertirInventarioKardex(inv.id); // PRP-058: revierte los movimientos del kardex
     toast.info("Confirmacion deshecha. El inventario vuelve a estado Borrador.");
   };
 
