@@ -2,7 +2,7 @@
 // Capitalización sentence case (memoria feedback_capitalizacion_textos_ui).
 
 export type TipoMovimiento = "entrada" | "salida";
-export type DocumentoTipo = "albaran" | "pos_ticket" | "ajuste";
+export type DocumentoTipo = "albaran" | "pos_ticket" | "inventario" | "merma" | "ajuste";
 
 export interface StockMovimiento {
   id: string;
@@ -28,8 +28,10 @@ export const TIPO_MOVIMIENTO_LABEL: Record<TipoMovimiento, string> = {
 };
 
 export const DOCUMENTO_TIPO_LABEL: Record<DocumentoTipo, string> = {
-  albaran: "Compra (albarán)",
+  albaran: "Compra",
   pos_ticket: "Venta",
+  inventario: "Inventario",
+  merma: "Merma",
   ajuste: "Ajuste",
 };
 

@@ -1,7 +1,15 @@
 "use client";
 
 import { Fragment, useEffect, useState, useCallback } from "react";
-import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  ChevronDown,
+  ChevronRight,
+  ClipboardList,
+  Loader2,
+  Trash2,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AlertDialog,
@@ -31,6 +39,15 @@ function fmtFecha(iso: string): string {
 function fmtNum(n: number): string {
   return Number(n).toLocaleString("es-ES", { maximumFractionDigits: 2 });
 }
+
+// Icono y color por tipo de movimiento (Compra/Venta/Inventario/Merma/Ajuste).
+const ICONO_TIPO: Record<string, { Icon: typeof ArrowDownToLine; color: string }> = {
+  albaran: { Icon: ArrowDownToLine, color: "text-emerald-700" },
+  pos_ticket: { Icon: ArrowUpFromLine, color: "text-amber-700" },
+  inventario: { Icon: ClipboardList, color: "text-sky-700" },
+  merma: { Icon: Trash2, color: "text-rose-700" },
+  ajuste: { Icon: ArrowDownToLine, color: "text-muted-foreground" },
+};
 
 /** Histórico de movimientos (kardex) dentro de la ficha del producto. SIN columna de almacén.
  *  Incluye el interruptor "Controlar stock" (Sí/No) con aviso y conservación del histórico. */
@@ -183,24 +200,27 @@ export function MovimientosStockSection({
                       >
                         <td className="py-2 whitespace-nowrap">{fmtFecha(m.fecha)}</td>
                         <td className="py-2">
-                          <span
-                            className={cn(
-                              "inline-flex items-center gap-1",
-                              m.tipo === "entrada" ? "text-emerald-700" : "text-amber-700",
-                            )}
-                          >
-                            {m.tipo === "entrada" ? (
-                              <ArrowDownToLine className="h-3.5 w-3.5" />
-                            ) : (
-                              <ArrowUpFromLine className="h-3.5 w-3.5" />
-                            )}
-                            {DOCUMENTO_TIPO_LABEL[m.documento_tipo]}
-                          </span>
+                          {(() => {
+                            const meta = ICONO_TIPO[m.documento_tipo] ?? ICONO_TIPO.ajuste;
+                            const Icon = meta.Icon;
+                            return (
+                              <span className={cn("inline-flex items-center gap-1", meta.color)}>
+                                <Icon className="h-3.5 w-3.5" />
+                                {DOCUMENTO_TIPO_LABEL[m.documento_tipo]}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="py-2 text-right tabular-nums">
-                          {m.signo === 1 ? "+" : "−"}
-                          {fmtNum(m.cantidad)}
-                          {unidad ? ` ${unidad}` : ""}
+                          {m.documento_tipo === "inventario" && Number(m.cantidad) === 0 ? (
+                            <span className="text-muted-foreground">Sin cambios</span>
+                          ) : (
+                            <>
+                              {m.signo === 1 ? "+" : "−"}
+                              {fmtNum(m.cantidad)}
+                              {unidad ? ` ${unidad}` : ""}
+                            </>
+                          )}
                         </td>
                         <td className="py-2 text-right tabular-nums">{fmtNum(m.saldo_resultante)}</td>
                         <td className="py-2">

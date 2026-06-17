@@ -49,6 +49,7 @@ import {
 import { cn } from "@/lib/utils";
 import { getVentasDashboard } from "@/features/sala/actions/ventas-actions";
 import { AgoraExtraccionesPanel } from "@/features/sala/components/AgoraExtraccionesPanel";
+import { MigracionAgoraDialog } from "@/features/sala/components/MigracionAgoraDialog";
 import type {
   VentasDashboard,
   VentasPreset,
@@ -297,6 +298,7 @@ export function VentasView() {
               Dashboard de ventas, productos y Menu Engineering
             </p>
           </div>
+          <MigracionAgoraDialog />
         </div>
 
         {/* Filtros */}

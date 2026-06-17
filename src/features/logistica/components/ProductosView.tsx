@@ -846,8 +846,9 @@ function ProductoDetalle({
         <ConexionAgoraSection productoId={producto!.id} />
       )}
 
-      {/* Movimientos de stock (kardex) — productos ya creados */}
-      {!isNew && (
+      {/* Movimientos de stock (kardex) + controlar stock — solo productos que GUARDAN
+          stock (compra y elaboraciones). Los de venta no tienen stock propio. */}
+      {!isNew && !esVenta && (
         <MovimientosStockSection productoId={producto!.id} unidad={unidad} />
       )}
 
