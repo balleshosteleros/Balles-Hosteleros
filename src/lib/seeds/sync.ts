@@ -20,6 +20,10 @@ import { INSPECCION_PRESENTACION_SEED } from "./inspeccion-presentacion";
 import { RESERVA_ETIQUETAS_SEED, normalizeReservaEtiquetaNombre } from "./reserva-etiquetas";
 import { SALA_ETIQUETAS_SEED, normalizeEtiquetaNombre } from "./sala-etiquetas";
 import { RESERVA_EMAIL_PLANTILLAS_SEED } from "./reserva-email-plantillas";
+import {
+  CATEGORIAS_PRODUCTO_SEED,
+  normalizeCategoriaProductoNombre,
+} from "./categorias-producto";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -481,6 +485,42 @@ export async function ensureRrhhConfigEmpresa(
 }
 
 /**
+ * Sincroniza las categorías de producto canónicas (tipo "compra") a una
+ * empresa (aditivo). Solo crea las categorías cuyo nombre aún no exista
+ * (case-insensitive, por tipo); nunca renombra ni borra. Las categorías de
+ * nicho (Vapers/Shishas) NO están en el seed, así que no se propagan.
+ */
+export async function syncCategoriasProductoAEmpresa(
+  admin: Admin,
+  empresaId: string,
+): Promise<{ creadas: number }> {
+  const { data: existentes } = await admin
+    .from("categorias_producto")
+    .select("tipo, nombre")
+    .eq("empresa_id", empresaId);
+  const setExistentes = new Set(
+    (existentes ?? []).map(
+      (c) => `${c.tipo as string}|${normalizeCategoriaProductoNombre(c.nombre as string)}`,
+    ),
+  );
+
+  const aCrear = CATEGORIAS_PRODUCTO_SEED.filter(
+    (c) => !setExistentes.has(`${c.tipo}|${normalizeCategoriaProductoNombre(c.nombre)}`),
+  ).map((c) => ({
+    empresa_id: empresaId,
+    tipo: c.tipo,
+    nombre: c.nombre,
+    orden: c.orden,
+    activa: true,
+  }));
+
+  if (aCrear.length === 0) return { creadas: 0 };
+  const { error } = await admin.from("categorias_producto").insert(aCrear);
+  if (error) throw error;
+  return { creadas: aCrear.length };
+}
+
+/**
  * Siembra una empresa nueva con todos los pilares canónicos.
  * Llamar desde `createEmpresa()` justo después del INSERT en `empresas`.
  */
@@ -497,6 +537,7 @@ export async function seedEmpresaDefaults(
   await syncInspeccionPresentacionAEmpresa(admin, empresaId);
   await syncReservaEtiquetasAEmpresa(admin, empresaId);
   await syncSalaEtiquetasAEmpresa(admin, empresaId);
+  await syncCategoriasProductoAEmpresa(admin, empresaId);
   await ensureReservasConfigEmpresa(admin, empresaId);
   await ensureRrhhConfigEmpresa(admin, empresaId);
   await syncReservaEmailPlantillasAEmpresa(admin, empresaId);
@@ -542,6 +583,7 @@ export async function syncSeedsToAllEmpresas(): Promise<{
       reservaEtiquetasCreadas: number;
       salaEtiquetasCategoriasCreadas: number;
       salaEtiquetasCreadas: number;
+      categoriasProductoCreadas: number;
       reservasConfigCreada: boolean;
       reservaEmailsCreadas: number;
     }> = [];
@@ -558,6 +600,7 @@ export async function syncSeedsToAllEmpresas(): Promise<{
       const ipres = await syncInspeccionPresentacionAEmpresa(admin, empresaId);
       const re = await syncReservaEtiquetasAEmpresa(admin, empresaId);
       const se = await syncSalaEtiquetasAEmpresa(admin, empresaId);
+      const cp = await syncCategoriasProductoAEmpresa(admin, empresaId);
       const rcfg = await ensureReservasConfigEmpresa(admin, empresaId);
       await ensureRrhhConfigEmpresa(admin, empresaId);
       const rep = await syncReservaEmailPlantillasAEmpresa(admin, empresaId);
@@ -572,6 +615,7 @@ export async function syncSeedsToAllEmpresas(): Promise<{
         reservaEtiquetasCreadas: re.creados,
         salaEtiquetasCategoriasCreadas: se.categoriasCreadas,
         salaEtiquetasCreadas: se.etiquetasCreadas,
+        categoriasProductoCreadas: cp.creadas,
         reservasConfigCreada: rcfg.creada,
         reservaEmailsCreadas: rep.creadas,
       });
