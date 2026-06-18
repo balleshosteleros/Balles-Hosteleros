@@ -34,6 +34,7 @@ import {
   type CierreRow, type CierresConfig, type CierreModo,
 } from "@/features/gerencia/actions/cierres-actions";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 const DIAS_SEMANA = [
   { value: 0, label: "Lunes" },
@@ -62,6 +63,7 @@ function jsDayToLunFirst(d: Date): number {
 }
 
 export function CierresView() {
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
   const [cierres, setCierres] = useState<CierreRow[]>([]);
   const [config, setConfig] = useState<CierresConfig>({ modo: "libre", dia_semana: null });
   const [loading, setLoading] = useState(true);
@@ -195,7 +197,12 @@ export function CierresView() {
   };
 
   const handleEliminar = async (id: string) => {
-    if (!confirm("¿Eliminar este cierre? Se borrará también el documento adjunto.")) return;
+    const ok = await confirmDelete({
+      title: "¿Eliminar este cierre?",
+      description: "Se borrará también el documento adjunto.",
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
     const res = await deleteCierre(id);
     if (res.ok) {
       toast.success("Cierre eliminado");
@@ -234,6 +241,7 @@ export function CierresView() {
 
   return (
     <div className="p-6 space-y-6">
+      {confirmDeleteDialog}
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>

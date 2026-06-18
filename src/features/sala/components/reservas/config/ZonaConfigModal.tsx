@@ -14,6 +14,7 @@ import {
   type Zona,
 } from "@/features/sala/planos/data/planos";
 import { createZona, updateZona, deleteZona } from "@/features/sala/planos/actions/zonas-actions";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 interface Props {
   open: boolean;
@@ -39,6 +40,7 @@ export function ZonaConfigModal({
   const [salaId, setSalaId] = useState("");
   const [color, setColor] = useState(COLORES_PASTEL_ZONAS[0]);
   const [saving, setSaving] = useState(false);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
   useEffect(() => {
     if (open) {
@@ -87,7 +89,12 @@ export function ZonaConfigModal({
 
   async function handleDelete() {
     if (!zona) return;
-    if (!confirm(`¿Borrar la zona "${zona.nombre}"? Las mesas asociadas bloquearán el borrado.`)) return;
+    const ok = await confirmDelete({
+      title: `Borrar la zona "${zona.nombre}"`,
+      description: "Las mesas asociadas bloquearán el borrado.",
+      confirmLabel: "Borrar",
+    });
+    if (!ok) return;
     const res = await deleteZona(zona.id);
     if (!res.ok) {
       toast.error(res.error ?? "No se pudo borrar");
@@ -165,6 +172,7 @@ export function ZonaConfigModal({
           </div>
         </div>
       </DialogContent>
+      {confirmDeleteDialog}
     </Dialog>
   );
 }

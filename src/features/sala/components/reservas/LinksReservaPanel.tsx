@@ -29,6 +29,7 @@ import {
 } from "@/features/sala/actions/reserva-links-actions";
 import { listTicketProductos } from "@/features/sala/actions/ticket-productos-actions";
 import type { ReservaTicketProducto } from "@/features/sala/data/ticket-productos";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 const COLUMNAS: ToolbarColumna[] = [
   { campo: "palabraClave", label: "Palabra clave", bloqueada: true },
@@ -42,6 +43,7 @@ function formatFecha(iso: string) {
 }
 
 export function LinksReservaPanel({ embedded = false }: { embedded?: boolean } = {}) {
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
   const [links, setLinks] = useState<ReservaLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
@@ -174,7 +176,12 @@ export function LinksReservaPanel({ embedded = false }: { embedded?: boolean } =
   }
 
   async function onEliminar(link: ReservaLink) {
-    if (!confirm(`¿Eliminar el link "${link.palabraClave}"? Las reservas históricas conservarán el badge.`)) return;
+    const ok = await confirmDelete({
+      title: "Eliminar link",
+      description: `¿Eliminar el link "${link.palabraClave}"? Las reservas históricas conservarán el badge.`,
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
     const r = await deleteReservaLink(link.id);
     if (!r.ok) {
       toast.error(r.error ?? "Error al eliminar");
@@ -188,6 +195,7 @@ export function LinksReservaPanel({ embedded = false }: { embedded?: boolean } =
 
   return (
     <div className={embedded ? "space-y-4" : "p-4 md:p-6 space-y-4"}>
+      {confirmDeleteDialog}
       {!embedded && (
         <div className="flex items-center gap-3">
           <Link href="/sala/reservas" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">

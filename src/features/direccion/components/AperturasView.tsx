@@ -342,9 +342,11 @@ export function AperturasView() {
   };
 
   const handleRegenerateShare = async (id: string) => {
-    const ok = window.confirm(
-      "¿Regenerar el enlace? El enlace anterior dejará de funcionar inmediatamente.",
-    );
+    const ok = await confirmDelete({
+      title: "¿Regenerar el enlace?",
+      description: "El enlace anterior dejará de funcionar inmediatamente.",
+      confirmLabel: "Regenerar",
+    });
     if (!ok) return;
     const res = await regenerateShareEstudio(id);
     if (!res.ok) {

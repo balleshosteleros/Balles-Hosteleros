@@ -20,6 +20,7 @@ import {
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { toast } from "sonner";
 import {
   getCampanaDetalle,
@@ -42,6 +43,8 @@ export function CampanaDetalleView({ campanaId }: Props) {
   const [busqueda, setBusqueda] = useState("");
   const [envioAbierto, setEnvioAbierto] = useState<string | null>(null);
   const [timelineOpen, setTimelineOpen] = useState(false);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } =
+    useConfirmDelete();
   const [, startTransition] = useTransition();
 
   function refresh() {
@@ -77,7 +80,13 @@ export function CampanaDetalleView({ campanaId }: Props) {
   }
 
   async function onCerrar() {
-    if (!confirm("¿Cerrar la campaña? Podrás seguir editando reuniones pero quedará marcada como cerrada.")) return;
+    const ok = await confirmDelete({
+      title: "Cerrar la campaña",
+      description:
+        "Podrás seguir editando reuniones pero quedará marcada como cerrada.",
+      confirmLabel: "Cerrar",
+    });
+    if (!ok) return;
     const res = await cerrarCampana(campanaId);
     if (!res.ok) return toast.error(res.error);
     toast.success("Campaña cerrada");
@@ -242,6 +251,8 @@ export function CampanaDetalleView({ campanaId }: Props) {
           setEnvioAbierto(envioId);
         }}
       />
+
+      {confirmDeleteDialog}
     </div>
   );
 }

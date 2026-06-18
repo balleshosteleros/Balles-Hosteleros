@@ -68,6 +68,7 @@ import {
   type Resena,
 } from "@/features/calidad/types/resenas";
 import { AgentesIAView } from "./AgentesIAView";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 
@@ -906,6 +907,8 @@ function DetalleResenaDialog({
   const [generando, setGenerando] = useState(false);
   const [publicando, setPublicando] = useState(false);
   useGlobalLoadingSync(saving || generando || publicando);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } =
+    useConfirmDelete();
 
   useEffect(() => {
     if (resena) {
@@ -968,13 +971,14 @@ function DetalleResenaDialog({
       window.open(url, "_blank", "noopener,noreferrer");
       // Pequeña pausa para que se vea el toast
       await new Promise((r) => setTimeout(r, 400));
-      if (
-        confirm(
-          "Abrí Google Maps con tu respuesta en el portapapeles.\n\n" +
-            "Pulsa Cmd+V para pegarla, publícala en Google y vuelve aquí.\n\n" +
-            "¿La publicaste? (OK = marcar como publicada / Cancelar = aún no)",
-        )
-      ) {
+      const ok = await confirmDelete({
+        title: "¿La publicaste?",
+        description:
+          "Abrí Google Maps con tu respuesta en el portapapeles. Pulsa Cmd+V para pegarla, publícala en Google y vuelve aquí.",
+        confirmLabel: "Marcar como publicada",
+        cancelLabel: "Aún no",
+      });
+      if (ok) {
         const res = await marcarComoPublicada(resena.id);
         if (!res.ok) {
           toast.error(res.error);
@@ -1010,7 +1014,12 @@ function DetalleResenaDialog({
   };
 
   const onEliminar = async () => {
-    if (!confirm("¿Eliminar esta reseña? No se puede deshacer.")) return;
+    const ok = await confirmDelete({
+      title: "Eliminar reseña",
+      description: "¿Eliminar esta reseña? No se puede deshacer.",
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
     const res = await eliminarResena(resena.id);
     if (!res.ok) {
       toast.error(res.error);
@@ -1022,6 +1031,7 @@ function DetalleResenaDialog({
   };
 
   return (
+    <>
     <Dialog open={!!resena} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
@@ -1213,5 +1223,7 @@ function DetalleResenaDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    {confirmDeleteDialog}
+    </>
   );
 }

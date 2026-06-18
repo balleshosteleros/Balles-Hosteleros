@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { publicarOficial, anadirACartaDigital } from "../actions/publicar-oficial-actions";
 import type { RecetaConExtras } from "../actions/recetas-actions";
 import { ComunicadoRecetaDialog } from "./ComunicadoRecetaDialog";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 interface Props {
   receta: RecetaConExtras;
@@ -31,14 +32,20 @@ export function MarketingTab({ receta, onChanged }: Props) {
   );
   const [publishing, setPublishing] = useState(false);
   const [showComunicado, setShowComunicado] = useState(false);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } =
+    useConfirmDelete();
 
   const publicada = Boolean(receta.escandallo_id);
 
   async function publicar() {
     if (publicada) {
-      if (!confirm("Esta receta ya está publicada. ¿Actualizar la escandallo oficial y productos de compra?")) {
-        return;
-      }
+      const ok = await confirmDelete({
+        title: "Esta receta ya está publicada",
+        description:
+          "¿Actualizar el escandallo oficial y los productos de compra?",
+        confirmLabel: "Actualizar",
+      });
+      if (!ok) return;
     }
     setPublishing(true);
     const res = await publicarOficial(receta.id);
@@ -156,6 +163,7 @@ export function MarketingTab({ receta, onChanged }: Props) {
         onOpenChange={setShowComunicado}
         receta={receta}
       />
+      {confirmDeleteDialog}
     </div>
   );
 }

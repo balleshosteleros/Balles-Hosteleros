@@ -29,6 +29,7 @@ import {
   colVisible,
 } from "@/shared/components/SubmoduleToolbar";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import {
   listInformes, createInforme, deleteInforme,
 } from "@/features/gerencia/actions/informes-actions";
@@ -80,6 +81,7 @@ const COLUMNAS_DEF: ToolbarColumna[] = [
 ];
 
 export function InformesView() {
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
   const [informes, setInformes] = useState<InformeRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -205,7 +207,12 @@ export function InformesView() {
   };
 
   const handleEliminar = async (id: string) => {
-    if (!confirm("¿Eliminar este informe? Se borrará también el documento adjunto.")) return;
+    const ok = await confirmDelete({
+      title: "¿Eliminar este informe?",
+      description: "Se borrará también el documento adjunto.",
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
     const res = await deleteInforme(id);
     if (res.ok) {
       toast.success("Informe eliminado");
@@ -219,6 +226,7 @@ export function InformesView() {
 
   return (
     <div className="p-6 space-y-4">
+      {confirmDeleteDialog}
       {/* BARRA HORIZONTAL 1: + Nuevo | Buscar + 3 iconos (columnas / IO / Settings) */}
       <SubmoduleToolbar
         busqueda={busqueda}

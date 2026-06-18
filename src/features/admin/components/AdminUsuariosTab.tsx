@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { createEmployee, getEmployees, deleteEmployee } from '@/actions/admin'
 import type { Profile } from '@/types/database'
 import { LoadingSpinner } from '@/shared/components/LoadingSpinner'
+import { useConfirmDelete } from '@/shared/components/ConfirmDeleteDialog'
 
 const ROLES = ['empleado', 'cocinero', 'camarero', 'gerente', 'admin']
 
@@ -30,6 +31,7 @@ export function AdminUsuariosTab() {
   const [formError, setFormError] = useState<string | null>(null)
   const [formLoading, setFormLoading] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete()
 
   async function loadEmployees() {
     setLoading(true)
@@ -58,7 +60,12 @@ export function AdminUsuariosTab() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('¿Seguro que quieres eliminar este usuario?')) return
+    const ok = await confirmDelete({
+      title: '¿Eliminar usuario?',
+      description: 'Se eliminará el acceso de este usuario al sistema. Esta acción no se puede deshacer.',
+      confirmLabel: 'Eliminar',
+    })
+    if (!ok) return
     setDeleting(id)
     const result = await deleteEmployee(id)
     if (result?.error) {
@@ -177,6 +184,8 @@ export function AdminUsuariosTab() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {confirmDeleteDialog}
     </div>
   )
 }

@@ -34,8 +34,10 @@ import { MesaConfigModal } from "./MesaConfigModal";
 import { CombinacionConfigModal } from "./CombinacionConfigModal";
 import { PlanosTab } from "./PlanosTab";
 import { SalaPlanoEditor } from "./SalaPlanoEditor";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 export function EstructuraTab() {
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
   const [locales, setLocales] = useState<LocalMin[]>([]);
   const [localId, setLocalId] = useState<string>("");
   const [salas, setSalas] = useState<Sala[]>([]);
@@ -93,7 +95,12 @@ export function EstructuraTab() {
   }, [localId, cargarTodo]);
 
   async function handleBorrarSala(s: Sala) {
-    if (!confirm(`¿Borrar la sala "${s.nombre}"? Si tiene zonas, se bloqueará.`)) return;
+    const ok = await confirmDelete({
+      title: "Borrar sala",
+      description: `¿Borrar la sala "${s.nombre}"? Si tiene zonas, se bloqueará.`,
+      confirmLabel: "Borrar",
+    });
+    if (!ok) return;
     const res = await deleteSala(s.id);
     if (!res.ok) {
       toast.error(res.error ?? "No se pudo borrar");
@@ -127,6 +134,7 @@ export function EstructuraTab() {
 
   return (
     <div className="space-y-6">
+      {confirmDeleteDialog}
       {locales.length > 1 && (
         <div className="space-y-1.5 max-w-sm">
           <Label className="text-xs">Local</Label>

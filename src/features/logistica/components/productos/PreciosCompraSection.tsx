@@ -37,6 +37,7 @@ import { ProveedorCombobox } from "@/features/logistica/components/productos/Pro
 import { useCatalogosLogistica } from "@/features/logistica/hooks/useCatalogosLogistica";
 import { toast } from "sonner";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 interface Props {
   productoId: string;
@@ -113,6 +114,7 @@ export function PreciosCompraSection({ productoId, unidad, onCurrentChange, onIt
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   useGlobalLoadingSync(loading || saving || deletingId !== null);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
   // Form state (nuevo precio o edición de uno existente)
   const [precio, setPrecio] = useState("");
@@ -367,7 +369,12 @@ export function PreciosCompraSection({ productoId, unidad, onCurrentChange, onIt
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("¿Eliminar esta entrada del histórico?")) return;
+    const ok = await confirmDelete({
+      title: "Eliminar entrada",
+      description: "¿Eliminar esta entrada del histórico de precios?",
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
     setDeletingId(id);
     const res = await deletePrecioCompra(id);
     setDeletingId(null);
@@ -662,6 +669,7 @@ export function PreciosCompraSection({ productoId, unidad, onCurrentChange, onIt
           </div>
         )}
       </CardContent>
+      {confirmDeleteDialog}
     </Card>
   );
 }

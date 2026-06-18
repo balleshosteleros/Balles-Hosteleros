@@ -49,6 +49,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import {
   useFormacionStore,
   leccionesOrdenadas,
@@ -69,6 +70,8 @@ function formatFecha(iso: string): string {
 
 export function AdminFormacionPanel() {
   const { empresaActual } = useEmpresa();
+  const { confirm: confirmRestaurar, dialog: confirmRestaurarDialog } =
+    useConfirmDelete();
   const cursos = useFormacionStore((s) => s.cursos);
   const secciones = useFormacionStore((s) => s.secciones);
   const lecciones = useFormacionStore((s) => s.lecciones);
@@ -175,14 +178,13 @@ export function AdminFormacionPanel() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => {
-              if (
-                confirm(
-                  "¿Restaurar contenido de ejemplo? Se perderán los cambios manuales.",
-                )
-              ) {
-                resetSeed();
-              }
+            onClick={async () => {
+              const ok = await confirmRestaurar({
+                title: "¿Restaurar contenido de ejemplo?",
+                description: "Se perderán los cambios manuales.",
+                confirmLabel: "Restaurar",
+              });
+              if (ok) resetSeed();
             }}
           >
             <RefreshCw className="mr-2 h-3.5 w-3.5" />
@@ -467,6 +469,7 @@ export function AdminFormacionPanel() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {confirmRestaurarDialog}
     </Card>
   );
 }

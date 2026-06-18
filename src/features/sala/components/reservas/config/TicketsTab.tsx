@@ -25,6 +25,7 @@ import {
   listTicketProductos,
   unarchiveTicketProducto,
 } from "@/features/sala/actions/ticket-productos-actions";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { TicketProductoForm } from "./TicketProductoForm";
 
 function fmtEuro(n: number, iva: number): string {
@@ -33,6 +34,7 @@ function fmtEuro(n: number, iva: number): string {
 }
 
 export function TicketsTab() {
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
   const [productos, setProductos] = useState<ReservaTicketProducto[]>([]);
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState<ReservaTicketProducto | null>(null);
@@ -69,7 +71,12 @@ export function TicketsTab() {
   }
 
   async function handleDelete(p: ReservaTicketProducto) {
-    if (!confirm(`¿Borrar el producto "${p.nombre}"?`)) return;
+    const ok = await confirmDelete({
+      title: "Borrar producto",
+      description: `¿Borrar el producto "${p.nombre}"?`,
+      confirmLabel: "Borrar",
+    });
+    if (!ok) return;
     const r = await deleteTicketProducto(p.id);
     if (!r.ok) {
       toast.error(r.error ?? "No se pudo borrar");
@@ -83,6 +90,7 @@ export function TicketsTab() {
 
   return (
     <div className="space-y-3">
+      {confirmDeleteDialog}
       <div className="flex items-center justify-between gap-3">
         <Button size="sm" onClick={() => setCreando(true)}>
           <Plus className="h-3.5 w-3.5 mr-1" /> Nuevo

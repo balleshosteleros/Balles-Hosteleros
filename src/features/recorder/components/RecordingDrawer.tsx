@@ -43,6 +43,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { useRecordingStore } from "../store/recording-store";
 import { useRecorder, formatDuration } from "../contexts/recorder-context";
 
@@ -479,6 +480,8 @@ function RecordingsList() {
   const [savingRename, setSavingRename] = useState(false);
   const [quota, setQuota] = useState<{ used: number; limit: number } | null>(null);
   const { pendingCount } = useRecorder();
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } =
+    useConfirmDelete();
 
   useEffect(() => {
     let alive = true;
@@ -533,7 +536,12 @@ function RecordingsList() {
   }, [filtered]);
 
   async function handleDelete(id: string) {
-    if (!confirm("¿Eliminar esta grabación?")) return;
+    const ok = await confirmDelete({
+      title: "¿Eliminar esta grabación?",
+      description: "Esta acción no se puede deshacer.",
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
     const res = await fetch("/api/recordings", {
       method: "DELETE",
       body: JSON.stringify({ id }),
@@ -745,6 +753,7 @@ function RecordingsList() {
           ))}
         </div>
       )}
+      {confirmDeleteDialog}
     </div>
   );
 }
@@ -792,6 +801,8 @@ function PendingUploadsList() {
   >([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [retryingAll, setRetryingAll] = useState(false);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } =
+    useConfirmDelete();
 
   useEffect(() => {
     let alive = true;
@@ -831,7 +842,12 @@ function PendingUploadsList() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("¿Eliminar esta grabación local? No se podrá recuperar.")) return;
+    const ok = await confirmDelete({
+      title: "¿Eliminar esta grabación local?",
+      description: "No se podrá recuperar.",
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
     await deletePending(id);
   }
 
@@ -923,6 +939,7 @@ function PendingUploadsList() {
           );
         })}
       </div>
+      {confirmDeleteDialog}
     </div>
   );
 }

@@ -12,6 +12,7 @@ import {
   reordenarCategorias,
   reordenarItems,
 } from "../../actions/carta-admin-actions";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import Image from "next/image";
 
 export function CategoriaCard({
@@ -34,6 +35,7 @@ export function CategoriaCard({
   const [editing, setEditing] = useState(false);
   const [nombre, setNombre] = useState(cat.nombre);
   const [pending, startTransition] = useTransition();
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
   const handleSaveNombre = () => {
     startTransition(async () => {
@@ -48,8 +50,13 @@ export function CategoriaCard({
     });
   };
 
-  const handleBorrar = () => {
-    if (!confirm(`¿Borrar la categoría "${cat.nombre}" y todos sus platos?`)) return;
+  const handleBorrar = async () => {
+    const ok = await confirmDelete({
+      title: "Borrar categoría",
+      description: `Se borrará la categoría "${cat.nombre}" y todos sus platos.`,
+      confirmLabel: "Borrar",
+    });
+    if (!ok) return;
     startTransition(async () => {
       await borrarCategoria(cat.id);
     });
@@ -79,6 +86,7 @@ export function CategoriaCard({
 
   return (
     <Card className={cat.visible ? "" : "opacity-60"}>
+      {confirmDeleteDialog}
       <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-3">
         <div className="flex flex-1 items-center gap-2">
           {editing ? (

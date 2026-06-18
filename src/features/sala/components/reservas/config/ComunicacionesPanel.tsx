@@ -51,11 +51,13 @@ import {
   upsertReservasConfig,
 } from "@/features/sala/actions/reservas-config-actions";
 import type { EmpresaReservasConfig } from "@/features/sala/data/reservas";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { cn } from "@/lib/utils";
 
 const HORAS_RECORDATORIO: number[] = [1, 2, 3, 4, 6, 8, 12, 24, 48];
 
 export function ComunicacionesPanel() {
+  const { confirm: confirmReset, dialog: confirmResetDialog } = useConfirmDelete();
   const [plantillas, setPlantillas] = useState<ReservaEmailPlantilla[]>([]);
   const [config, setConfig] = useState<EmpresaReservasConfig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -145,9 +147,12 @@ export function ComunicacionesPanel() {
 
   async function restablecer() {
     if (!selected) return;
-    if (!window.confirm("¿Restablecer al texto de fábrica? Se perderá tu personalización.")) {
-      return;
-    }
+    const ok = await confirmReset({
+      title: "Restablecer al texto de fábrica",
+      description: "Se perderá tu personalización.",
+      confirmLabel: "Restablecer",
+    });
+    if (!ok) return;
     const res = await resetReservaEmailPlantilla(selectedTipo);
     if (res.ok) {
       toast.success("Restablecido");
@@ -180,6 +185,7 @@ export function ComunicacionesPanel() {
 
   return (
     <div className="space-y-4">
+      {confirmResetDialog}
       <div>
         <h2 className="text-base font-semibold text-foreground">Plantillas de correo al cliente</h2>
         <p className="text-xs text-muted-foreground mt-0.5">

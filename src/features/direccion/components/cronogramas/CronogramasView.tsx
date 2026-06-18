@@ -45,6 +45,7 @@ import { cn } from "@/lib/utils";
 import { listDepartamentos, type DepartamentoRow } from "@/features/ajustes/actions/departamentos-actions";
 import { crearCronogramaParaPuesto, listPuestosParaCronograma } from "@/features/rrhh/actions/vacantes-actions";
 import { getUserPermisos } from "@/features/auth/actions/permisos-actions";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 const ORDERED_FREQUENCIES: Frecuencia[] = [
   "DIARIO", "SEMANAL", "MENSUAL", "TRIMESTRAL", "ANUAL", "POR NECESIDAD",
@@ -995,6 +996,7 @@ function DetalleTareaDialog({
   /** En modo edit: callback que recibe el patch. El parent decide en qué empresas aplicarlo. */
   onSubmitEdit?: (patch: Partial<CronogramaOperativo>) => Promise<void>;
 }) {
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
   const isCreate = mode === "create";
   const [nombre, setNombre] = useState(tarea.tarea ?? "");
   const [resumen, setResumen] = useState(tarea.resumen ?? "");
@@ -1078,7 +1080,12 @@ function DetalleTareaDialog({
 
   const handleDeleteVideo = async () => {
     if (!videoUrl) return;
-    if (!confirm("¿Eliminar el video?")) return;
+    const ok = await confirmDelete({
+      title: "¿Eliminar el vídeo?",
+      description: "Se quitará el vídeo formativo de esta tarea. Esta acción no se puede deshacer.",
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
     const res = await deleteCronogramaVideo(tarea.id, videoUrl);
     if (!res.ok) { toast.error(res.error); return; }
     setVideoUrl("");
@@ -1087,6 +1094,7 @@ function DetalleTareaDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
+      {confirmDeleteDialog}
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-start gap-3 pr-10">

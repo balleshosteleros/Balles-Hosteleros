@@ -19,6 +19,7 @@ import { SubmoduleToolbar } from "@/shared/components/SubmoduleToolbar";
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { toast } from "sonner";
 import {
   CATEGORIA_CUESTIONARIO_LABEL,
@@ -199,6 +200,8 @@ function PlantillaDialog({ open, onOpenChange, plantilla, onGuardada }: Plantill
   const [notaCorte, setNotaCorte] = useState(70);
   const [archivada, setArchivada] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } =
+    useConfirmDelete();
 
   useEffect(() => {
     if (!open) return;
@@ -250,7 +253,12 @@ function PlantillaDialog({ open, onOpenChange, plantilla, onGuardada }: Plantill
 
   async function onDelete() {
     if (!plantilla) return;
-    if (!confirm("¿Eliminar esta plantilla? No se puede deshacer.")) return;
+    const ok = await confirmDelete({
+      title: "Eliminar plantilla",
+      description: "¿Eliminar esta plantilla? No se puede deshacer.",
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
     setSubmitting(true);
     const res = await deletePlantilla(plantilla.id);
     setSubmitting(false);
@@ -261,6 +269,7 @@ function PlantillaDialog({ open, onOpenChange, plantilla, onGuardada }: Plantill
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
@@ -382,5 +391,7 @@ function PlantillaDialog({ open, onOpenChange, plantilla, onGuardada }: Plantill
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    {confirmDeleteDialog}
+    </>
   );
 }

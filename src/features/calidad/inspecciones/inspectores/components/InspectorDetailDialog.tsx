@@ -25,6 +25,7 @@ import { FASES_INSPECTOR_CONFIG } from "../data";
 import type { InspectorDetalle } from "../types";
 import { eliminarInspector, getInspectorDetalle } from "../actions";
 import { llamarDesdeApp } from "@/features/google-workspace/components/TelefonoDrawer";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 function telefonoParaWhatsapp(input: string | null | undefined): string {
   if (!input) return "";
@@ -49,6 +50,8 @@ export function InspectorDetailDialog({
   const [data, setData] = useState<InspectorDetalle | null>(null);
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } =
+    useConfirmDelete();
 
   useEffect(() => {
     if (!open || !inspectorId) {
@@ -70,9 +73,13 @@ export function InspectorDetailDialog({
 
   async function handleDelete() {
     if (!inspectorId) return;
-    if (!confirm("¿Eliminar este inspector? Sus inspecciones realizadas se conservan.")) {
-      return;
-    }
+    const ok = await confirmDelete({
+      title: "Eliminar inspector",
+      description:
+        "¿Eliminar este inspector? Sus inspecciones realizadas se conservan.",
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
     setDeleting(true);
     const res = await eliminarInspector(inspectorId);
     setDeleting(false);
@@ -85,6 +92,7 @@ export function InspectorDetailDialog({
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         {loading || !data ? (
@@ -283,6 +291,8 @@ export function InspectorDetailDialog({
         )}
       </DialogContent>
     </Dialog>
+    {confirmDeleteDialog}
+    </>
   );
 }
 

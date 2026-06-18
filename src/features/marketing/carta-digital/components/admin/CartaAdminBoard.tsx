@@ -25,6 +25,7 @@ import {
   reordenarCategorias,
   reordenarItems,
 } from "../../actions/carta-admin-actions";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { ItemEditorModal } from "./ItemEditorModal";
 import { SlugConfigCard } from "./SlugConfigCard";
 import { QrDownloadButton } from "./QrDownloadButton";
@@ -300,6 +301,7 @@ function CategoriaPanel({
 }) {
   const [editing, setEditing] = useState(false);
   const [nombre, setNombre] = useState(cat.nombre);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
   // Sincroniza el nombre editable cuando cambia la categoría activa.
   useEffect(() => {
@@ -320,8 +322,13 @@ function CategoriaPanel({
     });
   };
 
-  const handleBorrar = () => {
-    if (!confirm(`¿Borrar la categoría "${cat.nombre}" y todos sus platos?`)) return;
+  const handleBorrar = async () => {
+    const ok = await confirmDelete({
+      title: "Borrar categoría",
+      description: `Se borrará la categoría "${cat.nombre}" y todos sus platos.`,
+      confirmLabel: "Borrar",
+    });
+    if (!ok) return;
     startTransition(async () => {
       await borrarCategoria(cat.id);
     });
@@ -351,6 +358,7 @@ function CategoriaPanel({
 
   return (
     <div className={cat.visible ? "space-y-3" : "space-y-3 opacity-60"}>
+      {confirmDeleteDialog}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
         <div className="flex flex-1 items-center gap-2">
           {editing ? (

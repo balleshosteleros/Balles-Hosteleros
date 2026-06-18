@@ -10,6 +10,7 @@ import {
   deleteConocimientoManual,
 } from "@/features/soporte/actions/conocimiento-actions";
 import { MODULOS_SOPORTE } from "@/lib/soporte/modulos";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import type {
   ConocimientoChunk,
   ConocimientoManualInput,
@@ -44,6 +45,7 @@ export function ConocimientoAdminPanel({
   const [form, setForm] = useState<ConocimientoManualInput>(EMPTY_INPUT);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
   const manuales = initialChunks.filter((c) => c.fuente === "manual");
   const deFormacion = initialChunks.filter((c) => c.fuente === "formacion");
@@ -88,8 +90,13 @@ export function ConocimientoAdminPanel({
     });
   }
 
-  function remove(id: string) {
-    if (!confirm("¿Seguro que quieres borrar este artículo? No se puede deshacer.")) return;
+  async function remove(id: string) {
+    const ok = await confirmDelete({
+      title: "Borrar artículo",
+      description: "Se borrará este artículo. No se puede deshacer.",
+      confirmLabel: "Borrar",
+    });
+    if (!ok) return;
     startTransition(async () => {
       const result = await deleteConocimientoManual(id);
       if (result.error) {
@@ -128,6 +135,7 @@ export function ConocimientoAdminPanel({
 
   return (
     <div className="space-y-6">
+      {confirmDeleteDialog}
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold">Base del asistente</h2>

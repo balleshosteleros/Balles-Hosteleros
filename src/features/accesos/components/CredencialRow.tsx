@@ -5,6 +5,7 @@ import { Eye, EyeOff, Copy, Pencil, Trash2, Loader2, ExternalLink, ShieldCheck }
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { revelarCredencial } from "../actions/revelar-action";
 import { deleteCredencial } from "../actions/credenciales-actions";
 import type { Credencial } from "../data/tipos";
@@ -23,6 +24,7 @@ export function CredencialRow({
   const [revelado, setRevelado] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
   async function handleRevelar() {
     if (revelado) {
@@ -57,7 +59,12 @@ export function CredencialRow({
   }
 
   async function handleDelete() {
-    if (!confirm(`¿Eliminar la credencial "${credencial.etiqueta}"?`)) return;
+    const ok = await confirmDelete({
+      title: "Eliminar credencial",
+      description: `¿Eliminar la credencial "${credencial.etiqueta}"?`,
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
     setDeleting(true);
     const res = await deleteCredencial(credencial.id);
     setDeleting(false);
@@ -71,6 +78,7 @@ export function CredencialRow({
 
   return (
     <div className="rounded-lg border bg-card p-3 space-y-2">
+      {confirmDeleteDialog}
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">

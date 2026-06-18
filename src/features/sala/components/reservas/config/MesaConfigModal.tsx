@@ -17,6 +17,7 @@ import {
   type Zona,
 } from "@/features/sala/planos/data/planos";
 import { createMesa, updateMesa, deleteMesa } from "@/features/sala/planos/actions/mesas-actions";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 interface Props {
   open: boolean;
@@ -49,6 +50,7 @@ export function MesaConfigModal({
   const [zonaId, setZonaId] = useState("");
   const [tipo, setTipo] = useState<TipoMesa>("BAJA");
   const [saving, setSaving] = useState(false);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
   useEffect(() => {
     if (open) {
@@ -109,7 +111,12 @@ export function MesaConfigModal({
 
   async function handleDelete() {
     if (!mesa) return;
-    if (!confirm(`¿Borrar la mesa ${mesa.codigo}? Esta acción no se puede deshacer.`)) return;
+    const ok = await confirmDelete({
+      title: `Borrar la mesa ${mesa.codigo}`,
+      description: "Esta acción no se puede deshacer.",
+      confirmLabel: "Borrar",
+    });
+    if (!ok) return;
     const res = await deleteMesa(mesa.id);
     if (!res.ok) {
       toast.error(res.error ?? "No se pudo borrar");
@@ -202,6 +209,7 @@ export function MesaConfigModal({
           </div>
         </div>
       </DialogContent>
+      {confirmDeleteDialog}
     </Dialog>
   );
 }

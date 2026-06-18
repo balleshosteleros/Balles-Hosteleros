@@ -27,6 +27,7 @@ import {
   updateCuponAction,
   deleteCuponAction,
 } from "@/features/sala/cupones/actions/cupones-actions";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 const DIAS: { key: DiaSemanaKey; label: string }[] = [
   { key: "lun", label: "Lun" },
@@ -46,6 +47,7 @@ interface Props {
 }
 
 export function CuponDrawer({ open, onClose, cupon, onSaved }: Props) {
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
   const isEdit = !!cupon;
   const [tituloInterno, setTituloInterno] = useState("");
   const [tituloCliente, setTituloCliente] = useState("");
@@ -129,7 +131,12 @@ export function CuponDrawer({ open, onClose, cupon, onSaved }: Props) {
 
   async function handleDelete() {
     if (!cupon) return;
-    if (!confirm(`¿Borrar el cupón ${cupon.codigo}? No se puede deshacer.`)) return;
+    const ok = await confirmDelete({
+      title: "Borrar cupón",
+      description: `¿Borrar el cupón ${cupon.codigo}? No se puede deshacer.`,
+      confirmLabel: "Borrar",
+    });
+    if (!ok) return;
     const res = await deleteCuponAction(cupon.id);
     if (!res.ok) {
       toast.error(res.error ?? "No se pudo borrar");
@@ -148,6 +155,7 @@ export function CuponDrawer({ open, onClose, cupon, onSaved }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      {confirmDeleteDialog}
       <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Editar cupón" : "Nuevo cupón"}</DialogTitle>

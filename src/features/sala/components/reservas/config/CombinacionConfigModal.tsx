@@ -23,6 +23,7 @@ import {
   listComponentes,
   updateCombinacion,
 } from "@/features/sala/planos/actions/combinaciones-actions";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 interface Props {
   open: boolean;
@@ -54,6 +55,7 @@ export function CombinacionConfigModal({
   const [tipo, setTipo] = useState<TipoMesa | "">("");
   const [color, setColor] = useState(COLORES_PASTEL_COMBINACIONES[0]);
   const [saving, setSaving] = useState(false);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
   const mesasOrdenadas = useMemo(
     () => mesaIds.map((id) => mesas.find((m) => m.id === id)).filter((x): x is Mesa => !!x),
@@ -162,7 +164,12 @@ export function CombinacionConfigModal({
 
   async function handleDelete() {
     if (!combinacion) return;
-    if (!confirm(`¿Borrar la combinación "${combinacion.codigo}"?`)) return;
+    const ok = await confirmDelete({
+      title: `Borrar la combinación "${combinacion.codigo}"`,
+      description: "Esta acción no se puede deshacer.",
+      confirmLabel: "Borrar",
+    });
+    if (!ok) return;
     const res = await deleteCombinacion(combinacion.id);
     if (!res.ok) {
       toast.error(res.error ?? "No se pudo borrar");
@@ -350,6 +357,7 @@ export function CombinacionConfigModal({
           </div>
         </div>
       </DialogContent>
+      {confirmDeleteDialog}
     </Dialog>
   );
 }

@@ -21,6 +21,7 @@ import {
 } from "@/shared/components/ui/select";
 import { ALERGENOS_UE, type CartaCategoria, type CartaItem, type Alergeno } from "../../types";
 import { crearItem, actualizarItem, borrarItem } from "../../actions/carta-admin-actions";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { FotoUploader } from "./FotoUploader";
 
 const ALERGENO_LABEL: Record<string, string> = {
@@ -65,6 +66,7 @@ export function ItemEditorModal({
   const [fotoUrl, setFotoUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
   useEffect(() => {
     if (item) {
@@ -129,9 +131,14 @@ export function ItemEditorModal({
     });
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!item) return;
-    if (!confirm(`¿Borrar "${item.nombre}"? Esta acción no se puede deshacer.`)) return;
+    const ok = await confirmDelete({
+      title: "Borrar plato",
+      description: `Se borrará "${item.nombre}". Esta acción no se puede deshacer.`,
+      confirmLabel: "Borrar",
+    });
+    if (!ok) return;
     startTransition(async () => {
       const res = await borrarItem(item.id);
       if (!res.ok) {
@@ -144,6 +151,7 @@ export function ItemEditorModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      {confirmDeleteDialog}
       <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{item ? "Editar plato" : "Nuevo plato"}</DialogTitle>

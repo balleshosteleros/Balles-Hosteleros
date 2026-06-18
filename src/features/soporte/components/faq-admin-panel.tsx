@@ -11,6 +11,7 @@ import {
 } from "@/features/soporte/actions/faq-actions";
 import type { Faq, FaqInput } from "@/features/soporte/types";
 import type { AppRole } from "@/features/auth/contexts/auth-context";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 const ALL_ROLES: AppRole[] = [
   "admin",
@@ -39,6 +40,7 @@ export function FaqAdminPanel({ initialFaqs }: FaqAdminPanelProps) {
   const [form, setForm] = useState<FaqInput>(EMPTY_INPUT);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
   function startNew() {
     setEditingId("new");
@@ -92,10 +94,13 @@ export function FaqAdminPanel({ initialFaqs }: FaqAdminPanelProps) {
     });
   }
 
-  function remove(id: string) {
-    if (!confirm("¿Seguro que quieres borrar esta FAQ? No se puede deshacer.")) {
-      return;
-    }
+  async function remove(id: string) {
+    const ok = await confirmDelete({
+      title: "Borrar FAQ",
+      description: "Se borrará esta FAQ. No se puede deshacer.",
+      confirmLabel: "Borrar",
+    });
+    if (!ok) return;
     startTransition(async () => {
       const result = await deleteFaq(id);
       if (result.error) {
@@ -114,6 +119,7 @@ export function FaqAdminPanel({ initialFaqs }: FaqAdminPanelProps) {
 
   return (
     <div className="space-y-6">
+      {confirmDeleteDialog}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold">Gestión de FAQs</h2>

@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/popover";
 import { Pencil, Plus, Trash2, Check, X } from "lucide-react";
 import { toast } from "sonner";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { EtiquetaChip } from "./EtiquetaChip";
 import {
   createEtiqueta,
@@ -29,6 +30,7 @@ interface Props {
 }
 
 export function CategoriaEtiquetasCard({ categoria, etiquetas, onChange }: Props) {
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
   const [editandoNombre, setEditandoNombre] = useState(false);
   const [nombreLocal, setNombreLocal] = useState(categoria.nombre);
   const [creandoEtiqueta, setCreandoEtiqueta] = useState(false);
@@ -55,12 +57,12 @@ export function CategoriaEtiquetasCard({ categoria, etiquetas, onChange }: Props
       toast.error("Las categorías del sistema no se pueden borrar.");
       return;
     }
-    if (
-      !confirm(
-        `¿Borrar la categoría "${categoria.nombre}"? Las etiquetas dentro quedarán sin categoría.`,
-      )
-    )
-      return;
+    const ok = await confirmDelete({
+      title: "Borrar categoría",
+      description: `¿Borrar la categoría "${categoria.nombre}"? Las etiquetas dentro quedarán sin categoría.`,
+      confirmLabel: "Borrar",
+    });
+    if (!ok) return;
     const res = await deleteEtiquetaCategoria(categoria.id);
     if (!res.ok) toast.error(res.error ?? "No se pudo borrar");
     else {
@@ -71,6 +73,7 @@ export function CategoriaEtiquetasCard({ categoria, etiquetas, onChange }: Props
 
   return (
     <div className="rounded-md border bg-card">
+      {confirmDeleteDialog}
       {/* Header de categoría */}
       <div className="flex items-center justify-between px-3 py-2 border-b">
         {editandoNombre ? (
@@ -187,6 +190,7 @@ function EtiquetaItem({
   onEndEdit: () => void;
   onChange: () => void;
 }) {
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
   const [nombre, setNombre] = useState(etiqueta.nombre);
   const [emoji, setEmoji] = useState(etiqueta.emoji ?? "");
   const [color, setColor] = useState(etiqueta.color);
@@ -215,7 +219,12 @@ function EtiquetaItem({
       toast.error("Etiqueta del sistema: desactívala en lugar de borrarla.");
       return;
     }
-    if (!confirm(`¿Borrar la etiqueta "${etiqueta.nombre}"?`)) return;
+    const ok = await confirmDelete({
+      title: "Borrar etiqueta",
+      description: `¿Borrar la etiqueta "${etiqueta.nombre}"?`,
+      confirmLabel: "Borrar",
+    });
+    if (!ok) return;
     const res = await deleteEtiqueta(etiqueta.id);
     if (!res.ok) toast.error(res.error ?? "No se pudo borrar");
     else {
@@ -225,7 +234,9 @@ function EtiquetaItem({
   }
 
   return (
-    <Popover open={editando} onOpenChange={(o) => (o ? onStartEdit() : onEndEdit())}>
+    <>
+      {confirmDeleteDialog}
+      <Popover open={editando} onOpenChange={(o) => (o ? onStartEdit() : onEndEdit())}>
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -286,7 +297,8 @@ function EtiquetaItem({
           </div>
         </div>
       </PopoverContent>
-    </Popover>
+      </Popover>
+    </>
   );
 }
 

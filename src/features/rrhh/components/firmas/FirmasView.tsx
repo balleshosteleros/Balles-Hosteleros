@@ -68,6 +68,7 @@ import {
 } from "@/shared/components/SubmoduleToolbar";
 import { toast } from "sonner";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import {
   TIPOS_DOCUMENTO,
   MODALIDADES_FIRMA,
@@ -158,6 +159,7 @@ export function FirmasView() {
 
   const [nuevoOpen, setNuevoOpen] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
   useGlobalLoadingSync(cargandoItems || cargandoEmpleados || enviando);
 
   const [titulo, setTitulo] = useState("");
@@ -355,7 +357,12 @@ export function FirmasView() {
   }
 
   async function cancelar(docId: string) {
-    if (!window.confirm("¿Cancelar y marcar como expirado?")) return;
+    const ok = await confirmDelete({
+      title: "¿Marcar como expirado?",
+      description: "El documento dejará de estar disponible para firmar.",
+      confirmLabel: "Marcar expirado",
+    });
+    if (!ok) return;
     setAccionPorFila((s) => ({ ...s, [docId]: "cancelar" }));
     const res = await cancelarFirma(docId);
     setAccionPorFila((s) => ({ ...s, [docId]: null }));
@@ -869,6 +876,8 @@ export function FirmasView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {confirmDeleteDialog}
     </div>
   );
 }

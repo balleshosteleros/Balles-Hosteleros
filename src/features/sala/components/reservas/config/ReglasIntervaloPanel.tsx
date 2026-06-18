@@ -18,6 +18,7 @@ import {
 } from "@/features/sala/reglas/actions/reglas-intervalo-actions";
 import { VigenciaBadge } from "@/features/sala/reglas/components/VigenciaBadge";
 import { ReglaIntervaloModal } from "./ReglaIntervaloModal";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 /**
  * Panel de reglas de intervalo: límites de "máx reservas por franja" y
@@ -84,6 +85,7 @@ function SeccionMetrica({
 }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editando, setEditando] = useState<EmpresaReservasIntervaloRegla | null>(null);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
   function abrirNueva() {
     setEditando(null);
@@ -94,7 +96,12 @@ function SeccionMetrica({
     setModalOpen(true);
   }
   async function borrar(r: EmpresaReservasIntervaloRegla) {
-    if (!confirm("¿Borrar esta regla?")) return;
+    const ok = await confirmDelete({
+      title: "Borrar esta regla",
+      description: "Esta acción no se puede deshacer.",
+      confirmLabel: "Borrar",
+    });
+    if (!ok) return;
     const res = await deleteReglaIntervalo(r.id);
     if (!res.ok) {
       toast.error(res.error ?? "No se pudo borrar");
@@ -181,6 +188,7 @@ function SeccionMetrica({
         regla={editando}
         onSaved={onChange}
       />
+      {confirmDeleteDialog}
     </section>
   );
 }

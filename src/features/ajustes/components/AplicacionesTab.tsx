@@ -40,6 +40,7 @@ import {
 } from "@/features/rrhh/actions/accesos-apps-actions";
 import { getRolesEmpresaNombres } from "@/features/ajustes/actions/roles-actions";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 const emptyApp: Omit<AccesoApp, "id" | "ultimaActualizacion"> = {
   nombre: "",
@@ -112,6 +113,8 @@ export function AplicacionesTab() {
   const { empresas, empresaActual } = useEmpresa();
   const empresaDbId = empresaActual.dbId;
   const empresasOptions = empresas.map((e) => ({ id: e.id, nombre: e.nombre }));
+
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
   const [apps, setApps] = useState<AccesoApp[]>([]);
   const [loading, setLoading] = useState(true);
@@ -242,7 +245,12 @@ export function AplicacionesTab() {
   };
 
   const handleDeleteApp = async (app: AccesoApp) => {
-    if (!confirm(`¿Eliminar el acceso "${app.nombre}"?`)) return;
+    const ok = await confirmDelete({
+      title: "Eliminar acceso",
+      description: `¿Eliminar el acceso "${app.nombre}"?`,
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
     try {
       await deleteAccesoApp(app.id);
       setApps((prev) => prev.filter((a) => a.id !== app.id));
@@ -256,6 +264,7 @@ export function AplicacionesTab() {
 
   return (
     <div className="space-y-2">
+      {confirmDeleteDialog}
       <div className="flex justify-end">
         <Button size="sm" className="gap-1.5" onClick={openCreate}>
           <Plus className="h-4 w-4" />Nuevo

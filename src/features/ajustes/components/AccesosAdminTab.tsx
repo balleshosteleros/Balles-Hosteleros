@@ -29,6 +29,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Plus, Pencil, Trash2, Eye, EyeOff, Copy, ExternalLink, Search, ChevronDown, X } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 const emptyApp: Omit<AccesoApp, "id" | "ultimaActualizacion"> = {
   nombre: "",
@@ -92,6 +93,7 @@ function PasswordAdmin({ value }: { value: string }) {
 export function AccesosAdminTab() {
   const { empresaActual, empresas: EMPRESAS } = useEmpresa();
   const empresaDbId = empresaActual.dbId;
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
   const [apps, setApps] = useState<AccesoApp[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -202,7 +204,12 @@ export function AccesosAdminTab() {
   };
 
   const handleDelete = async (app: AccesoApp) => {
-    if (!confirm(`¿Eliminar el acceso "${app.nombre}"?`)) return;
+    const ok = await confirmDelete({
+      title: "Eliminar acceso",
+      description: `¿Eliminar el acceso "${app.nombre}"?`,
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
     try {
       await deleteAccesoApp(app.id);
       setApps((prev) => prev.filter((a) => a.id !== app.id));
@@ -217,6 +224,7 @@ export function AccesosAdminTab() {
 
   return (
     <div className="space-y-2">
+      {confirmDeleteDialog}
       <div className="flex justify-end">
         <Button size="sm" className="gap-1.5" onClick={openCreate}>
           <Plus className="h-4 w-4" />Nuevo

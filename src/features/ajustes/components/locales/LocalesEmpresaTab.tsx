@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/shared/lib/utils";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { MapPicker } from "@/features/ajustes/components/locales/MapPicker";
 import { AsignacionEmpleadosLocalDialog } from "@/features/ajustes/components/locales/AsignacionEmpleadosLocalDialog";
 
@@ -92,6 +93,7 @@ export function LocalesEmpresaTab({ empresaId }: LocalesEmpresaTabProps = {}) {
   const [draft, setDraft] = useState<LocalInput>(DRAFT_INICIAL);
   const [guardando, setGuardando] = useState(false);
   const [asignacionLocal, setAsignacionLocal] = useState<Local | null>(null);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
   const cargar = useCallback(async () => {
     const res = await listLocales(empresaId);
@@ -169,7 +171,12 @@ export function LocalesEmpresaTab({ empresaId }: LocalesEmpresaTabProps = {}) {
       toast.error(`No puedes eliminar "${c.nombre}" — tiene ${c.empleados_count} empleados asignados.`);
       return;
     }
-    if (!confirm(`¿Eliminar el local "${c.nombre}"?`)) return;
+    const ok = await confirmDelete({
+      title: "Eliminar local",
+      description: `¿Eliminar el local "${c.nombre}"?`,
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
     const res = await deleteLocal(c.id);
     if (res.ok) {
       toast.success("Local eliminado");
@@ -181,6 +188,7 @@ export function LocalesEmpresaTab({ empresaId }: LocalesEmpresaTabProps = {}) {
 
   return (
     <Card>
+      {confirmDeleteDialog}
       <CardHeader className="px-4 pt-3 pb-2">
         <div className="flex items-center justify-between gap-3">
           <div>

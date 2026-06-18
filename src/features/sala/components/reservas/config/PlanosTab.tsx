@@ -36,6 +36,7 @@ import {
 import { TurnoToggle } from "@/features/sala/reglas/components/TurnoToggle";
 import { VigenciaSelector } from "@/features/sala/reglas/components/VigenciaSelector";
 import { VigenciaBadge } from "@/features/sala/reglas/components/VigenciaBadge";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 /** Deriva el turno (COMIDA/CENA/AMBOS) a partir de los flags del plano. */
 function planoToTurno(p: Plano): TurnoRegla {
@@ -107,6 +108,7 @@ export function PlanosTab({
   const [nuevoOpen, setNuevoOpen] = useState(false);
   const [editandoNombre, setEditandoNombre] = useState<Plano | null>(null);
   const [editandoSalas, setEditandoSalas] = useState<Plano | null>(null);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
   const cargar = useCallback(async (id: string) => {
     if (datosControlados) {
@@ -142,7 +144,12 @@ export function PlanosTab({
   }, [localId, cargar, datosControlados]);
 
   async function handleBorrar(p: Plano) {
-    if (!confirm(`¿Borrar el plano "${p.nombre}"?`)) return;
+    const ok = await confirmDelete({
+      title: `Borrar el plano "${p.nombre}"`,
+      description: "Esta acción no se puede deshacer.",
+      confirmLabel: "Borrar",
+    });
+    if (!ok) return;
     const res = await deletePlano(p.id);
     if (!res.ok) {
       toast.error(res.error ?? "No se pudo borrar");
@@ -292,6 +299,7 @@ export function PlanosTab({
         onClose={() => setEditandoSalas(null)}
         onSaved={() => cargar(localId)}
       />
+      {confirmDeleteDialog}
     </div>
   );
 }

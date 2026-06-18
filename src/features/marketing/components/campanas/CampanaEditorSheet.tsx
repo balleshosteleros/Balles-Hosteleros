@@ -16,6 +16,7 @@ import type { Campana, RecurrenciaCampana } from "@/features/marketing/data/camp
 import { EditorSegmento } from "./editor/EditorSegmento";
 import { enviarCampanaDemoAction } from "@/features/marketing/actions/envios-actions";
 import { previewSegmentoAction } from "@/features/marketing/actions/segmento-actions";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 interface Props {
   open: boolean;
@@ -44,6 +45,7 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
   const [nuevoLink, setNuevoLink] = useState("");
   const [creandoLink, setCreandoLink] = useState(false);
   const [coincidencias, setCoincidencias] = useState<number | null>(null);
+  const { confirm: confirmDemo, dialog: confirmDemoDialog } = useConfirmDelete();
 
   useEffect(() => { setDraft(campana); }, [campana]);
 
@@ -136,9 +138,14 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
     });
   }
 
-  function onEnviarDemo() {
+  async function onEnviarDemo() {
     if (!validacion.ok) return;
-    if (!confirm(`Modo demo: se registrarán ${coincidencias} envíos sin llamar a ningún proveedor. ¿Continuar?`)) return;
+    const ok = await confirmDemo({
+      title: "Modo demo",
+      description: `Se registrarán ${coincidencias} envíos sin llamar a ningún proveedor.`,
+      confirmLabel: "Continuar",
+    });
+    if (!ok) return;
     startSend(async () => {
       // Primero guardar para tener UUID válido si es nueva
       const saved = await guardarCampanaAction(draft);
@@ -154,6 +161,7 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
+      {confirmDemoDialog}
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">

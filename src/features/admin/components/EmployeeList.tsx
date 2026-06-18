@@ -3,13 +3,20 @@
 import { useState } from 'react'
 import { deleteEmployee } from '@/actions/admin'
 import type { Profile } from '@/types/database'
+import { useConfirmDelete } from '@/shared/components/ConfirmDeleteDialog'
 
 export function EmployeeList({ employees: initial }: { employees: Profile[] }) {
   const [employees, setEmployees] = useState(initial)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete()
 
   async function handleDelete(id: string) {
-    if (!confirm('¿Seguro que quieres eliminar este empleado?')) return
+    const ok = await confirmDelete({
+      title: '¿Eliminar empleado?',
+      description: 'Esta acción no se puede deshacer.',
+      confirmLabel: 'Eliminar',
+    })
+    if (!ok) return
 
     setDeleting(id)
     const result = await deleteEmployee(id)
@@ -27,6 +34,7 @@ export function EmployeeList({ employees: initial }: { employees: Profile[] }) {
   }
 
   return (
+    <>
     <div className="overflow-x-auto rounded-lg border border-gray-200">
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
@@ -67,5 +75,7 @@ export function EmployeeList({ employees: initial }: { employees: Profile[] }) {
         </tbody>
       </table>
     </div>
+    {confirmDeleteDialog}
+    </>
   )
 }

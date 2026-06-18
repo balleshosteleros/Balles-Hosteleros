@@ -50,6 +50,7 @@ import {
   type PlantillaConVersion,
 } from "@/features/calidad/actions/plantillas-actions";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 const TIPO_OPTIONS: Array<{ value: AuditoriaTipoPregunta; label: string }> = [
   { value: "escala", label: "Escala 0–5" },
@@ -69,6 +70,8 @@ export function PlantillaEditor({ plantillaId, versionIdInicial }: { plantillaId
   const [data, setData] = useState<PlantillaConVersion | null>(null);
   const [loading, setLoading] = useState(true);
   useGlobalLoadingSync(loading);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } =
+    useConfirmDelete();
   const [, startTransition] = useTransition();
 
   const reload = useCallback(async () => {
@@ -102,7 +105,12 @@ export function PlantillaEditor({ plantillaId, versionIdInicial }: { plantillaId
       toast.error("Añade al menos una sección antes de publicar.");
       return;
     }
-    if (!confirm(`¿Publicar versión ${versionActual.version}? La vigente actual quedará como histórica.`)) return;
+    const ok = await confirmDelete({
+      title: "Publicar versión",
+      description: `¿Publicar versión ${versionActual.version}? La vigente actual quedará como histórica.`,
+      confirmLabel: "Publicar",
+    });
+    if (!ok) return;
     const res = await publicarVersion(versionActual.id);
     if (res.ok) {
       toast.success(`Versión ${versionActual.version} publicada y vigente`);
@@ -202,7 +210,12 @@ export function PlantillaEditor({ plantillaId, versionIdInicial }: { plantillaId
               reload();
             }}
             onEliminarSeccion={async () => {
-              if (!confirm(`¿Eliminar la sección "${s.titulo}" y todas sus preguntas?`)) return;
+              const ok = await confirmDelete({
+                title: "Eliminar sección",
+                description: `¿Eliminar la sección "${s.titulo}" y todas sus preguntas?`,
+                confirmLabel: "Eliminar",
+              });
+              if (!ok) return;
               await eliminarSeccion(s.id);
               reload();
             }}
@@ -215,7 +228,12 @@ export function PlantillaEditor({ plantillaId, versionIdInicial }: { plantillaId
               reload();
             }}
             onEliminarPregunta={async (preguntaId) => {
-              if (!confirm("¿Eliminar esta pregunta?")) return;
+              const ok = await confirmDelete({
+                title: "Eliminar pregunta",
+                description: "¿Eliminar esta pregunta?",
+                confirmLabel: "Eliminar",
+              });
+              if (!ok) return;
               await eliminarPregunta(preguntaId);
               reload();
             }}
@@ -253,6 +271,7 @@ export function PlantillaEditor({ plantillaId, versionIdInicial }: { plantillaId
           </Card>
         )}
       </div>
+      {confirmDeleteDialog}
     </div>
   );
 }

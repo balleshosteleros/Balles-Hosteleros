@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plus, Pencil, Trash2, Search, Fingerprint, Check } from "lucide-react";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { FICHAJE_COLOR_PALETTE, fichajeColorDot } from "@/features/rrhh/data/fichajes";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 type FormState = {
   nombre: string;
@@ -46,6 +47,7 @@ export function TiposFichajeSection({ empresaId }: { empresaId: string }) {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [empresasReplicar, setEmpresasReplicar] = useState<string[]>([empresaId]);
   const [saving, setSaving] = useState(false);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
   useEffect(() => {
     if (showModal) {
@@ -86,7 +88,12 @@ export function TiposFichajeSection({ empresaId }: { empresaId: string }) {
   };
 
   const eliminar = async (id: string) => {
-    if (!confirm("¿Eliminar este tipo de fichaje?")) return;
+    const ok = await confirmDelete({
+      title: "¿Eliminar tipo de fichaje?",
+      description: "Esta acción no se puede deshacer.",
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
     await remove(id);
   };
 
@@ -250,6 +257,7 @@ export function TiposFichajeSection({ empresaId }: { empresaId: string }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {confirmDeleteDialog}
     </div>
   );
 }

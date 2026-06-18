@@ -31,6 +31,7 @@ import {
 } from "@/shared/components/SubmoduleToolbar";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { IOActions } from "@/shared/io";
 import { tarifasIO } from "@/features/logistica/io/tarifas.io";
 import {
@@ -57,6 +58,7 @@ export function TarifasView() {
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [showConfig, setShowConfig] = useState(false);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -128,9 +130,12 @@ export function TarifasView() {
       toast.error("No se puede eliminar la tarifa default");
       return;
     }
-    if (!confirm(`¿Eliminar la tarifa "${t.nombre}"? Se borrarán también los precios asociados.`)) {
-      return;
-    }
+    const ok = await confirmDelete({
+      title: "Eliminar tarifa",
+      description: `¿Eliminar la tarifa "${t.nombre}"? Se borrarán también los precios asociados.`,
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
     const res = await deleteTarifa(t.id);
     if (!res.ok) {
       toast.error(res.error ?? "Error al eliminar");
@@ -408,6 +413,7 @@ export function TarifasView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {confirmDeleteDialog}
     </div>
   );
 }

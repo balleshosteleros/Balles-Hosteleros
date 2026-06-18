@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import {
   CATEGORIAS_APP,
   appExternaSchema,
@@ -49,6 +50,7 @@ export function AppFormDialog({
   const [notas, setNotas] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
   useEffect(() => {
     if (open) {
@@ -90,13 +92,12 @@ export function AppFormDialog({
 
   async function handleDelete() {
     if (!app) return;
-    if (
-      !confirm(
-        `¿Eliminar "${app.nombre}" y TODAS sus credenciales? Esta acción no se puede deshacer.`,
-      )
-    ) {
-      return;
-    }
+    const ok = await confirmDelete({
+      title: "Eliminar app",
+      description: `¿Eliminar "${app.nombre}" y todas sus credenciales? Esta acción no se puede deshacer.`,
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
     setDeleting(true);
     const res = await deleteApp(app.id);
     setDeleting(false);
@@ -110,8 +111,10 @@ export function AppFormDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+    <>
+      {confirmDeleteDialog}
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{editing ? "Editar app" : "Nueva app"}</DialogTitle>
           <DialogDescription>
@@ -217,6 +220,7 @@ export function AppFormDialog({
           </DialogFooter>
         </form>
       </DialogContent>
-    </Dialog>
+      </Dialog>
+    </>
   );
 }

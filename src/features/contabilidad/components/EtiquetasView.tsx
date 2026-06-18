@@ -38,6 +38,7 @@ import {
   type EtiquetaTipo,
 } from "../actions/etiquetas-actions";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 const TABS: { label: string; tipo: EtiquetaTipo }[] = [
   { label: "Categorías",   tipo: "CATEGORIA" },
@@ -62,6 +63,7 @@ export function EtiquetasView() {
   const [loading, setLoading] = useState(true);
   useGlobalLoadingSync(loading);
   const [showConfig, setShowConfig] = useState(false);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
   const [dialogCrear, setDialogCrear] = useState<{
     open: boolean;
@@ -206,10 +208,14 @@ export function EtiquetasView() {
 
   async function handleBorrar(row: EtiquetaRow) {
     const esCategoria = row.parent_id === null;
-    const msg = esCategoria
-      ? `¿Borrar la categoría "${row.nombre}" y todas sus etiquetas?`
-      : `¿Borrar la etiqueta "${row.nombre}"?`;
-    if (!confirm(msg)) return;
+    const ok = await confirmDelete({
+      title: esCategoria ? "Borrar categoría" : "Borrar etiqueta",
+      description: esCategoria
+        ? `¿Borrar la categoría "${row.nombre}" y todas sus etiquetas?`
+        : `¿Borrar la etiqueta "${row.nombre}"?`,
+      confirmLabel: "Borrar",
+    });
+    if (!ok) return;
     const res = await deleteEtiqueta(row.id);
     if (res.ok) {
       toast.success("Borrada");
@@ -491,6 +497,8 @@ export function EtiquetasView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {confirmDeleteDialog}
     </div>
   );
 }

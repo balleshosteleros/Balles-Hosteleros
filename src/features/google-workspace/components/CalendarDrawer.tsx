@@ -35,6 +35,7 @@ import { GoogleReauthBanner } from "./GoogleReauthBanner";
 import { GoogleAccountButton } from "./GoogleAccountButton";
 import { useGoogleConnection } from "./useGoogleConnection";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { CalendarSidebar } from "./CalendarSidebar";
 import { loadUserPref, saveUserPref } from "@/shared/io/user-preferences";
 import {
@@ -303,6 +304,8 @@ const FORM_VACIO: Form = {
 
 export function CalendarDrawer({ children }: CalendarDrawerProps) {
   const { connected } = useGoogleConnection();
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } =
+    useConfirmDelete();
   const [vista, setVista] = useState<Vista>("week");
   const [fechaRef, setFechaRef] = useState(new Date());
   const [calendarios, setCalendarios] = useState<GoogleCalendar[]>([]);
@@ -729,7 +732,12 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
 
   async function borrar() {
     if (!eventoSel) return;
-    if (!confirm(`¿Borrar "${eventoSel.titulo}"?`)) return;
+    const ok = await confirmDelete({
+      title: "¿Borrar evento?",
+      description: `Se eliminará "${eventoSel.titulo}" de tu calendario.`,
+      confirmLabel: "Borrar",
+    });
+    if (!ok) return;
     const res = await fetch("/api/google/calendar/delete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1514,6 +1522,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
             </div>
           </div>
         )}
+        {confirmDeleteDialog}
       </SheetContent>
     </Sheet>
   );

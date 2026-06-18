@@ -55,6 +55,7 @@ import {
   iaGenerarSlide,
 } from "../actions";
 import type { Slide, SlideBlock, SlideLayout, EmpresaTheme } from "../types";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 interface PresentacionEditorProps {
   slidesInitial: Slide[];
@@ -156,6 +157,8 @@ export function PresentacionEditor({ slidesInitial, theme, empresaId }: Presenta
   const [isSaving, startSave] = useTransition();
   const [iaOpen, setIaOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } =
+    useConfirmDelete();
 
   const selected = slides[selectedIdx];
 
@@ -228,8 +231,13 @@ export function PresentacionEditor({ slidesInitial, theme, empresaId }: Presenta
     setDirty(true);
   }
 
-  function removeSlide() {
-    if (!confirm("¿Eliminar esta slide?")) return;
+  async function removeSlide() {
+    const ok = await confirmDelete({
+      title: "Eliminar slide",
+      description: "¿Eliminar esta slide?",
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
     setSlides((prev) => prev.filter((_, i) => i !== selectedIdx));
     setDirty(true);
   }
@@ -332,6 +340,8 @@ export function PresentacionEditor({ slidesInitial, theme, empresaId }: Presenta
           </div>
         </DialogContent>
       </Dialog>
+
+      {confirmDeleteDialog}
     </div>
   );
 }

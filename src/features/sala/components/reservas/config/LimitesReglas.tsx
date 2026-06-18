@@ -16,6 +16,7 @@ import {
 import { ReglaModal } from "@/features/sala/reglas/components/ReglaModal";
 import { VigenciaBadge } from "@/features/sala/reglas/components/VigenciaBadge";
 import { resolverValorEfectivo } from "@/features/sala/reglas/lib/resolver";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 function hoyEnMadridISO(): string {
   // Sin librerías: usamos toLocaleDateString con la TZ Europe/Madrid.
@@ -91,6 +92,7 @@ function SeccionMetrica({
 }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editando, setEditando] = useState<EmpresaReservasRegla | null>(null);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
   const hoy = useMemo(() => hoyEnMadridISO(), []);
   const valorHoyComida = resolverValorEfectivo(reglas, hoy, "COMIDA", metrica);
@@ -105,7 +107,12 @@ function SeccionMetrica({
     setModalOpen(true);
   }
   async function borrar(r: EmpresaReservasRegla) {
-    if (!confirm(`¿Borrar esta regla?`)) return;
+    const ok = await confirmDelete({
+      title: "Borrar esta regla",
+      description: "Esta acción no se puede deshacer.",
+      confirmLabel: "Borrar",
+    });
+    if (!ok) return;
     const res = await deleteReglaReserva(r.id);
     if (!res.ok) {
       toast.error(res.error ?? "No se pudo borrar");
@@ -203,6 +210,7 @@ function SeccionMetrica({
         unidad={unidad}
         onSaved={onChange}
       />
+      {confirmDeleteDialog}
     </section>
   );
 }

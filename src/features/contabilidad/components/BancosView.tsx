@@ -28,6 +28,7 @@ import {
   seedBancosBase,
 } from "@/features/contabilidad/actions/psd2-actions";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 interface BankAccount {
   id: string;
@@ -80,6 +81,7 @@ export function BancosView() {
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [showConfig, setShowConfig] = useState(false);
   const [seeded, setSeeded] = useState(false);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -172,12 +174,12 @@ export function BancosView() {
   }
 
   async function handleEliminar(connectionId: string, nombre: string) {
-    if (
-      !confirm(
-        `¿Eliminar la conexión con ${nombre}? Se perderán las cuentas y movimientos importados.`,
-      )
-    )
-      return;
+    const ok = await confirmDelete({
+      title: "Eliminar conexión",
+      description: `¿Eliminar la conexión con ${nombre}? Se perderán las cuentas y movimientos importados.`,
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
     const res = await eliminarConexion(connectionId);
     if (res.ok) {
       toast.success("Conexión eliminada");
@@ -419,6 +421,8 @@ export function BancosView() {
         prefilter={dialogPrefilter}
         reconnectConnectionId={dialogReconnectId}
       />
+
+      {confirmDeleteDialog}
     </div>
   );
 }

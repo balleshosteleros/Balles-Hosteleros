@@ -60,6 +60,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 // ─── Vacancy Card ────────────────────────────────────────────────
 interface VacanteCardProps {
@@ -436,6 +437,7 @@ export function ReclutamientoView() {
   useGlobalLoadingSync(loading);
   const [reloadKey, setReloadKey] = useState(0);
   const recargar = useCallback(() => setReloadKey((k) => k + 1), []);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
   useEffect(() => {
     let cancelled = false;
@@ -473,9 +475,12 @@ export function ReclutamientoView() {
   const handleEliminar = useCallback(async (id: string) => {
     const v = vacantes.find((x) => x.id === id);
     const titulo = v?.puesto ?? "esta vacante";
-    if (!window.confirm(`¿Eliminar definitivamente la vacante "${titulo}"? Esta acción no se puede deshacer.`)) {
-      return;
-    }
+    const ok = await confirmDelete({
+      title: "¿Eliminar vacante?",
+      description: `Se eliminará definitivamente la vacante "${titulo}". Esta acción no se puede deshacer.`,
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
     const res = await deleteVacante(id);
     if (res.ok) {
       toast.success("Vacante eliminada");
@@ -483,7 +488,7 @@ export function ReclutamientoView() {
     } else {
       toast.error(("error" in res && res.error) || "No se pudo eliminar");
     }
-  }, [recargar, vacantes]);
+  }, [recargar, vacantes, confirmDelete]);
 
   const handleToggleVisible = useCallback(async (id: string, visible: boolean) => {
     const res = await toggleVisibilidadVacante(id, visible);
@@ -790,6 +795,8 @@ export function ReclutamientoView() {
           empresaNombre={empresaActual.nombre}
         />
       )}
+
+      {confirmDeleteDialog}
     </div>
   );
 }

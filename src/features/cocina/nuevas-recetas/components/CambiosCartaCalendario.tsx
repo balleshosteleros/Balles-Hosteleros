@@ -24,6 +24,7 @@ import {
   type CambioCartaConSemanas, type CambioCartaSemana, type FaseColor,
 } from "../types";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { CalendarRangeToggle, CalendarRangeNav } from "@/shared/components/calendar/CalendarRangeToggle";
 import { useCalendarRange, type CalendarRangeMode } from "@/shared/components/calendar/calendar-range";
@@ -509,6 +510,8 @@ function DetalleCambioDialog({
 }) {
   const [movDelta, setMovDelta] = useState<string>("");
   const [eliminando, setEliminando] = useState(false);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } =
+    useConfirmDelete();
 
   if (!cambio) return null;
 
@@ -533,7 +536,12 @@ function DetalleCambioDialog({
 
   async function handleEliminar() {
     if (!cambio) return;
-    if (!confirm(`¿Eliminar "${cambio.nombre}"?`)) return;
+    const ok = await confirmDelete({
+      title: "¿Eliminar cambio de carta?",
+      description: `Se eliminará "${cambio.nombre}" y sus semanas.`,
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
     setEliminando(true);
     const res = await deleteCambioCarta(cambio.id);
     setEliminando(false);
@@ -664,6 +672,7 @@ function DetalleCambioDialog({
           <Button variant="outline" onClick={onClose}>Cerrar</Button>
         </DialogFooter>
       </DialogContent>
+      {confirmDeleteDialog}
     </Dialog>
   );
 }

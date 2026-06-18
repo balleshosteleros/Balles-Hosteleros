@@ -53,6 +53,7 @@ import {
   type TonoAgente,
 } from "@/features/calidad/types/resenas";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 const INSTRUCCIONES_DEFAULT =
   "Recibirá reseñas de clientes y debe generar una respuesta como propietario. La respuesta se usará tal cual en Google. Sé natural, evita clichés y no incluyas saludos genéricos.";
@@ -61,6 +62,8 @@ export function AgentesIAView() {
   const [agentes, setAgentes] = useState<AgenteIA[]>([]);
   const [loading, setLoading] = useState(true);
   useGlobalLoadingSync(loading);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } =
+    useConfirmDelete();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -95,7 +98,12 @@ export function AgentesIAView() {
   };
 
   const onEliminar = async (id: string, nombre: string) => {
-    if (!confirm(`¿Eliminar el agente "${nombre}"?`)) return;
+    const ok = await confirmDelete({
+      title: "Eliminar agente",
+      description: `¿Eliminar el agente "${nombre}"?`,
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
     const res = await eliminarAgenteIA(id);
     if (!res.ok) {
       toast.error(res.error);
@@ -271,6 +279,7 @@ export function AgentesIAView() {
           cargar();
         }}
       />
+      {confirmDeleteDialog}
     </div>
   );
 }

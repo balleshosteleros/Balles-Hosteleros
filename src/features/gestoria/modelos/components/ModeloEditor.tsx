@@ -32,6 +32,7 @@ import { correrIA } from "../actions/categorizacion-actions";
 import { marcarRevisado } from "../actions/modelos-actions";
 import { presentarModelo } from "../actions/export-actions";
 import { validarCuadre } from "../services/validar-cuadre";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 interface Props {
   modelo: ModeloAeat;
@@ -55,6 +56,7 @@ export function ModeloEditor({ modelo, facturas, asignaciones, registros347 }: P
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [iaEjecutando, setIaEjecutando] = useState(false);
+  const { confirm: confirmPresentar, dialog: confirmPresentarDialog } = useConfirmDelete();
 
   const presentado = modelo.estado === "PRESENTADO";
   const editable = !presentado;
@@ -86,7 +88,13 @@ export function ModeloEditor({ modelo, facturas, asignaciones, registros347 }: P
   }
 
   async function handlePresentar() {
-    if (!confirm("Presentar el modelo congela los datos de forma INMUTABLE. ¿Seguro?")) return;
+    const ok = await confirmPresentar({
+      title: "Presentar el modelo",
+      description:
+        "Presentar el modelo congela los datos de forma inmutable y no podrá editarse después. ¿Seguro?",
+      confirmLabel: "Presentar",
+    });
+    if (!ok) return;
     startTransition(async () => {
       const res = await presentarModelo(modelo.id);
       if (!res.ok) alert(`Error: ${res.error}`);
@@ -210,6 +218,8 @@ export function ModeloEditor({ modelo, facturas, asignaciones, registros347 }: P
           </aside>
         ) : null}
       </div>
+
+      {confirmPresentarDialog}
     </div>
   );
 }

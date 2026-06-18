@@ -37,10 +37,12 @@ import {
   updatePoliticaCancelacion,
   deletePoliticaCancelacion,
 } from "@/features/sala/actions/politicas-cancelacion-actions";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 const HORAS_OPCIONES = [1, 2, 3, 4, 6, 8, 12, 24, 48, 72] as const;
 
 export function PoliticasCancelacionTab() {
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
   // --- Configuración GLOBAL de política de cancelación (1 por empresa) ---
   const [config, setConfig] = useState<EmpresaReservasConfig | null>(null);
   const [configLoading, setConfigLoading] = useState(true);
@@ -142,7 +144,12 @@ export function PoliticasCancelacionTab() {
   }
 
   async function handleDelete(id: string, nombre: string) {
-    if (!confirm(`¿Borrar la política "${nombre}"?`)) return;
+    const ok = await confirmDelete({
+      title: "Borrar política",
+      description: `¿Borrar la política "${nombre}"?`,
+      confirmLabel: "Borrar",
+    });
+    if (!ok) return;
     const res = await deletePoliticaCancelacion(id);
     if (!res.ok) toast.error(res.error ?? "No se pudo borrar");
     else {
@@ -153,6 +160,7 @@ export function PoliticasCancelacionTab() {
 
   return (
     <div className="space-y-6">
+      {confirmDeleteDialog}
       {/* === Política de cancelación (global, texto fijo) === */}
       <section className="space-y-4">
         <div>

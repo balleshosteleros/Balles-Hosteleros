@@ -24,6 +24,7 @@ import {
   updateReservaEtiqueta,
   deleteReservaEtiqueta,
 } from "@/features/sala/actions/reserva-etiquetas-actions";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 const EMOJI_CATALOG: string[] = [
   "🎂", "🎉", "🎈", "🎁", "🥂", "🍾", "🍰", "🍽️",
@@ -44,6 +45,7 @@ export function EtiquetasReservaList({ etiquetas, onChange }: Props) {
   const [nuevoEmoji, setNuevoEmoji] = useState<string>("🎉");
   const [nuevoColor, setNuevoColor] = useState("#7c3aed");
   const [creando, setCreando] = useState(false);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
   function resetForm() {
     setNuevoNombre("");
@@ -81,7 +83,12 @@ export function EtiquetasReservaList({ etiquetas, onChange }: Props) {
   }
 
   async function handleDelete(id: string, nombre: string) {
-    if (!confirm(`¿Borrar la etiqueta "${nombre}"?`)) return;
+    const ok = await confirmDelete({
+      title: `Borrar la etiqueta "${nombre}"`,
+      description: "Esta acción no se puede deshacer.",
+      confirmLabel: "Borrar",
+    });
+    if (!ok) return;
     const res = await deleteReservaEtiqueta(id);
     if (!res.ok) toast.error(res.error ?? "No se pudo borrar");
     else {
@@ -209,6 +216,7 @@ export function EtiquetasReservaList({ etiquetas, onChange }: Props) {
           </div>
         </DialogContent>
       </Dialog>
+      {confirmDeleteDialog}
     </div>
   );
 }

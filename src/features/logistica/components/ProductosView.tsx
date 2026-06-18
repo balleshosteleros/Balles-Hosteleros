@@ -28,6 +28,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import {
   ShoppingCart, Store, Settings,
   ArrowLeft, Trash2, AlertTriangle, FlaskConical,
@@ -162,6 +163,7 @@ function ProductoDetalle({
   }, [tipo]);
   const categorias = categoriasLocal;
 
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
   const [nombre, setNombre] = useState(producto?.nombre ?? "");
   const [categoria, setCategoria] = useState(producto?.categoria ?? "");
   const [unidad, setUnidad] = useState(producto?.unidad || "ud");
@@ -376,7 +378,12 @@ function ProductoDetalle({
 
   const handleDelete = async () => {
     if (!producto) return;
-    if (!confirm(`¿Eliminar "${producto.nombre}"?`)) return;
+    const ok = await confirmDelete({
+      title: "Eliminar producto",
+      description: `¿Seguro que quieres eliminar «${producto.nombre}»? Esta acción no se puede deshacer.`,
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
     const res = await deleteProducto(producto.id);
     if (res.error) { toast.error(res.error); return; }
     toast.success("Producto eliminado");
@@ -859,6 +866,7 @@ function ProductoDetalle({
           </Button>
         </div>
       )}
+      {confirmDeleteDialog}
     </div>
   );
 }
@@ -867,6 +875,7 @@ function ProductoDetalle({
 function TablaProductos({
   tipo, onAddClick, onRowClick, reloadKey, showConfig, onToggleConfig,
   umbralVerde, umbralNaranja,
+  busqueda, setBusqueda, filtros, setFiltros, orden, setOrden,
 }: {
   tipo: TipoProducto;
   onAddClick: () => void;
@@ -876,6 +885,14 @@ function TablaProductos({
   onToggleConfig: () => void;
   umbralVerde: number;
   umbralNaranja: number;
+  // Estado de filtros elevado al padre para que sobreviva a abrir/cerrar la ficha
+  // (al editar o eliminar un producto la tabla se desmonta y volvería a montarse limpia).
+  busqueda: string;
+  setBusqueda: (v: string) => void;
+  filtros: ToolbarFiltroActivo[];
+  setFiltros: (v: ToolbarFiltroActivo[]) => void;
+  orden: ToolbarOrdenActivo | null;
+  setOrden: (v: ToolbarOrdenActivo | null) => void;
 }) {
   const { empresaActual } = useEmpresa();
   const catalogos = useCatalogosLogistica();
@@ -892,9 +909,6 @@ function TablaProductos({
     return () => { cancelled = true; };
   }, [tipo, empresaActual.id, reloadKey]);
 
-  const [busqueda, setBusqueda] = useState("");
-  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
-  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>(
     tipo === "venta" || tipo === "elaboracion"
       ? { iva: false }
@@ -1601,6 +1615,11 @@ export function ProductosView() {
   // El producto solo se persiste al pulsar Guardar (evita huecos en el nº secuencial).
   const [nuevoModo, setNuevoModo] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  // Filtros de la tabla viven aquí (no en TablaProductos) para que se conserven
+  // al abrir la ficha de un producto y volver tras editar/eliminar.
+  const [busqueda, setBusqueda] = useState("");
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const config = useProductConfig(tipoActivo);
 
   const [countCompra, setCountCompra] = useState(0);
@@ -1682,7 +1701,15 @@ export function ProductosView() {
       </div>
 
       {showConfig ? (
-        <div className="bg-card border rounded-lg p-5">
+        <div className="bg-card border rounded-lg p-5 space-y-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowConfig(false)}
+            className="gap-1 -ml-2"
+          >
+            <ArrowLeft className="h-4 w-4" /> Volver
+          </Button>
           <ConfigProductos
             tipo={tipoActivo}
             onCategoriasChanged={config.reloadCategorias}
@@ -1702,6 +1729,12 @@ export function ProductosView() {
           onToggleConfig={() => setShowConfig((v) => !v)}
           umbralVerde={config.umbralVerde}
           umbralNaranja={config.umbralNaranja}
+          busqueda={busqueda}
+          setBusqueda={setBusqueda}
+          filtros={filtros}
+          setFiltros={setFiltros}
+          orden={orden}
+          setOrden={setOrden}
         />
       )}
     </div>

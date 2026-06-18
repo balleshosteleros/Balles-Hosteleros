@@ -36,6 +36,7 @@ import {
   FolderOpen, Folder, Settings, ChevronLeft, Upload, FolderPlus,
 } from "lucide-react";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 const BUCKET = "documentacion";
 
@@ -53,6 +54,7 @@ function iconForMime(mime: string | null): ReactNode {
 }
 
 export function DocumentacionView() {
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
   // Navegación: path [] = raíz, [a] = nivel 1, [a, b] = nivel 2
   const [path, setPath] = useState<Carpeta[]>([]);
   const nivel = path.length; // 0 | 1 | 2
@@ -249,7 +251,12 @@ export function DocumentacionView() {
   };
 
   const onBorrarDocumento = async (doc: DocumentoRow) => {
-    if (!confirm(`¿Eliminar "${doc.nombre}"?`)) return;
+    const ok = await confirmDelete({
+      title: "¿Eliminar documento?",
+      description: `Se eliminará "${doc.nombre}". Esta acción no se puede deshacer.`,
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
     const res = await deleteDocumento(doc.id);
     if (!res.ok) {
       toast.error(res.error ?? "No se pudo eliminar");
@@ -278,6 +285,7 @@ export function DocumentacionView() {
 
   return (
     <div className="p-6 space-y-4 max-w-[1400px] mx-auto">
+      {confirmDeleteDialog}
       {/* Breadcrumb */}
       {nivel > 0 && (
         <div className="flex items-center gap-1 text-sm flex-wrap">
