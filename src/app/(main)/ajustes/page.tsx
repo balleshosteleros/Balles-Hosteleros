@@ -1,6 +1,6 @@
 "use client";
 
-import { Users, Shield, Layers, Store, Rocket, Palette, Mail, Calendar as CalendarIcon, Video, MessageCircle } from "lucide-react";
+import { Users, Shield, Layers, Store, Plug, Palette, Mail, Calendar as CalendarIcon, Video, MessageCircle } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -8,7 +8,7 @@ import { UsuariosTab } from "@/features/ajustes/components/UsuariosTab";
 import { RolesTab } from "@/features/ajustes/components/RolesTab";
 import { DepartamentosTab } from "@/features/ajustes/components/DepartamentosTab";
 import { EmpresaTab } from "@/features/ajustes/components/EmpresaTab";
-import { AplicacionesTab } from "@/features/ajustes/components/AplicacionesTab";
+import { IntegracionesTab } from "@/features/ajustes/components/IntegracionesTab";
 import { ImagenMarcaTab } from "@/features/ajustes/components/ImagenMarcaTab";
 import { HerramientasTab } from "@/features/ajustes/components/HerramientasTab";
 import { useHydrateUsuarios } from "@/features/ajustes/hooks/use-hydrate-usuarios";
@@ -35,7 +35,7 @@ const tabs = [
   { id: "roles",          label: "Roles",           icon: Shield     },
   { id: "departamentos",  label: "Departamentos",   icon: Layers     },
   { id: "herramientas",   label: "Herramientas",    icon: HerramientasIcon },
-  { id: "aplicaciones",   label: "Aplicaciones",    icon: Rocket           },
+  { id: "integraciones",  label: "Integraciones",   icon: Plug             },
 ] as const;
 
 export default function AjustesPage() {
@@ -71,8 +71,8 @@ export default function AjustesPage() {
         <TabsContent value="usuarios"><UsuariosTab /></TabsContent>
         <TabsContent value="roles"><RolesTab /></TabsContent>
         <TabsContent value="departamentos"><DepartamentosTab /></TabsContent>
-        <TabsContent value="aplicaciones"><AplicacionesTab /></TabsContent>
         <TabsContent value="herramientas"><HerramientasTab /></TabsContent>
+        <TabsContent value="integraciones"><IntegracionesTab /></TabsContent>
       </Tabs>
     </div>
   );

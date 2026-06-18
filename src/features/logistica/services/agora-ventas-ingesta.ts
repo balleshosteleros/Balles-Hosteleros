@@ -25,13 +25,18 @@ function toNum(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-async function agoraGet(path: string): Promise<unknown> {
-  const base = (process.env.AGORA_API_URL ?? "").replace(/\/$/, "");
-  const token = process.env.AGORA_API_TOKEN;
-  if (!base || !token) {
-    throw new Error("AGORA_API_URL / AGORA_API_TOKEN no configurados (pendientes en Vercel).");
-  }
-  const r = await fetch(base + path, { headers: { "Api-Token": token, Accept: "application/json" } });
+/** Credenciales de Ágora ya resueltas (por empresa o por fallback de env). PRP-059. */
+export interface AgoraConexion {
+  url: string;
+  token: string;
+  workplaceId: number;
+}
+
+async function agoraGet(path: string, conexion: AgoraConexion): Promise<unknown> {
+  const base = conexion.url.replace(/\/$/, "");
+  const r = await fetch(base + path, {
+    headers: { "Api-Token": conexion.token, Accept: "application/json" },
+  });
   if (!r.ok) throw new Error(`Ágora ${path} -> HTTP ${r.status}`);
   return r.json();
 }
@@ -40,17 +45,21 @@ export type IngestaResultado = { facturas: number; lineas: number; sinProducto: 
 
 /**
  * Ingiere las facturas de Ágora de un business-day para una empresa.
+ * Recibe las credenciales ya resueltas (ver `getAgoraCredenciales`). PRP-059.
  * Devuelve el resumen. Lanza si Ágora falla (fail-closed).
  */
 export async function ingerirVentasAgoraDia(
   supabase: SupabaseClient,
   empresaId: string,
   businessDay: string,
+  conexion: AgoraConexion,
 ): Promise<IngestaResultado> {
-  const workplaceId = EMPRESA_WORKPLACE[empresaId];
-  if (!workplaceId) throw new Error(`Empresa ${empresaId} sin Workplace de Ágora mapeado`);
+  const workplaceId = conexion.workplaceId;
 
-  const payload = (await agoraGet(`/api/export/?business-day=${businessDay}&filter=Invoices`)) as {
+  const payload = (await agoraGet(
+    `/api/export/?business-day=${businessDay}&filter=Invoices`,
+    conexion,
+  )) as {
     Invoices?: AgoraInvoice[];
   };
   const propias = (payload.Invoices ?? []).filter((f) => f.Workplace?.Id === workplaceId);

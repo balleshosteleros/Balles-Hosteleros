@@ -14,6 +14,7 @@ import {
   ingerirVentasAgoraDia,
   EMPRESA_WORKPLACE,
 } from "@/features/logistica/services/agora-ventas-ingesta";
+import { getAgoraCredenciales } from "@/features/logistica/services/agora-credenciales";
 import { descontarStockPorTicket } from "@/features/sala/pos/services/descontar-stock-por-ventas";
 import { revertirMovimientosPorDocumento } from "@/features/logistica/services/kardex";
 
@@ -92,16 +93,35 @@ export async function GET(request: Request) {
     { auth: { persistSession: false } },
   );
 
-  const empresaIds = (empresaFiltro ? [empresaFiltro] : Object.keys(EMPRESA_WORKPLACE)).filter(
-    (id) => EMPRESA_WORKPLACE[id] != null,
-  );
+  // Empresas a sincronizar: las que tienen el conector Ágora activo en BD
+  // (camino definitivo) ∪ las del mapa legacy (fallback de transición). PRP-059.
+  let empresaIds: string[];
+  if (empresaFiltro) {
+    empresaIds = [empresaFiltro];
+  } else {
+    const { data: activas } = await supabase
+      .from("empresas")
+      .select("id")
+      .eq("agora_activo", true);
+    const ids = new Set<string>([
+      ...(activas ?? []).map((e) => e.id as string),
+      ...Object.keys(EMPRESA_WORKPLACE),
+    ]);
+    empresaIds = Array.from(ids);
+  }
 
   const resultados: Array<Record<string, unknown>> = [];
   let hayErrores = false;
 
   for (const empresaId of empresaIds) {
     try {
-      const r = await ingerirVentasAgoraDia(supabase, empresaId, businessDay);
+      const conexion = await getAgoraCredenciales(supabase, empresaId);
+      if (!conexion) {
+        // Sin Ágora configurado ni por BD ni por fallback → se salta sin error.
+        resultados.push({ empresaId, omitida: "sin credenciales de Ágora" });
+        continue;
+      }
+      const r = await ingerirVentasAgoraDia(supabase, empresaId, businessDay, conexion);
       // Descontar stock vía kardex (solo desde la fecha de corte de la empresa).
       const desc = await descontarDiaSiCorte(supabase, empresaId, businessDay);
       await supabase.from("agora_sync_log").insert({

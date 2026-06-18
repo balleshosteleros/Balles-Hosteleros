@@ -22,6 +22,7 @@ import {
 import { TelefonoConfigPanel } from "@/features/ajustes/components/TelefonoConfigPanel";
 import { HoraSecundariaPanel } from "@/features/ajustes/components/HoraSecundariaPanel";
 import { ToolNotifPanel } from "@/features/ajustes/components/ToolNotifPanel";
+import { AplicacionesTab } from "@/features/ajustes/components/AplicacionesTab";
 import type { ToolNotifKey } from "@/features/ajustes/data/ajustes";
 
 // Iconos sin contador real → se oculta el toggle del círculo de aviso.
@@ -151,6 +152,13 @@ export function HerramientasTab() {
                   <HoraSecundariaPanel />
                   <div className="border-t pt-4">
                     <ToolNotifPanel toolKey={id} hasBadge />
+                  </div>
+                </div>
+              ) : id === "aplicaciones" ? (
+                <div className="space-y-6">
+                  <AplicacionesTab />
+                  <div className="border-t pt-4">
+                    <ToolNotifPanel toolKey="aplicaciones" hasBadge={false} />
                   </div>
                 </div>
               ) : (

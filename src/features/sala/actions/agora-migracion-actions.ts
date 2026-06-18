@@ -2,10 +2,8 @@
 
 import { getAppContext } from "@/lib/supabase/get-context";
 import { createAdminClient } from "@/lib/supabase/admin";
-import {
-  ingerirVentasAgoraDia,
-  EMPRESA_WORKPLACE,
-} from "@/features/logistica/services/agora-ventas-ingesta";
+import { ingerirVentasAgoraDia } from "@/features/logistica/services/agora-ventas-ingesta";
+import { getAgoraCredenciales } from "@/features/logistica/services/agora-credenciales";
 
 // "Tripas" de la migración de Ágora: estado, log de sincronizaciones y facturas crudas. PRP-057.
 
@@ -133,7 +131,7 @@ export async function getMigracionAgoraEstado(): Promise<
     return {
       ok: true,
       empresaId,
-      envsConfigurados: Boolean(process.env.AGORA_API_URL && process.env.AGORA_API_TOKEN),
+      envsConfigurados: (await getAgoraCredenciales(supabase, empresaId)) != null,
       tickets: tickets ?? 0,
       primerDia: (rango?.[0]?.cerrado_at as string | null) ?? null,
       ultimoDia: (rangoMax?.[0]?.cerrado_at as string | null) ?? null,
@@ -152,14 +150,12 @@ export async function sincronizarDiaAgora(
   try {
     const { empresaId } = await getAppContext();
     if (!empresaId) return { ok: false, error: "Sin empresa activa." };
-    if (!EMPRESA_WORKPLACE[empresaId]) {
-      return { ok: false, error: "La empresa activa no tiene almacén de Ágora asociado." };
-    }
-    if (!process.env.AGORA_API_URL || !process.env.AGORA_API_TOKEN) {
-      return { ok: false, error: "Faltan las claves de Ágora (AGORA_API_URL / AGORA_API_TOKEN)." };
-    }
     const admin = createAdminClient();
-    const r = await ingerirVentasAgoraDia(admin, empresaId, dia);
+    const conexion = await getAgoraCredenciales(admin, empresaId);
+    if (!conexion) {
+      return { ok: false, error: "La empresa activa no tiene Ágora configurado. Ve a Ajustes → Integraciones." };
+    }
+    const r = await ingerirVentasAgoraDia(admin, empresaId, dia, conexion);
     await admin.from("agora_sync_log").insert({
       empresa_id: empresaId,
       status: "ok",
