@@ -29,7 +29,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { LabelConRegla } from "@/components/forms/LabelConRegla";
 import { BotonesGuardarBorrador } from "@/components/forms/BotonesGuardarBorrador";
-import { Mail, AlertTriangle, Settings, Pencil, Trash2, Plus, Sparkles, X } from "lucide-react";
+import { Mail, AlertTriangle, Settings, Pencil, Trash2, Plus, Sparkles, X, ArrowLeft } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -450,7 +450,7 @@ export function ProveedoresView() {
         <div className="bg-card border rounded-lg p-5 space-y-5">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-foreground">CONFIGURACIÓN — PROVEEDORES</h3>
-            <Button size="sm" variant="outline" onClick={() => setShowConfig(false)}>Volver</Button>
+            <Button size="sm" variant="ghost" onClick={() => setShowConfig(false)} className="gap-1"><ArrowLeft className="h-4 w-4" /> Volver</Button>
           </div>
 
           <CategoriasProveedorManager items={categoriasFull} onChanged={reloadCategorias} />

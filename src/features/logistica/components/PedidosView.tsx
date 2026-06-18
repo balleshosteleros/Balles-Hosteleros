@@ -24,7 +24,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import {
   Copy, Pencil, Trash2, Printer, MoreHorizontal, ClipboardList, Truck,
-  ChevronDown, Package, Settings, Receipt,
+  ChevronDown, Package, Settings, Receipt, ArrowLeft,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
@@ -697,7 +697,15 @@ export function PedidosView() {
           />
 
           {showConfig && (
-            <div className="rounded-xl border bg-card p-5">
+            <div className="rounded-xl border bg-card p-5 space-y-4">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowConfig(false)}
+                className="gap-1 -ml-2"
+              >
+                <ArrowLeft className="h-4 w-4" /> Volver
+              </Button>
               <p className="text-sm text-muted-foreground">Configuración de pedidos — próximamente.</p>
             </div>
           )}

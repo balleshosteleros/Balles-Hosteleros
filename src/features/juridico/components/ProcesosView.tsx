@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Info, FileText, Settings } from "lucide-react";
+import { Info, FileText, Settings, ArrowLeft } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -356,7 +356,16 @@ export function ProcesosView() {
         />
 
         {showConfig ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowConfig(false)}
+              className="gap-1 -ml-2"
+            >
+              <ArrowLeft className="h-4 w-4" /> Volver
+            </Button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Estados</CardTitle>
@@ -393,6 +402,7 @@ export function ProcesosView() {
                 {JURIDICOS.map((j) => <Badge key={j} variant="outline">{j}</Badge>)}
               </CardContent>
             </Card>
+            </div>
           </div>
         ) : (
           <>

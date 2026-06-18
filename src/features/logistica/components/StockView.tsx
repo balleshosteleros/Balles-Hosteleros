@@ -21,7 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/shared/components/ui/popover";
 import {
-  ArrowUpDown, Pencil, Check, X, Sun, Settings, ChevronDown, ShoppingCart, FlaskConical,
+  ArrowUpDown, Pencil, Check, X, Sun, Settings, ChevronDown, ShoppingCart, FlaskConical, ArrowLeft,
 } from "lucide-react";
 import {
   SubmoduleToolbar,
@@ -683,7 +683,15 @@ export function StockView() {
           />
 
           {showConfig ? (
-            <div className="bg-card border rounded-lg p-5">
+            <div className="bg-card border rounded-lg p-5 space-y-4">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowConfig(false)}
+                className="gap-1 -ml-2"
+              >
+                <ArrowLeft className="h-4 w-4" /> Volver
+              </Button>
               <TemporadasConfig
                 temporadas={temporadas}
                 setTemporadas={setTemporadas}

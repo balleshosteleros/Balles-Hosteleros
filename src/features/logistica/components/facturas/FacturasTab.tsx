@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Receipt, Settings } from "lucide-react";
+import { Receipt, Settings, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -211,7 +211,15 @@ export function FacturasTab({ openFacturaId, onOpened }: Props) {
       />
 
       {showConfig && (
-        <div className="rounded-xl border bg-card p-5">
+        <div className="rounded-xl border bg-card p-5 space-y-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowConfig(false)}
+            className="gap-1 -ml-2"
+          >
+            <ArrowLeft className="h-4 w-4" /> Volver
+          </Button>
           <p className="text-sm text-muted-foreground">Configuración de facturas — próximamente.</p>
         </div>
       )}
