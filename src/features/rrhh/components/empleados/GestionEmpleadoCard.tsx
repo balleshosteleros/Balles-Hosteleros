@@ -379,57 +379,6 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
         </div>
 
         <div className="space-y-2">
-          <Label>Locales donde puede fichar</Label>
-          <p className="text-xs text-muted-foreground">
-            Marca uno o varios locales. Solo aparecen los de las empresas a las que pertenece el empleado.
-          </p>
-          <div className="space-y-3">
-            {empresasMarcadas.map((empId) => {
-              const empresa = empresasDisponibles.find((e) => e.id === empId);
-              const locales = localesPorEmpresa[empId];
-              return (
-                <div key={empId} className="rounded-lg border bg-muted/20 p-3 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="text-sm font-medium">{empresa?.nombre ?? "Empresa"}</span>
-                  </div>
-                  {locales === undefined ? (
-                    <p className="text-xs text-muted-foreground pl-6">Cargando locales…</p>
-                  ) : locales.length === 0 ? (
-                    <p className="text-xs text-rose-600 pl-6">
-                      Esta empresa aún no tiene locales: el empleado no podría fichar
-                      aquí. Crea un local o desmarca la empresa.
-                    </p>
-                  ) : (
-                    <>
-                      <div className="grid gap-1.5 sm:grid-cols-2 pl-1">
-                        {locales.map((local) => (
-                          <label
-                            key={local.id}
-                            className="flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm cursor-pointer"
-                          >
-                            <Checkbox
-                              checked={localesSeleccionados.includes(local.id)}
-                              onCheckedChange={(c) => toggleLocal(local.id, c === true)}
-                            />
-                            <span>{local.nombre}</span>
-                          </label>
-                        ))}
-                      </div>
-                      {!locales.some((l) => localesSeleccionados.includes(l.id)) && (
-                        <p className="text-xs text-rose-600 pl-1">
-                          Marca al menos un local de fichaje en esta empresa.
-                        </p>
-                      )}
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="space-y-2">
           <Label>Teletrabajo</Label>
           <label className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm w-fit">
             <Checkbox
@@ -448,29 +397,67 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
             <div className="space-y-1">
               <h4 className="text-sm font-semibold text-foreground">Acceso multiempresa</h4>
               <p className="text-sm text-muted-foreground">
-                Marca las empresas en las que trabaja este empleado. Tendrá el mismo acceso en todas según su departamento. La empresa donde está dado de alta queda siempre activa.
+                Marca las empresas en las que trabaja este empleado y, en cada una, sus locales de fichaje. La empresa donde está dado de alta queda siempre activa.
               </p>
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-3">
             {empresasDisponibles.map((empresa) => {
               const marcada = empresasMarcadas.includes(empresa.id);
               const esPrincipal = empresa.id === initial.empresaId;
+              const locales = localesPorEmpresa[empresa.id];
               return (
-                <label
+                <div
                   key={empresa.id}
-                  className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
+                  className={`rounded-lg border p-3 space-y-2 ${marcada ? "bg-muted/20" : ""}`}
                 >
-                  <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
                     <Checkbox
                       checked={marcada}
                       onCheckedChange={(checked) => toggleEmpresa(empresa.id, checked === true)}
                       disabled={esPrincipal}
                     />
+                    <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
                     <span>{empresa.nombre}</span>
-                  </div>
-                </label>
+                  </label>
+
+                  {marcada && (
+                    <div className="pl-6 space-y-2">
+                      {locales === undefined ? (
+                        <p className="text-xs text-muted-foreground">Cargando locales…</p>
+                      ) : locales.length === 0 ? (
+                        <p className="text-xs text-rose-600">
+                          Esta empresa aún no tiene locales: el empleado no podría fichar
+                          aquí. Crea un local o desmarca la empresa.
+                        </p>
+                      ) : (
+                        <>
+                          <p className="text-xs text-muted-foreground">Locales donde puede fichar:</p>
+                          <div className="grid gap-1.5 sm:grid-cols-2">
+                            {locales.map((local) => (
+                              <label
+                                key={local.id}
+                                className="flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm cursor-pointer"
+                              >
+                                <Checkbox
+                                  checked={localesSeleccionados.includes(local.id)}
+                                  onCheckedChange={(c) => toggleLocal(local.id, c === true)}
+                                />
+                                <span>{local.nombre}</span>
+                              </label>
+                            ))}
+                          </div>
+                          {!locales.some((l) => localesSeleccionados.includes(l.id)) && (
+                            <p className="text-xs text-rose-600">
+                              Marca al menos un local de fichaje en esta empresa.
+                            </p>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
