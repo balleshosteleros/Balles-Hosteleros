@@ -3,6 +3,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { getUserPermisos } from "@/features/auth/actions/permisos-actions";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -65,51 +66,58 @@ export async function requireAdminUser(opts?: { empresaIds?: string[] }) {
 }
 
 /**
- * Guard de autorización para operar DENTRO de un grupo (cuenta multi-empresa).
+ * Guard de autorización para gestionar/duplicar empleados entre empresas.
  *
- * Exige rol admin con acceso a la empresa de ORIGEN (el `director` salta el
- * scope) y verifica que todas las empresas objetivo pertenecen al MISMO grupo
- * que la de origen. Sustituye al chequeo "admin de la empresa destino" cuando
- * la operación es legítima cross-empresa dentro del grupo (copiar empleado,
- * acceso multiempresa). Lanza `Error` si no cumple.
+ * NO se basa en "grupo": cada empresa es individual. Exige que el usuario:
+ *  1) tenga permiso de RECURSOS HUMANOS (editar) en su rol, y
+ *  2) tenga acceso real (`usuario_empresas` ∪ empresa principal) a TODAS las
+ *     empresas objetivo.
+ * El rol `director` (plataforma) es superusuario y salta ambos chequeos.
+ * Ejemplo: quien tenga las dos empresas pero sin RRHH (p. ej. CALIDAD) NO pasa;
+ * quien tenga las dos + RRHH sí. Lanza `Error` si no cumple.
  */
-export async function requireAdminMismoGrupo(
-  empresaOrigenId: string,
-  empresasObjetivo: string[],
-) {
-  const user = await requireAdminUser({ empresaIds: [empresaOrigenId] });
+export async function requireRRHHAcceso(empresaIds: string[]) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("No autenticado");
 
-  const objetivo = Array.from(
-    new Set(empresasObjetivo.filter((id) => typeof id === "string" && UUID_RE.test(id))),
-  );
-  if (objetivo.length === 0) return user;
+  const { data: rolesRows } = await supabase
+    .from("usuario_roles")
+    .select("role")
+    .eq("user_id", user.id);
+  const esDirector = (rolesRows ?? []).some((r: { role: string }) => r.role === "director");
+  if (esDirector) return user;
 
-  const admin = createAdminClient();
-  const { data: ref } = await admin
-    .from("empresas")
-    .select("grupo_id")
-    .eq("id", empresaOrigenId)
-    .maybeSingle();
-  const grupoId = (ref?.grupo_id as string | null) ?? null;
-
-  const { data: emps } = await admin
-    .from("empresas")
-    .select("id, grupo_id")
-    .in("id", objetivo);
-  const grupoPorEmpresa = new Map(
-    (emps ?? []).map((e: { id: string; grupo_id: string | null }) => [e.id, e.grupo_id]),
-  );
-
-  const fuera = objetivo.filter((id) => {
-    // La propia empresa de origen siempre es válida.
-    if (id === empresaOrigenId) return false;
-    const g = grupoPorEmpresa.get(id) ?? null;
-    return grupoId == null || g == null || g !== grupoId;
-  });
-  if (fuera.length > 0) {
+  // 1) Permiso de Recursos Humanos (editar) en el rol del usuario.
+  const { permisos } = await getUserPermisos();
+  const tieneRRHH = permisos.some((p) => p.modulo === "RECURSOS HUMANOS" && p.editar);
+  if (!tieneRRHH) {
     throw new Error(
-      "Sin permisos: la empresa destino no pertenece al mismo grupo que el empleado.",
+      "Sin permisos: necesitas acceso a Recursos Humanos para gestionar empleados.",
     );
+  }
+
+  // 2) Acceso real a TODAS las empresas objetivo.
+  const empresasReq = Array.from(
+    new Set(empresaIds.filter((id) => typeof id === "string" && UUID_RE.test(id))),
+  );
+  if (empresasReq.length > 0) {
+    const [{ data: rels }, { data: prof }] = await Promise.all([
+      supabase
+        .from("usuario_empresas")
+        .select("empresa_id")
+        .eq("user_id", user.id)
+        .in("empresa_id", empresasReq),
+      supabase.from("usuarios").select("empresa_id").eq("user_id", user.id).maybeSingle(),
+    ]);
+    const accesibles = new Set((rels ?? []).map((r: { empresa_id: string }) => r.empresa_id));
+    if (prof?.empresa_id) accesibles.add(prof.empresa_id as string);
+    const sinAcceso = empresasReq.filter((id) => !accesibles.has(id));
+    if (sinAcceso.length > 0) {
+      throw new Error("Sin permisos: no tienes acceso a esa empresa.");
+    }
   }
 
   return user;

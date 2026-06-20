@@ -184,25 +184,7 @@ export function FichajesConfigPanel({ embedded = false }: { embedded?: boolean }
               </p>
             </div>
 
-            <div className="flex items-center justify-between pl-1">
-              <Label className="text-sm">Cuándo salta el aviso</Label>
-              <select
-                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                value={policy.popupModo}
-                onChange={(e) =>
-                  setPolicy((p) => ({
-                    ...p,
-                    popupModo: e.target.value === "siempre" ? "siempre" : "ventana",
-                  }))
-                }
-              >
-                <option value="ventana">Solo a su hora (ventana)</option>
-                <option value="siempre">Siempre que falte fichar</option>
-              </select>
-            </div>
-
-            {policy.popupModo === "ventana" && (
-              <>
+            <>
                 <div className="flex items-center justify-between pl-1">
                   <Label className="text-sm">Salta hasta X min antes de su hora</Label>
                   <select
@@ -260,8 +242,7 @@ export function FichajesConfigPanel({ embedded = false }: { embedded?: boolean }
                     </select>
                   </div>
                 )}
-              </>
-            )}
+            </>
 
             <div className="flex items-center justify-between gap-4 pl-1">
               <Label className="text-sm">Sonar al avisar</Label>

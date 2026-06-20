@@ -41,7 +41,7 @@ import {
   User,
   Fingerprint, Inbox, FileSignature, Calendar, Timer,
   UserRoundSearch, UserCheck, Gift, Trophy, HandCoins,
-  GraduationCap, ClipboardList, FileQuestion, FileSearch, Building2,
+  GraduationCap, ClipboardList, FileQuestion, FileSearch,
   Save, Loader2,
 } from "lucide-react";
 
@@ -321,24 +321,8 @@ export default function FichaEmpleadoPage() {
       <FichaEmpleadoHeader
         empleado={empleado}
         onBack={() => router.push("/rrhh/empleados")}
+        empresas={empresasAcceso}
       />
-
-      {empresasAcceso.length > 0 && (
-        <div className="border-b bg-card px-6 py-2.5 flex items-center gap-2 flex-wrap shrink-0">
-          <Building2 className="h-4 w-4 text-muted-foreground" />
-          <span className="text-xs uppercase tracking-wide text-muted-foreground mr-1">
-            Empresas:
-          </span>
-          {empresasAcceso.map((e) => (
-            <span
-              key={e.id}
-              className="text-xs px-2 py-0.5 rounded font-medium bg-muted text-foreground"
-            >
-              {e.nombre}
-            </span>
-          ))}
-        </div>
-      )}
 
       <div className="border-b bg-card px-6 flex gap-0 overflow-x-auto shrink-0">
         {TOP_TABS.map((tab) => (

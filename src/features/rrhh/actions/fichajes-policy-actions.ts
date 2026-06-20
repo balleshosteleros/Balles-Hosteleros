@@ -34,7 +34,6 @@ export async function getFichajePolicy(): Promise<{
     if (error) throw error;
     if (!data) return { ok: true, data: { ...FICHAJE_POLICY_DEFAULT } };
 
-    const popupModo = data.popup_modo === "siempre" ? "siempre" : "ventana";
     return {
       ok: true,
       data: {
@@ -44,7 +43,6 @@ export async function getFichajePolicy(): Promise<{
         margenDespuesMin: (data.margen_despues_min as number) ?? 15,
         redondearAntes: !!data.redondear_antes,
         redondearDespues: !!data.redondear_despues,
-        popupModo,
         popupMargenAntesMin: (data.popup_margen_antes_min as number) ?? 15,
         popupMargenDespuesMin: (data.popup_margen_despues_min as number) ?? 15,
         permitirFueraHorario: !!data.permitir_fuera_horario,
@@ -78,7 +76,6 @@ export async function saveFichajePolicy(input: FichajePolicy) {
         margen_despues_min: clampMargen(input.margenDespuesMin),
         redondear_antes: input.redondearAntes,
         redondear_despues: input.redondearDespues,
-        popup_modo: input.popupModo === "siempre" ? "siempre" : "ventana",
         popup_margen_antes_min: clampMargen(input.popupMargenAntesMin),
         popup_margen_despues_min: clampMargen(input.popupMargenDespuesMin),
         permitir_fuera_horario: input.permitirFueraHorario,

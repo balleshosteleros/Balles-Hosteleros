@@ -17,9 +17,10 @@ function avatarColor(id: string) {
 interface Props {
   empleado: EmpleadoUI;
   onBack: () => void;
+  empresas?: { id: string; nombre: string }[];
 }
 
-export function FichaEmpleadoHeader({ empleado, onBack }: Props) {
+export function FichaEmpleadoHeader({ empleado, onBack, empresas = [] }: Props) {
   const iniciales = (empleado.nombre[0] + (empleado.apellidos[0] ?? "")).toUpperCase();
 
   return (
@@ -40,13 +41,21 @@ export function FichaEmpleadoHeader({ empleado, onBack }: Props) {
         </div>
         <div>
           <h2 className="text-xl font-bold text-foreground">{empleado.nombre} {empleado.apellidos}</h2>
-          <div className="flex items-center gap-3 mt-0.5">
+          <div className="flex items-center gap-3 mt-0.5 flex-wrap">
             <div className="flex items-center gap-1.5">
               <span className={`h-2 w-2 rounded-full ${ESTADOS_COLOR[empleado.estado]}`} />
               <span className="text-sm text-muted-foreground">{ESTADOS_LABEL[empleado.estado]}</span>
             </div>
             <span className="text-sm text-muted-foreground">·</span>
             <span className="text-sm text-muted-foreground">{empleado.departamento}</span>
+            {empresas.map((e) => (
+              <span
+                key={e.id}
+                className="text-xs px-2 py-0.5 rounded font-medium bg-muted text-foreground"
+              >
+                {e.nombre}
+              </span>
+            ))}
           </div>
         </div>
       </div>

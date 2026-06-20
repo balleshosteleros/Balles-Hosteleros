@@ -23,14 +23,17 @@ interface Ventana {
   tieneHorario: boolean;
   entradaMin: number | null;
   salidaMin: number | null;
-  popupModo: "ventana" | "siempre";
   popupMargenAntesMin: number;
   popupMargenDespuesMin: number;
   avisoSonido: boolean;
   avisoVibracion: boolean;
 }
 
-/** ¿Toca avisar de fichar ahora? Según config de Ajustes RRHH → Fichajes. */
+/**
+ * ¿Toca avisar de fichar ahora? Según config de Ajustes RRHH → Fichajes.
+ * El aviso SOLO salta a quien tiene turno ese día, y SOLO dentro de la ventana
+ * (X min antes / X min después de su hora). Nunca en ningún otro caso.
+ */
 function calcularDebe(
   ventana: Ventana | null,
   estado: Estado,
@@ -38,16 +41,11 @@ function calcularDebe(
   nowMin: number,
 ): { debeEntrada: boolean; debeSalida: boolean } {
   const tiene = ventana?.tieneHorario ?? false;
-  const modo = ventana?.popupModo ?? "ventana";
   const mAntes = ventana?.popupMargenAntesMin ?? 15;
   const mDespues = ventana?.popupMargenDespuesMin ?? 15;
-  // "Siempre": el aviso salta mientras falte fichar (entrada).
-  const modoSiempre = modo === "siempre";
   let debeEntrada = false;
   let debeSalida = false;
-  if (modoSiempre) {
-    debeEntrada = estado === "sin-fichar";
-  } else if (tiene) {
+  if (tiene) {
     debeEntrada =
       estado === "sin-fichar" &&
       ventana?.entradaMin != null &&
@@ -137,7 +135,6 @@ export function MobileFichajeProvider() {
           tieneHorario: v.tieneHorario,
           entradaMin: v.entradaMin,
           salidaMin: v.salidaMin,
-          popupModo: v.popupModo,
           popupMargenAntesMin: v.popupMargenAntesMin,
           popupMargenDespuesMin: v.popupMargenDespuesMin,
           avisoSonido: v.avisoSonido,

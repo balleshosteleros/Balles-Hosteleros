@@ -341,7 +341,6 @@ export interface VentanaFichajeHoy {
   salidaMin: number | null;
   cruzaMedianoche: boolean;
   /** Config del aviso (pop-up) de fichar — Ajustes RRHH → Fichajes. */
-  popupModo: "ventana" | "siempre";
   popupMargenAntesMin: number;
   popupMargenDespuesMin: number;
   avisoSonido: boolean;
@@ -356,7 +355,6 @@ async function leerPopupConfig(
   supabase: Awaited<ReturnType<typeof createClient>>,
   empresaId: string | null,
 ): Promise<{
-  popupModo: "ventana" | "siempre";
   popupMargenAntesMin: number;
   popupMargenDespuesMin: number;
   avisoSonido: boolean;
@@ -365,7 +363,6 @@ async function leerPopupConfig(
   reavisoIntervaloMin: number;
 }> {
   const def = {
-    popupModo: "ventana" as "ventana" | "siempre",
     popupMargenAntesMin: 15,
     popupMargenDespuesMin: 15,
     avisoSonido: false,
@@ -377,12 +374,11 @@ async function leerPopupConfig(
   const { data: cfg } = await supabase
     .from("empresa_fichajes_config")
     .select(
-      "popup_modo, popup_margen_antes_min, popup_margen_despues_min, aviso_sonido, aviso_vibracion, reaviso_activo, reaviso_intervalo_min",
+      "popup_margen_antes_min, popup_margen_despues_min, aviso_sonido, aviso_vibracion, reaviso_activo, reaviso_intervalo_min",
     )
     .eq("empresa_id", empresaId)
     .maybeSingle();
   return {
-    popupModo: (cfg?.popup_modo === "siempre" ? "siempre" : "ventana") as "ventana" | "siempre",
     popupMargenAntesMin: (cfg?.popup_margen_antes_min as number | null) ?? 15,
     popupMargenDespuesMin: (cfg?.popup_margen_despues_min as number | null) ?? 15,
     avisoSonido: !!cfg?.aviso_sonido,
@@ -398,7 +394,6 @@ export async function getMiVentanaFichajeHoy(): Promise<VentanaFichajeHoy> {
     entradaMin: null as number | null,
     salidaMin: null as number | null,
     cruzaMedianoche: false,
-    popupModo: "ventana" as "ventana" | "siempre",
     popupMargenAntesMin: 15,
     popupMargenDespuesMin: 15,
     avisoSonido: false,

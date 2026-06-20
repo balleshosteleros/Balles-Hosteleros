@@ -1,8 +1,8 @@
 /**
  * Cron: REAVISOS de fichar (PRP-060).
  *
- * Cada minuto, para las empresas con `reaviso_activo` y `popup_modo = 'ventana'`,
- * busca empleados con horario FIJO hoy que están dentro de su ventana de
+ * Cada minuto, para las empresas con `reaviso_activo`, busca empleados con
+ * horario FIJO hoy que están dentro de su ventana de
  * cortesía de ENTRADA (entrada − margen_antes … entrada + margen_despues) y que
  * aún NO han fichado, y les envía un push de recordatorio cada `reaviso_intervalo`
  * minutos. Idempotente vía `fichaje_reavisos_log` (UNIQUE user_id, fecha, slot).
@@ -41,13 +41,12 @@ export async function GET(request: Request) {
 
   const { fecha: hoy, minutos: ahoraMin } = ahoraEnMadrid();
 
-  // Empresas con reaviso activo en modo ventana.
+  // Empresas con reaviso activo (o aviso de cambio de empresa).
   const { data: configs, error: cfgErr } = await supabase
     .from("empresa_fichajes_config")
     .select(
-      "empresa_id, popup_modo, popup_margen_antes_min, popup_margen_despues_min, reaviso_activo, reaviso_intervalo_min, aviso_cambio_empresa",
+      "empresa_id, popup_margen_antes_min, popup_margen_despues_min, reaviso_activo, reaviso_intervalo_min, aviso_cambio_empresa",
     )
-    .eq("popup_modo", "ventana")
     .or("reaviso_activo.eq.true,aviso_cambio_empresa.eq.true");
   if (cfgErr) {
     return NextResponse.json({ ok: false, error: cfgErr.message }, { status: 500 });

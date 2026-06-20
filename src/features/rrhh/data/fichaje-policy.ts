@@ -2,9 +2,6 @@
 // Módulo de datos puro (sin "use server") para poder exportar constante y tipo,
 // que un archivo de server actions no puede exportar.
 
-/** Cuándo salta el aviso (pop-up) de fichar en el móvil. */
-export type PopupModo = "ventana" | "siempre";
-
 export interface FichajePolicy {
   permitirAntes: boolean;
   margenAntesMin: number;
@@ -12,8 +9,8 @@ export interface FichajePolicy {
   margenDespuesMin: number;
   redondearAntes: boolean;
   redondearDespues: boolean;
-  // Aviso (pop-up) de fichar en el móvil.
-  popupModo: PopupModo;
+  // Aviso (pop-up) de fichar en el móvil. Solo salta a empleados CON turno ese
+  // día, dentro de la ventana (X min antes / X min después de su hora de entrada).
   popupMargenAntesMin: number;
   popupMargenDespuesMin: number;
   // Permite fichar fuera de la ventana/sin turno; no auto-paraliza la jornada.
@@ -41,7 +38,6 @@ export const FICHAJE_POLICY_DEFAULT: FichajePolicy = {
   margenDespuesMin: 15,
   redondearAntes: true,
   redondearDespues: false,
-  popupModo: "ventana",
   popupMargenAntesMin: 15,
   popupMargenDespuesMin: 15,
   permitirFueraHorario: false,

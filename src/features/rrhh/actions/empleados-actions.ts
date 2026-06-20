@@ -4,7 +4,7 @@ import { getAppContext } from "@/lib/supabase/get-context";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   requireAdminUser,
-  requireAdminMismoGrupo,
+  requireRRHHAcceso,
   altaUsuarioEmpleado,
 } from "@/features/rrhh/services/empleados-core";
 import { revalidatePath } from "next/cache";
@@ -633,7 +633,6 @@ export async function getDatosCopiaEmpleado(input: {
 }) {
   try {
     const { supabase } = await getAppContext();
-    await requireAdminUser({ empresaIds: [input.empresaDestinoId] });
 
     const { data: origen } = await supabase
       .from("empleados")
@@ -641,6 +640,9 @@ export async function getDatosCopiaEmpleado(input: {
       .eq("id", input.empleadoId)
       .maybeSingle();
     if (!origen?.user_id) return { ok: false, error: "Empleado no encontrado." };
+
+    // Quien copia: con RRHH (editar) + acceso real a la empresa destino.
+    await requireRRHHAcceso([input.empresaDestinoId]);
 
     let admin;
     try { admin = createAdminClient(); }
@@ -736,8 +738,8 @@ export async function copiarEmpleadoAEmpresa(input: {
     if (!origen?.user_id) return { ok: false, error: "Empleado no encontrado o sin usuario vinculado." };
     if (input.empresaDestinoId === origen.empresa_id) return { ok: false, error: "El empleado ya está en esa empresa." };
 
-    // Admin con acceso a la empresa de origen + destino DENTRO del mismo grupo.
-    await requireAdminMismoGrupo(origen.empresa_id as string, [input.empresaDestinoId]);
+    // Quien copia: con RRHH (editar) + acceso real a la empresa destino.
+    await requireRRHHAcceso([input.empresaDestinoId]);
     let admin;
     try { admin = createAdminClient(); }
     catch { return { ok: false, error: "Supabase admin no configurado." }; }
