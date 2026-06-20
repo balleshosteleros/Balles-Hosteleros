@@ -22,6 +22,7 @@ import {
   type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
+import { EmpresaBadge } from "@/shared/components/EmpresaBadge";
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 import { IOActions } from "@/shared/io";
 import { empleadosIO } from "@/features/rrhh/io/empleados.io";
@@ -264,12 +265,7 @@ export function EmpleadosView() {
               <span className="text-xs text-muted-foreground">—</span>
             ) : (
               emp.empresasAcceso.map((e) => (
-                <span
-                  key={e.id}
-                  className="text-[11px] px-1.5 py-0.5 rounded bg-muted text-foreground"
-                >
-                  {e.nombre}
-                </span>
+                <EmpresaBadge key={e.id} nombre={e.nombre} size="sm" />
               ))
             )}
           </div>

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { EmpresaBadge } from "@/shared/components/EmpresaBadge";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -110,7 +111,7 @@ export function ConsultasPendientesView() {
                 {consultas.map((c) => (
                   <TableRow key={c.id}>
                     <TableCell className="font-medium text-sm max-w-[250px] truncate">{c.pregunta}</TableCell>
-                    <TableCell><Badge variant="outline" className="text-[10px]">{c.empresaNombre}</Badge></TableCell>
+                    <TableCell><EmpresaBadge nombre={c.empresaNombre} size="sm" /></TableCell>
                     <TableCell className="text-xs">{c.rolUsuario}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{c.fecha}</TableCell>
                     <TableCell>

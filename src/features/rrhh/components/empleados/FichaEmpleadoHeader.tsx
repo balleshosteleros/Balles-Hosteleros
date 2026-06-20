@@ -2,6 +2,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Camera } from "lucide-react";
 import { ESTADOS_COLOR, ESTADOS_LABEL, type EmpleadoUI } from "@/features/rrhh/components/empleados/empleado-ui";
+import { EmpresaBadge } from "@/shared/components/EmpresaBadge";
 
 const AVATAR_COLORS = [
   "hsl(var(--primary))", "hsl(25 80% 55%)", "hsl(280 60% 55%)", "hsl(160 55% 42%)",
@@ -49,12 +50,7 @@ export function FichaEmpleadoHeader({ empleado, onBack, empresas = [] }: Props) 
             <span className="text-sm text-muted-foreground">·</span>
             <span className="text-sm text-muted-foreground">{empleado.departamento}</span>
             {empresas.map((e) => (
-              <span
-                key={e.id}
-                className="text-xs px-2 py-0.5 rounded font-medium bg-muted text-foreground"
-              >
-                {e.nombre}
-              </span>
+              <EmpresaBadge key={e.id} nombre={e.nombre} />
             ))}
           </div>
         </div>

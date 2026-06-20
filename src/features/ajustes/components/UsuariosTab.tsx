@@ -31,6 +31,7 @@ import {
 } from "@/features/empresa/actions/user-empresas-actions";
 import { Checkbox } from "@/components/ui/checkbox";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { EmpresaBadge } from "@/shared/components/EmpresaBadge";
 
 const ESTADO_STYLES: Record<EstadoAcceso, string> = {
   Activo: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
@@ -1127,10 +1128,7 @@ function EmpresasCell({
 
   return (
     <div className="flex items-center gap-1">
-      <Badge variant="outline" className="text-[10px] gap-1">
-        <Building2 className="h-3 w-3" />
-        {primera}
-      </Badge>
+      <EmpresaBadge nombre={primera} size="sm" />
       {resto.length > 0 && (
         <Popover>
           <PopoverTrigger asChild>
@@ -1147,10 +1145,10 @@ function EmpresasCell({
               <p className="text-[10px] font-bold tracking-wider text-muted-foreground">EMPRESAS</p>
               <p className="text-xs text-muted-foreground">{nombres.length} con acceso</p>
             </div>
-            <ul className="max-h-64 overflow-y-auto py-1">
+            <ul className="max-h-64 overflow-y-auto p-2 flex flex-col gap-1.5">
               {nombres.map((n) => (
-                <li key={n} className="px-3 py-1.5 text-sm hover:bg-muted/50">
-                  {n}
+                <li key={n}>
+                  <EmpresaBadge nombre={n} />
                 </li>
               ))}
             </ul>
