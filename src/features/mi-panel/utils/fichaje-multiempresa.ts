@@ -360,6 +360,50 @@ export function minutosMadridDe(d: Date): number {
   return h * 60 + m;
 }
 
+/**
+ * Salida prevista del empleado el día `fecha`, según su horario UNIFICADO entre
+ * empresas:
+ *  · FIJO     → fin del último tramo fijo, colocado en la fecha de la entrada.
+ *  · FLEXIBLE → solo si su objetivo es DIARIO: hora de entrada + horas del día.
+ * Devuelve `null` si no se puede predecir (sin horario, flexible semanal, o
+ * jornada que cruza medianoche, que la cierra el cron de huérfanos).
+ */
+export async function calcularSalidaPrevista(
+  client: SupabaseClient,
+  userId: string,
+  fecha: string,
+  horaEntradaISO: string,
+): Promise<Date | null> {
+  const horarios = await getHorariosDiaUnificado(client, userId, fecha);
+  const starts: number[] = [];
+  const ends: number[] = [];
+  let objetivoFlexHoras = 0;
+  for (const h of horarios) {
+    if (h.horario.tipo === "fijo") {
+      for (const tr of h.horario.tramos) {
+        const s = hhmmAMinutos(tr.inicio);
+        const e = hhmmAMinutos(tr.fin);
+        if (s != null) starts.push(s);
+        if (e != null) ends.push(e);
+      }
+    } else if (h.horario.tipo === "flexible" && h.horario.modo === "diario") {
+      objetivoFlexHoras = Math.max(objetivoFlexHoras, h.horario.objetivoHoras || 0);
+    }
+  }
+  const entrada = new Date(horaEntradaISO);
+  if (ends.length) {
+    const entradaMin = Math.min(...starts);
+    const salidaMin = Math.max(...ends);
+    if (salidaMin <= entradaMin) return null; // cruza medianoche → cron de huérfanos
+    // Coloca la salida en la misma fecha local de la entrada.
+    return new Date(entrada.getTime() + (salidaMin - minutosMadridDe(entrada)) * 60000);
+  }
+  if (objetivoFlexHoras > 0) {
+    return new Date(entrada.getTime() + objetivoFlexHoras * 3600000);
+  }
+  return null;
+}
+
 function textoMotivo(motivo: MotivoReparto | undefined): string {
   return motivo === "solape"
     ? "Turnos de empresas distintas SOLAPADOS — revisar configuración de turnos"
@@ -388,8 +432,9 @@ export interface CierreCtx {
  * Cierra un fichaje a la hora `salida`, repartiéndolo entre empresas según el
  * horario UNIFICADO del día si la jornada continua cubre tramos de más de una
  * empresa. Reutilizable desde la salida manual (Mi Panel) y desde el cron de
- * auto-salida (con `autoCierre`). Cuando `autoCierre`, marca revisión y deja
- * `hora_salida_real = null` (el empleado no fichó salida).
+ * auto-salida (con `autoCierre`). Con `autoCierre` se guarda como un fichaje
+ * normal (NO se marca para revisión) y deja `hora_salida_real = null` como único
+ * rastro de que el empleado no fichó salida.
  */
 export async function cerrarConReparto(
   client: SupabaseClient,
@@ -435,13 +480,8 @@ export async function cerrarConReparto(
         lat_salida: geo?.lat ?? null,
         lng_salida: geo?.lng ?? null,
         precision_salida_metros: geo?.precision ?? null,
-        ...(auto
-          ? {
-              requiere_revision: true,
-              revision_motivo: "Cierre automático a la hora de salida prevista (no fichó salida)",
-              incidencia: "Cierre automático: jornada cerrada a la hora prevista — pendiente de revisión",
-            }
-          : {}),
+        // Auto-cierre: se guarda como un fichaje normal, NO se marca para revisión.
+        // El único rastro de que el empleado no fichó salida es `hora_salida_real = null`.
       })
       .eq("id", ctx.fichajeId);
     return { horas, repartido: 1 };
@@ -465,12 +505,10 @@ export async function cerrarConReparto(
         : localPorEmpresa.get(seg.empresaId) ?? { id: null as string | null, nombre: "" };
     const horasSeg = Math.round((((seg.finMin - seg.inicioMin) * 60000) / 3600000) * 10000) / 10000;
     const finISO = esUltimo ? salida.toISOString() : isoDeMin(seg.finMin);
-    const revision = !seg.cubierto || auto;
-    const motivoTxt = !seg.cubierto
-      ? textoMotivo(seg.motivo)
-      : auto
-        ? "Cierre automático a la hora de salida prevista (no fichó salida)"
-        : null;
+    // El auto-cierre NO marca revisión (se guarda como fichaje normal); solo la
+    // marca un tramo realmente no cubierto por el horario, que es otra anomalía.
+    const revision = !seg.cubierto;
+    const motivoTxt = !seg.cubierto ? textoMotivo(seg.motivo) : null;
     const incidencia = revision ? motivoTxt : null;
     const salidaRealSeg = esUltimo ? horaSalidaReal : null;
     const geoSeg = esUltimo ? geo : null;

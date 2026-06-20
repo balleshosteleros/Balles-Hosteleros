@@ -46,7 +46,7 @@ import {
   listLocales,
   setEmpleadoTeletrabajo,
 } from "@/features/ajustes/actions/locales-actions";
-import { getEmpresasAccesibles, type EmpresaAccesible } from "@/features/empresa/actions/empresas-accesibles-actions";
+import { getEmpresasDelGrupo, type EmpresaAccesible } from "@/features/empresa/actions/empresas-accesibles-actions";
 import { CopiarEmpleadoDialog } from "@/features/rrhh/components/empleados/CopiarEmpleadoDialog";
 
 type DepartamentoOpt = { id: string; nombre: string };
@@ -116,7 +116,7 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
       const pr = rows.find((r) => r.esPrincipal);
       setPrincipalPuestoId(pr?.puestoId ?? rows[0]?.puestoId ?? "");
     });
-    getEmpresasAccesibles().then((res) => {
+    getEmpresasDelGrupo(initial.empresaId).then((res) => {
       setEmpresasDisponibles(res.ok ? res.data : []);
     });
     getLocalesEmpleado(empleadoId).then((res) => {

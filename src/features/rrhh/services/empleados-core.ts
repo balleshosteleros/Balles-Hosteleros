@@ -64,6 +64,57 @@ export async function requireAdminUser(opts?: { empresaIds?: string[] }) {
   return user;
 }
 
+/**
+ * Guard de autorización para operar DENTRO de un grupo (cuenta multi-empresa).
+ *
+ * Exige rol admin con acceso a la empresa de ORIGEN (el `director` salta el
+ * scope) y verifica que todas las empresas objetivo pertenecen al MISMO grupo
+ * que la de origen. Sustituye al chequeo "admin de la empresa destino" cuando
+ * la operación es legítima cross-empresa dentro del grupo (copiar empleado,
+ * acceso multiempresa). Lanza `Error` si no cumple.
+ */
+export async function requireAdminMismoGrupo(
+  empresaOrigenId: string,
+  empresasObjetivo: string[],
+) {
+  const user = await requireAdminUser({ empresaIds: [empresaOrigenId] });
+
+  const objetivo = Array.from(
+    new Set(empresasObjetivo.filter((id) => typeof id === "string" && UUID_RE.test(id))),
+  );
+  if (objetivo.length === 0) return user;
+
+  const admin = createAdminClient();
+  const { data: ref } = await admin
+    .from("empresas")
+    .select("grupo_id")
+    .eq("id", empresaOrigenId)
+    .maybeSingle();
+  const grupoId = (ref?.grupo_id as string | null) ?? null;
+
+  const { data: emps } = await admin
+    .from("empresas")
+    .select("id, grupo_id")
+    .in("id", objetivo);
+  const grupoPorEmpresa = new Map(
+    (emps ?? []).map((e: { id: string; grupo_id: string | null }) => [e.id, e.grupo_id]),
+  );
+
+  const fuera = objetivo.filter((id) => {
+    // La propia empresa de origen siempre es válida.
+    if (id === empresaOrigenId) return false;
+    const g = grupoPorEmpresa.get(id) ?? null;
+    return grupoId == null || g == null || g !== grupoId;
+  });
+  if (fuera.length > 0) {
+    throw new Error(
+      "Sin permisos: la empresa destino no pertenece al mismo grupo que el empleado.",
+    );
+  }
+
+  return user;
+}
+
 export type AltaUsuarioEmpleadoInput = {
   /** Cliente admin (service role) ya creado por el caller. */
   admin: AdminClient;

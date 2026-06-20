@@ -344,7 +344,6 @@ export interface VentanaFichajeHoy {
   popupModo: "ventana" | "siempre";
   popupMargenAntesMin: number;
   popupMargenDespuesMin: number;
-  popupSinHorario: boolean;
   avisoSonido: boolean;
   avisoVibracion: boolean;
   reavisoActivo: boolean;
@@ -360,7 +359,6 @@ async function leerPopupConfig(
   popupModo: "ventana" | "siempre";
   popupMargenAntesMin: number;
   popupMargenDespuesMin: number;
-  popupSinHorario: boolean;
   avisoSonido: boolean;
   avisoVibracion: boolean;
   reavisoActivo: boolean;
@@ -370,7 +368,6 @@ async function leerPopupConfig(
     popupModo: "ventana" as "ventana" | "siempre",
     popupMargenAntesMin: 15,
     popupMargenDespuesMin: 15,
-    popupSinHorario: false,
     avisoSonido: false,
     avisoVibracion: false,
     reavisoActivo: false,
@@ -380,7 +377,7 @@ async function leerPopupConfig(
   const { data: cfg } = await supabase
     .from("empresa_fichajes_config")
     .select(
-      "popup_modo, popup_margen_antes_min, popup_margen_despues_min, popup_sin_horario, aviso_sonido, aviso_vibracion, reaviso_activo, reaviso_intervalo_min",
+      "popup_modo, popup_margen_antes_min, popup_margen_despues_min, aviso_sonido, aviso_vibracion, reaviso_activo, reaviso_intervalo_min",
     )
     .eq("empresa_id", empresaId)
     .maybeSingle();
@@ -388,7 +385,6 @@ async function leerPopupConfig(
     popupModo: (cfg?.popup_modo === "siempre" ? "siempre" : "ventana") as "ventana" | "siempre",
     popupMargenAntesMin: (cfg?.popup_margen_antes_min as number | null) ?? 15,
     popupMargenDespuesMin: (cfg?.popup_margen_despues_min as number | null) ?? 15,
-    popupSinHorario: !!cfg?.popup_sin_horario,
     avisoSonido: !!cfg?.aviso_sonido,
     avisoVibracion: !!cfg?.aviso_vibracion,
     reavisoActivo: !!cfg?.reaviso_activo,
@@ -405,7 +401,6 @@ export async function getMiVentanaFichajeHoy(): Promise<VentanaFichajeHoy> {
     popupModo: "ventana" as "ventana" | "siempre",
     popupMargenAntesMin: 15,
     popupMargenDespuesMin: 15,
-    popupSinHorario: false,
     avisoSonido: false,
     avisoVibracion: false,
     reavisoActivo: false,

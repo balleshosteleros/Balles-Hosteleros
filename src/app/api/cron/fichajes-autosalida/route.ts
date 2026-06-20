@@ -13,8 +13,8 @@
 
 import { NextResponse } from "next/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
-import { ahoraEnMadrid, hhmmAMinutos } from "@/features/rrhh/utils/horario-empleado";
-import { cerrarConReparto, getHorariosDiaUnificado } from "@/features/mi-panel/utils/fichaje-multiempresa";
+import { ahoraEnMadrid } from "@/features/rrhh/utils/horario-empleado";
+import { calcularSalidaPrevista, cerrarConReparto } from "@/features/mi-panel/utils/fichaje-multiempresa";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -33,7 +33,7 @@ export async function GET(request: Request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
 
-  const { fecha: hoy, minutos: ahoraMin } = ahoraEnMadrid();
+  const { fecha: hoy } = ahoraEnMadrid();
 
   const { data: configs, error: cfgErr } = await supabase
     .from("empresa_fichajes_config")
@@ -63,37 +63,17 @@ export async function GET(request: Request) {
     for (const f of abiertos ?? []) {
       const userId = f.empleado_id as string;
       if (!f.hora_entrada) continue;
-
-      // Salida prevista = FIN del último tramo FIJO del día entre TODAS sus
-      // empresas (no solo esta), para no cortar una jornada partida.
-      let entradaMin: number | null = null;
-      let salidaMin: number | null = null;
+      // Salida prevista según el tipo de turno (fijo o flexible diario) entre
+      // TODAS sus empresas, para no cortar una jornada partida.
+      let salidaPrevista: Date | null = null;
       try {
-        const horarios = await getHorariosDiaUnificado(supabase, userId, hoy);
-        const starts: number[] = [];
-        const ends: number[] = [];
-        for (const h of horarios) {
-          if (h.horario.tipo !== "fijo") continue;
-          for (const tr of h.horario.tramos) {
-            const s = hhmmAMinutos(tr.inicio);
-            const e = hhmmAMinutos(tr.fin);
-            if (s != null) starts.push(s);
-            if (e != null) ends.push(e);
-          }
-        }
-        if (starts.length) entradaMin = Math.min(...starts);
-        if (ends.length) salidaMin = Math.max(...ends);
+        salidaPrevista = await calcularSalidaPrevista(supabase, userId, hoy, f.hora_entrada as string);
       } catch {
         continue;
       }
-      if (entradaMin == null || salidaMin == null) continue;
-      // Cruza medianoche: lo gestiona el cron de huérfanos, no este.
-      if (salidaMin <= entradaMin) continue;
+      if (salidaPrevista == null) continue;
       // Aún no ha pasado la salida prevista + margen.
-      if (ahoraMin < salidaMin + margen) continue;
-
-      // Hora prevista de hoy (relativa a "ahora" para respetar DST).
-      const salidaPrevista = new Date(Date.now() - (ahoraMin - salidaMin) * 60000);
+      if (Date.now() < salidaPrevista.getTime() + margen * 60000) continue;
       try {
         await cerrarConReparto(
           supabase,

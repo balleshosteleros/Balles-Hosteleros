@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { distanciaMetros } from "@/features/rrhh/utils/geo";
 import { getEmpresaActivaId } from "@/features/empresa/actions/empresa-activa-actions";
+import { calcularSalidaPrevista, cerrarConReparto } from "@/features/mi-panel/utils/fichaje-multiempresa";
 import { revalidatePath } from "next/cache";
 
 const ROLES_ADMIN_FICHAJES = ["admin", "director"] as const;
@@ -545,6 +546,97 @@ export async function updateFichaje(
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[fichajes] updateFichaje:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Cierra de golpe TODOS los fichajes que quedaron abiertos en la empresa activa
+ * (estado trabajando/pausa sin hora_salida), por si alguien se dejó la jornada
+ * abierta fuera de su turno. Para cada uno calcula la salida prevista de su
+ * horario (fijo o flexible diario) y lo cierra a esa hora como fichaje normal
+ * (sin marcarlo para revisión, igual que el auto-cierre). Si el empleado no
+ * tiene horario que permita predecir la salida, se cierra a la hora actual y SÍ
+ * se marca para revisión, porque no se conoce su hora real de salida.
+ * Acción manual de admin/director.
+ */
+export async function cerrarFichajesAbiertos() {
+  try {
+    await requireAdminFichajes();
+    const empresaId = await getEmpresaActivaId();
+    if (!empresaId) return { ok: false, error: "No hay empresa activa" };
+
+    const admin = createAdminClient();
+    const { data: abiertos, error: fetchErr } = await admin
+      .from("fichajes")
+      .select(
+        "id, empleado_id, empleado_nombre, fecha, hora_entrada, local_id, centro, tipo, modo_teletrabajo, empresa_id",
+      )
+      .eq("empresa_id", empresaId)
+      .is("hora_salida", null)
+      .in("estado", ["trabajando", "pausa"]);
+    if (fetchErr) throw fetchErr;
+
+    const ahora = new Date();
+    let cerrados = 0;
+    let revisados = 0;
+
+    for (const f of abiertos ?? []) {
+      const userId = f.empleado_id as string;
+      const horaEntrada = f.hora_entrada as string | null;
+      if (!userId || !horaEntrada) continue;
+
+      let salidaPrevista: Date | null = null;
+      try {
+        salidaPrevista = await calcularSalidaPrevista(admin, userId, f.fecha as string, horaEntrada);
+      } catch {
+        salidaPrevista = null;
+      }
+      // Con horario → cierra a la salida prevista (fichaje normal). Sin horario
+      // → cierra ahora y marca revisión (no se conoce la hora real de salida).
+      const salida = salidaPrevista ?? ahora;
+      const ctx = {
+        fichajeId: f.id as string,
+        userId,
+        nombre: (f.empleado_nombre as string) ?? "",
+        empresaId: f.empresa_id as string,
+        localId: (f.local_id as string | null) ?? null,
+        centro: (f.centro as string | null) ?? "",
+        tipo: (f.tipo as string | null) ?? null,
+        modoTeletrabajo: Boolean(f.modo_teletrabajo),
+        fecha: f.fecha as string,
+        horaEntrada,
+      };
+      try {
+        if (salidaPrevista) {
+          await cerrarConReparto(admin, ctx, salida, { autoCierre: true });
+        } else {
+          const horas =
+            Math.round(((salida.getTime() - new Date(horaEntrada).getTime()) / 3600000) * 100) / 100;
+          await admin
+            .from("fichajes")
+            .update({
+              hora_salida: salida.toISOString(),
+              horas_totales: horas,
+              estado: "completado",
+              requiere_revision: true,
+              revision_motivo: "Cierre manual masivo: sin horario para calcular la salida real",
+              incidencia: "Cierre manual: fichaje abierto sin horario — pendiente de revisión",
+            })
+            .eq("id", ctx.fichajeId);
+          revisados++;
+        }
+        cerrados++;
+      } catch (e) {
+        console.error("[fichajes] cerrarFichajesAbiertos item:", e);
+      }
+    }
+
+    revalidatePath("/rrhh/fichajes");
+    return { ok: true, data: { cerrados, revisados } };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[fichajes] cerrarFichajesAbiertos:", msg);
     return { ok: false, error: msg };
   }
 }

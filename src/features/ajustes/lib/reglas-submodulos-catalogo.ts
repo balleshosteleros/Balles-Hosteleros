@@ -7,12 +7,17 @@
  *
  * Cada submódulo declara:
  *   - Lista de campos del formulario "Nuevo" (con label visible)
- *   - Qué campos exige cada modo preset (basico / estandar / avanzado)
+ *   - Qué campos son obligatorios por defecto (si el admin no personaliza nada)
  *
  * Los submódulos cuyo formulario aún no existe aparecen con `placeholder: true`
  * y `campos: []` — la UI los muestra como "PRÓXIMAMENTE".
  */
 
+/**
+ * Modo de una regla guardada. Histórico: antes existían niveles
+ * (básico/estándar/avanzado). Hoy la UI solo guarda "personalizado"; los
+ * otros valores se conservan por compatibilidad con filas antiguas en BD.
+ */
 export type ModoReglas = "basico" | "estandar" | "avanzado" | "personalizado";
 
 /** Centinela usado en la columna `submodulo` para marcar la regla a nivel módulo. */
@@ -42,12 +47,8 @@ export interface SubmoduloDef {
   label: string;
   /** Campos del formulario "Nuevo" — vacío si todavía no hay formulario */
   campos: CampoSubmodulo[];
-  /** Campos exigidos en cada modo preset (subconjunto de campos.keys) */
-  presets: {
-    basico: string[];
-    estandar: string[];
-    avanzado: string[];
-  };
+  /** Campos obligatorios por defecto (subconjunto de campos.keys) */
+  obligatorios: string[];
   /** Si true, este submódulo todavía no tiene "Nuevo" funcional — UI muestra placeholder */
   placeholder?: boolean;
 }
@@ -64,14 +65,8 @@ export interface ModuloDef {
 // Helpers
 // ============================================================
 
-function todos(campos: CampoSubmodulo[]): string[] {
-  return campos.map((c) => c.key);
-}
-
-const PLACEHOLDER_PRESETS = { basico: [], estandar: [], avanzado: [] };
-
 function placeholder(key: string, label: string): SubmoduloDef {
-  return { key, label, campos: [], presets: PLACEHOLDER_PRESETS, placeholder: true };
+  return { key, label, campos: [], obligatorios: [], placeholder: true };
 }
 
 // ============================================================
@@ -215,11 +210,7 @@ export const CATALOGO: ModuloDef[] = [
         key: "presentaciones",
         label: "Presentaciones",
         campos: CAMPOS_PRESENTACIONES_DIRECCION,
-        presets: {
-          basico: ["prompt"],
-          estandar: ["prompt", "numSlides", "idioma"],
-          avanzado: todos(CAMPOS_PRESENTACIONES_DIRECCION),
-        },
+        obligatorios: ["prompt", "numSlides", "idioma"],
       },
     ],
   },
@@ -246,21 +237,13 @@ export const CATALOGO: ModuloDef[] = [
         key: "nuevas_recetas",
         label: "Nuevas recetas",
         campos: CAMPOS_NUEVAS_RECETAS,
-        presets: {
-          basico: ["nombre"],
-          estandar: ["nombre", "destino", "pvp"],
-          avanzado: todos(CAMPOS_NUEVAS_RECETAS),
-        },
+        obligatorios: ["nombre", "destino", "pvp"],
       },
       {
         key: "escandallos",
         label: "Escandallos",
         campos: CAMPOS_ESCANDALLOS,
-        presets: {
-          basico: ["nombre", "categoria", "ingredientes"],
-          estandar: ["nombre", "categoria", "ingredientes", "destino", "pvp"],
-          avanzado: todos(CAMPOS_ESCANDALLOS),
-        },
+        obligatorios: ["nombre", "categoria", "ingredientes", "destino", "pvp"],
       },
       placeholder("elaboraciones", "Elaboraciones"),
       placeholder("partidas", "Partidas"),
@@ -277,42 +260,26 @@ export const CATALOGO: ModuloDef[] = [
         key: "proveedores",
         label: "Proveedores",
         campos: CAMPOS_PROVEEDORES,
-        presets: {
-          basico: ["nombreComercial"],
-          estandar: ["nombreComercial", "cifNif", "emailPedidos"],
-          avanzado: todos(CAMPOS_PROVEEDORES),
-        },
+        obligatorios: ["nombreComercial", "cifNif", "emailPedidos"],
       },
       {
         key: "productos",
         label: "Productos",
         campos: CAMPOS_PRODUCTOS,
-        presets: {
-          basico: ["nombre", "tipo", "categoria"],
-          estandar: ["nombre", "tipo", "categoria", "unidad", "iva"],
-          avanzado: todos(CAMPOS_PRODUCTOS),
-        },
+        obligatorios: ["nombre", "tipo", "categoria", "unidad", "iva"],
       },
       {
         key: "pedidos",
         label: "Pedidos",
         campos: CAMPOS_PEDIDOS,
-        presets: {
-          basico: ["proveedor"],
-          estandar: ["proveedor", "lineas", "fecha_entrega"],
-          avanzado: todos(CAMPOS_PEDIDOS),
-        },
+        obligatorios: ["proveedor", "lineas", "fecha_entrega"],
       },
       placeholder("stock", "Stock"),
       {
         key: "inventarios",
         label: "Inventarios",
         campos: CAMPOS_INVENTARIOS,
-        presets: {
-          basico: ["nombre"],
-          estandar: ["nombre", "almacen", "fecha"],
-          avanzado: todos(CAMPOS_INVENTARIOS),
-        },
+        obligatorios: ["nombre", "almacen", "fecha"],
       },
     ],
   },
@@ -331,11 +298,7 @@ export const CATALOGO: ModuloDef[] = [
         key: "comunicados",
         label: "Comunicados",
         campos: CAMPOS_COMUNICADOS,
-        presets: {
-          basico: ["titulo"],
-          estandar: ["titulo", "asunto", "cuerpo"],
-          avanzado: todos(CAMPOS_COMUNICADOS),
-        },
+        obligatorios: ["titulo", "asunto", "cuerpo"],
       },
     ],
   },
@@ -349,11 +312,7 @@ export const CATALOGO: ModuloDef[] = [
         key: "empleados",
         label: "Empleados",
         campos: CAMPOS_EMPLEADOS,
-        presets: {
-          basico: ["full_name"],
-          estandar: ["full_name", "email", "role"],
-          avanzado: todos(CAMPOS_EMPLEADOS),
-        },
+        obligatorios: ["full_name", "email", "role"],
       },
       placeholder("fichajes", "Fichajes"),
       placeholder("solicitudes", "Solicitudes"),
@@ -364,11 +323,7 @@ export const CATALOGO: ModuloDef[] = [
         key: "reclutamiento",
         label: "Reclutamiento",
         campos: CAMPOS_RECLUTAMIENTO,
-        presets: {
-          basico: ["titulo"],
-          estandar: ["titulo", "departamento_id", "puesto_id", "descripcion"],
-          avanzado: todos(CAMPOS_RECLUTAMIENTO),
-        },
+        obligatorios: ["titulo", "departamento_id", "puesto_id", "descripcion"],
       },
       placeholder("boarding", "Boarding"),
       placeholder("bonus", "Bonus"),
@@ -404,11 +359,7 @@ export const CATALOGO: ModuloDef[] = [
         key: "contactos",
         label: "Contactos",
         campos: CAMPOS_CONTACTOS,
-        presets: {
-          basico: ["nombre", "tipo"],
-          estandar: ["nombre", "tipo", "nif", "email"],
-          avanzado: todos(CAMPOS_CONTACTOS),
-        },
+        obligatorios: ["nombre", "tipo", "nif", "email"],
       },
       placeholder("facturas", "Facturas"),
       placeholder("impuestos", "Impuestos"),
@@ -453,11 +404,7 @@ export const CATALOGO: ModuloDef[] = [
         key: "procesos",
         label: "Procesos",
         campos: CAMPOS_PROCESOS_JURIDICOS,
-        presets: {
-          basico: ["titulo"],
-          estandar: ["titulo", "tipo", "fecha", "estado"],
-          avanzado: todos(CAMPOS_PROCESOS_JURIDICOS),
-        },
+        obligatorios: ["titulo", "tipo", "fecha", "estado"],
       },
     ],
   },
@@ -495,14 +442,19 @@ export function moduloKeyDesdeNombreDept(nombre: string): string | null {
   return match?.key ?? null;
 }
 
-/** Devuelve los campos exigidos para un submódulo según el modo elegido. */
-export function camposExigidos(
+/**
+ * Devuelve los campos obligatorios efectivos de un submódulo.
+ *
+ * Si hay una regla personalizada guardada se usa su lista; en cualquier otro
+ * caso (sin regla, o filas antiguas con modo preset) se cae al default del
+ * submódulo (`obligatorios`).
+ */
+export function camposObligatoriosEfectivos(
   submodulo: SubmoduloDef,
-  modo: ModoReglas,
-  camposPersonalizados: string[],
+  row?: { modo: ModoReglas; campos_obligatorios: string[] } | null,
 ): string[] {
-  if (modo === "personalizado") return camposPersonalizados;
-  return submodulo.presets[modo];
+  if (row && row.modo === "personalizado") return row.campos_obligatorios ?? [];
+  return submodulo.obligatorios;
 }
 
 /**

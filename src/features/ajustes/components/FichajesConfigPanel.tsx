@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Save, Clock } from "lucide-react";
+import { Loader2, Save, Clock, DoorClosed } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { getFichajePolicy, saveFichajePolicy } from "@/features/rrhh/actions/fichajes-policy-actions";
+import { cerrarFichajesAbiertos } from "@/features/rrhh/actions/fichajes-actions";
 import { FICHAJE_POLICY_DEFAULT, type FichajePolicy } from "@/features/rrhh/data/fichaje-policy";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 const MINUTOS_OPCIONES = [5, 10, 15, 20, 25, 30];
 const REAVISO_OPCIONES = [1, 2, 3, 5, 10, 15];
@@ -21,6 +23,8 @@ export function FichajesConfigPanel({ embedded = false }: { embedded?: boolean }
   const [policy, setPolicy] = useState<FichajePolicy>(FICHAJE_POLICY_DEFAULT);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
+  const [cerrando, setCerrando] = useState(false);
+  const { confirm, dialog } = useConfirmDelete();
 
   useEffect(() => {
     let activo = true;
@@ -44,6 +48,32 @@ export function FichajesConfigPanel({ embedded = false }: { embedded?: boolean }
       return;
     }
     toast.success("Reglas de fichaje guardadas.");
+  }
+
+  async function cerrarAbiertos() {
+    const ok = await confirm({
+      title: "¿Cerrar todos los fichajes abiertos?",
+      description:
+        "Se cerrarán todas las jornadas que sigan abiertas en esta empresa (por si alguien se dejó la suya abierta fuera de su turno). Cada una se cierra a su hora de salida prevista; las que no tengan horario se cierran a la hora actual y quedan marcadas para revisión.",
+      confirmLabel: "Cerrar fichajes",
+    });
+    if (!ok) return;
+    setCerrando(true);
+    const res = await cerrarFichajesAbiertos();
+    setCerrando(false);
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudieron cerrar los fichajes.");
+      return;
+    }
+    const { cerrados, revisados } = res.data!;
+    if (cerrados === 0) {
+      toast.success("No había fichajes abiertos.");
+    } else {
+      toast.success(
+        `${cerrados} fichaje${cerrados === 1 ? "" : "s"} cerrado${cerrados === 1 ? "" : "s"}` +
+          (revisados > 0 ? ` (${revisados} marcado${revisados === 1 ? "" : "s"} para revisión).` : "."),
+      );
+    }
   }
 
   return (
@@ -234,20 +264,6 @@ export function FichajesConfigPanel({ embedded = false }: { embedded?: boolean }
             )}
 
             <div className="flex items-center justify-between gap-4 pl-1">
-              <div className="space-y-0.5">
-                <Label className="text-sm">Avisar aunque no tenga horario asignado</Label>
-                <p className="text-[11px] text-muted-foreground">
-                  El aviso también salta a quien no tiene turno ese día. Si no se permite fichar
-                  fuera de horario, es solo un recordatorio (no le deja fichar).
-                </p>
-              </div>
-              <Switch
-                checked={policy.popupSinHorario}
-                onCheckedChange={(v) => setPolicy((p) => ({ ...p, popupSinHorario: v }))}
-              />
-            </div>
-
-            <div className="flex items-center justify-between gap-4 pl-1">
               <Label className="text-sm">Sonar al avisar</Label>
               <Switch
                 checked={policy.avisoSonido}
@@ -286,8 +302,10 @@ export function FichajesConfigPanel({ embedded = false }: { embedded?: boolean }
               <div className="space-y-0.5">
                 <Label className="text-sm font-medium">Cerrar la jornada automáticamente</Label>
                 <p className="text-xs text-muted-foreground">
-                  Si un empleado con horario fijo no ficha salida, el sistema cierra su jornada a la
-                  hora de salida prevista + margen y la deja marcada para revisión.
+                  Si un empleado no ficha salida, el sistema cierra su jornada a la hora de salida
+                  prevista + margen y la guarda como un fichaje normal (no la marca para revisión).
+                  Aplica a todo tipo de turnos: en horario fijo usa la hora de fin del turno; en
+                  flexible, la hora de entrada + las horas previstas del día.
                 </p>
               </div>
               <Switch
@@ -296,19 +314,26 @@ export function FichajesConfigPanel({ embedded = false }: { embedded?: boolean }
               />
             </div>
             {policy.autoSalidaActiva && (
-              <div className="flex items-center justify-between pl-1">
-                <Label className="text-sm">Margen tras la hora de salida</Label>
-                <select
-                  className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                  value={policy.autoSalidaMargenMin}
-                  onChange={(e) =>
-                    setPolicy((p) => ({ ...p, autoSalidaMargenMin: Number(e.target.value) }))
-                  }
-                >
-                  {MINUTOS_OPCIONES.map((m) => (
-                    <option key={m} value={m}>{m} min</option>
-                  ))}
-                </select>
+              <div className="space-y-1 pl-1">
+                <div className="flex items-center justify-between gap-4">
+                  <Label className="text-sm">Margen tras la hora de salida</Label>
+                  <select
+                    className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                    value={policy.autoSalidaMargenMin}
+                    onChange={(e) =>
+                      setPolicy((p) => ({ ...p, autoSalidaMargenMin: Number(e.target.value) }))
+                    }
+                  >
+                    {MINUTOS_OPCIONES.map((m) => (
+                      <option key={m} value={m}>{m} min</option>
+                    ))}
+                  </select>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Tiempo de cortesía que el sistema espera tras la hora prevista antes de cerrar, por
+                  si el empleado se queda unos minutos de más y ficha él mismo. A 0 min cierra justo a
+                  la hora prevista.
+                </p>
               </div>
             )}
           </div>
@@ -332,6 +357,32 @@ export function FichajesConfigPanel({ embedded = false }: { embedded?: boolean }
             </div>
           </div>
 
+          {/* Cierre manual de fichajes abiertos */}
+          <div className="space-y-3 rounded-lg border p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-0.5">
+                <Label className="text-sm font-medium">Cerrar todos los fichajes abiertos</Label>
+                <p className="text-xs text-muted-foreground">
+                  Por si algún empleado se dejó la jornada abierta fuera de su turno. Cierra ahora
+                  todas las jornadas abiertas de esta empresa a su hora de salida prevista; las que no
+                  tengan horario se cierran a la hora actual y quedan marcadas para revisión.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={cerrarAbiertos}
+                disabled={cerrando}
+                className="gap-2 shrink-0"
+              >
+                {cerrando ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" />Cerrando…</>
+                ) : (
+                  <><DoorClosed className="h-4 w-4" />Cerrar fichajes</>
+                )}
+              </Button>
+            </div>
+          </div>
+
           <div className="flex justify-end">
             <Button onClick={guardar} disabled={guardando} className="gap-2">
               {guardando ? (
@@ -343,6 +394,7 @@ export function FichajesConfigPanel({ embedded = false }: { embedded?: boolean }
           </div>
         </>
       )}
+      {dialog}
     </div>
   );
 }

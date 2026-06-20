@@ -26,7 +26,6 @@ interface Ventana {
   popupModo: "ventana" | "siempre";
   popupMargenAntesMin: number;
   popupMargenDespuesMin: number;
-  popupSinHorario: boolean;
   avisoSonido: boolean;
   avisoVibracion: boolean;
 }
@@ -42,10 +41,8 @@ function calcularDebe(
   const modo = ventana?.popupModo ?? "ventana";
   const mAntes = ventana?.popupMargenAntesMin ?? 15;
   const mDespues = ventana?.popupMargenDespuesMin ?? 15;
-  const sinHorario = ventana?.popupSinHorario ?? false;
-  // "Siempre": el aviso salta mientras falte fichar (entrada). También cuando no
-  // hay horario fijo pero la empresa activó "avisar sin horario".
-  const modoSiempre = modo === "siempre" || (!tiene && sinHorario);
+  // "Siempre": el aviso salta mientras falte fichar (entrada).
+  const modoSiempre = modo === "siempre";
   let debeEntrada = false;
   let debeSalida = false;
   if (modoSiempre) {
@@ -143,7 +140,6 @@ export function MobileFichajeProvider() {
           popupModo: v.popupModo,
           popupMargenAntesMin: v.popupMargenAntesMin,
           popupMargenDespuesMin: v.popupMargenDespuesMin,
-          popupSinHorario: v.popupSinHorario,
           avisoSonido: v.avisoSonido,
           avisoVibracion: v.avisoVibracion,
         });

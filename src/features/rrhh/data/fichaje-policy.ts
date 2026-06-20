@@ -16,7 +16,6 @@ export interface FichajePolicy {
   popupModo: PopupModo;
   popupMargenAntesMin: number;
   popupMargenDespuesMin: number;
-  popupSinHorario: boolean;
   // Permite fichar fuera de la ventana/sin turno; no auto-paraliza la jornada.
   permitirFueraHorario: boolean;
   // Reavisos del aviso de fichar (modo ventana): repetir cada X min dentro de la
@@ -45,7 +44,6 @@ export const FICHAJE_POLICY_DEFAULT: FichajePolicy = {
   popupModo: "ventana",
   popupMargenAntesMin: 15,
   popupMargenDespuesMin: 15,
-  popupSinHorario: false,
   permitirFueraHorario: false,
   reavisoActivo: false,
   reavisoIntervaloMin: 5,
