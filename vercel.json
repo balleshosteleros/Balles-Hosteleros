@@ -51,14 +51,6 @@
     {
       "path": "/api/cron/reservas-recordatorios",
       "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/cron/fichajes-reavisos",
-      "schedule": "* * * * *"
-    },
-    {
-      "path": "/api/cron/fichajes-autosalida",
-      "schedule": "* * * * *"
     }
   ]
 }
