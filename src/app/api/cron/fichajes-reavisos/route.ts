@@ -45,10 +45,10 @@ export async function GET(request: Request) {
   const { data: configs, error: cfgErr } = await supabase
     .from("empresa_fichajes_config")
     .select(
-      "empresa_id, popup_modo, popup_margen_antes_min, popup_margen_despues_min, reaviso_activo, reaviso_intervalo_min",
+      "empresa_id, popup_modo, popup_margen_antes_min, popup_margen_despues_min, reaviso_activo, reaviso_intervalo_min, aviso_cambio_empresa",
     )
-    .eq("reaviso_activo", true)
-    .eq("popup_modo", "ventana");
+    .eq("popup_modo", "ventana")
+    .or("reaviso_activo.eq.true,aviso_cambio_empresa.eq.true");
   if (cfgErr) {
     return NextResponse.json({ ok: false, error: cfgErr.message }, { status: 500 });
   }
@@ -61,6 +61,13 @@ export async function GET(request: Request) {
     const margenAntes = (cfg.popup_margen_antes_min as number | null) ?? 15;
     const margenDespues = (cfg.popup_margen_despues_min as number | null) ?? 15;
     const intervalo = Math.max(1, (cfg.reaviso_intervalo_min as number | null) ?? 5);
+    const reavisoActivo = Boolean(cfg.reaviso_activo);
+    const avisoCambioEmpresa = Boolean(cfg.aviso_cambio_empresa);
+    let empresaNombre = "esta empresa";
+    if (avisoCambioEmpresa) {
+      const { data: er } = await supabase.from("empresas").select("nombre").eq("id", empresaId).maybeSingle();
+      empresaNombre = (er?.nombre as string | undefined) ?? "esta empresa";
+    }
 
     // Empleados activos de la empresa.
     const { data: empleados } = await supabase
@@ -95,7 +102,44 @@ export async function GET(request: Request) {
       if (((offset % intervalo) + intervalo) % intervalo !== 0) continue;
       candidatos++;
 
-      // ¿Ya fichó entrada hoy en esta empresa? Si sí, no se reavisa.
+      // ¿Tiene una jornada ABIERTA hoy en CUALQUIER empresa? Entonces ya está
+      // trabajando (jornada continua multi-empresa): NO se le dice "ficha entrada".
+      const { data: abierto } = await supabase
+        .from("fichajes")
+        .select("id, empresa_id")
+        .eq("empleado_id", userId)
+        .eq("fecha", hoy)
+        .is("hora_salida", null)
+        .in("estado", ["trabajando", "pausa"])
+        .limit(1)
+        .maybeSingle();
+      if (abierto) {
+        // Si su jornada continúa en ESTA empresa (el fichaje abierto es de otra) y
+        // la empresa lo activó, se le avisa de que su jornada continúa aquí (una vez).
+        if (avisoCambioEmpresa && abierto.empresa_id !== empresaId) {
+          const { error: logErr } = await supabase
+            .from("fichaje_reavisos_log")
+            .insert({ empresa_id: empresaId, user_id: userId, fecha: hoy, slot_min: 9999 });
+          if (!logErr) {
+            const res = await sendPushWithClient(supabase, {
+              userId,
+              empresaId,
+              eventType: "fichaje_recordatorio",
+              payload: {
+                title: "Tu jornada continúa",
+                body: `Sigues fichado: tu jornada continúa ahora en ${empresaNombre}. No tienes que volver a fichar.`,
+                url: "/m",
+                tag: "fichaje-cambio-empresa",
+                renotify: true,
+              },
+            });
+            enviados += res.delivered;
+          }
+        }
+        continue;
+      }
+
+      // ¿Ya fichó (y cerró) hoy en esta empresa? Si sí, no se reavisa.
       const { data: fich } = await supabase
         .from("fichajes")
         .select("id")
@@ -106,30 +150,33 @@ export async function GET(request: Request) {
         .limit(1);
       if (fich && fich.length > 0) continue;
 
-      // Idempotencia: reservar el slot antes de enviar. Si ya existe, saltar.
-      const { error: logErr } = await supabase
-        .from("fichaje_reavisos_log")
-        .insert({ empresa_id: empresaId, user_id: userId, fecha: hoy, slot_min: offset });
-      if (logErr) continue; // conflicto UNIQUE → ya enviado este slot
-
-      const antes = offset < 0;
-      const res = await sendPushWithClient(supabase, {
-        userId,
-        empresaId,
-        eventType: "fichaje_recordatorio",
-        payload: {
-          title: "Recuerda fichar",
-          body: antes
-            ? `Tu entrada es en ${Math.abs(offset)} min. No olvides fichar.`
-            : offset === 0
-              ? "Es tu hora de entrada. Ficha tu entrada."
-              : `Llevas ${offset} min de tu hora de entrada sin fichar.`,
-          url: "/m",
-          tag: "fichaje-recordatorio",
-          renotify: true,
-        },
-      });
-      enviados += res.delivered;
+      // Reaviso normal de "ficha entrada" (solo si la empresa lo tiene activo).
+      if (reavisoActivo) {
+        // Idempotencia: reservar el slot antes de enviar. Si ya existe, saltar.
+        const { error: logErr } = await supabase
+          .from("fichaje_reavisos_log")
+          .insert({ empresa_id: empresaId, user_id: userId, fecha: hoy, slot_min: offset });
+        if (!logErr) {
+          const antes = offset < 0;
+          const res = await sendPushWithClient(supabase, {
+            userId,
+            empresaId,
+            eventType: "fichaje_recordatorio",
+            payload: {
+              title: "Recuerda fichar",
+              body: antes
+                ? `Tu entrada es en ${Math.abs(offset)} min. No olvides fichar.`
+                : offset === 0
+                  ? "Es tu hora de entrada. Ficha tu entrada."
+                  : `Llevas ${offset} min de tu hora de entrada sin fichar.`,
+              url: "/m",
+              tag: "fichaje-recordatorio",
+              renotify: true,
+            },
+          });
+          enviados += res.delivered;
+        }
+      }
     }
   }
 

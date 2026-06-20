@@ -12,7 +12,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { distanciaMetros } from "@/features/rrhh/utils/geo";
-import { getHorarioDia, type HorarioDia } from "@/features/rrhh/utils/horario-empleado";
+import { getHorarioDia, hhmmAMinutos, type HorarioDia } from "@/features/rrhh/utils/horario-empleado";
 
 /** Una fila de empleado del usuario en una empresa concreta. */
 export interface FilaEmpleadoEmpresa {
@@ -345,4 +345,181 @@ export function planificarReparto(
 
   // Un único segmento → no hay reparto real.
   return segs.length <= 1 ? [] : segs;
+}
+
+/** Minutos del día (0–1439) de una fecha concreta, en zona Europe/Madrid. */
+export function minutosMadridDe(d: Date): number {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Madrid",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(d);
+  const h = Number(parts.find((p) => p.type === "hour")?.value ?? "0") % 24;
+  const m = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
+  return h * 60 + m;
+}
+
+function textoMotivo(motivo: MotivoReparto | undefined): string {
+  return motivo === "solape"
+    ? "Turnos de empresas distintas SOLAPADOS — revisar configuración de turnos"
+    : motivo === "hueco"
+      ? "Hueco entre turnos: la jornada no es seguida — el empleado debía desfichar y volver a fichar"
+      : "Horas fuera del horario planificado (reparto multi-empresa)";
+}
+
+/** Contexto mínimo del fichaje abierto que se va a cerrar (con o sin reparto). */
+export interface CierreCtx {
+  fichajeId: string;
+  /** `fichajes.empleado_id` = auth uid del empleado. */
+  userId: string;
+  nombre: string;
+  empresaId: string;
+  localId: string | null;
+  centro: string;
+  tipo: string | null;
+  modoTeletrabajo: boolean;
+  fecha: string;
+  /** ISO de la hora de entrada. */
+  horaEntrada: string;
+}
+
+/**
+ * Cierra un fichaje a la hora `salida`, repartiéndolo entre empresas según el
+ * horario UNIFICADO del día si la jornada continua cubre tramos de más de una
+ * empresa. Reutilizable desde la salida manual (Mi Panel) y desde el cron de
+ * auto-salida (con `autoCierre`). Cuando `autoCierre`, marca revisión y deja
+ * `hora_salida_real = null` (el empleado no fichó salida).
+ */
+export async function cerrarConReparto(
+  client: SupabaseClient,
+  ctx: CierreCtx,
+  salida: Date,
+  opts?: {
+    geo?: { lat: number; lng: number; precision: number } | null;
+    autoCierre?: boolean;
+  },
+): Promise<{ horas: number; repartido: number }> {
+  const entradaMs = new Date(ctx.horaEntrada).getTime();
+  const salidaMs = salida.getTime();
+  const horas = Math.round(((salidaMs - entradaMs) / 3600000) * 10000) / 10000;
+  const geo = opts?.geo ?? null;
+  const auto = opts?.autoCierre ?? false;
+  const horaSalidaReal = auto ? null : salida.toISOString();
+
+  const entradaMin = minutosMadridDe(new Date(ctx.horaEntrada));
+  const salidaMin = entradaMin + (salidaMs - entradaMs) / 60000;
+
+  const horarios = await getHorariosDiaUnificado(client, ctx.userId, ctx.fecha);
+  const tramos: TramoEmpresaMin[] = [];
+  for (const h of horarios) {
+    if (h.horario.tipo !== "fijo") continue;
+    for (const tr of h.horario.tramos) {
+      const s = hhmmAMinutos(tr.inicio);
+      const e = hhmmAMinutos(tr.fin);
+      if (s == null || e == null) continue;
+      tramos.push({ empresaId: h.empresaId, startMin: s, endMin: e });
+    }
+  }
+  const reparto = planificarReparto(entradaMin, salidaMin, tramos);
+
+  // Sin reparto (una sola empresa) → cierre simple del fichaje.
+  if (reparto.length <= 1) {
+    await client
+      .from("fichajes")
+      .update({
+        hora_salida: salida.toISOString(),
+        hora_salida_real: horaSalidaReal,
+        horas_totales: horas,
+        estado: "completado",
+        lat_salida: geo?.lat ?? null,
+        lng_salida: geo?.lng ?? null,
+        precision_salida_metros: geo?.precision ?? null,
+        ...(auto
+          ? {
+              requiere_revision: true,
+              revision_motivo: "Cierre automático a la hora de salida prevista (no fichó salida)",
+              incidencia: "Cierre automático: jornada cerrada a la hora prevista — pendiente de revisión",
+            }
+          : {}),
+      })
+      .eq("id", ctx.fichajeId);
+    return { horas, repartido: 1 };
+  }
+
+  // Reparto real: 1 fila por empresa, atadas por `sesion_id`.
+  const sesionId = crypto.randomUUID();
+  const locales = await getMisLocales(client, ctx.userId);
+  const localPorEmpresa = new Map<string, { id: string; nombre: string }>();
+  for (const l of locales) {
+    if (!localPorEmpresa.has(l.empresaId)) localPorEmpresa.set(l.empresaId, { id: l.id, nombre: l.nombre });
+  }
+  const isoDeMin = (min: number) => new Date(entradaMs + (min - entradaMin) * 60000).toISOString();
+
+  for (let i = 0; i < reparto.length; i++) {
+    const seg = reparto[i];
+    const esUltimo = i === reparto.length - 1;
+    const localSeg =
+      seg.empresaId === ctx.empresaId
+        ? { id: ctx.localId, nombre: ctx.centro }
+        : localPorEmpresa.get(seg.empresaId) ?? { id: null as string | null, nombre: "" };
+    const horasSeg = Math.round((((seg.finMin - seg.inicioMin) * 60000) / 3600000) * 10000) / 10000;
+    const finISO = esUltimo ? salida.toISOString() : isoDeMin(seg.finMin);
+    const revision = !seg.cubierto || auto;
+    const motivoTxt = !seg.cubierto
+      ? textoMotivo(seg.motivo)
+      : auto
+        ? "Cierre automático a la hora de salida prevista (no fichó salida)"
+        : null;
+    const incidencia = revision ? motivoTxt : null;
+    const salidaRealSeg = esUltimo ? horaSalidaReal : null;
+    const geoSeg = esUltimo ? geo : null;
+
+    if (i === 0) {
+      await client
+        .from("fichajes")
+        .update({
+          empresa_id: seg.empresaId,
+          local_id: localSeg.id,
+          centro: localSeg.nombre,
+          hora_salida: finISO,
+          hora_salida_real: salidaRealSeg,
+          horas_totales: horasSeg,
+          estado: "completado",
+          sesion_id: sesionId,
+          requiere_revision: revision,
+          revision_motivo: revision ? motivoTxt : null,
+          incidencia,
+          lat_salida: geoSeg?.lat ?? null,
+          lng_salida: geoSeg?.lng ?? null,
+          precision_salida_metros: geoSeg?.precision ?? null,
+        })
+        .eq("id", ctx.fichajeId);
+    } else {
+      await client.from("fichajes").insert({
+        empresa_id: seg.empresaId,
+        empleado_id: ctx.userId,
+        empleado_nombre: ctx.nombre || "Sin nombre",
+        fecha: ctx.fecha,
+        hora_entrada: isoDeMin(seg.inicioMin),
+        hora_entrada_real: null,
+        hora_salida: finISO,
+        hora_salida_real: salidaRealSeg,
+        horas_totales: horasSeg,
+        estado: "completado",
+        local_id: localSeg.id,
+        centro: localSeg.nombre,
+        modo_teletrabajo: ctx.modoTeletrabajo,
+        tipo: ctx.tipo ?? "ENT",
+        sesion_id: sesionId,
+        requiere_revision: revision,
+        revision_motivo: revision ? motivoTxt : null,
+        incidencia,
+        lat_salida: geoSeg?.lat ?? null,
+        lng_salida: geoSeg?.lng ?? null,
+        precision_salida_metros: geoSeg?.precision ?? null,
+      });
+    }
+  }
+  return { horas, repartido: reparto.length };
 }
