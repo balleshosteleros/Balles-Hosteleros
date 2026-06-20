@@ -34,14 +34,11 @@ function formatearFechaHora(value: string | null): string {
 }
 
 export function FichajesTab({
-  empleado,
-  fichajes,
+  fichajes = [],
 }: {
-  empleado: EmpleadoUI;
   fichajes?: FichajeEmpleadoResumen[];
 }) {
-  if (fichajes) {
-    return (
+  return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold text-foreground">Historial de fichajes</h3>
@@ -86,23 +83,6 @@ export function FichajesTab({
         )}
       </div>
     );
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-foreground">Historial de fichajes</h3>
-      </div>
-      {empleado.fichajes > 0 ? (
-        <div className="rounded-lg border bg-card p-4">
-          <p className="text-sm text-muted-foreground">Fichajes registrados hoy: <span className="font-semibold text-foreground">{empleado.fichajes}</span></p>
-          <p className="text-sm text-muted-foreground mt-1">Horas acumuladas hoy: <span className="font-semibold text-foreground">{empleado.horasHoy}</span></p>
-        </div>
-      ) : (
-        <EmptyState icon={Clock} texto="No hay fichajes registrados para hoy." />
-      )}
-    </div>
-  );
 }
 
 /* ─── SOLICITUDES ─── */
@@ -184,7 +164,6 @@ export function EstadisticasTab({ empleado }: { empleado: EmpleadoUI }) {
         {[
           { label: "Horas hoy", value: empleado.horasHoy },
           { label: "Horario semanal", value: empleado.horarioSemanal },
-          { label: "Fichajes hoy", value: String(empleado.fichajes) },
         ].map((s) => (
           <div key={s.label} className="rounded-lg border bg-card p-4 text-center">
             <p className="text-xs text-muted-foreground">{s.label}</p>

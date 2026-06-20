@@ -2,18 +2,12 @@
 
 import { useState, useMemo, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { ESTADO_FICHAJE_LABEL, TIPOS_INCIDENCIA_LABEL, TIPO_FICHAJE_LABEL, TIPO_FICHAJE_BADGE, fichajeColorBadge } from "@/features/rrhh/data/fichajes";
+import { ESTADO_FICHAJE_LABEL, TIPO_FICHAJE_LABEL, TIPO_FICHAJE_BADGE, fichajeColorBadge } from "@/features/rrhh/data/fichajes";
 import type { EstadoFichaje, Fichaje, LocalGeo, ConfigFichajes, TipoFichajeCodigo } from "@/features/rrhh/data/fichajes";
 import { listFichajes, crearFichajeManual } from "@/features/rrhh/actions/fichajes-actions";
 import { listTiposFichaje, type TipoFichajeRow } from "@/features/rrhh/actions/horarios-config-actions";
 import { listEmpleados } from "@/features/rrhh/actions/empleados-actions";
-import {
-  getFichajeGeoStatus,
-  FICHAJE_GEO_STATUS_LABEL,
-} from "@/features/rrhh/utils/fichaje-geo-status";
-import { GeoBadge } from "@/features/rrhh/components/fichajes/geo-badge";
 import { FichajeDetalleDialog } from "@/features/rrhh/components/fichajes/FichajeDetalleDialog";
-import { FichajesMapaView } from "@/features/rrhh/components/fichajes/FichajesMapaView";
 import { listLocales } from "@/features/ajustes/actions/locales-actions";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { toast } from "sonner";
@@ -25,12 +19,9 @@ const initialManualForm = () => ({
   fecha: new Date().toISOString().split("T")[0],
   horaEntrada: "",
   horaSalida: "",
-  pausaInicio: "",
-  pausaFin: "",
   observaciones: "",
 });
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,9 +29,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/shared/components/ui/popover";
-import { Checkbox } from "@/shared/components/ui/checkbox";
-import { AlertTriangle, Settings, Settings2, ClipboardList, History, Map, Building2, X } from "lucide-react";
+import { AlertTriangle, Settings } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -85,6 +74,8 @@ function mapDbToFichaje(row: Record<string, unknown>): Fichaje {
     fecha: (row.fecha as string) ?? "",
     horaEntrada: (row.hora_entrada as string | null) ?? null,
     horaSalida: (row.hora_salida as string | null) ?? null,
+    horaEntradaReal: (row.hora_entrada_real as string | null) ?? null,
+    horaSalidaReal: (row.hora_salida_real as string | null) ?? null,
     pausaInicio: (row.pausa_inicio as string | null) ?? null,
     pausaFin: (row.pausa_fin as string | null) ?? null,
     horasTotales: (row.horas_totales as number) ?? 0,
@@ -135,11 +126,9 @@ export function FichajesView() {
   const [savingManual, setSavingManual] = useState(false);
   const [locales, setLocales] = useState<LocalGeo[]>([]);
   const [tiposFichaje, setTiposFichaje] = useState<TipoFichajeRow[]>([]);
-  // Filtros geo (TASK-002.05). Se aplican sobre fichajesFiltrados y afectan
-  // tanto a la tabla como a la tab Mapa porque ambas leen el mismo state.
-  const [soloFuera, setSoloFuera] = useState(false);
-  const [soloTeletrabajo, setSoloTeletrabajo] = useState(false);
-  const [localesFiltro, setLocalesFiltro] = useState<string[]>([]);
+  // Rango de fechas del histórico. Vacío = todos los fichajes desde el inicio.
+  const [fechaDesde, setFechaDesde] = useState("");
+  const [fechaHasta, setFechaHasta] = useState("");
 
   const loadFichajes = useCallback(async () => {
     const empresaId = empresaActivaRef.current;
@@ -152,8 +141,9 @@ export function FichajesView() {
 
     setLoading(true);
     try {
-      const today = new Date().toISOString().split("T")[0];
-      const res = await listFichajes(today);
+      // Histórico completo: sin filtro de fecha en servidor. El acotado por
+      // rango (fechaDesde/fechaHasta) se hace en cliente.
+      const res = await listFichajes();
       if (empresaId !== empresaActivaRef.current) return;
       if (res.ok) {
         const next = res.data.map(mapDbToFichaje);
@@ -179,7 +169,6 @@ export function FichajesView() {
     empresaActivaRef.current = empresaActual.id;
     setFichajes([]);
     setLocales([]);
-    setLocalesFiltro([]);
     setFichajeModal(null);
     loadFichajes();
   }, [empresaActual.id, loadFichajes]);
@@ -288,8 +277,6 @@ export function FichajesView() {
       fecha: manualForm.fecha,
       horaEntrada: manualForm.horaEntrada,
       horaSalida: manualForm.horaSalida || null,
-      pausaInicio: manualForm.pausaInicio || null,
-      pausaFin: manualForm.pausaFin || null,
       observaciones: manualForm.observaciones || null,
     });
     setSavingManual(false);
@@ -302,16 +289,6 @@ export function FichajesView() {
     }
   }, [manualForm, loadFichajes]);
 
-  const incidencias = useMemo(() => fichajes.filter(f => Boolean(f.incidencia)).map(f => ({
-    id: f.id,
-    fichajeId: f.id,
-    empleadoNombre: f.empleadoNombre,
-    fecha: f.fecha,
-    tipo: "fichaje_incompleto" as const,
-    descripcion: f.incidencia ?? "Incidencia detectada",
-    resuelta: false,
-  })), [fichajes]);
-
   const _dptos = useMemo(() => [...new Set(fichajes.map(f => f.departamento))].sort(), [fichajes]);
 
   const acceso = (f: Fichaje, campo: string): unknown => {
@@ -321,6 +298,7 @@ export function FichajesView() {
     if (campo === "horasTotales") return f.horasTotales;
     if (campo === "fecha") return f.fecha;
     if (campo === "empleado") return f.empleadoNombre;
+    if (campo === "local") return f.local?.nombre ?? "—";
     if (campo === "geo") {
       // Para orden: usar distancia (null → Infinity sortea al final asc).
       // Para filtro: el campo es categórico derivado; se aplica fuera del
@@ -333,61 +311,25 @@ export function FichajesView() {
   const fichajesFiltrados = useMemo(() => {
     let lista = fichajes.filter(f => {
       if (busqueda && !f.empleadoNombre.toLowerCase().includes(busqueda.toLowerCase())) return false;
+      // Rango de fechas (histórico). f.fecha es "YYYY-MM-DD", comparable como string.
+      if (fechaDesde && f.fecha < fechaDesde) return false;
+      if (fechaHasta && f.fecha > fechaHasta) return false;
       return true;
     });
 
-    // Filtro geo (columna): el status es un categórico derivado (`getFichajeGeoStatus`),
-    // no un campo directo del fichaje. Se aplica fuera de aplicarFiltrosToolbar
-    // igual que el filtro "empresas" hace en EmpleadosView.
-    const filtrosGeo = filtros.filter((fi) => fi.campo === "geo");
-    const otrosFiltros = filtros.filter((fi) => fi.campo !== "geo");
-    lista = aplicarFiltrosToolbar(lista, otrosFiltros, acceso);
-    if (filtrosGeo.length > 0) {
-      lista = lista.filter((fic) => {
-        const status = getFichajeGeoStatus(fic, fic.local ?? null);
-        const label = FICHAJE_GEO_STATUS_LABEL[status];
-        return filtrosGeo.every((filtro) =>
-          filtro.valores?.includes(label),
-        );
-      });
-    }
-
-    // Filtros geo del toolbar de auditoría (TASK-002.05).
-    if (soloFuera) {
-      lista = lista.filter(
-        (fic) => getFichajeGeoStatus(fic, fic.local ?? null) === "fuera",
-      );
-    }
-    if (soloTeletrabajo) {
-      lista = lista.filter((fic) => fic.modoTeletrabajo === true);
-    }
-    if (localesFiltro.length > 0) {
-      lista = lista.filter(
-        (fic) => fic.local != null && localesFiltro.includes(fic.local.id),
-      );
-    }
-
+    lista = aplicarFiltrosToolbar(lista, filtros, acceso);
     lista = aplicarOrdenToolbar(lista, orden, acceso);
     return lista;
-  }, [fichajes, busqueda, filtros, orden, soloFuera, soloTeletrabajo, localesFiltro]);
-
-  const localesMapa = useMemo(() => {
-    if (localesFiltro.length === 0) return locales;
-    const seleccionados = new Set(localesFiltro);
-    return locales.filter((local) => seleccionados.has(local.id));
-  }, [locales, localesFiltro]);
-
-  const incidenciasPendientes = incidencias.filter(i => !i.resuelta);
+  }, [fichajes, busqueda, filtros, orden, fechaDesde, fechaHasta]);
 
   const columnasDef: ToolbarColumna[] = [
     { campo: "empleado", label: "Empleado" },
     { campo: "fecha", label: "Fecha" },
     { campo: "entrada", label: "Entrada" },
     { campo: "salida", label: "Salida" },
-    { campo: "pausa", label: "Descanso" },
     { campo: "horas", label: "Horas" },
     { campo: "tipo", label: "Tipo" },
-    { campo: "geo", label: "Geo" },
+    { campo: "local", label: "Local" },
   ];
 
   function formatHora(s: string | null): string {
@@ -405,6 +347,12 @@ export function FichajesView() {
         <TableCell key="empleado">
           <div>
             <p className="flex items-center gap-1.5 font-medium text-sm">
+              {(f.incidencia?.toUpperCase().includes("SOLAPAD") ?? false) && (
+                <AlertTriangle
+                  className="h-4 w-4 shrink-0 text-red-600"
+                  aria-label="Turnos de empresas distintas solapados — error de configuración"
+                />
+              )}
               {f.cierreAnticipado && (
                 <AlertTriangle
                   className="h-4 w-4 shrink-0 text-amber-500"
@@ -436,12 +384,6 @@ export function FichajesView() {
         <TableCell key="salida" className="text-sm">{formatHora(f.horaSalida)}</TableCell>
       ),
     },
-    pausa: {
-      th: <TableHead key="pausa">Descanso</TableHead>,
-      td: (f) => (
-        <TableCell key="pausa" className="text-sm">{f.pausaInicio && f.pausaFin ? `${f.pausaInicio.slice(0,5)}–${f.pausaFin.slice(0,5)}` : "—"}</TableCell>
-      ),
-    },
     horas: {
       th: <TableHead key="horas" className="text-right">Horas</TableHead>,
       td: (f) => (
@@ -461,28 +403,26 @@ export function FichajesView() {
         );
       },
     },
-    geo: {
-      // Esta columna usa TableColumnHeader (en vez de TableHead simple) para
-      // exponer el filtro de lista y el orden por distancia desde la propia
-      // celda de cabecera. Mismo patrón que EmpleadosView aplica a "empresas".
+    local: {
+      // El cliente filtra los fichajes por local desde la propia cabecera
+      // (filtro de lista con los nombres de locales de la empresa). Mismo
+      // patrón que EmpleadosView aplica a "empresas".
       th: (
         <TableColumnHeader
-          key="geo"
-          label="Geo"
-          campo="geo"
+          key="local"
+          label="Local"
+          campo="local"
           ordenable
           orden={orden}
           onOrdenChange={setOrden}
           filtroTipo="lista"
-          opciones={Object.values(FICHAJE_GEO_STATUS_LABEL)}
+          opciones={locales.map((l) => l.nombre)}
           filtros={filtros}
           onFiltrosChange={setFiltros}
         />
       ),
       td: (f) => (
-        <TableCell key="geo">
-          <GeoBadge fichaje={f} />
-        </TableCell>
+        <TableCell key="local" className="text-sm">{f.local?.nombre ?? "—"}</TableCell>
       ),
     },
   };
@@ -491,268 +431,117 @@ export function FichajesView() {
     (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
   );
 
-  // Barra de filtros geo (TASK-002.05). Se reusa en tab Fichajes y tab Mapa
-  // porque ambas leen el mismo state `fichajesFiltrados`, lo que mantiene
-  // la selección coherente al cambiar entre tabs.
-  const filtrosGeoActivos =
-    soloFuera || soloTeletrabajo || localesFiltro.length > 0;
-  const geoFiltrosBar = (
-    <div className="flex flex-wrap items-center gap-2 px-1">
-      <Button
-        size="sm"
-        variant={soloFuera ? "default" : "outline"}
-        className="h-8 text-xs"
-        onClick={() => setSoloFuera((v) => !v)}
-      >
-        Solo fuera del radio
-      </Button>
-      <Button
-        size="sm"
-        variant={soloTeletrabajo ? "default" : "outline"}
-        className="h-8 text-xs"
-        onClick={() => setSoloTeletrabajo((v) => !v)}
-      >
-        Solo teletrabajo
-      </Button>
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button
-            size="sm"
-            variant={localesFiltro.length > 0 ? "default" : "outline"}
-            className="h-8 text-xs gap-1"
-          >
-            <Building2 className="h-3.5 w-3.5" />
-            Locales
-            {localesFiltro.length > 0 && (
-              <span className="ml-1 rounded-full bg-background text-foreground px-1.5 text-[10px] font-medium">
-                {localesFiltro.length}
-              </span>
-            )}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-64 p-2" align="start">
-          <div className="text-xs font-medium px-2 py-1 text-muted-foreground">
-            Filtrar por local
-          </div>
-          {locales.length === 0 ? (
-            <div className="px-2 py-3 text-xs text-muted-foreground">
-              Sin locales en esta empresa.
-            </div>
-          ) : (
-            <div className="max-h-64 overflow-y-auto">
-              {locales.map((l) => (
-                <label
-                  key={l.id}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted/50 cursor-pointer"
-                >
-                  <Checkbox
-                    checked={localesFiltro.includes(l.id)}
-                    onCheckedChange={(checked) => {
-                      setLocalesFiltro((curr) =>
-                        checked === true
-                          ? [...curr, l.id]
-                          : curr.filter((id) => id !== l.id),
-                      );
-                    }}
-                  />
-                  <span className="text-sm">{l.nombre}</span>
-                </label>
-              ))}
-            </div>
-          )}
-        </PopoverContent>
-      </Popover>
-      {filtrosGeoActivos && (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-8 text-xs gap-1"
-          onClick={() => {
-            setSoloFuera(false);
-            setSoloTeletrabajo(false);
-            setLocalesFiltro([]);
-          }}
-        >
-          <X className="h-3 w-3" />
-          Limpiar
-        </Button>
-      )}
-    </div>
-  );
 
   return (
     <div className="p-6 space-y-6">
-      <Tabs defaultValue="fichajes" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="fichajes" className="gap-1"><ClipboardList className="h-4 w-4" />Fichajes</TabsTrigger>
-          <TabsTrigger value="mapa" className="gap-1"><Map className="h-4 w-4" />Mapa</TabsTrigger>
-          <TabsTrigger value="historial" className="gap-1"><History className="h-4 w-4" />Historial</TabsTrigger>
-          <TabsTrigger value="incidencias" className="gap-1"><AlertTriangle className="h-4 w-4" />Incidencias</TabsTrigger>
-          <TabsTrigger value="config" aria-label="Configuración" className="ml-auto"><Settings2 className="h-4 w-4" strokeWidth={1.75} /></TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="fichajes" className="space-y-4">
-          <SubmoduleToolbar
-            busqueda={busqueda}
-            onBusquedaChange={setBusqueda}
-            placeholderBusqueda="Buscar"
-            onNuevo={openNuevoDialog}
-            filtros={filtros}
-            onFiltrosChange={setFiltros}
-            orden={orden}
-            onOrdenChange={setOrden}
-            columnas={columnasDef}
-            columnasVisibles={columnasVisibles}
-            onColumnasVisiblesChange={setColumnasVisibles}
-            columnasOrden={columnasOrden}
-            onColumnasOrdenChange={setColumnasOrden}
-            extraDerecha={
-              <>
-                <IOActions
-                  config={fichajesIO}
-                  context={{ empresaId: empresaActual.id }}
-                  exportRecords={fichajesFiltrados}
-                  onSuccess={() => window.location.reload()}
-                />
-                <Button
-                  size="icon"
-                  variant={showConfig ? "default" : "outline"}
-                  className="h-9 w-9"
-                  onClick={() => setShowConfig((v) => !v)}
-                  title="Configuración"
-                  aria-label="Configuración"
-                >
-                  <Settings className="h-4 w-4" strokeWidth={1.75} />
-                </Button>
-              </>
-            }
-          />
-          {geoFiltrosBar}
-          <Card>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {columnasRender.map((c) => columnDefs[c.campo]?.th)}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {fichajesFiltrados.map(f => (
-                  <TableRow key={f.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setFichajeModal(f)}>
-                    {columnasRender.map((c) => columnDefs[c.campo]?.td(f))}
-                  </TableRow>
-                ))}
-                {fichajesFiltrados.length === 0 && (
-                  <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Sin fichajes para los filtros seleccionados</TableCell></TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="mapa" className="space-y-4">
-          {geoFiltrosBar}
-          <Card className="p-4">
-            <FichajesMapaView
-              fichajes={fichajesFiltrados}
-              locales={localesMapa}
-              onFichajeClick={(f) => setFichajeModal(f)}
+      <SubmoduleToolbar
+        busqueda={busqueda}
+        onBusquedaChange={setBusqueda}
+        placeholderBusqueda="Buscar"
+        onNuevo={openNuevoDialog}
+        filtros={filtros}
+        onFiltrosChange={setFiltros}
+        orden={orden}
+        onOrdenChange={setOrden}
+        columnas={columnasDef}
+        columnasVisibles={columnasVisibles}
+        onColumnasVisiblesChange={setColumnasVisibles}
+        columnasOrden={columnasOrden}
+        onColumnasOrdenChange={setColumnasOrden}
+        extraDerecha={
+          <>
+            <IOActions
+              config={fichajesIO}
+              context={{ empresaId: empresaActual.id }}
+              exportRecords={fichajesFiltrados}
+              onSuccess={() => window.location.reload()}
             />
-          </Card>
-        </TabsContent>
+            <Button
+              size="icon"
+              variant={showConfig ? "default" : "outline"}
+              className="h-9 w-9"
+              onClick={() => setShowConfig(true)}
+              title="Configuración"
+              aria-label="Configuración"
+            >
+              <Settings className="h-4 w-4" strokeWidth={1.75} />
+            </Button>
+          </>
+        }
+      />
+      <div className="flex flex-wrap items-center gap-2 px-1">
+        <span className="text-xs text-muted-foreground">Histórico desde</span>
+        <Input
+          type="date"
+          value={fechaDesde}
+          max={fechaHasta || undefined}
+          onChange={(e) => setFechaDesde(e.target.value)}
+          className="h-8 w-auto text-xs"
+        />
+        <span className="text-xs text-muted-foreground">hasta</span>
+        <Input
+          type="date"
+          value={fechaHasta}
+          min={fechaDesde || undefined}
+          onChange={(e) => setFechaHasta(e.target.value)}
+          className="h-8 w-auto text-xs"
+        />
+        {(fechaDesde || fechaHasta) && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 text-xs"
+            onClick={() => {
+              setFechaDesde("");
+              setFechaHasta("");
+            }}
+          >
+            Ver todo
+          </Button>
+        )}
+      </div>
+      <Card>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              {columnasRender.map((c) => columnDefs[c.campo]?.th)}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {fichajesFiltrados.map(f => (
+              <TableRow key={f.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setFichajeModal(f)}>
+                {columnasRender.map((c) => columnDefs[c.campo]?.td(f))}
+              </TableRow>
+            ))}
+            {fichajesFiltrados.length === 0 && (
+              <TableRow><TableCell colSpan={columnasRender.length} className="text-center py-8 text-muted-foreground">Sin fichajes para los filtros seleccionados</TableCell></TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </Card>
 
-        <TabsContent value="historial" className="space-y-4">
-          <Card>
-            <CardHeader><CardTitle className="text-lg">Historial de fichajes</CardTitle><CardDescription>Registro completo ordenado cronológicamente</CardDescription></CardHeader>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Empleado</TableHead><TableHead>Fecha</TableHead><TableHead>Entrada</TableHead>
-                  <TableHead>Salida</TableHead><TableHead className="text-right">Horas</TableHead>
-                  <TableHead>Tipo</TableHead><TableHead>Incidencia</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {[...fichajes].sort((a, b) => b.fecha.localeCompare(a.fecha)).map(f => {
-                  const tb = tipoBadge(f.tipo);
-                  return (
-                    <TableRow key={f.id}>
-                      <TableCell className="font-medium text-sm">{f.empleadoNombre}</TableCell>
-                      <TableCell className="text-sm">{f.fecha}</TableCell>
-                      <TableCell className="text-sm">{formatHora(f.horaEntrada)}</TableCell>
-                      <TableCell className="text-sm">{formatHora(f.horaSalida)}</TableCell>
-                      <TableCell className="text-sm text-right">{f.horaSalida ? formatHorasDecimal(f.horasTotales) : "—"}</TableCell>
-                      <TableCell><Badge variant="outline" className={`text-xs ${tb.className}`}>{tb.label}</Badge></TableCell>
-                      <TableCell className="text-sm">{f.incidencia ?? <span className="text-muted-foreground">—</span>}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="incidencias" className="space-y-4">
-          {incidenciasPendientes.length > 0 && (
-            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3 flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-destructive" />
-              <span className="text-sm font-medium">{incidenciasPendientes.length} incidencia(s) pendiente(s) de resolver</span>
+      <Dialog open={showConfig} onOpenChange={setShowConfig}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Configuración de fichajes</DialogTitle>
+            <CardDescription className="text-xs">Ajustes generales del sistema de fichajes</CardDescription>
+          </DialogHeader>
+          <div className="space-y-6 py-2">
+            <div className="flex items-center justify-between">
+              <div><Label className="font-medium">Permitir fichaje manual</Label><p className="text-xs text-muted-foreground">Los empleados pueden registrar fichajes manualmente</p></div>
+              <Switch checked={config.permitirManual} onCheckedChange={v => setConfig(c => ({ ...c, permitirManual: v }))} />
             </div>
-          )}
-          <Card>
-            <Table>
-              <TableHeader>
-                <TableRow><TableHead>Empleado</TableHead><TableHead>Fecha</TableHead><TableHead>Tipo</TableHead><TableHead>Descripción</TableHead><TableHead>Estado</TableHead></TableRow>
-              </TableHeader>
-              <TableBody>
-                {incidencias.map(i => (
-                  <TableRow
-                    key={i.id}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => {
-                      const fichaje = fichajes.find((f) => f.id === i.fichajeId);
-                      if (fichaje) setFichajeModal(fichaje);
-                    }}
-                  >
-                    <TableCell className="font-medium text-sm">{i.empleadoNombre}</TableCell>
-                    <TableCell className="text-sm">{i.fecha}</TableCell>
-                    <TableCell><Badge variant="outline" className="text-xs">{TIPOS_INCIDENCIA_LABEL[i.tipo]}</Badge></TableCell>
-                    <TableCell className="text-sm text-muted-foreground max-w-[300px]">{i.descripcion}</TableCell>
-                    <TableCell>
-                      {i.resuelta
-                        ? <Badge className="bg-emerald-500/10 text-emerald-700 border-emerald-500/20 text-xs">Resuelta</Badge>
-                        : <Badge variant="destructive" className="text-xs">Pendiente</Badge>}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="config" className="space-y-4">
-          <Card>
-            <CardHeader><CardTitle className="text-lg">Configuración de fichajes</CardTitle><CardDescription>Ajustes generales del sistema de fichajes</CardDescription></CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div><Label className="font-medium">Permitir fichaje manual</Label><p className="text-xs text-muted-foreground">Los empleados pueden registrar fichajes manualmente</p></div>
-                <Switch checked={config.permitirManual} onCheckedChange={v => setConfig(c => ({ ...c, permitirManual: v }))} />
-              </div>
-              <div className="flex items-center justify-between">
-                <div><Label className="font-medium">Requiere validación</Label><p className="text-xs text-muted-foreground">Los fichajes deben ser validados por un responsable</p></div>
-                <Switch checked={config.requiereValidacion} onCheckedChange={v => setConfig(c => ({ ...c, requiereValidacion: v }))} />
-              </div>
-              <div className="flex items-center justify-between">
-                <div><Label className="font-medium">Descansos activos</Label><p className="text-xs text-muted-foreground">Permitir registrar descansos dentro del fichaje</p></div>
-                <Switch checked={config.pausasActivas} onCheckedChange={v => setConfig(c => ({ ...c, pausasActivas: v }))} />
-              </div>
-              <div className="flex items-center justify-between">
-                <div><Label className="font-medium">Tolerancia horaria (minutos)</Label><p className="text-xs text-muted-foreground">Margen antes de generar incidencia por desfase</p></div>
-                <Input type="number" className="w-20" value={config.toleranciaMinutos} onChange={e => setConfig(c => ({ ...c, toleranciaMinutos: Number(e.target.value) }))} />
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            <div className="flex items-center justify-between">
+              <div><Label className="font-medium">Requiere validación</Label><p className="text-xs text-muted-foreground">Los fichajes deben ser validados por un responsable</p></div>
+              <Switch checked={config.requiereValidacion} onCheckedChange={v => setConfig(c => ({ ...c, requiereValidacion: v }))} />
+            </div>
+            <div className="flex items-center justify-between">
+              <div><Label className="font-medium">Tolerancia horaria (minutos)</Label><p className="text-xs text-muted-foreground">Margen antes de generar incidencia por desfase</p></div>
+              <Input type="number" className="w-20" value={config.toleranciaMinutos} onChange={e => setConfig(c => ({ ...c, toleranciaMinutos: Number(e.target.value) }))} />
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <FichajeDetalleDialog
         fichaje={fichajeModal}
@@ -813,22 +602,6 @@ export function FichajesView() {
                   type="time"
                   value={manualForm.horaSalida}
                   onChange={(e) => setManualForm((f) => ({ ...f, horaSalida: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Pausa inicio (opcional)</Label>
-                <Input
-                  type="time"
-                  value={manualForm.pausaInicio}
-                  onChange={(e) => setManualForm((f) => ({ ...f, pausaInicio: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Pausa fin (opcional)</Label>
-                <Input
-                  type="time"
-                  value={manualForm.pausaFin}
-                  onChange={(e) => setManualForm((f) => ({ ...f, pausaFin: e.target.value }))}
                 />
               </div>
             </div>

@@ -31,6 +31,13 @@ import {
   hhmmAMinutos,
   minutosAHHMM,
 } from "@/features/rrhh/utils/horario-empleado";
+import {
+  resolverPresenciaPorGeo,
+  getHorariosDiaUnificado,
+  getMisLocales,
+  planificarReparto,
+  type TramoEmpresaMin,
+} from "@/features/mi-panel/utils/fichaje-multiempresa";
 
 function extractErrorMessage(err: unknown): string {
   if (!err) return "Error desconocido";
@@ -119,24 +126,28 @@ function monthBounds(anio: number, mes: number) {
 // para no interrumpir turnos de noche en curso.
 async function autoCerrarFichajesHuerfanos(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  empresaId: string,
+  empresaId: string | null,
   empleadoId: string,
 ): Promise<void> {
   const now = new Date();
   if (now.getHours() < 8) return;
   try {
-    await supabase
+    // Multi-empresa: si `empresaId` es null se cierran los huérfanos del
+    // empleado en TODAS sus empresas (RLS limita a las suyas). Si se pasa una
+    // empresa concreta, solo esa.
+    let q = supabase
       .from("fichajes")
       .update({
         estado: "completado",
         hora_salida: now.toISOString(),
         incidencia: "Fichaje sin cierre — pendiente de revisión",
       })
-      .eq("empresa_id", empresaId)
       .eq("empleado_id", empleadoId)
       .lt("fecha", todayISO())
       .is("hora_salida", null)
       .in("estado", ["trabajando", "pausa"]);
+    if (empresaId) q = q.eq("empresa_id", empresaId);
+    await q;
   } catch (err: unknown) {
     console.error("[mi-panel] autoCerrarFichajesHuerfanos:", extractErrorMessage(err));
   }
@@ -191,13 +202,15 @@ export async function getMiFichajeHoy(): Promise<{
   error?: string;
 }> {
   try {
-    const { supabase, user, empresaId } = await getContext();
-    if (!user || !empresaId) return { ok: false, data: null, error: "No autenticado" };
-    await autoCerrarFichajesHuerfanos(supabase, empresaId, user.id);
+    const { supabase, user } = await getContext();
+    if (!user) return { ok: false, data: null, error: "No autenticado" };
+    // Agnóstico de empresa: cierra huérfanos y busca el fichaje de hoy del
+    // empleado en CUALQUIERA de sus empresas (no la de la cookie), para que el
+    // botón de salida aparezca aunque la empresa activa sea otra.
+    await autoCerrarFichajesHuerfanos(supabase, null, user.id);
     const { data, error } = await supabase
       .from("fichajes")
       .select("*")
-      .eq("empresa_id", empresaId)
       .eq("empleado_id", user.id)
       .eq("fecha", todayISO())
       .order("created_at", { ascending: false })
@@ -205,6 +218,8 @@ export async function getMiFichajeHoy(): Promise<{
       .maybeSingle();
     if (error) throw error;
     if (!data) return { ok: true, data: null };
+    // La empresa relevante es la del propio fichaje, no la cookie.
+    const empresaId = data.empresa_id as string;
 
     // ─── Jornada flexible: objetivo de horas + autocierre ──────────────────
     // Si el empleado tiene hoy un turno flexible y su fichaje abierto ya
@@ -308,6 +323,145 @@ export async function getMiFichajeHoy(): Promise<{
   }
 }
 
+/**
+ * Ventana horaria de fichaje del empleado para HOY.
+ *
+ * Resuelve el horario del día (motor `getHorarioDia`) y devuelve, en minutos del
+ * día (0–1439), la hora de ENTRADA prevista (inicio del primer tramo) y la de
+ * SALIDA prevista (fin del último tramo). El móvil usa esto para mostrar el
+ * pop-up de fichar solo dentro de ±N minutos de esas horas.
+ *
+ * `tieneHorario` es true únicamente cuando hoy hay un horario FIJO con tramos.
+ * Para jornada flexible o sin horario no existe "hora de fichaje" que vigilar.
+ */
+export interface VentanaFichajeHoy {
+  ok: boolean;
+  tieneHorario: boolean;
+  entradaMin: number | null;
+  salidaMin: number | null;
+  cruzaMedianoche: boolean;
+  /** Config del aviso (pop-up) de fichar — Ajustes RRHH → Fichajes. */
+  popupModo: "ventana" | "siempre";
+  popupMargenAntesMin: number;
+  popupMargenDespuesMin: number;
+  popupSinHorario: boolean;
+  avisoSonido: boolean;
+  avisoVibracion: boolean;
+  reavisoActivo: boolean;
+  reavisoIntervaloMin: number;
+  error?: string;
+}
+
+/** Config del pop-up de fichar para una empresa (defaults = comportamiento actual). */
+async function leerPopupConfig(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  empresaId: string | null,
+): Promise<{
+  popupModo: "ventana" | "siempre";
+  popupMargenAntesMin: number;
+  popupMargenDespuesMin: number;
+  popupSinHorario: boolean;
+  avisoSonido: boolean;
+  avisoVibracion: boolean;
+  reavisoActivo: boolean;
+  reavisoIntervaloMin: number;
+}> {
+  const def = {
+    popupModo: "ventana" as "ventana" | "siempre",
+    popupMargenAntesMin: 15,
+    popupMargenDespuesMin: 15,
+    popupSinHorario: false,
+    avisoSonido: false,
+    avisoVibracion: false,
+    reavisoActivo: false,
+    reavisoIntervaloMin: 5,
+  };
+  if (!empresaId) return def;
+  const { data: cfg } = await supabase
+    .from("empresa_fichajes_config")
+    .select(
+      "popup_modo, popup_margen_antes_min, popup_margen_despues_min, popup_sin_horario, aviso_sonido, aviso_vibracion, reaviso_activo, reaviso_intervalo_min",
+    )
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+  return {
+    popupModo: (cfg?.popup_modo === "siempre" ? "siempre" : "ventana") as "ventana" | "siempre",
+    popupMargenAntesMin: (cfg?.popup_margen_antes_min as number | null) ?? 15,
+    popupMargenDespuesMin: (cfg?.popup_margen_despues_min as number | null) ?? 15,
+    popupSinHorario: !!cfg?.popup_sin_horario,
+    avisoSonido: !!cfg?.aviso_sonido,
+    avisoVibracion: !!cfg?.aviso_vibracion,
+    reavisoActivo: !!cfg?.reaviso_activo,
+    reavisoIntervaloMin: (cfg?.reaviso_intervalo_min as number | null) ?? 5,
+  };
+}
+
+export async function getMiVentanaFichajeHoy(): Promise<VentanaFichajeHoy> {
+  const base = {
+    tieneHorario: false,
+    entradaMin: null as number | null,
+    salidaMin: null as number | null,
+    cruzaMedianoche: false,
+    popupModo: "ventana" as "ventana" | "siempre",
+    popupMargenAntesMin: 15,
+    popupMargenDespuesMin: 15,
+    popupSinHorario: false,
+    avisoSonido: false,
+    avisoVibracion: false,
+    reavisoActivo: false,
+    reavisoIntervaloMin: 5,
+  };
+  try {
+    const { supabase, user, empresaId: cookieEmpresaId } = await getContext();
+    if (!user) return { ok: false, ...base, error: "No autenticado" };
+
+    // Ventana UNIFICADA: combina los turnos FIJOS de hoy de TODAS sus empresas
+    // (p.ej. mañana en una empresa + noche en otra). El pop-up es un aviso; la
+    // ventana dura de fichaje la valida el server en `ficharEntradaPersonal`.
+    const horarios = await getHorariosDiaUnificado(supabase, user.id, todayISO());
+
+    const fijos: { empresaId: string; entradaMin: number; salidaMin: number }[] = [];
+    for (const h of horarios) {
+      if (h.horario.tipo !== "fijo") continue;
+      for (const tr of h.horario.tramos) {
+        const e = hhmmAMinutos(tr.inicio);
+        const s = hhmmAMinutos(tr.fin);
+        if (e == null || s == null) continue;
+        fijos.push({ empresaId: h.empresaId, entradaMin: e, salidaMin: s });
+      }
+    }
+
+    // Empresa para la config del pop-up: la del tramo más temprano; si no hay
+    // tramos fijos, la empresa activa (cookie) o la primera con horario.
+    const empresaPopup =
+      fijos.length > 0
+        ? fijos.reduce((a, b) => (b.entradaMin < a.entradaMin ? b : a)).empresaId
+        : cookieEmpresaId ?? horarios[0]?.empresaId ?? null;
+    const popup = await leerPopupConfig(supabase, empresaPopup);
+
+    if (fijos.length === 0) {
+      return { ok: true, ...base, ...popup };
+    }
+
+    // Entrada prevista = el primer tramo del día; salida = el último.
+    const entradaMin = Math.min(...fijos.map((f) => f.entradaMin));
+    const salidaMin = Math.max(...fijos.map((f) => f.salidaMin));
+
+    return {
+      ok: true,
+      tieneHorario: true,
+      entradaMin,
+      salidaMin,
+      cruzaMedianoche: salidaMin <= entradaMin,
+      ...popup,
+    };
+  } catch (err: unknown) {
+    const msg = extractErrorMessage(err);
+    console.error("[mi-panel] getMiVentanaFichajeHoy:", msg);
+    return { ok: false, ...base, error: msg };
+  }
+}
+
 export type ModoFichaje = "presencial" | "teletrabajo";
 
 /**
@@ -393,28 +547,74 @@ export async function ficharEntradaPersonal(
   tipoCodigo?: string,
 ) {
   try {
-    const { supabase, user, empresaId, nombre } = await getContext();
-    if (!user || !empresaId) return { ok: false, error: "No autenticado" };
-    const { data: empleado, error: empleadoErr } = await supabase
-      .from("empleados")
-      .select("id, permite_teletrabajo")
-      .eq("user_id", user.id)
-      .eq("empresa_id", empresaId)
-      .maybeSingle();
-    if (empleadoErr) throw empleadoErr;
-    if (!empleado) {
-      return {
-        ok: false,
-        error: "Tu usuario no está vinculado a ningún empleado.",
-      };
-    }
+    const { supabase, user, empresaId: cookieEmpresaId, nombre } = await getContext();
+    if (!user) return { ok: false, error: "No autenticado" };
 
-    // ─── Tipo de fichaje + reglas de disponibilidad ────────────────────────
-    // Resuelve qué tipo se va a registrar y valida sus condiciones ANTES de
-    // pedir geolocalización, para fallar rápido con un mensaje claro.
     const { fecha: hoyMadrid, minutos: ahoraMin } = ahoraEnMadrid();
     // Si el redondeo aplica, la entrada se registra a la hora exacta del turno.
     let horaEntradaOverrideISO: string | null = null;
+
+    // ─── Resolver empresa + empleado + local (AGNÓSTICO de empresa) ─────────
+    // PRESENCIAL: la empresa sale del LOCAL más cercano entre TODAS las empresas
+    // del empleado (multi-empresa); la geo decide, nunca la cookie ni el empleado.
+    // TELETRABAJO: no hay geo que valide zona → se usa la empresa activa (cookie)
+    // y su fila de empleado, si la tiene permitida.
+    let empresaId: string;
+    let empleadoId: string;
+    let localElegidoId: string;
+    let centro: string;
+    let modoTeletrabajo = false;
+
+    if (modoSolicitado === "teletrabajo") {
+      if (!cookieEmpresaId) return { ok: false, error: "No autenticado" };
+      const { data: empleado, error: empErr } = await supabase
+        .from("empleados")
+        .select("id, permite_teletrabajo")
+        .eq("user_id", user.id)
+        .eq("empresa_id", cookieEmpresaId)
+        .maybeSingle();
+      if (empErr) throw empErr;
+      if (!empleado) {
+        return { ok: false, error: "Tu usuario no está vinculado a ningún empleado." };
+      }
+      if (!empleado.permite_teletrabajo) {
+        return { ok: false, error: "No tienes el teletrabajo permitido en esta empresa." };
+      }
+      const { data: locs } = await supabase
+        .from("empleado_locales")
+        .select("locales!inner(id, nombre, empresa_id)")
+        .eq("empleado_id", empleado.id)
+        .eq("locales.empresa_id", cookieEmpresaId);
+      const primero = (locs ?? [])
+        .map((r) => (r as unknown as { locales: { id: string; nombre: string | null } }).locales)
+        .filter(Boolean)[0];
+      if (!primero) {
+        return {
+          ok: false,
+          error: "No tienes ningún local asignado en esta empresa. Pide a tu responsable que te asigne uno.",
+        };
+      }
+      empresaId = cookieEmpresaId;
+      empleadoId = empleado.id as string;
+      localElegidoId = primero.id;
+      centro = primero.nombre ?? "";
+      modoTeletrabajo = true;
+    } else {
+      if (!geo) {
+        return {
+          ok: false,
+          error: "Activa la geolocalización para poder fichar de forma presencial.",
+        };
+      }
+      const pres = await resolverPresenciaPorGeo(supabase, user.id, geo);
+      if (!pres.ok) return { ok: false, error: pres.error };
+      empresaId = pres.empresaId;
+      empleadoId = pres.empleadoId;
+      localElegidoId = pres.localId;
+      centro = pres.centro;
+    }
+
+    // ─── Tipo de fichaje + reglas de disponibilidad (contra la empresa RESUELTA) ─
     const { data: tiposData } = await supabase
       .from("tipos_fichaje")
       .select("codigo, nombre, requiere_solicitud, margen_antes_min, margen_despues_min")
@@ -429,13 +629,12 @@ export async function ficharEntradaPersonal(
       margen_despues_min: number;
     }[];
 
-    const tipoSel = tipoCodigo
+    // El tipo llega del front según la empresa de la cookie. Si no existe en la
+    // empresa resuelta por geo, se cae al tipo normal (no-solicitud) de esa empresa.
+    let tipoSel = tipoCodigo
       ? tiposActivos.find((t) => t.codigo.toUpperCase() === tipoCodigo.toUpperCase()) ?? null
-      : tiposActivos.find((t) => !t.requiere_solicitud) ?? null;
-
-    if (tipoCodigo && !tipoSel) {
-      return { ok: false, error: "El tipo de fichaje seleccionado no está disponible." };
-    }
+      : null;
+    if (!tipoSel) tipoSel = tiposActivos.find((t) => !t.requiere_solicitud) ?? null;
 
     if (tipoSel) {
       if (tipoSel.requiere_solicitud) {
@@ -461,24 +660,30 @@ export async function ficharEntradaPersonal(
         // ventana de Ajustes RRHH → Fichajes (respecto a la hora de inicio). Si
         // es FLEXIBLE, sin ventana horaria, pero bloqueado si ya alcanzó su
         // objetivo de horas del periodo (día o semana, según el turno).
-        const horario = await getHorarioDia(
-          supabase,
-          empresaId,
-          empleado.id,
-          hoyMadrid,
-        );
+        const horario = await getHorarioDia(supabase, empresaId, empleadoId, hoyMadrid);
+
+        // "Permitir fichar fuera de horario" (Ajustes RRHH → Fichajes): si está
+        // activo, NO se aplica ninguna comprobación de horario (ni bloqueo por
+        // ventana/objetivo, ni redondeo).
+        const { data: cfgFuera } = await supabase
+          .from("empresa_fichajes_config")
+          .select("permitir_fuera_horario")
+          .eq("empresa_id", empresaId)
+          .maybeSingle();
+        const permitirFuera = !!cfgFuera?.permitir_fuera_horario;
 
         if (
-          horario.tipo === "ninguno" ||
-          (horario.tipo === "flexible" && horario.objetivoHoras <= 0)
+          !permitirFuera &&
+          (horario.tipo === "ninguno" ||
+            (horario.tipo === "flexible" && horario.objetivoHoras <= 0))
         ) {
           return {
             ok: false,
-            error: "No tienes horario asignado para hoy, así que no puedes fichar. Avisa a tu responsable.",
+            error: "No tienes horario asignado para hoy, así que no puedes fichar el horario normal. Aun así, siempre puedes fichar por solicitud y tu responsable lo revisará.",
           };
         }
 
-        if (horario.tipo === "flexible") {
+        if (!permitirFuera && horario.tipo === "flexible") {
           const consumido = await horasTrabajadasPeriodo(
             supabase,
             empresaId,
@@ -497,7 +702,7 @@ export async function ficharEntradaPersonal(
             };
           }
           // Flexible: sin ventana ni redondeo; se registra la entrada directa.
-        } else {
+        } else if (!permitirFuera && horario.tipo === "fijo") {
           // tipo "fijo": ventana horaria respecto a la hora de inicio del turno.
           const tramos = horario.tramos;
           const { data: cfg } = await supabase
@@ -544,74 +749,6 @@ export async function ficharEntradaPersonal(
       }
     }
 
-    // Locales donde puede fichar EN ESTA empresa (tabla puente multi-local).
-    const { data: asignados, error: asignadosErr } = await supabase
-      .from("empleado_locales")
-      .select("locales!inner(id, nombre, lat, lng, radio_metros, empresa_id)")
-      .eq("empleado_id", empleado.id)
-      .eq("locales.empresa_id", empresaId);
-    if (asignadosErr) throw asignadosErr;
-    const localesAsignados = (asignados ?? [])
-      .map((r) => (r as unknown as { locales: {
-        id: string; nombre: string | null; lat: number | null;
-        lng: number | null; radio_metros: number;
-      } }).locales)
-      .filter(Boolean);
-    if (localesAsignados.length === 0) {
-      return {
-        ok: false,
-        error: "No tienes ningún local asignado en esta empresa. Pide a tu responsable que te asigne uno.",
-      };
-    }
-
-    // El empleado solo ficha como teletrabajo si lo tiene permitido Y lo elige
-    // explícitamente. En cualquier otro caso (incluido presencial elegido por
-    // quien sí puede teletrabajar) se exige ubicación dentro de un local.
-    const permiteTeletrabajo = Boolean(empleado.permite_teletrabajo);
-    const modoTeletrabajo = permiteTeletrabajo && modoSolicitado === "teletrabajo";
-    let centro = "";
-    let localElegidoId: string;
-
-    if (!modoTeletrabajo) {
-      if (!geo) {
-        return {
-          ok: false,
-          error: "Activa la geolocalización para poder fichar de forma presencial.",
-        };
-      }
-      // Elige el local más cercano dentro de su radio (cualquiera de los suyos).
-      let mejor: { id: string; nombre: string; dist: number } | null = null;
-      let masCercano: { nombre: string; dist: number; radio: number } | null = null;
-      for (const l of localesAsignados) {
-        if (l.lat == null || l.lng == null) continue;
-        const dist = distanciaMetros(geo.lat, geo.lng, l.lat, l.lng);
-        if (!masCercano || dist < masCercano.dist) {
-          masCercano = { nombre: l.nombre ?? "", dist, radio: l.radio_metros };
-        }
-        if (dist <= l.radio_metros && (!mejor || dist < mejor.dist)) {
-          mejor = { id: l.id, nombre: l.nombre ?? "", dist };
-        }
-      }
-      if (!mejor) {
-        if (!masCercano) {
-          return {
-            ok: false,
-            error: "Tus locales no tienen ubicación configurada. Avisa a tu responsable.",
-          };
-        }
-        return {
-          ok: false,
-          error: `Estás a ${Math.round(masCercano.dist)} m de "${masCercano.nombre}" (radio permitido ${masCercano.radio} m). Acércate a un local asignado para fichar.`,
-        };
-      }
-      localElegidoId = mejor.id;
-      centro = mejor.nombre;
-    } else {
-      // Teletrabajo: no se valida zona; se usa el local por defecto (primero).
-      localElegidoId = localesAsignados[0].id;
-      centro = localesAsignados[0].nombre ?? "";
-    }
-
     const ahora = new Date();
     const { data, error } = await supabase
       .from("fichajes")
@@ -620,7 +757,10 @@ export async function ficharEntradaPersonal(
         empleado_id: user.id,
         empleado_nombre: nombre || "Sin nombre",
         fecha: todayISO(),
+        // Oficial (la que cuenta): redondeada al turno si aplica. Real: instante
+        // físico del fichaje, siempre, para auditoría en RRHH.
         hora_entrada: horaEntradaOverrideISO ?? ahora.toISOString(),
+        hora_entrada_real: ahora.toISOString(),
         estado: "trabajando",
         local_id: localElegidoId,
         lat_entrada: geo?.lat ?? null,
@@ -641,12 +781,30 @@ export async function ficharEntradaPersonal(
   }
 }
 
+/** Minutos del día (0–1439) de una fecha concreta, en zona Europe/Madrid. */
+function minutosMadridDe(d: Date): number {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Madrid",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(d);
+  const h = Number(parts.find((p) => p.type === "hour")?.value ?? "0") % 24;
+  const m = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
+  return h * 60 + m;
+}
+
+function redondearHoras(ms: number): number {
+  return Math.round((ms / 3600000) * 10000) / 10000;
+}
+
 export async function ficharSalidaPersonal(fichajeId: string, geo?: GeoInput) {
   try {
-    const { supabase } = await getContext();
+    const { supabase, user, nombre } = await getContext();
+    if (!user) return { ok: false, error: "No autenticado" };
     const { data: fichaje, error: fetchErr } = await supabase
       .from("fichajes")
-      .select("hora_entrada, local_id, modo_teletrabajo")
+      .select("hora_entrada, local_id, modo_teletrabajo, empresa_id, fecha, centro, tipo")
       .eq("id", fichajeId)
       .single();
     if (fetchErr) throw fetchErr;
@@ -676,25 +834,161 @@ export async function ficharSalidaPersonal(fichajeId: string, geo?: GeoInput) {
     }
 
     const ahora = new Date();
-    let horasTotales = 0;
-    if (fichaje?.hora_entrada) {
-      const entrada = new Date(fichaje.hora_entrada as string);
-      horasTotales =
-        Math.round(((ahora.getTime() - entrada.getTime()) / 3600000) * 10000) / 10000;
+    if (!fichaje.hora_entrada) {
+      // Sin hora de entrada no hay nada que repartir ni cronometrar.
+      const { error } = await supabase
+        .from("fichajes")
+        .update({
+          hora_salida: ahora.toISOString(),
+          hora_salida_real: ahora.toISOString(),
+          horas_totales: 0,
+          estado: "completado",
+          lat_salida: geo?.lat ?? null,
+          lng_salida: geo?.lng ?? null,
+          precision_salida_metros: geo?.precision ?? null,
+        })
+        .eq("id", fichajeId);
+      if (error) throw error;
+      return { ok: true, data: { horas_totales: 0 } };
     }
-    const { error } = await supabase
-      .from("fichajes")
-      .update({
-        hora_salida: ahora.toISOString(),
-        horas_totales: horasTotales,
-        estado: "completado",
-        lat_salida: geo?.lat ?? null,
-        lng_salida: geo?.lng ?? null,
-        precision_salida_metros: geo?.precision ?? null,
-      })
-      .eq("id", fichajeId);
-    if (error) throw error;
-    return { ok: true, data: { horas_totales: horasTotales } };
+
+    const entrada = new Date(fichaje.hora_entrada as string);
+    const entradaMs = entrada.getTime();
+    const horasTotales = redondearHoras(ahora.getTime() - entradaMs);
+
+    // ─── Reparto de jornada partida entre empresas ─────────────────────────
+    // Si la jornada continua cubre tramos planificados de MÁS de una empresa,
+    // se reparte: el corte sigue el horario; lo no cubierto se marca para
+    // revisión. La empresa NO la elige el empleado (sale del horario), y no
+    // tiene que desfichar/refichar a mitad de jornada.
+    const entradaMin = minutosMadridDe(entrada);
+    const salidaMin = entradaMin + (ahora.getTime() - entradaMs) / 60000;
+    const horarios = await getHorariosDiaUnificado(
+      supabase,
+      user.id,
+      fichaje.fecha as string,
+    );
+    const tramos: TramoEmpresaMin[] = [];
+    for (const h of horarios) {
+      if (h.horario.tipo !== "fijo") continue;
+      for (const tr of h.horario.tramos) {
+        const s = hhmmAMinutos(tr.inicio);
+        const e = hhmmAMinutos(tr.fin);
+        if (s == null || e == null) continue;
+        tramos.push({ empresaId: h.empresaId, startMin: s, endMin: e });
+      }
+    }
+    const reparto = planificarReparto(entradaMin, salidaMin, tramos);
+
+    // Sin reparto (una sola empresa) → cierre normal del fichaje.
+    if (reparto.length <= 1) {
+      const { error } = await supabase
+        .from("fichajes")
+        .update({
+          hora_salida: ahora.toISOString(),
+          hora_salida_real: ahora.toISOString(),
+          horas_totales: horasTotales,
+          estado: "completado",
+          lat_salida: geo?.lat ?? null,
+          lng_salida: geo?.lng ?? null,
+          precision_salida_metros: geo?.precision ?? null,
+        })
+        .eq("id", fichajeId);
+      if (error) throw error;
+      return { ok: true, data: { horas_totales: horasTotales } };
+    }
+
+    // Reparto real: 1 fila por empresa, atadas por `sesion_id`.
+    const sesionId = crypto.randomUUID();
+    const locales = await getMisLocales(supabase, user.id);
+    const localPorEmpresa = new Map<string, { id: string; nombre: string }>();
+    for (const l of locales) {
+      if (!localPorEmpresa.has(l.empresaId)) {
+        localPorEmpresa.set(l.empresaId, { id: l.id, nombre: l.nombre });
+      }
+    }
+    const isoDeMin = (min: number) =>
+      new Date(entradaMs + (min - entradaMin) * 60000).toISOString();
+
+    for (let i = 0; i < reparto.length; i++) {
+      const seg = reparto[i];
+      const esUltimo = i === reparto.length - 1;
+      const localSeg =
+        seg.empresaId === fichaje.empresa_id
+          ? { id: (fichaje.local_id as string | null) ?? null, nombre: (fichaje.centro as string | null) ?? "" }
+          : (() => {
+              const l = localPorEmpresa.get(seg.empresaId);
+              return { id: l?.id ?? null, nombre: l?.nombre ?? "" };
+            })();
+      const horasSeg = redondearHoras((seg.finMin - seg.inicioMin) * 60000);
+      const finISO = esUltimo ? ahora.toISOString() : isoDeMin(seg.finMin);
+      const revision = !seg.cubierto;
+      const motivoTxt =
+        seg.motivo === "solape"
+          ? "Turnos de empresas distintas SOLAPADOS — revisar configuración de turnos"
+          : seg.motivo === "hueco"
+            ? "Hueco entre turnos: la jornada no es seguida — el empleado debía desfichar y volver a fichar"
+            : "Horas fuera del horario planificado (reparto multi-empresa)";
+      const incidencia = revision ? motivoTxt : null;
+
+      if (i === 0) {
+        // El primer segmento reaprovecha la fila original.
+        const { error } = await supabase
+          .from("fichajes")
+          .update({
+            empresa_id: seg.empresaId,
+            local_id: localSeg.id,
+            centro: localSeg.nombre,
+            hora_salida: finISO,
+            hora_salida_real: esUltimo ? ahora.toISOString() : null,
+            horas_totales: horasSeg,
+            estado: "completado",
+            sesion_id: sesionId,
+            requiere_revision: revision,
+            revision_motivo: revision ? motivoTxt : null,
+            incidencia,
+            // Geo de salida solo si este segmento es además el último.
+            lat_salida: esUltimo ? geo?.lat ?? null : null,
+            lng_salida: esUltimo ? geo?.lng ?? null : null,
+            precision_salida_metros: esUltimo ? geo?.precision ?? null : null,
+          })
+          .eq("id", fichajeId);
+        if (error) throw error;
+      } else {
+        // Segmentos siguientes → filas nuevas en su empresa.
+        const { error } = await supabase.from("fichajes").insert({
+          empresa_id: seg.empresaId,
+          empleado_id: user.id,
+          empleado_nombre: nombre || "Sin nombre",
+          fecha: fichaje.fecha as string,
+          // Cortes planificados del reparto: la hora real solo existe en el
+          // segmento que cierra físicamente (último); el resto es un corte.
+          hora_entrada: isoDeMin(seg.inicioMin),
+          hora_entrada_real: null,
+          hora_salida: finISO,
+          hora_salida_real: esUltimo ? ahora.toISOString() : null,
+          horas_totales: horasSeg,
+          estado: "completado",
+          local_id: localSeg.id,
+          centro: localSeg.nombre,
+          modo_teletrabajo: Boolean(fichaje.modo_teletrabajo),
+          tipo: (fichaje.tipo as string | null) ?? "ENT",
+          sesion_id: sesionId,
+          requiere_revision: revision,
+          revision_motivo: revision
+            ? "Horas fuera del horario planificado (reparto multi-empresa)"
+            : null,
+          incidencia,
+          // La geo de salida va en el último segmento (el que cierra ahora).
+          lat_salida: esUltimo ? geo?.lat ?? null : null,
+          lng_salida: esUltimo ? geo?.lng ?? null : null,
+          precision_salida_metros: esUltimo ? geo?.precision ?? null : null,
+        });
+        if (error) throw error;
+      }
+    }
+
+    return { ok: true, data: { horas_totales: horasTotales, repartido: reparto.length } };
   } catch (err: unknown) {
     const msg = extractErrorMessage(err);
     console.error("[mi-panel] ficharSalidaPersonal:", msg);
@@ -819,13 +1113,15 @@ export async function listarMisFichajes(limite = 60): Promise<{
   error?: string;
 }> {
   try {
-    const { supabase, user, empresaId } = await getContext();
-    if (!user || !empresaId) return { ok: false, data: [], error: "No autenticado" };
-    await autoCerrarFichajesHuerfanos(supabase, empresaId, user.id);
+    const { supabase, user } = await getContext();
+    if (!user) return { ok: false, data: [], error: "No autenticado" };
+    // Histórico UNIFICADO: todos los fichajes del empleado en TODAS sus empresas
+    // (RLS limita a las suyas). Cada fichaje conserva su `centro`/local, que
+    // distingue de qué empresa es.
+    await autoCerrarFichajesHuerfanos(supabase, null, user.id);
     const { data, error } = await supabase
       .from("fichajes")
       .select("*")
-      .eq("empresa_id", empresaId)
       .eq("empleado_id", user.id)
       .order("fecha", { ascending: false })
       .order("created_at", { ascending: false })
@@ -941,22 +1237,23 @@ export async function getMiCalendarioMes(
   mes: number,
 ): Promise<{ ok: boolean; data: DiaCalendario[]; error?: string }> {
   try {
-    const { supabase, user, empresaId } = await getContext();
-    if (!user || !empresaId) return { ok: false, data: [], error: "No autenticado" };
+    const { supabase, user } = await getContext();
+    if (!user) return { ok: false, data: [], error: "No autenticado" };
     const { desde, hasta } = monthBounds(anio, mes);
 
+    // Calendario UNIFICADO: fichajes y solicitudes del empleado en TODAS sus
+    // empresas (RLS limita a las suyas). Un día repartido entre dos empresas
+    // suma las horas de ambas.
     const [fichajesRes, solicitudesRes] = await Promise.all([
       supabase
         .from("fichajes")
         .select("fecha, horas_totales, estado")
-        .eq("empresa_id", empresaId)
         .eq("empleado_id", user.id)
         .gte("fecha", desde)
         .lt("fecha", hasta),
       supabase
         .from("solicitudes_personal")
         .select("tipo, subtipo, fecha_inicio, fecha_fin, estado")
-        .eq("empresa_id", empresaId)
         .eq("user_id", user.id)
         .eq("estado", "aprobada")
         .or(`fecha_inicio.lt.${hasta},fecha_fin.gte.${desde}`),
@@ -976,7 +1273,8 @@ export async function getMiCalendarioMes(
         trabajoExtra: null,
       };
       prev.fichado = true;
-      prev.horasFichaje = (f.horas_totales as number | null) ?? 0;
+      // Suma (no sobrescribe): un día puede tener fichajes en 2 empresas.
+      prev.horasFichaje += (f.horas_totales as number | null) ?? 0;
       map.set(fecha, prev);
     }
 

@@ -8,7 +8,6 @@ import {
   type Descanso,
   type TipoJornada,
   type Turno,
-  type TurnoTono,
   type TurnoTramo,
 } from "@/features/rrhh/data/horarios";
 import {
@@ -79,7 +78,6 @@ interface TurnoDraft {
   nombre: string;
   codigo: string;
   tramos: TurnoTramo[];
-  color: TurnoTono;
   departamento: string;
   empleadoIds: string[];
   tipoJornada: TipoJornada;
@@ -106,7 +104,6 @@ function turnoToDraft(t: Turno | null, empleadoIds: string[] = []): TurnoDraft {
       nombre: "",
       codigo: "",
       tramos: [{ inicio: "09:00", fin: "17:00" }],
-      color: "emerald",
       departamento: "",
       empleadoIds,
       tipoJornada: "fijo",
@@ -119,7 +116,6 @@ function turnoToDraft(t: Turno | null, empleadoIds: string[] = []): TurnoDraft {
     nombre: t.nombre,
     codigo: t.codigo,
     tramos: t.tramos.length ? t.tramos.map((tr) => ({ ...tr })) : [{ inicio: "09:00", fin: "17:00" }],
-    color: t.color,
     departamento: t.departamento ?? "",
     empleadoIds,
     tipoJornada: t.tipoJornada,
@@ -324,7 +320,6 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
       nombre: `${t.nombre} (copia)`,
       codigo: t.codigo,
       tramos: t.tramos.map((tr) => ({ ...tr })),
-      color: t.color,
       activo: true,
       tipoJornada: t.tipoJornada,
       dias: [],
@@ -386,7 +381,6 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
         nombre,
         codigo,
         tramos,
-        color: draft.color,
         departamento,
         dias: [],
         flexHorasDia,
@@ -404,7 +398,6 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
         nombre,
         codigo,
         tramos,
-        color: draft.color,
         departamento,
         tipoJornada: draft.tipoJornada,
         dias: [],

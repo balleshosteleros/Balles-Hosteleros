@@ -9,7 +9,7 @@ import { ESTADOS_LABEL, ESTADOS_COLOR, type EmpleadoUI } from "@/features/rrhh/c
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Settings } from "lucide-react";
+import { Settings, Lock } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -45,18 +45,6 @@ function iniciales(nombre: string, apellidos: string) {
 // se muestran en sentence case.
 function formatArea(area: string) {
   return area.charAt(0).toUpperCase() + area.slice(1).toLowerCase();
-}
-
-function FichajeBar({ fichajes }: { fichajes: number }) {
-  const pct = Math.min(fichajes * 25, 100);
-  const colors: Record<number, string> = { 0: "bg-muted", 1: "bg-amber-400", 2: "bg-sky-500", 3: "bg-emerald-500" };
-  const colorClass = colors[Math.min(fichajes, 3)] ?? "bg-emerald-500";
-  if (pct === 0) return <span className="text-sm text-muted-foreground">-</span>;
-  return (
-    <div className="w-20 h-1.5 rounded-full bg-muted overflow-hidden">
-      <div className={`h-full rounded-full ${colorClass}`} style={{ width: `${pct}%` }} />
-    </div>
-  );
 }
 
 type EmpleadoBDRow = {
@@ -96,7 +84,6 @@ function bdToEmpleado(row: EmpleadoBDRow): EmpleadoConAcceso {
     departamento: row.departamentos?.nombre ?? "—",
     areas: row.areas ?? [],
     telefono: row.telefono ?? "—",
-    fichajes: 0,
     emailEmpresa: row.email_empresa ?? "",
     emailPersonal: row.email_personal ?? "",
     validadorTrabajo: row.validador_trabajo_nombre ?? "—",
@@ -155,11 +142,14 @@ export function EmpleadosView() {
     if (campo === "empresas") return e.empresasAcceso.map((a) => a.nombre);
     if (campo === "estado") return ESTADOS_LABEL[e.estado];
     if (campo === "horario") return e.horarioTipo;
-    if (campo === "horasHoy") return e.horasHoy;
+    if (campo === "horasHoy") {
+      // Orden por volumen de horas trabajadas (numérico, no alfabético).
+      const n = parseFloat(String(e.horasHoy).replace(",", "."));
+      return Number.isNaN(n) ? -1 : n;
+    }
     if (campo === "departamento") return e.departamento;
     if (campo === "area") return e.areas.map(formatArea);
     if (campo === "telefono") return e.telefono;
-    if (campo === "fichajes") return e.fichajes;
     if (campo === "emailEmpresa") return e.emailEmpresa;
     if (campo === "emailPersonal") return e.emailPersonal;
     if (campo === "validador") return e.validadorTrabajo;
@@ -222,7 +212,6 @@ export function EmpleadosView() {
     { campo: "departamento", label: "Departamento" },
     { campo: "area", label: "Área" },
     { campo: "telefono", label: "Teléfono" },
-    { campo: "fichajes", label: "Fichajes" },
     { campo: "emailEmpresa", label: "Email empresa" },
     { campo: "emailPersonal", label: "Email personal" },
     { campo: "validador", label: "Validador trabajo" },
@@ -294,9 +283,6 @@ export function EmpleadosView() {
           label="Estado"
           campo="estado"
           align="center"
-          ordenable
-          orden={orden}
-          onOrdenChange={setOrden}
           filtroTipo="lista"
           opciones={Object.values(ESTADOS_LABEL)}
           filtros={filtros}
@@ -319,9 +305,6 @@ export function EmpleadosView() {
           label="Horario"
           campo="horario"
           align="center"
-          ordenable
-          orden={orden}
-          onOrdenChange={setOrden}
         />
       ),
       td: (emp) => (
@@ -343,6 +326,8 @@ export function EmpleadosView() {
           ordenable
           orden={orden}
           onOrdenChange={setOrden}
+          ordenLabelAsc="Menos horas"
+          ordenLabelDesc="Más horas"
         />
       ),
       td: (emp) => (
@@ -356,9 +341,6 @@ export function EmpleadosView() {
           label="Departamento"
           campo="departamento"
           align="center"
-          ordenable
-          orden={orden}
-          onOrdenChange={setOrden}
           filtroTipo="lista"
           opciones={departamentosUsados}
           filtros={filtros}
@@ -414,34 +396,12 @@ export function EmpleadosView() {
         <td key="telefono" className="px-3 py-2 align-middle text-center"><span className="text-sm text-muted-foreground whitespace-nowrap">{emp.telefono}</span></td>
       ),
     },
-    fichajes: {
-      th: (
-        <TableColumnHeader
-          key="fichajes"
-          label="Fichajes"
-          campo="fichajes"
-          align="center"
-          ordenable
-          orden={orden}
-          onOrdenChange={setOrden}
-          filtroTipo="numero"
-          filtros={filtros}
-          onFiltrosChange={setFiltros}
-        />
-      ),
-      td: (emp) => (
-        <td key="fichajes" className="px-3 py-2 align-middle text-center"><div className="flex justify-center"><FichajeBar fichajes={emp.fichajes} /></div></td>
-      ),
-    },
     emailEmpresa: {
       th: (
         <TableColumnHeader
           key="emailEmpresa"
           label="Email empresa"
           campo="emailEmpresa"
-          ordenable
-          orden={orden}
-          onOrdenChange={setOrden}
         />
       ),
       td: (emp) => (
@@ -455,9 +415,6 @@ export function EmpleadosView() {
           label="Email personal"
           campo="emailPersonal"
           align="center"
-          ordenable
-          orden={orden}
-          onOrdenChange={setOrden}
         />
       ),
       td: (emp) => (
@@ -530,6 +487,27 @@ export function EmpleadosView() {
           </>
         }
       />
+
+      {showConfig && (
+        <div className="rounded-lg border bg-card p-4">
+          <h3 className="text-sm font-semibold text-foreground">Configuración de empleados</h3>
+          <div className="mt-3 flex items-start gap-3 rounded-md border bg-muted/30 p-3">
+            <Checkbox checked disabled className="mt-0.5" />
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-medium text-foreground">
+                  No permitir borrar empleados ya grabados
+                </span>
+                <Lock className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.75} />
+              </div>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Un empleado con horarios, turnos o fichajes no se puede borrar nunca; solo
+                marcarse como Inactivo (registro legal). Este ajuste está bloqueado de momento.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ResizableColumnsProvider storageKey="rrhh-empleados">
         <div className="rounded-lg border bg-card overflow-x-auto">

@@ -47,6 +47,7 @@ import {
   setEmpleadoTeletrabajo,
 } from "@/features/ajustes/actions/locales-actions";
 import { getEmpresasAccesibles, type EmpresaAccesible } from "@/features/empresa/actions/empresas-accesibles-actions";
+import { CopiarEmpleadoDialog } from "@/features/rrhh/components/empleados/CopiarEmpleadoDialog";
 
 type DepartamentoOpt = { id: string; nombre: string };
 type LocalOpt = { id: string; nombre: string };
@@ -472,6 +473,19 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
                 </label>
               );
             })}
+          </div>
+
+          <div className="pt-1">
+            <CopiarEmpleadoDialog
+              empleadoId={empleadoId}
+              empleadoNombre={initial.nombre}
+              empresasDisponibles={empresasDisponibles}
+              empresasActuales={empresasMarcadas}
+            />
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              Crea su ficha en otra empresa reutilizando sus datos personales. Lo propio de cada
+              empresa (puesto, local, horario, validadores…) se configura en la nueva empresa.
+            </p>
           </div>
         </div>
       </div>

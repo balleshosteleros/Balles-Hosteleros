@@ -5,8 +5,6 @@ export interface TurnoTramo {
   fin: string;
 }
 
-export type TurnoTono = "stone" | "emerald" | "violet" | "rose" | "teal" | "sky" | "amber";
-
 // Tipo de jornada al crear el turno (estilo Sésamo):
 //  - fijo: días + tramo(s) horario(s) (partido = 2 tramos).
 //  - flexible: días + horas objetivo por día (flexHoras).
@@ -17,11 +15,6 @@ export interface Turno {
   nombre: string;
   codigo: string;
   tramos: TurnoTramo[];
-  /**
-   * Color legacy (paleta TurnoTono). Ya no se elige al crear el turno: el tinte
-   * real viene del departamento (`colorHex`). Se conserva por compatibilidad.
-   */
-  color: TurnoTono;
   /** Color hex del departamento del turno (fuente única del tinte). */
   colorHex: string;
   activo: boolean;
@@ -46,21 +39,11 @@ export interface Turno {
   vigenteHasta?: string | null; // ISO date fin de validez; null/undef = sin fin
 }
 
-export const TURNO_TONOS: Record<TurnoTono, { pill: string; dot: string; label: string }> = {
-  stone: { pill: "bg-stone-200 text-stone-700", dot: "bg-stone-400", label: "Piedra" },
-  emerald: { pill: "bg-emerald-200 text-emerald-800", dot: "bg-emerald-400", label: "Esmeralda" },
-  violet: { pill: "bg-violet-200 text-violet-800", dot: "bg-violet-500", label: "Violeta" },
-  rose: { pill: "bg-rose-200 text-rose-800", dot: "bg-rose-400", label: "Rosa" },
-  teal: { pill: "bg-teal-100 text-teal-800", dot: "bg-teal-400", label: "Verde agua" },
-  sky: { pill: "bg-sky-100 text-sky-800", dot: "bg-sky-400", label: "Cielo" },
-  amber: { pill: "bg-amber-100 text-amber-800", dot: "bg-amber-400", label: "Ámbar" },
-};
-
 // ─── Color por departamento (tinte de los turnos en el cuadrante) ─────────
-// El color del departamento (hex) es ahora la fuente única del tinte de un
-// turno: todos los turnos del mismo departamento se pintan igual. Estos helpers
+// El color del departamento (hex) es la fuente única del tinte de un turno:
+// todos los turnos del mismo departamento se pintan igual. Estos helpers
 // derivan estilos legibles (fondo claro + texto/realce del propio color) a
-// partir del hex, sin depender de la paleta fija TurnoTono.
+// partir del hex.
 
 export const COLOR_DEPARTAMENTO_FALLBACK = "#6b7280";
 

@@ -10,6 +10,7 @@ import { getFichajePolicy, saveFichajePolicy } from "@/features/rrhh/actions/fic
 import { FICHAJE_POLICY_DEFAULT, type FichajePolicy } from "@/features/rrhh/data/fichaje-policy";
 
 const MINUTOS_OPCIONES = [5, 10, 15, 20, 25, 30];
+const REAVISO_OPCIONES = [1, 2, 3, 5, 10, 15];
 
 /**
  * Configuración de margen de fichaje respecto a la hora del turno. Vive en
@@ -142,6 +143,193 @@ export function FichajesConfigPanel({ embedded = false }: { embedded?: boolean }
                 </p>
               </>
             )}
+          </div>
+
+          {/* Aviso (pop-up) de fichar en la app móvil */}
+          <div className="space-y-3 rounded-lg border p-4">
+            <div className="space-y-0.5">
+              <Label className="text-sm font-medium">Aviso de fichar (app móvil)</Label>
+              <p className="text-xs text-muted-foreground">
+                Cuándo le salta al empleado el aviso para fichar en el móvil.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between pl-1">
+              <Label className="text-sm">Cuándo salta el aviso</Label>
+              <select
+                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                value={policy.popupModo}
+                onChange={(e) =>
+                  setPolicy((p) => ({
+                    ...p,
+                    popupModo: e.target.value === "siempre" ? "siempre" : "ventana",
+                  }))
+                }
+              >
+                <option value="ventana">Solo a su hora (ventana)</option>
+                <option value="siempre">Siempre que falte fichar</option>
+              </select>
+            </div>
+
+            {policy.popupModo === "ventana" && (
+              <>
+                <div className="flex items-center justify-between pl-1">
+                  <Label className="text-sm">Salta hasta X min antes de su hora</Label>
+                  <select
+                    className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                    value={policy.popupMargenAntesMin}
+                    onChange={(e) =>
+                      setPolicy((p) => ({ ...p, popupMargenAntesMin: Number(e.target.value) }))
+                    }
+                  >
+                    {MINUTOS_OPCIONES.map((m) => (
+                      <option key={m} value={m}>{m} min</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center justify-between pl-1">
+                  <Label className="text-sm">Sigue saltando hasta X min después</Label>
+                  <select
+                    className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                    value={policy.popupMargenDespuesMin}
+                    onChange={(e) =>
+                      setPolicy((p) => ({ ...p, popupMargenDespuesMin: Number(e.target.value) }))
+                    }
+                  >
+                    {MINUTOS_OPCIONES.map((m) => (
+                      <option key={m} value={m}>{m} min</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center justify-between gap-4 pl-1">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm">Reavisar mientras no fiche</Label>
+                    <p className="text-[11px] text-muted-foreground">
+                      Vuelve a avisar (notificación push) dentro de la cortesía si aún no ha fichado.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={policy.reavisoActivo}
+                    onCheckedChange={(v) => setPolicy((p) => ({ ...p, reavisoActivo: v }))}
+                  />
+                </div>
+                {policy.reavisoActivo && (
+                  <div className="flex items-center justify-between pl-1">
+                    <Label className="text-sm">Cada cuánto reavisar</Label>
+                    <select
+                      className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                      value={policy.reavisoIntervaloMin}
+                      onChange={(e) =>
+                        setPolicy((p) => ({ ...p, reavisoIntervaloMin: Number(e.target.value) }))
+                      }
+                    >
+                      {REAVISO_OPCIONES.map((m) => (
+                        <option key={m} value={m}>{m} min</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </>
+            )}
+
+            <div className="flex items-center justify-between gap-4 pl-1">
+              <div className="space-y-0.5">
+                <Label className="text-sm">Avisar aunque no tenga horario asignado</Label>
+                <p className="text-[11px] text-muted-foreground">
+                  El aviso también salta a quien no tiene turno ese día. Si no se permite fichar
+                  fuera de horario, es solo un recordatorio (no le deja fichar).
+                </p>
+              </div>
+              <Switch
+                checked={policy.popupSinHorario}
+                onCheckedChange={(v) => setPolicy((p) => ({ ...p, popupSinHorario: v }))}
+              />
+            </div>
+
+            <div className="flex items-center justify-between gap-4 pl-1">
+              <Label className="text-sm">Sonar al avisar</Label>
+              <Switch
+                checked={policy.avisoSonido}
+                onCheckedChange={(v) => setPolicy((p) => ({ ...p, avisoSonido: v }))}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-4 pl-1">
+              <Label className="text-sm">Vibrar al avisar</Label>
+              <Switch
+                checked={policy.avisoVibracion}
+                onCheckedChange={(v) => setPolicy((p) => ({ ...p, avisoVibracion: v }))}
+              />
+            </div>
+          </div>
+
+          {/* Fichaje fuera de horario */}
+          <div className="space-y-3 rounded-lg border p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-0.5">
+                <Label className="text-sm font-medium">Permitir fichar fuera de horario</Label>
+                <p className="text-xs text-muted-foreground">
+                  Deja fichar aunque esté fuera de su ventana o sin turno asignado. En ese caso el
+                  sistema NO auto-paraliza la jornada por horario (no sabría cuándo cerrarla).
+                </p>
+              </div>
+              <Switch
+                checked={policy.permitirFueraHorario}
+                onCheckedChange={(v) => setPolicy((p) => ({ ...p, permitirFueraHorario: v }))}
+              />
+            </div>
+          </div>
+
+          {/* Auto-fichar salida */}
+          <div className="space-y-3 rounded-lg border p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-0.5">
+                <Label className="text-sm font-medium">Cerrar la jornada automáticamente</Label>
+                <p className="text-xs text-muted-foreground">
+                  Si un empleado con horario fijo no ficha salida, el sistema cierra su jornada a la
+                  hora de salida prevista + margen y la deja marcada para revisión.
+                </p>
+              </div>
+              <Switch
+                checked={policy.autoSalidaActiva}
+                onCheckedChange={(v) => setPolicy((p) => ({ ...p, autoSalidaActiva: v }))}
+              />
+            </div>
+            {policy.autoSalidaActiva && (
+              <div className="flex items-center justify-between pl-1">
+                <Label className="text-sm">Margen tras la hora de salida</Label>
+                <select
+                  className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                  value={policy.autoSalidaMargenMin}
+                  onChange={(e) =>
+                    setPolicy((p) => ({ ...p, autoSalidaMargenMin: Number(e.target.value) }))
+                  }
+                >
+                  {MINUTOS_OPCIONES.map((m) => (
+                    <option key={m} value={m}>{m} min</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Multi-empresa: aviso de jornada que continúa en otra empresa */}
+          <div className="space-y-3 rounded-lg border p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-0.5">
+                <Label className="text-sm font-medium">Avisar cuando la jornada continúa en otra empresa</Label>
+                <p className="text-xs text-muted-foreground">
+                  Para empleados que trabajan en varias empresas en la misma jornada. Cuando su turno
+                  pasa de una empresa a otra, no vuelven a fichar: el sistema les avisa de que su
+                  jornada continúa en la otra empresa (en vez del recordatorio de fichar entrada).
+                  Aplica a todos los empleados de esta empresa.
+                </p>
+              </div>
+              <Switch
+                checked={policy.avisoCambioEmpresa}
+                onCheckedChange={(v) => setPolicy((p) => ({ ...p, avisoCambioEmpresa: v }))}
+              />
+            </div>
           </div>
 
           <div className="flex justify-end">

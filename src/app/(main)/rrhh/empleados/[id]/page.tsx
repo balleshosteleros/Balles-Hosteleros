@@ -106,7 +106,6 @@ function bdToEmpleadoUI(emp: EmpleadoBD): EmpleadoUI {
     departamento: emp.departamentos?.nombre ?? "—",
     areas: [],
     telefono: emp.telefono ?? "—",
-    fichajes: 0,
     emailEmpresa: emp.email_empresa ?? "",
     emailPersonal: emp.email_personal ?? "",
     validadorTrabajo: "—",
@@ -271,7 +270,7 @@ export default function FichaEmpleadoPage() {
           </div>
         );
       case "fichajes":
-        return <div className="p-6"><FichajesTab empleado={empleado} fichajes={fichajes} /></div>;
+        return <div className="p-6"><FichajesTab fichajes={fichajes} /></div>;
       case "horarios":
         return <div className="p-6"><HorariosTab horario={horarioActual} /></div>;
       case "solicitudes":

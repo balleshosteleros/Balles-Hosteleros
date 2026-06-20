@@ -39,7 +39,7 @@ export const horariosIO: ModuleIO<TurnoExportRow> = {
       codigo: t.codigo,
       horario: formatTurnoHorario(t),
       duracion: calcularDuracionTurno(t),
-      color: t.color,
+      color: t.colorHex, // color real = el del departamento del turno
     }));
   },
 };

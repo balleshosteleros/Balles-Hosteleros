@@ -135,13 +135,6 @@ export function SolicitudesView() {
     [items],
   );
 
-  const stats = useMemo(() => {
-    const pendientes = items.filter((s) => s.estado === "pendiente").length;
-    const aprobadas = items.filter((s) => s.estado === "aprobada").length;
-    const rechazadas = items.filter((s) => s.estado === "rechazada").length;
-    return { pendientes, aprobadas, rechazadas };
-  }, [items]);
-
   function abrirRevision(sol: SolicitudPersonal, m: Modo) {
     if (!puedoValidarIds.has(sol.id)) {
       toast.error("Solo el validador asignado de este empleado puede gestionar esta solicitud.");
@@ -244,31 +237,7 @@ export function SolicitudesView() {
   );
 
   return (
-    <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-5">
-      {/* Cabecera */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Solicitudes del personal</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Aprueba o rechaza ausencias y registros de trabajo enviados por los empleados.
-        </p>
-      </div>
-
-      {/* KPIs */}
-      <div className="grid grid-cols-3 gap-3">
-        <Card className="p-4">
-          <div className="text-xs uppercase text-muted-foreground tracking-wider">Pendientes</div>
-          <div className="text-2xl font-bold mt-1 text-amber-600">{stats.pendientes}</div>
-        </Card>
-        <Card className="p-4">
-          <div className="text-xs uppercase text-muted-foreground tracking-wider">Aprobadas</div>
-          <div className="text-2xl font-bold mt-1 text-emerald-600">{stats.aprobadas}</div>
-        </Card>
-        <Card className="p-4">
-          <div className="text-xs uppercase text-muted-foreground tracking-wider">Rechazadas</div>
-          <div className="text-2xl font-bold mt-1 text-rose-600">{stats.rechazadas}</div>
-        </Card>
-      </div>
-
+    <div className="p-6 space-y-6">
       {/* Tabs + buscador */}
       <Tabs value={tab} onValueChange={(v) => setTab(v as "pendientes" | "todas")}>
         <TabsList>

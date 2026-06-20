@@ -1,18 +1,67 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { X, Loader2, Ban } from "lucide-react";
 import { toast } from "sonner";
 import { obtenerPosicionActual } from "@/features/rrhh/utils/geo";
 import {
   getMiFichajeHoy,
+  getMiVentanaFichajeHoy,
   paralizarFichajePersonal,
 } from "@/features/mi-panel/actions/mi-panel-actions";
 import type { MiFichajeHoy } from "@/features/mi-panel/types";
 import { BigClockButton } from "./BigClockButton";
+import { reproducirAvisoFichaje } from "../lib/aviso-fichaje";
 
 type Estado = "sin-fichar" | "trabajando" | "pausa" | "completado";
+
+/** Tras posponer el pop-up, vuelve a saltar pasado este tiempo (ms). */
+const POSPONER_MS = 5 * 60 * 1000;
+
+interface Ventana {
+  tieneHorario: boolean;
+  entradaMin: number | null;
+  salidaMin: number | null;
+  popupModo: "ventana" | "siempre";
+  popupMargenAntesMin: number;
+  popupMargenDespuesMin: number;
+  popupSinHorario: boolean;
+  avisoSonido: boolean;
+  avisoVibracion: boolean;
+}
+
+/** ¿Toca avisar de fichar ahora? Según config de Ajustes RRHH → Fichajes. */
+function calcularDebe(
+  ventana: Ventana | null,
+  estado: Estado,
+  trabajando: boolean,
+  nowMin: number,
+): { debeEntrada: boolean; debeSalida: boolean } {
+  const tiene = ventana?.tieneHorario ?? false;
+  const modo = ventana?.popupModo ?? "ventana";
+  const mAntes = ventana?.popupMargenAntesMin ?? 15;
+  const mDespues = ventana?.popupMargenDespuesMin ?? 15;
+  const sinHorario = ventana?.popupSinHorario ?? false;
+  // "Siempre": el aviso salta mientras falte fichar (entrada). También cuando no
+  // hay horario fijo pero la empresa activó "avisar sin horario".
+  const modoSiempre = modo === "siempre" || (!tiene && sinHorario);
+  let debeEntrada = false;
+  let debeSalida = false;
+  if (modoSiempre) {
+    debeEntrada = estado === "sin-fichar";
+  } else if (tiene) {
+    debeEntrada =
+      estado === "sin-fichar" &&
+      ventana?.entradaMin != null &&
+      dentroVentana(nowMin, ventana.entradaMin, mAntes, mDespues);
+    debeSalida =
+      trabajando &&
+      ventana?.salidaMin != null &&
+      dentroVentana(nowMin, ventana.salidaMin, mAntes, mDespues);
+  }
+  return { debeEntrada, debeSalida };
+}
 
 function deriveEstado(f: MiFichajeHoy | null): Estado {
   if (!f) return "sin-fichar";
@@ -32,19 +81,42 @@ function formatoTiempo(ms: number): string {
   return `${hh}:${mm}:${ss}`;
 }
 
-const POPUP_OFF_KEY = "bh_fichar_popup_off";
+/** Minutos del día (0–1439) ahora mismo en zona Madrid. */
+function minutosAhoraMadrid(): number {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Madrid",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+  const h = Number(parts.find((p) => p.type === "hour")?.value ?? "0") % 24;
+  const m = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
+  return h * 60 + m;
+}
+
+/**
+ * ¿`now` cae en [target − antes, target + despues]? Circular sobre 24 h.
+ * `diff` < 0 = `now` es anterior a `target`; > 0 = posterior.
+ */
+function dentroVentana(now: number, target: number, antes: number, despues: number): boolean {
+  let diff = (((now - target) % 1440) + 1440) % 1440;
+  if (diff > 720) diff -= 1440;
+  return diff >= -antes && diff <= despues;
+}
 
 export function MobileFichajeProvider() {
   const router = useRouter();
   const [habilitado, setHabilitado] = useState(false);
   const [cargado, setCargado] = useState(false);
   const [fichaje, setFichaje] = useState<MiFichajeHoy | null>(null);
+  const [ventana, setVentana] = useState<Ventana | null>(null);
 
-  const [ficharOpen, setFicharOpen] = useState(false);
   const [indicadorOpen, setIndicadorOpen] = useState(false);
   const [pidiendoMotivo, setPidiendoMotivo] = useState(false);
   const [motivo, setMotivo] = useState("");
   const [paralizando, setParalizando] = useState(false);
+  const [pospuestoHasta, setPospuestoHasta] = useState<number | null>(null);
+  const [nowMin, setNowMin] = useState<number>(() => minutosAhoraMadrid());
   const [, setTick] = useState(0);
 
   const estado = deriveEstado(fichaje);
@@ -57,49 +129,76 @@ export function MobileFichajeProvider() {
     return r.ok ? r.data : null;
   }, []);
 
-  // Carga inicial: decide si mostrar el pop-up de fichar al abrir la app.
+  // Carga inicial: estado del fichaje + ventana horaria del día.
   useEffect(() => {
     let alive = true;
     (async () => {
-      const data = await refetch();
+      const [, v] = await Promise.all([refetch(), getMiVentanaFichajeHoy()]);
       if (!alive) return;
+      if (v.ok) {
+        setVentana({
+          tieneHorario: v.tieneHorario,
+          entradaMin: v.entradaMin,
+          salidaMin: v.salidaMin,
+          popupModo: v.popupModo,
+          popupMargenAntesMin: v.popupMargenAntesMin,
+          popupMargenDespuesMin: v.popupMargenDespuesMin,
+          popupSinHorario: v.popupSinHorario,
+          avisoSonido: v.avisoSonido,
+          avisoVibracion: v.avisoVibracion,
+        });
+      }
       setCargado(true);
-      const est = deriveEstado(data);
-      const silenciado =
-        typeof window !== "undefined" && sessionStorage.getItem(POPUP_OFF_KEY) === "1";
-      if (est === "sin-fichar" && !silenciado) setFicharOpen(true);
     })();
     return () => {
       alive = false;
     };
   }, [refetch]);
 
-  // Reloj en vivo mientras hay jornada abierta.
+  // Reloj en vivo (1 s) mientras hay jornada abierta: alimenta el cronómetro.
   useEffect(() => {
     if (!trabajando) return;
     const i = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(i);
   }, [trabajando]);
 
-  // Al volver a la app, refrescar estado.
+  // Tick lento (20 s) siempre activo: refresca la hora actual para reevaluar la
+  // ventana de fichaje y el tiempo de posposición del pop-up.
   useEffect(() => {
-    const onFocus = () => void refetch();
+    const i = setInterval(() => setNowMin(minutosAhoraMadrid()), 20_000);
+    return () => clearInterval(i);
+  }, []);
+
+  // Al volver a la app, refrescar estado y la hora actual.
+  useEffect(() => {
+    const onFocus = () => {
+      void refetch();
+      setNowMin(minutosAhoraMadrid());
+    };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [refetch]);
 
-  const cerrarPopupFichar = () => {
-    setFicharOpen(false);
-    try {
-      sessionStorage.setItem(POPUP_OFF_KEY, "1");
-    } catch {
-      /* noop */
+  // Sonido/vibración cuando aparece el aviso (solo en la transición a visible).
+  const avisoEmitido = useRef(false);
+  useEffect(() => {
+    const { debeEntrada, debeSalida } = calcularDebe(ventana, estado, trabajando, nowMin);
+    const debe = debeEntrada || debeSalida;
+    const pospuesto = pospuestoHasta != null && Date.now() < pospuestoHasta;
+    const mostrar = cargado && habilitado && debe && !pospuesto;
+    if (mostrar && !avisoEmitido.current) {
+      avisoEmitido.current = true;
+      reproducirAvisoFichaje({
+        sonido: ventana?.avisoSonido ?? false,
+        vibracion: ventana?.avisoVibracion ?? false,
+      });
+    } else if (!mostrar) {
+      avisoEmitido.current = false;
     }
-  };
+  }, [ventana, estado, trabajando, nowMin, pospuestoHasta, cargado, habilitado]);
 
   const onFichado = async () => {
-    const data = await refetch();
-    if (deriveEstado(data) !== "sin-fichar") setFicharOpen(false);
+    await refetch();
   };
 
   const confirmarParalizar = async () => {
@@ -137,6 +236,15 @@ export function MobileFichajeProvider() {
   const entradaMs = fichaje?.horaEntrada ? new Date(fichaje.horaEntrada).getTime() : null;
   const elapsed = entradaMs ? Date.now() - entradaMs : 0;
 
+  // ── ¿Toca fichar ahora? Según la config de Ajustes RRHH → Fichajes ────────
+  const { debeEntrada, debeSalida } = calcularDebe(ventana, estado, trabajando, nowMin);
+  const debeFichar = debeEntrada || debeSalida;
+
+  const pospuesto = pospuestoHasta != null && Date.now() < pospuestoHasta;
+  const mostrarFichar = debeFichar && !pospuesto;
+
+  const posponer = () => setPospuestoHasta(Date.now() + POSPONER_MS);
+
   return (
     <>
       {/* Indicador verde parpadeante mientras trabaja */}
@@ -155,11 +263,11 @@ export function MobileFichajeProvider() {
         </button>
       )}
 
-      {/* Pop-up de fichar al abrir la app */}
-      {ficharOpen && estado === "sin-fichar" && (
+      {/* Pop-up de fichar: solo dentro de la ventana horaria (±15 min) */}
+      {mostrarFichar && (
         <div
           className="fixed inset-0 z-[60] flex flex-col justify-end bg-black/50"
-          onClick={cerrarPopupFichar}
+          onClick={posponer}
         >
           <div
             className="rounded-t-3xl bg-background pb-[max(env(safe-area-inset-bottom),16px)] pt-5"
@@ -167,19 +275,27 @@ export function MobileFichajeProvider() {
           >
             <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-muted" />
             <div className="flex items-center justify-between px-5">
-              <h2 className="text-lg font-semibold">¿Fichar entrada?</h2>
+              <h2 className="text-lg font-semibold">
+                {debeSalida ? "¿Fichar salida?" : "¿Fichar entrada?"}
+              </h2>
               <button
-                onClick={cerrarPopupFichar}
-                aria-label="Cerrar"
+                onClick={posponer}
+                aria-label="Ahora no"
                 className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground active:bg-muted"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
             <p className="px-5 pt-1 text-sm text-muted-foreground">
-              Registra tu entrada para empezar la jornada.
+              {debeSalida
+                ? "Es tu hora de salida. Registra tu salida para cerrar la jornada."
+                : "Es tu hora de entrada. Registra tu entrada para empezar la jornada."}
             </p>
-            <BigClockButton fichajeId={null} estado="sin-fichar" onAction={onFichado} />
+            <BigClockButton
+              fichajeId={debeSalida ? fichaje?.id ?? null : null}
+              estado={debeSalida ? estado : "sin-fichar"}
+              onAction={onFichado}
+            />
           </div>
         </div>
       )}

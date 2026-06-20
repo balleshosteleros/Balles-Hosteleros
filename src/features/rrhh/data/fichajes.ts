@@ -142,6 +142,12 @@ export interface Fichaje {
   // ─── Paralización (cierre anticipado manual) ──────────────────────
   cierreAnticipado?: boolean;
   cierreAnticipadoMotivo?: string | null;
+  // ─── Hora real vs oficial (PRP-060) ───────────────────────────────
+  // `horaEntrada`/`horaSalida` son la OFICIAL (redondeada, la que cuenta).
+  // Estas son la hora FÍSICA del fichaje (informativa); null en fichajes
+  // antiguos o en cierres automáticos (no fichó).
+  horaEntradaReal?: string | null;
+  horaSalidaReal?: string | null;
 }
 
 export interface IncidenciaFichaje {
@@ -170,8 +176,8 @@ export const TIPOS_INCIDENCIA_LABEL: Record<TipoIncidencia, string> = {
 };
 
 export const ESTADO_FICHAJE_LABEL: Record<EstadoFichaje, string> = {
-  completado: "Completado",
-  completo: "Completo",
+  completado: "Correcto",
+  completo: "Correcto",
   incompleto: "Incompleto",
   incidencia: "Incidencia",
   pausa: "En pausa",

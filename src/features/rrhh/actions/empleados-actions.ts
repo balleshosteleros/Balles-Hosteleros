@@ -567,6 +567,48 @@ export async function setEmpleadoEstado(input: {
 export async function deleteEmpleado(id: string) {
   try {
     const { supabase } = await getAppContext();
+
+    // ─── REGLA DURA: no se borra un empleado YA GRABADO ────────────────────
+    // Un empleado con datos (perfil completado, fichajes o turnos) NO se puede
+    // borrar nunca — solo marcar Inactivo (registro legal). De momento el
+    // borrado queda PROHIBIDO para empleados grabados; el ajuste de RRHH que lo
+    // refleja está bloqueado (no editable). Solo se permite descartar un alta
+    // en borrador (sin perfil completado y sin datos).
+    const { data: emp } = await supabase
+      .from("empleados")
+      .select("perfil_completado, user_id")
+      .eq("id", id)
+      .maybeSingle();
+
+    let tieneDatos = Boolean(emp?.perfil_completado);
+    if (!tieneDatos && emp?.user_id) {
+      const [{ count: nFichajes }, { count: nTurnos }, { count: nPatrones }] =
+        await Promise.all([
+          supabase
+            .from("fichajes")
+            .select("id", { count: "exact", head: true })
+            .eq("empleado_id", emp.user_id as string),
+          supabase
+            .from("rrhh_turno_empleados")
+            .select("turno_id", { count: "exact", head: true })
+            .eq("empleado_id", id),
+          supabase
+            .from("rrhh_patron_empleados")
+            .select("patron_id", { count: "exact", head: true })
+            .eq("empleado_id", id),
+        ]);
+      tieneDatos =
+        (nFichajes ?? 0) > 0 || (nTurnos ?? 0) > 0 || (nPatrones ?? 0) > 0;
+    }
+
+    if (tieneDatos) {
+      return {
+        ok: false,
+        error:
+          "No se puede borrar un empleado ya grabado (tiene horarios, turnos o fichajes). Márcalo como Inactivo en su lugar.",
+      };
+    }
+
     const { error } = await supabase.from("empleados").delete().eq("id", id);
     if (error) throw error;
     revalidatePath("/rrhh/empleados");
@@ -575,6 +617,228 @@ export async function deleteEmpleado(id: string) {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[rrhh] deleteEmpleado:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Datos que necesita el formulario de "Copiar empleado" para la empresa destino:
+ * el estado del emparejado por NOMBRE (departamento/puesto) y las listas para
+ * elegir lo obligatorio (calendario y local), todo de la empresa destino.
+ */
+export async function getDatosCopiaEmpleado(input: {
+  empleadoId: string;
+  empresaDestinoId: string;
+}) {
+  try {
+    const { supabase } = await getAppContext();
+    await requireAdminUser({ empresaIds: [input.empresaDestinoId] });
+
+    const { data: origen } = await supabase
+      .from("empleados")
+      .select("id, user_id, empresa_id, departamento_id")
+      .eq("id", input.empleadoId)
+      .maybeSingle();
+    if (!origen?.user_id) return { ok: false, error: "Empleado no encontrado." };
+
+    let admin;
+    try { admin = createAdminClient(); }
+    catch { return { ok: false, error: "Supabase admin no configurado." }; }
+
+    const { data: yaExiste } = await admin
+      .from("empleados").select("id")
+      .eq("user_id", origen.user_id).eq("empresa_id", input.empresaDestinoId).maybeSingle();
+
+    // Departamento de origen → ¿existe por nombre en destino?
+    let depNombre: string | null = null;
+    let depExiste = false;
+    if (origen.departamento_id) {
+      const { data: depO } = await admin.from("departamentos").select("nombre").eq("id", origen.departamento_id as string).maybeSingle();
+      depNombre = (depO?.nombre as string | undefined) ?? null;
+      if (depNombre) {
+        const { data: depD } = await admin.from("departamentos").select("id").eq("empresa_id", input.empresaDestinoId).eq("nombre", depNombre).maybeSingle();
+        depExiste = Boolean(depD?.id);
+      }
+    }
+
+    // Puestos del empleado → ¿existen por nombre en destino?
+    const { data: epO } = await admin
+      .from("empleado_puestos")
+      .select("es_principal, puestos!inner(nombre)")
+      .eq("empleado_id", input.empleadoId);
+    const puestosOrigen = (epO ?? []).map((r) => {
+      const row = r as unknown as { es_principal: boolean; puestos: { nombre: string } };
+      return { nombre: row.puestos?.nombre, esPrincipal: Boolean(row.es_principal) };
+    }).filter((p) => p.nombre);
+    let puestosDest = new Set<string>();
+    if (puestosOrigen.length) {
+      const { data: pD } = await admin.from("puestos").select("nombre").eq("empresa_id", input.empresaDestinoId).in("nombre", puestosOrigen.map((p) => p.nombre as string));
+      puestosDest = new Set((pD ?? []).map((p) => p.nombre as string));
+    }
+    const puestos = puestosOrigen.map((p) => ({ nombre: p.nombre as string, esPrincipal: p.esPrincipal, existe: puestosDest.has(p.nombre as string) }));
+
+    const [{ data: cals }, { data: locs }] = await Promise.all([
+      admin.from("rrhh_calendarios_vacaciones").select("id, nombre").eq("empresa_id", input.empresaDestinoId).order("nombre"),
+      admin.from("locales").select("id, nombre").eq("empresa_id", input.empresaDestinoId).order("nombre"),
+    ]);
+
+    const motivos: string[] = [];
+    if (yaExiste) motivos.push("El empleado ya tiene ficha en esa empresa.");
+    if (origen.departamento_id && !depExiste) motivos.push(`El departamento "${depNombre}" no existe en la empresa destino.`);
+    const faltaPuesto = puestos.find((p) => p.esPrincipal && !p.existe);
+    if (faltaPuesto) motivos.push(`El puesto "${faltaPuesto.nombre}" no existe en la empresa destino.`);
+
+    return {
+      ok: true,
+      data: {
+        bloqueado: motivos.length > 0,
+        motivos,
+        departamento: depNombre ? { nombre: depNombre, existe: depExiste } : null,
+        puestos,
+        calendarios: (cals ?? []) as { id: string; nombre: string }[],
+        locales: (locs ?? []) as { id: string; nombre: string }[],
+      },
+    };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[rrhh] getDatosCopiaEmpleado:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Copia un empleado a OTRA empresa: crea su ficha (mismo `user_id`, sin crear
+ * usuario nuevo) reutilizando los DATOS PERSONALES + teletrabajo, emparejando
+ * departamento y puesto POR NOMBRE (bloquea si no existen), y rellenando lo
+ * obligatorio de la empresa destino: email de empresa, calendario, local(es) y
+ * nº de empleado correlativo. NO copia turnos (se asignan allí) ni el histórico.
+ */
+export async function copiarEmpleadoAEmpresa(input: {
+  empleadoId: string;
+  empresaDestinoId: string;
+  emailEmpresa: string;
+  calendarioId: string;
+  localIds: string[];
+}) {
+  try {
+    const { supabase } = await getAppContext();
+
+    const emailEmpresa = (input.emailEmpresa ?? "").trim();
+    const localIds = Array.from(new Set((input.localIds ?? []).filter(Boolean)));
+    if (!emailEmpresa) return { ok: false, error: "Indica el email de empresa." };
+    if (!input.calendarioId) return { ok: false, error: "Selecciona un calendario de vacaciones." };
+    if (localIds.length === 0) return { ok: false, error: "Selecciona al menos un local de fichaje." };
+
+    const { data: origen, error: origenErr } = await supabase
+      .from("empleados").select("*").eq("id", input.empleadoId).maybeSingle();
+    if (origenErr) throw origenErr;
+    if (!origen?.user_id) return { ok: false, error: "Empleado no encontrado o sin usuario vinculado." };
+    if (input.empresaDestinoId === origen.empresa_id) return { ok: false, error: "El empleado ya está en esa empresa." };
+
+    await requireAdminUser({ empresaIds: [input.empresaDestinoId] });
+    let admin;
+    try { admin = createAdminClient(); }
+    catch { return { ok: false, error: "Supabase admin no configurado." }; }
+
+    const { data: yaExiste } = await admin.from("empleados").select("id")
+      .eq("user_id", origen.user_id).eq("empresa_id", input.empresaDestinoId).maybeSingle();
+    if (yaExiste) return { ok: false, error: "El empleado ya tiene ficha en esa empresa." };
+
+    const o = origen as Record<string, unknown>;
+
+    // Departamento por NOMBRE en destino (bloquea si no existe).
+    let departamentoDestId: string | null = null;
+    if (o.departamento_id) {
+      const { data: depO } = await admin.from("departamentos").select("nombre").eq("id", o.departamento_id as string).maybeSingle();
+      if (depO?.nombre) {
+        const { data: depD } = await admin.from("departamentos").select("id").eq("empresa_id", input.empresaDestinoId).eq("nombre", depO.nombre).maybeSingle();
+        if (!depD?.id) return { ok: false, error: `El departamento "${depO.nombre}" no existe en la empresa destino. Créalo allí antes de copiar.` };
+        departamentoDestId = depD.id as string;
+      }
+    }
+
+    // Calendario y locales deben ser de la empresa destino.
+    const { data: calOk } = await admin.from("rrhh_calendarios_vacaciones").select("id").eq("id", input.calendarioId).eq("empresa_id", input.empresaDestinoId).maybeSingle();
+    if (!calOk) return { ok: false, error: "El calendario elegido no es de la empresa destino." };
+    const { data: locsOk } = await admin.from("locales").select("id").eq("empresa_id", input.empresaDestinoId).in("id", localIds);
+    if ((locsOk ?? []).length !== localIds.length) return { ok: false, error: "Algún local elegido no es de la empresa destino." };
+
+    // Nº de empleado correlativo al último de la empresa destino.
+    const { data: nums } = await admin.from("empleados").select("numero_empleado").eq("empresa_id", input.empresaDestinoId);
+    let maxN = 0;
+    for (const r of nums ?? []) {
+      const n = parseInt(String((r as { numero_empleado: string | null }).numero_empleado ?? "").replace(/\D/g, ""), 10);
+      if (Number.isFinite(n) && n > maxN) maxN = n;
+    }
+    const numeroEmpleado = String(maxN + 1);
+
+    const nuevo = {
+      empresa_id: input.empresaDestinoId,
+      user_id: origen.user_id,
+      nombre: o.nombre,
+      apellidos: o.apellidos ?? null,
+      dni_nie: o.dni_nie ?? null,
+      fecha_nacimiento: o.fecha_nacimiento ?? null,
+      nacionalidad: o.nacionalidad ?? null,
+      telefono: o.telefono ?? null,
+      email_personal: o.email_personal ?? null,
+      email_empresa: emailEmpresa,
+      direccion: o.direccion ?? null,
+      numero_ss: o.numero_ss ?? null,
+      iban: o.iban ?? null,
+      dni_archivo_url: o.dni_archivo_url ?? null,
+      contacto_emergencia_nombre: o.contacto_emergencia_nombre ?? null,
+      contacto_emergencia_telefono: o.contacto_emergencia_telefono ?? null,
+      contacto_emergencia_relacion: o.contacto_emergencia_relacion ?? null,
+      talla_uniforme: o.talla_uniforme ?? null,
+      alergias_medicas: o.alergias_medicas ?? null,
+      avatar_url: o.avatar_url ?? null,
+      permite_teletrabajo: Boolean(o.permite_teletrabajo),
+      tipo_jornada: o.tipo_jornada ?? "Completa",
+      departamento_id: departamentoDestId,
+      calendario_vacaciones_id: input.calendarioId,
+      local_id: localIds[0],
+      numero_empleado: numeroEmpleado,
+      estado: "Activo", // aunque en origen esté Inactivo, la copia entra Activa.
+      perfil_completado: false, // pendiente de asignar turnos/validadores en destino.
+    };
+
+    const { data: creado, error: insErr } = await admin.from("empleados").insert(nuevo).select("id").single();
+    if (insErr) throw insErr;
+    const nuevoId = creado.id as string;
+
+    // Puestos por NOMBRE (los que existan en destino).
+    const { data: epO } = await admin.from("empleado_puestos").select("es_principal, puestos!inner(nombre)").eq("empleado_id", input.empleadoId);
+    const puestosOrigen = (epO ?? []).map((r) => {
+      const row = r as unknown as { es_principal: boolean; puestos: { nombre: string } };
+      return { nombre: row.puestos?.nombre, esPrincipal: Boolean(row.es_principal) };
+    }).filter((p) => p.nombre);
+    if (puestosOrigen.length) {
+      const { data: pD } = await admin.from("puestos").select("id, nombre").eq("empresa_id", input.empresaDestinoId).in("nombre", puestosOrigen.map((p) => p.nombre as string));
+      const idPorNombre = new Map((pD ?? []).map((p) => [p.nombre as string, p.id as string]));
+      const hoy = new Date().toISOString().split("T")[0];
+      const filas = puestosOrigen
+        .filter((p) => idPorNombre.has(p.nombre as string))
+        .map((p) => ({ empleado_id: nuevoId, puesto_id: idPorNombre.get(p.nombre as string), es_principal: p.esPrincipal, vigente_desde: hoy }));
+      if (filas.length) await admin.from("empleado_puestos").insert(filas);
+    }
+
+    // Locales de fichaje elegidos.
+    await admin.from("empleado_locales").insert(localIds.map((local_id) => ({ empleado_id: nuevoId, local_id })));
+
+    // Acceso a la empresa destino.
+    const { data: link } = await admin.from("usuario_empresas").select("user_id").eq("user_id", origen.user_id).eq("empresa_id", input.empresaDestinoId).maybeSingle();
+    if (!link) {
+      const { error: linkErr } = await admin.from("usuario_empresas").insert({ user_id: origen.user_id, empresa_id: input.empresaDestinoId });
+      if (linkErr) throw linkErr;
+    }
+
+    revalidatePath("/rrhh/empleados");
+    revalidatePath(`/rrhh/empleados/${input.empleadoId}`);
+    return { ok: true, data: { empleadoId: nuevoId } };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[rrhh] copiarEmpleadoAEmpresa:", msg);
     return { ok: false, error: msg };
   }
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Inbox, AlertTriangle, Clock } from "lucide-react";
+import { Loader2, Inbox, AlertTriangle, LogIn, LogOut, CheckCircle2 } from "lucide-react";
 import { listarMisFichajes } from "@/features/mi-panel/actions/mi-panel-actions";
 import type { MiFichajeHoy } from "@/features/mi-panel/types";
 import { formatHorasDecimal } from "@/shared/lib/timeUtils";
@@ -10,7 +10,7 @@ import { cn } from "@/shared/lib/utils";
 const ESTADO_LABEL: Record<string, string> = {
   trabajando: "En curso",
   pausa: "En pausa",
-  completado: "Completado",
+  completado: "Correcto",
   pendiente: "Pendiente",
   "sin cerrar": "Sin cerrar",
   incidencia: "Incidencia",
@@ -19,7 +19,7 @@ const ESTADO_LABEL: Record<string, string> = {
 const ESTADO_COLOR: Record<string, string> = {
   trabajando: "bg-emerald-500",
   pausa: "bg-amber-500",
-  completado: "bg-slate-400",
+  completado: "bg-emerald-500",
   pendiente: "bg-blue-500",
   "sin cerrar": "bg-orange-500",
   incidencia: "bg-rose-500",
@@ -57,6 +57,25 @@ function formatHora(s: string | null): string {
     });
   }
   return s.slice(0, 5);
+}
+
+/** Agrupa los fichajes de un mes por fecha (un día puede tener varios tramos: 2 entradas / 2 salidas). */
+function groupByDay(items: MiFichajeHoy[]): Array<{ fecha: string; tramos: MiFichajeHoy[] }> {
+  const groups = new Map<string, MiFichajeHoy[]>();
+  for (const item of items) {
+    const arr = groups.get(item.fecha) ?? [];
+    arr.push(item);
+    groups.set(item.fecha, arr);
+  }
+  return Array.from(groups.entries())
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([fecha, tramos]) => ({
+      fecha,
+      // Tramos del día en orden cronológico (entrada más temprana primero).
+      tramos: tramos.sort((a, b) =>
+        (a.horaEntrada ?? "").localeCompare(b.horaEntrada ?? ""),
+      ),
+    }));
 }
 
 function groupByMonth(items: MiFichajeHoy[]): Array<{ key: string; label: string; items: MiFichajeHoy[] }> {
@@ -132,65 +151,109 @@ export function MisFichajesMobile() {
               </span>
             </div>
             <ul className="space-y-2">
-              {group.items.map((f) => {
-                const estado = deriveEstadoMostrado(f, hoy);
-                const isAlerta = ESTADOS_ALERTA.has(estado);
+              {groupByDay(group.items).map((dia) => {
+                const totalDia = dia.tramos.reduce((acc, t) => acc + (t.horasTotales ?? 0), 0);
+                const hayAlerta = dia.tramos.some((t) =>
+                  ESTADOS_ALERTA.has(deriveEstadoMostrado(t, hoy)),
+                );
+                const tramoRef = dia.tramos[0];
                 return (
                   <li
-                    key={f.id}
+                    key={dia.fecha}
                     className={cn(
                       "rounded-2xl border bg-card p-3.5",
-                      isAlerta ? "border-rose-200 bg-rose-50/40 dark:bg-rose-950/20" : "border-border/60",
+                      hayAlerta ? "border-rose-200 bg-rose-50/40 dark:bg-rose-950/20" : "border-border/60",
                     )}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium capitalize">
-                          {formatFechaLarga(f.fecha)}
+                          {formatFechaLarga(dia.fecha)}
                         </p>
-                        <div className="mt-1.5 flex items-center gap-3 text-xs text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {formatHora(f.horaEntrada)} – {formatHora(f.horaSalida)}
-                          </span>
-                          {(f.pausaInicio || f.pausaFin) && (
-                            <span>· descanso {formatHora(f.pausaInicio)}–{formatHora(f.pausaFin)}</span>
-                          )}
-                        </div>
                         <span
                           className={cn(
                             "mt-1.5 inline-block rounded-full border px-2 py-0.5 text-[10px] font-medium",
-                            f.modoTeletrabajo
+                            tramoRef.modoTeletrabajo
                               ? "border-blue-200 bg-blue-100 text-blue-700"
                               : "border-emerald-200 bg-emerald-100 text-emerald-700",
                           )}
                         >
-                          {f.modoTeletrabajo ? "Teletrabajo" : (f.local || "Local")}
+                          {tramoRef.modoTeletrabajo ? "Teletrabajo" : (tramoRef.local || "Local")}
                         </span>
                       </div>
-                      <div className="text-right">
-                        <p className="text-base font-semibold tabular-nums">
-                          {formatHorasDecimal(f.horasTotales ?? 0)}
-                        </p>
-                        <div className="mt-1 flex items-center justify-end gap-1.5">
-                          <span
-                            className={cn(
-                              "h-1.5 w-1.5 rounded-full",
-                              ESTADO_COLOR[estado] ?? "bg-slate-400",
-                            )}
-                          />
-                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                            {ESTADO_LABEL[estado] ?? estado}
-                          </span>
-                        </div>
-                      </div>
+                      <p className="text-base font-semibold tabular-nums">
+                        {formatHorasDecimal(totalDia)}
+                      </p>
                     </div>
-                    {f.incidencia && (
-                      <div className="mt-2.5 flex items-start gap-1.5 rounded-lg bg-rose-100/60 p-2 text-xs text-rose-900 dark:bg-rose-950/40 dark:text-rose-100">
-                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                        <span>{f.incidencia}</span>
-                      </div>
-                    )}
+
+                    <div className="mt-3 space-y-2">
+                      {dia.tramos.map((t, i) => {
+                        const estado = deriveEstadoMostrado(t, hoy);
+                        const esCorrecto = estado === "completado";
+                        return (
+                          <div
+                            key={t.id}
+                            className="rounded-xl border border-border/50 bg-muted/30 px-3 py-2"
+                          >
+                            {dia.tramos.length > 1 && (
+                              <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                                Tramo {i + 1}
+                              </p>
+                            )}
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2">
+                                <LogIn className="h-3.5 w-3.5 text-emerald-600" />
+                                <div>
+                                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                                    Entrada
+                                  </p>
+                                  <p className="text-sm font-semibold tabular-nums">
+                                    {formatHora(t.horaEntrada)}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <LogOut className="h-3.5 w-3.5 text-rose-500" />
+                                <div>
+                                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                                    Salida
+                                  </p>
+                                  <p className="text-sm font-semibold tabular-nums">
+                                    {formatHora(t.horaSalida)}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="mt-2 flex items-center gap-1.5">
+                              {esCorrecto ? (
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                              ) : (
+                                <span
+                                  className={cn(
+                                    "h-1.5 w-1.5 rounded-full",
+                                    ESTADO_COLOR[estado] ?? "bg-slate-400",
+                                  )}
+                                />
+                              )}
+                              <span
+                                className={cn(
+                                  "text-[10px] uppercase tracking-wider",
+                                  esCorrecto ? "font-medium text-emerald-600" : "text-muted-foreground",
+                                )}
+                              >
+                                {ESTADO_LABEL[estado] ?? estado}
+                              </span>
+                            </div>
+                            {t.incidencia && (
+                              <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-rose-100/60 p-2 text-xs text-rose-900 dark:bg-rose-950/40 dark:text-rose-100">
+                                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                <span>{t.incidencia}</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </li>
                 );
               })}

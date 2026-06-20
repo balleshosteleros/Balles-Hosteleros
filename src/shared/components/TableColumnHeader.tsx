@@ -46,6 +46,8 @@ export interface TableColumnHeaderProps {
   ordenable?: boolean;
   orden?: ToolbarOrdenActivo | null;
   onOrdenChange?: (o: ToolbarOrdenActivo | null) => void;
+  ordenLabelAsc?: string;
+  ordenLabelDesc?: string;
 
   align?: "left" | "right" | "center";
   className?: string;
@@ -61,6 +63,8 @@ export function TableColumnHeader({
   ordenable = false,
   orden = null,
   onOrdenChange,
+  ordenLabelAsc = "A→Z",
+  ordenLabelDesc = "Z→A",
   align = "left",
   className,
 }: TableColumnHeaderProps) {
@@ -183,7 +187,7 @@ export function TableColumnHeader({
                     "bg-primary text-primary-foreground hover:bg-primary/90",
                 )}
               >
-                <ArrowUp className="h-3 w-3" /> A→Z
+                <ArrowUp className="h-3 w-3" /> {ordenLabelAsc}
               </button>
               <button
                 type="button"
@@ -201,7 +205,7 @@ export function TableColumnHeader({
                     "bg-primary text-primary-foreground hover:bg-primary/90",
                 )}
               >
-                <ArrowDown className="h-3 w-3" /> Z→A
+                <ArrowDown className="h-3 w-3" /> {ordenLabelDesc}
               </button>
             </div>
           )}

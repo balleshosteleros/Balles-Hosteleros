@@ -6,7 +6,6 @@ import { getPatronesQueUsanTurno } from "@/features/rrhh/actions/patrones-action
 import type {
   Turno,
   TurnoTramo,
-  TurnoTono,
   TipoJornada,
   DiaSemana,
 } from "@/features/rrhh/data/horarios";
@@ -31,7 +30,6 @@ function rowToTurno(r: Record<string, unknown>): Turno {
     nombre: r.nombre as string,
     codigo: r.codigo as string,
     tramos: (r.tramos as TurnoTramo[]) ?? [],
-    color: (r.color as TurnoTono) ?? "stone",
     colorHex: COLOR_DEPARTAMENTO_FALLBACK, // se resuelve por departamento en la capa que lista
     activo: !!r.activo,
     centro: (r.centro as string | null) ?? undefined,
@@ -122,7 +120,6 @@ export type TurnoInput = {
   nombre: string;
   codigo: string;
   tramos: TurnoTramo[];
-  color: TurnoTono;
   departamento?: string | null;
   activo?: boolean;
   tipoJornada?: TipoJornada;
@@ -164,7 +161,6 @@ export async function createTurno(
       nombre: input.nombre.trim(),
       codigo: input.codigo.trim().toUpperCase(),
       tramos: input.tipoJornada === "flexible" ? [] : input.tramos,
-      color: input.color,
       departamento: input.departamento?.trim() || null,
       activo: input.activo ?? true,
       tipo_jornada: input.tipoJornada ?? "fijo",
@@ -182,9 +178,10 @@ export async function createTurno(
   }
 }
 
-// Edita metadatos de la versión oficial EN SITIO (nombre, código, color,
-// departamento, activo). El HORARIO (tramos) está capado aquí: para cambiarlo
-// hay que crear una versión nueva con crearVersionTurno (PRP-053).
+// Edita metadatos de la versión oficial EN SITIO (nombre, código,
+// departamento, activo). El color lo define el departamento, no el turno. El
+// HORARIO (tramos) está capado aquí: para cambiarlo hay que crear una versión
+// nueva con crearVersionTurno (PRP-053).
 export async function updateTurno(id: string, patch: Partial<TurnoInput>) {
   try {
     const { supabase } = await getAppContext();
@@ -197,7 +194,6 @@ export async function updateTurno(id: string, patch: Partial<TurnoInput>) {
     if (patch.nombre !== undefined) payload.nombre = patch.nombre.trim();
     if (patch.codigo !== undefined) payload.codigo = patch.codigo.trim().toUpperCase();
     // patch.tramos se ignora deliberadamente: el horario no se edita en sitio.
-    if (patch.color !== undefined) payload.color = patch.color;
     if (patch.departamento !== undefined)
       payload.departamento = patch.departamento?.trim() || null;
     if (patch.activo !== undefined) payload.activo = patch.activo;

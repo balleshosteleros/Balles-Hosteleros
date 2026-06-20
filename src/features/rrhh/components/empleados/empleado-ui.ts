@@ -12,7 +12,6 @@ export interface EmpleadoUI {
   departamento: string;
   areas: string[];
   telefono: string;
-  fichajes: number;
   emailEmpresa: string;
   emailPersonal: string;
   validadorTrabajo: string;

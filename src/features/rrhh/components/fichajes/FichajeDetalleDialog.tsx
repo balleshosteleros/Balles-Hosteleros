@@ -13,7 +13,9 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { CheckCircle2 } from "lucide-react";
 import {
+  ESTADO_FICHAJE_LABEL,
   TIPO_FICHAJE_BADGE,
   TIPO_FICHAJE_LABEL,
   type Fichaje,
@@ -121,24 +123,41 @@ export function FichajeDetalleDialog({ fichaje, open, onOpenChange, onUpdated, t
               <div>
                 <span className="text-muted-foreground">Entrada:</span>
                 <p className="font-medium">{formatHora(fichaje.horaEntrada)}</p>
+                {fichaje.horaEntradaReal &&
+                  formatHora(fichaje.horaEntradaReal) !== formatHora(fichaje.horaEntrada) && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Fichó a las {formatHora(fichaje.horaEntradaReal)} (real)
+                    </p>
+                  )}
               </div>
               <div>
                 <span className="text-muted-foreground">Salida:</span>
                 <p className="font-medium">{formatHora(fichaje.horaSalida)}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Descanso:</span>
-                <p className="font-medium">
-                  {fichaje.pausaInicio && fichaje.pausaFin
-                    ? `${fichaje.pausaInicio.slice(0, 5)} – ${fichaje.pausaFin.slice(0, 5)}`
-                    : "—"}
-                </p>
+                {fichaje.horaSalidaReal &&
+                  formatHora(fichaje.horaSalidaReal) !== formatHora(fichaje.horaSalida) && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Fichó a las {formatHora(fichaje.horaSalidaReal)} (real)
+                    </p>
+                  )}
               </div>
               <div>
                 <span className="text-muted-foreground">Horas totales:</span>
                 <p className="font-semibold">
                   {fichaje.horaSalida ? formatHorasDecimal(fichaje.horasTotales) : "—"}
                 </p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Estado:</span>
+                {fichaje.estado === "completado" || fichaje.estado === "completo" ? (
+                  <p className="flex items-center gap-1 font-medium text-emerald-600">
+                    <CheckCircle2 className="h-4 w-4" />
+                    Correcto
+                  </p>
+                ) : (
+                  <p className="font-medium">
+                    {ESTADO_FICHAJE_LABEL[fichaje.estado] ?? fichaje.estado}
+                  </p>
+                )}
               </div>
             </div>
             {fichaje.incidencia && (

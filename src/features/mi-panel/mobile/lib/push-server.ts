@@ -1,6 +1,7 @@
 import "server-only";
 
 import webpush, { type PushSubscription } from "web-push";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 
 const VAPID_PUBLIC = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
@@ -23,7 +24,8 @@ export type PushEventType =
   | "solicitud_resuelta"
   | "comunicado_nuevo"
   | "cronograma_cambiado"
-  | "llamada_entrante";
+  | "llamada_entrante"
+  | "fichaje_recordatorio";
 
 export interface PushPayload {
   title: string;
@@ -43,25 +45,47 @@ export async function sendPushToUser(args: {
   eventType: PushEventType;
   payload: PushPayload;
 }): Promise<{ delivered: number; failed: number }> {
+  const supabase = (await createClient()) as unknown as SupabaseClient;
+  return sendPushWithClient(supabase, args);
+}
+
+/**
+ * Igual que `sendPushToUser` pero con un cliente Supabase explícito. Lo usan los
+ * crons (sin sesión de usuario) pasando el cliente con service role.
+ */
+export async function sendPushWithClient(
+  supabase: SupabaseClient,
+  args: {
+    userId: string;
+    empresaId: string;
+    eventType: PushEventType;
+    payload: PushPayload;
+  },
+): Promise<{ delivered: number; failed: number }> {
   if (!ensureConfigured()) return { delivered: 0, failed: 0 };
 
-  const supabase = await createClient();
-
-  // Filtrar por opt-in del canal en profiles.
+  // Filtrar por opt-in del canal en usuarios.
   const { data: profile } = await supabase
     .from("usuarios")
-    .select("push_solicitudes, push_comunicados, push_cronograma, push_llamadas")
+    .select(
+      "push_solicitudes, push_comunicados, push_cronograma, push_llamadas, push_fichajes",
+    )
     .eq("user_id", args.userId)
     .maybeSingle();
 
   const optInMap: Record<
     PushEventType,
-    "push_solicitudes" | "push_comunicados" | "push_cronograma" | "push_llamadas"
+    | "push_solicitudes"
+    | "push_comunicados"
+    | "push_cronograma"
+    | "push_llamadas"
+    | "push_fichajes"
   > = {
     solicitud_resuelta: "push_solicitudes",
     comunicado_nuevo: "push_comunicados",
     cronograma_cambiado: "push_cronograma",
     llamada_entrante: "push_llamadas",
+    fichaje_recordatorio: "push_fichajes",
   };
   if (profile && profile[optInMap[args.eventType]] === false) {
     return { delivered: 0, failed: 0 };
