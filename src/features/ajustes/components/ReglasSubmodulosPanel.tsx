@@ -28,6 +28,7 @@ import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { ValidadoresSolicitudesConfig } from "@/features/ajustes/components/RrhhConfigTab";
 import { FichajesConfigPanel } from "@/features/ajustes/components/FichajesConfigPanel";
 import { NotifLiquidacionesConfigPanel } from "@/features/notificaciones/components/NotifLiquidacionesConfigPanel";
+import { JornadasVacantesPanel } from "@/features/ajustes/components/JornadasVacantesPanel";
 
 // ============================================================
 // Tipado del estado local
@@ -208,7 +209,7 @@ function SubmoduloRow({
         )}
         <span className="text-sm font-medium flex-1">{submodulo.label}</span>
         {submodulo.placeholder &&
-          !["solicitudes", "fichajes", "pagos"].includes(submodulo.key) && (
+          !["solicitudes", "fichajes", "pagos", "jornadas"].includes(submodulo.key) && (
             <Badge variant="outline" className="text-[9px] text-muted-foreground">
               PRÓXIMAMENTE
             </Badge>
@@ -223,6 +224,8 @@ function SubmoduloRow({
             <FichajesConfigPanel embedded />
           ) : submodulo.key === "pagos" ? (
             <NotifLiquidacionesConfigPanel embedded />
+          ) : submodulo.key === "jornadas" ? (
+            <JornadasVacantesPanel />
           ) : (
             <>
               <ChecklistCampos

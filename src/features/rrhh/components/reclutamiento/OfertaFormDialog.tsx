@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import {
   Dialog, DialogContent, DialogDescription,
   DialogFooter, DialogHeader, DialogTitle,
@@ -34,7 +33,6 @@ interface FormState {
   descripcion: string;
   puesto_id: string;
   departamento_id: string;
-  ubicacion: string;
   tipo_jornada: string;
   salario_rango: string;
   estado_publicacion: EstadoPub;
@@ -46,7 +44,6 @@ const FORM_VACIO: FormState = {
   descripcion: "",
   puesto_id: "",
   departamento_id: "",
-  ubicacion: "",
   tipo_jornada: "",
   salario_rango: "",
   estado_publicacion: "borrador",
@@ -100,7 +97,7 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
       const v = res.data as {
         titulo?: string; descripcion?: string | null;
         puesto_id?: string | null; departamento_id?: string | null;
-        ubicacion?: string | null; tipo_jornada?: string | null;
+        tipo_jornada?: string | null;
         salario_rango?: string | null;
         estado_publicacion?: EstadoPub; visible_publicamente?: boolean;
       } | null;
@@ -110,7 +107,6 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
           descripcion: v.descripcion ?? "",
           puesto_id: v.puesto_id ?? "",
           departamento_id: v.departamento_id ?? "",
-          ubicacion: v.ubicacion ?? "",
           tipo_jornada: v.tipo_jornada ?? "",
           salario_rango: v.salario_rango ?? "",
           estado_publicacion: v.estado_publicacion ?? "borrador",
@@ -122,15 +118,13 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
   }, [open, vacanteId, tituloPrefill]);
 
   function guardar() {
-    // Solo validamos al CREAR. Al editar dejamos pasar (puede haber sido creada
-    // con reglas distintas y queremos permitir editar lo que ya existe).
+    // Solo validamos reglas de submódulo al CREAR. Al editar dejamos pasar.
     if (!vacanteId) {
       const { labelsFaltantes } = validar({
         titulo: form.titulo,
         descripcion: form.descripcion,
         puesto_id: form.puesto_id,
         departamento_id: form.departamento_id,
-        ubicacion: form.ubicacion,
         tipo_jornada: form.tipo_jornada,
         salario_rango: form.salario_rango,
         estado_publicacion: form.estado_publicacion,
@@ -146,7 +140,6 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
         descripcion: form.descripcion.trim() || null,
         puesto_id: form.puesto_id || null,
         departamento_id: form.departamento_id || null,
-        ubicacion: form.ubicacion.trim() || null,
         tipo_jornada: form.tipo_jornada || null,
         salario_rango: form.salario_rango.trim() || null,
         estado_publicacion: form.estado_publicacion,
@@ -223,15 +216,7 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Ubicación</Label>
-                <Input
-                  value={form.ubicacion}
-                  onChange={(e) => setForm({ ...form, ubicacion: e.target.value })}
-                  placeholder="Ej. Madrid centro"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Tipo de jornada</Label>
+                <Label>Jornada</Label>
                 <Select value={form.tipo_jornada} onValueChange={(v) => setForm({ ...form, tipo_jornada: v })}>
                   <SelectTrigger><SelectValue placeholder="Selecciona…" /></SelectTrigger>
                   <SelectContent>
@@ -241,15 +226,14 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Rango salarial (opcional)</Label>
-              <Input
-                value={form.salario_rango}
-                onChange={(e) => setForm({ ...form, salario_rango: e.target.value })}
-                placeholder="Ej. 18.000 - 22.000 € brutos/año"
-              />
+              <div className="space-y-1.5">
+                <Label>Rango salarial (opcional)</Label>
+                <Input
+                  value={form.salario_rango}
+                  onChange={(e) => setForm({ ...form, salario_rango: e.target.value })}
+                  placeholder="Ej. 18.000 - 22.000 € brutos/año"
+                />
+              </div>
             </div>
 
             <div className="space-y-1.5">
@@ -262,22 +246,6 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
               />
             </div>
 
-            <div className="space-y-1.5">
-              <Label>Visibilidad pública</Label>
-              <div className="flex items-center gap-3 rounded-md border p-3">
-                <Switch
-                  checked={form.visible_publicamente}
-                  onCheckedChange={(n) => setForm({
-                    ...form,
-                    visible_publicamente: n,
-                    estado_publicacion: n ? "publicada" : "borrador",
-                  })}
-                />
-                <span className="text-sm">
-                  {form.visible_publicamente ? "Publicada · aparece en el portal" : "Borrador · oculta"}
-                </span>
-              </div>
-            </div>
           </div>
         )}
 

@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { listVacantesConCandidatos, seedVacantesDesdeOrganigrama } from "@/features/rrhh/actions/reclutamiento-actions";
 import {
-  publicarVacante, cerrarVacante, deleteVacante, toggleVisibilidadVacante,
+  publicarVacante, despublicarVacante, deleteVacante,
 } from "@/features/rrhh/actions/vacantes-actions";
 import { moverCandidatoFase } from "@/features/rrhh/actions/candidatos-actions";
 import { toast } from "sonner";
@@ -32,11 +32,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Switch } from "@/components/ui/switch";
 import {
   Search, Star, MoreHorizontal, MapPin, Clock, CalendarDays,
   FileText, Users, Send, ArrowLeft, User, Phone, Mail, Tag, Kanban, List,
-  Pencil, Share2, EyeOff, Trash2, Utensils, Building2, Settings,
+  Pencil, Share2, Trash2, Utensils, Building2, Settings, Check,
 } from "lucide-react";
 import { DialogSnippetEmbed } from "@/features/empleo-publico/components/DialogSnippetEmbed";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
@@ -67,27 +66,20 @@ interface VacanteCardProps {
   vacante: Vacante & { visiblePublicamente?: boolean };
   onSelectFase: (v: Vacante, f: FaseReclutamiento | null) => void;
   onPublicar?: (id: string) => void;
-  onCerrar?: (id: string) => void;
+  onDespublicar?: (id: string) => void;
   onEliminar?: (id: string) => void;
-  onToggleVisible?: (id: string, visible: boolean) => void;
-  onCompartir?: (v: Vacante) => void;
   onEditar?: (v: Vacante) => void;
 }
 
 function VacanteCard({
   vacante, onSelectFase,
-  onPublicar, onCerrar, onEliminar, onToggleVisible, onCompartir, onEditar,
+  onPublicar, onDespublicar, onEliminar, onEditar,
 }: VacanteCardProps) {
   const counts = contarCandidatosPorFase(vacante.candidatos);
-  const total = vacante.candidatos.length;
   const visiblePublicamente = !!vacante.visiblePublicamente;
   const estaPublicada = vacante.estadoPublicacion === "publicada";
-  const estadoColor: Record<string, string> = {
-    publicada: "bg-emerald-100 text-emerald-700",
-    borrador: "bg-amber-100 text-amber-700",
-    cerrada: "bg-muted text-muted-foreground",
-    archivada: "bg-muted text-muted-foreground",
-  };
+  // En el portal de empleo solo aparece si está publicada Y visible.
+  const enPortal = estaPublicada && visiblePublicamente;
 
   return (
     <Card className="overflow-hidden">
@@ -102,38 +94,31 @@ function VacanteCard({
           >
             {vacante.puesto}
           </h3>
-          <Badge variant="secondary" className="text-xs font-normal">{total} candidatos</Badge>
-          <Badge className={`text-[11px] font-medium border-0 ${estadoColor[vacante.estadoPublicacion] || ""}`}>
-            {ESTADO_PUBLICACION_LABELS[vacante.estadoPublicacion]}
-          </Badge>
-          {visiblePublicamente && estaPublicada && (
-            <Badge variant="outline" className="text-[10px] border-emerald-300 bg-emerald-50 text-emerald-700">
-              🌐 Pública
-            </Badge>
-          )}
         </div>
         <div className="flex items-center gap-2">
-          {!estaPublicada ? (
-            <div className="h-8 flex items-center gap-2 px-3 rounded-md border border-border bg-muted/30">
-              <button
-                type="button"
-                onClick={() => onPublicar?.(vacante.id)}
-                disabled={!onPublicar}
-                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
-              >
-                <Send className="h-3 w-3" /> Publicar
-              </button>
-            </div>
+          {/* Botón toggle único: blanco "Publicar" ↔ verde "Publicada".
+              Publicar = aparece en el portal de empleo; siempre conmuta en ambas direcciones. */}
+          {enPortal ? (
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => onDespublicar?.(vacante.id)}
+              disabled={!onDespublicar}
+              className="h-8 gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700"
+            >
+              <Check className="h-3.5 w-3.5" /> Publicada
+            </Button>
           ) : (
-            <div className="h-8 flex items-center gap-2 px-3 rounded-md border border-border bg-muted/30">
-              <span className="text-[11px] text-muted-foreground">Pública</span>
-              <Switch
-                checked={visiblePublicamente}
-                onCheckedChange={(n) => onToggleVisible?.(vacante.id, n)}
-                disabled={!onToggleVisible}
-                aria-label="Visible en el portal público"
-              />
-            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => onPublicar?.(vacante.id)}
+              disabled={!onPublicar}
+              className="h-8 gap-1.5"
+            >
+              <Send className="h-3.5 w-3.5" /> Publicar
+            </Button>
           )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -147,19 +132,9 @@ function VacanteCard({
                   <Pencil className="h-4 w-4 mr-2" /> Editar
                 </DropdownMenuItem>
               )}
-              {onCompartir && (
-                <DropdownMenuItem onClick={() => onCompartir(vacante)}>
-                  <Share2 className="h-4 w-4 mr-2" /> Compartir / embed
-                </DropdownMenuItem>
-              )}
               <DropdownMenuItem onClick={() => onSelectFase(vacante, null)}>
                 <Users className="h-4 w-4 mr-2" /> Ver candidatos
               </DropdownMenuItem>
-              {estaPublicada && onCerrar && (
-                <DropdownMenuItem onClick={() => onCerrar(vacante.id)}>
-                  <EyeOff className="h-4 w-4 mr-2" /> Cerrar
-                </DropdownMenuItem>
-              )}
               {onEliminar && (
                 <DropdownMenuItem onClick={() => onEliminar(vacante.id)} className="text-destructive">
                   <Trash2 className="h-4 w-4 mr-2" /> Eliminar
@@ -204,8 +179,9 @@ function VacanteCard({
       </div>
 
       <div className="flex flex-wrap items-center gap-4 px-5 py-3 bg-muted/30 border-t border-border text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{vacante.ubicacion}</span>
-        <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" />{TIPO_JORNADA_LABELS[vacante.tipoJornada]}</span>
+        {vacante.tipoJornada && (
+          <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" />{TIPO_JORNADA_LABELS[vacante.tipoJornada] ?? vacante.tipoJornada}</span>
+        )}
         <span className="inline-flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" />{vacante.fechaCreacion}</span>
         {vacante.cuestionario && <span className="inline-flex items-center gap-1"><FileText className="h-3.5 w-3.5" />Cuestionario</span>}
         <span className="inline-flex items-center gap-1"><Users className="h-3.5 w-3.5" />{vacante.reclutadores.join(", ")}</span>
@@ -350,7 +326,7 @@ function CandidatosView({ vacante, faseInicial, onBack }: { vacante: Vacante; fa
         </Button>
         <div>
           <h2 className="text-xl font-bold text-foreground">{vacante.puesto}</h2>
-          <p className="text-sm text-muted-foreground">{candidatosLocal.length} candidatos · {vacante.ubicacion}</p>
+          <p className="text-sm text-muted-foreground">{candidatosLocal.length} candidatos</p>
         </div>
       </div>
 
@@ -464,14 +440,6 @@ export function ReclutamientoView() {
     } else toast.error("No se pudo publicar");
   }, [recargar]);
 
-  const handleCerrar = useCallback(async (id: string) => {
-    const res = await cerrarVacante(id);
-    if (res.ok) {
-      toast.success("Oferta cerrada");
-      recargar();
-    } else toast.error("No se pudo cerrar");
-  }, [recargar]);
-
   const handleEliminar = useCallback(async (id: string) => {
     const v = vacantes.find((x) => x.id === id);
     const titulo = v?.puesto ?? "esta vacante";
@@ -490,12 +458,12 @@ export function ReclutamientoView() {
     }
   }, [recargar, vacantes, confirmDelete]);
 
-  const handleToggleVisible = useCallback(async (id: string, visible: boolean) => {
-    const res = await toggleVisibilidadVacante(id, visible);
+  const handleDespublicar = useCallback(async (id: string) => {
+    const res = await despublicarVacante(id);
     if (res.ok) {
-      toast.success(visible ? "Visible públicamente" : "Oculta del portal");
+      toast.success("Oferta retirada del portal");
       recargar();
-    } else toast.error("No se pudo cambiar la visibilidad");
+    } else toast.error("No se pudo despublicar");
   }, [recargar]);
 
   const [search, setSearch] = useState("");
@@ -511,7 +479,6 @@ export function ReclutamientoView() {
   const [nuevaOfertaOpen, setNuevaOfertaOpen] = useState(false);
   const [nuevoCandidatoOpen, setNuevoCandidatoOpen] = useState(false);
   const [ofertaEditando, setOfertaEditando] = useState<Vacante | null>(null);
-  const [snippetVacante, setSnippetVacante] = useState<Vacante | null>(null);
   const [snippetGlobalOpen, setSnippetGlobalOpen] = useState(false);
 
   // Selector de área (vacantes operativas vs. administrativas)
@@ -703,7 +670,7 @@ export function ReclutamientoView() {
               <>
                 {empresaActual.id ? (
                   <Button variant="outline" size="sm" onClick={() => setSnippetGlobalOpen(true)} className="gap-1.5">
-                    <Share2 className="h-3.5 w-3.5" /> Compartir portal
+                    <Share2 className="h-3.5 w-3.5" /> Compartir
                   </Button>
                 ) : null}
                 <Button
@@ -735,10 +702,8 @@ export function ReclutamientoView() {
                 vacante={v as Vacante & { visiblePublicamente?: boolean }}
                 onSelectFase={handleSelectFase}
                 onPublicar={handlePublicar}
-                onCerrar={handleCerrar}
+                onDespublicar={handleDespublicar}
                 onEliminar={handleEliminar}
-                onToggleVisible={handleToggleVisible}
-                onCompartir={(vc) => setSnippetVacante(vc)}
                 onEditar={(vc) => { setOfertaEditando(vc); setNuevaOfertaOpen(true); }}
               />
             ))}
@@ -773,18 +738,6 @@ export function ReclutamientoView() {
         onOpenChange={setNuevoCandidatoOpen}
         onSaved={recargar}
       />
-
-      {/* ── Snippet de share por oferta ────────────── */}
-      {empresaActual.id && snippetVacante && (
-        <DialogSnippetEmbed
-          open={!!snippetVacante}
-          onOpenChange={(o) => !o && setSnippetVacante(null)}
-          empresaSlug={empresaActual.id}
-          empresaNombre={empresaActual.nombre}
-          ofertaId={snippetVacante.id}
-          ofertaTitulo={snippetVacante.puesto}
-        />
-      )}
 
       {/* ── Snippet de share del portal completo ────── */}
       {empresaActual.id && (
