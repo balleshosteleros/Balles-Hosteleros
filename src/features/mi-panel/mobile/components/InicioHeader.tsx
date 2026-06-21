@@ -1,5 +1,4 @@
 import { PerfilPill } from "./PerfilPill";
-import { CerrarSesionButton } from "./CerrarSesionButton";
 import type { MobileInicioData } from "../lib/mobile-inicio-data";
 
 export function InicioHeader({ data }: { data: MobileInicioData }) {
@@ -13,8 +12,8 @@ export function InicioHeader({ data }: { data: MobileInicioData }) {
         className="pointer-events-none absolute inset-x-0 -top-24 h-56 bg-gradient-to-b from-primary/15 via-primary/5 to-transparent blur-2xl"
       />
 
-      {/* Fila superior: pill de perfil (logo + nombre/rol + foto) + cerrar sesión */}
-      <div className="relative flex items-center justify-between gap-2">
+      {/* Fila superior: pill de perfil (logo empresa + nombre/rol + foto→menú) */}
+      <div className="relative flex items-center gap-2">
         <PerfilPill
           nombre={nombre}
           rolLabel={rolLabel}
@@ -22,7 +21,6 @@ export function InicioHeader({ data }: { data: MobileInicioData }) {
           empresaActual={empresaActual}
           empresas={empresas}
         />
-        <CerrarSesionButton />
       </div>
     </header>
   );

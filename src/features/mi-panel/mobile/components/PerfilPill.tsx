@@ -5,15 +5,8 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Check, ChevronDown, Loader2, Building2 } from "lucide-react";
 import { setEmpresaActiva } from "@/features/empresa/actions/empresa-activa-actions";
+import { EmpleadoMenuMobile } from "./EmpleadoMenuMobile";
 import type { InicioEmpresa } from "../lib/mobile-inicio-data";
-
-/** Iniciales del nombre de la persona para el avatar de respaldo. */
-function inicialesNombre(nombre: string): string {
-  const partes = nombre.trim().split(/\s+/);
-  const a = partes[0]?.[0] ?? "";
-  const b = partes[1]?.[0] ?? "";
-  return (a + b).toUpperCase() || "·";
-}
 
 /** Iniciales de respaldo cuando la empresa no tiene isotipo/logo. */
 function inicialesEmpresa(nombre: string): string {
@@ -73,27 +66,29 @@ export function PerfilPill({
           aria-label={soloUna ? actual?.nombre : "Cambiar de empresa"}
           className="flex items-center gap-0.5 rounded-full active:opacity-70 disabled:opacity-100"
         >
-          <span
-            className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full"
-            style={{ backgroundColor: actual?.color ?? "hsl(220 70% 45%)" }}
-          >
-            {logo ? (
-              <Image
-                src={logo}
-                alt={actual?.nombre ?? ""}
-                width={32}
-                height={32}
-                className="h-8 w-8 object-cover"
-                unoptimized
-              />
-            ) : actual ? (
-              <span className="text-[10px] font-bold text-white">
-                {inicialesEmpresa(actual.nombre)}
-              </span>
-            ) : (
-              <Building2 className="h-4 w-4 text-white" />
-            )}
-          </span>
+          {logo ? (
+            <Image
+              src={logo}
+              alt={actual?.nombre ?? ""}
+              width={32}
+              height={32}
+              className="h-8 w-8 shrink-0 rounded-md object-contain"
+              unoptimized
+            />
+          ) : (
+            <span
+              className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md"
+              style={{ backgroundColor: actual?.color ?? "hsl(220 70% 45%)" }}
+            >
+              {actual ? (
+                <span className="text-[10px] font-bold text-white">
+                  {inicialesEmpresa(actual.nombre)}
+                </span>
+              ) : (
+                <Building2 className="h-4 w-4 text-white" />
+              )}
+            </span>
+          )}
           {!soloUna && (
             <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
           )}
@@ -116,23 +111,8 @@ export function PerfilPill({
           )}
         </div>
 
-        {/* Foto del trabajador */}
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10 ring-1 ring-border">
-          {avatarUrl ? (
-            <Image
-              src={avatarUrl}
-              alt={nombre}
-              width={36}
-              height={36}
-              className="h-9 w-9 object-cover"
-              unoptimized
-            />
-          ) : (
-            <span className="text-xs font-bold text-primary">
-              {inicialesNombre(nombre)}
-            </span>
-          )}
-        </span>
+        {/* Foto del trabajador → menú (cambiar vista + cerrar sesión) */}
+        <EmpleadoMenuMobile nombre={nombre} avatarUrl={avatarUrl} />
       </div>
 
       {/* Desplegable para cambiar de empresa */}
@@ -158,25 +138,25 @@ export function PerfilPill({
                       onClick={() => elegir(e.id)}
                       className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm active:bg-muted"
                     >
-                      <span
-                        className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full"
-                        style={{ backgroundColor: e.color ?? "hsl(220 70% 45%)" }}
-                      >
-                        {eLogo ? (
-                          <Image
-                            src={eLogo}
-                            alt={e.nombre}
-                            width={28}
-                            height={28}
-                            className="h-7 w-7 object-cover"
-                            unoptimized
-                          />
-                        ) : (
+                      {eLogo ? (
+                        <Image
+                          src={eLogo}
+                          alt={e.nombre}
+                          width={28}
+                          height={28}
+                          className="h-7 w-7 shrink-0 rounded-md object-contain"
+                          unoptimized
+                        />
+                      ) : (
+                        <span
+                          className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md"
+                          style={{ backgroundColor: e.color ?? "hsl(220 70% 45%)" }}
+                        >
                           <span className="text-[10px] font-bold text-white">
                             {inicialesEmpresa(e.nombre)}
                           </span>
-                        )}
-                      </span>
+                        </span>
+                      )}
                       <span className="flex-1 truncate font-medium">
                         {e.nombre}
                       </span>
