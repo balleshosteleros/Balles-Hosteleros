@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getOrganigrama } from "@/features/direccion/actions/organigrama-actions";
 import { orgChartsPorEmpresa, type AreaType, type OrgNode } from "@/features/direccion/data/direccion";
@@ -154,7 +155,6 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
       "web", "formulario", "redes_sociales", "recomendacion",
       "base_datos", "portal_empleo", "otros",
     ]);
-    const JORNADAS_VALIDAS = new Set(["completa", "parcial", "temporal", "indefinido", "practicas"]);
 
     // ── Cada vacante toma su área del nodo del organigrama cuyo label
     // coincide con el `titulo` (case-insensitive). Si no hay match, cae
@@ -177,7 +177,7 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
         puesto: v.titulo,
         categoria: v.departamentos?.nombre ?? v.categoria ?? "Sin categoría",
         ubicacion: v.ubicacion ?? "",
-        tipoJornada: JORNADAS_VALIDAS.has(v.tipo_jornada ?? "") ? v.tipo_jornada : "completa",
+        tipoJornada: v.tipo_jornada ?? "",
         estadoPublicacion: v.estado_publicacion,
         fechaCreacion: v.fecha_creacion,
         cuestionario: v.cuestionario,
@@ -360,5 +360,127 @@ export async function seedVacantesDesdeOrganigrama(empresaSlug?: string | null) 
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[reclutamiento] seedVacantesDesdeOrganigrama:", msg);
     return { ok: false, created: 0 };
+  }
+}
+
+/* ─── URL personalizable del portal de empleo ─────────────────────────────
+ * El portal de empleo público resuelve por `empresas.empleo_slug` (cae a
+ * `slug` si está vacío). Es independiente del slug global — que es FK lógica
+ * en accesos_apps / organigramas / logos — para que renombrar la URL de
+ * empleo no rompa nada más. Único entre empresas (índice + validación aquí).
+ * ------------------------------------------------------------------------- */
+
+/** Normaliza una URL de empleo: quita acentos, deja [A-Za-z0-9-], conserva
+ *  mayúsculas (para poder mostrar "Habana" tal cual el nombre comercial). */
+function sanitizeEmpleoSlug(raw: string): string {
+  return raw
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-zA-Z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/** ¿Hay OTRA empresa usando este nombre (en empleo_slug o en su slug global)? */
+async function empleoSlugOcupado(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  empresaId: string,
+  valor: string,
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("empresas")
+    .select("id")
+    .neq("id", empresaId)
+    .or(`empleo_slug.ilike.${valor},slug.ilike.${valor}`)
+    .limit(1);
+  return (data?.length ?? 0) > 0;
+}
+
+export interface EmpleoUrlConfig {
+  empleoSlug: string;
+  /** Nombre comercial — valor por defecto sugerido para la URL. */
+  nombreComercial: string;
+}
+
+/** Lee la URL de empleo actual de la empresa activa (cae al nombre comercial). */
+export async function getEmpleoUrlConfig(): Promise<EmpleoUrlConfig | null> {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return null;
+    const { data } = await supabase
+      .from("empresas")
+      .select("nombre, slug, empleo_slug")
+      .eq("id", empresaId)
+      .maybeSingle();
+    if (!data) return null;
+    const nombreComercial = (data.nombre as string | null) ?? "";
+    const empleoSlug =
+      (data.empleo_slug as string | null) ??
+      (data.slug as string | null) ??
+      sanitizeEmpleoSlug(nombreComercial);
+    return { empleoSlug, nombreComercial };
+  } catch (err) {
+    console.error("[reclutamiento] getEmpleoUrlConfig:", err);
+    return null;
+  }
+}
+
+export type GuardarEmpleoUrlResult =
+  | { ok: true; empleoSlug: string }
+  | { ok: false; error: string; sugerencia?: string };
+
+/** Guarda la URL de empleo de la empresa activa, garantizando unicidad. */
+export async function updateEmpleoUrlSlug(raw: string): Promise<GuardarEmpleoUrlResult> {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No hay empresa activa." };
+
+    const valor = sanitizeEmpleoSlug(raw);
+    if (!valor) {
+      return {
+        ok: false,
+        error: "Escribe un nombre válido (solo letras, números y guiones).",
+      };
+    }
+    if (valor.length < 2 || valor.length > 60) {
+      return { ok: false, error: "El nombre debe tener entre 2 y 60 caracteres." };
+    }
+
+    if (await empleoSlugOcupado(supabase, empresaId, valor)) {
+      // Sugerimos la primera variante libre: nombre-2, nombre-3, …
+      let sugerencia: string | undefined;
+      for (let i = 2; i <= 9; i++) {
+        const candidato = `${valor}-${i}`;
+        if (!(await empleoSlugOcupado(supabase, empresaId, candidato))) {
+          sugerencia = candidato;
+          break;
+        }
+      }
+      return {
+        ok: false,
+        error: `Otra empresa ya usa "${valor}" en su URL. Prueba con otro nombre.`,
+        sugerencia,
+      };
+    }
+
+    const { error } = await supabase
+      .from("empresas")
+      .update({ empleo_slug: valor })
+      .eq("id", empresaId);
+    if (error) {
+      // Carrera con el índice único: lo tratamos como colisión.
+      if (error.code === "23505") {
+        return { ok: false, error: `Otra empresa ya usa "${valor}" en su URL. Prueba con otro nombre.` };
+      }
+      throw error;
+    }
+
+    revalidatePath(`/empleo/${valor}`);
+    return { ok: true, empleoSlug: valor };
+  } catch (err) {
+    console.error("[reclutamiento] updateEmpleoUrlSlug:", err);
+    return { ok: false, error: "No se pudo guardar la URL. Inténtalo de nuevo." };
   }
 }

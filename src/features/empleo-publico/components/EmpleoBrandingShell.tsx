@@ -28,7 +28,7 @@ export function EmpleoBrandingShell({
       >
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
           <Link
-            href={`/empleo/${empresa.slug}`}
+            href={`/empleo/${empresa.empleo_slug}`}
             className="flex items-center gap-3 hover:opacity-80 transition-opacity"
           >
             {empresa.logo_url ? (

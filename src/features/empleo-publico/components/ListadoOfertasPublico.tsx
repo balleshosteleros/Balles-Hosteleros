@@ -37,7 +37,7 @@ export function ListadoOfertasPublico({ portal }: { portal: EmpleoPortal }) {
           {ofertas.map((o) => (
             <Link
               key={o.id}
-              href={`/empleo/${empresa.slug}/${o.id}`}
+              href={`/empleo/${empresa.empleo_slug}/${o.id}`}
               className="block rounded-lg border border-border bg-card p-4 md:p-5 hover:shadow-md hover:border-foreground/20 transition-all group"
             >
               <div className="flex items-start gap-4">

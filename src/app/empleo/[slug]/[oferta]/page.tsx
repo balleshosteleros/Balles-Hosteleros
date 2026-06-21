@@ -30,7 +30,7 @@ export default async function OfertaPublicaPage({
     <EmpleoBrandingShell empresa={empresa}>
       <div className="space-y-6">
         <Link
-          href={`/empleo/${empresa.slug}`}
+          href={`/empleo/${empresa.empleo_slug}`}
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="h-4 w-4" /> Volver a las ofertas
@@ -83,7 +83,7 @@ export default async function OfertaPublicaPage({
         )}
 
         <FormCandidaturaPublica
-          empresaSlug={empresa.slug}
+          empresaSlug={empresa.empleo_slug}
           empresaId={empresa.id}
           ofertaId={oferta.id}
           ofertaTitulo={oferta.titulo}

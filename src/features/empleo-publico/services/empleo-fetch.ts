@@ -16,6 +16,8 @@ function serviceClient() {
 export interface EmpresaPublica {
   id: string;
   slug: string;
+  /** URL personalizable del portal de empleo. Cae a `slug` si no se ha definido. */
+  empleo_slug: string;
   nombre: string;
   logo_url: string | null;
   color: string | null;
@@ -51,11 +53,41 @@ export interface EmpleoOfertaDetalle {
 interface EmpresaRow {
   id: string;
   slug: string;
+  empleo_slug: string | null;
   nombre: string;
   logo_url: string | null;
   color: string | null;
   color_secundario: string | null;
   color_texto: string | null;
+}
+
+const EMPRESA_COLS = "id, slug, empleo_slug, nombre, logo_url, color, color_secundario, color_texto";
+
+/**
+ * Resuelve la empresa pública por su URL de empleo personalizada (`empleo_slug`)
+ * y, si no la encuentra, cae al `slug` global. Insensible a mayúsculas para que
+ * `/empleo/Habana` y `/empleo/habana` resuelvan igual. Sanea el comodín de ilike.
+ */
+async function findEmpresaPublica(
+  supabase: ReturnType<typeof serviceClient>,
+  slug: string,
+): Promise<EmpresaRow | null> {
+  const safe = slug.replace(/[%_]/g, "");
+  if (!safe) return null;
+
+  const porEmpleo = await supabase
+    .from("empresas")
+    .select(EMPRESA_COLS)
+    .ilike("empleo_slug", safe)
+    .maybeSingle<EmpresaRow>();
+  if (porEmpleo.data) return porEmpleo.data;
+
+  const porSlug = await supabase
+    .from("empresas")
+    .select(EMPRESA_COLS)
+    .ilike("slug", safe)
+    .maybeSingle<EmpresaRow>();
+  return porSlug.data ?? null;
 }
 
 interface VacanteRow {
@@ -81,6 +113,7 @@ function rowToEmpresa(r: EmpresaRow): EmpresaPublica {
   return {
     id: r.id,
     slug: r.slug,
+    empleo_slug: r.empleo_slug ?? r.slug,
     nombre: r.nombre,
     logo_url: r.logo_url,
     color: r.color,
@@ -110,16 +143,7 @@ export async function fetchPortalEmpleoPorSlug(slug: string): Promise<EmpleoPort
   try {
     const supabase = serviceClient();
 
-    const { data: empresa, error: empresaErr } = await supabase
-      .from("empresas")
-      .select("id, slug, nombre, logo_url, color, color_secundario, color_texto")
-      .eq("slug", slug)
-      .maybeSingle<EmpresaRow>();
-
-    if (empresaErr) {
-      console.error("[empleo-fetch] empresa error:", empresaErr.message);
-      return null;
-    }
+    const empresa = await findEmpresaPublica(supabase, slug);
     if (!empresa) return null;
 
     const { data: ofertasRows, error: ofertasErr } = await supabase
@@ -159,13 +183,8 @@ export async function fetchOfertaPublica(
   try {
     const supabase = serviceClient();
 
-    const { data: empresa, error: empresaErr } = await supabase
-      .from("empresas")
-      .select("id, slug, nombre, logo_url, color, color_secundario, color_texto")
-      .eq("slug", slug)
-      .maybeSingle<EmpresaRow>();
-
-    if (empresaErr || !empresa) return null;
+    const empresa = await findEmpresaPublica(supabase, slug);
+    if (!empresa) return null;
 
     const { data: ofertaRow, error: ofertaErr } = await supabase
       .from("vacantes")
