@@ -17,6 +17,10 @@ export interface PagoEmpleado {
   propinaMantenimiento: number;
   total: number;
   pagado: boolean;
+  // Confirmacion de liquidacion: enviada -> bloqueada; aceptada -> el empleado la
+  // acepto desde su app. ISO string o null.
+  confirmacionEnviadaAt: string | null;
+  confirmacionAceptadaAt: string | null;
 }
 
 export interface ResumenPagos {

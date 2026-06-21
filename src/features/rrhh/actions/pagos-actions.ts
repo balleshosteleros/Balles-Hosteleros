@@ -1,6 +1,21 @@
 "use server";
 
 import { getAppContext } from "@/lib/supabase/get-context";
+import { getRolContext } from "@/features/auth/actions/permisos-actions";
+import { getNotifLiquidacionesConfig } from "@/features/notificaciones/actions/notif-config-actions";
+import { crearNotificaciones } from "@/features/notificaciones/actions/notificaciones-actions";
+
+const MESES_PAGOS = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+function periodoLabel(periodo: string): string {
+  const [y, m] = periodo.split("-");
+  return `${MESES_PAGOS[Number(m) - 1] ?? ""} ${y}`.trim();
+}
+function fmtEur(n: number): string {
+  return n.toLocaleString("es-ES", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + " €";
+}
 
 export type EmpleadoArea = "administrativa" | "operativa";
 
@@ -102,6 +117,8 @@ export interface PagoGuardado {
   propinaMantenimiento: number;
   total: number;
   pagado: boolean;
+  confirmacionEnviadaAt: string | null;
+  confirmacionAceptadaAt: string | null;
 }
 
 type PagoDbRow = {
@@ -119,10 +136,12 @@ type PagoDbRow = {
   propina_mes_anterior: number | string;
   total: number | string;
   pagado: boolean;
+  confirmacion_enviada_at: string | null;
+  confirmacion_aceptada_at: string | null;
 };
 
 const PAGO_COLS =
-  "empleado_id, empleado_nombre, fijo, pago, nomina, horas_reales, horas_trabajadas, propina, ajuste, horas_extras, bonus, propina_mes_anterior, total, pagado";
+  "empleado_id, empleado_nombre, fijo, pago, nomina, horas_reales, horas_trabajadas, propina, ajuste, horas_extras, bonus, propina_mes_anterior, total, pagado, confirmacion_enviada_at, confirmacion_aceptada_at";
 
 function dbToPago(r: PagoDbRow): PagoGuardado {
   return {
@@ -140,6 +159,8 @@ function dbToPago(r: PagoDbRow): PagoGuardado {
     propinaMantenimiento: Number(r.propina_mes_anterior),
     total: Number(r.total),
     pagado: r.pagado,
+    confirmacionEnviadaAt: r.confirmacion_enviada_at,
+    confirmacionAceptadaAt: r.confirmacion_aceptada_at,
   };
 }
 
@@ -165,10 +186,23 @@ export async function loadPagos(
 export async function savePago(
   periodo: string,
   row: PagoGuardado,
-): Promise<{ ok: boolean }> {
+): Promise<{ ok: boolean; locked?: boolean }> {
   try {
     const { supabase, empresaId, userId } = await getAppContext();
     if (!empresaId || !row.empleadoId) return { ok: false };
+
+    // Bloqueo: si la liquidacion ya fue enviada al empleado, no se edita
+    // (hay que reabrirla primero). El trigger lo garantiza en BD; aqui evitamos
+    // la llamada y damos feedback claro.
+    const { data: existente } = await supabase
+      .from("rrhh_pagos")
+      .select("confirmacion_enviada_at")
+      .eq("empresa_id", empresaId)
+      .eq("empleado_id", row.empleadoId)
+      .eq("periodo", periodo)
+      .maybeSingle();
+    if (existente?.confirmacion_enviada_at) return { ok: false, locked: true };
+
     const { error } = await supabase.from("rrhh_pagos").upsert(
       {
         empresa_id: empresaId,
@@ -196,5 +230,191 @@ export async function savePago(
   } catch (err) {
     console.error("[rrhh] savePago:", err);
     return { ok: false };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Confirmaciones de liquidacion.
+// Enviar = marcar confirmacion_enviada_at -> bloquea el pago y le aparece el
+// pop-up al empleado en su app. Solo afecta a empleados con ficha (empleado_id).
+// ---------------------------------------------------------------------------
+
+export async function enviarConfirmacionesPago(
+  periodo: string,
+  empleadoIds: string[],
+): Promise<{ ok: boolean; enviadosIds: string[] }> {
+  try {
+    const { supabase, empresaId, userId } = await getAppContext();
+    const ids = empleadoIds.filter((id) => id && !id.startsWith("ext-"));
+    if (!empresaId || ids.length === 0) return { ok: false, enviadosIds: [] };
+
+    // Solo afecta a pagos YA guardados (no a empleados sin datos): si no hay fila
+    // en rrhh_pagos no hay liquidación que enviar.
+    const { data, error } = await supabase
+      .from("rrhh_pagos")
+      .update({
+        confirmacion_enviada_at: new Date().toISOString(),
+        confirmacion_enviada_por: userId,
+      })
+      .eq("empresa_id", empresaId)
+      .eq("periodo", periodo)
+      .in("empleado_id", ids)
+      .is("confirmacion_enviada_at", null)
+      .select(
+        "id, empleado_id, empleado_nombre, pago, nomina, propina, ajuste, horas_extras, bonus, propina_mes_anterior, total",
+      );
+    if (error) throw error;
+    const updated = data ?? [];
+    const enviadosIds = updated.map((r) => r.empleado_id as string);
+
+    // Notificar a cada empleado (si la empresa lo tiene activado).
+    const cfg = await getNotifLiquidacionesConfig();
+    if (cfg.activo && updated.length > 0) {
+      const empIds = updated.map((r) => r.empleado_id as string).filter(Boolean);
+      const { data: emps } = await supabase
+        .from("empleados")
+        .select("id, user_id")
+        .in("id", empIds);
+      const userByEmp = new Map((emps ?? []).map((e) => [e.id as string, e.user_id as string | null]));
+      const label = periodoLabel(periodo);
+      const rows = updated
+        .map((r) => {
+          const uid = userByEmp.get(r.empleado_id as string);
+          if (!uid) return null;
+          return {
+            empleadoId: r.empleado_id as string,
+            usuarioId: uid,
+            tipo: "liquidacion",
+            titulo: `Tu liquidación de ${label}`,
+            mensaje: `Total: ${fmtEur(Number(r.total))}`,
+            payload: {
+              periodo,
+              pago: Number(r.pago),
+              nomina: Number(r.nomina),
+              propina: Number(r.propina),
+              ajuste: Number(r.ajuste),
+              horasExtras: Number(r.horas_extras),
+              bonus: Number(r.bonus),
+              propinaMantenimiento: Number(r.propina_mes_anterior),
+              total: Number(r.total),
+              textoLiquidar: cfg.textoLiquidar,
+              requiereAprobacion: cfg.requiereAprobacion,
+            },
+            accionLabel: cfg.requiereAprobacion ? "LIQUIDAR" : "Visto",
+            requiereAccion: cfg.requiereAprobacion,
+            refTabla: "rrhh_pagos",
+            refId: r.id as string,
+            accionUrl: "/m",
+          };
+        })
+        .filter((x): x is NonNullable<typeof x> => x !== null);
+      if (rows.length > 0) await crearNotificaciones(rows);
+    }
+
+    return { ok: true, enviadosIds };
+  } catch (err) {
+    console.error("[rrhh] enviarConfirmacionesPago:", err);
+    return { ok: false, enviadosIds: [] };
+  }
+}
+
+// Marca/quita el flag `pagado` (botón Pagar/Pagado de RRHH). Si la empresa exige
+// aprobación, solo deja marcar pagado cuando el empleado ya aprobó (tick). Si
+// está activado, al marcar pagado notifica al empleado.
+export async function marcarPagado(
+  periodo: string,
+  empleadoId: string,
+  pagado: boolean,
+): Promise<{ ok: boolean; requiereAprobacion?: boolean }> {
+  try {
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId || !empleadoId || empleadoId.startsWith("ext-")) return { ok: false };
+    const cfg = await getNotifLiquidacionesConfig();
+
+    const { data: row } = await supabase
+      .from("rrhh_pagos")
+      .select("id, total, confirmacion_aceptada_at")
+      .eq("empresa_id", empresaId)
+      .eq("periodo", periodo)
+      .eq("empleado_id", empleadoId)
+      .maybeSingle();
+    if (!row) return { ok: false };
+
+    if (pagado && cfg.requiereAprobacion && !row.confirmacion_aceptada_at) {
+      return { ok: false, requiereAprobacion: true };
+    }
+
+    const { error } = await supabase
+      .from("rrhh_pagos")
+      .update({ pagado })
+      .eq("id", row.id as string);
+    if (error) throw error;
+
+    if (pagado && cfg.pagadoActivo) {
+      const { data: emp } = await supabase
+        .from("empleados")
+        .select("user_id")
+        .eq("id", empleadoId)
+        .maybeSingle();
+      const uid = emp?.user_id as string | null;
+      if (uid) {
+        const label = periodoLabel(periodo);
+        await crearNotificaciones([
+          {
+            empleadoId,
+            usuarioId: uid,
+            tipo: "liquidacion_pagada",
+            titulo: `Liquidación pagada — ${label}`,
+            mensaje: `Tu liquidación de ${label} (${fmtEur(Number(row.total))}) ha sido abonada.`,
+            payload: { periodo, total: Number(row.total) },
+            accionLabel: "Visto",
+            requiereAccion: false,
+            refTabla: "rrhh_pagos",
+            refId: row.id as string,
+            accionUrl: "/m",
+          },
+        ]);
+      }
+    }
+    return { ok: true };
+  } catch (err) {
+    console.error("[rrhh] marcarPagado:", err);
+    return { ok: false };
+  }
+}
+
+// Reabrir = anular el envio para corregir y reenviar. Solo director.
+export async function reabrirConfirmacionPago(
+  periodo: string,
+  empleadoId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { esDirector } = await getRolContext();
+    if (!esDirector) return { ok: false, error: "Solo un director puede reabrir una liquidación." };
+
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId || !empleadoId || empleadoId.startsWith("ext-")) return { ok: false };
+
+    // El trigger limpia aceptada_at y enviada_por al poner enviada_at = null.
+    const { error } = await supabase
+      .from("rrhh_pagos")
+      .update({ confirmacion_enviada_at: null })
+      .eq("empresa_id", empresaId)
+      .eq("periodo", periodo)
+      .eq("empleado_id", empleadoId);
+    if (error) throw error;
+    return { ok: true };
+  } catch (err) {
+    console.error("[rrhh] reabrirConfirmacionPago:", err);
+    return { ok: false, error: "No se pudo reabrir la liquidación." };
+  }
+}
+
+export async function puedeReabrirPagos(): Promise<boolean> {
+  try {
+    const { esDirector } = await getRolContext();
+    return esDirector;
+  } catch {
+    return false;
   }
 }

@@ -27,6 +27,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { ValidadoresSolicitudesConfig } from "@/features/ajustes/components/RrhhConfigTab";
 import { FichajesConfigPanel } from "@/features/ajustes/components/FichajesConfigPanel";
+import { NotifLiquidacionesConfigPanel } from "@/features/notificaciones/components/NotifLiquidacionesConfigPanel";
 
 // ============================================================
 // Tipado del estado local
@@ -206,11 +207,12 @@ function SubmoduloRow({
           <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
         )}
         <span className="text-sm font-medium flex-1">{submodulo.label}</span>
-        {submodulo.placeholder && submodulo.key !== "solicitudes" && (
-          <Badge variant="outline" className="text-[9px] text-muted-foreground">
-            PRÓXIMAMENTE
-          </Badge>
-        )}
+        {submodulo.placeholder &&
+          !["solicitudes", "fichajes", "pagos"].includes(submodulo.key) && (
+            <Badge variant="outline" className="text-[9px] text-muted-foreground">
+              PRÓXIMAMENTE
+            </Badge>
+          )}
       </button>
 
       {open && (
@@ -219,6 +221,8 @@ function SubmoduloRow({
             <ValidadoresSolicitudesConfig embedded />
           ) : submodulo.key === "fichajes" ? (
             <FichajesConfigPanel embedded />
+          ) : submodulo.key === "pagos" ? (
+            <NotifLiquidacionesConfigPanel embedded />
           ) : (
             <>
               <ChecklistCampos

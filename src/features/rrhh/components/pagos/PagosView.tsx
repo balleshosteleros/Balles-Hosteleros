@@ -4,17 +4,32 @@ import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { getResumenPagos, type PagoEmpleado, type PagoArea } from "@/features/rrhh/data/pagos";
-import { listEmpleadosParaPagos, loadPagos, savePago, type PagoGuardado } from "@/features/rrhh/actions/pagos-actions";
+import {
+  listEmpleadosParaPagos,
+  loadPagos,
+  savePago,
+  enviarConfirmacionesPago,
+  reabrirConfirmacionPago,
+  puedeReabrirPagos,
+  marcarPagado,
+  type PagoGuardado,
+} from "@/features/rrhh/actions/pagos-actions";
+import {
+  getNotifLiquidacionesConfig,
+  type NotifLiquidacionesConfig,
+} from "@/features/notificaciones/actions/notif-config-actions";
+import { NotifLiquidacionesConfigPanel } from "@/features/notificaciones/components/NotifLiquidacionesConfigPanel";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { toast } from "sonner";
 import { ZONE_COLORS } from "@/features/direccion/data/direccion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Edit2, Banknote, TrendingUp, TrendingDown, PiggyBank, HandCoins, Wallet, Settings } from "lucide-react";
+import { Edit2, Banknote, TrendingUp, TrendingDown, PiggyBank, HandCoins, Wallet, Settings, Send, Lock, Unlock, CheckCircle2, Clock } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -72,6 +87,8 @@ function fromGuardado(
     propinaMantenimiento: g.propinaMantenimiento,
     total: g.total,
     pagado: g.pagado,
+    confirmacionEnviadaAt: g.confirmacionEnviadaAt,
+    confirmacionAceptadaAt: g.confirmacionAceptadaAt,
   };
 }
 
@@ -91,6 +108,8 @@ function toGuardado(p: PagoEmpleado): PagoGuardado {
     propinaMantenimiento: p.propinaMantenimiento,
     total: p.total,
     pagado: p.pagado,
+    confirmacionEnviadaAt: p.confirmacionEnviadaAt,
+    confirmacionAceptadaAt: p.confirmacionAceptadaAt,
   };
 }
 
@@ -112,6 +131,8 @@ function nuevoPagoVacio(empleadoId: string, empleadoNombre: string, area: PagoAr
     propinaMantenimiento: 0,
     total: 0,
     pagado: false,
+    confirmacionEnviadaAt: null,
+    confirmacionAceptadaAt: null,
   };
 }
 
@@ -128,8 +149,17 @@ export function PagosView() {
   const [loading, setLoading] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [filtroArea, setFiltroArea] = useState<"todos" | PagoArea>("todos");
+  const [enviando, setEnviando] = useState(false);
+  const [esDirector, setEsDirector] = useState(false);
+  const [notifCfg, setNotifCfg] = useState<NotifLiquidacionesConfig | null>(null);
+  const { confirm, dialog: confirmDialog } = useConfirmDelete();
 
   useGlobalLoadingSync(loading);
+
+  useEffect(() => {
+    void puedeReabrirPagos().then(setEsDirector);
+    void getNotifLiquidacionesConfig().then(setNotifCfg);
+  }, [empresaActual.id]);
 
   const claveRango = rangoKey(calRange.range);
   const periodo = periodoDeRango(calRange.range);
@@ -216,17 +246,24 @@ export function PagosView() {
 
   const resumen = useMemo(() => getResumenPagos(pagosFiltrados), [pagosFiltrados]);
 
-  const togglePagado = (id: string) => {
-    let actualizado: PagoEmpleado | undefined;
-    setPagos((prev) =>
-      prev.map((p) => {
-        if (p.id !== id) return p;
-        actualizado = { ...p, pagado: !p.pagado };
-        return actualizado;
-      }),
-    );
-    if (actualizado) void savePago(periodo, toGuardado(actualizado));
+  // Botón Pagar/Pagado (lo pulsa RRHH). Si la empresa exige aprobación, solo
+  // deja pagar cuando el empleado ya aprobó (tick de LIQUIDAR).
+  const togglePagar = async (p: PagoEmpleado) => {
+    const nuevo = !p.pagado;
+    const res = await marcarPagado(periodo, p.empleadoId, nuevo);
+    if (!res.ok) {
+      if (res.requiereAprobacion) {
+        toast.error("El empleado debe aprobar su liquidación (LIQUIDAR) antes de marcarla como pagada.");
+      } else {
+        toast.error("No se pudo actualizar el pago. Guarda primero la liquidación del empleado.");
+      }
+      return;
+    }
+    setPagos((prev) => prev.map((x) => (x.id === p.id ? { ...x, pagado: nuevo } : x)));
   };
+
+  const pagarBloqueado = (p: PagoEmpleado): boolean =>
+    !p.pagado && !!notifCfg?.requiereAprobacion && !p.confirmacionAceptadaAt;
 
   const guardarEdicion = (datos: Partial<PagoEmpleado>) => {
     if (!editando) return;
@@ -244,7 +281,78 @@ export function PagosView() {
       }),
     );
     setEditando(null);
-    if (actualizado) void savePago(periodo, toGuardado(actualizado));
+    if (actualizado) {
+      void savePago(periodo, toGuardado(actualizado)).then((r) => {
+        if (!r.ok && r.locked) toast.error("Liquidación ya enviada. Reábrela para modificarla.");
+      });
+    }
+  };
+
+  // Envía la confirmación de liquidación a los empleados indicados (uno o todos).
+  // Tras enviar, esos pagos quedan bloqueados y al empleado le salta el pop-up.
+  const enviarConfirmaciones = async (ids: string[], etiqueta: string) => {
+    const reales = ids.filter((id) => !id.startsWith("ext-"));
+    if (reales.length === 0) {
+      toast.error("No hay empleados con app a los que enviar.");
+      return;
+    }
+    const ok = await confirm({
+      title: `Enviar ${etiqueta}`,
+      description:
+        `Se enviará la liquidación a ${reales.length === 1 ? "este empleado" : `${reales.length} empleados`} y quedará ` +
+        "bloqueada: no se podrá editar hasta que un director la reabra. ¿Continuar?",
+      confirmLabel: "Enviar",
+      cancelLabel: "Cancelar",
+    });
+    if (!ok) return;
+    setEnviando(true);
+    const res = await enviarConfirmacionesPago(periodo, reales);
+    setEnviando(false);
+    if (!res.ok) {
+      toast.error("No se pudieron enviar las confirmaciones.");
+      return;
+    }
+    if (res.enviadosIds.length === 0) {
+      toast.info("No había liquidaciones guardadas pendientes de enviar.");
+      return;
+    }
+    const enviadosSet = new Set(res.enviadosIds);
+    toast.success(`Liquidación enviada a ${enviadosSet.size} empleado${enviadosSet.size === 1 ? "" : "s"}.`);
+    setPagosPorRango((prev) => {
+      const lista = prev[claveRango] ?? [];
+      const nowIso = new Date().toISOString();
+      return {
+        ...prev,
+        [claveRango]: lista.map((p) =>
+          enviadosSet.has(p.empleadoId) ? { ...p, confirmacionEnviadaAt: nowIso } : p,
+        ),
+      };
+    });
+  };
+
+  const reabrir = async (p: PagoEmpleado) => {
+    const ok = await confirm({
+      title: "Reabrir liquidación",
+      description: `Se anulará el envío a ${p.empleadoNombre} para poder corregirla y reenviarla. ¿Continuar?`,
+      confirmLabel: "Reabrir",
+      cancelLabel: "Cancelar",
+    });
+    if (!ok) return;
+    const res = await reabrirConfirmacionPago(periodo, p.empleadoId);
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudo reabrir la liquidación.");
+      return;
+    }
+    toast.success("Liquidación reabierta. Ya puedes editarla.");
+    setPagosPorRango((prev) => {
+      const lista = prev[claveRango] ?? [];
+      return {
+        ...prev,
+        [claveRango]: lista.map((x) =>
+          x.id === p.id ? { ...x, confirmacionEnviadaAt: null, confirmacionAceptadaAt: null } : x,
+        ),
+      };
+    });
   };
 
   const fmt = (n: number) => n.toLocaleString("es-ES", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + " €";
@@ -271,6 +379,7 @@ export function PagosView() {
     { campo: "propinaMantenimiento", label: "Prop. Mant." },
     { campo: "total", label: "Total" },
     { campo: "pagado", label: "Pagado" },
+    { campo: "confirmacion", label: "Confirmación" },
   ];
 
   const columnDefs: Record<string, { th: ReactNode; td: (p: PagoEmpleado) => ReactNode }> = {
@@ -328,8 +437,54 @@ export function PagosView() {
       td: (p) => <TableCell key="total" className="text-right font-bold tabular-nums">{fmt(p.total)}</TableCell>,
     },
     pagado: {
-      th: <TableHead key="pagado" className="text-center w-[80px]">Pagado</TableHead>,
-      td: (p) => <TableCell key="pagado" className="text-center"><Checkbox checked={p.pagado} onCheckedChange={() => togglePagado(p.id)} /></TableCell>,
+      th: <TableHead key="pagado" className="text-center w-[120px]">Pagar</TableHead>,
+      td: (p) => {
+        const ext = p.empleadoId.startsWith("ext-");
+        const bloqueado = pagarBloqueado(p);
+        return (
+          <TableCell key="pagado" className="text-center">
+            {ext ? (
+              <span className="text-muted-foreground text-xs">—</span>
+            ) : p.pagado ? (
+              <Button
+                size="sm"
+                className="h-7 gap-1 bg-emerald-600 text-white hover:bg-emerald-700"
+                onClick={() => void togglePagar(p)}
+                title="Pagado (pulsa para revertir)"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />Pagado
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1 border-primary text-primary hover:bg-primary/5 disabled:opacity-40"
+                onClick={() => void togglePagar(p)}
+                disabled={bloqueado}
+                title={bloqueado ? "El empleado debe aprobar (LIQUIDAR) antes de pagar" : "Marcar como pagado"}
+              >
+                <Banknote className="h-3.5 w-3.5" />Pagar
+              </Button>
+            )}
+          </TableCell>
+        );
+      },
+    },
+    confirmacion: {
+      th: <TableHead key="confirmacion" className="text-center w-[110px]">Aprobación</TableHead>,
+      td: (p) => (
+        <TableCell key="confirmacion" className="text-center">
+          {p.confirmacionAceptadaAt ? (
+            <span className="inline-flex items-center gap-1 text-emerald-600" title="Aprobada por el empleado (LIQUIDAR)">
+              <CheckCircle2 className="h-4 w-4" /><span className="text-xs font-medium">Liquidada</span>
+            </span>
+          ) : p.confirmacionEnviadaAt ? (
+            <Badge variant="secondary" className="gap-1 border-amber-300 bg-amber-50 text-[10px] text-amber-700"><Clock className="h-3 w-3" />Enviada</Badge>
+          ) : (
+            <span className="text-muted-foreground text-xs">—</span>
+          )}
+        </TableCell>
+      ),
     },
   };
 
@@ -358,6 +513,19 @@ export function PagosView() {
           onToday={calRange.goToToday}
           isToday={calRange.isToday}
         />
+        <Button
+          className="ml-auto gap-2"
+          onClick={() =>
+            enviarConfirmaciones(
+              pagos.filter((p) => !p.confirmacionEnviadaAt).map((p) => p.empleadoId),
+              "liquidaciones",
+            )
+          }
+          disabled={enviando || pagos.every((p) => !!p.confirmacionEnviadaAt)}
+        >
+          <Send className="h-4 w-4" />
+          Enviar liquidaciones
+        </Button>
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
@@ -436,6 +604,14 @@ export function PagosView() {
         }
       />
 
+      {showConfig && (
+        <Card>
+          <CardContent className="p-4">
+            <NotifLiquidacionesConfigPanel />
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -474,7 +650,25 @@ export function PagosView() {
                       >
                         <TableCell className="font-medium" style={{ color: palette.label }}>{p.empleadoNombre}</TableCell>
                         {columnasRender.map((c) => columnDefs[c.campo]?.td(p))}
-                        <TableCell><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditando(p)}><Edit2 className="h-3.5 w-3.5" /></Button></TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-0.5">
+                            {p.confirmacionEnviadaAt ? (
+                              <>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 cursor-not-allowed text-muted-foreground" disabled title="Liquidación enviada (bloqueada)"><Lock className="h-3.5 w-3.5" /></Button>
+                                {esDirector && (
+                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => reabrir(p)} title="Reabrir liquidación"><Unlock className="h-3.5 w-3.5" /></Button>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditando(p)} title="Editar"><Edit2 className="h-3.5 w-3.5" /></Button>
+                                {!p.empleadoId.startsWith("ext-") && (
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-primary" onClick={() => enviarConfirmaciones([p.empleadoId], "liquidación")} disabled={enviando} title="Enviar liquidación a este empleado"><Send className="h-3.5 w-3.5" /></Button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </TableCell>
                       </TableRow>
                     );
                   })
@@ -493,6 +687,7 @@ export function PagosView() {
                     <TableCell className="text-right tabular-nums">{fmt(pagosFiltrados.reduce((s, p) => s + p.propinaMantenimiento, 0))}</TableCell>
                     <TableCell className="text-right tabular-nums font-bold">{fmt(resumen.totalFinal)}</TableCell>
                     <TableCell className="text-center"><Badge variant={pagosFiltrados.every((p) => p.pagado) ? "default" : "secondary"} className="text-[10px]">{pagosFiltrados.filter((p) => p.pagado).length}/{pagosFiltrados.length}</Badge></TableCell>
+                    <TableCell className="text-center"><Badge variant="secondary" className="text-[10px]">{pagosFiltrados.filter((p) => p.confirmacionEnviadaAt).length}/{pagosFiltrados.length}</Badge></TableCell>
                     <TableCell />
                   </TableRow>
                 )}
@@ -508,6 +703,8 @@ export function PagosView() {
           {editando && <EditForm pago={editando} onSave={guardarEdicion} />}
         </DialogContent>
       </Dialog>
+
+      {confirmDialog}
     </div>
   );
 }

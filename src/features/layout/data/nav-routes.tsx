@@ -12,6 +12,7 @@ import {
   Inbox, FileSignature, Trophy, UserCircle, LayoutDashboard, FileQuestion,
   LayoutGrid, CalendarClock, AlertTriangle, HelpCircle, MessageSquareWarning,
   Video, Mail, MessageSquare, Banknote, Building2, Smartphone, Trash2,
+  Bell,
 } from "lucide-react";
 
 // ─── Icons custom ──────────────────────────────────────────────────────────
@@ -100,6 +101,7 @@ export const direccionSubs: SubItem[] = [
   { title: "DOCUMENTACIÓN", url: "/direccion/documentacion", icon: FileArchive },
   { title: "APERTURAS", url: "/direccion/aperturas", icon: TrendingUp },
   { title: "PRESENTACIONES", url: "/direccion/presentaciones", icon: Presentation },
+  { title: "NOTIFICACIONES", url: "/direccion/notificaciones", icon: Bell },
 ];
 
 export const salaSubs: SubItem[] = [

@@ -5,6 +5,7 @@ import { PWARegister } from "@/features/mi-panel/mobile/components/PWARegister";
 import { MobileBottomNav } from "@/features/mi-panel/mobile/components/MobileBottomNav";
 import { MobileFichajeProvider } from "@/features/mi-panel/mobile/components/MobileFichajeProvider";
 import { VersionAutoUpdate } from "@/features/mi-panel/mobile/components/VersionAutoUpdate";
+import { NotificacionesGate } from "@/features/notificaciones/components/NotificacionesGate";
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +69,7 @@ export default async function MobileLayout({ children }: { children: React.React
       <main className="mx-auto w-full max-w-screen-sm pb-24">{children}</main>
       <MobileBottomNav />
       <MobileFichajeProvider />
+      <NotificacionesGate />
     </div>
   );
 }

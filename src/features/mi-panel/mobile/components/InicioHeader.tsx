@@ -1,4 +1,5 @@
 import { PerfilPill } from "./PerfilPill";
+import { NotificacionBell } from "@/features/notificaciones/components/NotificacionBell";
 import type { MobileInicioData } from "../lib/mobile-inicio-data";
 
 export function InicioHeader({ data }: { data: MobileInicioData }) {
@@ -19,6 +20,7 @@ export function InicioHeader({ data }: { data: MobileInicioData }) {
       {/* Fila superior: pill de perfil (logo empresa + nombre/rol + foto→menú).
           Alineada a la derecha del todo. */}
       <div className="relative flex items-center justify-end gap-2">
+        <NotificacionBell />
         <PerfilPill
           nombre={nombre}
           rolLabel={rolLabel}

@@ -7,6 +7,8 @@ import { CalendarioPersonal } from "@/features/mi-panel/components/CalendarioPer
 import { SolicitudModal } from "@/features/mi-panel/components/SolicitudModal";
 import { MisSolicitudesList } from "@/features/mi-panel/components/MisSolicitudesList";
 import { MisTareasCronogramaWidget } from "@/features/mi-panel/components/MisTareasCronogramaWidget";
+import { NotificacionesGate } from "@/features/notificaciones/components/NotificacionesGate";
+import { NotificacionBell } from "@/features/notificaciones/components/NotificacionBell";
 import { PointsHeroCard } from "@/features/mi-panel/components/PointsHeroCard";
 import { ResumenTiles } from "@/features/mi-panel/components/ResumenTiles";
 import {
@@ -80,12 +82,16 @@ export function MiPanelView() {
 
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-5">
+      <NotificacionesGate />
       {/* Cabecera */}
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
-          {saludoSegunHora()}{userName ? `, ${userName.split(" ")[0]}` : ""}
-        </h1>
-        <p className="text-sm text-muted-foreground capitalize">{fechaLarga}</p>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+            {saludoSegunHora()}{userName ? `, ${userName.split(" ")[0]}` : ""}
+          </h1>
+          <p className="text-sm text-muted-foreground capitalize">{fechaLarga}</p>
+        </div>
+        <NotificacionBell />
       </div>
 
       {/* Barra de fichaje */}
