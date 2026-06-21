@@ -68,7 +68,7 @@ export async function POST(request: Request) {
   }
 
   const deviceToken = generarDeviceToken();
-  const { error: e1 } = await supabase
+  const { data: emparejado, error: e1 } = await supabase
     .from("conectores")
     .update({
       estado: "emparejado",
@@ -79,11 +79,18 @@ export async function POST(request: Request) {
       last_seen_at: new Date().toISOString(),
     })
     .eq("id", conector.id)
-    .eq("estado", "pendiente"); // guard anti-doble-canje concurrente
+    .eq("estado", "pendiente") // guard anti-doble-canje concurrente
+    .select("id")
+    .maybeSingle();
 
   if (e1) {
     console.error("[conector/pair] update:", e1.message);
     return NextResponse.json({ ok: false, error: "Error interno" }, { status: 500 });
+  }
+  // Si el guard no actualizó ninguna fila, otra petición canjeó el código a la
+  // vez (carrera): NO se entrega token, porque su hash no quedó guardado.
+  if (!emparejado) {
+    return NextResponse.json({ ok: false, error: "Código no válido o ya usado" }, { status: 409 });
   }
 
   return NextResponse.json({
