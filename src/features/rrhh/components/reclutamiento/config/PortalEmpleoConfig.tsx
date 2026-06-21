@@ -17,12 +17,6 @@ export function PortalEmpleoConfig() {
   const [tituloSobreNosotros, setTituloSobreNosotros] = useState("Conócenos un poquito más...");
   const [textoSobreNosotros, setTextoSobreNosotros] = useState("");
 
-  // Visual customization
-  const [colorPrimario, setColorPrimario] = useState("#8B1A4A");
-  const [colorSecundario, setColorSecundario] = useState("#F5E6D3");
-  const [colorBoton, setColorBoton] = useState("#8B1A4A");
-  const [colorTexto, setColorTexto] = useState("#1a1a2e");
-
   const portalPath = `/portal-empleo/${nombreUrl}`;
   const urlBase = `${window.location.origin}${portalPath}`;
   const iframeCode = `<iframe src="${urlBase}" width="100%" height="800" frameborder="0" style="border:none; border-radius:8px;"></iframe>`;
@@ -186,96 +180,28 @@ export function PortalEmpleoConfig() {
         </CardContent>
       </Card>
 
-      {/* ── Personalización visual ───────────────────── */}
+      {/* ── Identidad visual (automática) ────────────── */}
       <Card>
         <div className="px-5 py-3 border-b border-border bg-primary/5 flex items-center gap-2">
           <Palette className="h-4 w-4 text-primary" />
-          <span className="text-sm font-semibold text-foreground">Personalización visual</span>
+          <span className="text-sm font-semibold text-foreground">Identidad visual</span>
         </div>
         <CardContent className="p-5">
-          <p className="text-xs text-muted-foreground mb-5">
-            Personaliza los colores de tu portal de empleo para que se alinee con la identidad visual de tu empresa.
+          <p className="text-sm text-muted-foreground">
+            El portal de empleo usa un diseño unificado y toma automáticamente los colores y el logotipo
+            de la <span className="font-medium text-foreground">imagen de marca</span> de {empresaActual.nombre}.
+            No necesitas configurar nada aquí.
           </p>
-          <div className="grid grid-cols-2 gap-5">
-            <ColorPicker label="Color principal" description="Cabecera y elementos destacados" value={colorPrimario} onChange={setColorPrimario} />
-            <ColorPicker label="Color secundario" description="Fondo y zonas suaves" value={colorSecundario} onChange={setColorSecundario} />
-            <ColorPicker label="Color de botones" description="Botones de acción y CTA" value={colorBoton} onChange={setColorBoton} />
-            <ColorPicker label="Color de textos" description="Títulos y textos principales" value={colorTexto} onChange={setColorTexto} />
-          </div>
-
-          <Separator className="my-5" />
-
-          {/* Logo */}
-          <div className="space-y-3">
-            <Label className="text-xs font-medium">Logotipo de la empresa</Label>
-            <div className="flex items-center gap-4">
-              <div className="w-20 h-20 rounded-lg border-2 border-dashed border-border flex items-center justify-center bg-muted/30">
-                <Upload className="h-5 w-5 text-muted-foreground" />
-              </div>
-              <div className="space-y-1">
-                <Button variant="outline" size="sm" className="gap-1.5 text-xs">
-                  <Upload className="h-3.5 w-3.5" /> Subir logotipo
-                </Button>
-                <p className="text-[10px] text-muted-foreground">PNG o SVG, fondo transparente recomendado</p>
-              </div>
-            </div>
-          </div>
-
-          <Separator className="my-5" />
-
-          {/* Preview */}
-          <div className="space-y-3">
-            <Label className="text-xs font-medium">Vista previa del portal</Label>
-            <div className="rounded-xl border border-border overflow-hidden shadow-sm">
-              {/* Mini preview header */}
-              <div className="px-6 py-8 text-center" style={{ backgroundColor: colorPrimario }}>
-                <p className="text-white/70 text-[10px] uppercase tracking-wider mb-1">{empresaActual.nombre}</p>
-                <p className="text-white font-bold text-sm">{titulo || "Título de bienvenida"}</p>
-                <p className="text-white/70 text-[10px] mt-1 max-w-xs mx-auto truncate">{textoBienvenida || "Texto de bienvenida..."}</p>
-              </div>
-              {/* Mini preview body */}
-              <div className="p-4 space-y-2" style={{ backgroundColor: colorSecundario + "40" }}>
-                {["CAMARERO", "JEFE DE SALA", "ARTISTA"].map((nombre) => (
-                  <div key={nombre} className="bg-white rounded-lg px-4 py-3 flex items-center justify-between border border-gray-100">
-                    <div>
-                      <p className="text-xs font-bold" style={{ color: colorTexto }}>{nombre}</p>
-                      <p className="text-[9px] text-gray-400">Madrid · Jornada completa</p>
-                    </div>
-                    <div className="px-2 py-1 rounded text-[9px] text-white font-medium" style={{ backgroundColor: colorBoton }}>
-                      Ver vacante
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          <Button variant="outline" size="sm" className="gap-1.5 mt-4" asChild>
+            <a href="/ajustes?tab=imagen-marca" target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="h-4 w-4" /> Editar imagen de marca
+            </a>
+          </Button>
         </CardContent>
       </Card>
 
       <div className="flex justify-end">
         <Button className="gap-1.5" onClick={() => toast.success("Configuración del portal guardada")}>Guardar cambios</Button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Color Picker Component ─────────────────────────────────────
-function ColorPicker({ label, description, value, onChange }: { label: string; description: string; value: string; onChange: (v: string) => void }) {
-  return (
-    <div className="flex items-start gap-3">
-      <div className="relative shrink-0">
-        <div className="w-10 h-10 rounded-lg border-2 border-border cursor-pointer shadow-sm" style={{ backgroundColor: value }} />
-        <input
-          type="color"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-        />
-      </div>
-      <div className="flex-1 min-w-0">
-        <Label className="text-xs font-medium">{label}</Label>
-        <p className="text-[10px] text-muted-foreground">{description}</p>
-        <Input value={value} onChange={(e) => onChange(e.target.value)} className="mt-1 h-7 text-xs font-mono max-w-[120px]" />
       </div>
     </div>
   );
