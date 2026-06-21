@@ -1,6 +1,7 @@
 "use client";
 
 import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, UserRoundX, ShieldAlert, Briefcase, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ import {
   listDepartamentos,
   updateEmpleadoEmpresasAcceso,
   setEmpleadoEstado,
+  quitarEmpleadoDeEmpresa,
   type EstadoEmpleado,
 } from "@/features/rrhh/actions/empleados-actions";
 import { listPuestosCatalogo } from "@/features/rrhh/actions/vacantes-actions";
@@ -103,6 +105,12 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
   const [dependientes, setDependientes] = useState<DependienteValidador[]>([]);
   const [reemplazos, setReemplazos] = useState<ValidadorElegible[]>([]);
   const [sustitutoId, setSustitutoId] = useState<string>("");
+  // Quitar (desvincular) de una empresa: confirma, pasa su ficha a Inactivo y le
+  // retira el acceso a esa empresa. Mínimo 1 empresa (el server lo garantiza).
+  const router = useRouter();
+  const [quitarEmpresa, setQuitarEmpresa] = useState<{ id: string; nombre: string } | null>(null);
+  const [quitando, setQuitando] = useState(false);
+  const [quitarSustOpen, setQuitarSustOpen] = useState(false);
 
   useEffect(() => {
     listDepartamentos().then((res) => {
@@ -158,16 +166,41 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
   }, [empresasMarcadas, localesPorEmpresa]);
 
   function toggleEmpresa(empresaId: string, checked: boolean) {
-    if (empresaId === initial.empresaId && !checked) return;
-    setEmpresasMarcadas((prev) => {
-      if (checked) return prev.includes(empresaId) ? prev : [...prev, empresaId];
-      return prev.filter((id) => id !== empresaId);
+    // Añadir una empresa se hace con "Copiar empleado" (crea su ficha allí); el
+    // checkbox no añade. Y la empresa principal no se quita desde aquí.
+    if (checked || empresaId === initial.empresaId) return;
+    // Quitar = desvincular: pasa su ficha a Inactivo y le retira el acceso a esa
+    // empresa. Pide confirmación antes de nada.
+    const emp = empresasDisponibles.find((e) => e.id === empresaId);
+    setQuitarEmpresa({ id: empresaId, nombre: emp?.nombre ?? "esta empresa" });
+  }
+
+  async function ejecutarQuitar(sustituto?: string) {
+    if (!quitarEmpresa) return;
+    setQuitando(true);
+    const res = await quitarEmpleadoDeEmpresa({
+      empleadoId,
+      empresaId: quitarEmpresa.id,
+      sustitutoId: sustituto,
     });
-    // Al desmarcar una empresa, sus locales salen del conjunto seleccionado.
-    if (!checked) {
-      const idsEmpresa = new Set((localesPorEmpresa[empresaId] ?? []).map((l) => l.id));
-      setLocalesSeleccionados((prev) => prev.filter((id) => !idsEmpresa.has(id)));
+    setQuitando(false);
+    if (!res.ok) {
+      if (res.needsSubstitute) {
+        setDependientes((res.dependientes ?? []) as DependienteValidador[]);
+        setReemplazos((res.reemplazos ?? []) as ValidadorElegible[]);
+        setSustitutoId("");
+        setQuitarSustOpen(true);
+        return;
+      }
+      toast.error(res.error ?? "No se pudo quitar de la empresa");
+      return;
     }
+    toast.success(
+      `Empleado desvinculado de ${quitarEmpresa.nombre}: queda inactivo allí (histórico conservado).`,
+    );
+    setQuitarEmpresa(null);
+    setQuitarSustOpen(false);
+    router.push("/rrhh/empleados");
   }
 
   function toggleLocal(localId: string, checked: boolean) {
@@ -416,10 +449,18 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
                     <Checkbox
                       checked={marcada}
                       onCheckedChange={(checked) => toggleEmpresa(empresa.id, checked === true)}
-                      disabled={esPrincipal}
+                      disabled={esPrincipal || !marcada}
                     />
                     <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
                     <span>{empresa.nombre}</span>
+                    {esPrincipal && (
+                      <span className="text-[11px] font-normal text-muted-foreground">(principal)</span>
+                    )}
+                    {!marcada && (
+                      <span className="text-[11px] font-normal text-muted-foreground">
+                        — añádelo con «Copiar empleado»
+                      </span>
+                    )}
                   </label>
 
                   {marcada && (
@@ -629,6 +670,99 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
               {savingEstado
                 ? <><Loader2 className="h-4 w-4 animate-spin" />Desactivando…</>
                 : <>Reasignar y desactivar</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmar "Quitar de esta empresa" (desvincular). */}
+      <AlertDialog
+        open={!!quitarEmpresa && !quitarSustOpen}
+        onOpenChange={(o) => { if (!o && !quitando) setQuitarEmpresa(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Quitar de {quitarEmpresa?.nombre}</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se desvinculará a <strong className="text-foreground">{initial.nombre}</strong> de{" "}
+              <strong className="text-foreground">{quitarEmpresa?.nombre}</strong>: su ficha allí
+              pasa a <strong className="text-foreground">Inactiva</strong> (se conserva todo el
+              histórico) y pierde el acceso a esa empresa, así que dejará de verla en su software.
+              Seguirá en sus demás empresas. ¿Continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={quitando}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); ejecutarQuitar(); }}
+              disabled={quitando}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {quitando ? "Quitando…" : "Sí, quitar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Sustitución obligatoria si valida a otros en la empresa de la que se le quita. */}
+      <Dialog open={quitarSustOpen} onOpenChange={(o) => { if (!quitando) setQuitarSustOpen(o); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reasignar validaciones antes de quitar</DialogTitle>
+            <DialogDescription>
+              En {quitarEmpresa?.nombre}, este empleado valida a{" "}
+              <strong className="text-foreground">{dependientes.length}</strong>{" "}
+              {dependientes.length === 1 ? "empleado" : "empleados"}. Elige quién le sustituye antes
+              de desvincularlo; el sustituto asumirá sus validaciones.
+            </DialogDescription>
+          </DialogHeader>
+
+          {dependientes.length > 0 && (
+            <div className="rounded-md border bg-muted/30 p-3 max-h-40 overflow-auto space-y-1">
+              {dependientes.map((d) => (
+                <div key={d.empleadoId} className="flex items-center justify-between gap-2 text-sm">
+                  <span className="text-foreground">{d.nombreCompleto}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {[d.comoTrabajo ? "trabajo" : null, d.comoAusencias ? "ausencias" : null]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <Label>Sustituto</Label>
+            <Select value={sustitutoId} onValueChange={setSustitutoId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecciona un sustituto" />
+              </SelectTrigger>
+              <SelectContent>
+                {reemplazos.map((r) => (
+                  <SelectItem key={r.id} value={r.id}>{r.nombreCompleto}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => { setQuitarSustOpen(false); setQuitarEmpresa(null); }}
+              disabled={quitando}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => ejecutarQuitar(sustitutoId)}
+              disabled={quitando || !sustitutoId}
+              className="gap-2"
+            >
+              {quitando
+                ? <><Loader2 className="h-4 w-4 animate-spin" />Quitando…</>
+                : <>Reasignar y quitar</>}
             </Button>
           </DialogFooter>
         </DialogContent>

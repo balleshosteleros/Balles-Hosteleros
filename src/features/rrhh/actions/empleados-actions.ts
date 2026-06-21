@@ -13,6 +13,11 @@ import {
   normalizarNombre,
   normalizarNombreOrNull,
 } from "@/shared/lib/normalizar-nombre";
+import {
+  getDependientesValidador,
+  reasignarValidadorYDesactivar,
+} from "@/features/rrhh/actions/validadores-actions";
+import { resolverHorarioResumen, ahoraEnMadrid } from "@/features/rrhh/utils/horario-empleado";
 import type { DatosPersonalesInput, DatosPersonalesCompletos } from "@/features/mi-panel/actions/datos-personales-actions";
 import type { SolicitudPersonal, SolicitudSubtipo, SolicitudTipo, SolicitudEstado } from "@/features/mi-panel/types";
 
@@ -144,6 +149,18 @@ export async function listEmpleados() {
       }, {});
     }
 
+    // Resumen de horario (tipo + horas hoy) por empleado, en pocas queries.
+    const empleadoIds = Array.from(
+      new Set((data ?? []).map((e) => e.id as string).filter(Boolean)),
+    );
+    const { fecha: hoyISO } = ahoraEnMadrid();
+    const horarioPorEmpleado = await resolverHorarioResumen(
+      admin,
+      empresaId,
+      empleadoIds,
+      hoyISO,
+    );
+
     const enriched = [...porUser.values(), ...sinUser].map((e) => ({
       ...e,
       es_principal: e.empresa_id === empresaId,
@@ -159,6 +176,7 @@ export async function listEmpleados() {
       validador_ausencias_nombre: e.validador_ausencias_id
         ? nombrePorEmpleadoId[e.validador_ausencias_id as string] ?? null
         : null,
+      horario_resumen: horarioPorEmpleado.get(e.id as string) ?? null,
     }));
     enriched.sort((a, b) =>
       String(a.nombre ?? "").localeCompare(String(b.nombre ?? ""), "es"),
@@ -561,6 +579,142 @@ export async function setEmpleadoEstado(input: {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[rrhh] setEmpleadoEstado:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Quita (DESVINCULA) a un empleado de UNA empresa, conservando todo su histórico.
+ *
+ * - La ficha de esa empresa pasa a Inactivo (no se borra: registro legal).
+ * - Se le retira el acceso a esa empresa (`usuario_empresas`) y sus locales, de
+ *   modo que en su software deja de ver nada de esa empresa.
+ * - Mínimo 1: nunca puede quedarse sin empresas (debe conservar otra).
+ * - Si valida a otros en esa empresa, exige sustituto (igual que el alta de baja).
+ * - Si esa era su empresa de referencia (login), se mueve a otra que le quede.
+ *
+ * `empleadoId` identifica al usuario (cualquiera de sus fichas); `empresaId` es
+ * la empresa de la que se le quita. Devuelve `needsSubstitute` cuando hay que
+ * elegir un sustituto antes de continuar.
+ */
+export async function quitarEmpleadoDeEmpresa(input: {
+  empleadoId: string;
+  empresaId: string;
+  sustitutoId?: string;
+}): Promise<
+  | { ok: true }
+  | {
+      ok: false;
+      error?: string;
+      needsSubstitute?: boolean;
+      dependientes?: unknown[];
+      reemplazos?: unknown[];
+    }
+> {
+  try {
+    const { supabase } = await getAppContext();
+
+    const { data: actual } = await supabase
+      .from("empleados")
+      .select("user_id")
+      .eq("id", input.empleadoId)
+      .maybeSingle();
+    if (!actual?.user_id) return { ok: false, error: "Empleado no encontrado." };
+    const userId = actual.user_id as string;
+
+    await requireRRHHAcceso([input.empresaId]);
+
+    let admin;
+    try {
+      admin = createAdminClient();
+    } catch {
+      return { ok: false, error: "Supabase admin no configurado." };
+    }
+
+    // Todas las fichas del empleado (una por empresa).
+    const { data: filas } = await admin
+      .from("empleados")
+      .select("id, empresa_id")
+      .eq("user_id", userId);
+    const objetivo = (filas ?? []).find((f) => f.empresa_id === input.empresaId);
+    if (!objetivo) return { ok: false, error: "El empleado no está en esa empresa." };
+
+    // Mínimo 1: debe quedarle al menos otra empresa.
+    const otras = (filas ?? []).filter((f) => f.empresa_id !== input.empresaId);
+    if (otras.length === 0) {
+      return {
+        ok: false,
+        error:
+          "Es su única empresa. No puedes desvincularlo de todas; para darlo de baja por completo, márcalo Inactivo en su ficha.",
+      };
+    }
+
+    const objetivoId = objetivo.id as string;
+
+    // Validadores: si valida a otros en esta empresa, hace falta sustituto.
+    const dep = await getDependientesValidador(objetivoId);
+    if (dep.ok && dep.dependientes.length > 0 && !input.sustitutoId) {
+      if (dep.reemplazos.length === 0) {
+        return {
+          ok: false,
+          error:
+            "Valida a otros y no hay nadie con acceso a RRHH para sustituirle. Da acceso a RRHH a otra persona antes de quitarlo.",
+        };
+      }
+      return {
+        ok: false,
+        needsSubstitute: true,
+        dependientes: dep.dependientes,
+        reemplazos: dep.reemplazos,
+      };
+    }
+
+    const hoy = new Date().toISOString().split("T")[0];
+
+    // 1) Ficha de esta empresa → Inactivo (conserva todo), reasignando validador
+    //    si procede.
+    if (dep.ok && dep.dependientes.length > 0 && input.sustitutoId) {
+      const r = await reasignarValidadorYDesactivar({
+        empleadoId: objetivoId,
+        sustitutoId: input.sustitutoId,
+        fechaBaja: hoy,
+      });
+      if (!r.ok) return { ok: false, error: r.error };
+    } else {
+      const { error: upErr } = await admin
+        .from("empleados")
+        .update({ estado: "Inactivo", fecha_baja: hoy })
+        .eq("id", objetivoId);
+      if (upErr) throw upErr;
+    }
+
+    // 2) Desvincular: quitar acceso a esta empresa + sus locales de fichaje.
+    await admin
+      .from("usuario_empresas")
+      .delete()
+      .eq("user_id", userId)
+      .eq("empresa_id", input.empresaId);
+    await admin.from("empleado_locales").delete().eq("empleado_id", objetivoId);
+
+    // 3) Si esta era su empresa de referencia (login), moverla a otra que quede.
+    const { data: prof } = await admin
+      .from("usuarios")
+      .select("empresa_id")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (prof?.empresa_id === input.empresaId) {
+      await admin
+        .from("usuarios")
+        .update({ empresa_id: otras[0].empresa_id })
+        .eq("user_id", userId);
+    }
+
+    revalidatePath("/rrhh/empleados");
+    revalidatePath(`/rrhh/empleados/${input.empleadoId}`);
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[rrhh] quitarEmpleadoDeEmpresa:", msg);
     return { ok: false, error: msg };
   }
 }
