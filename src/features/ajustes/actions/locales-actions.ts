@@ -282,20 +282,50 @@ export async function listEmpleadosEmpresaParaLocales(
 }
 
 /** Locales (ids) donde el empleado puede fichar, de todas sus empresas. */
+/**
+ * Locales de fichaje de la PERSONA (no de una sola ficha): un empleado
+ * multi-empresa tiene una fila de `empleados` por empresa, y cada local vive en
+ * el puente de la ficha de SU empresa. La tarjeta de gestión muestra los locales
+ * de todas sus empresas, así que aquí devolvemos la UNIÓN de los puentes de
+ * todas sus fichas (por `user_id`). Si no, el local de la otra empresa saldría
+ * desmarcado aunque sí esté asignado.
+ */
 export async function getLocalesEmpleado(empleadoId: string) {
   try {
     const { supabase } = await getContext();
+    const { data: emp } = await supabase
+      .from("empleados")
+      .select("user_id")
+      .eq("id", empleadoId)
+      .maybeSingle();
+    const empleadoIds = await idsFichasDelEmpleado(supabase, empleadoId, emp?.user_id ?? null);
     const { data, error } = await supabase
       .from("empleado_locales")
       .select("local_id")
-      .eq("empleado_id", empleadoId);
+      .in("empleado_id", empleadoIds);
     if (error) throw error;
-    return { ok: true, data: (data ?? []).map((r) => r.local_id as string) };
+    const ids = Array.from(new Set((data ?? []).map((r) => r.local_id as string)));
+    return { ok: true, data: ids };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[locales] getLocalesEmpleado:", msg);
     return { ok: false, data: [], error: msg };
   }
+}
+
+/** Todas las fichas (`empleados.id`) de la misma persona; al menos la propia. */
+async function idsFichasDelEmpleado(
+  supabase: Awaited<ReturnType<typeof getContext>>["supabase"],
+  empleadoId: string,
+  userId: string | null,
+): Promise<string[]> {
+  if (!userId) return [empleadoId];
+  const { data } = await supabase
+    .from("empleados")
+    .select("id")
+    .eq("user_id", userId);
+  const ids = (data ?? []).map((r) => r.id as string);
+  return ids.length > 0 ? ids : [empleadoId];
 }
 
 /**
@@ -326,47 +356,79 @@ async function recomputarLocalPorDefecto(
   await supabase.from("empleados").update({ local_id: defecto }).eq("id", empleadoId);
 }
 
-/** Reemplaza por completo el conjunto de locales donde el empleado puede fichar. */
+/**
+ * Reemplaza el conjunto de locales donde la PERSONA puede fichar, REPARTIENDO
+ * cada local a la ficha (`empleados.id`) de SU empresa. Un empleado multi-empresa
+ * tiene una fila por empresa; el local debe vivir en el puente de la fila de su
+ * empresa para que el fichaje (agnóstico de empresa, geo→local→empresa) resuelva
+ * el `empleado.id` correcto y no aparezca un local duplicado. La tarjeta envía la
+ * unión marcada en todas las empresas; aquí la desglosamos por empresa.
+ */
 export async function setLocalesEmpleado(empleadoId: string, localIds: string[]) {
   try {
     const { supabase } = await getContext();
     const ids = Array.from(new Set((localIds ?? []).filter(Boolean)));
 
-    // Cada local debe pertenecer a una empresa a la que el empleado tiene acceso.
+    const { data: emp } = await supabase
+      .from("empleados")
+      .select("user_id")
+      .eq("id", empleadoId)
+      .maybeSingle();
+    const userId = emp?.user_id ?? null;
+
+    // Todas las fichas de la persona: empresa → empleado.id que la posee.
+    const { data: fichas } = userId
+      ? await supabase.from("empleados").select("id, empresa_id").eq("user_id", userId)
+      : { data: null as { id: string; empresa_id: string }[] | null };
+    const fichaPorEmpresa = new Map<string, string>();
+    for (const f of fichas ?? []) fichaPorEmpresa.set(f.empresa_id as string, f.id as string);
+    if (fichaPorEmpresa.size === 0) fichaPorEmpresa.set("__self__", empleadoId);
+
+    // Validación: cada local debe ser de una empresa a la que la persona accede.
+    const empresaPorLocal = new Map<string, string>();
     if (ids.length > 0) {
-      const { data: emp } = await supabase
-        .from("empleados")
-        .select("user_id")
-        .eq("id", empleadoId)
-        .maybeSingle();
       const { data: accesos } = await supabase
         .from("usuario_empresas")
         .select("empresa_id")
-        .eq("user_id", emp?.user_id ?? "");
-      const empresasEmpleado = new Set((accesos ?? []).map((a) => a.empresa_id));
+        .eq("user_id", userId ?? "");
+      const empresasEmpleado = new Set((accesos ?? []).map((a) => a.empresa_id as string));
       const { data: locs } = await supabase
         .from("locales")
         .select("id, empresa_id")
         .in("id", ids);
       if ((locs?.length ?? 0) !== ids.length ||
-          (locs ?? []).some((l) => !empresasEmpleado.has(l.empresa_id))) {
+          (locs ?? []).some((l) => !empresasEmpleado.has(l.empresa_id as string))) {
         return { ok: false, error: "Algún local no pertenece a una empresa del empleado." };
       }
+      for (const l of locs ?? []) empresaPorLocal.set(l.id as string, l.empresa_id as string);
     }
 
-    const { error: delErr } = await supabase
-      .from("empleado_locales")
-      .delete()
-      .eq("empleado_id", empleadoId);
-    if (delErr) throw delErr;
-
-    if (ids.length > 0) {
-      const rows = ids.map((local_id) => ({ empleado_id: empleadoId, local_id }));
-      const { error: insErr } = await supabase.from("empleado_locales").insert(rows);
-      if (insErr) throw insErr;
+    // Reparte: cada local → ficha de su empresa (si la persona no tiene ficha en
+    // esa empresa todavía, recae en la ficha que se está editando, como fallback).
+    const localesPorFicha = new Map<string, string[]>();
+    for (const fichaId of fichaPorEmpresa.values()) localesPorFicha.set(fichaId, []);
+    localesPorFicha.set(empleadoId, localesPorFicha.get(empleadoId) ?? []);
+    for (const localId of ids) {
+      const empresa = empresaPorLocal.get(localId);
+      const fichaId = (empresa && fichaPorEmpresa.get(empresa)) || empleadoId;
+      localesPorFicha.get(fichaId)!.push(localId);
     }
 
-    await recomputarLocalPorDefecto(supabase, empleadoId);
+    // Persiste cada ficha por separado y recalcula su local por defecto.
+    for (const [fichaId, locales] of localesPorFicha) {
+      const { error: delErr } = await supabase
+        .from("empleado_locales")
+        .delete()
+        .eq("empleado_id", fichaId);
+      if (delErr) throw delErr;
+      if (locales.length > 0) {
+        const rows = locales.map((local_id) => ({ empleado_id: fichaId, local_id }));
+        const { error: insErr } = await supabase.from("empleado_locales").insert(rows);
+        if (insErr) throw insErr;
+      }
+      await recomputarLocalPorDefecto(supabase, fichaId);
+    }
+
     return { ok: true };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
