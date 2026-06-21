@@ -21,7 +21,7 @@ export async function checkProfileGuard(
 ): Promise<ProfileGuardResult> {
   const { data: profile } = await supabase
     .from('usuarios')
-    .select('estado_acceso, empresa_id, rol_label')
+    .select('estado_acceso, empresa_id, rol_id, rol_label')
     .eq('user_id', userId)
     .maybeSingle()
 
@@ -35,10 +35,13 @@ export async function checkProfileGuard(
   const empresaId = (profile.empresa_id as string | null) ?? null
   if (!empresaId) return { ok: false, code: 'sin_empresa' }
 
+  // Fuente única (PRP-063): el rol se valida por rol_id; rol_label es un espejo.
+  // Fallback defensivo a rol_label para no regresar a usuarios en transición.
+  const rolId = (profile.rol_id as string | null) ?? null
   const rolLabel = (profile.rol_label as string | null) ?? null
-  if (!rolLabel) return { ok: false, code: 'sin_rol' }
+  if (!rolId && !rolLabel) return { ok: false, code: 'sin_rol' }
 
-  return { ok: true, empresaId, rolLabel }
+  return { ok: true, empresaId, rolLabel: rolLabel ?? '' }
 }
 
 const GENERIC_ACCESS_MESSAGE = 'Usuario o contraseña incorrectos.'
