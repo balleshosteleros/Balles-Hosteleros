@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { listVacantesConCandidatos, seedVacantesDesdeOrganigrama } from "@/features/rrhh/actions/reclutamiento-actions";
+import { listVacantesConCandidatos, asegurarVacantesPorPuesto } from "@/features/rrhh/actions/reclutamiento-actions";
 import {
   publicarVacante, despublicarVacante, deleteVacante,
 } from "@/features/rrhh/actions/vacantes-actions";
@@ -419,9 +419,9 @@ export function ReclutamientoView() {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      // Asegura que cada nodo del organigrama tenga su vacante (idempotente),
+      // Regla del modelo: cada puesto activo tiene su vacante (idempotente),
       // siempre para la empresa seleccionada en el contexto del cliente.
-      await seedVacantesDesdeOrganigrama(empresaActual.id);
+      await asegurarVacantesPorPuesto(empresaActual.id);
       const res = await listVacantesConCandidatos(empresaActual.id);
       if (!cancelled) {
         setVacantes((res.data ?? []) as unknown as Vacante[]);

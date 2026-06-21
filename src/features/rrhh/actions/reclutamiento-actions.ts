@@ -77,7 +77,7 @@ interface VacanteRowReal {
   fecha_creacion: string;
   cuestionario: boolean;
   favorita: boolean;
-  departamentos: { nombre: string } | null;
+  departamentos: { nombre: string; area: string | null } | null;
   puestos: { nombre: string } | null;
 }
 
@@ -120,7 +120,7 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
           id, empresa_id, titulo, categoria, ubicacion, tipo_jornada,
           estado_publicacion, visible_publicamente, fecha_creacion,
           cuestionario, favorita,
-          departamentos(nombre),
+          departamentos(nombre, area),
           puestos(nombre)
         `)
         .eq("empresa_id", empresaId)
@@ -156,9 +156,10 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
       "base_datos", "portal_empleo", "otros",
     ]);
 
-    // ── Cada vacante toma su área del nodo del organigrama cuyo label
-    // coincide con el `titulo` (case-insensitive). Si no hay match, cae
-    // en "administrativa" por defecto.
+    // ── El área (operativa/administrativa) de una vacante la define su
+    // DEPARTAMENTO (`departamentos.area`), que es la fuente canónica del
+    // proyecto. El organigrama solo se usa como respaldo para vacantes sin
+    // departamento asignado, cruzando su `titulo` con el label del nodo.
     const slugResuelto = empresaSlug ?? (await getEmpresaSlug(supabase, empresaId));
     const organigrama = slugResuelto
       ? ((await getOrganigrama(slugResuelto)) ?? orgChartsPorEmpresa[slugResuelto] ?? null)
@@ -171,7 +172,14 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
     const data = vacantes.map((v) => {
       const cands = candidatosByVacante.get(v.id) ?? [];
       const nodo = nodoPorTitulo.get(norm(v.titulo));
-      const area: AreaType = (nodo?.area as string) === "operativa" ? "operativa" : "administrativa";
+      // 1º el área del departamento (canónica); 2º respaldo al organigrama.
+      const areaDepto = v.departamentos?.area?.toLowerCase();
+      const area: AreaType =
+        areaDepto === "operativa" || areaDepto === "administrativa"
+          ? (areaDepto as AreaType)
+          : (nodo?.area as string) === "operativa"
+            ? "operativa"
+            : "administrativa";
       return {
         id: v.id,
         puesto: v.titulo,
@@ -307,11 +315,13 @@ export async function deleteCandidato(id: string) {
 }
 
 /**
- * Crea una vacante (en estado borrador) por cada nodo del organigrama de la
- * empresa actual que aún no tenga una vacante con ese título. Idempotente:
- * llamarlo varias veces no duplica ofertas.
+ * Regla del modelo: «todo PUESTO tiene su vacante». Garantiza que cada puesto
+ * activo de la empresa tenga exactamente una vacante enlazada por `puesto_id`.
+ * Idempotente y ADITIVO (nunca borra): crea las que falten —en borrador, para
+ * no exponerlas en el portal público sin revisión— heredando el departamento
+ * del puesto, y enlaza por nombre las vacantes homónimas que existieran sueltas.
  */
-export async function seedVacantesDesdeOrganigrama(empresaSlug?: string | null) {
+export async function asegurarVacantesPorPuesto(empresaSlug?: string | null) {
   try {
     const { supabase, user, empresaId: profileEmpresaId } = await getContext();
     const empresaId = empresaSlug
@@ -319,46 +329,69 @@ export async function seedVacantesDesdeOrganigrama(empresaSlug?: string | null) 
       : profileEmpresaId;
     if (!empresaId) return { ok: false, created: 0 };
 
-    const slug = empresaSlug ?? (await getEmpresaSlug(supabase, empresaId));
-    const organigrama = slug
-      ? ((await getOrganigrama(slug)) ?? orgChartsPorEmpresa[slug] ?? null)
-      : null;
-    const nodos: OrgNode[] = organigrama?.nodes ?? [];
-    if (nodos.length === 0) return { ok: true, created: 0 };
+    const [puestosRes, vacantesRes] = await Promise.all([
+      supabase
+        .from("puestos")
+        .select("id, nombre, departamento_id")
+        .eq("empresa_id", empresaId)
+        .eq("estado", "activo"),
+      supabase
+        .from("vacantes")
+        .select("id, titulo, puesto_id")
+        .eq("empresa_id", empresaId),
+    ]);
 
-    const { data: existentes, error: errExist } = await supabase
-      .from("vacantes")
-      .select("titulo")
-      .eq("empresa_id", empresaId);
-    if (errExist) throw errExist;
+    const puestos = (puestosRes.data ?? []) as Array<{
+      id: string; nombre: string; departamento_id: string | null;
+    }>;
+    const vacantes = (vacantesRes.data ?? []) as Array<{
+      id: string; titulo: string | null; puesto_id: string | null;
+    }>;
+    if (puestos.length === 0) return { ok: true, created: 0 };
 
     const norm = (s: string) => s.trim().toLowerCase();
-    const titulosExistentes = new Set(
-      ((existentes ?? []) as Array<{ titulo: string | null }>).map((r) =>
-        norm(r.titulo ?? ""),
-      ),
+    const puestoIdConVacante = new Set(
+      vacantes.map((v) => v.puesto_id).filter(Boolean) as string[],
     );
+    const vacantePorNombre = new Map<string, { id: string; puesto_id: string | null }>();
+    for (const v of vacantes) vacantePorNombre.set(norm(v.titulo ?? ""), v);
 
-    const aCrear = nodos.filter((n) => !titulosExistentes.has(norm(n.label)));
-    if (aCrear.length === 0) return { ok: true, created: 0 };
+    const aCrear: Array<Record<string, unknown>> = [];
+    for (const p of puestos) {
+      if (puestoIdConVacante.has(p.id)) continue; // ya tiene su vacante
+      const homonima = vacantePorNombre.get(norm(p.nombre));
+      if (homonima) {
+        // Existe una vacante con el mismo nombre pero sin enlazar → enlazar.
+        if (!homonima.puesto_id) {
+          await supabase
+            .from("vacantes")
+            .update({ puesto_id: p.id, departamento_id: p.departamento_id })
+            .eq("id", homonima.id);
+        }
+        continue;
+      }
+      aCrear.push({
+        empresa_id: empresaId,
+        titulo: p.nombre,
+        puesto_id: p.id,
+        departamento_id: p.departamento_id,
+        tipo_jornada: "Completa",
+        estado_publicacion: "borrador",
+        visible_publicamente: false,
+        cuestionario: false,
+        favorita: false,
+        creado_por: user?.id ?? null,
+      });
+    }
 
-    const rows = aCrear.map((n) => ({
-      empresa_id: empresaId,
-      titulo: n.label,
-      tipo_jornada: "completa",
-      estado_publicacion: "borrador",
-      visible_publicamente: false,
-      cuestionario: false,
-      favorita: false,
-      creado_por: user?.id ?? null,
-    }));
-
-    const { error } = await supabase.from("vacantes").insert(rows);
-    if (error) throw error;
+    if (aCrear.length > 0) {
+      const { error } = await supabase.from("vacantes").insert(aCrear);
+      if (error) throw error;
+    }
     return { ok: true, created: aCrear.length };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[reclutamiento] seedVacantesDesdeOrganigrama:", msg);
+    console.error("[reclutamiento] asegurarVacantesPorPuesto:", msg);
     return { ok: false, created: 0 };
   }
 }
