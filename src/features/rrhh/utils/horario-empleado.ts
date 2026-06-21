@@ -262,6 +262,260 @@ export async function getTramosHorarioEmpleado(
   return turnos.flatMap((t) => t.tramos);
 }
 
+/** Horas decimales de una lista de tramos (resuelve cruce de medianoche). */
+function horasDeTramos(tramos: Tramo[]): number {
+  let total = 0;
+  for (const tr of tramos) {
+    const ini = hhmmAMinutos(tr.inicio);
+    let fin = hhmmAMinutos(tr.fin);
+    if (ini == null || fin == null) continue;
+    if (fin <= ini) fin += 1440; // cruza medianoche
+    total += fin - ini;
+  }
+  return total / 60;
+}
+
+export type HorarioResumenEmpleado = {
+  /** Nombre del/los TURNO(s) que tocan HOY (no del patrón). null = hoy descansa. */
+  nombre: string | null;
+  /** Etiqueta del tipo del turno de hoy: "Fijo" | "Flexible". null si descansa. */
+  tipoLabel: string | null;
+  /** Horas previstas hoy (decimal). null = libra hoy o flexible sin ventana. */
+  horasHoy: number | null;
+  /** true si el empleado tiene CUALQUIER horario asignado (aunque hoy libre). */
+  tieneHorario: boolean;
+};
+
+/**
+ * Resumen de horario para una LISTA de empleados en una fecha, en pocas queries
+ * (batched, sin N+1). Para cada empleado devuelve el nombre/tipo del horario
+ * asignado (patrón preferente, si no turno directo) y las horas previstas hoy.
+ * Pensado para columnas de listados como `EmpleadosView`.
+ */
+export async function resolverHorarioResumen(
+  supabase: SupabaseClient,
+  empresaId: string,
+  empleadoIds: string[],
+  hoyISO: string,
+): Promise<Map<string, HorarioResumenEmpleado>> {
+  const out = new Map<string, HorarioResumenEmpleado>();
+  if (empleadoIds.length === 0) return out;
+  const weekday = indexLunes(hoyISO);
+  const letra = LETRAS_DIA[weekday];
+
+  // Turnos que aplican HOY (ya filtrados por día): planificación + celda del
+  // patrón (explícitos) y turnos directos cuyo día encaja.
+  const explicitos: Record<string, Set<string>> = {};
+  const directos: Record<string, Set<string>> = {};
+  const addExpl = (eid: string, tid: string) => (explicitos[eid] ??= new Set<string>()).add(tid);
+  const addDir = (eid: string, tid: string) => (directos[eid] ??= new Set<string>()).add(tid);
+  // El empleado tiene horario asignado (vigente hoy o en el futuro) → en sus días
+  // de descanso es "Libre", no "Sin horario".
+  const tieneHorario: Record<string, boolean> = {};
+
+  // 0) Planificación concreta de hoy.
+  const { data: planif } = await supabase
+    .from("rrhh_planificacion")
+    .select("empleado_id, turno_id")
+    .eq("empresa_id", empresaId)
+    .in("empleado_id", empleadoIds)
+    .eq("fecha", hoyISO);
+  for (const p of planif ?? []) {
+    const eid = (p as { empleado_id?: string }).empleado_id;
+    const tid = (p as { turno_id?: string | null }).turno_id;
+    if (eid && tid) {
+      addExpl(eid, tid);
+      tieneHorario[eid] = true;
+    }
+  }
+
+  // a) Turnos directos: TODAS las asignaciones (sin filtrar fecha) para detectar
+  //    también horario que arranca en el futuro; la aplicabilidad de hoy se
+  //    decide luego con vigente_desde y los días del turno.
+  const { data: te } = await supabase
+    .from("rrhh_turno_empleados")
+    .select("empleado_id, turno_id, vigente_desde")
+    .eq("empresa_id", empresaId)
+    .in("empleado_id", empleadoIds);
+
+  // b) Patrones: TODAS las asignaciones (sin filtrar fecha).
+  const { data: pe } = await supabase
+    .from("rrhh_patron_empleados")
+    .select("empleado_id, patron_id, vigente_desde")
+    .in("empleado_id", empleadoIds);
+  const patronIds = [
+    ...new Set(
+      (pe ?? [])
+        .map((r) => (r as { patron_id?: string }).patron_id)
+        .filter((x): x is string => Boolean(x)),
+    ),
+  ];
+  // Patrones "vivos": activos y no caducados (permite vigente_desde futuro).
+  const patronInfo = new Map<
+    string,
+    { nombre: string; tipo: string; vigenteDesde: string | null }
+  >();
+  if (patronIds.length > 0) {
+    const { data: patrones } = await supabase
+      .from("rrhh_patrones")
+      .select("id, nombre, tipo, vigente_desde, vigente_hasta")
+      .eq("empresa_id", empresaId)
+      .eq("activo", true)
+      .in("id", patronIds)
+      .or(`vigente_hasta.is.null,vigente_hasta.gte.${hoyISO}`);
+    for (const p of patrones ?? []) {
+      const row = p as { id: string; nombre: string; tipo: string; vigente_desde: string | null };
+      patronInfo.set(row.id, { nombre: row.nombre, tipo: row.tipo, vigenteDesde: row.vigente_desde });
+    }
+    const activos = [...patronInfo.keys()];
+    if (activos.length > 0) {
+      const { data: semanas } = await supabase
+        .from("rrhh_patron_semanas")
+        .select("patron_id, dias")
+        .in("patron_id", activos);
+      const turnoDiaPorPatron = new Map<string, Set<string>>();
+      for (const s of semanas ?? []) {
+        const pid = (s as { patron_id: string }).patron_id;
+        const dias = ((s as { dias?: (string | null)[] }).dias ?? []) as (string | null)[];
+        const tid = dias[weekday];
+        if (tid) (turnoDiaPorPatron.get(pid) ?? turnoDiaPorPatron.set(pid, new Set<string>()).get(pid)!).add(tid);
+      }
+      for (const r of pe ?? []) {
+        const eid = (r as { empleado_id?: string }).empleado_id;
+        const pid = (r as { patron_id?: string }).patron_id;
+        if (!eid || !pid) continue;
+        const info = patronInfo.get(pid);
+        if (!info) continue; // patrón inactivo o caducado
+        tieneHorario[eid] = true; // patrón vivo asignado (aunque empiece en el futuro)
+        const asigDesde = (r as { vigente_desde?: string | null }).vigente_desde ?? null;
+        const aplicaHoy =
+          (info.vigenteDesde == null || info.vigenteDesde <= hoyISO) &&
+          (asigDesde == null || asigDesde <= hoyISO);
+        if (aplicaHoy) {
+          const tids = turnoDiaPorPatron.get(pid);
+          if (tids) for (const tid of tids) addExpl(eid, tid); // celda del día (puede no haber → libre)
+        }
+      }
+    }
+  }
+  // Detalle de los turnos referenciados (celdas de patrón + directos).
+  const allTurnoIds = new Set<string>();
+  for (const eid of empleadoIds) {
+    for (const t of explicitos[eid] ?? []) allTurnoIds.add(t);
+  }
+  for (const d of te ?? []) {
+    const tid = (d as { turno_id?: string | null }).turno_id;
+    if (tid) allTurnoIds.add(tid);
+  }
+  type TurnoInfo = {
+    nombre: string;
+    tramos: Tramo[];
+    tipoJornada: "fijo" | "flexible";
+    flexHoras: Record<string, number>;
+    flexHorasDia: number | null;
+    flexModo: "diario" | "semanal";
+    dias: string[];
+    vigenteHasta: string | null;
+  };
+  const turnoInfo = new Map<string, TurnoInfo>();
+  if (allTurnoIds.size > 0) {
+    const { data: turnos } = await supabase
+      .from("rrhh_turnos")
+      .select("id, nombre, tramos, activo, tipo_jornada, flex_horas, flex_horas_dia, flex_modo, dias, vigente_hasta")
+      .eq("empresa_id", empresaId)
+      .eq("activo", true)
+      .in("id", [...allTurnoIds]);
+    for (const t of turnos ?? []) {
+      const row = t as {
+        id: string;
+        nombre?: string | null;
+        tramos?: { inicio?: string; fin?: string }[];
+        tipo_jornada?: string;
+        flex_horas?: Record<string, number> | null;
+        flex_horas_dia?: number | string | null;
+        flex_modo?: string | null;
+        dias?: string[] | null;
+        vigente_hasta?: string | null;
+      };
+      const tramos: Tramo[] = [];
+      for (const tr of row.tramos ?? []) {
+        if (tr?.inicio && tr?.fin) tramos.push({ inicio: tr.inicio, fin: tr.fin });
+      }
+      turnoInfo.set(row.id, {
+        nombre: row.nombre ?? "",
+        tramos,
+        tipoJornada: (row.tipo_jornada as "fijo" | "flexible") ?? "fijo",
+        flexHoras: (row.flex_horas as Record<string, number> | null) ?? {},
+        flexHorasDia: row.flex_horas_dia == null ? null : Number(row.flex_horas_dia),
+        flexModo: (row.flex_modo as "diario" | "semanal") ?? "diario",
+        dias: (row.dias as string[] | null) ?? [],
+        vigenteHasta: row.vigente_hasta ?? null,
+      });
+    }
+  }
+
+  // Aplicabilidad de los turnos directos: el turno debe estar vivo (activo y no
+  // caducado) → cuenta como horario asignado; aplica HOY si ya entró en vigor y
+  // hoy es uno de sus días (los días entre medias quedan "Libre").
+  for (const d of te ?? []) {
+    const eid = (d as { empleado_id?: string }).empleado_id;
+    const tid = (d as { turno_id?: string | null }).turno_id;
+    if (!eid || !tid) continue;
+    const info = turnoInfo.get(tid);
+    if (!info) continue; // turno inactivo
+    if (info.vigenteHasta != null && info.vigenteHasta < hoyISO) continue; // caducado
+    tieneHorario[eid] = true;
+    const asigDesde = (d as { vigente_desde?: string | null }).vigente_desde ?? null;
+    const aplicaHoy =
+      (asigDesde == null || asigDesde <= hoyISO) &&
+      (info.dias.length === 0 || info.dias.includes(letra));
+    if (aplicaHoy) addDir(eid, tid);
+  }
+
+  for (const eid of empleadoIds) {
+    // `explicitos` y `directos` ya contienen solo turnos aplicables hoy.
+    const todos = new Set<string>([...(explicitos[eid] ?? []), ...(directos[eid] ?? [])]);
+
+    const tramosFijos: Tramo[] = [];
+    let flexAplica: { objetivo: number; modo: "diario" | "semanal" } | null = null;
+    // Nombre y tipo del TURNO de hoy (no del patrón): lo que toca trabajar este día.
+    const nombresHoy: string[] = [];
+    let tipoHoy: "fijo" | "flexible" | null = null;
+    for (const tid of todos) {
+      const info = turnoInfo.get(tid);
+      if (!info) continue;
+      if (info.nombre) nombresHoy.push(info.nombre);
+      if (info.tipoJornada !== "flexible") {
+        tramosFijos.push(...info.tramos);
+        tipoHoy = "fijo";
+      } else {
+        if (tipoHoy == null) tipoHoy = "flexible";
+        if (!flexAplica) {
+          const objetivo =
+            info.flexHorasDia != null
+              ? info.flexHorasDia
+              : info.flexModo === "semanal"
+                ? Object.values(info.flexHoras).reduce((a, b) => a + (Number(b) || 0), 0)
+                : Number(info.flexHoras[letra] ?? 0);
+          const modo = info.flexHorasDia != null ? "diario" : info.flexModo;
+          flexAplica = { objetivo, modo };
+        }
+      }
+    }
+
+    // Horas previstas hoy: si hoy descansa, queda null → la UI mostrará "Libre".
+    let horasHoy: number | null = null;
+    if (tramosFijos.length > 0) horasHoy = horasDeTramos(tramosFijos);
+    else if (flexAplica) horasHoy = flexAplica.modo === "diario" ? flexAplica.objetivo : null;
+
+    const nombre = nombresHoy.length > 0 ? [...new Set(nombresHoy)].join(" + ") : null;
+    const tipoLabel = tipoHoy === "fijo" ? "Fijo" : tipoHoy === "flexible" ? "Flexible" : null;
+
+    out.set(eid, { nombre, tipoLabel, horasHoy, tieneHorario: !!tieneHorario[eid] });
+  }
+  return out;
+}
+
 /** Lunes y domingo (YYYY-MM-DD) de la semana ISO que contiene la fecha. */
 export function semanaDeFecha(fechaISO: string): { lunes: string; domingo: string } {
   const d = new Date(`${fechaISO}T12:00:00`);

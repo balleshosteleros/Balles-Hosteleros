@@ -62,7 +62,20 @@ type EmpleadoBDRow = {
   empresas_acceso?: Array<{ id: string; nombre: string }>;
   validador_trabajo_nombre?: string | null;
   validador_ausencias_nombre?: string | null;
+  horario_resumen?: {
+    nombre: string | null;
+    tipoLabel: string | null;
+    horasHoy: number | null;
+    tieneHorario: boolean;
+  } | null;
 };
+
+/** "8", "7,5" — horas decimales sin ceros sobrantes, coma decimal (es-ES). */
+function formatHoras(h: number): string {
+  return (Math.round(h * 100) / 100).toLocaleString("es-ES", {
+    maximumFractionDigits: 2,
+  });
+}
 
 type EmpleadoConAcceso = EmpleadoUI & {
   esPrincipal: boolean;
@@ -74,14 +87,26 @@ function normalizarEstadoEmpleado(estado: string): EmpleadoUI["estado"] {
 }
 
 function bdToEmpleado(row: EmpleadoBDRow): EmpleadoConAcceso {
+  const h = row.horario_resumen;
+  // Columna Horario: nombre del TURNO de hoy; si descansa "Libre"; si no tiene
+  // ningún horario asignado "Sin horario".
+  const horarioTipo = h?.nombre ?? (h?.tieneHorario ? "Libre" : "Sin horario");
+  const horarioSemanal = h?.tipoLabel ?? "—";
+  // Horas hoy: o trabaja (horas), o descansa con horario asignado ("Libre"), o
+  // no tiene horario alguno ("Sin horario"). Nunca horas + libre a la vez.
+  const horasHoy = h?.horasHoy != null
+    ? `${formatHoras(h.horasHoy)} h`
+    : h?.tieneHorario
+      ? "Libre"
+      : "Sin horario";
   return {
     id: row.id,
     nombre: row.nombre ?? "",
     apellidos: row.apellidos ?? "",
     estado: normalizarEstadoEmpleado(row.estado),
-    horarioTipo: "—",
-    horarioSemanal: "—",
-    horasHoy: "—",
+    horarioTipo,
+    horarioSemanal,
+    horasHoy,
     departamento: row.departamentos?.nombre ?? "—",
     areas: row.areas ?? [],
     telefono: row.telefono ?? "—",
@@ -307,7 +332,9 @@ export function EmpleadosView() {
         <td key="horario" className="px-3 py-2 align-middle text-center">
           <div className="leading-tight">
             <span className="text-sm font-semibold text-foreground">{emp.horarioTipo}</span>
-            <p className="text-[11px] text-muted-foreground">({emp.horarioSemanal})</p>
+            {emp.horarioSemanal && emp.horarioSemanal !== "—" && (
+              <p className="text-[11px] text-muted-foreground">({emp.horarioSemanal})</p>
+            )}
           </div>
         </td>
       ),
