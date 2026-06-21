@@ -12,6 +12,12 @@ export type CamaraRow = {
   stream_subtipo: number;
   orden: number;
   activo: boolean;
+  // PRP-061: vínculo al conector + datos de stream (sin credenciales)
+  conector_id: string | null;
+  onvif_uid: string | null;
+  rtsp_path: string | null;
+  soporta_rebobinado: boolean;
+  grabacion_cloud: boolean;
   created_at: string;
   updated_at: string;
 };

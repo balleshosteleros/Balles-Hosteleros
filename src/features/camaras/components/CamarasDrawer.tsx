@@ -20,6 +20,7 @@ import {
   Pencil,
   Check,
   X,
+  Router,
 } from "lucide-react";
 import {
   Sheet,
@@ -54,6 +55,7 @@ import {
   updateCamara,
   deleteCamara,
 } from "@/features/camaras/actions/camaras-actions";
+import { ConectorPairingDialog } from "@/features/camaras/components/ConectorPairingDialog";
 
 type Camara = {
   id: string;
@@ -86,6 +88,7 @@ export function CamarasDrawer({ children }: { children: ReactNode }) {
   const [layout, setLayout] = useState<LayoutKey>("2x2");
   const [fullscreen, setFullscreen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [conectoresOpen, setConectoresOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [formNombre, setFormNombre] = useState("");
   const [formUbicacion, setFormUbicacion] = useState("");
@@ -261,14 +264,25 @@ export function CamarasDrawer({ children }: { children: ReactNode }) {
               Videovigilancia
             </SheetTitle>
             {!denegado && (
-              <Button
-                size="sm"
-                className="h-7 gap-1 bg-teal-600 hover:bg-teal-700"
-                onClick={abrirNueva}
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Nueva cámara
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1"
+                  onClick={() => setConectoresOpen(true)}
+                >
+                  <Router className="h-3.5 w-3.5" />
+                  Conectores
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-7 gap-1 bg-teal-600 hover:bg-teal-700"
+                  onClick={abrirNueva}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Nueva cámara
+                </Button>
+              </div>
             )}
           </div>
         </SheetHeader>
@@ -487,6 +501,9 @@ export function CamarasDrawer({ children }: { children: ReactNode }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Gestor de conectores (cajita push) + emparejamiento por QR */}
+      <ConectorPairingDialog open={conectoresOpen} onOpenChange={setConectoresOpen} />
     </Sheet>
   );
 }
