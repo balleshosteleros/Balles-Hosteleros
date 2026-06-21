@@ -102,6 +102,15 @@ export async function createEmployee(formData: FormData) {
   const validation = await assertRoleExistsInEmpresa(admin, empresaId, rolLabelInput)
   if (validation.error) return { error: validation.error }
 
+  // Fuente única (PRP-063): el usuario se enlaza por rol_id (no por texto).
+  const { data: rolRowAlta } = await admin
+    .from('empresa_roles')
+    .select('id')
+    .eq('empresa_id', empresaId)
+    .ilike('nombre', rolLabelInput)
+    .maybeSingle()
+  const rolId = (rolRowAlta?.id as string | null) ?? null
+
   const role: AppRole = inferAppRoleFromLabel(rolLabelInput)
   const rolLabel = rolLabelInput
   // El departamento ya no se asigna a nivel de usuario: se hereda del rol.
@@ -131,6 +140,7 @@ export async function createEmployee(formData: FormData) {
     nombre,
     apellidos,
     rol_label: rolLabel,
+    rol_id: rolId,
     es_empleado: esEmpleado,
     avatar_obligatorio: esEmpleado,
   }

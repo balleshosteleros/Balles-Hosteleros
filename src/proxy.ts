@@ -96,16 +96,12 @@ export async function proxy(request: NextRequest) {
   const cutoff = new Date(Date.now() - 30_000).toISOString()
   const ahora = new Date().toISOString()
 
-  const [{ data: profile }, { data: rolesRows }] = await Promise.all([
+  const [{ data: profile }] = await Promise.all([
     admin
       .from('usuarios')
-      .select('rol_label, empresa_id, estado_acceso')
+      .select('rol_id, rol_label, empresa_id, estado_acceso')
       .eq('user_id', user.id)
       .maybeSingle(),
-    admin
-      .from('usuario_roles')
-      .select('role')
-      .eq('user_id', user.id),
     admin
       .from('usuarios')
       .update({ ultima_actividad: ahora })
@@ -124,15 +120,24 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  const appRoles = (rolesRows ?? []).map((r) => r.role as string)
+  const rolId = (profile?.rol_id as string | null) ?? null
   const rolLabel = (profile?.rol_label as string | null) ?? null
   const empresaId = (profile?.empresa_id as string | null) ?? null
 
-  // 'director' es un rol tenant: bypass condicionado a que sea miembro real
-  // de su empresa activa (user_empresas, fuente canónica del Doc 4 §5.1).
-  // El día que el modelo separe rol-tenant vs rol-plataforma (Doc 4 §6),
-  // este bypass desaparece a favor de has_empresa_role(empresa_id, 'director').
-  if (appRoles.includes('director') && empresaId) {
+  if ((!rolId && !rolLabel) || !empresaId) {
+    return NextResponse.redirect(new URL('/', request.url))
+  }
+
+  // Rol del usuario (fuente única PRP-063): por rol_id; fallback defensivo a
+  // rol_label (texto) por si algún usuario en transición aún no tiene rol_id.
+  const rolQuery = admin.from('empresa_roles').select('permisos, es_admin_plataforma')
+  const { data: rolRow } = rolId
+    ? await rolQuery.eq('id', rolId).maybeSingle()
+    : await rolQuery.eq('empresa_id', empresaId).ilike('nombre', rolLabel as string).maybeSingle()
+
+  // 'director' (es_admin_plataforma) es rol tenant: bypass condicionado a que
+  // sea miembro real de su empresa activa (user_empresas, fuente canónica).
+  if (rolRow?.es_admin_plataforma && empresaId) {
     const { data: membership } = await admin
       .from('usuario_empresas')
       .select('user_id')
@@ -141,17 +146,6 @@ export async function proxy(request: NextRequest) {
       .maybeSingle()
     if (membership) return sessionResponse
   }
-
-  if (!rolLabel || !empresaId) {
-    return NextResponse.redirect(new URL('/', request.url))
-  }
-
-  const { data: rolRow } = await admin
-    .from('empresa_roles')
-    .select('permisos')
-    .eq('empresa_id', empresaId)
-    .ilike('nombre', rolLabel)
-    .maybeSingle()
 
   const permisos = (rolRow?.permisos ?? []) as Array<{ modulo: string; ver: boolean; editar: boolean }>
   const modulosReqNorm = new Set(modulosPermitidos(moduloReq))
