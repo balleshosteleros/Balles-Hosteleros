@@ -25,7 +25,7 @@ type Vista = "paneles" | "departamentos";
 /** Rutas de cada vista en el móvil (equivalente al toggle del software). */
 const VISTA_RUTA: Record<Vista, string> = {
   paneles: "/m",
-  departamentos: "/m/equipo",
+  departamentos: "/m/departamentos",
 };
 
 /** Iniciales del nombre para el avatar de respaldo. */
@@ -52,8 +52,8 @@ export function EmpleadoMenuMobile({ nombre, avatarUrl }: Props) {
   const [confirmando, setConfirmando] = useState(false);
   const [saliendo, setSaliendo] = useState(false);
 
-  // Vista activa según la ruta: /m/equipo = departamentos; resto = paneles.
-  const vistaActiva: Vista = pathname.startsWith("/m/equipo")
+  // Vista activa según la ruta: /m/departamentos = departamentos; resto = paneles.
+  const vistaActiva: Vista = pathname.startsWith("/m/departamentos")
     ? "departamentos"
     : "paneles";
 

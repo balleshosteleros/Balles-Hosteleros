@@ -123,7 +123,7 @@ export function PerfilPill({
             onClick={() => setOpen(false)}
             aria-hidden
           />
-          <div className="absolute left-0 top-full z-50 mt-1.5 w-60 overflow-hidden rounded-2xl border border-border/60 bg-popover shadow-xl">
+          <div className="absolute right-0 top-full z-50 mt-1.5 w-60 overflow-hidden rounded-2xl border border-border/60 bg-popover shadow-xl">
             <p className="px-3 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               Cambiar de empresa
             </p>
