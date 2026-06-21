@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { capitalizeText } from "@/shared/lib/utils";
+import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
 import type {
   Producto,
@@ -110,19 +111,9 @@ async function requireManagement() {
 
   if (!user) throw new Error("No autenticado");
 
-  const { data: rolesData } = await supabase
-    .from("usuario_roles")
-    .select("role")
-    .eq("user_id", user.id);
+  const { esDirector } = await getRolContext();
 
-  const roles = (rolesData ?? []).map((r: { role: string }) => r.role);
-  const canManage =
-    roles.includes("admin") ||
-    roles.includes("director") ||
-    roles.includes("gerencia") ||
-    roles.includes("responsable");
-
-  if (!canManage) throw new Error("No tienes permisos para gestionar productos");
+  if (!esDirector) throw new Error("No tienes permisos para gestionar productos");
 
   return user;
 }

@@ -23,6 +23,7 @@ import {
   getNiveles,
 } from "@/features/toques/services/toques.service";
 import { getEmpresaActivaId } from "@/features/empresa/actions/empresa-activa-actions";
+import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import { bloqueoSolapaRango } from "@/features/rrhh/data/calendarios-vacaciones";
 import {
   ahoraEnMadrid,
@@ -1533,8 +1534,6 @@ export async function getMiVacacionesInfo(): Promise<{
   }
 }
 
-type SupabaseAny = Awaited<ReturnType<typeof createClient>>;
-
 const SUBTIPO_AUSENCIA_KEYWORD: Record<
   Exclude<SolicitudSubtipoAusencia, "baja_contrato">,
   string
@@ -1580,14 +1579,9 @@ function diasSolicitudEnAnio(inicio: string, fin: string | null, anio: number): 
   return Math.floor((hi.getTime() - lo.getTime()) / 86400000) + 1;
 }
 
-async function userTieneRolDirector(supabase: SupabaseAny, userId: string): Promise<boolean> {
-  const { data } = await supabase
-    .from("usuario_roles")
-    .select("role")
-    .eq("user_id", userId);
-  return (data ?? []).some((r: { role: string }) =>
-    r.role === "director" || r.role === "admin",
-  );
+async function userTieneRolDirector(userId: string): Promise<boolean> {
+  const { esDirector } = await getRolContext(userId);
+  return esDirector;
 }
 
 export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
@@ -1817,7 +1811,7 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
       const limite = (tipoAusencia?.limite_dias as number | null | undefined) ?? null;
 
       if (limite != null && limite > 0) {
-        const esDirector = await userTieneRolDirector(supabase, user.id);
+        const esDirector = await userTieneRolDirector(user.id);
         if (!esDirector) {
           const anio = new Date(input.fechaInicio + "T00:00:00Z").getUTCFullYear();
           const diasSolicitados = diasSolicitudEnAnio(input.fechaInicio, input.fechaFin ?? null, anio);

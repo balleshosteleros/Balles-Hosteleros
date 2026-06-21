@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Rol, PermisoModulo } from '@/features/ajustes/data/ajustes'
+import { getRolContext } from '@/features/auth/actions/permisos-actions'
 
 const DEV_EMPRESA_ID = '00000000-0000-0000-0000-000000000001'
 
@@ -26,14 +27,8 @@ async function requireDirectorAppRole(): Promise<string | null> {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return 'No autenticado'
 
-    const admin = createAdminClient()
-    const { data: rows } = await admin
-      .from('usuario_roles')
-      .select('role')
-      .eq('user_id', user.id)
-
-    const roles = (rows ?? []).map((r) => r.role as string)
-    if (!roles.includes('director')) {
+    const { esDirector } = await getRolContext()
+    if (!esDirector) {
       return 'Solo un director puede modificar roles de empresa'
     }
     return null

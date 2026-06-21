@@ -5,6 +5,7 @@
  */
 
 import { getAppContext } from "@/lib/supabase/get-context";
+import { getRolContext } from "@/features/auth/actions/permisos-actions";
 
 const ROLES_PERMITIDOS = new Set([
   "admin",
@@ -22,20 +23,12 @@ export async function getComandasPermisos(): Promise<{
   roles: string[];
   reason?: string;
 }> {
-  const { supabase, userId } = await getAppContext();
+  const { userId } = await getAppContext();
   if (!userId) return { allowed: false, userId: null, roles: [], reason: "No autenticado" };
 
-  const { data: roles, error } = await supabase
-    .from("usuario_roles")
-    .select("role")
-    .eq("user_id", userId);
-
-  if (error) {
-    console.error("[cocina][permisos] Error cargando roles:", error.message);
-    return { allowed: false, userId, roles: [], reason: "Error cargando roles" };
-  }
-
-  const lista = (roles ?? []).map((r) => (r as { role: string }).role);
+  // Fuente única (PRP-063): el rol de plataforma se deriva del rol del usuario.
+  const { esDirector } = await getRolContext(userId);
+  const lista = esDirector ? ["director"] : ["empleado"];
   const tieneSoloLectura = lista.includes("solo_lectura") && lista.length === 1;
   const tieneAutorizado = lista.some((r) => ROLES_PERMITIDOS.has(r));
   const allowed = !tieneSoloLectura && (tieneAutorizado || lista.length === 0);

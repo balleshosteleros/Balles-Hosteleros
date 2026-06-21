@@ -5,35 +5,23 @@ import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 async function getContext() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { supabase, user: null, empresaId: null, role: null };
-  const [empresaId, { data: profile }, { data: roles }] = await Promise.all([
+  if (!user) return { supabase, user: null, empresaId: null, esDirector: false };
+  const [empresaId, { esDirector }] = await Promise.all([
     getEmpresaActivaForUser(supabase as unknown as SupabaseClient, user.id),
-    supabase
-      .from("usuarios")
-      .select("role")
-      .eq("user_id", user.id)
-      .single(),
-    supabase
-      .from("usuario_roles")
-      .select("role")
-      .eq("user_id", user.id),
+    getRolContext(),
   ]);
-  const appRole = (roles ?? [])
-    .map((r) => (r.role as string | null) ?? null)
-    .find((role) => role === "admin" || role === "director")
-    ?? (profile?.role as string | null)
-    ?? null;
   return {
     supabase,
     user,
     empresaId,
-    role: appRole,
+    esDirector,
   };
 }
 
@@ -43,20 +31,20 @@ async function getContext() {
  */
 function resolverEmpresa(
   empresaId: string | null,
-  role: string | null,
+  esDirector: boolean,
   empresaIdOverride?: string | null
 ): string | null {
-  if (empresaIdOverride && (role === "admin" || role === "director")) return empresaIdOverride;
+  if (empresaIdOverride && esDirector) return empresaIdOverride;
   return empresaId;
 }
 
 async function resolveEmpresaAutorizada(
   userId: string,
   empresaId: string | null,
-  role: string | null,
+  esDirector: boolean,
   empresaIdOverride?: string | null
 ): Promise<string | null> {
-  const target = resolverEmpresa(empresaId, role, empresaIdOverride);
+  const target = resolverEmpresa(empresaId, esDirector, empresaIdOverride);
   if (!target) return null;
   if (!empresaIdOverride || target === empresaId) return target;
 
@@ -90,12 +78,12 @@ export type LocalInput = z.infer<typeof localSchema>;
 
 export async function listLocales(empresaIdOverride?: string | null) {
   try {
-    const { user, empresaId, role } = await getContext();
+    const { user, empresaId, esDirector } = await getContext();
     if (!user) return { ok: false, data: [], error: "No autenticado" };
     const target = await resolveEmpresaAutorizada(
       user.id,
       empresaId,
-      role,
+      esDirector,
       empresaIdOverride
     );
     if (!target) return { ok: false, data: [], error: "Sin empresa activa" };
@@ -139,9 +127,9 @@ export async function createLocal(
 ) {
   try {
     const parsed = localSchema.parse(input);
-    const { user, empresaId, role } = await getContext();
+    const { user, empresaId, esDirector } = await getContext();
     const target = user
-      ? await resolveEmpresaAutorizada(user.id, empresaId, role, empresaIdOverride)
+      ? await resolveEmpresaAutorizada(user.id, empresaId, esDirector, empresaIdOverride)
       : null;
     if (!user || !target) return { ok: false, error: "No autenticado" };
     const admin = createAdminClient();
@@ -237,12 +225,12 @@ export async function listEmpleadosEmpresaParaLocales(
   empresaIdOverride?: string | null
 ) {
   try {
-    const { user, empresaId, role } = await getContext();
+    const { user, empresaId, esDirector } = await getContext();
     if (!user) return { ok: false, data: [] };
     const target = await resolveEmpresaAutorizada(
       user.id,
       empresaId,
-      role,
+      esDirector,
       empresaIdOverride
     );
     if (!target) return { ok: false, data: [] };

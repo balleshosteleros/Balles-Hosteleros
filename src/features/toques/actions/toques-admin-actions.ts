@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import { getRolContext } from "@/features/auth/actions/permisos-actions";
 
 type ActionResult<T = unknown> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -25,12 +26,8 @@ async function getAdminSession() {
   } = await supabase.auth.getUser();
   if (!user) return { user: null, empresaId: null, isAdmin: false };
   const empresaId = await getEmpresaActivaForUser(supabase, user.id);
-  const { data: roles } = await supabase
-    .from("usuario_roles")
-    .select("role")
-    .eq("user_id", user.id);
-  const adminRoles = new Set(["admin", "director", "gerencia", "responsable"]);
-  const isAdmin = (roles ?? []).some((r: { role: string }) => adminRoles.has(r.role));
+  const { esDirector } = await getRolContext(user.id);
+  const isAdmin = esDirector;
   return { user, empresaId, isAdmin };
 }
 

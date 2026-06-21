@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 async function getContext() {
   const supabase = await createClient();
@@ -77,12 +78,8 @@ async function getAccesoCtx(
   userId: string,
   empresaId: string,
 ): Promise<AccesoCtx> {
-  const { data: rolesRows } = await supabase
-    .from("usuario_roles")
-    .select("role")
-    .eq("user_id", userId);
-  const appRoles = (rolesRows ?? []).map((r) => r.role as string);
-  const esAdmin = appRoles.includes("director") || appRoles.includes("admin");
+  const { esDirector } = await getRolContext(userId);
+  const esAdmin = esDirector;
 
   const candidatos: string[] = [];
   if (!esAdmin) {

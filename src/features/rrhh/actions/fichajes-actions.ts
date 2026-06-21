@@ -5,9 +5,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { distanciaMetros } from "@/features/rrhh/utils/geo";
 import { getEmpresaActivaId } from "@/features/empresa/actions/empresa-activa-actions";
 import { calcularSalidaPrevista, cerrarConReparto } from "@/features/mi-panel/utils/fichaje-multiempresa";
+import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import { revalidatePath } from "next/cache";
 
-const ROLES_ADMIN_FICHAJES = ["admin", "director"] as const;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -25,21 +25,14 @@ async function requireAdminFichajes(opts?: { empresaIds?: string[] }) {
   } = await supabase.auth.getUser();
   if (!user) throw new Error("No autenticado");
 
-  const { data: rolesRows } = await supabase
-    .from("usuario_roles")
-    .select("role")
-    .eq("user_id", user.id);
-  const roles = (rolesRows ?? []).map((r: { role: string }) => r.role);
-  const isAdmin = roles.some((r) =>
-    (ROLES_ADMIN_FICHAJES as readonly string[]).includes(r),
-  );
-  if (!isAdmin) {
+  const { esDirector } = await getRolContext();
+  if (!esDirector) {
     throw new Error(
       "Sin permisos: solo admin o director pueden gestionar fichajes",
     );
   }
 
-  if (opts?.empresaIds && opts.empresaIds.length > 0 && !roles.includes("director")) {
+  if (opts?.empresaIds && opts.empresaIds.length > 0 && !esDirector) {
     const empresasReq = Array.from(
       new Set(
         opts.empresaIds.filter(

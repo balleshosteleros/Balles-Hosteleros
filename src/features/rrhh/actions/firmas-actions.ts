@@ -8,11 +8,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sha256, generarToken, hashToken } from "@/features/rrhh/services/firmas/crypto";
 import { registrarEvento, listarEventos, verificarCadena } from "@/features/rrhh/services/firmas/audit";
 import { enviarInvitacionFirma } from "@/features/rrhh/services/firmas/email";
+import { getRolContext } from "@/features/auth/actions/permisos-actions";
 
 const BUCKET = "firmas";
 const SIGNED_URL_TTL_DESCARGA = 60 * 60 * 24 * 7; // 7 días para copia firmada
 const SIGNED_URL_TTL_VISOR = 60 * 5;              // 5 min para visor de firma
-const ROLES_ADMIN = ["admin", "director"] as const;
 const MAX_PDF_BYTES = 10 * 1024 * 1024;            // 10 MB
 const MODALIDADES = ["click_to_sign", "email_otp", "manuscrita_digital"] as const;
 
@@ -53,14 +53,8 @@ async function requireAdmin(): Promise<{ userId: string; userName: string; empre
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("No autenticado");
 
-  const { data: roles } = await supabase
-    .from("usuario_roles")
-    .select("role")
-    .eq("user_id", user.id);
-  const ok = (roles ?? []).some((r: { role: string }) =>
-    (ROLES_ADMIN as readonly string[]).includes(r.role),
-  );
-  if (!ok) throw new Error("Solo admin o director pueden gestionar firmas");
+  const { esDirector } = await getRolContext();
+  if (!esDirector) throw new Error("Solo admin o director pueden gestionar firmas");
 
   const { empresaId } = await getAppContext();
   if (!empresaId) throw new Error("Empresa no resuelta para el usuario actual");

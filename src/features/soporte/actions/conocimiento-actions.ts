@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import { generarEmbedding } from "@/lib/ia/embeddings";
 import { MODULOS_SOPORTE } from "@/lib/soporte/modulos";
 import type {
@@ -38,13 +39,8 @@ async function requireAdminOrDirector() {
   } = await supabase.auth.getUser();
   if (!user) throw new Error("No autenticado");
 
-  const { data: rolesData } = await supabase
-    .from("usuario_roles")
-    .select("role")
-    .eq("user_id", user.id);
-
-  const roles = (rolesData ?? []).map((r: { role: string }) => r.role);
-  if (!roles.includes("admin") && !roles.includes("director")) {
+  const { esDirector } = await getRolContext();
+  if (!esDirector) {
     throw new Error("No tienes permisos para gestionar la base de conocimiento");
   }
   return user;

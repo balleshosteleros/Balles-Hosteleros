@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import type { Faq, FaqInput, FaqsByCategory } from "@/features/soporte/types";
 
 const APP_ROLES = [
@@ -32,15 +33,8 @@ async function requireAdminOrDirector() {
 
   if (!user) throw new Error("No autenticado");
 
-  const { data: rolesData } = await supabase
-    .from("usuario_roles")
-    .select("role")
-    .eq("user_id", user.id);
-
-  const roles = (rolesData ?? []).map((r: { role: string }) => r.role);
-  const canEdit = roles.includes("admin") || roles.includes("director");
-
-  if (!canEdit) throw new Error("No tienes permisos para editar FAQs");
+  const { esDirector } = await getRolContext();
+  if (!esDirector) throw new Error("No tienes permisos para editar FAQs");
 
   return user;
 }

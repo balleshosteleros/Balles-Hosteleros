@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getRolContext } from "@/features/auth/actions/permisos-actions";
 
 export interface UserEmpresaRow {
   user_id: string;
@@ -130,12 +131,8 @@ export async function listAllUserEmpresas(): Promise<Record<string, string[]>> {
   if (!user) return {};
 
   const admin = createAdminClient();
-  const { data: roles } = await admin
-    .from("usuario_roles")
-    .select("role")
-    .eq("user_id", user.id);
-  const appRoles = (roles ?? []).map((r) => r.role as string);
-  if (!appRoles.includes("director") && !appRoles.includes("admin")) {
+  const { esDirector } = await getRolContext(user.id);
+  if (!esDirector) {
     return {};
   }
 

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import {
   listFaqsForCurrentUser,
   listAllFaqs,
@@ -18,12 +19,9 @@ export default async function AyudaPage() {
 
   if (!user) redirect("/");
 
-  const { data: rolesData } = await supabase
-    .from("usuario_roles")
-    .select("role")
-    .eq("user_id", user.id);
-  const roles = (rolesData ?? []).map((r: { role: string }) => r.role);
-  const canEdit = roles.includes("admin") || roles.includes("director");
+  const { esDirector } = await getRolContext();
+  const roles = esDirector ? ["director"] : ["empleado"];
+  const canEdit = esDirector;
 
   let viewerData: Awaited<ReturnType<typeof listFaqsForCurrentUser>> = [];
   try {

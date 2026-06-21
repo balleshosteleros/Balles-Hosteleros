@@ -77,7 +77,7 @@ export async function getEmpleadosEmpresa(): Promise<
 
     const { data, error } = await supabase
       .from("usuarios")
-      .select("user_id, nombre, apellidos, full_name, departamento, role")
+      .select("user_id, nombre, apellidos, full_name, departamento, rol_label")
       .eq("empresa_id", empresaId)
       .order("nombre", { ascending: true });
     if (error) return { ok: false, error: error.message };
@@ -89,7 +89,7 @@ export async function getEmpleadosEmpresa(): Promise<
           [p.nombre, p.apellidos].filter(Boolean).join(" ") ||
           (p.full_name as string | null) ||
           "(sin nombre)",
-        rol: (p.departamento as string | null) || (p.role as string | null) || "—",
+        rol: (p.departamento as string | null) || (p.rol_label as string | null) || "—",
       }));
     return { ok: true, data: rows };
   } catch (e) {

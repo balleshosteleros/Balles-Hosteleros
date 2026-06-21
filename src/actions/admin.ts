@@ -7,29 +7,7 @@ import { capitalizeText } from '@/shared/lib/utils'
 import { sendEmail } from '@/lib/email/send'
 import { passwordResetEmail } from '@/lib/email/templates/password-reset'
 import { friendlyError } from '@/shared/lib/friendly-errors'
-
-const VALID_ROLES = ['admin', 'director', 'gerencia', 'responsable', 'empleado', 'solo_lectura'] as const
-type AppRole = typeof VALID_ROLES[number]
-
-/**
- * Mapea un nombre de rol custom (de empresa_roles, ej "Jefe Cocina", "Contable")
- * al app_role RBAC más cercano para autorización en user_roles.
- * El nombre original se guarda en profiles.rol_label.
- */
-function inferAppRoleFromLabel(label: string | null | undefined): AppRole {
-  const n = (label ?? '').toLowerCase().trim()
-  if (!n) return 'empleado'
-  if (n.includes('admin')) return 'admin'
-  if (n.includes('director') || n.includes('direcci')) return 'director'
-  if (n.includes('gerencia') || n.includes('gerente')) return 'gerencia'
-  if (n.includes('responsable') || n.includes('jefe') || n.includes('encargad')) return 'responsable'
-  if (n.includes('solo lectura') || n === 'lectura') return 'solo_lectura'
-  // Si el label coincide directamente con un app_role (caso retrocompatible)
-  if ((VALID_ROLES as readonly string[]).includes(n)) return n as AppRole
-  return 'empleado'
-}
-
-const ADMIN_ROLES = ['admin', 'director'] as const
+import { getRolContext } from '@/features/auth/actions/permisos-actions'
 
 /**
  * Verifica que el nombre de rol exista en empresa_roles para la empresa del usuario.
@@ -58,15 +36,9 @@ async function requireAdmin() {
 
   if (!user) throw new Error('Not authenticated')
 
-  const { data: roles } = await supabase
-    .from('usuario_roles')
-    .select('role')
-    .eq('user_id', user.id)
-
-  const hasAccess = (roles ?? []).some((r: { role: string }) =>
-    (ADMIN_ROLES as readonly string[]).includes(r.role)
-  )
-  if (!hasAccess) throw new Error('Not authorized')
+  // Fuente única (PRP-063): el director se deriva del rol del usuario.
+  const { esDirector } = await getRolContext(user.id)
+  if (!esDirector) throw new Error('Not authorized')
 
   return user
 }
@@ -111,7 +83,6 @@ export async function createEmployee(formData: FormData) {
     .maybeSingle()
   const rolId = (rolRowAlta?.id as string | null) ?? null
 
-  const role: AppRole = inferAppRoleFromLabel(rolLabelInput)
   const rolLabel = rolLabelInput
   // El departamento ya no se asigna a nivel de usuario: se hereda del rol.
   const departamento = ((formData.get('departamento') as string) ?? '').trim().toUpperCase() || null
@@ -153,12 +124,8 @@ export async function createEmployee(formData: FormData) {
 
   if (profileError) return { error: friendlyError(profileError) }
 
-  // Asignar rol RBAC en user_roles (para autorización)
-  const { error: roleError } = await admin
-    .from('usuario_roles')
-    .insert({ user_id: data.user.id, role })
-
-  if (roleError) return { error: friendlyError(roleError) }
+  // El rol se enlaza por usuarios.rol_id (fijado arriba en el profilePatch);
+  // la tabla legacy usuario_roles ya no se usa (fuente única PRP-063).
 
   // Asignar empresas a las que el usuario tendrá acceso (multi-empresa).
   // El cliente envía 0..N campos `empresa_ids`. Si no llega ninguno, asignamos
@@ -198,25 +165,22 @@ export async function getEmployees() {
 
   if (error) return { error: friendlyError(error), data: [] }
 
-  const { data: roles } = await admin
-    .from('usuario_roles')
-    .select('user_id, role')
+  // Rol de plataforma (director/empleado) derivado de la FUENTE ÚNICA:
+  // empresa_roles.es_admin_plataforma del rol del usuario (usuarios.rol_id).
+  const rolIds = Array.from(
+    new Set((profiles ?? []).map((p: { rol_id?: string | null }) => p.rol_id).filter(Boolean) as string[]),
+  )
+  const { data: rolesAdmin } = rolIds.length
+    ? await admin.from('empresa_roles').select('id, es_admin_plataforma').in('id', rolIds)
+    : { data: [] as Array<{ id: string; es_admin_plataforma: boolean }> }
+  const adminPorRol = new Map(
+    (rolesAdmin ?? []).map((r: { id: string; es_admin_plataforma: boolean }) => [r.id, Boolean(r.es_admin_plataforma)]),
+  )
 
-  const rolesByUser = new Map<string, string>()
-  ;(roles ?? []).forEach((r: { user_id: string; role: string }) => {
-    // Si el usuario tiene varios roles, dejamos el de mayor jerarquía (admin > director > ...)
-    const order = ['admin', 'director', 'gerencia', 'responsable', 'empleado', 'solo_lectura']
-    const current = rolesByUser.get(r.user_id)
-    if (!current || order.indexOf(r.role) < order.indexOf(current)) {
-      rolesByUser.set(r.user_id, r.role)
-    }
-  })
-
-  const data = (profiles ?? []).map((p: { id: string; user_id?: string | null; rol_label?: string | null; ultima_actividad?: string | null }) => {
-    const authId = p.user_id ?? p.id
+  const data = (profiles ?? []).map((p: { id: string; user_id?: string | null; rol_id?: string | null; rol_label?: string | null; ultima_actividad?: string | null }) => {
     return {
       ...p,
-      role: rolesByUser.get(authId) ?? 'empleado',
+      role: (p.rol_id && adminPorRol.get(p.rol_id)) ? 'director' : 'empleado',
       // rol_label = nombre custom del rol (preferente para mostrar en UI)
       rol_label: p.rol_label ?? null,
       // ultima_actividad la escribe el proxy en cada navegación autenticada;
@@ -451,28 +415,14 @@ export async function updateEmployeeProfile(
     profileUpdate.rol_label = trimmed || null
   }
 
+  // Al actualizar rol_label, el trigger sync_usuario_rol_id fija usuarios.rol_id
+  // (fuente única PRP-063); la tabla legacy usuario_roles ya no se escribe.
   if (Object.keys(profileUpdate).length > 0) {
     const { error } = await admin
       .from('usuarios')
       .update(profileUpdate)
       .eq('id', profileId)
     if (error) return { error: friendlyError(error) }
-  }
-
-  // Actualizar app_role en user_roles si se pidió
-  if (patch.role !== undefined) {
-    const role = inferAppRoleFromLabel(patch.role)
-    const { data: profile } = await admin
-      .from('usuarios')
-      .select('user_id')
-      .eq('id', profileId)
-      .maybeSingle()
-    const userId = profile?.user_id
-    if (userId) {
-      await admin.from('usuario_roles').delete().eq('user_id', userId)
-      const { error } = await admin.from('usuario_roles').insert({ user_id: userId, role })
-      if (error) return { error: friendlyError(error) }
-    }
   }
 
   revalidatePath('/ajustes')
@@ -526,10 +476,9 @@ export async function deleteEmployee(userId: string) {
   // el usuario en auth.users. Si dejamos que la cascada del FK lo haga, corre
   // como `supabase_auth_admin`, que NO tiene DELETE sobre estas tablas y el
   // borrado falla con "permission denied for table empleados".
-  const cleanups: { table: 'empleados' | 'usuario_empresas' | 'usuario_roles'; column: string }[] = [
+  const cleanups: { table: 'empleados' | 'usuario_empresas'; column: string }[] = [
     { table: 'empleados', column: 'user_id' },
     { table: 'usuario_empresas', column: 'user_id' },
-    { table: 'usuario_roles', column: 'user_id' },
   ]
   for (const { table, column } of cleanups) {
     const { error: cleanErr } = await admin.from(table).delete().eq(column, userId)

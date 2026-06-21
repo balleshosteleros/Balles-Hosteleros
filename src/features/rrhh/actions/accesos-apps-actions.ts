@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import {
   type AccesoApp,
   type AccesoCredencial,
@@ -118,14 +119,8 @@ async function getUserOrNull(supabase: Awaited<ReturnType<typeof createClient>>)
 }
 
 async function userTieneRolAdminODirector(userId: string): Promise<boolean> {
-  // Roles son globales (no por empresa) — leer con service role es seguro.
-  const admin = createAdminClient();
-  const { data } = await admin
-    .from("usuario_roles")
-    .select("role")
-    .eq("user_id", userId);
-  const roles = (data ?? []).map((r) => r.role as string);
-  return roles.includes("director") || roles.includes("admin");
+  const { esDirector } = await getRolContext(userId);
+  return esDirector;
 }
 
 /** Lista accesos de UNA empresa. RLS enforça que el usuario pertenezca a ella. */

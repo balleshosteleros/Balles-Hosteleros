@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { getRolContext } from '@/features/auth/actions/permisos-actions'
 import { AdminPanel } from '@/features/admin/components/AdminPanel'
 
 export default async function EmpleadosPage() {
@@ -8,13 +9,9 @@ export default async function EmpleadosPage() {
 
   if (!user) redirect('/')
 
-  const { data: profile } = await supabase
-    .from('usuarios')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (profile?.role !== 'admin') redirect('/')
+  // Fuente única (PRP-063): el panel admin es solo para director.
+  const { esDirector } = await getRolContext(user.id)
+  if (!esDirector) redirect('/')
 
   return <AdminPanel />
 }

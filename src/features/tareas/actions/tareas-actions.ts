@@ -1,6 +1,7 @@
 "use server";
 
 import { getAppContext } from "@/lib/supabase/get-context";
+import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import { getMiInformacionLaboral } from "@/features/rrhh/actions/empleados-actions";
 import { parseISO, format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -668,12 +669,7 @@ export async function getDepartamentosVisibles(): Promise<
     const rolLabel = (profile?.rol_label as string | null)?.trim() ?? null;
 
     // Director del SaaS: bypass — ve todo.
-    const { data: rolesRows } = await supabase
-      .from("usuario_roles")
-      .select("role")
-      .eq("user_id", userId);
-    const appRoles = (rolesRows ?? []).map((r) => r.role as string);
-    const esDirectorGlobal = appRoles.includes("director") || appRoles.includes("admin");
+    const { esDirector: esDirectorGlobal } = await getRolContext(userId);
 
     let modulosVisibles: string[] = [];
     let moduloPropio: string | null = null;
@@ -873,9 +869,8 @@ export async function syncTareasCronograma(dateIso?: string, forcedRol?: string)
           || (prof?.departamento as string | null)?.trim()
           || undefined;
         if (!rol) {
-          const { data: rData } = await supabase.from("usuario_roles").select("role").eq("user_id", userId);
-          const roles = rData?.map(r => r.role as string) || [];
-          rol = roles.includes("admin") ? "Dirección" : (roles[0] || "Dirección");
+          const { esDirector } = await getRolContext(userId);
+          rol = esDirector ? "director" : "empleado";
         }
       }
       if (!rol) return { ok: true, data: { rol: null, insertadas: 0, yaExistian: 0 } };
@@ -980,12 +975,8 @@ export async function syncTareasCronogramaRange(dates: string[], forcedRol?: str
           || (prof?.departamento as string | null)?.trim()
           || undefined;
         if (!rol) {
-          const { data: rData } = await supabase
-            .from("usuario_roles")
-            .select("role")
-            .eq("user_id", userId);
-          const roles = rData?.map(r => r.role as string) || [];
-          rol = roles.includes("admin") ? "Dirección" : (roles[0] || "Dirección");
+          const { esDirector } = await getRolContext(userId);
+          rol = esDirector ? "director" : "empleado";
         }
       }
       if (!rol) return { ok: true, data: undefined };

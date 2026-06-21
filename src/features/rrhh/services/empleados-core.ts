@@ -156,8 +156,8 @@ export async function altaUsuarioEmpleado(
     })
     .eq("id", userId);
 
-  // 3. Rol RBAC base
-  await admin.from("usuario_roles").insert({ user_id: userId, role: "empleado" });
+  // 3. El rol se enlaza por usuarios.rol_id (lo fija el trigger desde rol_label);
+  //    la tabla legacy usuario_roles ya no se escribe (fuente única PRP-063).
 
   // 4. Acceso multi-empresa (rollback si falla)
   const accesosRows = input.empresasAcceso.map((eid) => ({
