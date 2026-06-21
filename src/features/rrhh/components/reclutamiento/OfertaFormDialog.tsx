@@ -19,6 +19,7 @@ import {
   createVacante, updateVacante, getVacanteById,
   listPuestosCatalogo, listDepartamentosCatalogo,
 } from "@/features/rrhh/actions/vacantes-actions";
+import { listJornadas, type JornadaRow } from "@/features/rrhh/actions/jornadas-actions";
 import { useReglasSubmodulo } from "@/features/ajustes/hooks/use-reglas-submodulo";
 import { ValidacionFaltantesDialog } from "@/features/ajustes/components/ValidacionFaltantesDialog";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
@@ -50,14 +51,6 @@ const FORM_VACIO: FormState = {
   visible_publicamente: false,
 };
 
-const JORNADA_OPCIONES = [
-  { value: "completa", label: "Jornada completa" },
-  { value: "parcial", label: "Jornada parcial" },
-  { value: "temporal", label: "Temporal" },
-  { value: "indefinido", label: "Indefinido" },
-  { value: "practicas", label: "Prácticas" },
-];
-
 interface Props {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -72,6 +65,7 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
   const [form, setForm] = useState<FormState>(FORM_VACIO);
   const [puestos, setPuestos] = useState<PuestoRef[]>([]);
   const [departamentos, setDepartamentos] = useState<DepartamentoRef[]>([]);
+  const [jornadas, setJornadas] = useState<JornadaRow[]>([]);
   const [pending, startTransition] = useTransition();
   const [loadingExisting, setLoadingExisting] = useState(false);
   useGlobalLoadingSync(loadingExisting);
@@ -80,9 +74,10 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
 
   useEffect(() => {
     if (!open) return;
-    void Promise.all([listPuestosCatalogo(), listDepartamentosCatalogo()]).then(([p, d]) => {
+    void Promise.all([listPuestosCatalogo(), listDepartamentosCatalogo(), listJornadas()]).then(([p, d, j]) => {
       setPuestos((p.data ?? []) as PuestoRef[]);
       setDepartamentos((d.data ?? []) as DepartamentoRef[]);
+      setJornadas((j.data ?? []) as JornadaRow[]);
     });
   }, [open]);
 
@@ -220,9 +215,13 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
                 <Select value={form.tipo_jornada} onValueChange={(v) => setForm({ ...form, tipo_jornada: v })}>
                   <SelectTrigger><SelectValue placeholder="Selecciona…" /></SelectTrigger>
                   <SelectContent>
-                    {JORNADA_OPCIONES.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                    ))}
+                    {jornadas.length === 0 ? (
+                      <SelectItem value="__none__" disabled>Sin jornadas (créalas en Ajustes → RRHH)</SelectItem>
+                    ) : (
+                      jornadas.map((j) => (
+                        <SelectItem key={j.id} value={j.nombre}>{j.nombre}</SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>

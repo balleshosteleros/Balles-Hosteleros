@@ -84,11 +84,23 @@ export async function updateJornada(
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    // Nombre actual (para cascade retroactivo si se renombra).
+    const { data: actual } = await supabase
+      .from("jornadas")
+      .select("nombre")
+      .eq("id", id)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    const nombreAnterior = (actual?.nombre as string | undefined) ?? null;
+
     const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    let nombreNuevo: string | null = null;
     if (input.nombre !== undefined) {
       const nombre = input.nombre.trim();
       if (!nombre) return { ok: false, error: "El nombre es obligatorio" };
       patch.nombre = nombre;
+      nombreNuevo = nombre;
     }
     if (input.activo !== undefined) patch.activo = input.activo;
 
@@ -101,6 +113,18 @@ export async function updateJornada(
       if (error.code === "23505") return { ok: false, error: "Ya existe una jornada con ese nombre" };
       throw error;
     }
+
+    // Cascade: al renombrar, propaga el nuevo nombre a todas las vacantes que
+    // tuvieran la jornada anterior (la jornada se guarda como texto en vacantes).
+    if (nombreNuevo && nombreAnterior && nombreNuevo !== nombreAnterior) {
+      await supabase
+        .from("vacantes")
+        .update({ tipo_jornada: nombreNuevo })
+        .eq("empresa_id", empresaId)
+        .eq("tipo_jornada", nombreAnterior);
+      revalidatePath("/rrhh/reclutamiento");
+    }
+
     revalidatePath("/ajustes");
     return { ok: true };
   } catch (err: unknown) {
@@ -115,17 +139,28 @@ export async function deleteJornada(id: string) {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
 
-    // No se puede borrar una jornada que esté en uso por alguna vacante.
-    const { count } = await supabase
-      .from("vacantes")
-      .select("id", { count: "exact", head: true })
+    // Nombre de la jornada (la jornada se guarda como texto en vacantes).
+    const { data: jor } = await supabase
+      .from("jornadas")
+      .select("nombre")
+      .eq("id", id)
       .eq("empresa_id", empresaId)
-      .eq("jornada_id", id);
-    if ((count ?? 0) > 0) {
-      return {
-        ok: false,
-        error: `No se puede borrar: hay ${count} vacante(s) usando esta jornada. Cámbialas primero.`,
-      };
+      .maybeSingle();
+    const nombre = (jor?.nombre as string | undefined) ?? null;
+
+    // No se puede borrar una jornada que esté en uso por alguna vacante.
+    if (nombre) {
+      const { count } = await supabase
+        .from("vacantes")
+        .select("id", { count: "exact", head: true })
+        .eq("empresa_id", empresaId)
+        .eq("tipo_jornada", nombre);
+      if ((count ?? 0) > 0) {
+        return {
+          ok: false,
+          error: `No se puede borrar: hay ${count} vacante(s) usando esta jornada. Cámbialas primero.`,
+        };
+      }
     }
 
     const { error } = await supabase

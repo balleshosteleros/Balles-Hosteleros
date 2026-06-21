@@ -22,8 +22,6 @@ export interface VacanteInput {
   categoria?: string | null;
   ubicacion?: string | null;
   tipo_jornada?: string | null;
-  local_id?: string | null;
-  jornada_id?: string | null;
   salario_rango?: string | null;
   estado_publicacion?: "publicada" | "borrador" | "cerrada" | "archivada";
   visible_publicamente?: boolean;
@@ -41,9 +39,7 @@ export async function listVacantes() {
       .select(`
         *,
         puestos(id,nombre),
-        departamentos(id,nombre),
-        locales(id,nombre),
-        jornadas(id,nombre)
+        departamentos(id,nombre)
       `)
       .eq("empresa_id", empresaId)
       .order("created_at", { ascending: false });
@@ -63,7 +59,7 @@ export async function getVacanteById(id: string) {
 
     const { data, error } = await supabase
       .from("vacantes")
-      .select("*, puestos(id,nombre), departamentos(id,nombre), locales(id,nombre), jornadas(id,nombre)")
+      .select("*, puestos(id,nombre), departamentos(id,nombre)")
       .eq("id", id)
       .eq("empresa_id", empresaId)
       .single();
@@ -93,8 +89,6 @@ export async function createVacante(input: VacanteInput) {
         categoria: input.categoria ?? null,
         ubicacion: input.ubicacion ?? null,
         tipo_jornada: input.tipo_jornada ?? null,
-        local_id: input.local_id ?? null,
-        jornada_id: input.jornada_id ?? null,
         salario_rango: input.salario_rango ?? null,
         estado_publicacion: input.estado_publicacion ?? "borrador",
         visible_publicamente: input.visible_publicamente ?? false,
