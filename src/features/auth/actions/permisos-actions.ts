@@ -18,52 +18,83 @@ export interface UserPermisos {
   departamento: string | null
 }
 
-export async function getUserPermisos(): Promise<UserPermisos> {
-  const empty: UserPermisos = { permisos: [], rolLabel: null, empresaId: null, appRoles: [], departamento: null }
+/**
+ * Contexto de rol de un usuario — FUENTE ÚNICA DE VERDAD (PRP-063).
+ *
+ * Resuelve el rol leyendo SOLO `usuarios.rol_id → empresa_roles` (enlace por ID,
+ * no por texto). Devuelve nombre, permisos y si es director (super-usuario de
+ * plataforma) DERIVADO de `empresa_roles.es_admin_plataforma`. Sin argumento,
+ * usa el usuario de la sesión.
+ */
+export interface RolContext {
+  rolId: string | null
+  rolNombre: string | null
+  permisos: PermisoModulo[]
+  esDirector: boolean
+  empresaId: string | null
+  departamento: string | null
+}
+
+export async function getRolContext(targetUserId?: string): Promise<RolContext> {
+  const vacio: RolContext = {
+    rolId: null, rolNombre: null, permisos: [], esDirector: false, empresaId: null, departamento: null,
+  }
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return empty
-
-    const admin = createAdminClient()
-
-    const [{ data: profile }, { data: rolesRows }] = await Promise.all([
-      admin
-        .from('usuarios')
-        .select('rol_label, empresa_id, departamento')
-        .eq('user_id', user.id)
-        .single(),
-      admin
-        .from('usuario_roles')
-        .select('role')
-        .eq('user_id', user.id),
-    ])
-
-    const appRoles = (rolesRows ?? []).map((r) => r.role as string)
-    const empresaId = (profile?.empresa_id as string | null) ?? null
-    const rolLabel = (profile?.rol_label as string | null) ?? null
-    const departamento = ((profile?.departamento as string | null) ?? null) || null
-
-    if (!empresaId || !rolLabel) {
-      return { permisos: [], rolLabel, empresaId, appRoles, departamento }
+    let userId = targetUserId
+    if (!userId) {
+      const supabase = await createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return vacio
+      userId = user.id
     }
 
-    const { data: rolRow } = await admin
-      .from('empresa_roles')
-      .select('permisos')
-      .eq('empresa_id', empresaId)
-      .ilike('nombre', rolLabel)
+    const admin = createAdminClient()
+    const { data: u } = await admin
+      .from('usuarios')
+      .select('rol_id, empresa_id, departamento, rol_label')
+      .eq('user_id', userId)
       .maybeSingle()
+    if (!u) return vacio
+
+    const empresaId = (u.empresa_id as string | null) ?? null
+    const departamento = ((u.departamento as string | null) ?? null) || null
+
+    if (!u.rol_id) {
+      // Defensivo: sin rol_id (no debería pasar tras el backfill de Fase 2).
+      return { ...vacio, empresaId, departamento, rolNombre: (u.rol_label as string | null) ?? null }
+    }
+
+    const { data: rol } = await admin
+      .from('empresa_roles')
+      .select('id, nombre, permisos, es_admin_plataforma')
+      .eq('id', u.rol_id as string)
+      .maybeSingle()
+    if (!rol) return { ...vacio, empresaId, departamento }
 
     return {
-      permisos: ((rolRow?.permisos ?? []) as PermisoModulo[]),
-      rolLabel,
+      rolId: rol.id as string,
+      rolNombre: (rol.nombre as string) ?? null,
+      permisos: ((rol.permisos ?? []) as PermisoModulo[]),
+      esDirector: Boolean(rol.es_admin_plataforma),
       empresaId,
-      appRoles,
       departamento,
     }
   } catch (e) {
-    console.error('[getUserPermisos]', e)
-    return empty
+    console.error('[getRolContext]', e)
+    return vacio
+  }
+}
+
+export async function getUserPermisos(): Promise<UserPermisos> {
+  const ctx = await getRolContext()
+  // `appRoles` se deriva del flag de plataforma (paridad con usuario_roles, que
+  // solo tenía director/empleado). Los lectores comprueban includes('director').
+  const appRoles = ctx.esDirector ? ['director'] : ['empleado']
+  return {
+    permisos: ctx.permisos,
+    rolLabel: ctx.rolNombre,
+    empresaId: ctx.empresaId,
+    appRoles,
+    departamento: ctx.departamento,
   }
 }

@@ -3,20 +3,19 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { friendlyError } from "@/shared/lib/friendly-errors";
-import { getUserPermisos } from "@/features/auth/actions/permisos-actions";
+import { getRolContext } from "@/features/auth/actions/permisos-actions";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
-const ROLES_ADMIN = ["admin", "director"] as const;
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * Guard de autorización compartido del alta de empleados.
+ * Guard de autorización compartido del alta/gestión de empleados.
  *
- * Exige rol admin/director y, si se pasan `empresaIds`, que el usuario
- * pertenezca a todas ellas (el rol plataforma `director` opera cross-tenant
- * y salta el scope por empresa). Lanza `Error` si no cumple.
+ * Fuente única (PRP-063): exige rol DIRECTOR (`empresa_roles.es_admin_plataforma`,
+ * derivado vía `getRolContext`), que opera cross-tenant. Mantiene la firma con
+ * `empresaIds` por compatibilidad; el director no se filtra por empresa.
  *
  * Lo usan tanto el alta directa (`createEmpleado`) como la promoción de
  * candidatos (`promoverCandidato`): única fuente de verdad de autorización.
@@ -26,42 +25,11 @@ export async function requireAdminUser(opts?: { empresaIds?: string[] }) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("No autenticado");
 
-  const { data: rolesRows } = await supabase
-    .from("usuario_roles")
-    .select("role")
-    .eq("user_id", user.id);
-  const roles = (rolesRows ?? []).map((r: { role: string }) => r.role);
-  const isAdmin = roles.some((r) =>
-    (ROLES_ADMIN as readonly string[]).includes(r),
-  );
-  if (!isAdmin) {
+  const ctx = await getRolContext(user.id);
+  if (!ctx.esDirector) {
     throw new Error("Sin permisos: solo admin o director pueden modificar empleados");
   }
-
-  // director (rol plataforma) opera cross-tenant; salta el scope por empresa.
-  if (opts?.empresaIds && opts.empresaIds.length > 0 && !roles.includes("director")) {
-    const empresasReq = Array.from(
-      new Set(opts.empresaIds.filter((id) => typeof id === "string" && UUID_RE.test(id))),
-    );
-    if (empresasReq.length === 0) {
-      throw new Error("Sin permisos: empresas no válidas");
-    }
-    const { data: rels } = await supabase
-      .from("usuario_empresas")
-      .select("empresa_id")
-      .eq("user_id", user.id)
-      .in("empresa_id", empresasReq);
-    const accesibles = new Set((rels ?? []).map((r: { empresa_id: string }) => r.empresa_id));
-    const sinAcceso = empresasReq.filter((id) => !accesibles.has(id));
-    if (sinAcceso.length > 0) {
-      throw new Error(
-        sinAcceso.length === 1
-          ? "Sin permisos: no tienes acceso a esa empresa"
-          : `Sin permisos: no tienes acceso a ${sinAcceso.length} de las empresas seleccionadas`,
-      );
-    }
-  }
-
+  void opts?.empresaIds; // director es cross-tenant: no aplica scope por empresa
   return user;
 }
 
@@ -83,16 +51,12 @@ export async function requireRRHHAcceso(empresaIds: string[]) {
   } = await supabase.auth.getUser();
   if (!user) throw new Error("No autenticado");
 
-  const { data: rolesRows } = await supabase
-    .from("usuario_roles")
-    .select("role")
-    .eq("user_id", user.id);
-  const esDirector = (rolesRows ?? []).some((r: { role: string }) => r.role === "director");
-  if (esDirector) return user;
+  // Fuente única (PRP-063): rol + permisos derivados de usuarios.rol_id.
+  const ctx = await getRolContext(user.id);
+  if (ctx.esDirector) return user; // director: super-usuario de plataforma
 
   // 1) Permiso de Recursos Humanos (editar) en el rol del usuario.
-  const { permisos } = await getUserPermisos();
-  const tieneRRHH = permisos.some((p) => p.modulo === "RECURSOS HUMANOS" && p.editar);
+  const tieneRRHH = ctx.permisos.some((p) => p.modulo === "RECURSOS HUMANOS" && p.editar);
   if (!tieneRRHH) {
     throw new Error(
       "Sin permisos: necesitas acceso a Recursos Humanos para gestionar empleados.",
