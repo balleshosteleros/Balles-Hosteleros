@@ -113,6 +113,7 @@ export async function syncRolesAEmpresa(
       descripcion: r.descripcion,
       permisos: r.permisos,
       protected: r.protected,
+      es_admin_plataforma: r.esAdminPlataforma ?? false,
       departamento_id: r.departamento
         ? deptoIdPorNombre.get(normalizeDeptoNombre(r.departamento)) ?? null
         : null,

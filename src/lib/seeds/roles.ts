@@ -19,6 +19,8 @@ export interface RolSeed {
   departamento: string | null;
   permisos: PermisoModulo[];
   protected: boolean;
+  /** El rol da rango de "director" (super-usuario de plataforma). Solo DIRECCIÓN. */
+  esAdminPlataforma?: boolean;
 }
 
 export const ROLES_SEED: RolSeed[] = [
@@ -27,6 +29,7 @@ export const ROLES_SEED: RolSeed[] = [
     descripcion: "Dirección general — acceso completo",
     departamento: null,
     protected: false,
+    esAdminPlataforma: true,
     permisos: [
       { modulo: "DIRECCIÓN", ver: true, editar: true },
       { modulo: "SALA", ver: true, editar: true },
