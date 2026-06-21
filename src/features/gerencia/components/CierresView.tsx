@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   CalendarDays, List, Plus, ChevronLeft, ChevronRight, Wallet, FileText,
   Settings, Trash2, Download, CheckCircle2, AlertTriangle, ArrowDownToLine,
-  ArrowUpFromLine, Clock,
+  ArrowUpFromLine,
 } from "lucide-react";
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths,
@@ -35,6 +35,16 @@ import {
 } from "@/features/gerencia/actions/cierres-actions";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import {
+  SubmoduleToolbar,
+  colVisible,
+  ordenarColumnas,
+  coincideBusquedaUniversal,
+  type ToolbarColumna,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
+import { IOActions } from "@/shared/io";
+import { cierresIO } from "@/features/gerencia/io/cierres.io";
 
 const DIAS_SEMANA = [
   { value: 0, label: "Lunes" },
@@ -69,6 +79,9 @@ export function CierresView() {
   const [loading, setLoading] = useState(true);
 
   const [vista, setVista] = useState<"resumen" | "calendario" | "ajustes">("resumen");
+  const [busqueda, setBusqueda] = useState("");
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [mesActual, setMesActual] = useState(new Date());
   const [modalOpen, setModalOpen] = useState(false);
   const [detalleOpen, setDetalleOpen] = useState(false);
@@ -154,6 +167,76 @@ export function CierresView() {
     });
     return { total, cuadran, descuadrados, saldoNeto };
   }, [cierres]);
+
+  const cierresFiltrados = useMemo(
+    () => cierres.filter((c) => coincideBusquedaUniversal(c, busqueda)),
+    [cierres, busqueda],
+  );
+
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "fecha", label: "Fecha", bloqueada: true },
+    { campo: "semana", label: "Semana" },
+    { campo: "efectivo", label: "Efectivo retirado" },
+    { campo: "total", label: "Total contado" },
+    { campo: "estado", label: "Estado" },
+    { campo: "descuadre", label: "Descuadre" },
+    { campo: "doc", label: "Doc." },
+  ];
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
+  const headDe: Record<string, ReactNode> = {
+    fecha: <TableHead key="fecha">Fecha</TableHead>,
+    semana: <TableHead key="semana">Semana</TableHead>,
+    efectivo: <TableHead key="efectivo" className="text-right">Efectivo retirado</TableHead>,
+    total: <TableHead key="total" className="text-right">Total contado</TableHead>,
+    estado: <TableHead key="estado">Estado</TableHead>,
+    descuadre: <TableHead key="descuadre" className="text-right">Descuadre</TableHead>,
+    doc: <TableHead key="doc">Doc.</TableHead>,
+  };
+  const cellDe = (c: CierreRow): Record<string, ReactNode> => ({
+    fecha: (
+      <TableCell key="fecha" className="font-medium">
+        {format(parseISO(c.fecha), "dd MMM yyyy", { locale: es })}
+      </TableCell>
+    ),
+    semana: (
+      <TableCell key="semana" className="text-xs text-muted-foreground">{c.semana_iso ?? "—"}</TableCell>
+    ),
+    efectivo: <TableCell key="efectivo" className="text-right">{fmtEuro(c.efectivo_retirado)}</TableCell>,
+    total: <TableCell key="total" className="text-right">{fmtEuro(c.total_contado)}</TableCell>,
+    estado: (
+      <TableCell key="estado">
+        {c.cuadra ? (
+          <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 gap-1">
+            <CheckCircle2 className="h-3 w-3" /> Cuadra
+          </Badge>
+        ) : (
+          <Badge className={`gap-1 ${c.descuadre >= 0 ? "bg-amber-100 text-amber-800 border-amber-300" : "bg-red-100 text-red-800 border-red-300"}`}>
+            <AlertTriangle className="h-3 w-3" />
+            {c.descuadre >= 0 ? "Sobra" : "Falta"}
+          </Badge>
+        )}
+      </TableCell>
+    ),
+    descuadre: (
+      <TableCell key="descuadre" className={`text-right font-medium ${c.descuadre === 0 ? "text-muted-foreground" : c.descuadre > 0 ? "text-amber-700" : "text-red-700"}`}>
+        {c.cuadra ? "—" : fmtEuro(c.descuadre)}
+      </TableCell>
+    ),
+    doc: (
+      <TableCell key="doc">
+        {c.url ? (
+          <Badge variant="outline" className="text-xs gap-1">
+            <FileText className="h-3 w-3" /> Sí
+          </Badge>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        )}
+      </TableCell>
+    ),
+  });
 
   // ── Handlers ──────────────────────────────────────────
   const abrirNuevo = (fecha?: string) => {
@@ -242,31 +325,33 @@ export function CierresView() {
   return (
     <div className="p-6 space-y-6">
       {confirmDeleteDialog}
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Cierres semanales</h1>
-          <p className="text-sm text-muted-foreground">
-            Registro semanal del cierre de caja con documento adjunto y control de descuadres.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {config.modo === "fijo" && config.dia_semana !== null && (
-            <Badge variant="outline" className="gap-1 px-2 py-1">
-              <Clock className="h-3 w-3" />
-              Día prefijado: {DIAS_SEMANA[config.dia_semana].label}
-            </Badge>
-          )}
-          {config.modo === "libre" && (
-            <Badge variant="outline" className="gap-1 px-2 py-1">
-              Día libre
-            </Badge>
-          )}
-          <Button variant="primary" size="lg" onClick={() => abrirNuevo()}>
-            <Plus className="mr-2 h-4 w-4" /> Nuevo cierre
-          </Button>
-        </div>
-      </div>
+      {/* Toolbar BARRA HORIZONTAL 1 */}
+      <SubmoduleToolbar
+        busqueda={busqueda}
+        onBusquedaChange={setBusqueda}
+        placeholderBusqueda="Buscar"
+        onNuevo={() => abrirNuevo()}
+        columnas={columnasDef}
+        columnasVisibles={columnasVisibles}
+        onColumnasVisiblesChange={setColumnasVisibles}
+        columnasOrden={columnasOrden}
+        onColumnasOrdenChange={setColumnasOrden}
+        extraDerecha={
+          <>
+            <IOActions config={cierresIO} onSuccess={cargar} />
+            <Button
+              size="icon"
+              variant={vista === "ajustes" ? "default" : "outline"}
+              className="h-9 w-9"
+              onClick={() => setVista("ajustes")}
+              title="Configuración"
+              aria-label="Configuración"
+            >
+              <Settings className="h-4 w-4" strokeWidth={1.75} />
+            </Button>
+          </>
+        }
+      />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -428,61 +513,29 @@ export function CierresView() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Semana</TableHead>
-                  <TableHead className="text-right">Efectivo retirado</TableHead>
-                  <TableHead className="text-right">Total contado</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead className="text-right">Descuadre</TableHead>
-                  <TableHead>Doc.</TableHead>
+                  {columnasRender.map((c) => headDe[c.campo])}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {cierres.length === 0 && (
+                {cierresFiltrados.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={columnasRender.length} className="text-center py-12 text-muted-foreground">
                       {loading ? <LoadingSpinner /> : "No hay cierres registrados aún"}
                     </TableCell>
                   </TableRow>
                 )}
-                {cierres.map((c) => (
-                  <TableRow
-                    key={c.id}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => { setSelected(c); setDetalleOpen(true); }}
-                  >
-                    <TableCell className="font-medium">
-                      {format(parseISO(c.fecha), "dd MMM yyyy", { locale: es })}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{c.semana_iso ?? "—"}</TableCell>
-                    <TableCell className="text-right">{fmtEuro(c.efectivo_retirado)}</TableCell>
-                    <TableCell className="text-right">{fmtEuro(c.total_contado)}</TableCell>
-                    <TableCell>
-                      {c.cuadra ? (
-                        <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 gap-1">
-                          <CheckCircle2 className="h-3 w-3" /> Cuadra
-                        </Badge>
-                      ) : (
-                        <Badge className={`gap-1 ${c.descuadre >= 0 ? "bg-amber-100 text-amber-800 border-amber-300" : "bg-red-100 text-red-800 border-red-300"}`}>
-                          <AlertTriangle className="h-3 w-3" />
-                          {c.descuadre >= 0 ? "Sobra" : "Falta"}
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className={`text-right font-medium ${c.descuadre === 0 ? "text-muted-foreground" : c.descuadre > 0 ? "text-amber-700" : "text-red-700"}`}>
-                      {c.cuadra ? "—" : fmtEuro(c.descuadre)}
-                    </TableCell>
-                    <TableCell>
-                      {c.url ? (
-                        <Badge variant="outline" className="text-xs gap-1">
-                          <FileText className="h-3 w-3" /> Sí
-                        </Badge>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {cierresFiltrados.map((c) => {
+                  const celdas = cellDe(c);
+                  return (
+                    <TableRow
+                      key={c.id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => { setSelected(c); setDetalleOpen(true); }}
+                    >
+                      {columnasRender.map((col) => celdas[col.campo])}
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </Card>
