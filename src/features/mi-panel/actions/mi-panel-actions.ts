@@ -32,7 +32,7 @@ import {
   minutosAHHMM,
 } from "@/features/rrhh/utils/horario-empleado";
 import {
-  resolverPresenciaPorGeo,
+  resolverCandidatosPorGeo,
   getHorariosDiaUnificado,
   getMisLocales,
   planificarReparto,
@@ -531,6 +531,156 @@ export async function getTiposFichajeDisponibles(): Promise<{
   }
 }
 
+type EvalEntradaResultado =
+  | { ok: true; tipoSel: { codigo: string } | null; horaEntradaOverrideISO: string | null }
+  | { ok: false; error: string; fueraDeHora?: boolean };
+
+/**
+ * ¿Puede el empleado fichar AHORA su entrada en esta empresa? Resuelve el tipo
+ * de fichaje y aplica las reglas de disponibilidad (solicitud / horario fijo /
+ * flexible) de ESA empresa. Única fuente de esta validación: el fichaje
+ * presencial la usa para elegir, entre los locales cercanos, la empresa en la
+ * que el empleado tiene turno ahora (el GPS solo confirma la presencia).
+ */
+async function evaluarEntradaFichaje(
+  supabase: Parameters<typeof getHorarioDia>[0],
+  args: {
+    empresaId: string;
+    empleadoId: string;
+    userId: string;
+    hoyMadrid: string;
+    ahoraMin: number;
+    tipoCodigo?: string;
+  },
+): Promise<EvalEntradaResultado> {
+  const { empresaId, empleadoId, userId, hoyMadrid, ahoraMin, tipoCodigo } = args;
+  let horaEntradaOverrideISO: string | null = null;
+
+  const { data: tiposData } = await supabase
+    .from("tipos_fichaje")
+    .select("codigo, nombre, requiere_solicitud, margen_antes_min, margen_despues_min")
+    .eq("empresa_id", empresaId)
+    .eq("activo", true)
+    .order("orden", { ascending: true });
+  const tiposActivos = (tiposData ?? []) as {
+    codigo: string;
+    nombre: string;
+    requiere_solicitud: boolean;
+    margen_antes_min: number;
+    margen_despues_min: number;
+  }[];
+
+  let tipoSel = tipoCodigo
+    ? tiposActivos.find((t) => t.codigo.toUpperCase() === tipoCodigo.toUpperCase()) ?? null
+    : null;
+  if (!tipoSel) tipoSel = tiposActivos.find((t) => !t.requiere_solicitud) ?? null;
+
+  if (tipoSel) {
+    if (tipoSel.requiere_solicitud) {
+      const { data: sol } = await supabase
+        .from("solicitudes_personal")
+        .select("id")
+        .eq("empresa_id", empresaId)
+        .eq("user_id", userId)
+        .eq("tipo", "trabajo")
+        .eq("estado", "aprobada")
+        .lte("fecha_inicio", hoyMadrid)
+        .or(`fecha_fin.is.null,fecha_fin.gte.${hoyMadrid}`)
+        .limit(1);
+      if (!sol || sol.length === 0) {
+        return {
+          ok: false,
+          error: `Para fichar como "${tipoSel.nombre}" necesitas una solicitud de trabajo aprobada para hoy.`,
+        };
+      }
+    } else {
+      const horario = await getHorarioDia(supabase, empresaId, empleadoId, hoyMadrid);
+
+      const { data: cfgFuera } = await supabase
+        .from("empresa_fichajes_config")
+        .select("permitir_fuera_horario")
+        .eq("empresa_id", empresaId)
+        .maybeSingle();
+      const permitirFuera = !!cfgFuera?.permitir_fuera_horario;
+
+      if (
+        !permitirFuera &&
+        (horario.tipo === "ninguno" ||
+          (horario.tipo === "flexible" && horario.objetivoHoras <= 0))
+      ) {
+        return {
+          ok: false,
+          error: "No tienes horario asignado para hoy, así que no puedes fichar el horario normal. Aun así, siempre puedes fichar por solicitud y tu responsable lo revisará.",
+        };
+      }
+
+      if (!permitirFuera && horario.tipo === "flexible") {
+        const consumido = await horasTrabajadasPeriodo(
+          supabase,
+          empresaId,
+          userId,
+          hoyMadrid,
+          horario.modo,
+        );
+        if (consumido >= horario.objetivoHoras - 1 / 3600) {
+          return {
+            ok: false,
+            error:
+              horario.modo === "semanal"
+                ? `Ya has completado tus ${fmtHorasObjetivo(horario.objetivoHoras)} de esta semana. Podrás volver a fichar el lunes que viene.`
+                : `Ya has completado tus ${fmtHorasObjetivo(horario.objetivoHoras)} de hoy. Podrás volver a fichar mañana.`,
+          };
+        }
+      } else if (!permitirFuera && horario.tipo === "fijo") {
+        const tramos = horario.tramos;
+        const { data: cfg } = await supabase
+          .from("empresa_fichajes_config")
+          .select("*")
+          .eq("empresa_id", empresaId)
+          .maybeSingle();
+        const permitirAntes = cfg ? !!cfg.permitir_antes : true;
+        const permitirDespues = cfg ? !!cfg.permitir_despues : true;
+        const margenAntes = permitirAntes ? ((cfg?.margen_antes_min as number) ?? 15) : 0;
+        const margenDespues = permitirDespues ? ((cfg?.margen_despues_min as number) ?? 15) : 0;
+        const redondearAntes = cfg ? !!cfg.redondear_antes : true;
+        const redondearDespues = cfg ? !!cfg.redondear_despues : false;
+
+        const inicios = tramos
+          .map((t) => hhmmAMinutos(t.inicio))
+          .filter((m): m is number => m != null);
+        const startMin = inicios.length ? Math.min(...inicios) : 0;
+        const lower = startMin - margenAntes;
+        const upper = startMin + margenDespues;
+        const enVentana = (m: number) => m >= lower && m <= upper;
+        const dentro =
+          enVentana(ahoraMin) || enVentana(ahoraMin + 1440) || enVentana(ahoraMin - 1440);
+
+        if (!dentro) {
+          return {
+            ok: false,
+            fueraDeHora: true,
+            error: `No se te permite fichar: estás fuera de hora. Tu turno empieza a las ${minutosAHHMM(startMin)}. Si necesitas registrar estas horas, puedes pedir que las validen.`,
+          };
+        }
+
+        const llegaAntes = ahoraMin < startMin;
+        const llegaDespues = ahoraMin > startMin;
+        if ((llegaAntes && redondearAntes) || (llegaDespues && redondearDespues)) {
+          horaEntradaOverrideISO = new Date(
+            Date.now() - (ahoraMin - startMin) * 60000,
+          ).toISOString();
+        }
+      }
+    }
+  }
+
+  return {
+    ok: true,
+    tipoSel: tipoSel ? { codigo: tipoSel.codigo } : null,
+    horaEntradaOverrideISO,
+  };
+}
+
 export async function ficharEntradaPersonal(
   geo?: GeoInput,
   modoSolicitado?: ModoFichaje,
@@ -541,19 +691,18 @@ export async function ficharEntradaPersonal(
     if (!user) return { ok: false, error: "No autenticado" };
 
     const { fecha: hoyMadrid, minutos: ahoraMin } = ahoraEnMadrid();
-    // Si el redondeo aplica, la entrada se registra a la hora exacta del turno.
-    let horaEntradaOverrideISO: string | null = null;
-
-    // ─── Resolver empresa + empleado + local (AGNÓSTICO de empresa) ─────────
-    // PRESENCIAL: la empresa sale del LOCAL más cercano entre TODAS las empresas
-    // del empleado (multi-empresa); la geo decide, nunca la cookie ni el empleado.
-    // TELETRABAJO: no hay geo que valide zona → se usa la empresa activa (cookie)
-    // y su fila de empleado, si la tiene permitida.
-    let empresaId: string;
-    let empleadoId: string;
-    let localElegidoId: string;
-    let centro: string;
+    // ─── Resolver empresa + empleado + local ───────────────────────────────
+    // PRESENCIAL: la geo solo CONFIRMA que estás en alguno de tus locales; la
+    // EMPRESA la decide tu TURNO (se prueba cada local cercano y se ficha en
+    // aquel donde puedes fichar ahora). Sin turno en ninguno, no se ficha.
+    // TELETRABAJO: sin geo → empresa activa (cookie) y su fila de empleado.
+    let empresaId = "";
+    let empleadoId = "";
+    let localElegidoId = "";
+    let centro = "";
     let modoTeletrabajo = false;
+    let tipoSel: { codigo: string } | null = null;
+    let horaEntradaOverrideISO: string | null = null;
 
     if (modoSolicitado === "teletrabajo") {
       if (!cookieEmpresaId) return { ok: false, error: "No autenticado" };
@@ -589,6 +738,22 @@ export async function ficharEntradaPersonal(
       localElegidoId = primero.id;
       centro = primero.nombre ?? "";
       modoTeletrabajo = true;
+
+      const ev = await evaluarEntradaFichaje(supabase, {
+        empresaId,
+        empleadoId,
+        userId: user.id,
+        hoyMadrid,
+        ahoraMin,
+        tipoCodigo,
+      });
+      if (!ev.ok) {
+        return ev.fueraDeHora
+          ? { ok: false, error: ev.error, fueraDeHora: true }
+          : { ok: false, error: ev.error };
+      }
+      tipoSel = ev.tipoSel;
+      horaEntradaOverrideISO = ev.horaEntradaOverrideISO;
     } else {
       if (!geo) {
         return {
@@ -596,147 +761,54 @@ export async function ficharEntradaPersonal(
           error: "Activa la geolocalización para poder fichar de forma presencial.",
         };
       }
-      const pres = await resolverPresenciaPorGeo(supabase, user.id, geo);
+      const pres = await resolverCandidatosPorGeo(supabase, user.id, geo);
       if (!pres.ok) return { ok: false, error: pres.error };
-      empresaId = pres.empresaId;
-      empleadoId = pres.empleadoId;
-      localElegidoId = pres.localId;
-      centro = pres.centro;
-    }
-
-    // ─── Tipo de fichaje + reglas de disponibilidad (contra la empresa RESUELTA) ─
-    const { data: tiposData } = await supabase
-      .from("tipos_fichaje")
-      .select("codigo, nombre, requiere_solicitud, margen_antes_min, margen_despues_min")
-      .eq("empresa_id", empresaId)
-      .eq("activo", true)
-      .order("orden", { ascending: true });
-    const tiposActivos = (tiposData ?? []) as {
-      codigo: string;
-      nombre: string;
-      requiere_solicitud: boolean;
-      margen_antes_min: number;
-      margen_despues_min: number;
-    }[];
-
-    // El tipo llega del front según la empresa de la cookie. Si no existe en la
-    // empresa resuelta por geo, se cae al tipo normal (no-solicitud) de esa empresa.
-    let tipoSel = tipoCodigo
-      ? tiposActivos.find((t) => t.codigo.toUpperCase() === tipoCodigo.toUpperCase()) ?? null
-      : null;
-    if (!tipoSel) tipoSel = tiposActivos.find((t) => !t.requiere_solicitud) ?? null;
-
-    if (tipoSel) {
-      if (tipoSel.requiere_solicitud) {
-        // Solo disponible si hay una solicitud de trabajo aprobada para hoy.
-        const { data: sol } = await supabase
-          .from("solicitudes_personal")
-          .select("id")
-          .eq("empresa_id", empresaId)
-          .eq("user_id", user.id)
-          .eq("tipo", "trabajo")
-          .eq("estado", "aprobada")
-          .lte("fecha_inicio", hoyMadrid)
-          .or(`fecha_fin.is.null,fecha_fin.gte.${hoyMadrid}`)
-          .limit(1);
-        if (!sol || sol.length === 0) {
-          return {
-            ok: false,
-            error: `Para fichar como "${tipoSel.nombre}" necesitas una solicitud de trabajo aprobada para hoy.`,
+      // La empresa la decide el TURNO: se prueba cada local cercano (más cerca
+      // primero) y se ficha en aquel donde el empleado puede fichar ahora.
+      let elegido:
+        | {
+            empresaId: string;
+            localId: string;
+            centro: string;
+            tipoSel: { codigo: string } | null;
+            horaEntradaOverrideISO: string | null;
+          }
+        | null = null;
+      let primerFallo: { error: string; fueraDeHora?: boolean } | null = null;
+      for (const c of pres.candidatos) {
+        const ev = await evaluarEntradaFichaje(supabase, {
+          empresaId: c.empresaId,
+          empleadoId: c.empleadoId,
+          userId: user.id,
+          hoyMadrid,
+          ahoraMin,
+          tipoCodigo,
+        });
+        if (ev.ok) {
+          elegido = {
+            empresaId: c.empresaId,
+            localId: c.localId,
+            centro: c.centro,
+            tipoSel: ev.tipoSel,
+            horaEntradaOverrideISO: ev.horaEntradaOverrideISO,
           };
+          break;
         }
-      } else {
-        // Fichaje normal: exige horario asignado hoy. Si es FIJO, dentro de la
-        // ventana de Ajustes RRHH → Fichajes (respecto a la hora de inicio). Si
-        // es FLEXIBLE, sin ventana horaria, pero bloqueado si ya alcanzó su
-        // objetivo de horas del periodo (día o semana, según el turno).
-        const horario = await getHorarioDia(supabase, empresaId, empleadoId, hoyMadrid);
-
-        // "Permitir fichar fuera de horario" (Ajustes RRHH → Fichajes): si está
-        // activo, NO se aplica ninguna comprobación de horario (ni bloqueo por
-        // ventana/objetivo, ni redondeo).
-        const { data: cfgFuera } = await supabase
-          .from("empresa_fichajes_config")
-          .select("permitir_fuera_horario")
-          .eq("empresa_id", empresaId)
-          .maybeSingle();
-        const permitirFuera = !!cfgFuera?.permitir_fuera_horario;
-
-        if (
-          !permitirFuera &&
-          (horario.tipo === "ninguno" ||
-            (horario.tipo === "flexible" && horario.objetivoHoras <= 0))
-        ) {
-          return {
-            ok: false,
-            error: "No tienes horario asignado para hoy, así que no puedes fichar el horario normal. Aun así, siempre puedes fichar por solicitud y tu responsable lo revisará.",
-          };
-        }
-
-        if (!permitirFuera && horario.tipo === "flexible") {
-          const consumido = await horasTrabajadasPeriodo(
-            supabase,
-            empresaId,
-            user.id,
-            hoyMadrid,
-            horario.modo,
-          );
-          // Margen de 1 s para evitar rebotes por redondeo.
-          if (consumido >= horario.objetivoHoras - 1 / 3600) {
-            return {
-              ok: false,
-              error:
-                horario.modo === "semanal"
-                  ? `Ya has completado tus ${fmtHorasObjetivo(horario.objetivoHoras)} de esta semana. Podrás volver a fichar el lunes que viene.`
-                  : `Ya has completado tus ${fmtHorasObjetivo(horario.objetivoHoras)} de hoy. Podrás volver a fichar mañana.`,
-            };
-          }
-          // Flexible: sin ventana ni redondeo; se registra la entrada directa.
-        } else if (!permitirFuera && horario.tipo === "fijo") {
-          // tipo "fijo": ventana horaria respecto a la hora de inicio del turno.
-          const tramos = horario.tramos;
-          const { data: cfg } = await supabase
-            .from("empresa_fichajes_config")
-            .select("*")
-            .eq("empresa_id", empresaId)
-            .maybeSingle();
-          const permitirAntes = cfg ? !!cfg.permitir_antes : true;
-          const permitirDespues = cfg ? !!cfg.permitir_despues : true;
-          const margenAntes = permitirAntes ? ((cfg?.margen_antes_min as number) ?? 15) : 0;
-          const margenDespues = permitirDespues ? ((cfg?.margen_despues_min as number) ?? 15) : 0;
-          const redondearAntes = cfg ? !!cfg.redondear_antes : true;
-          const redondearDespues = cfg ? !!cfg.redondear_despues : false;
-
-          // Hora de inicio del turno del día = el tramo más temprano.
-          const inicios = tramos
-            .map((t) => hhmmAMinutos(t.inicio))
-            .filter((m): m is number => m != null);
-          const startMin = inicios.length ? Math.min(...inicios) : 0;
-          const lower = startMin - margenAntes;
-          const upper = startMin + margenDespues;
-          const enVentana = (m: number) => m >= lower && m <= upper;
-          // Tolerancia de medianoche para turnos que empiezan cerca de las 00:00.
-          const dentro =
-            enVentana(ahoraMin) || enVentana(ahoraMin + 1440) || enVentana(ahoraMin - 1440);
-
-          if (!dentro) {
-            return {
-              ok: false,
-              fueraDeHora: true,
-              error: `No se te permite fichar: estás fuera de hora. Tu turno empieza a las ${minutosAHHMM(startMin)}. Si necesitas registrar estas horas, puedes pedir que las validen.`,
-            };
-          }
-
-          // Redondeo a la hora exacta del turno (si procede).
-          const llegaAntes = ahoraMin < startMin;
-          const llegaDespues = ahoraMin > startMin;
-          if ((llegaAntes && redondearAntes) || (llegaDespues && redondearDespues)) {
-            horaEntradaOverrideISO = new Date(
-              Date.now() - (ahoraMin - startMin) * 60000,
-            ).toISOString();
-          }
-        }
+        if (!primerFallo) primerFallo = { error: ev.error, fueraDeHora: ev.fueraDeHora };
       }
+      if (!elegido) {
+        const error =
+          primerFallo?.error ??
+          "No tienes turno a esta hora en ninguno de tus locales cercanos.";
+        return primerFallo?.fueraDeHora
+          ? { ok: false, error, fueraDeHora: true }
+          : { ok: false, error };
+      }
+      empresaId = elegido.empresaId;
+      localElegidoId = elegido.localId;
+      centro = elegido.centro;
+      tipoSel = elegido.tipoSel;
+      horaEntradaOverrideISO = elegido.horaEntradaOverrideISO;
     }
 
     const ahora = new Date();

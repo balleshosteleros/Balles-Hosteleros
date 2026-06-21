@@ -191,6 +191,89 @@ export async function resolverPresenciaPorGeo(
   };
 }
 
+/** Un local dentro del radio donde el empleado PODRÍA fichar (geo confirma presencia). */
+export type CandidatoPresencia = {
+  empresaId: string;
+  empleadoId: string;
+  localId: string;
+  centro: string;
+  distancia: number;
+};
+
+export type PresenciaCandidatos =
+  | { ok: true; candidatos: CandidatoPresencia[] }
+  | {
+      ok: false;
+      error: string;
+      masCercano?: { nombre: string; dist: number; radio: number };
+      sinUbicacion?: boolean;
+    };
+
+/**
+ * Como `resolverPresenciaPorGeo`, pero devuelve TODOS los locales dentro del
+ * radio (ordenados por distancia), no solo el más cercano. La geo solo confirma
+ * que el empleado está físicamente en alguno de sus locales; quién decide la
+ * empresa es el TURNO (lo resuelve el llamador probando cada candidato). Esto
+ * evita que, con dos locales solapados (p. ej. mismo edificio), el GPS atribuya
+ * la jornada a la empresa equivocada.
+ */
+export async function resolverCandidatosPorGeo(
+  supabase: SupabaseClient,
+  userId: string,
+  geo: { lat: number; lng: number },
+  filas?: FilaEmpleadoEmpresa[],
+): Promise<PresenciaCandidatos> {
+  const locales = await getMisLocales(supabase, userId, filas);
+  if (locales.length === 0) {
+    return {
+      ok: false,
+      error: "No tienes ningún local asignado. Pide a tu responsable que te asigne uno.",
+    };
+  }
+
+  const dentro: CandidatoPresencia[] = [];
+  let masCercano: { nombre: string; dist: number; radio: number } | null = null;
+  let algunoConUbicacion = false;
+
+  for (const l of locales) {
+    if (l.lat == null || l.lng == null) continue;
+    algunoConUbicacion = true;
+    const dist = distanciaMetros(geo.lat, geo.lng, l.lat, l.lng);
+    if (!masCercano || dist < masCercano.dist) {
+      masCercano = { nombre: l.nombre, dist, radio: l.radioMetros };
+    }
+    if (dist <= l.radioMetros) {
+      dentro.push({
+        empresaId: l.empresaId,
+        empleadoId: l.empleadoId,
+        localId: l.id,
+        centro: l.nombre,
+        distancia: dist,
+      });
+    }
+  }
+
+  if (!algunoConUbicacion) {
+    return {
+      ok: false,
+      sinUbicacion: true,
+      error: "Tus locales no tienen ubicación configurada. Avisa a tu responsable.",
+    };
+  }
+  if (dentro.length === 0) {
+    return {
+      ok: false,
+      error: masCercano
+        ? `Estás a ${Math.round(masCercano.dist)} m de "${masCercano.nombre}" (radio permitido ${masCercano.radio} m). Acércate a un local asignado para fichar.`
+        : "No estás dentro del radio de ninguno de tus locales.",
+      masCercano: masCercano ?? undefined,
+    };
+  }
+
+  dentro.sort((a, b) => a.distancia - b.distancia);
+  return { ok: true, candidatos: dentro };
+}
+
 /**
  * Horario del día del usuario en CADA una de sus empresas. La ventana de
  * fichaje y el reparto de jornada partida se construyen combinando estos
