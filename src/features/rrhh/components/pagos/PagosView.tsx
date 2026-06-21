@@ -3,8 +3,8 @@
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
-import { getResumenPagos, calcularTotalPago, type PagoEmpleado, type PagoArea } from "@/features/rrhh/data/pagos";
-import { listEmpleadosParaPagos } from "@/features/rrhh/actions/pagos-actions";
+import { getResumenPagos, type PagoEmpleado, type PagoArea } from "@/features/rrhh/data/pagos";
+import { listEmpleadosParaPagos, loadPagos, savePago, type PagoGuardado } from "@/features/rrhh/actions/pagos-actions";
 import { ZONE_COLORS } from "@/features/direccion/data/direccion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -34,10 +34,64 @@ import {
 } from "@/shared/components/calendar/CalendarRangeToggle";
 import { useCalendarRange, type CalendarRangeMode } from "@/shared/components/calendar/calendar-range";
 
-const MODES_PAGOS: CalendarRangeMode[] = ["MENSUAL", "TRIMESTRAL", "SEMESTRAL", "ANUAL"];
+// Los pagos se registran por mes (igual que la hoja de nóminas), así que el
+// módulo trabaja en modo MENSUAL: cada periodo = un mes 'YYYY-MM'.
+const MODES_PAGOS: CalendarRangeMode[] = ["MENSUAL"];
 
 function rangoKey(rango: { start: Date; end: Date }): string {
   return `${rango.start.toISOString().slice(0, 10)}_${rango.end.toISOString().slice(0, 10)}`;
+}
+
+// periodo 'YYYY-MM' en hora local (evita el salto de mes por UTC).
+function periodoDeRango(rango: { start: Date }): string {
+  const y = rango.start.getFullYear();
+  const m = String(rango.start.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
+}
+
+function fromGuardado(
+  empleadoId: string,
+  empleadoNombre: string,
+  area: PagoArea,
+  g: PagoGuardado,
+): PagoEmpleado {
+  return {
+    id: `${empleadoId}-pago`,
+    empleadoId,
+    empleadoNombre,
+    area,
+    fijo: g.fijo,
+    pago: g.pago,
+    nomina: g.nomina,
+    horasReales: g.horasReales,
+    horasTrabajadas: g.horasTrabajadas,
+    propina: g.propina,
+    ajuste: g.ajuste,
+    horasExtras: g.horasExtras,
+    bonus: g.bonus,
+    propinaMantenimiento: g.propinaMantenimiento,
+    total: g.total,
+    pagado: g.pagado,
+  };
+}
+
+function toGuardado(p: PagoEmpleado): PagoGuardado {
+  return {
+    empleadoId: p.empleadoId.startsWith("ext-") ? null : p.empleadoId,
+    empleadoNombre: p.empleadoNombre,
+    fijo: p.fijo,
+    pago: p.pago,
+    nomina: p.nomina,
+    horasReales: p.horasReales,
+    horasTrabajadas: p.horasTrabajadas,
+    propina: p.propina,
+    ajuste: p.ajuste,
+    horasExtras: p.horasExtras,
+    bonus: p.bonus,
+    propinaMantenimiento: p.propinaMantenimiento,
+    total: p.total,
+    pagado: p.pagado,
+  };
 }
 
 function nuevoPagoVacio(empleadoId: string, empleadoNombre: string, area: PagoArea): PagoEmpleado {
@@ -52,7 +106,7 @@ function nuevoPagoVacio(empleadoId: string, empleadoNombre: string, area: PagoAr
     horasReales: 0,
     horasTrabajadas: 0,
     propina: 0,
-    descuento: 0,
+    ajuste: 0,
     horasExtras: 0,
     bonus: 0,
     propinaMantenimiento: 0,
@@ -78,16 +132,42 @@ export function PagosView() {
   useGlobalLoadingSync(loading);
 
   const claveRango = rangoKey(calRange.range);
+  const periodo = periodoDeRango(calRange.range);
   const pagos = pagosPorRango[claveRango] ?? [];
 
   const cargarEmpleados = useCallback(async () => {
     setLoading(true);
-    const res = await listEmpleadosParaPagos();
+    const [resEmp, resPagos] = await Promise.all([
+      listEmpleadosParaPagos(),
+      loadPagos(periodo),
+    ]);
     setLoading(false);
-    if (!res.ok) return;
-    const filas = res.data.map((e) => nuevoPagoVacio(e.empleadoId, e.empleadoNombre, e.area));
-    setPagosPorRango((prev) => ({ ...prev, [claveRango]: filas }));
-  }, [claveRango]);
+    if (!resEmp.ok) return;
+
+    // Indexar lo guardado: por empleado (con ficha) y suelto (ex-empleados).
+    const guardadosPorEmp = new Map<string, PagoGuardado>();
+    const guardadosSinEmp: PagoGuardado[] = [];
+    for (const g of resPagos.data) {
+      if (g.empleadoId) guardadosPorEmp.set(g.empleadoId, g);
+      else guardadosSinEmp.push(g);
+    }
+
+    // Empleados activos: fila guardada si existe, si no fila vacía.
+    const filasEmpleados = resEmp.data.map((e) => {
+      const g = guardadosPorEmp.get(e.empleadoId);
+      guardadosPorEmp.delete(e.empleadoId);
+      return g
+        ? fromGuardado(e.empleadoId, e.empleadoNombre, e.area, g)
+        : nuevoPagoVacio(e.empleadoId, e.empleadoNombre, e.area);
+    });
+
+    // Pagos guardados de gente que ya no está activa (histórico): se muestran igual.
+    const filasExtra = [...guardadosPorEmp.values(), ...guardadosSinEmp].map((g) =>
+      fromGuardado(g.empleadoId ?? `ext-${g.empleadoNombre}`, g.empleadoNombre, "operativa", g),
+    );
+
+    setPagosPorRango((prev) => ({ ...prev, [claveRango]: [...filasEmpleados, ...filasExtra] }));
+  }, [claveRango, periodo]);
 
   useEffect(() => {
     if (pagosPorRango[claveRango]) return;
@@ -137,20 +217,34 @@ export function PagosView() {
   const resumen = useMemo(() => getResumenPagos(pagosFiltrados), [pagosFiltrados]);
 
   const togglePagado = (id: string) => {
-    setPagos((prev) => prev.map((p) => (p.id === id ? { ...p, pagado: !p.pagado } : p)));
+    let actualizado: PagoEmpleado | undefined;
+    setPagos((prev) =>
+      prev.map((p) => {
+        if (p.id !== id) return p;
+        actualizado = { ...p, pagado: !p.pagado };
+        return actualizado;
+      }),
+    );
+    if (actualizado) void savePago(periodo, toGuardado(actualizado));
   };
 
   const guardarEdicion = (datos: Partial<PagoEmpleado>) => {
     if (!editando) return;
+    let actualizado: PagoEmpleado | undefined;
     setPagos((prev) =>
       prev.map((p) => {
         if (p.id !== editando.id) return p;
         const updated = { ...p, ...datos };
-        updated.total = calcularTotalPago(updated);
+        // El ajuste (con signo) mueve el total de ese empleado por su diferencia;
+        // el resto de columnas son el desglose y no recalculan el total importado.
+        const deltaAjuste = updated.ajuste - p.ajuste;
+        updated.total = Math.round((p.total + deltaAjuste) * 100) / 100;
+        actualizado = updated;
         return updated;
       }),
     );
     setEditando(null);
+    if (actualizado) void savePago(periodo, toGuardado(actualizado));
   };
 
   const fmt = (n: number) => n.toLocaleString("es-ES", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + " €";
@@ -171,7 +265,7 @@ export function PagosView() {
     { campo: "horasReales", label: "H.R" },
     { campo: "horasTrabajadas", label: "H.T" },
     { campo: "propina", label: "Propina" },
-    { campo: "descuento", label: "Descuento" },
+    { campo: "ajuste", label: "Ajuste" },
     { campo: "horasExtras", label: "H.Extras" },
     { campo: "bonus", label: "Bonus" },
     { campo: "propinaMantenimiento", label: "Prop. Mant." },
@@ -206,9 +300,16 @@ export function PagosView() {
       th: <TableHead key="propina" className="text-right">Propina</TableHead>,
       td: (p) => <TableCell key="propina" className="text-right tabular-nums">{fmt(p.propina)}</TableCell>,
     },
-    descuento: {
-      th: <TableHead key="descuento" className="text-right">Descuento</TableHead>,
-      td: (p) => <TableCell key="descuento" className="text-right tabular-nums text-destructive">{p.descuento > 0 ? `-${fmt(p.descuento)}` : "—"}</TableCell>,
+    ajuste: {
+      th: <TableHead key="ajuste" className="text-right">Ajuste</TableHead>,
+      td: (p) => (
+        <TableCell
+          key="ajuste"
+          className={`text-right tabular-nums ${p.ajuste < 0 ? "text-destructive" : p.ajuste > 0 ? "text-emerald-600" : ""}`}
+        >
+          {p.ajuste === 0 ? "—" : `${p.ajuste > 0 ? "+" : "−"}${fmt(Math.abs(p.ajuste))}`}
+        </TableCell>
+      ),
     },
     horasExtras: {
       th: <TableHead key="horasExtras" className="text-right">H.Extras</TableHead>,
@@ -386,7 +487,7 @@ export function PagosView() {
                     <TableCell className="text-right tabular-nums">{pagosFiltrados.reduce((s, p) => s + p.horasReales, 0)}h</TableCell>
                     <TableCell className="text-right tabular-nums">{pagosFiltrados.reduce((s, p) => s + p.horasTrabajadas, 0)}h</TableCell>
                     <TableCell className="text-right tabular-nums">{fmt(resumen.totalPropinas)}</TableCell>
-                    <TableCell className="text-right tabular-nums text-destructive">{fmt(resumen.totalDescuentos)}</TableCell>
+                    <TableCell className={`text-right tabular-nums ${resumen.totalAjustes < 0 ? "text-destructive" : resumen.totalAjustes > 0 ? "text-emerald-600" : ""}`}>{resumen.totalAjustes === 0 ? "—" : `${resumen.totalAjustes > 0 ? "+" : "−"}${fmt(Math.abs(resumen.totalAjustes))}`}</TableCell>
                     <TableCell className="text-right tabular-nums">{fmt(resumen.totalExtras)}</TableCell>
                     <TableCell className="text-right tabular-nums">{fmt(resumen.totalBonus)}</TableCell>
                     <TableCell className="text-right tabular-nums">{fmt(pagosFiltrados.reduce((s, p) => s + p.propinaMantenimiento, 0))}</TableCell>
@@ -415,7 +516,7 @@ function EditForm({ pago, onSave }: { pago: PagoEmpleado; onSave: (d: Partial<Pa
   const [form, setForm] = useState({ ...pago });
   const campos: { key: keyof PagoEmpleado; label: string }[] = [
     { key: "pago", label: "Pago" }, { key: "nomina", label: "Nómina" }, { key: "propina", label: "Propina" },
-    { key: "descuento", label: "Descuento" }, { key: "horasExtras", label: "H. Extras" },
+    { key: "ajuste", label: "Ajuste (+/−)" }, { key: "horasExtras", label: "H. Extras" },
     { key: "bonus", label: "Bonus" }, { key: "propinaMantenimiento", label: "Propina Mant." },
   ];
   return (

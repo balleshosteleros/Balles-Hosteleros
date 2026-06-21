@@ -18,7 +18,7 @@ create table if not exists public.rrhh_pagos (
   horas_reales          numeric(8,2)  not null default 0,
   horas_trabajadas      numeric(8,2)  not null default 0,
   propina               numeric(12,2) not null default 0,
-  descuento             numeric(12,2) not null default 0,
+  ajuste                numeric(12,2) not null default 0, -- con signo: + suma al total, - resta
   horas_extras          numeric(12,2) not null default 0,
   bonus                 numeric(12,2) not null default 0,
   propina_mes_anterior  numeric(12,2) not null default 0,
@@ -29,10 +29,11 @@ create table if not exists public.rrhh_pagos (
   created_by            uuid
 );
 
--- Un pago por empleado x mes x empresa (solo cuando hay ficha).
+-- Un pago por empleado x mes x empresa (target de upsert desde PostgREST).
+-- No parcial: NULL empleado_id se considera distinto, asi que ex-empleados por
+-- nombre no chocan; los empleados con ficha si quedan deduplicados.
 create unique index if not exists uq_rrhh_pagos_emp_periodo
-  on public.rrhh_pagos(empresa_id, empleado_id, periodo)
-  where empleado_id is not null;
+  on public.rrhh_pagos(empresa_id, empleado_id, periodo);
 
 create index if not exists idx_rrhh_pagos_empresa_periodo
   on public.rrhh_pagos(empresa_id, periodo);

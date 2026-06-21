@@ -81,3 +81,120 @@ export async function listEmpleadosParaPagos(): Promise<{ ok: boolean; data: Emp
     return { ok: false, data: [] };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Persistencia de pagos (tabla rrhh_pagos). periodo = 'YYYY-MM'.
+// El TOTAL se guarda verbatim (cálculo de negocio propio), no se recomputa.
+// ---------------------------------------------------------------------------
+
+export interface PagoGuardado {
+  empleadoId: string | null;
+  empleadoNombre: string;
+  fijo: boolean;
+  pago: number;
+  nomina: number;
+  horasReales: number;
+  horasTrabajadas: number;
+  propina: number;
+  ajuste: number;
+  horasExtras: number;
+  bonus: number;
+  propinaMantenimiento: number;
+  total: number;
+  pagado: boolean;
+}
+
+type PagoDbRow = {
+  empleado_id: string | null;
+  empleado_nombre: string;
+  fijo: boolean;
+  pago: number | string;
+  nomina: number | string;
+  horas_reales: number | string;
+  horas_trabajadas: number | string;
+  propina: number | string;
+  ajuste: number | string;
+  horas_extras: number | string;
+  bonus: number | string;
+  propina_mes_anterior: number | string;
+  total: number | string;
+  pagado: boolean;
+};
+
+const PAGO_COLS =
+  "empleado_id, empleado_nombre, fijo, pago, nomina, horas_reales, horas_trabajadas, propina, ajuste, horas_extras, bonus, propina_mes_anterior, total, pagado";
+
+function dbToPago(r: PagoDbRow): PagoGuardado {
+  return {
+    empleadoId: r.empleado_id,
+    empleadoNombre: r.empleado_nombre,
+    fijo: r.fijo,
+    pago: Number(r.pago),
+    nomina: Number(r.nomina),
+    horasReales: Number(r.horas_reales),
+    horasTrabajadas: Number(r.horas_trabajadas),
+    propina: Number(r.propina),
+    ajuste: Number(r.ajuste),
+    horasExtras: Number(r.horas_extras),
+    bonus: Number(r.bonus),
+    propinaMantenimiento: Number(r.propina_mes_anterior),
+    total: Number(r.total),
+    pagado: r.pagado,
+  };
+}
+
+export async function loadPagos(
+  periodo: string,
+): Promise<{ ok: boolean; data: PagoGuardado[] }> {
+  try {
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false, data: [] };
+    const { data, error } = await supabase
+      .from("rrhh_pagos")
+      .select(PAGO_COLS)
+      .eq("empresa_id", empresaId)
+      .eq("periodo", periodo);
+    if (error) throw error;
+    return { ok: true, data: (data ?? []).map((r) => dbToPago(r as PagoDbRow)) };
+  } catch (err) {
+    console.error("[rrhh] loadPagos:", err);
+    return { ok: false, data: [] };
+  }
+}
+
+export async function savePago(
+  periodo: string,
+  row: PagoGuardado,
+): Promise<{ ok: boolean }> {
+  try {
+    const { supabase, empresaId, userId } = await getAppContext();
+    if (!empresaId || !row.empleadoId) return { ok: false };
+    const { error } = await supabase.from("rrhh_pagos").upsert(
+      {
+        empresa_id: empresaId,
+        empleado_id: row.empleadoId,
+        empleado_nombre: row.empleadoNombre,
+        periodo,
+        fijo: row.fijo,
+        pago: row.pago,
+        nomina: row.nomina,
+        horas_reales: row.horasReales,
+        horas_trabajadas: row.horasTrabajadas,
+        propina: row.propina,
+        ajuste: row.ajuste,
+        horas_extras: row.horasExtras,
+        bonus: row.bonus,
+        propina_mes_anterior: row.propinaMantenimiento,
+        total: row.total,
+        pagado: row.pagado,
+        created_by: userId,
+      },
+      { onConflict: "empresa_id,empleado_id,periodo" },
+    );
+    if (error) throw error;
+    return { ok: true };
+  } catch (err) {
+    console.error("[rrhh] savePago:", err);
+    return { ok: false };
+  }
+}
