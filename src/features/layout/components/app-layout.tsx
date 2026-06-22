@@ -69,6 +69,7 @@ import { useViewMode } from "@/features/layout/contexts/view-mode-context";
 
 const NAV_BADGE_BG: Record<string, string> = {
   red: "bg-red-500",
+  orange: "bg-orange-500",
   blue: "bg-blue-600",
   emerald: "bg-emerald-600",
   violet: "bg-violet-600",
@@ -213,8 +214,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         className="relative h-8 w-8"
                         title="Correo"
                       >
-                        <Mail className="!h-[18px] !w-[18px] text-red-500" />
-                        <NavBadge count={ajustes.notificaciones.email.badgeActivo ? counts.emails : 0} color="red" />
+                        <Mail className="!h-[18px] !w-[18px] text-orange-500" />
+                        <NavBadge count={ajustes.notificaciones.email.badgeActivo ? counts.emails : 0} color="orange" />
                       </Button>
                     </GmailDrawer>
 
