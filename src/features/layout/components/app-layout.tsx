@@ -197,6 +197,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 <>
                   {/* Integraciones: Google (cuenta + email + calendario + meet) | tareas + chat + llamadas | apps */}
                   <div className="hidden md:flex items-center rounded-full border bg-muted/40 py-1 px-1.5 gap-0.5">
+                    {/* Notificaciones — joya de la corona, la primera de la barra */}
+                    <NotificacionBell variant="toolbar" />
+
+                    {/* Separador visual */}
+                    <span className="w-px h-5 bg-border mx-0.5" />
+
                     {/* Cuenta Google activa (icono) */}
                     <GoogleHeaderPill />
 
@@ -238,9 +244,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
                     {/* Grabación de pantalla */}
                     <RecordingTrigger />
-
-                    {/* Notificaciones — avisos y alertas a todos los empleados */}
-                    <NotificacionBell variant="toolbar" />
 
                     {/* Separador visual */}
                     <span className="w-px h-5 bg-border mx-0.5" />
