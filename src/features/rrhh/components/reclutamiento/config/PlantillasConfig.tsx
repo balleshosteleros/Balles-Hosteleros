@@ -12,19 +12,14 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import {
-  Pencil, Mail, Eye, Search, ChevronRight, Clock,
-  Variable, CheckCircle2, XCircle, Loader2, RotateCcw,
+  Pencil, Mail, Eye, Search, Plus, Copy, Trash2,
+  Variable, CheckCircle2, XCircle, Loader2,
   Workflow, ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { PlantillasEstadoTab } from "./PlantillasEstadoTab";
 import { CuestionariosVacanteManager } from "./CuestionariosVacanteManager";
-import {
-  FASES_PRINCIPALES_ORDER,
-  FASES_PRINCIPALES,
-  ESTADOS_CONFIG,
-  type EstadoReclutamiento,
-} from "@/features/rrhh/data/reclutamiento";
 import {
   VARIABLES_RECLUTAMIENTO,
   GRUPOS_VARIABLES_RECLUTAMIENTO,
@@ -33,14 +28,16 @@ import {
 } from "@/features/rrhh/lib/reclutamiento-email";
 import {
   listReclutamientoEmailPlantillas,
+  createReclutamientoEmailPlantilla,
   updateReclutamientoEmailPlantilla,
   toggleReclutamientoEmailPlantillaActiva,
-  resetReclutamientoEmailPlantilla,
+  duplicateReclutamientoEmailPlantilla,
+  deleteReclutamientoEmailPlantilla,
   type ReclutamientoEmailPlantilla,
 } from "@/features/rrhh/actions/reclutamiento-email-plantillas-actions";
 import { toast } from "sonner";
 
-// ─── Editor modal ───────────────────────────────────────────────
+// ─── Editor modal (crear / editar) ──────────────────────────────
 function PlantillaEditorDialog({
   plantilla,
   open,
@@ -56,27 +53,23 @@ function PlantillaEditorDialog({
   empresaNombre: string;
   initialTab?: "editar" | "preview";
 }) {
+  const [nombre, setNombre] = useState("");
   const [asunto, setAsunto] = useState("");
   const [cuerpo, setCuerpo] = useState("");
   const [activa, setActiva] = useState(true);
   const [tab, setTab] = useState<"editar" | "preview">(initialTab);
   const [pending, startTransition] = useTransition();
 
-  // Sincroniza el formulario cuando cambia la plantilla o se abre el diálogo.
-  const estado = plantilla?.estado;
+  // Sincroniza el formulario al abrir o cambiar de plantilla.
+  const plantillaId = plantilla?.id ?? null;
   useEffect(() => {
-    if (plantilla) {
-      setAsunto(plantilla.asunto);
-      setCuerpo(plantilla.cuerpo);
-      setActiva(plantilla.activa);
-      setTab(initialTab);
-    }
-  }, [estado, plantilla, initialTab]);
-
-  if (!plantilla || !estado) return null;
-
-  const faseCfg = FASES_PRINCIPALES[plantilla.fase];
-  const estadoCfg = ESTADOS_CONFIG[estado];
+    if (!open) return;
+    setNombre(plantilla?.nombre ?? "");
+    setAsunto(plantilla?.asunto ?? "");
+    setCuerpo(plantilla?.cuerpo ?? "");
+    setActiva(plantilla?.activa ?? true);
+    setTab(initialTab);
+  }, [open, plantillaId, plantilla, initialTab]);
 
   const insertVariable = (variable: string) => {
     setCuerpo((prev) => (prev.endsWith(" ") || prev === "" ? prev : prev + " ") + variable);
@@ -86,22 +79,11 @@ function PlantillaEditorDialog({
 
   const handleSave = () => {
     startTransition(async () => {
-      const res = await updateReclutamientoEmailPlantilla(estado, { asunto, cuerpo, activa });
+      const res = plantilla
+        ? await updateReclutamientoEmailPlantilla(plantilla.id, { nombre, asunto, cuerpo, activa })
+        : await createReclutamientoEmailPlantilla({ nombre, asunto, cuerpo, activa });
       if (res.ok) {
-        toast.success("Plantilla guardada correctamente");
-        onOpenChange(false);
-        onSaved();
-      } else {
-        toast.error(res.error);
-      }
-    });
-  };
-
-  const handleReset = () => {
-    startTransition(async () => {
-      const res = await resetReclutamientoEmailPlantilla(estado);
-      if (res.ok) {
-        toast.success("Plantilla restaurada al texto por defecto");
+        toast.success(plantilla ? "Plantilla guardada" : "Plantilla creada");
         onOpenChange(false);
         onSaved();
       } else {
@@ -116,14 +98,10 @@ function PlantillaEditorDialog({
         <DialogHeader className="px-6 py-4 border-b border-border">
           <DialogTitle className="flex items-center gap-2 text-base">
             <Mail className="h-5 w-5 text-primary" />
-            Editar plantilla
+            {plantilla ? "Editar plantilla" : "Nueva plantilla de email"}
           </DialogTitle>
-          <DialogDescription className="flex items-center gap-2 mt-1">
-            <Badge variant="outline" className="text-[10px]" style={{ borderColor: faseCfg.color, color: faseCfg.color }}>
-              {faseCfg.label}
-            </Badge>
-            <ChevronRight className="h-3 w-3 text-muted-foreground" />
-            <Badge variant="secondary" className="text-[10px]">{estadoCfg.label}</Badge>
+          <DialogDescription>
+            Las plantillas son sueltas: créalas aquí y asóciales un estado desde Plantillas de estados o desde cada vacante.
           </DialogDescription>
         </DialogHeader>
 
@@ -142,14 +120,19 @@ function PlantillaEditorDialog({
           </button>
         </div>
 
-        <ScrollArea className="max-h-[calc(90vh-200px)]">
+        <ScrollArea className="max-h-[calc(90vh-210px)]">
           {tab === "editar" ? (
             <div className="px-6 py-5 space-y-5">
               <div className="flex items-center gap-2">
                 <Switch checked={activa} onCheckedChange={setActiva} />
                 <Label className="text-xs">
-                  {activa ? "Activa — se envía al pasar a este estado" : "Inactiva — no se envía correo"}
+                  {activa ? "Activa — se puede enviar al pasar a un estado asociado" : "Inactiva — no se envía correo"}
                 </Label>
+              </div>
+
+              <div>
+                <Label className="text-xs">Nombre de la plantilla</Label>
+                <Input value={nombre} onChange={(e) => setNombre(e.target.value)} className="mt-1" placeholder="Ej. Bienvenida al proceso" />
               </div>
 
               <div>
@@ -223,33 +206,29 @@ function PlantillaEditorDialog({
           )}
         </ScrollArea>
 
-        <DialogFooter className="px-6 py-4 border-t border-border sm:justify-between">
-          <Button variant="ghost" onClick={handleReset} disabled={pending} className="gap-1.5 text-muted-foreground">
-            <RotateCcw className="h-3.5 w-3.5" /> Restaurar por defecto
+        <DialogFooter className="px-6 py-4 border-t border-border">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>Cancelar</Button>
+          <Button onClick={handleSave} disabled={pending} className="gap-1.5">
+            {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+            {plantilla ? "Guardar plantilla" : "Crear plantilla"}
           </Button>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={pending} className="gap-1.5">
-              {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-              Guardar plantilla
-            </Button>
-          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
-// ─── Pestaña de Emails ──────────────────────────────────────────
+// ─── Pestaña de Emails (biblioteca suelta) ──────────────────────
 function PlantillasEmailTab() {
   const { empresaActual } = useEmpresa();
   const [plantillas, setPlantillas] = useState<ReclutamientoEmailPlantilla[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<ReclutamientoEmailPlantilla | null>(null);
+  const [creando, setCreando] = useState(false);
   const [editingTab, setEditingTab] = useState<"editar" | "preview">("editar");
   const [search, setSearch] = useState("");
-  const [filtroFase, setFiltroFase] = useState<string>("todas");
   const [filtroActivo, setFiltroActivo] = useState<string>("todos");
+  const { confirm, dialog } = useConfirmDelete();
 
   const reload = useCallback(async () => {
     const data = await listReclutamientoEmailPlantillas();
@@ -267,43 +246,74 @@ function PlantillasEmailTab() {
       const s = search.toLowerCase();
       list = list.filter((p) => p.nombre.toLowerCase().includes(s) || p.asunto.toLowerCase().includes(s));
     }
-    if (filtroFase !== "todas") list = list.filter((p) => p.fase === filtroFase);
     if (filtroActivo === "activas") list = list.filter((p) => p.activa);
     if (filtroActivo === "inactivas") list = list.filter((p) => !p.activa);
     return list;
-  }, [plantillas, search, filtroFase, filtroActivo]);
+  }, [plantillas, search, filtroActivo]);
 
-  const handleToggle = (estado: EstadoReclutamiento, current: boolean) => {
-    // Optimista
-    setPlantillas((prev) => prev.map((p) => (p.estado === estado ? { ...p, activa: !current } : p)));
+  const handleToggle = (id: string, current: boolean) => {
+    setPlantillas((prev) => prev.map((p) => (p.id === id ? { ...p, activa: !current } : p)));
     void (async () => {
-      const res = await toggleReclutamientoEmailPlantillaActiva(estado, !current);
+      const res = await toggleReclutamientoEmailPlantillaActiva(id, !current);
       if (res.ok) {
         toast.success("Estado de la plantilla actualizado");
       } else {
         toast.error(res.error);
-        setPlantillas((prev) => prev.map((p) => (p.estado === estado ? { ...p, activa: current } : p)));
+        setPlantillas((prev) => prev.map((p) => (p.id === id ? { ...p, activa: current } : p)));
       }
     })();
   };
 
+  const handleDuplicate = async (p: ReclutamientoEmailPlantilla) => {
+    const res = await duplicateReclutamientoEmailPlantilla(p.id);
+    if (res.ok) {
+      toast.success("Plantilla duplicada");
+      void reload();
+    } else {
+      toast.error(res.error);
+    }
+  };
+
+  const handleDelete = async (p: ReclutamientoEmailPlantilla) => {
+    const ok = await confirm({
+      title: "¿Eliminar plantilla de email?",
+      description: `Se eliminará «${p.nombre}». Se quitará su asociación de los estados y vacantes que la usaran.`,
+    });
+    if (!ok) return;
+    const res = await deleteReclutamientoEmailPlantilla(p.id);
+    if (res.ok) {
+      toast.success("Plantilla eliminada");
+      void reload();
+    } else {
+      toast.error(res.error);
+    }
+  };
+
+  const activasCount = plantillas.filter((p) => p.activa).length;
+
   return (
-    <div className="space-y-6">
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[200px] max-w-xs">
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-lg font-bold text-foreground">Plantillas de email</h2>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Biblioteca de correos reutilizables. Asocia cada uno a un estado desde Plantillas de estados o en cada vacante.
+          {!loading && <> {" "}{activasCount} de {plantillas.length} activas.</>}
+        </p>
+      </div>
+
+      {/* Barra: + Nueva (izq) · Buscar (der) */}
+      <div className="flex items-center justify-between gap-3">
+        <Button onClick={() => setCreando(true)} className="gap-1.5 shrink-0">
+          <Plus className="h-4 w-4" /> Nueva plantilla
+        </Button>
+        <div className="relative flex-1 min-w-[160px] max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Buscar plantilla..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
         </div>
-        <Select value={filtroFase} onValueChange={setFiltroFase}>
-          <SelectTrigger className="w-44 h-9"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todas">Todas las fases</SelectItem>
-            {FASES_PRINCIPALES_ORDER.map((fp) => (
-              <SelectItem key={fp} value={fp}>{FASES_PRINCIPALES[fp].label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      </div>
+
+      {/* Filtros en fila aparte */}
+      <div className="flex flex-wrap items-center gap-2">
         <Select value={filtroActivo} onValueChange={setFiltroActivo}>
           <SelectTrigger className="w-36 h-9"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -318,83 +328,61 @@ function PlantillasEmailTab() {
         <div className="flex items-center justify-center py-16 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin mr-2" /> Cargando plantillas…
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-16 text-muted-foreground text-sm">
+          {plantillas.length === 0 ? "No hay plantillas de email todavía." : "Ninguna plantilla coincide con el filtro."}
+        </div>
       ) : (
-        FASES_PRINCIPALES_ORDER.map((fp) => {
-          const cfg = FASES_PRINCIPALES[fp];
-          const fasePlantillas = filtered.filter((p) => p.fase === fp);
-          if (filtroFase !== "todas" && filtroFase !== fp) return null;
-          if (fasePlantillas.length === 0) return null;
-
-          return (
-            <Card key={fp} className="overflow-hidden">
-              <div
-                className="px-5 py-3 border-b border-border flex items-center justify-between"
-                style={{ background: `linear-gradient(90deg, ${cfg.colorFrom}15, ${cfg.colorTo}08)` }}
-              >
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cfg.color }} />
-                  <h3 className="font-semibold text-foreground text-sm">Fase: {cfg.label}</h3>
-                  <Badge variant="outline" className="text-[10px]">{fasePlantillas.length} plantillas</Badge>
-                </div>
-                <span className="text-[10px] text-muted-foreground">
-                  {fasePlantillas.filter((p) => p.activa).length} activas
-                </span>
-              </div>
-              <CardContent className="p-0">
-                {fasePlantillas.map((p) => {
-                  const estadoCfg = ESTADOS_CONFIG[p.estado];
-                  return (
-                    <div key={p.estado} className="flex items-center justify-between px-5 py-4 border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
-                      <div className="flex items-center gap-4 flex-1 min-w-0">
-                        <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 mb-0.5">
-                            <span className="text-sm font-medium text-foreground">Email al pasar a {estadoCfg.label}</span>
-                            <Badge variant="secondary" className="text-[10px]">{estadoCfg.label}</Badge>
-                          </div>
-                          <div className="text-xs text-muted-foreground truncate">
-                            <span className="font-medium">Asunto:</span> {p.asunto}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <Badge
-                          variant={p.activa ? "secondary" : "outline"}
-                          className={`text-[10px] gap-1 ${p.activa ? "bg-emerald-100 text-emerald-700" : ""}`}
-                        >
-                          {p.activa ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
-                          {p.activa ? "Activa" : "Inactiva"}
-                        </Badge>
-                        <Switch checked={p.activa} onCheckedChange={() => handleToggle(p.estado, p.activa)} />
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => { setEditingTab("editar"); setEditing(p); }}
-                          title="Editar"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => { setEditingTab("preview"); setEditing(p); }}
-                          title="Vista previa"
-                        >
-                          <Eye className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
+        <Card className="overflow-hidden">
+          <CardContent className="p-0">
+            {filtered.map((p) => (
+              <div key={p.id} className="flex items-center justify-between px-5 py-4 border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
+                <div className="flex items-center gap-4 flex-1 min-w-0">
+                  <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-sm font-medium text-foreground truncate">{p.nombre}</span>
                     </div>
-                  );
-                })}
-              </CardContent>
-            </Card>
-          );
-        })
+                    <div className="text-xs text-muted-foreground truncate">
+                      <span className="font-medium">Asunto:</span> {p.asunto}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Badge
+                    variant={p.activa ? "secondary" : "outline"}
+                    className={`text-[10px] gap-1 ${p.activa ? "bg-emerald-100 text-emerald-700" : ""}`}
+                  >
+                    {p.activa ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                    {p.activa ? "Activa" : "Inactiva"}
+                  </Badge>
+                  <Switch checked={p.activa} onCheckedChange={() => handleToggle(p.id, p.activa)} />
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditingTab("editar"); setEditing(p); }} title="Editar">
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditingTab("preview"); setEditing(p); }} title="Vista previa">
+                    <Eye className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDuplicate(p)} title="Duplicar">
+                    <Copy className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    onClick={() => handleDelete(p)}
+                    title="Eliminar"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       )}
 
-      {/* Editor Dialog */}
+      {/* Editor (editar) */}
       <PlantillaEditorDialog
         plantilla={editing}
         open={!!editing}
@@ -403,6 +391,16 @@ function PlantillasEmailTab() {
         empresaNombre={empresaActual.nombre}
         initialTab={editingTab}
       />
+      {/* Editor (crear) */}
+      <PlantillaEditorDialog
+        plantilla={null}
+        open={creando}
+        onOpenChange={setCreando}
+        onSaved={reload}
+        empresaNombre={empresaActual.nombre}
+        initialTab="editar"
+      />
+      {dialog}
     </div>
   );
 }

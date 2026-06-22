@@ -338,7 +338,8 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
                     .map((est) => {
                       const faseCfg = FASES_PLANTILLA_ESTADO[est.fase];
                       const current = form.email_plantillas[est.key]
-                        ?? (emailPlantillas.some((e) => e.estado === est.key) ? est.key : SIN_EMAIL);
+                        ?? est.email_plantilla_id
+                        ?? SIN_EMAIL;
                       return (
                         <div key={est.key} className="grid grid-cols-2 gap-2 items-center">
                           <div className="flex items-center gap-2 min-w-0">
@@ -360,7 +361,7 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
                             <SelectContent>
                               <SelectItem value={SIN_EMAIL}>Sin email</SelectItem>
                               {emailPlantillas.map((e) => (
-                                <SelectItem key={e.estado} value={e.estado}>
+                                <SelectItem key={e.id} value={e.id}>
                                   {e.nombre}{e.activa ? "" : " (inactiva)"}
                                 </SelectItem>
                               ))}

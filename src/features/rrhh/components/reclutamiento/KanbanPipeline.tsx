@@ -4,7 +4,6 @@ import {
   FASES_PRINCIPALES_ORDER,
   ESTADOS_CONFIG,
   ORIGEN_LABELS,
-  EMAIL_PLANTILLAS_FASE,
   getFasePrincipal,
   puedeMoverA,
   siguienteEstado,
@@ -32,7 +31,7 @@ import {
 import { toast } from "sonner";
 import {
   enviarReclutamientoFaseEmail,
-  listReclutamientoEmailPlantillas,
+  previewReclutamientoFaseEmail,
 } from "@/features/rrhh/actions/reclutamiento-email-plantillas-actions";
 import {
   sustituirVariablesReclutamiento,
@@ -312,33 +311,26 @@ function EmailConfirmDialog({
   vacante: Vacante;
   onConfirm: (enviarEmail: boolean) => void;
 }) {
-  // Plantilla real de BD para el estado destino (refleja ediciones y el flag
-  // `activa`). Mientras carga, usa el texto de fábrica como respaldo.
-  const [tpl, setTpl] = useState<{ asunto: string; cuerpo: string; activo: boolean } | null>(null);
+  // Plantilla asociada al estado destino de ESTE candidato (resuelta en servidor
+  // vía su vacante → plantilla de estados / override por vacante).
+  // undefined = cargando · null = sin email asociado a este estado.
+  const [tpl, setTpl] = useState<{ asunto: string; cuerpo: string; activa: boolean } | null | undefined>(undefined);
   useEffect(() => {
-    if (!open || !estadoNuevo) return;
+    if (!open || !estadoNuevo || !candidato) return;
     let cancel = false;
-    setTpl(null);
-    listReclutamientoEmailPlantillas()
-      .then((list) => {
-        if (cancel) return;
-        const found = list.find((p) => p.estado === estadoNuevo);
-        setTpl(
-          found
-            ? { asunto: found.asunto, cuerpo: found.cuerpo, activo: found.activa }
-            : { ...EMAIL_PLANTILLAS_FASE[estadoNuevo] },
-        );
-      })
-      .catch(() => {
-        if (!cancel) setTpl({ ...EMAIL_PLANTILLAS_FASE[estadoNuevo] });
-      });
+    setTpl(undefined);
+    previewReclutamientoFaseEmail(candidato.id, estadoNuevo)
+      .then((res) => { if (!cancel) setTpl(res); })
+      .catch(() => { if (!cancel) setTpl(null); });
     return () => {
       cancel = true;
     };
-  }, [open, estadoNuevo]);
+  }, [open, estadoNuevo, candidato]);
 
   if (!candidato || !estadoNuevo) return null;
-  const plantilla = tpl ?? EMAIL_PLANTILLAS_FASE[estadoNuevo];
+  const cargando = tpl === undefined;
+  const tieneEmail = !!tpl;
+  const emailActiva = !!tpl?.activa;
   const faseAnterior = getFasePrincipal(candidato.fase);
   const faseNueva = getFasePrincipal(estadoNuevo);
 
@@ -369,20 +361,30 @@ function EmailConfirmDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {plantilla.activo && (
+        {cargando && (
+          <p className="text-xs text-muted-foreground mt-2">Comprobando la plantilla asociada…</p>
+        )}
+
+        {!cargando && tieneEmail && emailActiva && tpl && (
           <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2 mt-2">
             <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
               <Mail className="h-3.5 w-3.5" /> Previsualización del email
             </p>
             <p className="text-xs text-muted-foreground"><span className="font-medium">Para:</span> {candidato.email}</p>
-            <p className="text-xs text-muted-foreground"><span className="font-medium">Asunto:</span> {reemplazarVariablesEmail(plantilla.asunto, candidato, vacante)}</p>
-            <p className="text-xs text-muted-foreground leading-relaxed mt-1">{reemplazarVariablesEmail(plantilla.cuerpo, candidato, vacante)}</p>
+            <p className="text-xs text-muted-foreground"><span className="font-medium">Asunto:</span> {reemplazarVariablesEmail(tpl.asunto, candidato, vacante)}</p>
+            <p className="text-xs text-muted-foreground leading-relaxed mt-1">{reemplazarVariablesEmail(tpl.cuerpo, candidato, vacante)}</p>
           </div>
         )}
 
-        {!plantilla.activo && (
+        {!cargando && tieneEmail && !emailActiva && (
           <div className="rounded-lg border border-border bg-amber-50 p-3 mt-2">
-            <p className="text-xs text-amber-700">La plantilla para este estado está desactivada. No se enviará email automático.</p>
+            <p className="text-xs text-amber-700">La plantilla asociada a este estado está desactivada. No se enviará email automático.</p>
+          </div>
+        )}
+
+        {!cargando && !tieneEmail && (
+          <div className="rounded-lg border border-border bg-amber-50 p-3 mt-2">
+            <p className="text-xs text-amber-700">No hay ninguna plantilla de email asociada a este estado. Se moverá sin enviar correo.</p>
           </div>
         )}
 
@@ -394,7 +396,7 @@ function EmailConfirmDialog({
           <Button variant="outline" onClick={() => onConfirm(false)} className="gap-1.5">
             <X className="h-4 w-4" /> No, no enviar email
           </Button>
-          <Button onClick={() => onConfirm(true)} disabled={!plantilla.activo} className="gap-1.5">
+          <Button onClick={() => onConfirm(true)} disabled={!emailActiva} className="gap-1.5">
             <Send className="h-4 w-4" /> Sí, enviar email
           </Button>
         </DialogFooter>
