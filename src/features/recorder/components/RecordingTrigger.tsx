@@ -23,7 +23,7 @@ export function RecordingTrigger() {
       onClick={() => setDrawerOpen(true)}
       title="Grabar pantalla"
     >
-      <Monitor className={cn("!h-[18px] !w-[18px]", isRecording ? "text-red-600" : "text-fuchsia-600")} />
+      <Monitor className={cn("!h-[18px] !w-[18px]", isRecording ? "text-red-600" : "text-slate-700")} />
 
       {isRecording ? (
         <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
