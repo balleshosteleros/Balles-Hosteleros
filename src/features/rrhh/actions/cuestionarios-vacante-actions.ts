@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import {
   MAX_PREGUNTAS_CUESTIONARIO,
+  MAX_OPCIONES_PREGUNTA,
   type CuestionarioVacante,
   type PreguntaCuestionario,
 } from "@/features/rrhh/data/cuestionario-vacante";
@@ -56,6 +57,9 @@ function validarPreguntas(preguntas: PreguntaCuestionario[]): string | null {
     if (!p.titulo?.trim()) return `La pregunta ${i + 1} no tiene título`;
     const opciones = (p.opciones ?? []).filter((o) => o.texto?.trim());
     if (opciones.length < 2) return `La pregunta ${i + 1} necesita al menos 2 opciones`;
+    if (opciones.length > MAX_OPCIONES_PREGUNTA) {
+      return `La pregunta ${i + 1} no puede tener más de ${MAX_OPCIONES_PREGUNTA} respuestas`;
+    }
     if (!opciones.some((o) => o.correcta)) {
       return `Marca la respuesta correcta en la pregunta ${i + 1}`;
     }

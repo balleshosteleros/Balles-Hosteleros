@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import {
   MAX_PREGUNTAS_CUESTIONARIO,
+  MAX_OPCIONES_PREGUNTA,
   preguntaVacia,
   nuevoId,
   type PreguntaCuestionario,
@@ -114,11 +115,14 @@ export function CuestionarioBuilderDialog({ open, onOpenChange, cuestionarioId, 
 
   function addOpcion(pid: string) {
     setPreguntas((prev) =>
-      prev.map((p) =>
-        p.id === pid
-          ? { ...p, opciones: [...p.opciones, { id: nuevoId("o"), texto: "", correcta: false }] }
-          : p,
-      ),
+      prev.map((p) => {
+        if (p.id !== pid) return p;
+        if (p.opciones.length >= MAX_OPCIONES_PREGUNTA) {
+          toast.error(`Máximo ${MAX_OPCIONES_PREGUNTA} respuestas por pregunta`);
+          return p;
+        }
+        return { ...p, opciones: [...p.opciones, { id: nuevoId("o"), texto: "", correcta: false }] };
+      }),
     );
   }
 
@@ -414,7 +418,7 @@ function PreguntaCard({
               </div>
             </div>
           ))}
-          {!readOnly && (
+          {!readOnly && pregunta.opciones.length < MAX_OPCIONES_PREGUNTA && (
             <button
               type="button"
               onClick={onAddOpcion}

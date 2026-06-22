@@ -5,7 +5,10 @@
 // Modelo de nota: cada pregunta vale 1 punto; se acierta si la opción elegida
 // está marcada como `correcta`. Nota final = (aciertos / total) * 10 (0–10).
 
-export const MAX_PREGUNTAS_CUESTIONARIO = 20;
+export const MAX_PREGUNTAS_CUESTIONARIO = 10;
+
+/** Máximo de opciones de respuesta por pregunta. */
+export const MAX_OPCIONES_PREGUNTA = 5;
 
 /** Único tipo soportado hoy: elección múltiple de una sola respuesta. */
 export type TipoPreguntaCuestionario = "eleccion_multiple";
