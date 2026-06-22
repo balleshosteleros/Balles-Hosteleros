@@ -17,7 +17,7 @@ export interface MermaRow {
 }
 
 const mermaSchema = z.object({
-  productoId: z.string().uuid("Producto no válido"),
+  productoId: z.string().guid("Producto no válido"),
   cantidad: z.coerce.number().positive("La cantidad debe ser mayor que 0"),
   unidad: z.string().optional().nullable(),
   motivo: z.string().trim().min(1, "El motivo es obligatorio"),

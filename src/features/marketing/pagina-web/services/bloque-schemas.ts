@@ -40,7 +40,7 @@ export const galeriaDatosSchema = z.object({
 
 export const menuDatosSchema = z.object({
   fuente: z.enum(["carta_items", "manual"]),
-  categoria_ids: z.array(z.string().uuid()).max(40).optional(),
+  categoria_ids: z.array(z.string().guid()).max(40).optional(),
   items_manual: z
     .array(
       z.object({

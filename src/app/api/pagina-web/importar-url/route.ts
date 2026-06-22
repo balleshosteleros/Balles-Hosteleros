@@ -15,7 +15,7 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 
 const bodySchema = z.object({
-  paginaId: z.string().uuid(),
+  paginaId: z.string().guid(),
   url: z.string().url(),
 });
 

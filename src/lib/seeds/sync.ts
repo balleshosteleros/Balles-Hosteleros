@@ -285,17 +285,17 @@ export async function syncReclutamientoEmailPlantillasAEmpresa(
 ): Promise<{ creadas: number }> {
   const { data: existentes } = await admin
     .from("reclutamiento_email_plantillas")
-    .select("estado")
+    .select("nombre")
     .eq("empresa_id", empresaId);
   const setExistentes = new Set(
-    (existentes ?? []).map((r) => r.estado as string),
+    (existentes ?? []).map((r) => r.nombre as string),
   );
 
   const aCrear = RECLUTAMIENTO_EMAIL_PLANTILLAS_SEED
-    .filter((p) => !setExistentes.has(p.estado))
+    .filter((p) => !setExistentes.has(p.nombre))
     .map((p) => ({
       empresa_id: empresaId,
-      estado: p.estado,
+      nombre: p.nombre,
       asunto: p.asunto,
       cuerpo: p.cuerpo,
       activa: p.activa,
@@ -324,15 +324,33 @@ export async function syncReclutamientoPlantillaEstadoAEmpresa(
     .limit(1);
   if ((existentes ?? []).length > 0) return { creadas: 0 };
 
+  // Resuelve los emails por defecto (biblioteca suelta) a sus ids en esta empresa.
+  // El sync de emails se ejecuta antes que el de estados (ver seedEmpresaDefaults).
+  const { data: emails } = await admin
+    .from("reclutamiento_email_plantillas")
+    .select("id, nombre")
+    .eq("empresa_id", empresaId);
+  const emailIdPorNombre = new Map(
+    (emails ?? []).map((e) => [e.nombre as string, e.id as string]),
+  );
+
   const seed = RECLUTAMIENTO_PLANTILLA_ESTADOS_SEED;
+  const estados = seed.estados.map((e) => {
+    const { defaultEmailNombre, ...resto } = e;
+    return {
+      ...resto,
+      email_plantilla_id: defaultEmailNombre
+        ? emailIdPorNombre.get(defaultEmailNombre) ?? null
+        : null,
+    };
+  });
   const { error } = await admin
     .from("reclutamiento_plantillas_estado")
     .insert({
       empresa_id: empresaId,
       nombre: seed.nombre,
-      descripcion: seed.descripcion,
       es_predeterminada: seed.esPredeterminada,
-      estados: seed.estados,
+      estados,
       activa: true,
     });
   if (error) throw error;

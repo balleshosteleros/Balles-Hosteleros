@@ -39,7 +39,19 @@ export type SendEmailInput = {
   subject: string;
   html: string;
   text?: string;
+  /**
+   * Nombre visible del remitente (display name). La dirección de correo sigue
+   * siendo siempre la del SMTP de la plataforma; esto solo cambia el nombre que
+   * ve el destinatario en su bandeja (p.ej. "HABANA <notificaciones@…>").
+   */
+  fromName?: string;
 };
+
+/** Extrae la dirección de un From que puede venir como "Nombre <email>" o "email". */
+function addressOf(from: string): string {
+  const m = from.match(/<([^>]+)>/);
+  return (m ? m[1] : from).trim();
+}
 
 export type SendEmailResult =
   | { ok: true; transport: "smtp"; id?: string }
@@ -93,7 +105,9 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
       auth: { user: cfg.user, pass: cfg.pass },
     });
     const info = await transporter.sendMail({
-      from: cfg.from,
+      from: input.fromName
+        ? { name: input.fromName, address: addressOf(cfg.from) }
+        : cfg.from,
       to: input.to,
       subject: input.subject,
       html: input.html,

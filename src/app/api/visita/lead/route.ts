@@ -23,7 +23,7 @@ const RATE_LIMIT_MAX = 8;
 const RATE_LIMIT_WINDOW_MIN = 15;
 
 const Schema = z.object({
-  empresa_id: z.string().uuid(),
+  empresa_id: z.string().guid(),
   empresa_slug: z.string().min(1).max(80),
   nombre: z.string().trim().min(1).max(80),
   email: z.string().email().max(180).nullable().optional(),

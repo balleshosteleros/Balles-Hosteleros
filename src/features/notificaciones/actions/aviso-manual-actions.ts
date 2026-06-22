@@ -57,8 +57,8 @@ export async function getOpcionesSegmento(): Promise<OpcionesSegmento> {
 // ── Validación del segmento + aviso ─────────────────────────────────
 const SegmentoSchema = z.discriminatedUnion("tipo", [
   z.object({ tipo: z.literal("empresa") }),
-  z.object({ tipo: z.literal("empleados"), empleadoIds: z.array(z.string().uuid()).min(1) }),
-  z.object({ tipo: z.literal("departamento"), departamentoId: z.string().uuid() }),
+  z.object({ tipo: z.literal("empleados"), empleadoIds: z.array(z.string().guid()).min(1) }),
+  z.object({ tipo: z.literal("departamento"), departamentoId: z.string().guid() }),
   z.object({ tipo: z.literal("area"), area: z.enum(["OPERATIVA", "ADMINISTRATIVA"]) }),
   z.object({ tipo: z.literal("rol"), rolLabel: z.string().trim().min(1) }),
 ]);

@@ -46,7 +46,7 @@ function rowToLlamada(r: Row): LlamadaInterna {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const createSchema = z.object({
-  calleeId: z.string().uuid(),
+  calleeId: z.string().guid(),
   tipo: z.enum(["voz", "video"]).default("voz"),
 });
 
@@ -120,7 +120,7 @@ export async function createLlamada(
 // ─────────────────────────────────────────────────────────────────────────────
 
 const updateSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().guid(),
   estado: z.enum([
     "iniciando",
     "sonando",

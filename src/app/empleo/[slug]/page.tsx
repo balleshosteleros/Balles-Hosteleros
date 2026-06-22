@@ -8,15 +8,18 @@ export const revalidate = 60;
 
 export default async function PortalEmpleoPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ o?: string }>;
 }) {
   const { slug } = await params;
+  const { o: canalCodigo } = await searchParams;
   const portal = await fetchPortalEmpleoPorSlug(slug);
   if (!portal) notFound();
   return (
     <EmpleoBrandingShell empresa={portal.empresa}>
-      <ListadoOfertasPublico portal={portal} />
+      <ListadoOfertasPublico portal={portal} canalCodigo={canalCodigo ?? null} />
     </EmpleoBrandingShell>
   );
 }

@@ -4,7 +4,7 @@ import pptxgen from "pptxgenjs";
 import { createClient } from "@/lib/supabase/server";
 import type { Branding, Slide } from "@/features/direccion/presentaciones/types/presentaciones";
 
-const InputSchema = z.object({ id: z.string().uuid() });
+const InputSchema = z.object({ id: z.string().guid() });
 
 const DEFAULT_BRAND = {
   color_primario: "#0F172A",

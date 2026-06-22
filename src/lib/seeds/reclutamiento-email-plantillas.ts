@@ -1,10 +1,11 @@
 /**
- * Seed canónico de PLANTILLAS DE EMAIL del pipeline de RECLUTAMIENTO.
+ * Seed canónico de la BIBLIOTECA de PLANTILLAS DE EMAIL del RECLUTAMIENTO.
  *
- * Una plantilla por cada uno de los 10 estados del pipeline de candidatos
- * (ver `src/features/rrhh/data/reclutamiento.ts` → EstadoReclutamiento). Cuando
- * un candidato cambia de estado dentro de una vacante, esta es la plantilla que
- * se usa para avisarle por correo.
+ * Cada plantilla es SUELTA (identificada por `nombre`, no atada a un estado).
+ * La asociación email↔estado vive en la plantilla de ESTADOS
+ * (`reclutamiento-plantilla-estados.ts` → `defaultEmailNombre` por estado) y,
+ * como override por vacante, en `vacantes.email_plantillas`. Estas 10 plantillas
+ * son las que se asocian por defecto a los 10 estados del proceso estándar.
  *
  * Cualquier cambio aquí se propaga a TODAS las empresas existentes vía
  * `syncSeedsToAllEmpresas()` (modo aditivo: solo crea los estados que falten,
@@ -33,21 +34,10 @@
  *     {{empresa_telefono}}          → teléfono principal de la empresa
  *     {{empresa_web}}              → web de la empresa
  *     {{empresa_direccion}}         → dirección del local de la empresa
- *
- *   Reclutador:
- *     {{reclutador_nombre}}         → nombre del reclutador asignado
- *     {{reclutador_email}}          → email del reclutador asignado
- *
- *   Proceso:
- *     {{fecha_entrevista}}          → fecha de la entrevista
- *     {{hora_entrevista}}           → hora de la entrevista
  */
 
-import type { EstadoReclutamiento } from "@/features/rrhh/data/reclutamiento";
-
 export interface ReclutamientoEmailPlantillaSeed {
-  estado: EstadoReclutamiento;
-  /** Label del estado (debe coincidir con ESTADOS_CONFIG[estado].label) */
+  /** Nombre de la plantilla (identidad de la plantilla dentro de la empresa). */
   nombre: string;
   asunto: string;
   cuerpo: string;
@@ -58,7 +48,6 @@ export interface ReclutamientoEmailPlantillaSeed {
 export const RECLUTAMIENTO_EMAIL_PLANTILLAS_SEED: ReclutamientoEmailPlantillaSeed[] = [
   // ─────────────────────────────────────────────────────── 1. Nuevo ──
   {
-    estado: "nuevo",
     nombre: "Nuevo",
     asunto: "Gracias por tu interés en unirte a nuestro equipo",
     cuerpo: `Hola {{candidato_nombre}},
@@ -78,7 +67,6 @@ Un saludo,
 
   // ──────────────────────────────────────────────────────── 2. Elegido ──
   {
-    estado: "elegido",
     nombre: "Elegido",
     asunto: "Proceso de selección — {{empresa_nombre}}",
     cuerpo: `Hola {{candidato_nombre}},
@@ -93,7 +81,6 @@ Te escribo para agradecerte el interés depositado en nuestra empresa {{empresa_
 
   // ────────────────────────────────────────────────────── 3. Entrevista ──
   {
-    estado: "entrevista",
     nombre: "Entrevista",
     asunto: "Proceso de selección — {{empresa_nombre}}",
     cuerpo: `Hola {{candidato_nombre}},
@@ -108,7 +95,6 @@ Te escribo para agradecerte el interés depositado en nuestra empresa {{empresa_
 
   // ───────────────────────────────────────────────────────── 4. Teórica ──
   {
-    estado: "teorica",
     nombre: "Teórica",
     asunto: "Teoría — {{empresa_nombre}}",
     cuerpo: `Hola {{candidato_nombre}},
@@ -133,7 +119,6 @@ Si te surge alguna duda, escríbenos sin problema a {{empresa_email}}.
 
   // ──────────────────────────────────────────────────────── 5. Práctica ──
   {
-    estado: "practica",
     nombre: "Práctica",
     asunto: "Práctica — {{empresa_nombre}}",
     cuerpo: `Hola {{candidato_nombre}},
@@ -161,7 +146,6 @@ Un saludo,
 
   // ────────────────────────────────────────────────────────── 6. Prueba ──
   {
-    estado: "prueba",
     nombre: "Prueba",
     asunto: "Bienvenido/a a tu periodo de prueba — {{empresa_nombre}}",
     cuerpo: `Hola {{candidato_nombre}},
@@ -181,7 +165,6 @@ Por nuestra parte, te deseamos lo mejor en esta nueva etapa y estamos convencido
 
   // ───────────────────────────────────────────────────────── 7. Empleado ──
   {
-    estado: "empleado",
     nombre: "Empleado",
     asunto: "¡Bienvenido/a al equipo! — {{empresa_nombre}}",
     cuerpo: `Hola {{candidato_nombre}},
@@ -195,7 +178,6 @@ Te escribo para darte la enhorabuena, porque ya perteneces a nuestra gran famili
 
   // ───────────────────────────────────────────────────────── 8. Papelera ──
   {
-    estado: "papelera",
     nombre: "Papelera",
     asunto: "Proceso de selección — {{empresa_nombre}}",
     cuerpo: `Hola {{candidato_nombre}},
@@ -204,12 +186,11 @@ Te escribo para agradecerte el interés depositado en nuestra empresa {{empresa_
 
 {{candidato_nombre}}, gracias y saludos.
 {{empresa_nombre}}`,
-    activa: false,
+    activa: true,
   },
 
   // ────────────────────────────────────────────────── 9. No se presenta ──
   {
-    estado: "no_se_presenta",
     nombre: "No se presenta",
     asunto: "Notificación sobre tu proceso de incorporación",
     cuerpo: `Hola {{candidato_nombre}},
@@ -224,12 +205,11 @@ Te deseamos mucho éxito en tus próximos pasos. Si en algún momento decides re
 
 Un saludo,
 {{empresa_nombre}}`,
-    activa: false,
+    activa: true,
   },
 
   // ──────────────────────────────────────────── 10. Suspenso formación ──
   {
-    estado: "suspenso_formacion",
     nombre: "Suspenso Formación",
     asunto: "Resultado de tu fase de formación práctica",
     cuerpo: `Hola {{candidato_nombre}},
@@ -242,11 +222,6 @@ Te deseamos lo mejor en tu camino y mucho éxito en tus próximos proyectos.
 
 Un saludo,
 {{empresa_nombre}}`,
-    activa: false,
+    activa: true,
   },
 ];
-
-/** Conjunto de estados válidos para validación rápida. */
-export const RECLUTAMIENTO_EMAIL_PLANTILLA_ESTADOS = new Set<EstadoReclutamiento>(
-  RECLUTAMIENTO_EMAIL_PLANTILLAS_SEED.map((p) => p.estado),
-);

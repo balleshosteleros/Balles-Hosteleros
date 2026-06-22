@@ -94,15 +94,16 @@ export const FASES_PRINCIPALES: Record<FasePrincipal, FasePrincipalConfig> = {
 
 // ─── Estado config ──────────────────────────────────────────────
 export const ESTADOS_CONFIG: Record<EstadoReclutamiento, { label: string; color: string; icono: string }> = {
+  // Todos los estados heredan el color oficial de su fase (Selección · Formación · Descartado).
   nuevo: { label: "Nuevo", color: "hsl(220, 70%, 55%)", icono: "📥" },
-  elegido: { label: "Elegido", color: "hsl(200, 70%, 50%)", icono: "✏️" },
-  papelera: { label: "Papelera", color: "hsl(0, 0%, 50%)", icono: "🗑️" },
-  entrevista: { label: "Entrevista", color: "hsl(145, 63%, 42%)", icono: "📋" },
-  teorica: { label: "Teórica", color: "hsl(270, 60%, 55%)", icono: "📋" },
-  practica: { label: "Práctica", color: "hsl(200, 70%, 50%)", icono: "📋" },
-  prueba: { label: "Prueba", color: "hsl(45, 90%, 50%)", icono: "📋" },
-  empleado: { label: "Empleado", color: "hsl(145, 70%, 35%)", icono: "📋" },
-  no_se_presenta: { label: "No se presenta", color: "hsl(0, 0%, 55%)", icono: "📋" },
+  elegido: { label: "Elegido", color: "hsl(220, 70%, 55%)", icono: "✏️" },
+  papelera: { label: "Papelera", color: "hsl(0, 72%, 51%)", icono: "🗑️" },
+  entrevista: { label: "Entrevista", color: "hsl(220, 70%, 55%)", icono: "📋" },
+  teorica: { label: "Teórica", color: "hsl(145, 63%, 42%)", icono: "📋" },
+  practica: { label: "Práctica", color: "hsl(145, 63%, 42%)", icono: "📋" },
+  prueba: { label: "Prueba", color: "hsl(145, 63%, 42%)", icono: "📋" },
+  empleado: { label: "Empleado", color: "hsl(145, 63%, 42%)", icono: "📋" },
+  no_se_presenta: { label: "No se presenta", color: "hsl(0, 72%, 51%)", icono: "📋" },
   suspenso_formacion: { label: "Suspenso Formación", color: "hsl(0, 72%, 51%)", icono: "📋" },
 };
 
@@ -189,6 +190,8 @@ export interface Candidato {
   cvTamanoKb?: number;
   fechaInscripcion: string;
   origen: OrigenCandidatura;
+  /** Canal concreto por el que entró el CV (nombre del enlace de empleo), si aplica. */
+  canal?: string | null;
   notasInternas: string;
   fase: EstadoReclutamiento;
   vacanteId: string;
@@ -214,9 +217,9 @@ export const EMAIL_PLANTILLAS_FASE: Record<EstadoReclutamiento, { asunto: string
   practica: { asunto: "Prueba práctica programada", cuerpo: "Avanzas a la fase de prueba práctica. Recibirás instrucciones en breve.", activo: true },
   prueba: { asunto: "Periodo de prueba", cuerpo: "Has avanzado al periodo de prueba. ¡Enhorabuena!", activo: true },
   empleado: { asunto: "¡Bienvenido/a al equipo!", cuerpo: "Nos complace comunicarte que has sido seleccionado/a para incorporarte al equipo. ¡Enhorabuena!", activo: true },
-  no_se_presenta: { asunto: "Estado de tu candidatura", cuerpo: "Lamentamos informarte de que tu candidatura ha sido marcada como no presentada.", activo: false },
-  suspenso_formacion: { asunto: "Resultado de la formación", cuerpo: "Te informamos del resultado de tu fase de formación.", activo: false },
-  papelera: { asunto: "Actualización de tu candidatura", cuerpo: "Te informamos de que tu candidatura no continúa en el proceso de selección actual.", activo: false },
+  no_se_presenta: { asunto: "Estado de tu candidatura", cuerpo: "Lamentamos informarte de que tu candidatura ha sido marcada como no presentada.", activo: true },
+  suspenso_formacion: { asunto: "Resultado de la formación", cuerpo: "Te informamos del resultado de tu fase de formación.", activo: true },
+  papelera: { asunto: "Actualización de tu candidatura", cuerpo: "Te informamos de que tu candidatura no continúa en el proceso de selección actual.", activo: true },
 };
 
 // ─── Vacante ────────────────────────────────────────────────────

@@ -35,9 +35,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import {
   Search, Star, MoreHorizontal, MapPin, Clock, CalendarDays,
   FileText, Users, Send, ArrowLeft, User, Phone, Mail, Tag, Kanban, List,
-  Pencil, Share2, Trash2, Utensils, Building2, Settings, Check,
+  Pencil, Share2, Trash2, Utensils, Building2, Settings, Check, Link2,
 } from "lucide-react";
 import { DialogSnippetEmbed } from "@/features/empleo-publico/components/DialogSnippetEmbed";
+import { EnlacesEmpleoDialog } from "@/features/rrhh/components/reclutamiento/EnlacesEmpleoDialog";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import {
   SubmoduleToolbar,
@@ -49,8 +50,6 @@ import {
 import { ReclutamientoConfigView } from "@/features/rrhh/components/reclutamiento/config/ReclutamientoConfigView";
 import { CandidatosRealesTab } from "@/features/rrhh/components/reclutamiento/CandidatosRealesTab";
 import { OfertaFormDialog } from "@/features/rrhh/components/reclutamiento/OfertaFormDialog";
-import { NuevoChooserDialog } from "@/features/rrhh/components/reclutamiento/NuevoChooserDialog";
-import { CandidatoFormDialog } from "@/features/rrhh/components/reclutamiento/CandidatoFormDialog";
 import { CandidatoDetailModal } from "@/features/rrhh/components/reclutamiento/CandidatoDetailModal";
 import { FunnelMetrics } from "@/features/rrhh/components/reclutamiento/FunnelMetrics";
 import {
@@ -241,7 +240,7 @@ function AllCandidatosView({ vacantes }: { vacantes: Vacante[] }) {
                 </TableCell>
                 <TableCell className="text-muted-foreground">{c.telefono}</TableCell>
                 <TableCell className="text-muted-foreground">{c.email}</TableCell>
-                <TableCell className="text-muted-foreground">{ORIGEN_LABELS[c.origen]}</TableCell>
+                <TableCell className="text-muted-foreground">{c.canal ? `${ORIGEN_LABELS[c.origen]} · ${c.canal}` : ORIGEN_LABELS[c.origen]}</TableCell>
                 <TableCell className="text-muted-foreground">{c.reclutadorAsignado}</TableCell>
               </TableRow>
             ))}
@@ -272,7 +271,7 @@ function CandidatoDialog({ candidato, open, onOpenChange }: { candidato: Candida
           <Row icon={<Phone className="h-4 w-4" />} label="Teléfono" value={candidato.telefono} />
           <Row icon={<Mail className="h-4 w-4" />} label="Email" value={candidato.email} />
           <Row icon={<CalendarDays className="h-4 w-4" />} label="Inscripción" value={candidato.fechaInscripcion} />
-          <Row icon={<MapPin className="h-4 w-4" />} label="Origen" value={ORIGEN_LABELS[candidato.origen]} />
+          <Row icon={<MapPin className="h-4 w-4" />} label="Origen" value={candidato.canal ? `${ORIGEN_LABELS[candidato.origen]} · ${candidato.canal}` : ORIGEN_LABELS[candidato.origen]} />
           <Row icon={<User className="h-4 w-4" />} label="Reclutador" value={candidato.reclutadorAsignado} />
         </div>
       </DialogContent>
@@ -382,7 +381,7 @@ function CandidatosView({ vacante, faseInicial, onBack }: { vacante: Vacante; fa
                 </TableCell>
                 <TableCell className="text-muted-foreground">{c.telefono}</TableCell>
                 <TableCell className="text-muted-foreground">{c.email}</TableCell>
-                <TableCell className="text-muted-foreground">{ORIGEN_LABELS[c.origen]}</TableCell>
+                <TableCell className="text-muted-foreground">{c.canal ? `${ORIGEN_LABELS[c.origen]} · ${c.canal}` : ORIGEN_LABELS[c.origen]}</TableCell>
                 <TableCell className="text-muted-foreground">{c.fechaInscripcion}</TableCell>
                 <TableCell className="text-muted-foreground">{c.reclutadorAsignado}</TableCell>
               </TableRow>
@@ -475,11 +474,10 @@ export function ReclutamientoView() {
   const [viewMode, setViewMode] = useState<"kanban" | "tabla">("kanban");
 
   // Dialogs (creación/edición + share)
-  const [nuevoChooserOpen, setNuevoChooserOpen] = useState(false);
   const [nuevaOfertaOpen, setNuevaOfertaOpen] = useState(false);
-  const [nuevoCandidatoOpen, setNuevoCandidatoOpen] = useState(false);
   const [ofertaEditando, setOfertaEditando] = useState<Vacante | null>(null);
   const [snippetGlobalOpen, setSnippetGlobalOpen] = useState(false);
+  const [enlacesOpen, setEnlacesOpen] = useState(false);
 
   // Selector de área (vacantes operativas vs. administrativas)
   const [areaFiltro, setAreaFiltro] = useState<"operativa" | "administrativa">("operativa");
@@ -651,7 +649,7 @@ export function ReclutamientoView() {
             busqueda={search}
             onBusquedaChange={setSearch}
             placeholderBusqueda="Buscar"
-            onNuevo={() => setNuevoChooserOpen(true)}
+            onNuevo={() => setNuevaOfertaOpen(true)}
             filtros={filtros}
             onFiltrosChange={setFiltros}
             orden={orden}
@@ -668,6 +666,9 @@ export function ReclutamientoView() {
             }
             extraDerecha={
               <>
+                <Button variant="outline" size="sm" onClick={() => setEnlacesOpen(true)} className="gap-1.5">
+                  <Link2 className="h-3.5 w-3.5" /> Enlaces
+                </Button>
                 {empresaActual.id ? (
                   <Button variant="outline" size="sm" onClick={() => setSnippetGlobalOpen(true)} className="gap-1.5">
                     <Share2 className="h-3.5 w-3.5" /> Compartir
@@ -710,17 +711,6 @@ export function ReclutamientoView() {
           </div>
         </div>
 
-      {/* ── Chooser inicial: ¿vacante o candidato? ──── */}
-      <NuevoChooserDialog
-        open={nuevoChooserOpen}
-        onOpenChange={setNuevoChooserOpen}
-        onPick={(tipo) => {
-          setNuevoChooserOpen(false);
-          if (tipo === "vacante") setNuevaOfertaOpen(true);
-          else setNuevoCandidatoOpen(true);
-        }}
-      />
-
       {/* ── Dialog crear/editar oferta ───────────────── */}
       <OfertaFormDialog
         open={nuevaOfertaOpen}
@@ -729,13 +719,6 @@ export function ReclutamientoView() {
           if (!o) setOfertaEditando(null);
         }}
         vacanteId={ofertaEditando?.id ?? null}
-        onSaved={recargar}
-      />
-
-      {/* ── Dialog crear candidato suelto ────────────── */}
-      <CandidatoFormDialog
-        open={nuevoCandidatoOpen}
-        onOpenChange={setNuevoCandidatoOpen}
         onSaved={recargar}
       />
 
@@ -748,6 +731,8 @@ export function ReclutamientoView() {
           empresaNombre={empresaActual.nombre}
         />
       )}
+
+      <EnlacesEmpleoDialog open={enlacesOpen} onOpenChange={setEnlacesOpen} />
 
       {confirmDeleteDialog}
     </div>

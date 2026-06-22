@@ -46,7 +46,7 @@ async function getSession() {
 
 // ─── Canjear recompensa (usuario) ─────────────────────────────
 const CanjearSchema = z.object({
-  recompensaId: z.string().uuid(),
+  recompensaId: z.string().guid(),
   notas: z.string().max(500).optional().default(""),
 });
 
@@ -137,7 +137,7 @@ export async function canjearRecompensa(
 
 // ─── Aprobar canje (admin) ────────────────────────────────────
 const AprobarSchema = z.object({
-  canjeId: z.string().uuid(),
+  canjeId: z.string().guid(),
   fechaDisfrute: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   notas: z.string().max(500).optional().default(""),
 });
@@ -224,7 +224,7 @@ export async function aprobarCanje(
 
 // ─── Rechazar canje (admin) ───────────────────────────────────
 const RechazarSchema = z.object({
-  canjeId: z.string().uuid(),
+  canjeId: z.string().guid(),
   motivo: z.string().min(1).max(500),
 });
 
@@ -274,7 +274,7 @@ export async function rechazarCanje(
 }
 
 // ─── Marcar canje como disfrutado (admin) ─────────────────────
-const DisfrutarSchema = z.object({ canjeId: z.string().uuid() });
+const DisfrutarSchema = z.object({ canjeId: z.string().guid() });
 
 export async function marcarCanjeDisfrutado(
   input: z.infer<typeof DisfrutarSchema>
@@ -313,7 +313,7 @@ export async function marcarCanjeDisfrutado(
 
 // ─── Otorgar toque manual (admin) ─────────────────────────────
 const OtorgarManualSchema = z.object({
-  userId: z.string().uuid(),
+  userId: z.string().guid(),
   toques: z.number().int(),
   motivo: z.string().min(1).max(500),
 });

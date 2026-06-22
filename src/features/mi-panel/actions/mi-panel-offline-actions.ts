@@ -8,7 +8,7 @@ const DRIFT_MAX_SEG = Number(process.env.FICHAJE_OFFLINE_DRIFT_MAX_SEG ?? 300);
 
 const itemSchema = z.object({
   kind: z.enum(["entrada", "salida", "pausa_inicio", "pausa_fin"]),
-  fichajeId: z.string().uuid().nullable(),
+  fichajeId: z.string().guid().nullable(),
   deviceTimestampIso: z.string().datetime(),
   deviceMonotonicMs: z.number(),
   offlineSeconds: z.number().min(0),

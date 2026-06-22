@@ -92,6 +92,7 @@ interface CandidatoRowReal {
   cv_url: string | null;
   notas: string | null;
   origen: string;
+  canal_nombre: string | null;
   fase: string;
   estado: string;
   promovido_at: string | null;
@@ -129,7 +130,7 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
         .from("candidatos")
         .select(`
           id, empresa_id, vacante_id, nombre, apellidos, email, telefono,
-          cv_url, notas, origen, fase, estado, promovido_at, empleado_id,
+          cv_url, notas, origen, canal_nombre, fase, estado, promovido_at, empleado_id,
           created_at
         `)
         .eq("empresa_id", empresaId)
@@ -204,6 +205,7 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
           cvAdjunto: c.cv_url ?? undefined,
           fechaInscripcion: c.created_at?.slice(0, 10) ?? "",
           origen: ORIGENES_VALIDOS.has(c.origen) ? c.origen : "otros",
+          canal: c.canal_nombre ?? null,
           notasInternas: c.notas ?? "",
           fase: ESTADOS_VALIDOS.has(c.estado) ? c.estado : "nuevo",
           vacanteId: v.id,

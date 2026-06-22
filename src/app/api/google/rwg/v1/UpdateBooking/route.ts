@@ -14,7 +14,7 @@ const TZ_DEFAULT = "Europe/Madrid";
 
 const requestSchema = z.object({
   booking: z.object({
-    booking_id: z.string().uuid(),
+    booking_id: z.string().guid(),
     status: z.enum([
       "CONFIRMED",
       "PENDING_MERCHANT_CONFIRMATION",

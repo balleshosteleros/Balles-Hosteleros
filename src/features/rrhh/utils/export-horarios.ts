@@ -53,6 +53,68 @@ export interface ExportCuadranteOpts {
   cuadranteNombre?: string;
 }
 
+/** Prefijo común (a nivel de palabra) de un conjunto de nombres. */
+function prefijoComun(nombres: string[]): string {
+  if (nombres.length === 0) return "";
+  if (nombres.length === 1) return nombres[0];
+  let pref = nombres[0];
+  for (const n of nombres.slice(1)) {
+    let i = 0;
+    while (i < pref.length && i < n.length && pref[i] === n[i]) i += 1;
+    pref = pref.slice(0, i);
+  }
+  // Recorta a la última palabra completa para no cortar a media palabra.
+  const trimmed = pref.replace(/\s+\S*$/, "").trim();
+  return trimmed || nombres[0];
+}
+
+/** Texto de horario de un turno: tramos "HH:MM-HH:MM" o "Flexible". */
+function horarioDeTurno(t: PlanTurno): string {
+  if (t.tipoJornada === "flexible") {
+    return t.flexHorasDia != null ? `Flexible · ${t.flexHorasDia} h/día` : "Flexible";
+  }
+  if (t.tramos.length === 0) return "—";
+  return t.tramos.map((tr) => `${tr.inicio}-${tr.fin}`).join(", ");
+}
+
+interface LeyendaEntry {
+  codigo: string;
+  nombre: string;
+  departamento: string;
+  horarios: string;
+  fill: RGB;
+  text: RGB;
+}
+
+/**
+ * Índice del cuadrante: una fila por CÓDIGO (no por turno) con su rol y los
+ * horarios que abarca. Solo incluye los códigos realmente presentes en el
+ * export para que la leyenda explique justo lo que se ve.
+ */
+function construirLeyenda(turnos: PlanTurno[], codigosUsados: Set<string>): LeyendaEntry[] {
+  const porCodigo = new Map<string, PlanTurno[]>();
+  for (const t of turnos) {
+    const cod = (t.codigo ?? "").trim().toUpperCase();
+    if (!cod || !codigosUsados.has(cod)) continue;
+    const arr = porCodigo.get(cod) ?? [];
+    arr.push(t);
+    porCodigo.set(cod, arr);
+  }
+  const entries: LeyendaEntry[] = [];
+  for (const [codigo, ts] of porCodigo) {
+    const nombre = prefijoComun(ts.map((t) => t.nombre));
+    const depto = ts[0].departamento ?? SIN_DEPTO;
+    const horarios = Array.from(new Set(ts.map(horarioDeTurno))).join("  ·  ");
+    const tono = pdfTonoDeHex(ts[0].colorHex);
+    entries.push({ codigo, nombre, departamento: depto, horarios, fill: tono.fill, text: tono.text });
+  }
+  return entries.sort(
+    (a, b) =>
+      a.departamento.localeCompare(b.departamento, "es") ||
+      a.codigo.localeCompare(b.codigo, "es"),
+  );
+}
+
 /** Réplica del agrupamiento por departamento de la rejilla. */
 function agruparDepartamentos(empleados: PlanEmpleado[]): [string, PlanEmpleado[]][] {
   const map = new Map<string, PlanEmpleado[]>();
@@ -262,6 +324,72 @@ export function exportarCuadrantePDF(opts: ExportCuadranteOpts) {
       0: { cellWidth: compacto ? 32 : 42, halign: "left" },
     },
   });
+
+  // ── Índice de códigos (qué horario es cada código) ───────────────────────
+  const codigosUsados = new Set<string>();
+  for (const e of empleados) {
+    for (const cs of Object.values(celdas[e.empleadoId] ?? {})) {
+      for (const c of cs) {
+        const t = turnoById.get(c.turnoId);
+        if (t?.codigo) codigosUsados.add(t.codigo.trim().toUpperCase());
+      }
+    }
+  }
+  // En vista por turnos se muestran todos los turnos del ámbito como filas.
+  if (agrupacion === "turnos") {
+    for (const t of turnos) if (t.codigo) codigosUsados.add(t.codigo.trim().toUpperCase());
+  }
+
+  const leyenda = construirLeyenda(turnos, codigosUsados);
+  if (leyenda.length > 0) {
+    const finalY = (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable
+      ?.finalY ?? 30;
+    doc.setFontSize(9.5);
+    doc.setTextColor(30);
+    doc.text("Índice de códigos", margin, finalY + 7);
+    autoTable(doc, {
+      startY: finalY + 9.5,
+      head: [
+        [
+          { content: "Código y turno", styles: { halign: "left" } },
+          { content: "Horario", styles: { halign: "left" } },
+          { content: "Departamento", styles: { halign: "left" } },
+        ],
+      ],
+      body: leyenda.map((l) => [
+        {
+          content: `${l.codigo}   ${l.nombre}`,
+          styles: { fillColor: l.fill, textColor: l.text, fontStyle: "bold" as const },
+        },
+        { content: l.horarios },
+        { content: l.departamento },
+      ]),
+      theme: "grid",
+      margin: { left: margin, right: margin },
+      tableWidth: "wrap",
+      styles: {
+        fontSize: compacto ? 6 : 7,
+        cellPadding: 1.2,
+        halign: "left",
+        valign: "middle",
+        lineColor: [226, 232, 240],
+        lineWidth: 0.1,
+        overflow: "linebreak",
+      },
+      headStyles: {
+        fillColor: HEAD,
+        textColor: [30, 41, 59],
+        fontStyle: "bold",
+        fontSize: compacto ? 6 : 7,
+        halign: "left",
+      },
+      columnStyles: {
+        0: { cellWidth: compacto ? 48 : 60 },
+        1: { cellWidth: compacto ? 42 : 52 },
+        2: { cellWidth: "auto" },
+      },
+    });
+  }
 
   const slug = rangoLabel
     .toLowerCase()

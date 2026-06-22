@@ -12,8 +12,8 @@ import { extraerIp, ipHash, truncarUserAgent } from "@/features/marketing/pagina
 export const runtime = "nodejs";
 
 const bodySchema = z.object({
-  empresaId: z.string().uuid(),
-  paginaId: z.string().uuid().optional(),
+  empresaId: z.string().guid(),
+  paginaId: z.string().guid().optional(),
   bloqueId: z.string().max(128).optional(),
   payload: z.record(z.string(), z.unknown()),
   utm: z

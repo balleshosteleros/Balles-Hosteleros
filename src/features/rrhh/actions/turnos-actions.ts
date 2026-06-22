@@ -24,6 +24,51 @@ async function bloqueoPorPatrones(turnoId: string): Promise<string | null> {
 
 type Result<T> = { ok: true; data: T } | { ok: false; data: T; error: string };
 
+// Rol base de un turno = su nombre sin el sufijo de día/turno. Permite que un
+// mismo código se reparta en varias filas del MISMO rol (p. ej. "JEFE COCINA 1
+// LUNES"…"VIERNES" comparten "JC1"), pero detecta cuando un código lo usarían
+// roles distintos (colisión real). Debe espejar el regex de la migración
+// 20260622150000_rrhh_turnos_codigos_unicos.sql.
+function rolBase(nombre: string): string {
+  return nombre
+    .trim()
+    .toUpperCase()
+    .replace(
+      /\s+(LUNES|MARTES|MIERCOLES|MIÉRCOLES|JUEVES|VIERNES|SABADO|SÁBADO|SABADOS|DOMINGO|DOMINGOS|DIARIO|DIARIA)S?$/,
+      "",
+    )
+    .trim();
+}
+
+// Verifica que el código no esté ya en uso por un turno de OTRO rol dentro de la
+// misma empresa. Devuelve un mensaje de bloqueo, o null si el código es válido.
+// `familiaIdExcluir` evita que un turno choque consigo mismo o con otras filas
+// de su propia familia/rol al editarse.
+async function colisionDeCodigo(
+  supabase: Awaited<ReturnType<typeof getAppContext>>["supabase"],
+  empresaId: string,
+  codigo: string,
+  nombre: string,
+  familiaIdExcluir?: string | null,
+): Promise<string | null> {
+  const cod = codigo.trim().toUpperCase();
+  if (!cod) return null;
+  const miRol = rolBase(nombre);
+  const { data } = await supabase
+    .from("rrhh_turnos")
+    .select("familia_id, nombre, codigo")
+    .eq("empresa_id", empresaId)
+    .eq("es_oficial", true);
+  for (const r of data ?? []) {
+    if ((r.codigo as string | null)?.trim().toUpperCase() !== cod) continue;
+    if (familiaIdExcluir && (r.familia_id as string | null) === familiaIdExcluir) continue;
+    if (rolBase((r.nombre as string) ?? "") !== miRol) {
+      return `El código «${cod}» ya lo usa el turno «${r.nombre}». Cada código debe ser único por turno: elige otro código.`;
+    }
+  }
+  return null;
+}
+
 function rowToTurno(r: Record<string, unknown>): Turno {
   return {
     id: r.id as string,
@@ -148,6 +193,14 @@ export async function createTurno(
     const empresaId = await resolveEmpresaUuid(supabase, empresaIdOrSlug);
     if (!empresaId) return { ok: false, error: "Empresa no encontrada" };
 
+    const colision = await colisionDeCodigo(
+      supabase,
+      empresaId,
+      input.codigo,
+      input.nombre,
+    );
+    if (colision) return { ok: false, error: colision };
+
     const id = makeTurnoId(empresaId);
     // Un turno nuevo nace como versión 1, oficial, siendo su propia familia.
     const { error } = await supabase.from("rrhh_turnos").insert({
@@ -189,6 +242,25 @@ export async function updateTurno(id: string, patch: Partial<TurnoInput>) {
     // MANDA EL TURNO: si el turno está en un patrón, no se puede cambiar aquí.
     const bloqueo = await bloqueoPorPatrones(id);
     if (bloqueo) return { ok: false, error: bloqueo };
+
+    // Si cambia el código o el nombre, revalidar que no choque con otro rol.
+    if (patch.codigo !== undefined || patch.nombre !== undefined) {
+      const { data: actual } = await supabase
+        .from("rrhh_turnos")
+        .select("empresa_id, familia_id, codigo, nombre")
+        .eq("id", id)
+        .maybeSingle();
+      if (actual) {
+        const colision = await colisionDeCodigo(
+          supabase,
+          actual.empresa_id as string,
+          patch.codigo ?? (actual.codigo as string),
+          patch.nombre ?? (actual.nombre as string),
+          (actual.familia_id as string) ?? id,
+        );
+        if (colision) return { ok: false, error: colision };
+      }
+    }
 
     const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (patch.nombre !== undefined) payload.nombre = patch.nombre.trim();

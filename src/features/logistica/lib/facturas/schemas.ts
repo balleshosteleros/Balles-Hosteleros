@@ -42,7 +42,7 @@ export const valorSistemaSchema = z.object({
 
 export const lineaFacturaSchema = z.object({
   id: z.string(),
-  productoId: z.string().uuid().nullable(),
+  productoId: z.string().guid().nullable(),
   origen: origenLineaSchema,
   nombre: z.string().min(1),
   cantidad: z.number().nonnegative(),
@@ -84,18 +84,18 @@ export const ocrFacturaResultadoSchema = z.object({
 // ─── Inputs de server actions ─────────────────────────────
 
 export const crearFacturaDesdeAlbaranInputSchema = z.object({
-  albaranId: z.string().uuid(),
+  albaranId: z.string().guid(),
 });
 
 export const crearFacturaHuerfanaInputSchema = z.object({
-  proveedorId: z.string().uuid().nullable(),
+  proveedorId: z.string().guid().nullable(),
   proveedorNombre: z.string().min(1),
   fechaFactura: z.string().nullable().optional(),
   notas: z.string().nullable().optional(),
 });
 
 export const resolverDiscrepanciaInputSchema = z.object({
-  facturaId: z.string().uuid(),
+  facturaId: z.string().guid(),
   lineaId: z.string(),
   resolucion: discrepanciaResolucionSchema,
   cantidad: z.number().optional(),
@@ -104,7 +104,7 @@ export const resolverDiscrepanciaInputSchema = z.object({
 });
 
 export const validarFacturaInputSchema = z.object({
-  facturaId: z.string().uuid(),
+  facturaId: z.string().guid(),
   notas: z.string().nullable().optional(),
 });
 

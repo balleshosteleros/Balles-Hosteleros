@@ -5,8 +5,8 @@ import { regenerarSlide } from "@/features/direccion/presentaciones/services/ia-
 import { GeminiKeyMissingError } from "@/lib/ia/gemini";
 
 const InputSchema = z.object({
-  presentacionId: z.string().uuid(),
-  slideId: z.string().uuid(),
+  presentacionId: z.string().guid(),
+  slideId: z.string().guid(),
 });
 
 export async function POST(request: Request) {

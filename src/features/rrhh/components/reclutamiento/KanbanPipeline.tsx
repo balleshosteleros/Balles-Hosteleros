@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
   FASES_PRINCIPALES,
   FASES_PRINCIPALES_ORDER,
@@ -30,6 +30,14 @@ import {
   GripVertical, Clock, History, Send, X,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  enviarReclutamientoFaseEmail,
+  listReclutamientoEmailPlantillas,
+} from "@/features/rrhh/actions/reclutamiento-email-plantillas-actions";
+import {
+  sustituirVariablesReclutamiento,
+  VARIABLES_RECLUTAMIENTO_EJEMPLO,
+} from "@/features/rrhh/lib/reclutamiento-email";
 
 interface KanbanPipelineProps {
   vacante: Vacante;
@@ -74,7 +82,7 @@ function CandidatoCard({
             </div>
             <div className="flex items-center gap-1">
               <MapPin className="h-3 w-3 shrink-0" />
-              <span>{ORIGEN_LABELS[candidato.origen]}</span>
+              <span>{candidato.canal ? `${ORIGEN_LABELS[candidato.origen]} · ${candidato.canal}` : ORIGEN_LABELS[candidato.origen]}</span>
             </div>
           </div>
         </div>
@@ -219,7 +227,7 @@ function CandidatoDetailDialog({
             <InfoRow icon={<Phone className="h-4 w-4" />} label="Teléfono" value={candidato.telefono} />
             <InfoRow icon={<Mail className="h-4 w-4" />} label="Email" value={candidato.email} />
             <InfoRow icon={<CalendarDays className="h-4 w-4" />} label="Inscripción" value={candidato.fechaInscripcion} />
-            <InfoRow icon={<MapPin className="h-4 w-4" />} label="Origen" value={ORIGEN_LABELS[candidato.origen]} />
+            <InfoRow icon={<MapPin className="h-4 w-4" />} label="Origen" value={candidato.canal ? `${ORIGEN_LABELS[candidato.origen]} · ${candidato.canal}` : ORIGEN_LABELS[candidato.origen]} />
             <InfoRow icon={<User className="h-4 w-4" />} label="Reclutador" value={candidato.reclutadorAsignado} />
           </div>
           {candidato.historial.length > 0 && (
@@ -272,20 +280,27 @@ function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string;
 }
 
 // ─── Variable replacement for email preview ────────────────────
+// Usa el MISMO motor de sustitución que el envío real, para que la previa
+// coincida con lo que recibe el candidato. Los datos del candidato/vacante son
+// reales; los de la empresa se muestran de ejemplo (en el envío salen los de la
+// empresa activa, resueltos en servidor).
 function reemplazarVariablesEmail(texto: string, candidato: Candidato, vacante: Vacante): string {
-  return texto
-    .replace(/\{\{empresa_nombre\}\}/g, "BALLES HOSTELEROS")
-    .replace(/\{\{candidato_nombre\}\}/g, candidato.nombre)
-    .replace(/\{\{candidato_apellidos\}\}/g, candidato.apellidos)
-    .replace(/\{\{vacante_nombre\}\}/g, vacante.puesto)
-    .replace(/\{\{rol_nombre\}\}/g, vacante.puesto)
-    .replace(/\{\{departamento_nombre\}\}/g, vacante.categoria || "")
-    .replace(/\{\{fecha_entrevista\}\}/g, "Por confirmar")
-    .replace(/\{\{hora_entrevista\}\}/g, "Por confirmar")
-    .replace(/\{\{ubicacion\}\}/g, vacante.ubicacion)
-    .replace(/\{\{reclutador_nombre\}\}/g, candidato.reclutadorAsignado)
-    .replace(/\{\{email_contacto\}\}/g, "rrhh@turestaurante.com")
-    .replace(/\{\{telefono_empresa\}\}/g, "912 345 678");
+  const nombreCompleto = [candidato.nombre, candidato.apellidos]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+  const vars: Record<string, string> = {
+    ...VARIABLES_RECLUTAMIENTO_EJEMPLO,
+    candidato_nombre: candidato.nombre,
+    candidato_apellidos: candidato.apellidos,
+    candidato_nombre_completo: nombreCompleto || candidato.nombre,
+    candidato_email: candidato.email,
+    candidato_telefono: candidato.telefono,
+    vacante_nombre: vacante.puesto,
+    vacante_ubicacion: vacante.ubicacion,
+    departamento_nombre: vacante.categoria || "",
+  };
+  return sustituirVariablesReclutamiento(texto, vars);
 }
 
 // ─── Email Confirmation Dialog ──────────────────────────────────
@@ -297,8 +312,33 @@ function EmailConfirmDialog({
   vacante: Vacante;
   onConfirm: (enviarEmail: boolean) => void;
 }) {
+  // Plantilla real de BD para el estado destino (refleja ediciones y el flag
+  // `activa`). Mientras carga, usa el texto de fábrica como respaldo.
+  const [tpl, setTpl] = useState<{ asunto: string; cuerpo: string; activo: boolean } | null>(null);
+  useEffect(() => {
+    if (!open || !estadoNuevo) return;
+    let cancel = false;
+    setTpl(null);
+    listReclutamientoEmailPlantillas()
+      .then((list) => {
+        if (cancel) return;
+        const found = list.find((p) => p.estado === estadoNuevo);
+        setTpl(
+          found
+            ? { asunto: found.asunto, cuerpo: found.cuerpo, activo: found.activa }
+            : { ...EMAIL_PLANTILLAS_FASE[estadoNuevo] },
+        );
+      })
+      .catch(() => {
+        if (!cancel) setTpl({ ...EMAIL_PLANTILLAS_FASE[estadoNuevo] });
+      });
+    return () => {
+      cancel = true;
+    };
+  }, [open, estadoNuevo]);
+
   if (!candidato || !estadoNuevo) return null;
-  const plantilla = EMAIL_PLANTILLAS_FASE[estadoNuevo];
+  const plantilla = tpl ?? EMAIL_PLANTILLAS_FASE[estadoNuevo];
   const faseAnterior = getFasePrincipal(candidato.fase);
   const faseNueva = getFasePrincipal(estadoNuevo);
 
@@ -397,7 +437,7 @@ export function KanbanPipeline({ vacante, onBack, onUpdateCandidatos }: KanbanPi
     draggedCandidato.current = null;
   }, []);
 
-  const handleConfirmMove = useCallback((enviarEmail: boolean) => {
+  const handleConfirmMove = useCallback(async (enviarEmail: boolean) => {
     if (!emailConfirm) return;
     const { candidato: c, estadoNuevo } = emailConfirm;
     const faseAnterior = getFasePrincipal(c.fase);
@@ -426,7 +466,14 @@ export function KanbanPipeline({ vacante, onBack, onUpdateCandidatos }: KanbanPi
 
     const label = `${FASES_PRINCIPALES[faseNueva].label} / ${ESTADOS_CONFIG[estadoNuevo].label}`;
     if (enviarEmail) {
-      toast.success(`Email enviado a ${c.nombre} ${c.apellidos}`, { description: label });
+      const res = await enviarReclutamientoFaseEmail(c.id, estadoNuevo);
+      if (res.sent) {
+        toast.success(`Email enviado a ${c.nombre} ${c.apellidos}`, { description: label });
+      } else {
+        toast.warning(`${c.nombre} ${c.apellidos} movido a ${label}`, {
+          description: `El email no se envió: ${res.reason ?? "motivo desconocido"}`,
+        });
+      }
     } else {
       toast.info(`${c.nombre} ${c.apellidos} movido a ${label}`, { description: "Sin envío de email" });
     }

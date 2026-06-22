@@ -135,7 +135,7 @@ export async function crearPlantilla(
 }
 
 const updatePlantillaSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().guid(),
   nombre: z.string().trim().min(1).max(160).optional(),
   descripcion: z.string().max(800).optional(),
   categoria: z.enum(["evaluacion", "formacion", "conocimiento", "induccion"]).optional(),
@@ -278,7 +278,7 @@ export async function listCampanas(): Promise<CampanaResumen[]> {
 }
 
 const crearCampanaSchema = z.object({
-  plantillaId: z.string().uuid(),
+  plantillaId: z.string().guid(),
   periodo: z.string().regex(/^\d{4}-S[12]$/, "Periodo inválido"),
 });
 
@@ -562,7 +562,7 @@ export async function getEnvioCompleto(envioId: string): Promise<EnvioCompleto |
 // ─── REUNIÓN ─────────────────────────────────────────────────
 
 const updateReunionSchema = z.object({
-  envioId: z.string().uuid(),
+  envioId: z.string().guid(),
   fecha: z.string().nullable().optional(),
   estado: z.enum(["pendiente", "realizada", "cancelada", "no_aplica"]).optional(),
   notas: z.string().max(5000).nullable().optional(),
@@ -596,7 +596,7 @@ export async function updateReunion(
 // ─── PUNTOS ──────────────────────────────────────────────────
 
 const crearPuntoSchema = z.object({
-  envioId: z.string().uuid(),
+  envioId: z.string().guid(),
   texto: z.string().trim().min(1, "Texto obligatorio").max(500),
 });
 
@@ -643,7 +643,7 @@ export async function crearPunto(
 }
 
 const updatePuntoSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().guid(),
   estado: z.enum(["pendiente", "en_curso", "cerrado"]).optional(),
   texto: z.string().trim().min(1).max(500).optional(),
 });

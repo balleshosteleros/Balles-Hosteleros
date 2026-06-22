@@ -19,7 +19,7 @@ const inputSchema = z.object({
   personas: z.number().int().min(1).max(50),
   notas: z.string().max(500).optional().nullable(),
   codigo: z.string().min(1).max(64).optional().nullable(),
-  ticketProductoId: z.string().uuid().optional().nullable(),
+  ticketProductoId: z.string().guid().optional().nullable(),
   ticketOnly: z.boolean().optional(),
 });
 

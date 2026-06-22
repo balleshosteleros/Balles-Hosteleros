@@ -15,7 +15,7 @@ export const CATEGORIAS_APP = [
 export type CategoriaApp = (typeof CATEGORIAS_APP)[number];
 
 export const appExternaSchema = z.object({
-  id: z.string().uuid().optional(),
+  id: z.string().guid().optional(),
   nombre: z.string().trim().min(1, "Nombre obligatorio").max(120),
   url: z
     .string()
@@ -43,15 +43,15 @@ export type AppExterna = {
 };
 
 export const credencialSchema = z.object({
-  id: z.string().uuid().optional(),
-  app_id: z.string().uuid("App requerida"),
+  id: z.string().guid().optional(),
+  app_id: z.string().guid("App requerida"),
   etiqueta: z.string().trim().min(1, "Etiqueta obligatoria").max(120),
   usuario: z.string().trim().min(1, "Usuario obligatorio").max(200),
   password: z.string().min(1, "Contraseña obligatoria").max(500),
   url_especifica: z.string().trim().url("URL inválida").optional().or(z.literal("")),
   notas: z.string().trim().optional().default(""),
   roles_ids: z
-    .array(z.string().uuid())
+    .array(z.string().guid())
     .min(1, "Selecciona al menos un rol"),
 });
 

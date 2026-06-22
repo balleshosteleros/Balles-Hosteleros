@@ -17,7 +17,7 @@ export interface VariableReclutamiento {
   /** Descripción legible (tooltip). */
   descripcion: string;
   /** Grupo para agrupar visualmente en el editor. */
-  grupo: "Candidato" | "Vacante" | "Empresa" | "Reclutador" | "Proceso";
+  grupo: "Candidato" | "Vacante" | "Empresa";
 }
 
 export const VARIABLES_RECLUTAMIENTO: VariableReclutamiento[] = [
@@ -38,12 +38,6 @@ export const VARIABLES_RECLUTAMIENTO: VariableReclutamiento[] = [
   { variable: "{{empresa_telefono}}", descripcion: "Teléfono de la empresa", grupo: "Empresa" },
   { variable: "{{empresa_web}}", descripcion: "Web de la empresa", grupo: "Empresa" },
   { variable: "{{empresa_direccion}}", descripcion: "Dirección de la empresa", grupo: "Empresa" },
-  // ── Reclutador ──
-  { variable: "{{reclutador_nombre}}", descripcion: "Nombre del reclutador asignado", grupo: "Reclutador" },
-  { variable: "{{reclutador_email}}", descripcion: "Email del reclutador asignado", grupo: "Reclutador" },
-  // ── Proceso ──
-  { variable: "{{fecha_entrevista}}", descripcion: "Fecha de la entrevista", grupo: "Proceso" },
-  { variable: "{{hora_entrevista}}", descripcion: "Hora de la entrevista", grupo: "Proceso" },
 ];
 
 /** Orden de los grupos para pintarlos en el editor. */
@@ -51,8 +45,6 @@ export const GRUPOS_VARIABLES_RECLUTAMIENTO: VariableReclutamiento["grupo"][] = 
   "Candidato",
   "Vacante",
   "Empresa",
-  "Reclutador",
-  "Proceso",
 ];
 
 /**
@@ -74,22 +66,19 @@ export const VARIABLES_RECLUTAMIENTO_EJEMPLO: Record<string, string> = {
   empresa_telefono: "912 345 678",
   empresa_web: "www.empresa.com",
   empresa_direccion: "Calle Mayor 1, Madrid",
-  reclutador_nombre: "Antonio Ballesteros",
-  reclutador_email: "antonio@empresa.com",
-  fecha_entrevista: "15/04/2026",
-  hora_entrevista: "10:00",
 };
 
 /**
  * Sustituye los códigos `{{clave}}` por el valor correspondiente en `vars`.
- * Tolerante: si un código no tiene valor, se deja el placeholder intacto.
+ * Si un código no tiene valor (o no se reconoce), se sustituye por cadena vacía:
+ * así NUNCA llega un `{{codigo}}` literal al destinatario del correo.
  */
 export function sustituirVariablesReclutamiento(
   texto: string,
   vars: Record<string, string>,
 ): string {
-  return texto.replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (full, key) => {
+  return texto.replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (_full, key) => {
     const val = vars[String(key).toLowerCase()];
-    return val != null && val !== "" ? val : full;
+    return val != null && val !== "" ? val : "";
   });
 }

@@ -30,12 +30,13 @@ export interface PlantillaEstadoItem {
   color: string;
   fase: "seleccion" | "formacion" | "descartado";
   orden: number;
+  /** Email (biblioteca suelta) que se envía por defecto al pasar a este estado. */
+  email_plantilla_id?: string | null;
 }
 
 export interface PlantillaEstadoRow {
   id: string;
   nombre: string;
-  descripcion: string | null;
   es_predeterminada: boolean;
   estados: PlantillaEstadoItem[];
   activa: boolean;
@@ -51,7 +52,7 @@ export async function listPlantillasEstado() {
     if (!empresaId) return { ok: false, data: [] as PlantillaEstadoRow[] };
     const { data, error } = await supabase
       .from("reclutamiento_plantillas_estado")
-      .select("id,nombre,descripcion,es_predeterminada,estados,activa,updated_at")
+      .select("id,nombre,es_predeterminada,estados,activa,updated_at")
       .eq("empresa_id", empresaId)
       .order("es_predeterminada", { ascending: false })
       .order("created_at", { ascending: true });
@@ -65,7 +66,6 @@ export async function listPlantillasEstado() {
 
 export async function createPlantillaEstado(input: {
   nombre: string;
-  descripcion?: string | null;
   estados: PlantillaEstadoItem[];
 }) {
   try {
@@ -78,7 +78,6 @@ export async function createPlantillaEstado(input: {
       .insert({
         empresa_id: empresaId,
         nombre: input.nombre.trim(),
-        descripcion: input.descripcion ?? null,
         es_predeterminada: false,
         estados: input.estados,
         activa: true,
@@ -97,7 +96,7 @@ export async function createPlantillaEstado(input: {
 
 export async function updatePlantillaEstado(
   id: string,
-  input: Partial<{ nombre: string; descripcion: string | null; estados: PlantillaEstadoItem[]; activa: boolean }>,
+  input: Partial<{ nombre: string; estados: PlantillaEstadoItem[]; activa: boolean }>,
 ) {
   try {
     const { supabase, empresaId } = await getContext();

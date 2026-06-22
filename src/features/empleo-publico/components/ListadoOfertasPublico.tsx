@@ -18,10 +18,10 @@ function ordenarPorOrden(a: OfertaPublica, b: OfertaPublica): number {
   return a.fecha_creacion < b.fecha_creacion ? 1 : -1;
 }
 
-function OfertaCard({ o, empleoSlug }: { o: OfertaPublica; empleoSlug: string }) {
+function OfertaCard({ o, empleoSlug, canalQuery }: { o: OfertaPublica; empleoSlug: string; canalQuery: string }) {
   return (
     <Link
-      href={`/empleo/${empleoSlug}/${o.id}`}
+      href={`/empleo/${empleoSlug}/${o.id}${canalQuery}`}
       className="group relative block overflow-hidden rounded-xl border border-border/60 bg-card/70 backdrop-blur-sm p-4 md:p-5 transition-all hover:-translate-y-0.5 hover:shadow-lg hover:border-[var(--brand-primary)] active:scale-[0.99]"
     >
       {/* Relleno con el color de marca al pulsar la vacante */}
@@ -71,11 +71,13 @@ function ColumnaArea({
   icono,
   ofertas,
   empleoSlug,
+  canalQuery,
 }: {
   titulo: string;
   icono: React.ReactNode;
   ofertas: OfertaPublica[];
   empleoSlug: string;
+  canalQuery: string;
 }) {
   return (
     <section className="space-y-3">
@@ -97,7 +99,7 @@ function ColumnaArea({
       ) : (
         <div className="grid gap-3">
           {ofertas.map((o) => (
-            <OfertaCard key={o.id} o={o} empleoSlug={empleoSlug} />
+            <OfertaCard key={o.id} o={o} empleoSlug={empleoSlug} canalQuery={canalQuery} />
           ))}
         </div>
       )}
@@ -105,9 +107,17 @@ function ColumnaArea({
   );
 }
 
-export function ListadoOfertasPublico({ portal }: { portal: EmpleoPortal }) {
+export function ListadoOfertasPublico({
+  portal,
+  canalCodigo = null,
+}: {
+  portal: EmpleoPortal;
+  canalCodigo?: string | null;
+}) {
   const { empresa, ofertas } = portal;
   const empleoSlug = empresa.empleo_slug;
+  // Conserva la atribución de canal al navegar de la lista a cada oferta.
+  const canalQuery = canalCodigo ? `?o=${encodeURIComponent(canalCodigo)}` : "";
 
   // Las administrativas a su columna; el resto (operativas o sin área) a operativa.
   const administrativas = ofertas
@@ -143,12 +153,14 @@ export function ListadoOfertasPublico({ portal }: { portal: EmpleoPortal }) {
             icono={<Utensils className="h-4 w-4" />}
             ofertas={operativas}
             empleoSlug={empleoSlug}
+            canalQuery={canalQuery}
           />
           <ColumnaArea
             titulo="Área administrativa"
             icono={<Building2 className="h-4 w-4" />}
             ofertas={administrativas}
             empleoSlug={empleoSlug}
+            canalQuery={canalQuery}
           />
         </div>
       )}

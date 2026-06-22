@@ -39,7 +39,7 @@ function revalidate() {
 
 // ─── REGLAS ──────────────────────────────────────────────────
 const ReglaUpdateSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().guid(),
   nombre: z.string().min(1).max(120).optional(),
   descripcion: z.string().max(500).optional(),
   toques: z.number().int().min(0).max(1000).optional(),
@@ -120,7 +120,7 @@ export async function crearRecompensa(input: z.infer<typeof RecompensaCreateSche
 }
 
 const RecompensaUpdateSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().guid(),
   nombre: z.string().min(1).max(120).optional(),
   descripcion: z.string().max(500).optional(),
   costeToques: z.number().int().min(0).max(100000).optional(),
@@ -165,7 +165,7 @@ export async function actualizarRecompensa(input: z.infer<typeof RecompensaUpdat
   }
 }
 
-const RecompensaDeleteSchema = z.object({ id: z.string().uuid() });
+const RecompensaDeleteSchema = z.object({ id: z.string().guid() });
 
 export async function eliminarRecompensa(input: z.infer<typeof RecompensaDeleteSchema>): Promise<ActionResult> {
   const parsed = RecompensaDeleteSchema.safeParse(input);
@@ -202,7 +202,7 @@ export async function eliminarRecompensa(input: z.infer<typeof RecompensaDeleteS
 
 // ─── FECHA DE ALTA (antigüedad) ──────────────────────────────
 const FechaAltaSchema = z.object({
-  userId: z.string().uuid(),
+  userId: z.string().guid(),
   fechaAlta: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 
@@ -248,7 +248,7 @@ export async function actualizarFechaAlta(
 
 // ─── NIVELES ─────────────────────────────────────────────────
 const NivelUpdateSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().guid(),
   nombre: z.string().min(1).max(60).optional(),
   toquesMin: z.number().int().min(0).max(1000000).optional(),
   badgeColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
