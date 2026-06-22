@@ -81,8 +81,8 @@ export function CuestionariosVacanteManager() {
             El candidato los responde antes de enviar su candidatura. La nota (0–10) aparece en su ficha.
           </p>
         </div>
-        <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8" onClick={abrirNuevo}>
-          <Plus className="h-3.5 w-3.5" /> Crear cuestionario
+        <Button onClick={abrirNuevo} className="gap-1.5">
+          <Plus className="h-4 w-4" /> Nuevo
         </Button>
       </div>
 
