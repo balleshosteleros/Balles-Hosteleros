@@ -16,7 +16,7 @@ import { ReactNode, useState, useEffect, useRef } from "react";
 import {
   Phone, PhoneOff, PhoneMissed, PhoneCall,
   Mic, MicOff, Volume2, VolumeX,
-  Settings2, X, Delete, Wifi, WifiOff, Users,
+  Delete, Wifi, WifiOff, Users,
 } from "lucide-react";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
@@ -24,19 +24,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
 import { DirectorioEmpleados } from "@/features/llamadas-internas/components/DirectorioEmpleados";
-
-const LS_KEY_PHONE = "balles_phone_cfg_v1";
-
-interface PhoneConfig {
-  provider: "twilio" | "sip" | "none";
-  sipServer?: string;
-  sipUser?: string;
-  sipPassword?: string;
-  twilioToken?: string;
-  displayName?: string;
-}
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 
 type CallState = "idle" | "ringing" | "connected" | "ended";
 
@@ -47,19 +36,6 @@ interface RecentCall {
   tipo: "saliente" | "entrante" | "perdida";
   duracion?: string;
   hora: string;
-}
-
-function loadConfig(): PhoneConfig {
-  try {
-    const raw = typeof window !== "undefined" ? localStorage.getItem(LS_KEY_PHONE) : null;
-    return raw ? (JSON.parse(raw) as PhoneConfig) : { provider: "none" };
-  } catch {
-    return { provider: "none" };
-  }
-}
-
-function saveConfig(cfg: PhoneConfig) {
-  try { localStorage.setItem(LS_KEY_PHONE, JSON.stringify(cfg)); } catch { /* ignore */ }
 }
 
 function formatDuration(seconds: number): string {
@@ -97,21 +73,17 @@ export function llamarDesdeApp(numero: string) {
 
 export function TelefonoDrawer({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<"equipo" | "marcador" | "recientes" | "ajustes">("equipo");
+  const [tab, setTab] = useState<"equipo" | "marcador" | "recientes">("equipo");
   const [numero, setNumero] = useState("");
   const [callState, setCallState] = useState<CallState>("idle");
   const [callSeconds, setCallSeconds] = useState(0);
   const [muted, setMuted] = useState(false);
   const [speakerOff, setSpeakerOff] = useState(false);
-  const [config, setConfig] = useState<PhoneConfig>({ provider: "none" });
-  const [cfgForm, setCfgForm] = useState<PhoneConfig>({ provider: "none" });
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
-    const cfg = loadConfig();
-    setConfig(cfg);
-    setCfgForm(cfg);
-  }, []);
+  // La configuración del teléfono vive en Ajustes → Herramientas → Teléfono.
+  const { ajustes } = useEmpresa();
+  const isConnected = ajustes.telefonia.proveedor !== "none";
 
   useEffect(() => {
     function handler(e: Event) {
@@ -143,10 +115,7 @@ export function TelefonoDrawer({ children }: { children: ReactNode }) {
 
   const handleCall = () => {
     if (!numero.trim()) return;
-    if (config.provider === "none") {
-      setTab("ajustes");
-      return;
-    }
+    if (!isConnected) return; // sin proveedor configurado en Ajustes → Teléfono
     // TODO: integrar Twilio Device.connect({ params: { To: numero } })
     //       o SIP.js session.invite(numero)
     setCallState("ringing");
@@ -158,14 +127,6 @@ export function TelefonoDrawer({ children }: { children: ReactNode }) {
     setCallState("ended");
     setTimeout(() => { setCallState("idle"); setNumero(""); }, 1500);
   };
-
-  const saveCfg = () => {
-    saveConfig(cfgForm);
-    setConfig(cfgForm);
-    setTab("marcador");
-  };
-
-  const isConnected = config.provider !== "none";
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -193,7 +154,7 @@ export function TelefonoDrawer({ children }: { children: ReactNode }) {
 
         {/* Tabs */}
         <div className="flex border-b bg-muted/20 shrink-0">
-          {(["equipo", "marcador", "recientes", "ajustes"] as const).map((t) => (
+          {(["equipo", "marcador", "recientes"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -206,8 +167,7 @@ export function TelefonoDrawer({ children }: { children: ReactNode }) {
               {t === "equipo" && <Users className="h-3.5 w-3.5" />}
               {t === "marcador" && <Phone className="h-3.5 w-3.5" />}
               {t === "recientes" && <PhoneCall className="h-3.5 w-3.5" />}
-              {t === "ajustes" && <Settings2 className="h-3.5 w-3.5" />}
-              {t === "equipo" ? "Equipo" : t === "marcador" ? "Marcador" : t === "recientes" ? "Recientes" : "Ajustes"}
+              {t === "equipo" ? "Equipo" : t === "marcador" ? "Marcador" : "Recientes"}
             </button>
           ))}
         </div>
@@ -319,10 +279,8 @@ export function TelefonoDrawer({ children }: { children: ReactNode }) {
               {/* Aviso sin configurar */}
               {!isConnected && callState === "idle" && (
                 <p className="text-xs text-center text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 max-w-xs">
-                  Configura tu proveedor VoIP en la pestaña{" "}
-                  <button className="underline font-semibold" onClick={() => setTab("ajustes")}>
-                    Ajustes
-                  </button>{" "}
+                  Configura tu proveedor VoIP en{" "}
+                  <span className="font-semibold">Ajustes → Herramientas → Teléfono</span>{" "}
                   para realizar llamadas reales.
                 </p>
               )}
@@ -382,136 +340,6 @@ export function TelefonoDrawer({ children }: { children: ReactNode }) {
             </div>
           )}
 
-          {/* ─── AJUSTES VoIP ─── */}
-          {tab === "ajustes" && (
-            <div className="px-5 py-5 space-y-5">
-              <div>
-                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Proveedor VoIP
-                </Label>
-                <div className="grid grid-cols-3 gap-2 mt-2">
-                  {(["none", "twilio", "sip"] as const).map((p) => (
-                    <button
-                      key={p}
-                      onClick={() => setCfgForm((f) => ({ ...f, provider: p }))}
-                      className={`rounded-lg border py-2.5 text-xs font-semibold transition-colors ${
-                        cfgForm.provider === p
-                          ? "border-sky-600 bg-sky-50 text-sky-700"
-                          : "border-border text-muted-foreground hover:border-sky-300"
-                      }`}
-                    >
-                      {p === "none" ? "Ninguno" : p === "twilio" ? "Twilio" : "SIP genérico"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {cfgForm.provider === "twilio" && (
-                <div className="space-y-3">
-                  <p className="text-xs text-muted-foreground bg-sky-50 border border-sky-200 rounded-lg p-3">
-                    Necesitas un <strong>Access Token</strong> generado por tu backend Twilio.
-                    Consulta la{" "}
-                    <a
-                      href="https://www.twilio.com/docs/voice/sdks/javascript/get-started"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="underline text-sky-600"
-                    >
-                      documentación oficial
-                    </a>.
-                  </p>
-                  <div>
-                    <Label className="text-xs">Nombre para mostrar</Label>
-                    <Input
-                      className="mt-1 h-8 text-sm"
-                      placeholder="Ej. Recepción Balles"
-                      value={cfgForm.displayName ?? ""}
-                      onChange={(e) => setCfgForm((f) => ({ ...f, displayName: e.target.value }))}
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Access Token (temporal)</Label>
-                    <Input
-                      className="mt-1 h-8 text-sm font-mono"
-                      placeholder="eyJ..."
-                      value={cfgForm.twilioToken ?? ""}
-                      onChange={(e) => setCfgForm((f) => ({ ...f, twilioToken: e.target.value }))}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {cfgForm.provider === "sip" && (
-                <div className="space-y-3">
-                  <div>
-                    <Label className="text-xs">Servidor SIP / WebSocket</Label>
-                    <Input
-                      className="mt-1 h-8 text-sm font-mono"
-                      placeholder="wss://sip.tuproveedor.com"
-                      value={cfgForm.sipServer ?? ""}
-                      onChange={(e) => setCfgForm((f) => ({ ...f, sipServer: e.target.value }))}
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Usuario SIP</Label>
-                    <Input
-                      className="mt-1 h-8 text-sm"
-                      placeholder="1001@tudominio.com"
-                      value={cfgForm.sipUser ?? ""}
-                      onChange={(e) => setCfgForm((f) => ({ ...f, sipUser: e.target.value }))}
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Contraseña SIP</Label>
-                    <Input
-                      type="password"
-                      className="mt-1 h-8 text-sm"
-                      value={cfgForm.sipPassword ?? ""}
-                      onChange={(e) => setCfgForm((f) => ({ ...f, sipPassword: e.target.value }))}
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Nombre para mostrar</Label>
-                    <Input
-                      className="mt-1 h-8 text-sm"
-                      placeholder="Ej. Balles Recepción"
-                      value={cfgForm.displayName ?? ""}
-                      onChange={(e) => setCfgForm((f) => ({ ...f, displayName: e.target.value }))}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {cfgForm.provider === "none" && (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  Selecciona un proveedor para activar las llamadas por internet desde el navegador.
-                </p>
-              )}
-
-              <Button
-                className="w-full bg-sky-600 hover:bg-sky-700"
-                onClick={saveCfg}
-              >
-                Guardar configuración
-              </Button>
-
-              {config.provider !== "none" && (
-                <Button
-                  variant="outline"
-                  className="w-full text-muted-foreground"
-                  onClick={() => {
-                    const reset: PhoneConfig = { provider: "none" };
-                    saveConfig(reset);
-                    setConfig(reset);
-                    setCfgForm(reset);
-                  }}
-                >
-                  <X className="h-4 w-4 mr-2" />
-                  Desconectar
-                </Button>
-              )}
-            </div>
-          )}
         </div>
       </SheetContent>
     </Sheet>

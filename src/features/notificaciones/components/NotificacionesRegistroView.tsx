@@ -108,11 +108,11 @@ export function NotificacionesRegistroView() {
         return (
           <TableCell key="estado">
             {n.estado === "Accionada" ? (
-              <Badge className="bg-emerald-600 text-[10px] hover:bg-emerald-600">Accionada</Badge>
+              <Badge className="bg-emerald-600 text-[10px] text-white hover:bg-emerald-600">Accionada</Badge>
             ) : n.estado === "Vista" ? (
-              <Badge variant="secondary" className="text-[10px]">Vista</Badge>
+              <Badge className="bg-green-600 text-[10px] text-white hover:bg-green-600">Vista</Badge>
             ) : (
-              <Badge variant="outline" className="text-[10px] text-amber-700">No vista</Badge>
+              <Badge className="bg-red-500 text-[10px] text-white hover:bg-red-500">No vista</Badge>
             )}
           </TableCell>
         );

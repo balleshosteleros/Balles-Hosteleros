@@ -152,7 +152,7 @@ export function NotificacionBell({
                               {busyId === n.id ? <Loader2 className="h-4 w-4 animate-spin" /> : "LIQUIDAR"}
                             </Button>
                           ) : (
-                            <Button size="sm" variant="outline" className="h-7" disabled={busyId === n.id} onClick={() => void onVisto(n)}>
+                            <Button size="sm" className="h-7 bg-green-600 hover:bg-green-700 text-white" disabled={busyId === n.id} onClick={() => void onVisto(n)}>
                               {busyId === n.id ? <Loader2 className="h-4 w-4 animate-spin" /> : (n.accionLabel || "Visto")}
                             </Button>
                           )}
