@@ -22,7 +22,6 @@ export const DEPT_COLORS: Record<string, DeptPalette> = {
   rrhh:          { bg: '#7c3aed', ring: '#8b5cf6', shadow: 'rgba(124,58,237,0.35)' },
   logistica:     { bg: '#ea580c', ring: '#f97316', shadow: 'rgba(234,88,12,0.35)' },
   gerencia:      { bg: '#e11d48', ring: '#f43f5e', shadow: 'rgba(225,29,72,0.35)' },
-  seguridad:     { bg: '#334155', ring: '#475569', shadow: 'rgba(51,65,85,0.40)' },
   artistas:      { bg: '#9333ea', ring: '#a855f7', shadow: 'rgba(147,51,234,0.35)' },
   'jefe-sala':   { bg: '#0ea5e9', ring: '#38bdf8', shadow: 'rgba(14,165,233,0.35)' },
   hostess:       { bg: '#ec4899', ring: '#f472b6', shadow: 'rgba(236,72,153,0.35)' },
@@ -136,7 +135,6 @@ const habanaChart: OrgChart = {
     { id: 'logistica', label: 'LOGÍSTICA', area: 'administrativa', x: 920, y: 200 },
     { id: 'gerencia', label: 'GERENCIA', area: 'administrativa', x: 1060, y: 200 },
     // Área Operativa
-    { id: 'seguridad', label: 'SEGURIDAD', area: 'operativa', x: 100, y: 400 },
     { id: 'artistas', label: 'ARTISTAS', area: 'operativa', x: 280, y: 400 },
     { id: 'jefe-sala', label: 'JEFE DE SALA', area: 'operativa', x: 480, y: 400 },
     { id: 'jefe-cocina', label: 'JEFE DE COCINA', area: 'operativa', x: 820, y: 400 },
@@ -158,7 +156,6 @@ const habanaChart: OrgChart = {
     { id: 'e7', source: 'direccion', target: 'rrhh' },
     { id: 'e8', source: 'direccion', target: 'gerencia' },
     { id: 'e9', source: 'direccion', target: 'logistica' },
-    { id: 'e10', source: 'gerencia', target: 'seguridad' },
     { id: 'e11', source: 'gerencia', target: 'artistas' },
     { id: 'e12', source: 'gerencia', target: 'jefe-sala' },
     { id: 'e13', source: 'gerencia', target: 'jefe-cocina' },

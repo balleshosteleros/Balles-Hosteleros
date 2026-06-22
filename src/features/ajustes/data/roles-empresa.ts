@@ -329,4 +329,4 @@ export function getVacantesDesdeRoles(empresaId: string): Vacante[] {
   return roles.map((rol) => rolToVacante(rol, getCandidatosPorVacante(rol.vacanteId)));
 }
 
-export const DEPARTAMENTOS = ["Sala", "Dirección", "Entretenimiento", "Operaciones", "Administración", "Cocina", "Barra", "Seguridad"];
+export const DEPARTAMENTOS = ["Sala", "Dirección", "Entretenimiento", "Operaciones", "Administración", "Cocina", "Barra"];

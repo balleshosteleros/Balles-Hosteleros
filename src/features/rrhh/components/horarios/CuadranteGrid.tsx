@@ -181,13 +181,17 @@ export function CuadranteGrid({
                 >
                   <span
                     className={cn(
-                      "text-[11px] capitalize",
+                      "text-[11px]",
+                      compacto ? "uppercase" : "capitalize",
                       esHoy
                         ? "text-primary font-semibold"
                         : "text-muted-foreground",
                     )}
                   >
-                    {format(d.date, compacto ? "EEEEE" : "EEE", { locale: es })}
+                    {/* Letra del día en mayúscula; miércoles = "X" para no confundir con martes ("M") */}
+                    {compacto
+                      ? ["D", "L", "M", "X", "J", "V", "S"][d.date.getDay()]
+                      : format(d.date, "EEE", { locale: es })}
                   </span>
                   <span
                     className={cn(

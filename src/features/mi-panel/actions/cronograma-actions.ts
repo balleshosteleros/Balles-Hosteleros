@@ -66,7 +66,6 @@ const ROL_TO_MODULO: Record<string, string> = {
   COCINERO: "COCINA",
   OFFICE: "COCINA",
   LIMPIEZA: "COCINA",
-  SEGURIDAD: "SALA",
   ARTISTA: "SALA",
   // Administrativa
   DIRECCION: "DIRECCION",
@@ -87,7 +86,6 @@ const ROL_LABEL: Record<string, string> = {
   COCINERO: "Cocinero",
   OFFICE: "Office",
   LIMPIEZA: "Limpieza",
-  SEGURIDAD: "Seguridad",
   ARTISTA: "Artista",
   DIRECCION: "Dirección",
   GERENTE: "Gerente",

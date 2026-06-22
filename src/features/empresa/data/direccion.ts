@@ -44,7 +44,6 @@ const habanaChart: OrgChart = {
     { id: 'logistica', label: 'LOGÍSTICA', area: 'administrativa', x: 920, y: 200 },
     { id: 'gerencia', label: 'GERENCIA', area: 'administrativa', x: 1060, y: 200 },
     // Área Operativa
-    { id: 'seguridad', label: 'SEGURIDAD', area: 'operativa', x: 100, y: 400 },
     { id: 'artistas', label: 'ARTISTAS', area: 'operativa', x: 280, y: 400 },
     { id: 'jefe-sala', label: 'JEFE DE SALA', area: 'operativa', x: 480, y: 400 },
     { id: 'jefe-cocina', label: 'JEFE DE COCINA', area: 'operativa', x: 820, y: 400 },
@@ -66,7 +65,6 @@ const habanaChart: OrgChart = {
     { id: 'e7', source: 'direccion', target: 'rrhh' },
     { id: 'e8', source: 'direccion', target: 'gerencia' },
     { id: 'e9', source: 'direccion', target: 'logistica' },
-    { id: 'e10', source: 'gerencia', target: 'seguridad' },
     { id: 'e11', source: 'gerencia', target: 'artistas' },
     { id: 'e12', source: 'gerencia', target: 'jefe-sala' },
     { id: 'e13', source: 'gerencia', target: 'jefe-cocina' },

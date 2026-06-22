@@ -15,7 +15,6 @@ export const CRONOGRAMA_ROLES: CronogramaRol[] = [
   { rol: "COCINERO", area: "OPERATIVA" },
   { rol: "OFFICE", area: "OPERATIVA" },
   { rol: "LIMPIEZA", area: "OPERATIVA" },
-  { rol: "SEGURIDAD", area: "OPERATIVA" },
   { rol: "ARTISTA", area: "OPERATIVA" },
 
   // ADMINISTRATIVA — equipo de gestión
@@ -77,7 +76,6 @@ export const CRONOGRAMA_TO_MODULO: Record<string, string> = {
   "COCINERO": "Cocina",
   "OFFICE": "Cocina",
   "LIMPIEZA": "Cocina",
-  "SEGURIDAD": "Sala",
   "ARTISTA": "Sala",
 };
 

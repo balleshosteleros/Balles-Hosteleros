@@ -62,7 +62,6 @@ const DEPTO_CONFIG: Record<string, { icon: React.ElementType; color: string; bg:
   SALA:               { icon: UtensilsCrossed, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
   "JEFE DE SALA":     { icon: UtensilsCrossed, color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200" },
   CAMARERO:           { icon: UtensilsCrossed, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
-  SEGURIDAD:          { icon: UtensilsCrossed, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
   ARTISTA:            { icon: UtensilsCrossed, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
   COCINA:             { icon: ChefHat,         color: "text-orange-600", bg: "bg-orange-50 border-orange-200" },
   "JEFE DE COCINA":   { icon: ChefHat,         color: "text-orange-700", bg: "bg-orange-50 border-orange-200" },
