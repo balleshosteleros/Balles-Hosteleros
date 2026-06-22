@@ -107,6 +107,7 @@ export const direccionSubs: SubItem[] = [
 export const salaSubs: SubItem[] = [
   { title: "PUNTO DE VENTA", url: "/sala/pos", icon: CreditCard },
   { title: "TARIFAS", url: "/sala/tarifas", icon: Tag },
+  { title: "DESCUENTOS", url: "/sala/descuentos", icon: PercentDiamond },
   { title: "VENTAS", url: "/sala/ventas", icon: TrendingUp },
   { title: "RESERVAS", url: "/sala/reservas", icon: BookOpen },
   { title: "CUPONES", url: "/sala/cupones", icon: Gift },
@@ -135,7 +136,6 @@ export const gerenciaSubs: SubItem[] = [
   { title: "MANTENIMIENTO", url: "/gerencia/mantenimiento", icon: Wrench },
   { title: "REVISIONES", url: "/gerencia/vencimientos", icon: CalendarDays },
   { title: "CIERRES", url: "/gerencia/cierres", icon: Wallet },
-  { title: "DESCUENTOS", url: "/gerencia/descuentos", icon: PercentDiamond },
   { title: "INFORMES", url: "/gerencia/informes", icon: BarChart3 },
   { title: "RATIOS", url: "/gerencia/ratios", icon: TrendingUp },
   { title: "COMUNICADOS", url: "/gerencia/comunicados", icon: Megaphone },

@@ -26,7 +26,7 @@ const ICONOS: Record<string, LucideIcon> = {
   exito: CheckCircle2,
   recordatorio: BellRing,
   liquidacion: FileCheck2,
-  aviso_manual: Megaphone,
+  aviso_manual: Bell,
   vencimiento: CalendarClock,
   cronograma: ListChecks,
   comunicado: Megaphone,

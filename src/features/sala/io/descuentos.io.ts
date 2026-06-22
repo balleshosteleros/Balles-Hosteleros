@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ModuleIO, RowSchema } from "@/shared/io";
-import { listDescuentos } from "@/features/gerencia/actions/descuentos-actions";
+import { listDescuentos } from "@/features/sala/actions/descuentos-actions";
 
 interface DescuentoExport {
   id: string;

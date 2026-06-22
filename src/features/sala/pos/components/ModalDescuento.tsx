@@ -4,7 +4,7 @@ import * as React from "react";
 import { Percent, Euro } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { listDescuentos } from "@/features/gerencia/actions/descuentos-actions";
+import { listDescuentos } from "@/features/sala/actions/descuentos-actions";
 import { usePOSTicket } from "../hooks/usePOSTicket";
 import type { DescuentoCabecera } from "../services/calculo-ticket";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";

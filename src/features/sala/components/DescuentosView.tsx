@@ -2,8 +2,8 @@
 
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { Descuento, ResultadoMensual, buildDefaultDescuentos, buildDefaultResultados } from "@/features/gerencia/data/descuentos";
-import { listDescuentos, createDescuento, updateDescuento, deleteDescuento } from "@/features/gerencia/actions/descuentos-actions";
+import { Descuento, ResultadoMensual, buildDefaultDescuentos, buildDefaultResultados } from "@/features/sala/data/descuentos";
+import { listDescuentos, createDescuento, updateDescuento, deleteDescuento } from "@/features/sala/actions/descuentos-actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +30,7 @@ import {
 } from "@/shared/components/SubmoduleToolbar";
 import { toast } from "sonner";
 import { IOActions } from "@/shared/io";
-import { descuentosIO } from "@/features/gerencia/io/descuentos.io";
+import { descuentosIO } from "@/features/sala/io/descuentos.io";
 
 const allResultados: Record<string, ResultadoMensual[]> = {};
 function getResultados(id: string) { if (!allResultados[id]) allResultados[id] = buildDefaultResultados(); return allResultados[id]; }

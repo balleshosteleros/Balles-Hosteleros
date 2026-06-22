@@ -17,9 +17,9 @@ export function InicioHeader({ data }: { data: MobileInicioData }) {
         <div className="absolute inset-x-0 -top-24 h-56 bg-gradient-to-b from-primary/15 via-primary/5 to-transparent blur-2xl" />
       </div>
 
-      {/* Fila superior: pill de perfil (logo empresa + nombre/rol + foto→menú).
-          Alineada a la derecha del todo. */}
-      <div className="relative flex items-center justify-end gap-2">
+      {/* Fila superior: campana a la izquierda del todo; pill de perfil
+          (logo empresa + nombre/rol + foto→menú) a la derecha. */}
+      <div className="relative flex items-center justify-between gap-2">
         <NotificacionBell />
         <PerfilPill
           nombre={nombre}
