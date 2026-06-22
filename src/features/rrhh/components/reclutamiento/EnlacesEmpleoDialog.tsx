@@ -9,9 +9,6 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import { toast } from "sonner";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import {
@@ -25,9 +22,6 @@ import {
   toggleEmpleoLink,
   deleteEmpleoLink,
 } from "@/features/rrhh/actions/empleo-links-actions";
-import { ORIGEN_LABELS, type OrigenCandidatura } from "@/features/rrhh/data/reclutamiento";
-
-const CATEGORIAS = Object.entries(ORIGEN_LABELS) as Array<[OrigenCandidatura, string]>;
 
 function formatFecha(iso: string) {
   return new Date(iso).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
@@ -44,7 +38,6 @@ export function EnlacesEmpleoDialog({ open, onOpenChange }: Props) {
   const [loading, setLoading] = useState(true);
   const [nuevoCodigo, setNuevoCodigo] = useState("");
   const [nuevoNombre, setNuevoNombre] = useState("");
-  const [nuevaCategoria, setNuevaCategoria] = useState<OrigenCandidatura>("otros");
   const [creando, startCreate] = useTransition();
   const [copiadoId, setCopiadoId] = useState<string | null>(null);
 
@@ -83,7 +76,6 @@ export function EnlacesEmpleoDialog({ open, onOpenChange }: Props) {
       const r = await createEmpleoLink({
         codigo: nuevoCodigo,
         nombre: nuevoNombre.trim(),
-        origenCategoria: nuevaCategoria,
       });
       if (!r.ok) {
         toast.error(r.error ?? "Error al crear enlace");
@@ -92,7 +84,6 @@ export function EnlacesEmpleoDialog({ open, onOpenChange }: Props) {
       toast.success(`Enlace "${r.data!.nombre}" creado`);
       setNuevoCodigo("");
       setNuevoNombre("");
-      setNuevaCategoria("otros");
       refrescar();
     });
   }
@@ -136,7 +127,7 @@ export function EnlacesEmpleoDialog({ open, onOpenChange }: Props) {
 
         {/* Alta */}
         <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
-          <div className="grid sm:grid-cols-3 gap-3">
+          <div className="grid sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="enlace-nombre">Nombre</Label>
               <Input
@@ -155,17 +146,6 @@ export function EnlacesEmpleoDialog({ open, onOpenChange }: Props) {
                 placeholder="INSTAGRAM"
                 maxLength={CODIGO_MAX}
               />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Origen</Label>
-              <Select value={nuevaCategoria} onValueChange={(v) => setNuevaCategoria(v as OrigenCandidatura)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {CATEGORIAS.map(([valor, label]) => (
-                    <SelectItem key={valor} value={valor}>{label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
           </div>
           <div className="flex items-center justify-between gap-3">
@@ -215,7 +195,6 @@ export function EnlacesEmpleoDialog({ open, onOpenChange }: Props) {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium">{l.nombre}</span>
                       <Badge variant="outline" className="font-mono text-[10px]">{l.codigo}</Badge>
-                      <span className="text-[11px] text-muted-foreground">{ORIGEN_LABELS[l.origenCategoria]}</span>
                     </div>
                   </td>
                   <td className="px-3 py-2">
