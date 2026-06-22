@@ -14,6 +14,12 @@ import {
   Tag,
   Notebook,
   X,
+  MessageCircle,
+  MapPin,
+  Building2,
+  StickyNote,
+  Trash2,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -27,8 +33,10 @@ import {
 import {
   listContactos,
   createContacto,
+  deleteContacto,
   listEtiquetas,
 } from "@/features/agenda/actions/contactos-actions";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 const CATEGORIA_ICON: Record<ContactoCategoria, React.ElementType> = {
   mantenimiento: Wrench,
@@ -71,6 +79,10 @@ export function AgendaMobile() {
   const [nuevoOpen, setNuevoOpen] = useState(false);
   const [form, setForm] = useState<ContactoInput>(EMPTY_FORM);
   const [guardando, setGuardando] = useState(false);
+
+  const [detalle, setDetalle] = useState<Contacto | null>(null);
+  const [borrando, setBorrando] = useState(false);
+  const { confirm, dialog } = useConfirmDelete();
 
   const cargar = useCallback(async () => {
     try {
@@ -170,6 +182,30 @@ export function AgendaMobile() {
     }
   }
 
+  async function eliminar(c: Contacto) {
+    const ok = await confirm({
+      title: "Eliminar contacto",
+      description: `Se eliminará "${c.nombre}" de la agenda. Esta acción no se puede deshacer.`,
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
+    try {
+      setBorrando(true);
+      const res = await deleteContacto(c.id);
+      if (!res.ok) {
+        toast.error(res.error ?? "Error al eliminar");
+        return;
+      }
+      setContactos((prev) => prev.filter((x) => x.id !== c.id));
+      setDetalle(null);
+      toast.success("Contacto eliminado");
+    } catch {
+      toast.error("Error al eliminar contacto");
+    } finally {
+      setBorrando(false);
+    }
+  }
+
   const grupos: Array<ContactoCategoria | "todos"> = ["todos", ...CONTACTO_CATEGORIAS];
 
   return (
@@ -265,7 +301,12 @@ export function AgendaMobile() {
               </p>
               <ul className="space-y-1.5">
                 {s.items.map((c) => (
-                  <FilaContacto key={c.id} c={c} etiqueta={c.etiqueta_id ? etiquetaById.get(c.etiqueta_id) : null} />
+                  <FilaContacto
+                    key={c.id}
+                    c={c}
+                    etiqueta={c.etiqueta_id ? etiquetaById.get(c.etiqueta_id) : null}
+                    onAbrir={() => setDetalle(c)}
+                  />
                 ))}
               </ul>
             </div>
@@ -274,7 +315,12 @@ export function AgendaMobile() {
       ) : (
         <ul className="space-y-1.5">
           {filtrados.map((c) => (
-            <FilaContacto key={c.id} c={c} etiqueta={c.etiqueta_id ? etiquetaById.get(c.etiqueta_id) : null} />
+            <FilaContacto
+              key={c.id}
+              c={c}
+              etiqueta={c.etiqueta_id ? etiquetaById.get(c.etiqueta_id) : null}
+              onAbrir={() => setDetalle(c)}
+            />
           ))}
         </ul>
       )}
@@ -362,8 +408,174 @@ export function AgendaMobile() {
           </div>
         </div>
       )}
+
+      {/* Sheet Ficha de contacto (solo lectura) */}
+      {detalle && (
+        <FichaContacto
+          c={detalle}
+          etiqueta={detalle.etiqueta_id ? etiquetaById.get(detalle.etiqueta_id) : null}
+          borrando={borrando}
+          onCerrar={() => setDetalle(null)}
+          onEliminar={() => eliminar(detalle)}
+        />
+      )}
+
+      {dialog}
     </div>
   );
+}
+
+function FichaContacto({
+  c,
+  etiqueta,
+  borrando,
+  onCerrar,
+  onEliminar,
+}: {
+  c: Contacto;
+  etiqueta?: Etiqueta | null;
+  borrando: boolean;
+  onCerrar: () => void;
+  onEliminar: () => void;
+}) {
+  const Icon = CATEGORIA_ICON[c.categoria];
+  const sincronizado = c.origen === "empleado" || c.origen === "proveedor";
+  // Solo los contactos manuales y no protegidos se pueden borrar desde aquí.
+  const puedeBorrar = !sincronizado && !c.protegido;
+  const motivoNoBorrar = sincronizado
+    ? c.origen === "empleado"
+      ? "Sincronizado desde Empleados. Se gestiona en su ficha de empleado."
+      : "Sincronizado desde Proveedores. Se gestiona en su ficha de proveedor."
+    : "Contacto protegido del sistema.";
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex flex-col justify-end bg-black/40"
+      onClick={onCerrar}
+    >
+      <div
+        className="max-h-[88dvh] overflow-y-auto rounded-t-3xl bg-background p-5 pb-[max(env(safe-area-inset-bottom),20px)]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-muted" />
+
+        {/* Cabecera */}
+        <div className="mb-4 flex items-start gap-3">
+          <div className={`shrink-0 rounded-2xl p-3 ${CATEGORIA_TINT[c.categoria]}`}>
+            <Icon className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 className="flex items-center gap-2 text-lg font-semibold leading-tight">
+              {c.nombre}
+              {!c.activo && (
+                <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">
+                  {c.estado_origen ?? "Inactivo"}
+                </span>
+              )}
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              {CATEGORIA_LABELS[c.categoria]}
+              {etiqueta ? ` · ${etiqueta.nombre}` : ""}
+            </p>
+          </div>
+          <button
+            onClick={onCerrar}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground active:bg-muted"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Datos */}
+        <div className="space-y-1">
+          <DatoFicha icon={Phone} label="Teléfono" valor={c.telefono} href={c.telefono ? `tel:${c.telefono}` : null} />
+          <DatoFicha
+            icon={MessageCircle}
+            label="WhatsApp"
+            valor={c.whatsapp}
+            href={c.whatsapp ? `https://wa.me/${c.whatsapp.replace(/[^\d]/g, "")}` : null}
+          />
+          <DatoFicha icon={Mail} label="Email" valor={c.email} href={c.email ? `mailto:${c.email}` : null} />
+          <DatoFicha icon={Building2} label="Empresa" valor={c.empresa_contacto} />
+          <DatoFicha icon={MapPin} label="Dirección" valor={c.direccion} />
+          <DatoFicha icon={StickyNote} label="Notas" valor={c.notas} />
+        </div>
+
+        {/* Acciones rápidas */}
+        <div className="mt-4 flex gap-2">
+          {c.telefono && (
+            <a
+              href={`tel:${c.telefono}`}
+              className="flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl bg-emerald-500 text-sm font-semibold text-white active:bg-emerald-600"
+            >
+              <Phone className="h-4 w-4" /> Llamar
+            </a>
+          )}
+          {c.email && (
+            <a
+              href={`mailto:${c.email}`}
+              className="flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl bg-muted text-sm font-semibold text-foreground active:bg-muted/70"
+            >
+              <Mail className="h-4 w-4" /> Email
+            </a>
+          )}
+        </div>
+
+        {/* Borrar / motivo */}
+        {puedeBorrar ? (
+          <button
+            onClick={onEliminar}
+            disabled={borrando}
+            className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-destructive/30 text-sm font-semibold text-destructive active:bg-destructive/10 disabled:opacity-60"
+          >
+            <Trash2 className="h-4 w-4" />
+            {borrando ? "Eliminando…" : "Eliminar contacto"}
+          </button>
+        ) : (
+          <p className="mt-3 flex items-center justify-center gap-1.5 rounded-2xl bg-muted/50 px-3 py-2.5 text-center text-[11px] text-muted-foreground">
+            <Lock className="h-3.5 w-3.5 shrink-0" />
+            {motivoNoBorrar}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DatoFicha({
+  icon: Icon,
+  label,
+  valor,
+  href,
+}: {
+  icon: React.ElementType;
+  label: string;
+  valor: string | null;
+  href?: string | null;
+}) {
+  if (!valor) return null;
+  const contenido = (
+    <>
+      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+      <span className="min-w-0 flex-1">
+        <span className="block text-[11px] text-muted-foreground">{label}</span>
+        <span className="block break-words text-sm text-foreground">{valor}</span>
+      </span>
+    </>
+  );
+  if (href) {
+    return (
+      <a
+        href={href}
+        target={href.startsWith("http") ? "_blank" : undefined}
+        rel={href.startsWith("http") ? "noopener noreferrer" : undefined}
+        className="flex items-start gap-3 rounded-xl px-1 py-2 active:bg-muted/50"
+      >
+        {contenido}
+      </a>
+    );
+  }
+  return <div className="flex items-start gap-3 px-1 py-2">{contenido}</div>;
 }
 
 function Campo({ label, children }: { label: string; children: React.ReactNode }) {
@@ -375,7 +587,15 @@ function Campo({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function FilaContacto({ c, etiqueta }: { c: Contacto; etiqueta?: Etiqueta | null }) {
+function FilaContacto({
+  c,
+  etiqueta,
+  onAbrir,
+}: {
+  c: Contacto;
+  etiqueta?: Etiqueta | null;
+  onAbrir: () => void;
+}) {
   const Icon = CATEGORIA_ICON[c.categoria];
   const sub =
     c.empresa_contacto && c.empresa_contacto !== c.nombre
@@ -383,25 +603,32 @@ function FilaContacto({ c, etiqueta }: { c: Contacto; etiqueta?: Etiqueta | null
       : c.telefono ?? null;
   return (
     <li className="flex items-center gap-3 rounded-2xl border border-border/50 bg-card px-3 py-2.5">
-      <div className={`shrink-0 rounded-xl p-2 ${CATEGORIA_TINT[c.categoria]}`}>
-        <Icon className="h-4 w-4" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="flex items-center gap-1.5 truncate text-sm font-medium text-foreground">
-          {c.nombre}
-          {!c.activo && (
-            <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-semibold text-gray-500">
-              {c.estado_origen ?? "Inactivo"}
-            </span>
-          )}
-        </p>
-        {(sub || etiqueta) && (
-          <p className="truncate text-[11px] text-muted-foreground">
-            {etiqueta ? `${etiqueta.nombre}${sub ? " · " : ""}` : ""}
-            {sub}
+      <button
+        type="button"
+        onClick={onAbrir}
+        className="flex min-w-0 flex-1 items-center gap-3 text-left active:opacity-70"
+        aria-label={`Ver ficha de ${c.nombre}`}
+      >
+        <div className={`shrink-0 rounded-xl p-2 ${CATEGORIA_TINT[c.categoria]}`}>
+          <Icon className="h-4 w-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-1.5 truncate text-sm font-medium text-foreground">
+            {c.nombre}
+            {!c.activo && (
+              <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-semibold text-gray-500">
+                {c.estado_origen ?? "Inactivo"}
+              </span>
+            )}
           </p>
-        )}
-      </div>
+          {(sub || etiqueta) && (
+            <p className="truncate text-[11px] text-muted-foreground">
+              {etiqueta ? `${etiqueta.nombre}${sub ? " · " : ""}` : ""}
+              {sub}
+            </p>
+          )}
+        </div>
+      </button>
       <div className="flex shrink-0 items-center gap-1.5">
         {c.email && (
           <a
