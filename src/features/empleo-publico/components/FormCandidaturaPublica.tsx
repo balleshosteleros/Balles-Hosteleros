@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, ArrowLeft, ArrowRight, Send, CheckCircle2, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -47,7 +46,6 @@ type Paso = "datos" | "cuestionario";
 export function FormCandidaturaPublica({
   empresaSlug, empresaId, ofertaId, ofertaTitulo, canalCodigo = null, cuestionario = null,
 }: Props) {
-  const router = useRouter();
   const [form, setForm] = useState<FormState>(VACIO);
   const [respuestas, setRespuestas] = useState<RespuestasCuestionario>({});
   const [paso, setPaso] = useState<Paso>("datos");
@@ -123,14 +121,6 @@ export function FormCandidaturaPublica({
     });
   }
 
-  function reiniciar() {
-    setForm(VACIO);
-    setRespuestas({});
-    setPaso("datos");
-    setEnviado(false);
-    router.refresh();
-  }
-
   if (enviado) {
     return (
       <div className="rounded-lg border bg-card p-8 text-center space-y-4">
@@ -147,7 +137,6 @@ export function FormCandidaturaPublica({
               <ArrowLeft className="h-4 w-4 mr-1.5" /> Ver más ofertas
             </Link>
           </Button>
-          <Button onClick={reiniciar}>Enviar otra candidatura</Button>
         </div>
       </div>
     );
@@ -159,6 +148,9 @@ export function FormCandidaturaPublica({
       <div className="rounded-lg border bg-card p-5 md:p-6 space-y-5">
         <div>
           <h2 className="text-lg font-semibold">{cuestionario.nombre}</h2>
+          <p className="text-sm text-muted-foreground mt-1.5">
+            Para terminar, necesitamos que respondas estas breves preguntas para conocerte un poco más.
+          </p>
           {cuestionario.descripcion && (
             <p className="text-sm text-muted-foreground mt-1.5 whitespace-pre-line">
               {cuestionario.descripcion}
@@ -326,7 +318,7 @@ export function FormCandidaturaPublica({
           ) : (
             <Send className="h-4 w-4 mr-1.5" />
           )}
-          {tieneCuestionario ? "Continuar al cuestionario" : "Enviar candidatura"}
+          {tieneCuestionario ? "Siguiente" : "Enviar candidatura"}
         </Button>
       </div>
     </form>
