@@ -18,6 +18,9 @@ export interface ContactoContable {
   etiquetas: string[];
   categoria: string;
   observaciones: string;
+  telefono?: string;
+  direccion?: string;
+  notas?: string;
 }
 
 export interface OperacionContable {

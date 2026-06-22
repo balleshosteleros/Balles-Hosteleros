@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,30 +25,37 @@ import { LabelConRegla } from "@/components/forms/LabelConRegla";
 import { BotonesGuardarBorrador } from "@/components/forms/BotonesGuardarBorrador";
 import { useReglasSubmodulo } from "@/features/ajustes/hooks/use-reglas-submodulo";
 import { ValidacionFaltantesDialog } from "@/features/ajustes/components/ValidacionFaltantesDialog";
-import { createContacto } from "@/features/contabilidad/actions/contabilidad-actions";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { EtiquetasInput } from "@/features/contabilidad/components/EtiquetasInput";
+import {
+  updateContacto,
+  deleteContacto,
+} from "@/features/contabilidad/actions/contabilidad-actions";
+import type { ContactoContable } from "@/features/contabilidad/data/contabilidad";
 
 const TIPOS_CONTACTO = ["Cliente", "Acreedor", "Empresa", "Particular"] as const;
 
-interface NuevoContactoDialogProps {
-  open: boolean;
+const SUFIJO_BORRADOR = /\s*\(borrador\)\s*$/i;
+const tipoBase = (t: string) => t.replace(SUFIJO_BORRADOR, "").trim() || "Cliente";
+
+interface EditContactoDialogProps {
+  contacto: ContactoContable | null;
   onOpenChange: (o: boolean) => void;
-  onCreated?: () => void;
+  onSaved?: () => void;
 }
 
 /**
- * Diálogo manual "Nuevo contacto" para contabilidad.
+ * Ficha de un contacto de contabilidad: muestra los datos guardados y permite
+ * editarlos o eliminar el registro. Se abre al pulsar una fila en la lista.
  *
- * Sigue la regla "datos completos": el botón "Crear contacto" se bloquea
- * mientras falten campos exigidos por el modo activo del catálogo. Si el
- * usuario aún no tiene toda la info, puede pulsar "Guardar borrador" y
- * volver a completarlo más tarde.
+ * Mantiene la regla "datos completos": "Guardar" se bloquea mientras falten
+ * campos exigidos; el contacto incompleto puede quedar como borrador.
  */
-export function NuevoContactoDialog({
-  open,
+export function EditContactoDialog({
+  contacto,
   onOpenChange,
-  onCreated,
-}: NuevoContactoDialogProps) {
+  onSaved,
+}: EditContactoDialogProps) {
   const [nombre, setNombre] = useState("");
   const [tipo, setTipo] = useState<string>("Cliente");
   const [nif, setNif] = useState("");
@@ -64,23 +72,27 @@ export function NuevoContactoDialog({
     "contabilidad",
     "contactos",
   );
+  const { confirm, dialog: confirmDialog } = useConfirmDelete();
+
+  // Carga los datos del contacto cada vez que se abre la ficha.
+  useEffect(() => {
+    if (!contacto) return;
+    setNombre(contacto.nombre ?? "");
+    setTipo(tipoBase(contacto.tipo ?? "Cliente"));
+    setNif(contacto.documento ?? "");
+    setEmail(contacto.email ?? "");
+    setTelefono(contacto.telefono ?? "");
+    setDireccion(contacto.direccion ?? "");
+    setNotas(contacto.notas ?? "");
+    setCategoria(contacto.categoria ?? "");
+    setEtiquetas(contacto.etiquetas ?? []);
+  }, [contacto]);
 
   const formValues = { nombre, tipo, nif, email, telefono, direccion };
   const { labelsFaltantes } = validar(formValues);
 
-  const reset = () => {
-    setNombre("");
-    setTipo("Cliente");
-    setNif("");
-    setEmail("");
-    setTelefono("");
-    setDireccion("");
-    setNotas("");
-    setCategoria("");
-    setEtiquetas([]);
-  };
-
   const guardar = async (esBorrador: boolean) => {
+    if (!contacto) return;
     if (!esBorrador && labelsFaltantes.length > 0) {
       setFaltantes(labelsFaltantes);
       return;
@@ -91,27 +103,47 @@ export function NuevoContactoDialog({
     }
     setLoading(true);
     try {
-      const res = await createContacto({
+      const res = await updateContacto(contacto.id, {
         nombre: nombre.trim(),
         tipo: esBorrador ? `${tipo} (borrador)` : tipo,
-        nif: nif.trim() || undefined,
-        email: email.trim() || undefined,
-        telefono: telefono.trim() || undefined,
-        direccion: direccion.trim() || undefined,
-        notas: notas.trim() || undefined,
-        categoria: categoria.trim() || undefined,
-        etiquetas: etiquetas.length ? etiquetas : undefined,
+        nif: nif.trim(),
+        email: email.trim(),
+        telefono: telefono.trim(),
+        direccion: direccion.trim(),
+        notas: notas.trim(),
+        categoria: categoria.trim(),
+        etiquetas,
       });
       if (!res.ok) {
-        toast.error(res.error || "Error al crear contacto");
+        toast.error(res.error || "Error al guardar el contacto");
         return;
       }
-      toast.success(
-        esBorrador ? "Contacto guardado como borrador" : "Contacto creado",
-      );
-      reset();
+      toast.success(esBorrador ? "Contacto guardado como borrador" : "Contacto actualizado");
       onOpenChange(false);
-      onCreated?.();
+      onSaved?.();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const eliminar = async () => {
+    if (!contacto) return;
+    const ok = await confirm({
+      title: "¿Eliminar contacto?",
+      description: `Se eliminará "${contacto.nombre}" de forma permanente.`,
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
+    setLoading(true);
+    try {
+      const res = await deleteContacto(contacto.id);
+      if (!res.ok) {
+        toast.error(res.error || "Error al eliminar el contacto");
+        return;
+      }
+      toast.success("Contacto eliminado");
+      onOpenChange(false);
+      onSaved?.();
     } finally {
       setLoading(false);
     }
@@ -119,10 +151,10 @@ export function NuevoContactoDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={contacto !== null} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Nuevo contacto</DialogTitle>
+            <DialogTitle>Ficha de contacto</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
@@ -132,12 +164,12 @@ export function NuevoContactoDialog({
                   moduloKey="contabilidad"
                   submoduloKey="contactos"
                   campoKey="nombre"
-                  htmlFor="contacto-nombre"
+                  htmlFor="edit-contacto-nombre"
                 >
                   Nombre o razón social
                 </LabelConRegla>
                 <Input
-                  id="contacto-nombre"
+                  id="edit-contacto-nombre"
                   value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
                   autoFocus
@@ -149,12 +181,12 @@ export function NuevoContactoDialog({
                   moduloKey="contabilidad"
                   submoduloKey="contactos"
                   campoKey="tipo"
-                  htmlFor="contacto-tipo"
+                  htmlFor="edit-contacto-tipo"
                 >
                   Tipo
                 </LabelConRegla>
                 <Select value={tipo} onValueChange={setTipo}>
-                  <SelectTrigger id="contacto-tipo">
+                  <SelectTrigger id="edit-contacto-tipo">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -172,12 +204,12 @@ export function NuevoContactoDialog({
                   moduloKey="contabilidad"
                   submoduloKey="contactos"
                   campoKey="nif"
-                  htmlFor="contacto-nif"
+                  htmlFor="edit-contacto-nif"
                 >
                   NIF / CIF
                 </LabelConRegla>
                 <Input
-                  id="contacto-nif"
+                  id="edit-contacto-nif"
                   value={nif}
                   onChange={(e) => setNif(e.target.value.toUpperCase())}
                   placeholder="B12345678"
@@ -189,12 +221,12 @@ export function NuevoContactoDialog({
                   moduloKey="contabilidad"
                   submoduloKey="contactos"
                   campoKey="email"
-                  htmlFor="contacto-email"
+                  htmlFor="edit-contacto-email"
                 >
                   Email
                 </LabelConRegla>
                 <Input
-                  id="contacto-email"
+                  id="edit-contacto-email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -206,12 +238,12 @@ export function NuevoContactoDialog({
                   moduloKey="contabilidad"
                   submoduloKey="contactos"
                   campoKey="telefono"
-                  htmlFor="contacto-tel"
+                  htmlFor="edit-contacto-tel"
                 >
                   Teléfono
                 </LabelConRegla>
                 <Input
-                  id="contacto-tel"
+                  id="edit-contacto-tel"
                   value={telefono}
                   onChange={(e) => setTelefono(e.target.value)}
                 />
@@ -222,12 +254,12 @@ export function NuevoContactoDialog({
                   moduloKey="contabilidad"
                   submoduloKey="contactos"
                   campoKey="direccion"
-                  htmlFor="contacto-dir"
+                  htmlFor="edit-contacto-dir"
                 >
                   Dirección fiscal
                 </LabelConRegla>
                 <Input
-                  id="contacto-dir"
+                  id="edit-contacto-dir"
                   value={direccion}
                   onChange={(e) => setDireccion(e.target.value)}
                   placeholder="Calle, número, ciudad, CP"
@@ -235,9 +267,9 @@ export function NuevoContactoDialog({
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="contacto-categoria">Categoría</Label>
+                <Label htmlFor="edit-contacto-categoria">Categoría</Label>
                 <Input
-                  id="contacto-categoria"
+                  id="edit-contacto-categoria"
                   value={categoria}
                   onChange={(e) => setCategoria(e.target.value)}
                   placeholder="Proveedor, Servicios, Asesoría…"
@@ -250,9 +282,9 @@ export function NuevoContactoDialog({
               </div>
 
               <div className="col-span-2 space-y-1.5">
-                <Label htmlFor="contacto-notas">Notas internas</Label>
+                <Label htmlFor="edit-contacto-notas">Notas internas</Label>
                 <Textarea
-                  id="contacto-notas"
+                  id="edit-contacto-notas"
                   rows={2}
                   value={notas}
                   onChange={(e) => setNotas(e.target.value)}
@@ -262,15 +294,21 @@ export function NuevoContactoDialog({
           </div>
 
           <DialogFooter className="flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={loading}>
-              Cancelar
+            <Button
+              variant="ghost"
+              onClick={() => void eliminar()}
+              disabled={loading}
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+            >
+              <Trash2 className="h-4 w-4 mr-1.5" />
+              Eliminar
             </Button>
             <BotonesGuardarBorrador
               onGuardar={() => void guardar(false)}
               onGuardarBorrador={() => void guardar(true)}
               faltantes={labelsFaltantes}
               loading={loading}
-              labelGuardar="Crear contacto"
+              labelGuardar="Guardar cambios"
               admiteBorrador={admiteBorrador}
             />
           </DialogFooter>
@@ -283,6 +321,8 @@ export function NuevoContactoDialog({
         campos={faltantes}
         submoduloLabel="Contactos"
       />
+
+      {confirmDialog}
     </>
   );
 }

@@ -25,6 +25,7 @@ import { IOActions } from "@/shared/io";
 import { contactosContablesIO } from "@/features/contabilidad/io/contactos.io";
 import { ImportadorIAContactosDialog } from "@/features/contabilidad/components/ImportadorIAContactosDialog";
 import { NuevoContactoDialog } from "@/features/contabilidad/components/NuevoContactoDialog";
+import { EditContactoDialog } from "@/features/contabilidad/components/EditContactoDialog";
 import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
@@ -42,11 +43,14 @@ function mapDbToContacto(row: Record<string, unknown>): ContactoContable {
     id: row.id as string,
     nombre: (row.nombre as string) ?? "",
     tipo: ((row.tipo as string) ?? "EMPRESA") as TipoContacto,
-    documento: (row.nif as string) ?? "",
+    documento: (row.cif as string) ?? "",
     email: (row.email as string) ?? "",
     etiquetas: Array.isArray(row.etiquetas) ? row.etiquetas as string[] : [],
     categoria: (row.categoria as string) ?? "",
     observaciones: (row.observaciones as string) ?? "",
+    telefono: (row.telefono as string) ?? "",
+    direccion: (row.direccion as string) ?? "",
+    notas: (row.notas as string) ?? "",
   };
 }
 
@@ -63,6 +67,7 @@ export function ContactosView() {
   const [showConfig, setShowConfig] = useState(false);
   const [importadorAbierto, setImportadorAbierto] = useState(false);
   const [nuevoAbierto, setNuevoAbierto] = useState(false);
+  const [editando, setEditando] = useState<ContactoContable | null>(null);
 
   const loadContactos = useCallback(async () => {
     setLoading(true);
@@ -296,10 +301,24 @@ export function ContactosView() {
                 {filtrados.map(c => {
                   const Icon = tipoIcon[c.tipo];
                   return (
-                    <tr key={c.id} className="border-b hover:bg-muted/30 transition-colors">
+                    <tr
+                      key={c.id}
+                      onClick={() => setEditando(c)}
+                      className="border-b hover:bg-muted/30 transition-colors cursor-pointer"
+                    >
                       <td className="px-3 py-3"><Icon className="h-4 w-4 text-muted-foreground" /></td>
                       {columnasRender.map((col) => columnDefs[col.campo]?.td(c))}
-                      <td className="px-3 py-3"><Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-3.5 w-3.5" /></Button></td>
+                      <td className="px-3 py-3">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={(e) => { e.stopPropagation(); setEditando(c); }}
+                          title="Ver ficha"
+                        >
+                          <MoreVertical className="h-3.5 w-3.5" />
+                        </Button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -322,6 +341,12 @@ export function ContactosView() {
         open={nuevoAbierto}
         onOpenChange={setNuevoAbierto}
         onCreated={loadContactos}
+      />
+
+      <EditContactoDialog
+        contacto={editando}
+        onOpenChange={(o) => { if (!o) setEditando(null); }}
+        onSaved={loadContactos}
       />
     </div>
   );

@@ -39,9 +39,13 @@ export async function createContacto(input: {
   tipo?: string;
   email?: string;
   telefono?: string;
+  direccion?: string;
+  notas?: string;
+  categoria?: string;
+  etiquetas?: string[];
 }) {
   try {
-    const { supabase, user, empresaId } = await getContext();
+    const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
 
     const { data, error } = await supabase
@@ -49,11 +53,14 @@ export async function createContacto(input: {
       .insert({
         empresa_id: empresaId,
         nombre: input.nombre,
-        nif: input.nif ?? null,
+        cif: input.nif ?? null,
         tipo: input.tipo ?? null,
         email: input.email ?? null,
         telefono: input.telefono ?? null,
-        created_by: user?.id ?? null,
+        direccion: input.direccion ?? null,
+        notas: input.notas ?? null,
+        categoria: input.categoria ?? null,
+        etiquetas: input.etiquetas ?? [],
       })
       .select()
       .single();
@@ -62,6 +69,70 @@ export async function createContacto(input: {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[contabilidad] createContacto:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+export async function updateContacto(
+  id: string,
+  input: {
+    nombre?: string;
+    nif?: string;
+    tipo?: string;
+    email?: string;
+    telefono?: string;
+    direccion?: string;
+    notas?: string;
+    categoria?: string;
+    etiquetas?: string[];
+  },
+) {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    const patch: Record<string, unknown> = {};
+    if (input.nombre !== undefined) patch.nombre = input.nombre;
+    if (input.tipo !== undefined) patch.tipo = input.tipo;
+    if (input.nif !== undefined) patch.cif = input.nif || null;
+    if (input.email !== undefined) patch.email = input.email || null;
+    if (input.telefono !== undefined) patch.telefono = input.telefono || null;
+    if (input.direccion !== undefined) patch.direccion = input.direccion || null;
+    if (input.notas !== undefined) patch.notas = input.notas || null;
+    if (input.categoria !== undefined) patch.categoria = input.categoria || null;
+    if (input.etiquetas !== undefined) patch.etiquetas = input.etiquetas;
+
+    const { data, error } = await supabase
+      .from("contactos_contabilidad")
+      .update(patch)
+      .eq("id", id)
+      .eq("empresa_id", empresaId)
+      .select()
+      .single();
+    if (error) throw error;
+    return { ok: true, data };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[contabilidad] updateContacto:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+export async function deleteContacto(id: string) {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    const { error } = await supabase
+      .from("contactos_contabilidad")
+      .delete()
+      .eq("id", id)
+      .eq("empresa_id", empresaId);
+    if (error) throw error;
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[contabilidad] deleteContacto:", msg);
     return { ok: false, error: msg };
   }
 }

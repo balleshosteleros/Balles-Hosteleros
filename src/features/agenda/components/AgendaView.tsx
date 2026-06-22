@@ -93,6 +93,7 @@ export function AgendaView() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
+  const [soloLectura, setSoloLectura] = useState(false);
   const [form, setForm] = useState<ContactoInput>(EMPTY_FORM);
 
   const cargarContactos = useCallback(async () => {
@@ -141,12 +142,18 @@ export function AgendaView() {
 
   function abrirNuevo() {
     setEditId(null);
+    setSoloLectura(false);
     setForm(EMPTY_FORM);
     setDialogOpen(true);
   }
 
-  function abrirEditar(c: Contacto) {
+  // Abre la ficha del contacto con sus datos. Los contactos sincronizados
+  // desde Empleados/Proveedores se muestran en solo lectura (se editan en su
+  // módulo de origen); el resto son editables.
+  function abrirFicha(c: Contacto) {
+    const sincronizado = c.origen === "empleado" || c.origen === "proveedor";
     setEditId(c.id);
+    setSoloLectura(sincronizado);
     setForm({
       nombre: c.nombre,
       empresa_contacto: c.empresa_contacto,
@@ -244,7 +251,12 @@ export function AgendaView() {
         {filtrados.map((c) => {
           const Icon = CATEGORIA_ICON[c.categoria];
           return (
-            <Card key={c.id} className="overflow-hidden">
+            <Card
+              key={c.id}
+              onClick={() => abrirFicha(c)}
+              className="overflow-hidden cursor-pointer transition-colors hover:border-primary/40 hover:bg-muted/30"
+              title="Ver ficha"
+            >
               <CardContent className="p-5 space-y-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-3">
@@ -295,6 +307,7 @@ export function AgendaView() {
                   {c.telefono && (
                     <a
                       href={`tel:${c.telefono}`}
+                      onClick={(e) => e.stopPropagation()}
                       className="flex items-center gap-2 text-foreground hover:text-primary"
                     >
                       <Phone className="h-3.5 w-3.5 text-muted-foreground" />
@@ -306,6 +319,7 @@ export function AgendaView() {
                       href={`https://wa.me/${c.whatsapp.replace(/[^\d]/g, "")}`}
                       target="_blank"
                       rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
                       className="flex items-center gap-2 text-foreground hover:text-primary"
                     >
                       <MessageCircle className="h-3.5 w-3.5 text-muted-foreground" />
@@ -315,6 +329,7 @@ export function AgendaView() {
                   {c.email && (
                     <a
                       href={`mailto:${c.email}`}
+                      onClick={(e) => e.stopPropagation()}
                       className="flex items-center gap-2 text-foreground hover:text-primary"
                     >
                       <Mail className="h-3.5 w-3.5 text-muted-foreground" />
@@ -355,7 +370,7 @@ export function AgendaView() {
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8"
-                        onClick={() => abrirEditar(c)}
+                        onClick={(e) => { e.stopPropagation(); abrirFicha(c); }}
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
@@ -364,7 +379,7 @@ export function AgendaView() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-destructive hover:text-destructive"
-                          onClick={() => eliminar(c.id)}
+                          onClick={(e) => { e.stopPropagation(); eliminar(c.id); }}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -383,9 +398,19 @@ export function AgendaView() {
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {editId ? "Editar contacto" : "Nuevo contacto"}
+              {soloLectura
+                ? "Ficha de contacto"
+                : editId
+                  ? "Editar contacto"
+                  : "Nuevo contacto"}
             </DialogTitle>
           </DialogHeader>
+          {soloLectura && (
+            <p className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+              Contacto sincronizado. Para modificar sus datos, edítalo en su
+              módulo de origen (Empleados o Proveedores).
+            </p>
+          )}
           <div className="space-y-3">
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
@@ -394,6 +419,7 @@ export function AgendaView() {
                   value={form.nombre}
                   onChange={(e) => setForm({ ...form, nombre: e.target.value })}
                   placeholder="Ej: Juan García"
+                  disabled={soloLectura}
                 />
               </div>
               <div>
@@ -404,6 +430,7 @@ export function AgendaView() {
                     setForm({ ...form, empresa_contacto: e.target.value })
                   }
                   placeholder="Opcional"
+                  disabled={soloLectura}
                 />
               </div>
             </div>
@@ -414,6 +441,7 @@ export function AgendaView() {
                 onValueChange={(v) =>
                   setForm({ ...form, categoria: v as ContactoCategoria })
                 }
+                disabled={soloLectura}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -434,6 +462,7 @@ export function AgendaView() {
                   value={form.telefono ?? ""}
                   onChange={(e) => setForm({ ...form, telefono: e.target.value })}
                   placeholder="+34 600 000 000"
+                  disabled={soloLectura}
                 />
               </div>
               <div>
@@ -442,6 +471,7 @@ export function AgendaView() {
                   value={form.whatsapp ?? ""}
                   onChange={(e) => setForm({ ...form, whatsapp: e.target.value })}
                   placeholder="+34 600 000 000"
+                  disabled={soloLectura}
                 />
               </div>
             </div>
@@ -452,6 +482,7 @@ export function AgendaView() {
                 value={form.email ?? ""}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 placeholder="correo@ejemplo.com"
+                disabled={soloLectura}
               />
             </div>
             <div>
@@ -460,6 +491,7 @@ export function AgendaView() {
                 value={form.direccion ?? ""}
                 onChange={(e) => setForm({ ...form, direccion: e.target.value })}
                 placeholder="Calle, ciudad…"
+                disabled={soloLectura}
               />
             </div>
             <div>
@@ -468,15 +500,24 @@ export function AgendaView() {
                 value={form.notas ?? ""}
                 onChange={(e) => setForm({ ...form, notas: e.target.value })}
                 placeholder="Horario de atención, observaciones…"
-                className="mt-1 min-h-[80px] w-full rounded-md border bg-background px-3 py-2 text-sm"
+                disabled={soloLectura}
+                className="mt-1 min-h-[80px] w-full rounded-md border bg-background px-3 py-2 text-sm disabled:opacity-60"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={guardar}>Guardar</Button>
+            {soloLectura ? (
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                Cerrar
+              </Button>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button onClick={guardar}>Guardar</Button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
