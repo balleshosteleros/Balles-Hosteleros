@@ -65,8 +65,9 @@ export function FormCandidaturaPublica({
     if (!form.email.trim()) return "El email es obligatorio";
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return "Email no válido";
     if (!form.telefono.trim()) return "El teléfono es obligatorio";
-    if (form.cv && form.cv.size > MAX_CV_BYTES) return "El CV no puede superar 5MB";
-    if (form.cv && form.cv.type !== "application/pdf") return "El CV debe ser un PDF";
+    if (!form.cv) return "El currículum es obligatorio";
+    if (form.cv.size > MAX_CV_BYTES) return "El CV no puede superar 5MB";
+    if (form.cv.type !== "application/pdf") return "El CV debe ser un PDF";
     return null;
   }
 
@@ -270,7 +271,7 @@ export function FormCandidaturaPublica({
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="cv">Currículum vitae</Label>
+        <Label htmlFor="cv">Currículum vitae *</Label>
         <label
           htmlFor="cv"
           className="flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm cursor-pointer transition-colors hover:bg-accent"

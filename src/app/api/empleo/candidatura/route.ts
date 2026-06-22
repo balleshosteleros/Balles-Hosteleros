@@ -141,10 +141,13 @@ export async function POST(req: Request) {
     const { empresa_id: empresaId, oferta_id: ofertaId,
             nombre, apellidos, email, telefono, carta_presentacion: cartaPresentacion } = parsed.data;
 
-    if (cv && cv.size > MAX_CV_BYTES) {
+    if (!cv || cv.size === 0) {
+      return NextResponse.json({ ok: false, error: "El currículum es obligatorio" }, { status: 400 });
+    }
+    if (cv.size > MAX_CV_BYTES) {
       return NextResponse.json({ ok: false, error: "El CV supera el tamaño máximo de 5MB" }, { status: 400 });
     }
-    if (cv && cv.type !== "application/pdf") {
+    if (cv.type !== "application/pdf") {
       return NextResponse.json({ ok: false, error: "El CV debe ser un PDF" }, { status: 400 });
     }
 
