@@ -98,6 +98,7 @@ export const miPanelSubs: SubItem[] = [
 export const direccionSubs: SubItem[] = [
   { title: "ORGANIGRAMA", url: "/direccion/estructura", icon: Network },
   { title: "CRONOGRAMAS", url: "/direccion/cronogramas", icon: CalendarDays },
+  { title: "AUDITORÍAS", url: "/direccion/auditorias", icon: ClipboardCheck },
   { title: "DOCUMENTACIÓN", url: "/direccion/documentacion", icon: FileArchive },
   { title: "APERTURAS", url: "/direccion/aperturas", icon: TrendingUp },
   { title: "PRESENTACIONES", url: "/direccion/presentaciones", icon: Presentation },
