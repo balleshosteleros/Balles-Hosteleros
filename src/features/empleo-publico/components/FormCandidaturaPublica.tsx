@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, ArrowLeft, Send, CheckCircle2 } from "lucide-react";
+import { Loader2, ArrowLeft, Send, CheckCircle2, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -129,12 +129,7 @@ export function FormCandidaturaPublica({ empresaSlug, empresaId, ofertaId, ofert
 
   return (
     <form onSubmit={enviar} className="rounded-lg border bg-card p-5 md:p-6 space-y-4">
-      <div>
-        <h2 className="text-lg font-semibold">Postular a esta oferta</h2>
-        <p className="text-sm text-muted-foreground">
-          Tus datos llegarán al equipo de selección. Tiempo aproximado: 1 minuto.
-        </p>
-      </div>
+      <h2 className="text-lg font-semibold">Postular a esta oferta</h2>
 
       <div className="grid sm:grid-cols-2 gap-3">
         <div className="space-y-1.5">
@@ -187,11 +182,21 @@ export function FormCandidaturaPublica({ empresaSlug, empresaId, ofertaId, ofert
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="cv">Currículum vitae (PDF, máx 5MB)</Label>
-        <Input
+        <Label htmlFor="cv">Currículum vitae</Label>
+        <label
+          htmlFor="cv"
+          className="flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm cursor-pointer transition-colors hover:bg-accent"
+        >
+          <Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <span className={form.cv ? "truncate text-foreground" : "text-muted-foreground"}>
+            {form.cv ? form.cv.name : "Adjuntar PDF"}
+          </span>
+        </label>
+        <input
           id="cv"
           type="file"
           accept="application/pdf"
+          className="sr-only"
           onChange={(e) => update("cv", e.target.files?.[0] ?? null)}
         />
       </div>
