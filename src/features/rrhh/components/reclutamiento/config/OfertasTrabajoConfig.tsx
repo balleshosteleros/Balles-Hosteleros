@@ -8,46 +8,16 @@ import {
   ESTADOS_CONFIG,
   TIPO_JORNADA_LABELS,
 } from "@/features/rrhh/data/reclutamiento";
-import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 
 export function OfertasTrabajoConfig() {
-  const { empresaActual } = useEmpresa();
-  const categorias = ["Sala", "Dirección", "Entretenimiento", "Operaciones", "Administración"];
-  const zonas = ["Sala principal", "Terraza", "Planta baja", "Oficina"];
-  const ubicaciones = zonas.map((z) => `${empresaActual.nombre} — ${z}`);
-
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-bold text-foreground">Vacantes</h2>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Configura categorías, tipos de jornada, ubicaciones y fases del proceso de selección
+          Configura tipos de jornada y fases del proceso de selección
         </p>
       </div>
-
-      {/* Categorías */}
-      <Card>
-        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-          <h3 className="font-semibold text-foreground text-sm">Categorías de puestos</h3>
-          <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8">
-            <Plus className="h-3.5 w-3.5" /> Añadir
-          </Button>
-        </div>
-        <CardContent className="p-0">
-          {categorias.map((item) => (
-            <div key={item} className="flex items-center justify-between px-5 py-3 border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-              <div className="flex items-center gap-2">
-                <GripVertical className="h-4 w-4 text-muted-foreground/40" />
-                <span className="text-sm text-foreground">{item}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon" className="h-7 w-7"><Pencil className="h-3 w-3" /></Button>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"><Trash2 className="h-3 w-3" /></Button>
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
 
       {/* Tipos de jornada */}
       <Card>
@@ -63,30 +33,6 @@ export function OfertasTrabajoConfig() {
               <div className="flex items-center gap-2">
                 <GripVertical className="h-4 w-4 text-muted-foreground/40" />
                 <span className="text-sm text-foreground">{label}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon" className="h-7 w-7"><Pencil className="h-3 w-3" /></Button>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"><Trash2 className="h-3 w-3" /></Button>
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      {/* Ubicaciones */}
-      <Card>
-        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-          <h3 className="font-semibold text-foreground text-sm">Ubicaciones</h3>
-          <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8">
-            <Plus className="h-3.5 w-3.5" /> Añadir
-          </Button>
-        </div>
-        <CardContent className="p-0">
-          {ubicaciones.map((item) => (
-            <div key={item} className="flex items-center justify-between px-5 py-3 border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-              <div className="flex items-center gap-2">
-                <GripVertical className="h-4 w-4 text-muted-foreground/40" />
-                <span className="text-sm text-foreground">{item}</span>
               </div>
               <div className="flex items-center gap-1">
                 <Button variant="ghost" size="icon" className="h-7 w-7"><Pencil className="h-3 w-3" /></Button>
