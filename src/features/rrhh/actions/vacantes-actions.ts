@@ -39,9 +39,10 @@ export async function listVacantes() {
       .select(`
         *,
         puestos(id,nombre),
-        departamentos(id,nombre)
+        departamentos(id,nombre,area)
       `)
       .eq("empresa_id", empresaId)
+      .order("orden", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: false });
 
     if (error) throw error;
@@ -159,6 +160,31 @@ export async function deleteVacante(id: string) {
 
 export async function toggleVisibilidadVacante(id: string, visible: boolean) {
   return updateVacante(id, { visible_publicamente: visible });
+}
+
+/**
+ * Persiste el orden de las vacantes (el mismo que se ve en el portal público).
+ * Recibe los ids ya ordenados; asigna `orden` 0,1,2… respetando la secuencia.
+ */
+export async function reordenarVacantes(ids: string[]) {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false as const, error: "No autenticado" };
+    for (let i = 0; i < ids.length; i++) {
+      const { error } = await supabase
+        .from("vacantes")
+        .update({ orden: i })
+        .eq("id", ids[i])
+        .eq("empresa_id", empresaId);
+      if (error) throw error;
+    }
+    revalidatePath("/rrhh/reclutamiento");
+    return { ok: true as const };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[rrhh] reordenarVacantes:", msg);
+    return { ok: false as const, error: msg };
+  }
 }
 
 export async function publicarVacante(id: string) {

@@ -37,6 +37,9 @@ export interface OfertaPublica {
   cuestionario: boolean;
   fecha_creacion: string;
   departamento_nombre: string | null;
+  /** Área del departamento de la vacante: gobierna la columna del portal. */
+  area: "OPERATIVA" | "ADMINISTRATIVA" | null;
+  orden: number | null;
   puesto_nombre: string | null;
 }
 
@@ -101,11 +104,12 @@ interface VacanteRow {
   salario_rango: string | null;
   cuestionario: boolean;
   fecha_creacion: string;
+  orden: number | null;
   visible_publicamente: boolean;
   estado_publicacion: string;
   departamento_id: string | null;
   puesto_id: string | null;
-  departamentos: { nombre: string } | null;
+  departamentos: { nombre: string; area: string | null } | null;
   puestos: { nombre: string } | null;
 }
 
@@ -135,6 +139,11 @@ function rowToOferta(r: VacanteRow): OfertaPublica {
     cuestionario: r.cuestionario,
     fecha_creacion: r.fecha_creacion,
     departamento_nombre: r.departamentos?.nombre ?? null,
+    area:
+      r.departamentos?.area === "OPERATIVA" || r.departamentos?.area === "ADMINISTRATIVA"
+        ? r.departamentos.area
+        : null,
+    orden: r.orden ?? null,
     puesto_nombre: r.puestos?.nombre ?? null,
   };
 }
@@ -150,15 +159,16 @@ export async function fetchPortalEmpleoPorSlug(slug: string): Promise<EmpleoPort
       .from("vacantes")
       .select(`
         id, empresa_id, titulo, descripcion, categoria, ubicacion,
-        tipo_jornada, salario_rango, cuestionario, fecha_creacion,
+        tipo_jornada, salario_rango, cuestionario, fecha_creacion, orden,
         visible_publicamente, estado_publicacion,
         departamento_id, puesto_id,
-        departamentos(nombre),
+        departamentos(nombre, area),
         puestos(nombre)
       `)
       .eq("empresa_id", empresa.id)
       .eq("visible_publicamente", true)
       .eq("estado_publicacion", "publicada")
+      .order("orden", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: false });
 
     if (ofertasErr) {
@@ -190,10 +200,10 @@ export async function fetchOfertaPublica(
       .from("vacantes")
       .select(`
         id, empresa_id, titulo, descripcion, categoria, ubicacion,
-        tipo_jornada, salario_rango, cuestionario, fecha_creacion,
+        tipo_jornada, salario_rango, cuestionario, fecha_creacion, orden,
         visible_publicamente, estado_publicacion,
         departamento_id, puesto_id,
-        departamentos(nombre),
+        departamentos(nombre, area),
         puestos(nombre)
       `)
       .eq("id", ofertaId)

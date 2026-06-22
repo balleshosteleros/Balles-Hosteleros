@@ -24,19 +24,23 @@ export function EmpleoBrandingShell({
         } as React.CSSProperties
       }
     >
-      {/* Fondo difuminado con el color de marca */}
+      {/* Fondo difuminado y minimalista con el color de marca (lavada suave,
+          no un color fijo): un velo del primario arriba que se desvanece. */}
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
         <div
-          className="absolute -top-[20%] left-1/2 -translate-x-1/2 h-[70vh] w-[90vh] rounded-full blur-[120px] opacity-30"
+          className="absolute inset-0 opacity-[0.07]"
+          style={{
+            background:
+              "radial-gradient(120% 80% at 50% -10%, var(--brand-primary) 0%, transparent 60%)",
+          }}
+        />
+        <div
+          className="absolute -top-[25%] left-1/2 -translate-x-1/2 h-[80vh] w-[110vh] rounded-full blur-[140px] opacity-20"
           style={{ background: "var(--brand-primary)" }}
         />
         <div
-          className="absolute -bottom-[15%] -right-[10%] h-[55vh] w-[55vh] rounded-full blur-[120px] opacity-20"
+          className="absolute -bottom-[20%] -right-[15%] h-[50vh] w-[50vh] rounded-full blur-[150px] opacity-[0.12]"
           style={{ background: "var(--brand-secondary)" }}
-        />
-        <div
-          className="absolute -bottom-[10%] -left-[10%] h-[45vh] w-[45vh] rounded-full blur-[120px] opacity-15"
-          style={{ background: "var(--brand-primary)" }}
         />
       </div>
 

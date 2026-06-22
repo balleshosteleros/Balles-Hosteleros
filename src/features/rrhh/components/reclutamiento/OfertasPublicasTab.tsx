@@ -4,8 +4,18 @@ import { useEffect, useState, useTransition, useCallback } from "react";
 import { toast } from "sonner";
 import {
   Briefcase, Eye, EyeOff, Globe, Plus, Pencil, Trash2,
-  Loader2, Copy, ExternalLink, MoreHorizontal,
+  Loader2, Copy, ExternalLink, MoreHorizontal, GripVertical,
+  Utensils, Building2,
 } from "lucide-react";
+import {
+  DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors,
+  closestCenter, type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext, useSortable, verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -33,7 +43,7 @@ import {
 import {
   listVacantes, createVacante, updateVacante, deleteVacante,
   toggleVisibilidadVacante, publicarVacante, cerrarVacante,
-  listPuestosCatalogo, listDepartamentosCatalogo,
+  listPuestosCatalogo, listDepartamentosCatalogo, reordenarVacantes,
 } from "@/features/rrhh/actions/vacantes-actions";
 import { DialogSnippetEmbed } from "@/features/empleo-publico/components/DialogSnippetEmbed";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
@@ -57,9 +67,17 @@ interface VacanteRow {
   favorita: boolean;
   puesto_id: string | null;
   departamento_id: string | null;
+  orden: number | null;
   puestos?: { id: string; nombre: string } | null;
-  departamentos?: { id: string; nombre: string } | null;
+  departamentos?: { id: string; nombre: string; area: string | null } | null;
   created_at: string;
+}
+
+type Area = "OPERATIVA" | "ADMINISTRATIVA";
+
+/** Las vacantes sin área asignada caen en la columna operativa. */
+function areaDe(v: VacanteRow): Area {
+  return v.departamentos?.area === "ADMINISTRATIVA" ? "ADMINISTRATIVA" : "OPERATIVA";
 }
 
 const ESTADO_LABEL: Record<EstadoPub, string> = {
@@ -107,6 +125,115 @@ const FORM_VACIO: FormState = {
   estado_publicacion: "borrador",
   visible_publicamente: false,
 };
+
+interface SortableCardProps {
+  v: VacanteRow;
+  isPending: boolean;
+  empresaSlug?: string | null;
+  onToggleVisible: (v: VacanteRow, next: boolean) => void;
+  onEditar: (v: VacanteRow) => void;
+  onPublicar: (v: VacanteRow) => void;
+  onCerrar: (v: VacanteRow) => void;
+  onSnippet: (v: VacanteRow) => void;
+  onDelete: (v: VacanteRow) => void;
+}
+
+function SortableVacanteCard({
+  v, isPending, empresaSlug,
+  onToggleVisible, onEditar, onPublicar, onCerrar, onSnippet, onDelete,
+}: SortableCardProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: v.id });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : undefined,
+  };
+
+  return (
+    <Card ref={setNodeRef} style={style} className={`overflow-hidden ${isDragging ? "opacity-80 shadow-lg" : ""}`}>
+      <CardContent className="p-4 flex items-center gap-3">
+        <button
+          type="button"
+          className="shrink-0 cursor-grab touch-none text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing"
+          aria-label="Reordenar"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="font-semibold truncate">{v.titulo}</h3>
+            <Badge variant="outline" className={`text-[10px] ${ESTADO_COLOR[v.estado_publicacion]}`}>
+              {ESTADO_LABEL[v.estado_publicacion]}
+            </Badge>
+            {v.visible_publicamente ? (
+              <Badge variant="outline" className="text-[10px] border-emerald-200 bg-emerald-50 text-emerald-700">
+                <Globe className="h-3 w-3 mr-1" /> Pública
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-[10px]">
+                <EyeOff className="h-3 w-3 mr-1" /> Solo interna
+              </Badge>
+            )}
+          </div>
+          <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-3 gap-y-1">
+            {v.departamentos?.nombre && <span>{v.departamentos.nombre}</span>}
+            {v.puestos?.nombre && <span>· {v.puestos.nombre}</span>}
+            {v.ubicacion && <span>· {v.ubicacion}</span>}
+            {v.tipo_jornada && <span>· {v.tipo_jornada}</span>}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 px-2">
+            <Switch
+              checked={v.visible_publicamente}
+              disabled={isPending || v.estado_publicacion !== "publicada"}
+              onCheckedChange={(n) => onToggleVisible(v, n)}
+              aria-label="Visible en el portal público"
+            />
+            <span className="text-xs text-muted-foreground">Pública</span>
+          </div>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuItem onClick={() => onEditar(v)}>
+                <Pencil className="h-4 w-4 mr-2" /> Editar
+              </DropdownMenuItem>
+              {v.estado_publicacion !== "publicada" && (
+                <DropdownMenuItem onClick={() => onPublicar(v)}>
+                  <Eye className="h-4 w-4 mr-2" /> Publicar
+                </DropdownMenuItem>
+              )}
+              {v.estado_publicacion === "publicada" && (
+                <DropdownMenuItem onClick={() => onCerrar(v)}>
+                  <EyeOff className="h-4 w-4 mr-2" /> Cerrar
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onClick={() => onSnippet(v)} disabled={!empresaSlug}>
+                <Copy className="h-4 w-4 mr-2" /> Compartir / embed
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => onDelete(v)}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="h-4 w-4 mr-2" /> Eliminar
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export function OfertasPublicasTab({ empresaSlug }: { empresaSlug?: string | null }) {
   const [vacantes, setVacantes] = useState<VacanteRow[]>([]);
@@ -251,6 +378,40 @@ export function OfertasPublicasTab({ empresaSlug }: { empresaSlug?: string | nul
 
   const totalPublicas = vacantes.filter((v) => v.visible_publicamente && v.estado_publicacion === "publicada").length;
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor),
+  );
+
+  const operativas = vacantes.filter((v) => areaDe(v) === "OPERATIVA");
+  const administrativas = vacantes.filter((v) => areaDe(v) === "ADMINISTRATIVA");
+
+  function handleDragEnd(area: Area) {
+    return (e: DragEndEvent) => {
+      const { active, over } = e;
+      if (!over || active.id === over.id) return;
+
+      const list = area === "OPERATIVA" ? operativas : administrativas;
+      const oldIndex = list.findIndex((v) => v.id === active.id);
+      const newIndex = list.findIndex((v) => v.id === over.id);
+      if (oldIndex < 0 || newIndex < 0) return;
+
+      const reordered = arrayMove(list, oldIndex, newIndex);
+      const nuevasOperativas = area === "OPERATIVA" ? reordered : operativas;
+      const nuevasAdministrativas = area === "ADMINISTRATIVA" ? reordered : administrativas;
+      const full = [...nuevasOperativas, ...nuevasAdministrativas];
+
+      setVacantes(full); // optimista: el portal usará este mismo orden
+      startTransition(async () => {
+        const res = await reordenarVacantes(full.map((v) => v.id));
+        if (!res.ok) {
+          toast.error("No se pudo guardar el orden");
+          void cargar();
+        }
+      });
+    };
+  }
+
   return (
     <div className="space-y-4">
       {/* ── Header con métrica + acción ───────────────────── */}
@@ -305,80 +466,51 @@ export function OfertasPublicasTab({ empresaSlug }: { empresaSlug?: string | nul
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-2">
-          {vacantes.map((v) => (
-            <Card key={v.id} className="overflow-hidden">
-              <CardContent className="p-4 flex items-center gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-semibold truncate">{v.titulo}</h3>
-                    <Badge variant="outline" className={`text-[10px] ${ESTADO_COLOR[v.estado_publicacion]}`}>
-                      {ESTADO_LABEL[v.estado_publicacion]}
-                    </Badge>
-                    {v.visible_publicamente ? (
-                      <Badge variant="outline" className="text-[10px] border-emerald-200 bg-emerald-50 text-emerald-700">
-                        <Globe className="h-3 w-3 mr-1" /> Pública
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-[10px]">
-                        <EyeOff className="h-3 w-3 mr-1" /> Solo interna
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-3 gap-y-1">
-                    {v.departamentos?.nombre && <span>{v.departamentos.nombre}</span>}
-                    {v.puestos?.nombre && <span>· {v.puestos.nombre}</span>}
-                    {v.ubicacion && <span>· {v.ubicacion}</span>}
-                    {v.tipo_jornada && <span>· {v.tipo_jornada}</span>}
-                  </div>
-                </div>
+        <div className="grid gap-6 md:grid-cols-2 md:gap-8">
+          {([
+            { area: "OPERATIVA" as Area, titulo: "Área operativa", icono: <Utensils className="h-4 w-4" />, lista: operativas },
+            { area: "ADMINISTRATIVA" as Area, titulo: "Área administrativa", icono: <Building2 className="h-4 w-4" />, lista: administrativas },
+          ]).map((col) => (
+            <section key={col.area} className="space-y-3">
+              <div className="flex items-center gap-2 px-1">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  {col.icono}
+                </span>
+                <h3 className="text-sm font-bold text-foreground/80">{col.titulo}</h3>
+                <span className="ml-auto text-xs text-muted-foreground">{col.lista.length}</span>
+              </div>
 
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 px-2">
-                    <Switch
-                      checked={v.visible_publicamente}
-                      disabled={isPending || v.estado_publicacion !== "publicada"}
-                      onCheckedChange={(n) => toggleVisible(v, n)}
-                      aria-label="Visible en el portal público"
-                    />
-                    <span className="text-xs text-muted-foreground">Pública</span>
-                  </div>
-
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-52">
-                      <DropdownMenuItem onClick={() => abrirEditar(v)}>
-                        <Pencil className="h-4 w-4 mr-2" /> Editar
-                      </DropdownMenuItem>
-                      {v.estado_publicacion !== "publicada" && (
-                        <DropdownMenuItem onClick={() => publicar(v)}>
-                          <Eye className="h-4 w-4 mr-2" /> Publicar
-                        </DropdownMenuItem>
-                      )}
-                      {v.estado_publicacion === "publicada" && (
-                        <DropdownMenuItem onClick={() => cerrar(v)}>
-                          <EyeOff className="h-4 w-4 mr-2" /> Cerrar
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem onClick={() => abrirSnippet(v)} disabled={!empresaSlug}>
-                        <Copy className="h-4 w-4 mr-2" /> Compartir / embed
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={() => setConfirmDelete(v)}
-                        className="text-destructive focus:text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" /> Eliminar
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+              {col.lista.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border/60 bg-muted/20 py-10 text-center text-sm text-muted-foreground">
+                  Sin vacantes en esta área
                 </div>
-              </CardContent>
-            </Card>
+              ) : (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd(col.area)}
+                >
+                  <SortableContext items={col.lista.map((v) => v.id)} strategy={verticalListSortingStrategy}>
+                    <div className="space-y-2">
+                      {col.lista.map((v) => (
+                        <SortableVacanteCard
+                          key={v.id}
+                          v={v}
+                          isPending={isPending}
+                          empresaSlug={empresaSlug}
+                          onToggleVisible={toggleVisible}
+                          onEditar={abrirEditar}
+                          onPublicar={publicar}
+                          onCerrar={cerrar}
+                          onSnippet={abrirSnippet}
+                          onDelete={setConfirmDelete}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              )}
+            </section>
           ))}
         </div>
       )}
