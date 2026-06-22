@@ -341,13 +341,11 @@ export async function enviarReclutamientoFaseEmail(
   const subject = sustituirVariablesReclutamiento(tpl.asunto, vars);
   const bodyText = sustituirVariablesReclutamiento(tpl.cuerpo, vars);
 
-  // Pie automático: deja claro que es un correo no monitorizado y redirige las
-  // consultas al correo real de la empresa (si lo hay).
+  // Pie automático: deja claro que es un correo no monitorizado y que no admite
+  // respuestas (sin incluir ninguna dirección de contacto).
   const empresaNombre = vars.empresa_nombre || "la empresa";
-  const empresaEmail = vars.empresa_email;
-  const pieText = empresaEmail
-    ? `Mensaje automático · por favor, no respondas a este correo. Para cualquier consulta, escribe a ${empresaEmail}.`
-    : `Mensaje automático · por favor, no respondas a este correo.`;
+  const pieText =
+    "Este mensaje se ha enviado de forma automática desde una dirección que no admite respuestas. Por favor, no respondas a este correo.";
   const html =
     bodyToHtml(bodyText) +
     `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:600px;margin:0 auto;padding:0 24px 24px"><p style="color:#9ca3af;font-size:12px;line-height:1.5;border-top:1px solid #e5e7eb;margin-top:8px;padding-top:12px">${escapeHtml(pieText)}</p></div>`;
