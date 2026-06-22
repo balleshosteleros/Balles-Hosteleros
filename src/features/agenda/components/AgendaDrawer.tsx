@@ -612,6 +612,9 @@ export function AgendaDrawer({ children }: { children: ReactNode }) {
                 </li>
               );
             })}
+            {filtrados.length % 2 === 1 && (
+              <li aria-hidden className="hidden bg-background lg:block" />
+            )}
           </ul>
         </div>
       </SheetContent>

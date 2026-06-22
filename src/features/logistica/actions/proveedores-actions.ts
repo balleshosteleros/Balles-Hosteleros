@@ -160,7 +160,6 @@ export async function createProveedor(input: ProveedorImport) {
       condiciones_pago: input.condicionesPago ?? null,
       plazo_entrega: input.plazoEntrega ?? null,
       observaciones: input.observaciones ?? null,
-      observaciones_logisticas: input.observacionesLogisticas ?? null,
       comentarios_internos: input.comentariosInternos ?? null,
       created_by: user.id,
     });
@@ -230,7 +229,6 @@ export async function updateProveedor(id: string, input: Partial<ProveedorImport
     if (input.condicionesPago !== undefined) updates.condiciones_pago = input.condicionesPago;
     if (input.plazoEntrega !== undefined) updates.plazo_entrega = input.plazoEntrega;
     if (input.observaciones !== undefined) updates.observaciones = input.observaciones;
-    if (input.observacionesLogisticas !== undefined) updates.observaciones_logisticas = input.observacionesLogisticas;
     if (input.comentariosInternos !== undefined) updates.comentarios_internos = input.comentariosInternos;
 
     const { error } = await supabase.from("proveedores").update(updates).eq("id", id);
@@ -349,7 +347,6 @@ export async function bulkImportProveedores(proveedores: ProveedorImport[]) {
         condiciones_pago: p.condicionesPago ?? null,
         plazo_entrega: p.plazoEntrega ?? null,
         observaciones: p.observaciones ?? null,
-        observaciones_logisticas: p.observacionesLogisticas ?? null,
         comentarios_internos: p.comentariosInternos ?? null,
         created_by: user.id,
       }));
