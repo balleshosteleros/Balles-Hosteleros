@@ -40,13 +40,18 @@ function slugify(label: string): string {
     .slice(0, 40) || `estado_${Math.floor(Math.random() * 1e6)}`;
 }
 
-/** Normaliza la lista de estados: agrupa por fase en orden y reasigna `orden` 1..n. */
+/**
+ * Normaliza la lista de estados: agrupa por fase en orden, reasigna `orden` 1..n
+ * y FUERZA el color de cada estado al color oficial de su fase (obligatorio de
+ * serie — todos los estados de una fase comparten el mismo color, sin excepción).
+ */
 function normalizarEstados(estados: PlantillaEstadoItem[]): PlantillaEstadoItem[] {
   const out: PlantillaEstadoItem[] = [];
   let orden = 1;
   for (const fase of FASES_ORDER) {
+    const color = FASES_PLANTILLA_ESTADO[fase].color;
     for (const e of estados.filter((x) => x.fase === fase)) {
-      out.push({ ...e, orden: orden++ });
+      out.push({ ...e, color, orden: orden++ });
     }
   }
   return out;
@@ -296,15 +301,9 @@ export function PlantillasEstadoTab() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-bold text-foreground">Plantillas de estados</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            La consecución de estados del pipeline. Al crear una vacante se elige una de estas plantillas.
-          </p>
-        </div>
-        <Button onClick={() => setCreando(true)} className="gap-1.5 shrink-0">
-          <Plus className="h-4 w-4" /> Nueva plantilla
+      <div className="flex items-center gap-2">
+        <Button onClick={() => setCreando(true)} className="gap-1.5">
+          <Plus className="h-4 w-4" /> Nuevo
         </Button>
       </div>
 

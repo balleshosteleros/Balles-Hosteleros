@@ -287,19 +287,8 @@ function PlantillasEmailTab() {
     })();
   };
 
-  const activasCount = plantillas.filter((p) => p.activa).length;
-
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h2 className="text-lg font-bold text-foreground">Plantillas de email</h2>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Una plantilla por cada estado del proceso de selección. Cuando un candidato pasa a ese estado dentro de una vacante, se le envía este correo.
-          {!loading && <> {" "}{activasCount} de {plantillas.length} activas.</>}
-        </p>
-      </div>
-
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[200px] max-w-xs">
