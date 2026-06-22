@@ -23,7 +23,7 @@ export async function getOpcionesSegmento(): Promise<OpcionesSegmento> {
         .from("departamentos")
         .select("id, nombre")
         .eq("empresa_id", empresaId)
-        .eq("activo", true)
+        .eq("estado", "Activo")
         .order("nombre", { ascending: true }),
       supabase
         .from("empresa_roles")
