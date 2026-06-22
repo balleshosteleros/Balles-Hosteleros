@@ -4,18 +4,22 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, ArrowLeft, Send, CheckCircle2, Paperclip } from "lucide-react";
+import { Loader2, ArrowLeft, ArrowRight, Send, CheckCircle2, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { normalizarNombre } from "@/shared/lib/normalizar-nombre";
+import type { CuestionarioPublico } from "@/features/empleo-publico/services/empleo-fetch";
+import type { RespuestasCuestionario } from "@/features/rrhh/data/cuestionario-vacante";
 
 interface Props {
   empresaSlug: string;
   empresaId: string;
   ofertaId: string;
   ofertaTitulo: string;
+  canalCodigo?: string | null;
+  cuestionario?: CuestionarioPublico | null;
 }
 
 interface FormState {
@@ -38,40 +42,57 @@ const VACIO: FormState = {
 
 const MAX_CV_BYTES = 5 * 1024 * 1024;
 
-export function FormCandidaturaPublica({ empresaSlug, empresaId, ofertaId, ofertaTitulo }: Props) {
+type Paso = "datos" | "cuestionario";
+
+export function FormCandidaturaPublica({
+  empresaSlug, empresaId, ofertaId, ofertaTitulo, canalCodigo = null, cuestionario = null,
+}: Props) {
   const router = useRouter();
   const [form, setForm] = useState<FormState>(VACIO);
+  const [respuestas, setRespuestas] = useState<RespuestasCuestionario>({});
+  const [paso, setPaso] = useState<Paso>("datos");
   const [enviado, setEnviado] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  const tieneCuestionario = !!cuestionario && cuestionario.preguntas.length > 0;
 
   function update<K extends keyof FormState>(k: K, v: FormState[K]) {
     setForm((p) => ({ ...p, [k]: v }));
   }
 
-  function validar(): string | null {
+  function validarDatos(): string | null {
     if (!form.nombre.trim()) return "El nombre es obligatorio";
     if (!form.apellidos.trim()) return "Los apellidos son obligatorios";
     if (!form.email.trim()) return "El email es obligatorio";
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return "Email no válido";
     if (!form.telefono.trim()) return "El teléfono es obligatorio";
-    if (form.cv && form.cv.size > MAX_CV_BYTES) {
-      return "El CV no puede superar 5MB";
-    }
-    if (form.cv && form.cv.type !== "application/pdf") {
-      return "El CV debe ser un PDF";
+    if (form.cv && form.cv.size > MAX_CV_BYTES) return "El CV no puede superar 5MB";
+    if (form.cv && form.cv.type !== "application/pdf") return "El CV debe ser un PDF";
+    return null;
+  }
+
+  function validarCuestionario(): string | null {
+    if (!cuestionario) return null;
+    for (const p of cuestionario.preguntas) {
+      if (p.obligatoria && !respuestas[p.id]) return "Responde todas las preguntas del cuestionario";
     }
     return null;
   }
 
-  function enviar(e: React.FormEvent) {
-    e.preventDefault();
+  function continuar() {
     setError(null);
-    const err = validar();
-    if (err) {
-      setError(err);
-      return;
-    }
+    const err = validarDatos();
+    if (err) { setError(err); return; }
+    setPaso("cuestionario");
+  }
+
+  function enviar() {
+    setError(null);
+    const errDatos = validarDatos();
+    if (errDatos) { setError(errDatos); setPaso("datos"); return; }
+    const errCuest = validarCuestionario();
+    if (errCuest) { setError(errCuest); return; }
 
     startTransition(async () => {
       try {
@@ -84,12 +105,11 @@ export function FormCandidaturaPublica({ empresaSlug, empresaId, ofertaId, ofert
         fd.set("email", form.email.trim().toLowerCase());
         fd.set("telefono", form.telefono.trim());
         fd.set("carta_presentacion", form.carta_presentacion.trim());
+        if (canalCodigo) fd.set("canal_codigo", canalCodigo);
         if (form.cv) fd.set("cv", form.cv);
+        if (tieneCuestionario) fd.set("respuestas", JSON.stringify(respuestas));
 
-        const res = await fetch("/api/empleo/candidatura", {
-          method: "POST",
-          body: fd,
-        });
+        const res = await fetch("/api/empleo/candidatura", { method: "POST", body: fd });
         const data = await res.json();
         if (!res.ok || !data.ok) {
           throw new Error(data.error ?? "Error al enviar la candidatura");
@@ -101,6 +121,14 @@ export function FormCandidaturaPublica({ empresaSlug, empresaId, ofertaId, ofert
         toast.error(msg);
       }
     });
+  }
+
+  function reiniciar() {
+    setForm(VACIO);
+    setRespuestas({});
+    setPaso("datos");
+    setEnviado(false);
+    router.refresh();
   }
 
   if (enviado) {
@@ -119,16 +147,84 @@ export function FormCandidaturaPublica({ empresaSlug, empresaId, ofertaId, ofert
               <ArrowLeft className="h-4 w-4 mr-1.5" /> Ver más ofertas
             </Link>
           </Button>
-          <Button onClick={() => { setForm(VACIO); setEnviado(false); router.refresh(); }}>
-            Enviar otra candidatura
+          <Button onClick={reiniciar}>Enviar otra candidatura</Button>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Paso 2: cuestionario ───────────────────────────────────────
+  if (paso === "cuestionario" && cuestionario) {
+    return (
+      <div className="rounded-lg border bg-card p-5 md:p-6 space-y-5">
+        <div>
+          <h2 className="text-lg font-semibold">{cuestionario.nombre}</h2>
+          {cuestionario.descripcion && (
+            <p className="text-sm text-muted-foreground mt-1.5 whitespace-pre-line">
+              {cuestionario.descripcion}
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-5">
+          {cuestionario.preguntas.map((p, idx) => (
+            <fieldset key={p.id} className="space-y-2.5">
+              <legend className="text-sm font-medium text-foreground">
+                {idx + 1}. {p.titulo}
+                {p.obligatoria && <span className="text-destructive ml-0.5">*</span>}
+              </legend>
+              <div className="space-y-2">
+                {p.opciones.map((o) => {
+                  const checked = respuestas[p.id] === o.id;
+                  return (
+                    <label
+                      key={o.id}
+                      className={`flex items-start gap-2.5 rounded-md border px-3 py-2.5 text-sm cursor-pointer transition-colors ${
+                        checked ? "border-primary bg-primary/5" : "border-input hover:bg-accent"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name={p.id}
+                        value={o.id}
+                        checked={checked}
+                        onChange={() => setRespuestas((prev) => ({ ...prev, [p.id]: o.id }))}
+                        className="mt-0.5 accent-primary"
+                      />
+                      <span className="text-foreground/90">{o.texto}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+          ))}
+        </div>
+
+        {error && (
+          <div className="rounded-md bg-destructive/10 text-destructive text-sm px-3 py-2 border border-destructive/20">
+            {error}
+          </div>
+        )}
+
+        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">
+          <Button variant="outline" onClick={() => { setError(null); setPaso("datos"); }} disabled={pending}>
+            <ArrowLeft className="h-4 w-4 mr-1.5" /> Volver
+          </Button>
+          <Button onClick={enviar} disabled={pending} size="lg">
+            {pending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Send className="h-4 w-4 mr-1.5" />}
+            Enviar candidatura
           </Button>
         </div>
       </div>
     );
   }
 
+  // ─── Paso 1: datos ──────────────────────────────────────────────
   return (
-    <form onSubmit={enviar} className="rounded-lg border bg-card p-5 md:p-6 space-y-4">
+    <form
+      onSubmit={(e) => { e.preventDefault(); if (tieneCuestionario) continuar(); else enviar(); }}
+      className="rounded-lg border bg-card p-5 md:p-6 space-y-4"
+    >
       <h2 className="text-lg font-semibold">Postular a esta oferta</h2>
 
       <div className="grid sm:grid-cols-2 gap-3">
@@ -225,10 +321,12 @@ export function FormCandidaturaPublica({ empresaSlug, empresaId, ofertaId, ofert
         <Button type="submit" disabled={pending} size="lg">
           {pending ? (
             <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+          ) : tieneCuestionario ? (
+            <ArrowRight className="h-4 w-4 mr-1.5" />
           ) : (
             <Send className="h-4 w-4 mr-1.5" />
           )}
-          Enviar candidatura
+          {tieneCuestionario ? "Continuar al cuestionario" : "Enviar candidatura"}
         </Button>
       </div>
     </form>

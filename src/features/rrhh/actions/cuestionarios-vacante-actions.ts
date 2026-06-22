@@ -40,6 +40,11 @@ function rowToCuestionario(r: CuestionarioRow, usado: boolean): CuestionarioVaca
   };
 }
 
+/** Normaliza: todas las preguntas son obligatorias (la nota es sobre el total). */
+function normalizarPreguntas(preguntas: PreguntaCuestionario[]): PreguntaCuestionario[] {
+  return preguntas.map((p) => ({ ...p, obligatoria: true }));
+}
+
 /** Valida las preguntas. Devuelve mensaje de error o null si todo correcto. */
 function validarPreguntas(preguntas: PreguntaCuestionario[]): string | null {
   if (preguntas.length === 0) return "Añade al menos una pregunta";
@@ -125,7 +130,8 @@ export async function createCuestionarioVacante(input: {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
     if (!input.nombre?.trim()) return { ok: false, error: "El nombre es obligatorio" };
-    const errPreg = validarPreguntas(input.preguntas);
+    const preguntas = normalizarPreguntas(input.preguntas);
+    const errPreg = validarPreguntas(preguntas);
     if (errPreg) return { ok: false, error: errPreg };
 
     const { data, error } = await supabase
@@ -134,7 +140,7 @@ export async function createCuestionarioVacante(input: {
         empresa_id: empresaId,
         nombre: input.nombre.trim(),
         descripcion: input.descripcion ?? null,
-        preguntas: input.preguntas,
+        preguntas,
         es_default: false,
         activa: true,
       })
@@ -158,7 +164,8 @@ export async function updateCuestionarioVacante(
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
     if (!input.nombre?.trim()) return { ok: false, error: "El nombre es obligatorio" };
-    const errPreg = validarPreguntas(input.preguntas);
+    const preguntas = normalizarPreguntas(input.preguntas);
+    const errPreg = validarPreguntas(preguntas);
     if (errPreg) return { ok: false, error: errPreg };
 
     // Bloqueo: si ya lo usó algún candidato, no se puede editar (rompería las
@@ -179,7 +186,7 @@ export async function updateCuestionarioVacante(
       .update({
         nombre: input.nombre.trim(),
         descripcion: input.descripcion ?? null,
-        preguntas: input.preguntas,
+        preguntas,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)

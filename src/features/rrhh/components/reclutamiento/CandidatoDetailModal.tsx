@@ -67,6 +67,10 @@ import {
   type Vacante,
 } from "@/features/rrhh/data/reclutamiento";
 import { useCriteriosResena } from "@/features/rrhh/data/criteriosResenaStore";
+import {
+  getRespuestaCuestionarioCandidato,
+  type RespuestaCuestionarioCandidato,
+} from "@/features/rrhh/actions/cuestionarios-vacante-actions";
 import { toast } from "sonner";
 
 const CURRENT_USER = "Admin RRHH";
@@ -95,6 +99,16 @@ export function CandidatoDetailModal({
   onMoverEstado,
 }: CandidatoDetailModalProps) {
   const [tab, setTab] = useState<TabKey>("informacion");
+  const [respuestaCuest, setRespuestaCuest] = useState<RespuestaCuestionarioCandidato | null>(null);
+
+  useEffect(() => {
+    if (!candidato) { setRespuestaCuest(null); return; }
+    let cancel = false;
+    void getRespuestaCuestionarioCandidato(candidato.id).then((res) => {
+      if (!cancel) setRespuestaCuest(res.data ?? null);
+    });
+    return () => { cancel = true; };
+  }, [candidato]);
 
   const index = useMemo(() => {
     if (!candidato) return -1;
@@ -198,7 +212,16 @@ export function CandidatoDetailModal({
                     <TabTriggerWithCount
                       label="Cuestionarios"
                       value="cuestionarios"
-                      count={vacante.cuestionario ? "KO" : undefined}
+                      count={respuestaCuest ? `${respuestaCuest.nota}/10` : undefined}
+                      tone={
+                        respuestaCuest
+                          ? respuestaCuest.nota >= 7
+                            ? "good"
+                            : respuestaCuest.nota >= 5
+                              ? "warn"
+                              : "bad"
+                          : "auto"
+                      }
                     />
                     <TabTriggerWithCount
                       label="Actividad"
@@ -224,7 +247,7 @@ export function CandidatoDetailModal({
                       <InformacionTab candidato={candidato} />
                     </TabsContent>
                     <TabsContent value="cuestionarios" className="m-0 outline-none">
-                      <CuestionariosTab vacante={vacante} />
+                      <CuestionariosTab vacante={vacante} respuesta={respuestaCuest} />
                     </TabsContent>
                     <TabsContent value="actividad" className="m-0 outline-none">
                       <ActividadTab candidato={candidato} />
@@ -483,11 +506,26 @@ function TabTriggerWithCount({
   label,
   value,
   count,
+  tone = "auto",
 }: {
   label: string;
   value: string;
   count?: number | string;
+  /** "auto" = string→rosa, número→neutro; o forzar good/warn/bad/neutral. */
+  tone?: "auto" | "good" | "warn" | "bad" | "neutral";
 }) {
+  const toneClass =
+    tone === "good"
+      ? "bg-emerald-100 text-emerald-700"
+      : tone === "warn"
+        ? "bg-amber-100 text-amber-700"
+        : tone === "bad"
+          ? "bg-rose-100 text-rose-700"
+          : tone === "neutral"
+            ? "bg-muted text-muted-foreground"
+            : typeof count === "string"
+              ? "bg-rose-100 text-rose-700"
+              : "bg-muted text-muted-foreground";
   return (
     <TabsTrigger
       value={value}
@@ -496,11 +534,7 @@ function TabTriggerWithCount({
       <span>{label}</span>
       {count !== undefined && (
         <span
-          className={`ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded text-[10px] font-semibold ${
-            typeof count === "string"
-              ? "bg-rose-100 text-rose-700"
-              : "bg-muted text-muted-foreground"
-          }`}
+          className={`ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded text-[10px] font-semibold ${toneClass}`}
         >
           {count}
         </span>
@@ -554,20 +588,100 @@ function InformacionTab({ candidato }: { candidato: Candidato }) {
 }
 
 // ─── Cuestionarios Tab ────────────────────────────────────────
-function CuestionariosTab({ vacante }: { vacante: Vacante }) {
-  if (!vacante.cuestionario) {
+function notaColor(nota: number): string {
+  if (nota >= 7) return "hsl(145, 63%, 42%)";
+  if (nota >= 5) return "hsl(45, 90%, 45%)";
+  return "hsl(0, 72%, 51%)";
+}
+
+function CuestionariosTab({
+  vacante,
+  respuesta,
+}: {
+  vacante: Vacante;
+  respuesta: RespuestaCuestionarioCandidato | null;
+}) {
+  if (!respuesta) {
     return (
       <p className="text-sm text-muted-foreground">
-        Esta vacante no tiene cuestionario asociado.
+        {vacante.cuestionario
+          ? "El candidato aún no ha respondido al cuestionario."
+          : "Esta vacante no tiene cuestionario asociado."}
       </p>
     );
   }
+
+  const color = notaColor(respuesta.nota);
+
   return (
-    <Section title="Cuestionario de la vacante">
-      <p className="text-sm text-muted-foreground">
-        El candidato aún no ha respondido al cuestionario.
-      </p>
-    </Section>
+    <div className="space-y-5">
+      {/* Nota destacada */}
+      <div className="flex items-center gap-4 rounded-xl border border-border p-4">
+        <div
+          className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-full font-bold"
+          style={{ backgroundColor: `${color}22`, color }}
+        >
+          <span className="text-xl leading-none">{respuesta.nota}</span>
+          <span className="text-[10px] font-medium opacity-80">/ 10</span>
+        </div>
+        <div>
+          <h4 className="text-sm font-semibold text-foreground">
+            {respuesta.cuestionarioNombre ?? "Cuestionario"}
+          </h4>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {respuesta.aciertos} de {respuesta.totalPreguntas} respuestas correctas
+          </p>
+        </div>
+      </div>
+
+      {/* Detalle pregunta a pregunta */}
+      <div className="space-y-3">
+        {respuesta.preguntas.map((p, idx) => {
+          const elegidaId = respuesta.respuestas[p.id];
+          const correctaId = p.opciones.find((o) => o.correcta)?.id;
+          const acerto = !!elegidaId && elegidaId === correctaId;
+          return (
+            <div key={p.id} className="rounded-lg border border-border p-3">
+              <p className="text-sm font-medium text-foreground mb-2">
+                {idx + 1}. {p.titulo}
+              </p>
+              <div className="space-y-1.5">
+                {p.opciones.map((o) => {
+                  const esElegida = o.id === elegidaId;
+                  const esCorrecta = o.correcta;
+                  return (
+                    <div
+                      key={o.id}
+                      className={`flex items-start gap-2 rounded-md px-2.5 py-1.5 text-xs ${
+                        esCorrecta
+                          ? "bg-emerald-50 text-emerald-800"
+                          : esElegida
+                            ? "bg-rose-50 text-rose-800"
+                            : "text-muted-foreground"
+                      }`}
+                    >
+                      <span className="mt-0.5 shrink-0">
+                        {esCorrecta ? "✓" : esElegida ? "✗" : "·"}
+                      </span>
+                      <span>
+                        {o.texto}
+                        {esElegida && <span className="ml-1.5 font-medium">(respuesta del candidato)</span>}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              {!elegidaId && (
+                <p className="mt-1.5 text-[11px] text-muted-foreground italic">Sin responder</p>
+              )}
+              {elegidaId && !acerto && (
+                <p className="mt-1.5 text-[11px] text-rose-600">Respuesta incorrecta</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

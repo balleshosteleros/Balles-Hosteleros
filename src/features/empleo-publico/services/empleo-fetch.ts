@@ -4,6 +4,14 @@
  * Usado por las rutas /empleo/[slug] y /empleo/[slug]/[oferta-id].
  */
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+import type { PreguntaCuestionario } from "@/features/rrhh/data/cuestionario-vacante";
+
+export interface CuestionarioPublico {
+  id: string;
+  nombre: string;
+  descripcion: string | null;
+  preguntas: PreguntaCuestionario[];
+}
 
 function serviceClient() {
   return createServiceClient(
@@ -41,6 +49,8 @@ export interface OfertaPublica {
   area: "OPERATIVA" | "ADMINISTRATIVA" | null;
   orden: number | null;
   puesto_nombre: string | null;
+  /** Cuestionario obligatorio asociado (solo se rellena en el detalle de oferta). */
+  cuestionarioPlantilla?: CuestionarioPublico | null;
 }
 
 export interface EmpleoPortal {
@@ -103,6 +113,7 @@ interface VacanteRow {
   tipo_jornada: string | null;
   salario_rango: string | null;
   cuestionario: boolean;
+  cuestionario_plantilla_id: string | null;
   fecha_creacion: string;
   orden: number | null;
   visible_publicamente: boolean;
@@ -200,7 +211,8 @@ export async function fetchOfertaPublica(
       .from("vacantes")
       .select(`
         id, empresa_id, titulo, descripcion, categoria, ubicacion,
-        tipo_jornada, salario_rango, cuestionario, fecha_creacion, orden,
+        tipo_jornada, salario_rango, cuestionario, cuestionario_plantilla_id,
+        fecha_creacion, orden,
         visible_publicamente, estado_publicacion,
         departamento_id, puesto_id,
         departamentos(nombre, area),
@@ -214,9 +226,38 @@ export async function fetchOfertaPublica(
 
     if (ofertaErr || !ofertaRow) return null;
 
+    const oferta = rowToOferta(ofertaRow);
+
+    // Cuestionario obligatorio (si la vacante lo tiene asignado).
+    if (ofertaRow.cuestionario_plantilla_id) {
+      const { data: cuest } = await supabase
+        .from("reclutamiento_plantillas_cuestionario")
+        .select("id, nombre, descripcion, preguntas, activa")
+        .eq("id", ofertaRow.cuestionario_plantilla_id)
+        .eq("empresa_id", empresa.id)
+        .maybeSingle();
+      if (cuest && cuest.activa && Array.isArray(cuest.preguntas) && cuest.preguntas.length > 0) {
+        // SEGURIDAD: nunca enviamos al navegador qué opción es la correcta
+        // (el candidato podría verlo en el código). La nota se calcula en el
+        // servidor (/api/empleo/candidatura) leyendo la plantilla desde la BD.
+        const preguntasPublicas: PreguntaCuestionario[] = (cuest.preguntas as PreguntaCuestionario[]).map(
+          (p) => ({
+            ...p,
+            opciones: p.opciones.map((o) => ({ id: o.id, texto: o.texto, correcta: false })),
+          }),
+        );
+        oferta.cuestionarioPlantilla = {
+          id: cuest.id as string,
+          nombre: cuest.nombre as string,
+          descripcion: (cuest.descripcion as string | null) ?? null,
+          preguntas: preguntasPublicas,
+        };
+      }
+    }
+
     return {
       empresa: rowToEmpresa(empresa),
-      oferta: rowToOferta(ofertaRow),
+      oferta,
     };
   } catch (err) {
     console.error("[empleo-fetch] fatal:", err);

@@ -18,10 +18,13 @@ const JORNADA_LABEL: Record<string, string> = {
 
 export default async function OfertaPublicaPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string; oferta: string }>;
+  searchParams: Promise<{ o?: string }>;
 }) {
   const { slug, oferta: ofertaId } = await params;
+  const { o: canalCodigo } = await searchParams;
   const detalle = await fetchOfertaPublica(slug, ofertaId);
   if (!detalle) notFound();
   const { empresa, oferta } = detalle;
@@ -87,6 +90,8 @@ export default async function OfertaPublicaPage({
           empresaId={empresa.id}
           ofertaId={oferta.id}
           ofertaTitulo={oferta.titulo}
+          canalCodigo={canalCodigo ?? null}
+          cuestionario={oferta.cuestionarioPlantilla ?? null}
         />
       </div>
     </EmpleoBrandingShell>

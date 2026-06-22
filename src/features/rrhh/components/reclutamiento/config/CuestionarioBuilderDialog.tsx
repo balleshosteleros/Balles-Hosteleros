@@ -170,7 +170,9 @@ export function CuestionarioBuilderDialog({ open, onOpenChange, cuestionarioId, 
 
   function guardar() {
     startTransition(async () => {
-      const payload = { nombre, descripcion: descripcion || null, preguntas };
+      // Todas las preguntas son obligatorias (la nota se calcula sobre el total).
+      const preguntasNorm = preguntas.map((p) => ({ ...p, obligatoria: true }));
+      const payload = { nombre, descripcion: descripcion || null, preguntas: preguntasNorm };
       const res = cuestionarioId
         ? await updateCuestionarioVacante(cuestionarioId, payload)
         : await createCuestionarioVacante(payload);
@@ -324,15 +326,10 @@ function PreguntaCard({
           </button>
         )}
         <span className="text-sm font-semibold text-foreground">Pregunta {indice + 1}</span>
+        <span className="text-[10px] font-medium text-muted-foreground rounded bg-muted px-1.5 py-0.5">
+          Obligatoria
+        </span>
         <div className="ml-auto flex items-center gap-3">
-          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            Obligatoria
-            <Switch
-              checked={pregunta.obligatoria}
-              disabled={readOnly}
-              onCheckedChange={(v) => onPatch({ obligatoria: v })}
-            />
-          </label>
           {!readOnly && (
             <>
               <button type="button" onClick={onDuplicar} className="text-muted-foreground hover:text-foreground" title="Duplicar">
@@ -377,7 +374,12 @@ function PreguntaCard({
 
         {/* Opciones */}
         <div className="space-y-2.5">
-          <p className="text-sm font-semibold text-foreground">Opciones de respuesta</p>
+          <div>
+            <p className="text-sm font-semibold text-foreground">Opciones de respuesta</p>
+            <p className="text-[11px] text-muted-foreground">
+              Marca cuál es la respuesta correcta (obligatorio, una por pregunta).
+            </p>
+          </div>
           {pregunta.opciones.map((o, i) => (
             <div key={o.id} className="space-y-1">
               <div className="flex items-center justify-between">

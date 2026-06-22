@@ -3,6 +3,11 @@ import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import crypto from "node:crypto";
 import { normalizarNombre } from "@/shared/lib/normalizar-nombre";
+import {
+  calcularNotaCuestionario,
+  type PreguntaCuestionario,
+  type RespuestasCuestionario,
+} from "@/features/rrhh/data/cuestionario-vacante";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -13,8 +18,8 @@ const RATE_LIMIT_MAX = 5;
 
 const CandidaturaSchema = z.object({
   empresa_slug: z.string().min(1).max(80),
-  empresa_id: z.string().uuid(),
-  oferta_id: z.string().uuid(),
+  empresa_id: z.string().guid(),
+  oferta_id: z.string().guid(),
   nombre: z.string().min(1).max(80),
   apellidos: z.string().min(1).max(120),
   email: z.string().email().max(180),
@@ -99,7 +104,22 @@ export async function POST(req: Request) {
   try {
     const fd = await req.formData();
     const captchaToken = (fd.get("captcha_token") as string | null) ?? null;
+    const canalCodigo = String(fd.get("canal_codigo") ?? "").trim().toUpperCase();
     const cv = fd.get("cv") as File | null;
+
+    // Respuestas del cuestionario (mapa { preguntaId: opcionId }), si las hay.
+    let respuestasCuestionario: RespuestasCuestionario = {};
+    const respuestasRaw = String(fd.get("respuestas") ?? "").trim();
+    if (respuestasRaw) {
+      try {
+        const parsedResp = JSON.parse(respuestasRaw);
+        if (parsedResp && typeof parsedResp === "object") {
+          respuestasCuestionario = parsedResp as RespuestasCuestionario;
+        }
+      } catch {
+        return NextResponse.json({ ok: false, error: "Respuestas del cuestionario no válidas" }, { status: 400 });
+      }
+    }
 
     const parsed = CandidaturaSchema.safeParse({
       empresa_slug: String(fd.get("empresa_slug") ?? "").trim(),
@@ -147,7 +167,7 @@ export async function POST(req: Request) {
     // Verificar que la oferta existe y es pública
     const { data: vacante, error: vacErr } = await supabase
       .from("vacantes")
-      .select("id, empresa_id, puesto_id, departamento_id, estado_publicacion, visible_publicamente")
+      .select("id, empresa_id, puesto_id, departamento_id, estado_publicacion, visible_publicamente, cuestionario_plantilla_id")
       .eq("id", ofertaId)
       .eq("empresa_id", empresaId)
       .maybeSingle();
@@ -157,6 +177,66 @@ export async function POST(req: Request) {
     }
     if (!vacante.visible_publicamente || vacante.estado_publicacion !== "publicada") {
       return NextResponse.json({ ok: false, error: "Esta oferta no está abierta" }, { status: 410 });
+    }
+
+    // Cuestionario obligatorio: si la vacante lo tiene asignado, validamos y
+    // calculamos la nota EN SERVIDOR (no nos fiamos del navegador).
+    let cuestionarioCalc: {
+      plantillaId: string;
+      nombre: string;
+      preguntas: PreguntaCuestionario[];
+      aciertos: number;
+      total: number;
+      nota: number;
+    } | null = null;
+    if (vacante.cuestionario_plantilla_id) {
+      const { data: plantilla } = await supabase
+        .from("reclutamiento_plantillas_cuestionario")
+        .select("id, nombre, preguntas, activa")
+        .eq("id", vacante.cuestionario_plantilla_id)
+        .eq("empresa_id", empresaId)
+        .maybeSingle();
+      const preguntas = (Array.isArray(plantilla?.preguntas) ? plantilla?.preguntas : []) as PreguntaCuestionario[];
+      if (plantilla && plantilla.activa && preguntas.length > 0) {
+        const faltaObligatoria = preguntas.some(
+          (p) => p.obligatoria && !respuestasCuestionario[p.id],
+        );
+        if (faltaObligatoria) {
+          return NextResponse.json(
+            { ok: false, error: "Debes responder todas las preguntas del cuestionario" },
+            { status: 400 },
+          );
+        }
+        const { aciertos, total, nota } = calcularNotaCuestionario(preguntas, respuestasCuestionario);
+        cuestionarioCalc = {
+          plantillaId: plantilla.id as string,
+          nombre: plantilla.nombre as string,
+          preguntas,
+          aciertos,
+          total,
+          nota,
+        };
+      }
+    }
+
+    // Atribución de canal: si la candidatura llega por un enlace ?o=<codigo>,
+    // hereda su origen_categoria y queda vinculada al enlace concreto.
+    let origen = "web";
+    let canalLinkId: string | null = null;
+    let canalNombre: string | null = null;
+    if (canalCodigo) {
+      const { data: link } = await supabase
+        .from("empleo_links")
+        .select("id, nombre, origen_categoria")
+        .eq("empresa_id", empresaId)
+        .eq("activo", true)
+        .ilike("codigo", canalCodigo)
+        .maybeSingle();
+      if (link) {
+        origen = (link.origen_categoria as string) ?? "web";
+        canalLinkId = link.id as string;
+        canalNombre = (link.nombre as string) ?? null;
+      }
     }
 
     // Subida del CV (si existe)
@@ -190,7 +270,9 @@ export async function POST(req: Request) {
         telefono,
         cv_url: cvUrl,
         carta_presentacion: cartaPresentacion || null,
-        origen: "web",
+        origen,
+        canal_link_id: canalLinkId,
+        canal_nombre: canalNombre,
         fase: "nuevo",
         estado: "nuevo",
       })
@@ -200,6 +282,32 @@ export async function POST(req: Request) {
     if (insErr) {
       console.error("[candidatura] insert error:", insErr.message);
       return NextResponse.json({ ok: false, error: "No se pudo registrar la candidatura" }, { status: 500 });
+    }
+
+    // Guardar respuestas + nota del cuestionario (snapshot verbatim) y reflejar
+    // la nota en la ficha del candidato (`puntuacion`, entero 0–10).
+    if (cuestionarioCalc) {
+      const { error: respErr } = await supabase
+        .from("candidato_cuestionario_respuestas")
+        .insert({
+          empresa_id: empresaId,
+          candidato_id: candidato.id,
+          cuestionario_plantilla_id: cuestionarioCalc.plantillaId,
+          cuestionario_nombre: cuestionarioCalc.nombre,
+          preguntas_snapshot: cuestionarioCalc.preguntas,
+          respuestas: respuestasCuestionario,
+          aciertos: cuestionarioCalc.aciertos,
+          total_preguntas: cuestionarioCalc.total,
+          nota: cuestionarioCalc.nota,
+        });
+      if (respErr) {
+        console.error("[candidatura] cuestionario insert error:", respErr.message);
+      } else {
+        await supabase
+          .from("candidatos")
+          .update({ puntuacion: Math.round(cuestionarioCalc.nota) })
+          .eq("id", candidato.id);
+      }
     }
 
     return NextResponse.json({ ok: true, id: candidato.id });
