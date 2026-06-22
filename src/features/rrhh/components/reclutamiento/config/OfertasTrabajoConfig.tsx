@@ -8,6 +8,7 @@ import {
   ESTADOS_CONFIG,
   TIPO_JORNADA_LABELS,
 } from "@/features/rrhh/data/reclutamiento";
+import { CuestionariosVacanteManager } from "./CuestionariosVacanteManager";
 
 export function OfertasTrabajoConfig() {
   return (
@@ -75,20 +76,7 @@ export function OfertasTrabajoConfig() {
       </Card>
 
       {/* Cuestionarios */}
-      <Card>
-        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-          <div>
-            <h3 className="font-semibold text-foreground text-sm">Cuestionarios</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">Formularios adicionales para candidatos al inscribirse</p>
-          </div>
-          <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8">
-            <Plus className="h-3.5 w-3.5" /> Crear cuestionario
-          </Button>
-        </div>
-        <CardContent className="py-10 text-center text-sm text-muted-foreground">
-          No hay cuestionarios configurados
-        </CardContent>
-      </Card>
+      <CuestionariosVacanteManager />
     </div>
   );
 }

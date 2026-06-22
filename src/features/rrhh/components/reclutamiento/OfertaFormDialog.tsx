@@ -20,6 +20,17 @@ import {
   listPuestosCatalogo, listDepartamentosCatalogo,
 } from "@/features/rrhh/actions/vacantes-actions";
 import { listJornadas, type JornadaRow } from "@/features/rrhh/actions/jornadas-actions";
+import { listCuestionariosVacante } from "@/features/rrhh/actions/cuestionarios-vacante-actions";
+import type { CuestionarioVacante } from "@/features/rrhh/data/cuestionario-vacante";
+import {
+  listPlantillasEstado,
+  type PlantillaEstadoRow,
+} from "@/features/rrhh/actions/plantillas-reclutamiento-actions";
+import {
+  listReclutamientoEmailPlantillas,
+  type ReclutamientoEmailPlantilla,
+} from "@/features/rrhh/actions/reclutamiento-email-plantillas-actions";
+import { FASES_PLANTILLA_ESTADO } from "@/lib/seeds/reclutamiento-plantilla-estados";
 import { useReglasSubmodulo } from "@/features/ajustes/hooks/use-reglas-submodulo";
 import { ValidacionFaltantesDialog } from "@/features/ajustes/components/ValidacionFaltantesDialog";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
@@ -38,7 +49,14 @@ interface FormState {
   salario_rango: string;
   estado_publicacion: EstadoPub;
   visible_publicamente: boolean;
+  cuestionario_plantilla_id: string;
+  plantilla_estado_id: string;
+  /** Map { estado_key: email_estado } — qué email se usa al pasar a cada estado. */
+  email_plantillas: Record<string, string>;
 }
+
+const SIN_CUESTIONARIO = "__none__";
+const SIN_EMAIL = "__no_email__";
 
 const FORM_VACIO: FormState = {
   titulo: "",
@@ -49,6 +67,9 @@ const FORM_VACIO: FormState = {
   salario_rango: "",
   estado_publicacion: "borrador",
   visible_publicamente: false,
+  cuestionario_plantilla_id: "",
+  plantilla_estado_id: "",
+  email_plantillas: {},
 };
 
 interface Props {
@@ -66,18 +87,42 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
   const [puestos, setPuestos] = useState<PuestoRef[]>([]);
   const [departamentos, setDepartamentos] = useState<DepartamentoRef[]>([]);
   const [jornadas, setJornadas] = useState<JornadaRow[]>([]);
+  const [cuestionarios, setCuestionarios] = useState<CuestionarioVacante[]>([]);
+  const [plantillasEstado, setPlantillasEstado] = useState<PlantillaEstadoRow[]>([]);
+  const [emailPlantillas, setEmailPlantillas] = useState<ReclutamientoEmailPlantilla[]>([]);
   const [pending, startTransition] = useTransition();
   const [loadingExisting, setLoadingExisting] = useState(false);
   useGlobalLoadingSync(loadingExisting);
   const [faltantes, setFaltantes] = useState<string[]>([]);
   const { validar } = useReglasSubmodulo("rrhh", "reclutamiento");
 
+  const selectedEstadoTemplate = plantillasEstado.find((pe) => pe.id === form.plantilla_estado_id) ?? null;
+
   useEffect(() => {
     if (!open) return;
-    void Promise.all([listPuestosCatalogo(), listDepartamentosCatalogo(), listJornadas()]).then(([p, d, j]) => {
+    void Promise.all([
+      listPuestosCatalogo(), listDepartamentosCatalogo(), listJornadas(), listCuestionariosVacante(),
+      listPlantillasEstado(), listReclutamientoEmailPlantillas(),
+    ]).then(([p, d, j, c, pe, ep]) => {
       setPuestos((p.data ?? []) as PuestoRef[]);
       setDepartamentos((d.data ?? []) as DepartamentoRef[]);
       setJornadas((j.data ?? []) as JornadaRow[]);
+      const cuests = (c.data ?? []) as CuestionarioVacante[];
+      setCuestionarios(cuests);
+      const plEstado = (pe.data ?? []) as PlantillaEstadoRow[];
+      setPlantillasEstado(plEstado);
+      setEmailPlantillas(ep as ReclutamientoEmailPlantilla[]);
+      // Al crear una vacante nueva, preselecciona el cuestionario y la plantilla
+      // de estados por defecto.
+      if (!vacanteId) {
+        const def = cuests.find((x) => x.esDefault);
+        const predeterminada = plEstado.find((x) => x.es_predeterminada) ?? plEstado[0];
+        setForm((f) => ({
+          ...f,
+          cuestionario_plantilla_id: f.cuestionario_plantilla_id || (def?.id ?? ""),
+          plantilla_estado_id: f.plantilla_estado_id || (predeterminada?.id ?? ""),
+        }));
+      }
     });
   }, [open]);
 
@@ -95,6 +140,9 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
         tipo_jornada?: string | null;
         salario_rango?: string | null;
         estado_publicacion?: EstadoPub; visible_publicamente?: boolean;
+        cuestionario_plantilla_id?: string | null;
+        plantilla_estado_id?: string | null;
+        email_plantillas?: Record<string, string> | null;
       } | null;
       if (v) {
         setForm({
@@ -106,6 +154,9 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
           salario_rango: v.salario_rango ?? "",
           estado_publicacion: v.estado_publicacion ?? "borrador",
           visible_publicamente: !!v.visible_publicamente,
+          cuestionario_plantilla_id: v.cuestionario_plantilla_id ?? "",
+          plantilla_estado_id: v.plantilla_estado_id ?? "",
+          email_plantillas: v.email_plantillas ?? {},
         });
       }
       setLoadingExisting(false);
@@ -139,6 +190,10 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
         salario_rango: form.salario_rango.trim() || null,
         estado_publicacion: form.estado_publicacion,
         visible_publicamente: form.visible_publicamente,
+        cuestionario_plantilla_id: form.cuestionario_plantilla_id || null,
+        cuestionario: !!form.cuestionario_plantilla_id,
+        plantilla_estado_id: form.plantilla_estado_id || null,
+        email_plantillas: form.email_plantillas ?? {},
       };
       const res = vacanteId
         ? await updateVacante(vacanteId, payload)
@@ -243,6 +298,102 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
                 rows={5}
                 placeholder="Tareas, requisitos, beneficios…"
               />
+            </div>
+
+            {/* Plantilla de estados (consecución del pipeline) */}
+            <div className="space-y-1.5">
+              <Label>Plantilla de estados</Label>
+              <Select
+                value={form.plantilla_estado_id}
+                onValueChange={(v) => setForm({ ...form, plantilla_estado_id: v })}
+              >
+                <SelectTrigger><SelectValue placeholder="Selecciona…" /></SelectTrigger>
+                <SelectContent>
+                  {plantillasEstado.length === 0 ? (
+                    <SelectItem value="__none__" disabled>Sin plantillas (créalas en Plantillas → Estados)</SelectItem>
+                  ) : (
+                    plantillasEstado.map((pe) => (
+                      <SelectItem key={pe.id} value={pe.id}>
+                        {pe.nombre}{pe.es_predeterminada ? " (predeterminada)" : ""}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                Define la consecución de estados del proceso de selección de esta vacante.
+              </p>
+            </div>
+
+            {/* Email por estado: qué plantilla de email se envía al pasar a cada estado */}
+            {selectedEstadoTemplate && selectedEstadoTemplate.estados.length > 0 && (
+              <div className="space-y-2 rounded-lg border border-border p-3">
+                <Label className="text-xs">Email por estado</Label>
+                <p className="text-[11px] text-muted-foreground -mt-1">
+                  Para cada estado, elige qué plantilla de email se envía al candidato al pasar a ese estado.
+                </p>
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {[...selectedEstadoTemplate.estados]
+                    .sort((a, b) => a.orden - b.orden)
+                    .map((est) => {
+                      const faseCfg = FASES_PLANTILLA_ESTADO[est.fase];
+                      const current = form.email_plantillas[est.key]
+                        ?? (emailPlantillas.some((e) => e.estado === est.key) ? est.key : SIN_EMAIL);
+                      return (
+                        <div key={est.key} className="grid grid-cols-2 gap-2 items-center">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: est.color || faseCfg.color }} />
+                            <span className="text-xs truncate">{est.label}</span>
+                          </div>
+                          <Select
+                            value={current}
+                            onValueChange={(v) =>
+                              setForm((f) => {
+                                const next = { ...f.email_plantillas };
+                                if (v === SIN_EMAIL) delete next[est.key];
+                                else next[est.key] = v;
+                                return { ...f, email_plantillas: next };
+                              })
+                            }
+                          >
+                            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Email…" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={SIN_EMAIL}>Sin email</SelectItem>
+                              {emailPlantillas.map((e) => (
+                                <SelectItem key={e.estado} value={e.estado}>
+                                  {e.nombre}{e.activa ? "" : " (inactiva)"}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <Label>Cuestionario para el candidato</Label>
+              <Select
+                value={form.cuestionario_plantilla_id || SIN_CUESTIONARIO}
+                onValueChange={(v) =>
+                  setForm({ ...form, cuestionario_plantilla_id: v === SIN_CUESTIONARIO ? "" : v })
+                }
+              >
+                <SelectTrigger><SelectValue placeholder="Selecciona…" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SIN_CUESTIONARIO}>Sin cuestionario</SelectItem>
+                  {cuestionarios.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.nombre}{c.esDefault ? " (por defecto)" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                El candidato deberá responderlo antes de enviar su candidatura. Gestiona los cuestionarios en Configuración.
+              </p>
             </div>
 
           </div>

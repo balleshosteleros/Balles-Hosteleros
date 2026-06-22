@@ -20,6 +20,9 @@ import { INSPECCION_PRESENTACION_SEED } from "./inspeccion-presentacion";
 import { RESERVA_ETIQUETAS_SEED, normalizeReservaEtiquetaNombre } from "./reserva-etiquetas";
 import { SALA_ETIQUETAS_SEED, normalizeEtiquetaNombre } from "./sala-etiquetas";
 import { RESERVA_EMAIL_PLANTILLAS_SEED } from "./reserva-email-plantillas";
+import { RECLUTAMIENTO_EMAIL_PLANTILLAS_SEED } from "./reclutamiento-email-plantillas";
+import { RECLUTAMIENTO_PLANTILLA_ESTADOS_SEED } from "./reclutamiento-plantilla-estados";
+import { RECLUTAMIENTO_CUESTIONARIO_DEFAULT_SEED } from "./reclutamiento-cuestionario-default";
 import {
   CATEGORIAS_PRODUCTO_SEED,
   normalizeCategoriaProductoNombre,
@@ -269,6 +272,124 @@ export async function syncReservaEmailPlantillasAEmpresa(
     .insert(aCrear);
   if (error) throw error;
   return { creadas: aCrear.length };
+}
+
+/**
+ * Sincroniza plantillas de email del pipeline de RECLUTAMIENTO (aditivo).
+ * Solo crea los estados que aún no existen en la empresa; NUNCA sobreescribe
+ * personalizaciones del cliente.
+ */
+export async function syncReclutamientoEmailPlantillasAEmpresa(
+  admin: Admin,
+  empresaId: string,
+): Promise<{ creadas: number }> {
+  const { data: existentes } = await admin
+    .from("reclutamiento_email_plantillas")
+    .select("estado")
+    .eq("empresa_id", empresaId);
+  const setExistentes = new Set(
+    (existentes ?? []).map((r) => r.estado as string),
+  );
+
+  const aCrear = RECLUTAMIENTO_EMAIL_PLANTILLAS_SEED
+    .filter((p) => !setExistentes.has(p.estado))
+    .map((p) => ({
+      empresa_id: empresaId,
+      estado: p.estado,
+      asunto: p.asunto,
+      cuerpo: p.cuerpo,
+      activa: p.activa,
+    }));
+
+  if (aCrear.length === 0) return { creadas: 0 };
+  const { error } = await admin
+    .from("reclutamiento_email_plantillas")
+    .insert(aCrear);
+  if (error) throw error;
+  return { creadas: aCrear.length };
+}
+
+/**
+ * Siembra la plantilla de ESTADOS por defecto (consecución del pipeline) SOLO
+ * si la empresa todavía no tiene ninguna plantilla de estados. No pisa al cliente.
+ */
+export async function syncReclutamientoPlantillaEstadoAEmpresa(
+  admin: Admin,
+  empresaId: string,
+): Promise<{ creadas: number }> {
+  const { data: existentes } = await admin
+    .from("reclutamiento_plantillas_estado")
+    .select("id")
+    .eq("empresa_id", empresaId)
+    .limit(1);
+  if ((existentes ?? []).length > 0) return { creadas: 0 };
+
+  const seed = RECLUTAMIENTO_PLANTILLA_ESTADOS_SEED;
+  const { error } = await admin
+    .from("reclutamiento_plantillas_estado")
+    .insert({
+      empresa_id: empresaId,
+      nombre: seed.nombre,
+      descripcion: seed.descripcion,
+      es_predeterminada: seed.esPredeterminada,
+      estados: seed.estados,
+      activa: true,
+    });
+  if (error) throw error;
+  return { creadas: 1 };
+}
+
+/**
+ * Siembra el cuestionario GENÉRICO por defecto del reclutamiento y lo asigna a
+ * todas las vacantes de la empresa que aún no tengan cuestionario. Aditivo:
+ * - Crea el cuestionario `es_default` solo si no existe (no pisa ediciones).
+ * - Asigna `cuestionario_plantilla_id` solo donde es NULL (respeta asignaciones
+ *   manuales por vacante).
+ */
+export async function syncReclutamientoCuestionarioDefaultAEmpresa(
+  admin: Admin,
+  empresaId: string,
+): Promise<{ creado: boolean; vacantesAsignadas: number }> {
+  // 1) ¿Ya tiene cuestionario por defecto?
+  const { data: existente } = await admin
+    .from("reclutamiento_plantillas_cuestionario")
+    .select("id")
+    .eq("empresa_id", empresaId)
+    .eq("es_default", true)
+    .maybeSingle();
+
+  let defaultId = existente?.id as string | undefined;
+  let creado = false;
+
+  if (!defaultId) {
+    const seed = RECLUTAMIENTO_CUESTIONARIO_DEFAULT_SEED;
+    const { data: insertado, error } = await admin
+      .from("reclutamiento_plantillas_cuestionario")
+      .insert({
+        empresa_id: empresaId,
+        nombre: seed.nombre,
+        descripcion: seed.descripcion,
+        preguntas: seed.preguntas,
+        es_default: true,
+        activa: true,
+      })
+      .select("id")
+      .single();
+    if (error) throw error;
+    defaultId = insertado.id as string;
+    creado = true;
+  }
+
+  // 2) Asignar a todas las vacantes sin cuestionario.
+  const { data: asignadas, error: upErr } = await admin
+    .from("vacantes")
+    .update({ cuestionario_plantilla_id: defaultId, cuestionario: true })
+    .eq("empresa_id", empresaId)
+    .is("cuestionario_plantilla_id", null)
+    .select("id");
+  if (upErr) throw upErr;
+
+  return { creado, vacantesAsignadas: asignadas?.length ?? 0 };
 }
 
 /**
@@ -542,6 +663,9 @@ export async function seedEmpresaDefaults(
   await ensureReservasConfigEmpresa(admin, empresaId);
   await ensureRrhhConfigEmpresa(admin, empresaId);
   await syncReservaEmailPlantillasAEmpresa(admin, empresaId);
+  await syncReclutamientoEmailPlantillasAEmpresa(admin, empresaId);
+  await syncReclutamientoPlantillaEstadoAEmpresa(admin, empresaId);
+  await syncReclutamientoCuestionarioDefaultAEmpresa(admin, empresaId);
 }
 
 /**
@@ -562,6 +686,8 @@ export async function syncSeedsToAllEmpresas(): Promise<{
     reservaEtiquetasCreadas: number;
     reservasConfigCreada: boolean;
     reservaEmailsCreadas: number;
+    reclutamientoEmailsCreadas: number;
+    reclutamientoEstadosCreadas: number;
   }>;
   error?: string;
 }> {
@@ -587,6 +713,8 @@ export async function syncSeedsToAllEmpresas(): Promise<{
       categoriasProductoCreadas: number;
       reservasConfigCreada: boolean;
       reservaEmailsCreadas: number;
+      reclutamientoEmailsCreadas: number;
+    reclutamientoEstadosCreadas: number;
     }> = [];
 
     for (const e of empresas ?? []) {
@@ -605,6 +733,9 @@ export async function syncSeedsToAllEmpresas(): Promise<{
       const rcfg = await ensureReservasConfigEmpresa(admin, empresaId);
       await ensureRrhhConfigEmpresa(admin, empresaId);
       const rep = await syncReservaEmailPlantillasAEmpresa(admin, empresaId);
+      const rclep = await syncReclutamientoEmailPlantillasAEmpresa(admin, empresaId);
+      const rclpe = await syncReclutamientoPlantillaEstadoAEmpresa(admin, empresaId);
+      await syncReclutamientoCuestionarioDefaultAEmpresa(admin, empresaId);
       resumen.push({
         empresa: empresaNombre,
         deptosCreados: d.creados,
@@ -619,6 +750,8 @@ export async function syncSeedsToAllEmpresas(): Promise<{
         categoriasProductoCreadas: cp.creadas,
         reservasConfigCreada: rcfg.creada,
         reservaEmailsCreadas: rep.creadas,
+        reclutamientoEmailsCreadas: rclep.creadas,
+        reclutamientoEstadosCreadas: rclpe.creadas,
       });
     }
 
