@@ -1,7 +1,12 @@
 "use server";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getAppContext } from "@/lib/supabase/get-context";
+import { resolverDestinatarios } from "@/features/notificaciones/lib/targeting";
+import { getTipoMeta } from "@/features/notificaciones/lib/catalogo";
+import type { EmitirInput, EmitirResultado } from "@/features/notificaciones/types";
 
 export interface NotificacionApp {
   id: string;
@@ -210,6 +215,46 @@ export interface NuevaNotificacion {
   refTabla?: string | null;
   refId?: string | null;
   accionUrl?: string | null;
+  /** Clave de idempotencia (emisores por cron/evento). */
+  dedupeKey?: string | null;
+}
+
+// Núcleo de inserción compartido por `crearNotificaciones` y `emitirNotificacion`.
+// Si alguna fila trae `dedupeKey`, usa upsert ignorando duplicados (idempotencia
+// vía índice único parcial notificaciones_dedupe_uq).
+async function insertNotifRows(
+  supabase: SupabaseClient,
+  empresaId: string,
+  createdBy: string | null,
+  rows: NuevaNotificacion[],
+): Promise<number> {
+  if (rows.length === 0) return 0;
+  const filas = rows.map((n) => ({
+    empresa_id: empresaId,
+    empleado_id: n.empleadoId,
+    usuario_id: n.usuarioId,
+    tipo: n.tipo,
+    titulo: n.titulo,
+    mensaje: n.mensaje,
+    payload: n.payload ?? {},
+    accion_label: n.accionLabel ?? "Visto",
+    requiere_accion: n.requiereAccion ?? false,
+    entidad_tipo: n.refTabla ?? null,
+    entidad_id: n.refId ?? null,
+    accion_url: n.accionUrl ?? null,
+    dedupe_key: n.dedupeKey ?? null,
+    created_by: createdBy,
+  }));
+  const conDedupe = filas.some((f) => f.dedupe_key !== null);
+  const query = conDedupe
+    ? supabase
+        .from("notificaciones")
+        .upsert(filas, { onConflict: "empresa_id,usuario_id,dedupe_key", ignoreDuplicates: true })
+        .select("id")
+    : supabase.from("notificaciones").insert(filas).select("id");
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []).length;
 }
 
 export async function crearNotificaciones(
@@ -218,26 +263,85 @@ export async function crearNotificaciones(
   try {
     const { supabase, empresaId, userId } = await getAppContext();
     if (!empresaId || rows.length === 0) return { ok: false, creadas: 0 };
-    const filas = rows.map((n) => ({
-      empresa_id: empresaId,
-      empleado_id: n.empleadoId,
-      usuario_id: n.usuarioId,
-      tipo: n.tipo,
-      titulo: n.titulo,
-      mensaje: n.mensaje,
-      payload: n.payload ?? {},
-      accion_label: n.accionLabel ?? "Visto",
-      requiere_accion: n.requiereAccion ?? false,
-      entidad_tipo: n.refTabla ?? null,
-      entidad_id: n.refId ?? null,
-      accion_url: n.accionUrl ?? null,
-      created_by: userId,
-    }));
-    const { data, error } = await supabase.from("notificaciones").insert(filas).select("id");
-    if (error) throw error;
-    return { ok: true, creadas: (data ?? []).length };
+    const creadas = await insertNotifRows(supabase as unknown as SupabaseClient, empresaId, userId, rows);
+    return { ok: true, creadas };
   } catch (err) {
     console.error("[notificaciones] crearNotificaciones:", err);
     return { ok: false, creadas: 0 };
+  }
+}
+
+// ── Motor de alertas (PRP-065) ──────────────────────────────────────
+// Capa única de emisión: resuelve destinatarios de un segmento, inserta una fila
+// por destinatario (con dedup opcional) y deja traza en el registro. Envuelve el
+// núcleo de inserción ya existente; no lo reemplaza.
+//
+//  - Aviso manual de un gestor → cliente del usuario (RLS gestor).
+//  - Eventos/crons del sistema (input.system) o sin sesión → service role.
+export async function emitirNotificacion(input: EmitirInput): Promise<EmitirResultado> {
+  try {
+    const ctx = await getAppContext();
+    const empresaId = input.empresaId ?? ctx.empresaId;
+    if (!empresaId) return { ok: false, destinatarios: 0, creadas: 0 };
+
+    const useService = input.system === true || !ctx.userId;
+    const supabase = (useService
+      ? createAdminClient()
+      : ctx.supabase) as unknown as SupabaseClient;
+    const createdBy = ctx.userId;
+
+    const destinatarios = await resolverDestinatarios(supabase, empresaId, input.segmento);
+    if (destinatarios.length === 0) return { ok: true, destinatarios: 0, creadas: 0 };
+
+    const meta = getTipoMeta(input.tipo);
+    const rows: NuevaNotificacion[] = destinatarios.map((d) => ({
+      empleadoId: d.empleadoId,
+      usuarioId: d.usuarioId,
+      tipo: input.tipo,
+      titulo: input.titulo,
+      mensaje: input.mensaje ?? "",
+      payload: input.payload,
+      accionLabel: input.accionLabel ?? meta.accionLabel,
+      requiereAccion: input.requiereAccion ?? meta.requiereAccion,
+      refTabla: input.refTabla ?? null,
+      refId: input.refId ?? null,
+      accionUrl: input.accionUrl ?? null,
+      dedupeKey: input.dedupeKey ?? null,
+    }));
+    const creadas = await insertNotifRows(supabase, empresaId, createdBy, rows);
+
+    // Canal push "alertas": llega al móvil de los destinatarios con opt-in
+    // (usuarios.push_alertas). Siempre con cliente service (debe leer las
+    // suscripciones de otros usuarios). Desactivable con input.push = false
+    // (p. ej. comunicados, que ya disparan su propio push).
+    if (input.push !== false && creadas > 0) {
+      try {
+        const { sendPushWithClient } = await import("@/features/mi-panel/mobile/lib/push-server");
+        const pushClient = (useService ? supabase : createAdminClient()) as unknown as SupabaseClient;
+        const body = (input.mensaje ?? "").trim() || meta.label;
+        await Promise.all(
+          destinatarios.map((d) =>
+            sendPushWithClient(pushClient, {
+              userId: d.usuarioId,
+              empresaId,
+              eventType: "alerta",
+              payload: {
+                title: input.titulo,
+                body,
+                url: input.accionUrl || "/",
+                tag: input.dedupeKey || `notif-${input.tipo}`,
+              },
+            }),
+          ),
+        );
+      } catch (e) {
+        console.error("[notificaciones] push alertas:", e);
+      }
+    }
+
+    return { ok: true, destinatarios: destinatarios.length, creadas };
+  } catch (err) {
+    console.error("[notificaciones] emitirNotificacion:", err);
+    return { ok: false, destinatarios: 0, creadas: 0 };
   }
 }

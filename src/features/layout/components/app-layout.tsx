@@ -54,6 +54,7 @@ import { AgendaDrawer } from "@/features/agenda/components/AgendaDrawer";
 import { ToolsAvisoPopups } from "@/features/layout/components/ToolsAvisoPopups";
 import { CamarasDrawer } from "@/features/camaras/components/CamarasDrawer";
 import { RecordingTrigger } from "@/features/recorder/components/RecordingTrigger";
+import { NotificacionBell } from "@/features/notificaciones/components/NotificacionBell";
 import { RecordingDrawer } from "@/features/recorder/components/RecordingDrawer";
 import { RecordingOverlay } from "@/features/recorder/components/RecordingOverlay";
 import { CountdownOverlay } from "@/features/recorder/components/CountdownOverlay";
@@ -238,6 +239,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     {/* Grabación de pantalla */}
                     <RecordingTrigger />
 
+                    {/* Notificaciones — avisos y alertas a todos los empleados */}
+                    <NotificacionBell variant="toolbar" />
+
                     {/* Separador visual */}
                     <span className="w-px h-5 bg-border mx-0.5" />
 
@@ -260,7 +264,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         className="relative h-8 w-8"
                         title="Comunicación interna"
                       >
-                        <MessageCircle className="!h-[18px] !w-[18px] text-green-500 fill-green-500/15" />
+                        <MessageCircle className="!h-[18px] !w-[18px] text-green-500" />
                         <NavBadge count={ajustes.notificaciones.chat.badgeActivo ? counts.chatGroups : 0} color="green" />
                       </Button>
                     </ChatDrawer>

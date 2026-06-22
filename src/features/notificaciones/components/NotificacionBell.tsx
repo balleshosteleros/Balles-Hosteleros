@@ -19,13 +19,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Bell, FileCheck2, CheckCircle2, Loader2 } from "lucide-react";
+import { Bell, CheckCircle2, Loader2 } from "lucide-react";
 import {
   listMisNotificaciones,
   marcarNotificacionVista,
   accionarLiquidacion,
   type NotificacionApp,
 } from "@/features/notificaciones/actions/notificaciones-actions";
+import { getTipoMeta } from "@/features/notificaciones/lib/catalogo";
+import { getIconoTipo } from "@/features/notificaciones/lib/catalogo-iconos";
 
 function fmtFecha(iso: string): string {
   try {
@@ -36,7 +38,15 @@ function fmtFecha(iso: string): string {
 }
 
 // Campana + círculo de no vistas + bandeja (Sheet) con acuse por notificación.
-export function NotificacionBell({ className }: { className?: string }) {
+// variant="panel" → botón redondo con borde (Mi Panel / móvil).
+// variant="toolbar" → icono ghost integrado en la barra de herramientas superior.
+export function NotificacionBell({
+  className,
+  variant = "panel",
+}: {
+  className?: string;
+  variant?: "panel" | "toolbar";
+}) {
   const [items, setItems] = useState<NotificacionApp[]>([]);
   const [open, setOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -48,6 +58,9 @@ export function NotificacionBell({ className }: { className?: string }) {
 
   useEffect(() => {
     cargar();
+    // Refresco periódico para que las alertas lleguen sin recargar la página.
+    const id = setInterval(cargar, 60_000);
+    return () => clearInterval(id);
   }, [cargar]);
 
   const sinVer = items.filter((n) => !n.vistaAt).length;
@@ -75,18 +88,34 @@ export function NotificacionBell({ className }: { className?: string }) {
     <>
       <Sheet open={open} onOpenChange={(o) => { setOpen(o); if (o) cargar(); }}>
         <SheetTrigger asChild>
-          <button
-            type="button"
-            className={`relative inline-flex h-9 w-9 items-center justify-center rounded-full border bg-background text-foreground/80 ${className ?? ""}`}
-            aria-label="Notificaciones"
-          >
-            <Bell className="h-5 w-5" strokeWidth={1.75} />
-            {sinVer > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
-                {sinVer > 9 ? "9+" : sinVer}
-              </span>
-            )}
-          </button>
+          {variant === "toolbar" ? (
+            <button
+              type="button"
+              className={`relative inline-flex h-8 w-8 items-center justify-center rounded-md text-foreground/80 hover:bg-accent hover:text-accent-foreground transition-colors ${className ?? ""}`}
+              aria-label="Notificaciones"
+              title="Notificaciones"
+            >
+              <Bell className="!h-[18px] !w-[18px] text-rose-500" />
+              {sinVer > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-rose-500 px-0.5 text-[8px] font-bold leading-none text-white">
+                  {sinVer > 9 ? "9+" : sinVer}
+                </span>
+              )}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={`relative inline-flex h-9 w-9 items-center justify-center rounded-full border bg-background text-foreground/80 ${className ?? ""}`}
+              aria-label="Notificaciones"
+            >
+              <Bell className="h-5 w-5" strokeWidth={1.75} />
+              {sinVer > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
+                  {sinVer > 9 ? "9+" : sinVer}
+                </span>
+              )}
+            </button>
+          )}
         </SheetTrigger>
         <SheetContent side="right" className="w-full max-w-sm p-0">
           <SheetHeader className="border-b p-4">
@@ -99,10 +128,12 @@ export function NotificacionBell({ className }: { className?: string }) {
               <ul className="divide-y">
                 {items.map((n) => {
                   const esLiquidacion = n.tipo === "liquidacion" && n.requiereAccion && !!n.refId && !n.vistaAt;
+                  const meta = getTipoMeta(n.tipo);
+                  const Icono = getIconoTipo(meta.icono);
                   return (
                     <li key={n.id} className={`flex gap-3 p-4 ${n.vistaAt ? "" : "bg-primary/5"}`}>
-                      <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                        <FileCheck2 className="h-4 w-4" />
+                      <span className={`mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted ${meta.color}`}>
+                        <Icono className="h-4 w-4" />
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">

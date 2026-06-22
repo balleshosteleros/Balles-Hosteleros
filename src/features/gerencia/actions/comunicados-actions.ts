@@ -128,6 +128,11 @@ export async function createComunicado(input: ComunicadoInput) {
       } catch (e) {
         console.error("[comunicados] push:", e);
       }
+      // Notificación in-app (campana + registro) — motor de alertas PRP-065.
+      const { emitirNotifComunicado } = await import(
+        "@/features/notificaciones/actions/emisores-actions"
+      );
+      await emitirNotifComunicado(data.id as string);
     }
 
     return { ok: true, data };
@@ -166,6 +171,11 @@ export async function updateComunicado(id: string, input: ComunicadoInput) {
       } catch (e) {
         console.error("[comunicados] push update:", e);
       }
+      // Notificación in-app (campana + registro) — motor de alertas PRP-065.
+      const { emitirNotifComunicado } = await import(
+        "@/features/notificaciones/actions/emisores-actions"
+      );
+      await emitirNotifComunicado(id);
     }
 
     return { ok: true };

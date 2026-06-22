@@ -8,7 +8,7 @@ import { sendPushToUser } from "./push-server";
  * Soporta: toda_empresa, empleados_destinatarios, roles_destinatarios,
  *          departamentos_destinatarios.
  */
-async function resolverDestinatariosUserIds(comunicadoId: string): Promise<{
+export async function resolverDestinatariosUserIds(comunicadoId: string): Promise<{
   userIds: string[];
   empresaId: string | null;
   titulo: string;

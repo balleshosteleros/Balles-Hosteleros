@@ -24,13 +24,8 @@ import {
   listRegistroNotificaciones,
   type NotificacionRegistro,
 } from "@/features/notificaciones/actions/notificaciones-actions";
-
-const TIPO_LABEL: Record<string, string> = {
-  liquidacion: "Liquidación",
-  liquidacion_pagada: "Liquidación pagada",
-  exito: "Aviso",
-  info: "Aviso",
-};
+import { getTipoMeta } from "@/features/notificaciones/lib/catalogo";
+import { NuevoAvisoDialog } from "@/features/notificaciones/components/NuevoAvisoDialog";
 
 const columnasDef: ToolbarColumna[] = [
   { campo: "tipo", label: "Tipo" },
@@ -61,6 +56,7 @@ export function NotificacionesRegistroView() {
   const [busqueda, setBusqueda] = useState("");
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
+  const [nuevoAviso, setNuevoAviso] = useState(false);
 
   const reload = useCallback(() => {
     setLoading(true);
@@ -78,7 +74,7 @@ export function NotificacionesRegistroView() {
     () =>
       items.filter((n) =>
         coincideBusquedaUniversal(
-          { titulo: n.titulo, destinatario: n.destinatario, tipo: TIPO_LABEL[n.tipo] ?? n.tipo, estado: n.estado },
+          { titulo: n.titulo, destinatario: n.destinatario, tipo: getTipoMeta(n.tipo).label, estado: n.estado },
           busqueda,
         ),
       ),
@@ -91,8 +87,14 @@ export function NotificacionesRegistroView() {
 
   const celda = (n: NotificacionRegistro, campo: string) => {
     switch (campo) {
-      case "tipo":
-        return <TableCell key="tipo">{TIPO_LABEL[n.tipo] ?? n.tipo}</TableCell>;
+      case "tipo": {
+        const meta = getTipoMeta(n.tipo);
+        return (
+          <TableCell key="tipo">
+            <Badge variant="secondary" className={`text-[10px] ${meta.badge}`}>{meta.label}</Badge>
+          </TableCell>
+        );
+      }
       case "titulo":
         return (
           <TableCell key="titulo" className="font-medium">
@@ -131,7 +133,8 @@ export function NotificacionesRegistroView() {
         busqueda={busqueda}
         onBusquedaChange={setBusqueda}
         placeholderBusqueda="Buscar notificación"
-        ocultarNuevo
+        onNuevo={() => setNuevoAviso(true)}
+        textoNuevo="Nuevo aviso"
         columnas={columnasDef}
         columnasVisibles={columnasVisibles}
         onColumnasVisiblesChange={setColumnasVisibles}
@@ -173,6 +176,8 @@ export function NotificacionesRegistroView() {
           </div>
         </CardContent>
       </Card>
+
+      <NuevoAvisoDialog open={nuevoAviso} onOpenChange={setNuevoAviso} onEmitted={reload} />
     </div>
   );
 }

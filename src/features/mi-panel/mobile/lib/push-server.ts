@@ -25,7 +25,8 @@ export type PushEventType =
   | "comunicado_nuevo"
   | "cronograma_cambiado"
   | "llamada_entrante"
-  | "fichaje_recordatorio";
+  | "fichaje_recordatorio"
+  | "alerta";
 
 export interface PushPayload {
   title: string;
@@ -68,7 +69,7 @@ export async function sendPushWithClient(
   const { data: profile } = await supabase
     .from("usuarios")
     .select(
-      "push_solicitudes, push_comunicados, push_cronograma, push_llamadas, push_fichajes",
+      "push_solicitudes, push_comunicados, push_cronograma, push_llamadas, push_fichajes, push_alertas",
     )
     .eq("user_id", args.userId)
     .maybeSingle();
@@ -80,12 +81,14 @@ export async function sendPushWithClient(
     | "push_cronograma"
     | "push_llamadas"
     | "push_fichajes"
+    | "push_alertas"
   > = {
     solicitud_resuelta: "push_solicitudes",
     comunicado_nuevo: "push_comunicados",
     cronograma_cambiado: "push_cronograma",
     llamada_entrante: "push_llamadas",
     fichaje_recordatorio: "push_fichajes",
+    alerta: "push_alertas",
   };
   if (profile && profile[optInMap[args.eventType]] === false) {
     return { delivered: 0, failed: 0 };

@@ -165,7 +165,21 @@ export async function createEncuesta(
       .select("*")
       .single();
     if (error) throw error;
-    return { ok: true, data: rowToEncuesta(data as EncuestaRow, []) };
+    const persisted = rowToEncuesta(data as EncuestaRow, []);
+    // Encuesta creada ya activa → notificar a su audiencia (motor de alertas PRP-065).
+    if (persisted.estado === "activa") {
+      const { emitirNotifEncuesta } = await import(
+        "@/features/notificaciones/actions/emisores-actions"
+      );
+      await emitirNotifEncuesta({
+        encuestaId: persisted.id,
+        empresaId,
+        nombre: persisted.nombre,
+        descripcion: persisted.descripcion,
+        destinatarios: persisted.destinatarios,
+      });
+    }
+    return { ok: true, data: persisted };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[encuestas] createEncuesta:", msg);
@@ -180,11 +194,30 @@ export async function saveEncuesta(
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
+    const { data: anterior } = await supabase
+      .from("encuestas")
+      .select("estado")
+      .eq("id", enc.id)
+      .maybeSingle();
     const { error } = await supabase
       .from("encuestas")
       .update({ ...encuestaToRow(enc, empresaId), updated_at: new Date().toISOString() })
       .eq("id", enc.id);
     if (error) throw error;
+    // Transición borrador → activa: notificar a la audiencia una sola vez
+    // (motor de alertas PRP-065, idempotente por encuesta).
+    if (anterior?.estado !== "activa" && enc.estado === "activa") {
+      const { emitirNotifEncuesta } = await import(
+        "@/features/notificaciones/actions/emisores-actions"
+      );
+      await emitirNotifEncuesta({
+        encuestaId: enc.id,
+        empresaId,
+        nombre: enc.nombre,
+        descripcion: enc.descripcion,
+        destinatarios: enc.destinatarios,
+      });
+    }
     return { ok: true };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
