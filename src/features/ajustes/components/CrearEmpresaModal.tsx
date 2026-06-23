@@ -12,6 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Building2, Info } from "lucide-react";
 import { toast } from "sonner";
 import { createEmpresa } from "@/features/empresa/actions/empresas-actions";
+import { setEmpresaActiva } from "@/features/empresa/actions/empresa-activa-actions";
+import { useRouter } from "next/navigation";
 import type { DatosGenerales, ConfigOperativa } from "@/features/ajustes/data/ajustes";
 
 // El alta replica EXACTAMENTE la vista de Ajustes → Empresa (ConfiguracionTab):
@@ -101,6 +103,7 @@ function Field({ label, value, onChange, type = "text", placeholder = "" }: {
 
 export function CrearEmpresaModal({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const { addEmpresa, setEmpresaId } = useEmpresa();
+  const router = useRouter();
   const [form, setForm] = useState<FormState>(EMPTY);
   const [saving, setSaving] = useState(false);
 
@@ -160,8 +163,12 @@ export function CrearEmpresaModal({ open, onOpenChange }: { open: boolean; onOpe
       });
       toast.success("Empresa creada con toda la estructura base (departamentos, roles, organigrama, plantillas…)");
       setEmpresaId(res.data.slug);
+      // Activar la empresa nueva (cookie) ANTES de navegar para que el onboarding
+      // lea su empresa correcta, y auto-lanzar el asistente de volcado de datos.
+      await setEmpresaActiva(res.data.id);
       setForm(EMPTY);
       onOpenChange(false);
+      router.push("/onboarding");
     } finally {
       setSaving(false);
     }

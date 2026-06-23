@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { getEmployees } from '@/actions/admin'
-import { CreateEmployeeForm } from './CreateEmployeeForm'
+// PRP-067: alta manual de empleados retirada. El alta es por el portal de empleo
+// (contratación) o el volcado masivo del onboarding; este panel queda solo de lectura.
 import { EmployeeList } from './EmployeeList'
 import type { Profile } from '@/types/database'
 import { LoadingSpinner } from '@/shared/components/LoadingSpinner'
@@ -24,8 +25,6 @@ export function AdminPanel() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-8 p-8">
-      <CreateEmployeeForm onSuccess={loadEmployees} />
-
       <div>
         <h2 className="mb-4 text-lg font-semibold">Empleados</h2>
         {loading ? (

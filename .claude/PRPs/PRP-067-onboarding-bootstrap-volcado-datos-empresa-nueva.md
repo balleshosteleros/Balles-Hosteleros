@@ -1,6 +1,6 @@
 # PRP-067: Onboarding inicial de volcado de datos para empresas nuevas (bootstrap)
 
-> **Estado**: PENDIENTE (afinado 2026-06-23)
+> **Estado**: IMPLEMENTADO 2026-06-23 (núcleo: fases 1–4 + typecheck; relanzamiento global diferido — ver Aprendizajes)
 > **Fecha**: 2026-06-23
 > **Proyecto**: Balles-Hosteleros
 
@@ -178,6 +178,20 @@ ALTER TABLE empresas ADD COLUMN IF NOT EXISTS onboarding_completado_at TIMESTAMP
 ## 🧠 Aprendizajes (Self-Annealing / Neural Network)
 
 > Crece con cada error durante la implementación.
+
+### 2026-06-23: Helper de conteo y tipos de Supabase
+- **Error**: un helper genérico `contar(tabla, (q)=>q.eq(...))` rompía los tipos (`PostgrestQueryBuilder` no tiene `.eq`).
+- **Fix**: helper `contarTabla(supabase, tabla, empresaId, extra: Record<string,string>)` que construye la query inline con un bucle de `.eq`. Sin callbacks.
+- **Aplicar en**: cualquier acción que cuente filas por entidad con filtros dinámicos.
+
+### 2026-06-23: Auto-lanzamiento sin condición de carrera
+- **Decisión**: tras `createEmpresa`, `await setEmpresaActiva(id)` ANTES de `router.push("/onboarding")`, para que el wizard lea la empresa recién creada (cookie) y no la anterior.
+
+### 2026-06-23: Alcance — launcher persistente diferido
+- El auto-lanzamiento se implementó en el punto de creación (`CrearEmpresaModal`). El **relanzamiento global** "mientras `onboarding_completado_at` sea null" (redirigir desde el layout en cada entrada) se DEJÓ FUERA a propósito: tocar `(main)/layout.tsx` es alto riesgo (árbol compartido con Fernando + posible bucle de redirección con `/onboarding`). El asistente es reanudable por URL `/onboarding` y persiste progreso. Pendiente si se quiere el relaunch automático.
+
+### 2026-06-23: Árbol compartido — no tocar WIP ajeno
+- Durante la Fase 5 el único error de typecheck era de `KanbanPipeline.tsx` (WIP de Fernando), con la línea del error MOVIÉNDOSE entre ejecuciones (lo editaba en vivo). No se tocó: el código de onboarding compila limpio de forma aislada.
 
 ---
 

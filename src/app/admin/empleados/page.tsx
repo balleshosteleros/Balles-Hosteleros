@@ -1,17 +1,8 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
-import { getRolContext } from '@/features/auth/actions/permisos-actions'
-import { AdminPanel } from '@/features/admin/components/AdminPanel'
 
-export default async function EmpleadosPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) redirect('/')
-
-  // Fuente única (PRP-063): el panel admin es solo para director.
-  const { esDirector } = await getRolContext(user.id)
-  if (!esDirector) redirect('/')
-
-  return <AdminPanel />
+// PRP-067: la creación manual de empleados se retiró. Este punto de arranque
+// legacy ya no se usa; redirige a la gestión real de RRHH. El alta de empleados
+// se hace por el portal de empleo (contratación) o el volcado masivo del onboarding.
+export default function EmpleadosAdminPage() {
+  redirect('/rrhh/empleados')
 }
