@@ -1,8 +1,18 @@
 # PRP-067: Onboarding inicial de volcado de datos para empresas nuevas (bootstrap)
 
-> **Estado**: PENDIENTE
+> **Estado**: PENDIENTE (afinado 2026-06-23)
 > **Fecha**: 2026-06-23
 > **Proyecto**: Balles-Hosteleros
+
+---
+
+## Decisiones de afinado (2026-06-23)
+
+1. **PRP-067 es AUTÓNOMO; no depende de PRP-044.** La vía baseline de cada paso es la carga que YA existe en cada submódulo (alta manual + import por entidad: logística ya tiene `ImportadorIADialog`/`ImportadorIACatalogoDialog`). El "Cargar con IA" unificado de PRP-044 es una mejora *opcional*: cuando exista `<MigracionIADialog>`, se hace swap por paso. PRP-067 se puede implementar y mergear sin PRP-044.
+2. **Empleados en el onboarding = VOLCADO MASIVO de plantilla existente (excepción sancionada).** La regla [[feedback_empleados_solo_por_portal_empleo]] (no alta manual uno a uno) se mantiene para el día a día: las **nuevas contrataciones** entran por el portal (PRP-066). PERO el bootstrap de una empresa nueva necesita cargar la **plantilla que YA trabaja allí** — eso se hace por **import masivo** (CSV/IA → `empleados-core` en lote), no por el formulario manual retirado. No se reabre `/rrhh/empleados/nuevo`; el volcado masivo es el único camino de alta en bloque y solo en onboarding.
+3. **`/admin/empleados` se degrada de forma concreta:** la ruta redirige a `/rrhh/empleados` (gestión) y se **retira `CreateEmployeeForm` de `AdminPanel`** (deja de crear empleados sueltos). No se borra el código de listado/gestión.
+4. **Obligatorio mínimo para "empresa operativa":** Locales + Puestos/Salarios + Empleados. El resto (proveedores, productos, imagen de marca, carta, calendarios) es opcional y omitible. Departamentos/roles/organigrama ya vienen sembrados (se muestran como "✓ listo de serie", no son pasos de carga).
+5. **Ruta y guard:** `/onboarding`, visible solo para rol director (o con permiso), operando siempre sobre la empresa activa (cookie).
 
 ---
 
@@ -28,14 +38,33 @@ Construir un **asistente de onboarding (bootstrap)** que arranca automáticament
 - [ ] Al completar `createEmpresa` y activar la empresa nueva, el director es llevado automáticamente al asistente de onboarding (ruta dedicada, p. ej. `/onboarding`), no a `/admin/empleados`.
 - [ ] El asistente muestra una lista ordenada de pasos del bootstrap con su estado (No iniciado / En progreso / Completado / Omitido) y un porcentaje global de avance.
 - [ ] El orden de pasos respeta las dependencias del modelo: primero estructura (locales → departamentos/roles ya sembrados → puestos+salarios), luego personas (empleados/usuarios), luego catálogo (proveedores → productos), con bloques opcionales al final.
-- [ ] Cada paso ofrece dos vías: **carga masiva con IA** (reutiliza `<MigracionIADialog entidad="…">` de PRP-044) y **alta manual** (reutiliza las altas existentes de cada submódulo); el bootstrap NO reimplementa esas altas.
-- [ ] El alta de empleados/usuarios queda integrada en el wizard reutilizando la lógica de `createEmployee`/`empleados-actions`; `/admin/empleados` ya no es el punto de arranque (redirige al onboarding o queda accesible solo como gestión secundaria).
+- [ ] Cada paso ofrece **alta manual / import por submódulo** (reutiliza lo existente; el bootstrap NO reimplementa altas). "Cargar con IA" unificado es opcional: si `<MigracionIADialog>` (PRP-044) existe se usa, si no, se cae al import/alta actual del submódulo. **PRP-067 funciona sin PRP-044.**
+- [ ] El paso **Empleados** carga la **plantilla existente por volcado masivo** (CSV/IA → `empleados-core` en lote), NO con el formulario manual retirado. Las nuevas contrataciones siguen entrando por el portal (PRP-066); el volcado masivo es exclusivo del onboarding.
+- [ ] `/admin/empleados` **redirige a `/rrhh/empleados`** y se retira `CreateEmployeeForm` de `AdminPanel`; deja de crear empleados sueltos (no se borra el listado/gestión).
 - [ ] El estado del onboarding persiste por empresa en BD y es reanudable: cerrar sesión y volver retoma el progreso exacto, sin perder pasos ya completados.
-- [ ] Un paso puede marcarse "Omitir por ahora" y el wizard sigue siendo completable; los pasos omitidos quedan visibles como pendientes.
+- [ ] Los pasos **opcionales** pueden marcarse "Omitir por ahora"; los **obligatorios (1–3)** NO son omitibles y deben quedar "completado" (derivado) para cerrar el onboarding.
 - [ ] El estado de cada paso se deriva de datos reales (p. ej. "Empleados" se considera completado cuando hay ≥1 empleado activo), no de un flag manual desincronizable.
 - [ ] El asistente puede cerrarse y reabrirse desde un acceso fijo mientras el onboarding no esté 100% completo; al completarse, deja de auto-lanzarse.
 - [ ] Respeta visibilidad por rol: solo el director (o rol con permiso) ve y ejecuta el bootstrap.
 - [ ] `npm run typecheck` pasa y `npm run build` es exitoso.
+
+### Catálogo de pasos (definitivo)
+
+Orden por dependencias del modelo. "Obl." = obligatorio para marcar el onboarding como completado.
+
+| # | Paso | Obl. | Depende de | Motor de carga (baseline hoy) | "Completado" se deriva de |
+|---|------|------|-----------|-------------------------------|---------------------------|
+| 0 | Estructura base sembrada (departamentos, roles, organigrama) | — | — | Automático (`seedEmpresaDefaults`) | Siempre ✓ (informativo, no editable aquí) |
+| 1 | **Locales** (puntos de fichaje) | ✅ | — | Alta manual de locales + import | ≥1 local |
+| 2 | **Puestos y salarios** | ✅ | depto (sembrado) | `PuestoSalarioDialog` + import | ≥1 puesto activo con ≥1 nivel |
+| 3 | **Empleados** (plantilla existente) | ✅ | locales + puestos | **Volcado masivo** (CSV/IA → `empleados-core` en lote) | ≥1 empleado activo |
+| 4 | Proveedores | ⬜ | — | `ImportadorIADialog` + alta | ≥1 proveedor (si se entra) |
+| 5 | Productos / catálogo | ⬜ | proveedores (recomendado) | `ImportadorIACatalogoDialog` + alta | ≥1 producto (si se entra) |
+| 6 | Imagen de marca (logo/paleta) | ⬜ | — | `ImagenMarcaTab` | logo o color definidos |
+| 7 | Carta digital | ⬜ | productos venta | módulo carta | — |
+| 8 | Calendarios de vacaciones | ⬜ | — | calendarios RRHH | — |
+
+> El onboarding se considera **completado** cuando los pasos 1–3 (obligatorios) están en estado "completado" (derivado) u "omitido" explícito NO se permite en obligatorios. Los opcionales pueden quedar pendientes sin bloquear.
 
 ### Comportamiento Esperado
 
@@ -133,8 +162,8 @@ ALTER TABLE empresas ADD COLUMN IF NOT EXISTS onboarding_completado_at TIMESTAMP
 **Validación**: Recorrer pasos de punta a punta sobre una empresa nueva; el progreso se refleja y persiste tras recargar.
 
 ### Fase 4: Auto-lanzamiento y degradación de `/admin/empleados`
-**Objetivo**: Tras `createEmpresa` + activación, redirigir a `/onboarding`; `OnboardingLauncher` reabre el asistente mientras `onboarding_completado_at` sea null. Reapuntar `/admin/empleados` (redirección o reetiquetado como gestión secundaria) para que deje de ser el punto de arranque, conservando su funcionalidad de gestión.
-**Validación**: Crear empresa → cae en `/onboarding`; abandonar y volver retoma el punto; completar todo desactiva el auto-lanzamiento; `/admin/empleados` ya no es la entrada.
+**Objetivo**: Tras `createEmpresa` + activación, redirigir a `/onboarding`; `OnboardingLauncher` reabre el asistente mientras `onboarding_completado_at` sea null. Degradación concreta de `/admin/empleados`: la ruta **redirige a `/rrhh/empleados`** y se **retira `<CreateEmployeeForm>` de `AdminPanel`** (sin borrar listado/gestión). Marcar `onboarding_completado_at` cuando los pasos 1–3 estén completados.
+**Validación**: Crear empresa → cae en `/onboarding`; abandonar y volver retoma el punto; completar 1–3 desactiva el auto-lanzamiento; entrar a `/admin/empleados` redirige a `/rrhh/empleados` y ya no hay alta suelta de empleados.
 
 ### Fase 5: Validación Final
 **Objetivo**: Sistema funcionando end-to-end (empresa nueva → vacía → operativa vía wizard).
@@ -160,6 +189,8 @@ ALTER TABLE empresas ADD COLUMN IF NOT EXISTS onboarding_completado_at TIMESTAMP
 - [ ] **RLS con helper**: usar `empresas_del_usuario()` en toda política (regla `project_rls_helper_empresas_del_usuario`).
 - [ ] **Orden por dependencias**: empleados requieren puesto/depto/local; productos requieren proveedor. El catálogo de pasos debe codificar y avisar estas dependencias.
 - [ ] **No borrar `/admin/empleados`**: degradar como punto de arranque sí; eliminar el código de gestión NO (pedir permiso antes de borrar archivos — regla de seguridad CLAUDE.md).
+- [ ] **Empleados = volcado masivo en lote, no formulario manual**: el paso Empleados llama a `empleados-core` en bucle/lote desde un import (CSV/IA), NO reabre `/rrhh/empleados/nuevo` (retirado). Cada empleado importado debe quedar COMPLETO (regla `feedback_datos_completos_obligatorio`): puesto + local + datos mínimos; si falta algo, queda como borrador del import, no como empleado a medias. Respeta `feedback_empleados_solo_por_portal_empleo` (esto es excepción de bootstrap, no alta del día a día).
+- [ ] **Obligatorios no omitibles**: pasos 1–3 no admiten "Omitir"; su estado se deriva de conteos reales. Solo los opcionales (4–8) son omitibles.
 - [ ] **Multi-tenant del software**: el wizard es del software (todas las empresas actuales y futuras), no se hardcodea para HABANA/BACANAL.
 - [ ] **Migración versionada**: guardar el `.sql` en `supabase/migrations/` aunque se aplique por MCP.
 
