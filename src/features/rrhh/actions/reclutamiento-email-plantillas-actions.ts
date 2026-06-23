@@ -377,7 +377,26 @@ export async function enviarReclutamientoFaseEmail(
     text: `${bodyText}\n\n—\n${pieText}`,
     fromName: empresaNombre,
   });
-  if (res.ok) return { sent: true };
+  if (res.ok) {
+    // Marca en la actividad que este cambio de estado envió correo al candidato.
+    // El registro lo creó moverCandidatoFase justo antes; actualizamos el más
+    // reciente de este candidato. No afecta al resultado del envío si falla.
+    const { data: ult } = await supabase
+      .from("candidato_historial")
+      .select("id")
+      .eq("candidato_id", candidatoId)
+      .eq("empresa_id", empresaId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (ult?.id) {
+      await supabase
+        .from("candidato_historial")
+        .update({ email_enviado: true })
+        .eq("id", ult.id as string);
+    }
+    return { sent: true };
+  }
   if (!res.configured) return { sent: false, reason: "Sin transporte de email configurado" };
   return { sent: false, reason: res.error };
 }
