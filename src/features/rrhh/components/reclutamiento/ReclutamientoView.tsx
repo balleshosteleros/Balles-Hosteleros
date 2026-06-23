@@ -222,12 +222,13 @@ function SortableVacanteCard(props: VacanteCardProps & { id: string }) {
         dragHandle={
           <button
             type="button"
-            className="shrink-0 cursor-grab touch-none text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing"
-            aria-label="Reordenar vacante"
+            className="shrink-0 -ml-1 flex h-7 w-7 items-center justify-center rounded-md cursor-grab touch-none text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing"
+            aria-label="Arrastrar para reordenar"
+            title="Arrastra para reordenar"
             {...attributes}
             {...listeners}
           >
-            <GripVertical className="h-4 w-4" />
+            <GripVertical className="h-5 w-5" />
           </button>
         }
       />
