@@ -1,6 +1,6 @@
 # Ágora POS — Estado de la integración y plan de corrección
 
-> **Fecha:** 2026-06-09 · actualizado **2026-06-10**
+> **Fecha:** 2026-06-09 · actualizado **2026-06-10** · **2026-06-23** ⚠️ El «**Estado**» de abajo es de 06-10 y está **superado** — ver la sección «**ACTUALIZACIÓN 2026-06-23 (cierre)**» al final del documento.
 > **Repo / HEAD:** Balles-Hosteleros · `main` @ `c777d6f`
 > **Origen:** handoff tras estudio del código heredado + la "Guía del Integrador" de Ágora (v8.6.0) + la conversación con el equipo técnico de Ágora (2026-06-09).
 > **Relacionado:** `.claude/PRPs/PRP-024-auditoria-tecnica-logistica-agora-pos.md`, `.claude/memory/feedback/regla_seguridad_agora.md`
@@ -380,3 +380,23 @@ Cotejando el código con la sección **"Integración mediante API HTTP"** de la 
 - Regla de Seguridad Ágora (`.claude/memory/feedback/regla_seguridad_agora.md`): ante cualquier error con Ágora o de persistencia, **parar, mostrar el error exacto, pedir aprobación**. Nunca reintentar/autocorregir solo. Aplica a todo el plan.
 - Nada de credenciales en commits. El token es el CIF sin letra → tratarlo como secreto igualmente.
 - Empezar **siempre por solo-lectura** (`export`/`export-master`). No usar `/api/import/`, `/api/doc/processed` ni `/api/hub/generate-data/` hasta tener el flujo de lectura validado y aprobado.
+
+---
+
+## ACTUALIZACIÓN 2026-06-23 (cierre)
+
+> Sesión lado Fernando (solo lectura sobre BD/Ágora + un cron en GitHub Actions; **no se tocó `src/`**). El «Estado» del encabezado (06-10) queda **superado** por esto.
+
+**Estado real hoy.** El colaborador construyó encima la **ingesta de ventas** (PRP-056/057/058) y un **conector multi-tenant** (PRP-059): las credenciales de Ágora ya no son env globales, viven **cifradas por empresa en BD** (`empresas.agora_activo` + `agora_api_*`), con fallback a env. Habana (Workplace 1) y Bacanal (Workplace 4) activas. Las **ventas Ágora→Balles fluyen a diario** a `pos_tickets`/`pos_ticket_lineas` (visibles en /sala/ventas) y el kardex descuenta por receta.
+
+**Hecho esta sesión:**
+- **Cron de ventas arreglado.** Vercel **no dispara fiable** los crons (plan Hobby, 16 crons en `vercel.json`, horas dispersas; se saltó el 22-23). Montado un **disparador externo en GitHub Actions** (`.github/workflows/agora-sync-cron.yml`, 09:37 UTC, `CRON_SECRET` en GitHub Secrets). Recuperados a mano los días 21-22 que faltaban (**44 facturas**). Commit `dea4201`.
+- **Escritura de precios Balles→Ágora VALIDADA end-to-end** en producción con un **cambio real reversible**: "Bot Belvedere 3L" (Id 2147), tarifa Bacanal **471,50 → 471,51 → 471,50 €** (`import` 200 + `generate-data` 200 en cambio y reversión). Enfoque **"leer y devolver"**: leer el producto del export, cambiar solo el `MainPrice` de su tarifa (Habana=`PriceListId 1`, Bacanal=`10`), reenviar `{Id, Name, BaseSaleFormatId, FamilyId, VatId, Prices}` por `/api/import/` + propagar con `/api/hub/generate-data/?workplaces=<1|4>`. El import **exige `Name` y `BaseSaleFormatId`** (500 si faltan). → **§9 satisfecho** (la escritura ya está validada y aprobada). Detalle: `.claude/memory/project/envio_precios_agora_validado.md`.
+- **Recetas: son triviales 1:1.** `producto_composicion` tiene 203 filas, **todas de 1 ingrediente**; las ~208 multi-ingrediente reales se perdieron en la migración del Excel del 10-jun (la tabla `backup_agora` que cita `migrar-catalogo.mjs` **no existe en BD**). El descuento de stock va bien para **bebidas** pero **no para platos**. Ágora **no exporta recetas** por API (solo vía `custom-query` con un `QueryGuid` de un informe creado en su back-office). Detalle: `.claude/memory/project/recetas_triviales_no_armar_descuento.md`.
+
+**3 pendientes para el equipo / Iván:**
+1. **Crons de Vercel** — los **otros 15** (fichajes, reseñas, recordatorios, points, firmas, rwg, vacantes…) siguen sin disparador fiable. Fix: **Vercel Pro** o **ampliar el workflow** a los 16 y vaciar `crons` en `vercel.json`. → `.claude/memory/project/crons_vercel_no_se_disparan.md`.
+2. **Recetas** — incorporar el **backup del Excel** de las recetas multi-ingrediente a `producto_composicion`. **No armar `empresas.stock_descuento_desde`** (descuento de platos) hasta entonces.
+3. **Botón de precios** — circuito validado; **falta la feature** (server action `enviarPreciosAgora` + UI en logística/productos). **Zona de Iván** → coordinar.
+
+**Punto de entrada de esta sesión:** `.claude/memory/project/agora_estado_y_pendientes_2026-06-23.md`. Commits: `dea4201`, `5d5a226`, `0c8b30b`, `fc654d9`, `0501c7a`, `f0bc93f`.
