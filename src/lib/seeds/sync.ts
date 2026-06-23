@@ -14,6 +14,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { DEPARTAMENTOS_SEED, normalizeDeptoNombre } from "./departamentos";
 import { ROLES_SEED, normalizeRolNombre } from "./roles";
+import { PUESTOS_SEED, normalizePuestoNombre } from "./puestos";
 import { ORGANIGRAMA_SEED } from "./organigrama";
 import { INSPECTOR_EMAIL_PLANTILLAS_SEED } from "./inspector-email-plantillas";
 import { INSPECCION_PRESENTACION_SEED } from "./inspeccion-presentacion";
@@ -129,6 +130,58 @@ export async function syncRolesAEmpresa(
 }
 
 /**
+ * Sincroniza puestos canónicos a una empresa concreta (aditivo).
+ * Resuelve `departamento_id` por nombre dentro de la empresa; omite los puestos
+ * cuyo departamento no exista. Idempotente por (departamento, nombre).
+ */
+export async function syncPuestosAEmpresa(
+  admin: Admin,
+  empresaId: string,
+): Promise<{ creados: number }> {
+  const { data: deptos } = await admin
+    .from("departamentos")
+    .select("id, nombre")
+    .eq("empresa_id", empresaId);
+  const deptoIdPorNombre = new Map(
+    ((deptos ?? []) as Array<{ id: string; nombre: string }>).map((d) => [
+      normalizeDeptoNombre(d.nombre),
+      d.id,
+    ]),
+  );
+
+  const { data: existentes } = await admin
+    .from("puestos")
+    .select("nombre, departamento_id")
+    .eq("empresa_id", empresaId);
+  // Clave existente = departamento_id|nombre normalizado.
+  const setExistentes = new Set(
+    ((existentes ?? []) as Array<{ nombre: string; departamento_id: string }>).map(
+      (p) => `${p.departamento_id}|${normalizePuestoNombre(p.nombre)}`,
+    ),
+  );
+
+  const aCrear: Array<Record<string, unknown>> = [];
+  for (const p of PUESTOS_SEED) {
+    const deptoId = deptoIdPorNombre.get(normalizeDeptoNombre(p.departamento));
+    if (!deptoId) continue; // el departamento del seed no existe en la empresa
+    const key = `${deptoId}|${normalizePuestoNombre(p.nombre)}`;
+    if (setExistentes.has(key)) continue;
+    setExistentes.add(key);
+    aCrear.push({
+      empresa_id: empresaId,
+      departamento_id: deptoId,
+      nombre: p.nombre,
+      estado: "activo",
+    });
+  }
+
+  if (aCrear.length === 0) return { creados: 0 };
+  const { error } = await admin.from("puestos").insert(aCrear);
+  if (error) throw error;
+  return { creados: aCrear.length };
+}
+
+/**
  * Siembra el organigrama base SOLO si la empresa no tiene uno aún.
  * Si ya existe (incluso personalizado), no se toca.
  */
@@ -155,47 +208,71 @@ export async function syncOrganigramaAEmpresa(
 }
 
 /**
- * Siembra vacantes en borrador a partir de los nodos del organigrama de la
- * empresa (aditivo: solo crea vacantes cuyo título no exista ya).
+ * Siembra una vacante en borrador por cada PUESTO de la empresa, enlazada
+ * (puesto_id + departamento_id) con jornada y contrato canónicos.
+ * Aditivo e idempotente: no duplica un puesto que ya tenga vacante y enlaza
+ * vacantes homónimas sueltas a su puesto. Mismo criterio que
+ * `asegurarVacantesPorPuesto` (acción de UI).
  */
 export async function syncVacantesAEmpresa(
   admin: Admin,
   empresaId: string,
-  empresaSlug: string,
+  _empresaSlug?: string,
 ): Promise<{ creadas: number }> {
-  const { data: org } = await admin
-    .from("organigramas")
-    .select("nodes")
-    .eq("empresa_slug", empresaSlug)
-    .maybeSingle();
-  const nodos = ((org?.nodes ?? []) as Array<{ label: string }>) ?? [];
-  if (nodos.length === 0) return { creadas: 0 };
+  const [puestosRes, vacantesRes] = await Promise.all([
+    admin
+      .from("puestos")
+      .select("id, nombre, departamento_id")
+      .eq("empresa_id", empresaId)
+      .eq("estado", "activo"),
+    admin
+      .from("vacantes")
+      .select("id, titulo, puesto_id")
+      .eq("empresa_id", empresaId),
+  ]);
 
-  const { data: vacExistentes } = await admin
-    .from("vacantes")
-    .select("titulo")
-    .eq("empresa_id", empresaId);
-  const setExistentes = new Set(
-    (vacExistentes ?? []).map((v) => (v.titulo as string).trim().toLowerCase()),
+  const puestos = (puestosRes.data ?? []) as Array<{
+    id: string; nombre: string; departamento_id: string | null;
+  }>;
+  const vacantes = (vacantesRes.data ?? []) as Array<{
+    id: string; titulo: string | null; puesto_id: string | null;
+  }>;
+  if (puestos.length === 0) return { creadas: 0 };
+
+  const norm = (s: string) => s.trim().toLowerCase();
+  const puestoIdConVacante = new Set(
+    vacantes.map((v) => v.puesto_id).filter(Boolean) as string[],
   );
+  const vacantePorNombre = new Map<string, { id: string; puesto_id: string | null }>();
+  for (const v of vacantes) vacantePorNombre.set(norm(v.titulo ?? ""), v);
 
-  const vistos = new Set<string>();
-  const aCrear = nodos
-    .filter((n) => {
-      const key = (n.label ?? "").trim().toLowerCase();
-      if (!key || vistos.has(key) || setExistentes.has(key)) return false;
-      vistos.add(key);
-      return true;
-    })
-    .map((n) => ({
+  const aCrear: Array<Record<string, unknown>> = [];
+  for (const p of puestos) {
+    if (puestoIdConVacante.has(p.id)) continue; // ya tiene su vacante
+    const homonima = vacantePorNombre.get(norm(p.nombre));
+    if (homonima) {
+      // Vacante con el mismo nombre pero sin enlazar → enlazar al puesto.
+      if (!homonima.puesto_id) {
+        await admin
+          .from("vacantes")
+          .update({ puesto_id: p.id, departamento_id: p.departamento_id })
+          .eq("id", homonima.id);
+      }
+      continue;
+    }
+    aCrear.push({
       empresa_id: empresaId,
-      titulo: n.label,
-      tipo_jornada: "completa",
+      titulo: p.nombre,
+      puesto_id: p.id,
+      departamento_id: p.departamento_id,
+      tipo_jornada: "Jornada completa",
+      tipo_contrato: "Indefinido",
       estado_publicacion: "borrador",
       visible_publicamente: false,
       cuestionario: false,
       favorita: false,
-    }));
+    });
+  }
 
   if (aCrear.length === 0) return { creadas: 0 };
   const { error } = await admin.from("vacantes").insert(aCrear);
@@ -662,15 +739,14 @@ export async function syncCategoriasProductoAEmpresa(
 
 /** Catálogos canónicos de vacantes (mismos valores que las migraciones). */
 const JORNADAS_SEED = [
-  { nombre: "Completa", orden: 1 },
-  { nombre: "Media jornada", orden: 2 },
-  { nombre: "Por horas", orden: 3 },
+  { nombre: "Jornada completa", orden: 1 },
+  { nombre: "Jornada reducida", orden: 2 },
+  { nombre: "Jornada por horas", orden: 3 },
 ];
 const TIPOS_CONTRATO_SEED = [
   { nombre: "Indefinido", orden: 1 },
   { nombre: "Temporal", orden: 2 },
-  { nombre: "Fijo discontinuo", orden: 3 },
-  { nombre: "Formación y prácticas", orden: 4 },
+  { nombre: "Prácticas", orden: 3 },
 ];
 
 /**
@@ -715,6 +791,7 @@ export async function seedEmpresaDefaults(
   const admin = createAdminClient();
   await syncDepartamentosAEmpresa(admin, empresaId);
   await syncRolesAEmpresa(admin, empresaId);
+  await syncPuestosAEmpresa(admin, empresaId);
   await syncOrganigramaAEmpresa(admin, empresaSlug);
   await syncCatalogosVacanteAEmpresa(admin, empresaId);
   await syncVacantesAEmpresa(admin, empresaId, empresaSlug);
@@ -786,6 +863,7 @@ export async function syncSeedsToAllEmpresas(): Promise<{
       const empresaNombre = (e.nombre as string) ?? empresaSlug;
       const d = await syncDepartamentosAEmpresa(admin, empresaId);
       const r = await syncRolesAEmpresa(admin, empresaId);
+      await syncPuestosAEmpresa(admin, empresaId);
       const o = await syncOrganigramaAEmpresa(admin, empresaSlug);
       await syncCatalogosVacanteAEmpresa(admin, empresaId);
       const v = await syncVacantesAEmpresa(admin, empresaId, empresaSlug);
