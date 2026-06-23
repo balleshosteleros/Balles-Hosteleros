@@ -271,7 +271,7 @@ export function FormCandidaturaPublica({
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="cv">Currículum vitae *</Label>
+        <Label htmlFor="cv">Currículum *</Label>
         <label
           htmlFor="cv"
           className="flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm cursor-pointer transition-colors hover:bg-accent"
