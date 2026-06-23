@@ -9,6 +9,8 @@ export interface EmpleoLink {
   origenCategoria: OrigenCandidatura;
   urlGenerada: string;
   activo: boolean;
+  /** Enlace de sistema (WEB por defecto): no se puede borrar ni desactivar. */
+  protegido: boolean;
   creadoPor: string | null;
   createdAt: string;
   updatedAt: string;

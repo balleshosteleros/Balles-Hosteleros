@@ -3,6 +3,7 @@ import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import crypto from "node:crypto";
 import { normalizarNombre } from "@/shared/lib/normalizar-nombre";
+import { ensureWebLink } from "@/features/rrhh/lib/empleo-web-link";
 import {
   calcularNotaCuestionario,
   type PreguntaCuestionario,
@@ -223,7 +224,8 @@ export async function POST(req: Request) {
     }
 
     // Atribución de canal: si la candidatura llega por un enlace ?o=<codigo>,
-    // hereda su origen_categoria y queda vinculada al enlace concreto.
+    // hereda su origen_categoria y queda vinculada al enlace concreto. Si no llega por
+    // ningún canal (o el código no existe), se atribuye al enlace WEB por defecto.
     let origen = "web";
     let canalLinkId: string | null = null;
     let canalNombre: string | null = null;
@@ -239,6 +241,14 @@ export async function POST(req: Request) {
         origen = (link.origen_categoria as string) ?? "web";
         canalLinkId = link.id as string;
         canalNombre = (link.nombre as string) ?? null;
+      }
+    }
+    if (!canalLinkId) {
+      const web = await ensureWebLink(supabase, empresaId);
+      if (web) {
+        origen = web.origen_categoria ?? "web";
+        canalLinkId = web.id;
+        canalNombre = web.nombre ?? "Web";
       }
     }
 

@@ -44,10 +44,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import {
   Search, Star, MoreHorizontal, MapPin, Clock, CalendarDays,
   FileText, Users, Send, ArrowLeft, User, Phone, Mail, Tag, Kanban, List,
-  Pencil, Share2, Trash2, Utensils, Building2, Settings, Check, Link2,
+  Pencil, Trash2, Utensils, Building2, Settings, Check, Link2,
   GripVertical,
 } from "lucide-react";
-import { DialogSnippetEmbed } from "@/features/empleo-publico/components/DialogSnippetEmbed";
 import { EnlacesEmpleoDialog } from "@/features/rrhh/components/reclutamiento/EnlacesEmpleoDialog";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import {
@@ -266,7 +265,7 @@ function AllCandidatosView({ vacantes }: { vacantes: Vacante[] }) {
               <TableHead>Fase</TableHead>
               <TableHead>Teléfono</TableHead>
               <TableHead>Email</TableHead>
-              <TableHead>Origen</TableHead>
+              <TableHead>Canal</TableHead>
               <TableHead>Reclutador</TableHead>
             </TableRow>
           </TableHeader>
@@ -287,7 +286,7 @@ function AllCandidatosView({ vacantes }: { vacantes: Vacante[] }) {
                 </TableCell>
                 <TableCell className="text-muted-foreground">{c.telefono}</TableCell>
                 <TableCell className="text-muted-foreground">{c.email}</TableCell>
-                <TableCell className="text-muted-foreground">{c.canal ? `${ORIGEN_LABELS[c.origen]} · ${c.canal}` : ORIGEN_LABELS[c.origen]}</TableCell>
+                <TableCell className="text-muted-foreground">{c.canal ?? ORIGEN_LABELS[c.origen]}</TableCell>
                 <TableCell className="text-muted-foreground">{c.reclutadorAsignado}</TableCell>
               </TableRow>
             ))}
@@ -318,7 +317,7 @@ function CandidatoDialog({ candidato, open, onOpenChange }: { candidato: Candida
           <Row icon={<Phone className="h-4 w-4" />} label="Teléfono" value={candidato.telefono} />
           <Row icon={<Mail className="h-4 w-4" />} label="Email" value={candidato.email} />
           <Row icon={<CalendarDays className="h-4 w-4" />} label="Inscripción" value={candidato.fechaInscripcion} />
-          <Row icon={<MapPin className="h-4 w-4" />} label="Origen" value={candidato.canal ? `${ORIGEN_LABELS[candidato.origen]} · ${candidato.canal}` : ORIGEN_LABELS[candidato.origen]} />
+          <Row icon={<MapPin className="h-4 w-4" />} label="Canal" value={candidato.canal ?? ORIGEN_LABELS[candidato.origen]} />
           <Row icon={<User className="h-4 w-4" />} label="Reclutador" value={candidato.reclutadorAsignado} />
         </div>
       </DialogContent>
@@ -414,7 +413,7 @@ function CandidatosView({ vacante, faseInicial, onBack }: { vacante: Vacante; fa
               <TableHead>Fase</TableHead>
               <TableHead>Teléfono</TableHead>
               <TableHead>Email</TableHead>
-              <TableHead>Origen</TableHead>
+              <TableHead>Canal</TableHead>
               <TableHead>Inscripción</TableHead>
               <TableHead>Reclutador</TableHead>
             </TableRow>
@@ -440,7 +439,7 @@ function CandidatosView({ vacante, faseInicial, onBack }: { vacante: Vacante; fa
                 </TableCell>
                 <TableCell className="text-muted-foreground">{c.telefono}</TableCell>
                 <TableCell className="text-muted-foreground">{c.email}</TableCell>
-                <TableCell className="text-muted-foreground">{c.canal ? `${ORIGEN_LABELS[c.origen]} · ${c.canal}` : ORIGEN_LABELS[c.origen]}</TableCell>
+                <TableCell className="text-muted-foreground">{c.canal ?? ORIGEN_LABELS[c.origen]}</TableCell>
                 <TableCell className="text-muted-foreground">{c.fechaInscripcion}</TableCell>
                 <TableCell className="text-muted-foreground">{c.reclutadorAsignado}</TableCell>
               </TableRow>
@@ -535,7 +534,6 @@ export function ReclutamientoView() {
   // Dialogs (creación/edición + share)
   const [nuevaOfertaOpen, setNuevaOfertaOpen] = useState(false);
   const [ofertaEditando, setOfertaEditando] = useState<Vacante | null>(null);
-  const [snippetGlobalOpen, setSnippetGlobalOpen] = useState(false);
   const [enlacesOpen, setEnlacesOpen] = useState(false);
 
   // Selector de área (vacantes operativas vs. administrativas)
@@ -766,11 +764,6 @@ export function ReclutamientoView() {
                 <Button variant="outline" size="sm" onClick={() => setEnlacesOpen(true)} className="gap-1.5">
                   <Link2 className="h-3.5 w-3.5" /> Enlaces
                 </Button>
-                {empresaActual.id ? (
-                  <Button variant="outline" size="sm" onClick={() => setSnippetGlobalOpen(true)} className="gap-1.5">
-                    <Share2 className="h-3.5 w-3.5" /> Compartir
-                  </Button>
-                ) : null}
                 <Button
                   size="icon"
                   variant="outline"
@@ -842,17 +835,11 @@ export function ReclutamientoView() {
         onSaved={recargar}
       />
 
-      {/* ── Snippet de share del portal completo ────── */}
-      {empresaActual.id && (
-        <DialogSnippetEmbed
-          open={snippetGlobalOpen}
-          onOpenChange={setSnippetGlobalOpen}
-          empresaSlug={empresaActual.id}
-          empresaNombre={empresaActual.nombre}
-        />
-      )}
-
-      <EnlacesEmpleoDialog open={enlacesOpen} onOpenChange={setEnlacesOpen} />
+      <EnlacesEmpleoDialog
+        open={enlacesOpen}
+        onOpenChange={setEnlacesOpen}
+        empresaNombre={empresaActual.nombre}
+      />
 
       {confirmDeleteDialog}
     </div>
