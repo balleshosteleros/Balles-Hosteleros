@@ -32,6 +32,22 @@ function deriveModeFromPath(pathname: string, sectionsForPrefix: Section[]): Vie
   return null;
 }
 
+// Etiqueta redonda (pill) para los items y módulos del menú lateral.
+function NavPill({ text, tone }: { text: string; tone: "blue" | "green" | "yellow" }) {
+  const tones: Record<string, string> = {
+    blue: "bg-blue-600 text-white",
+    green: "bg-green-600 text-white",
+    yellow: "bg-yellow-400 text-yellow-950",
+  };
+  return (
+    <span
+      className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold leading-none ${tones[tone]}`}
+    >
+      {text}
+    </span>
+  );
+}
+
 function SubMenu({ items, collapsed }: { items: SubItem[]; collapsed: boolean }) {
   return (
     <SidebarMenuSub>
@@ -46,6 +62,7 @@ function SubMenu({ items, collapsed }: { items: SubItem[]; collapsed: boolean })
             >
               <sub.icon className="mr-2 h-4 w-4 shrink-0" />
               {!collapsed && <span className="text-sm">{sub.title}</span>}
+              {!collapsed && sub.badge && <NavPill text={sub.badge} tone="blue" />}
             </NavLink>
           </SidebarMenuButton>
         </SidebarMenuSubItem>
@@ -63,6 +80,7 @@ function CollapsibleSection({
   linkTo,
   open,
   onOpenChange,
+  fase,
 }: {
   icon: React.ElementType;
   label: string;
@@ -72,7 +90,15 @@ function CollapsibleSection({
   linkTo?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  fase?: 1 | 2;
 }) {
+  const faseBadge =
+    fase === 1 ? (
+      <NavPill text="1ª fase" tone="green" />
+    ) : fase === 2 ? (
+      <NavPill text="2ª fase" tone="yellow" />
+    ) : null;
+
   const trigger = linkTo ? (
     <SidebarMenuButton asChild>
       <NavLink
@@ -85,7 +111,8 @@ function CollapsibleSection({
         {!collapsed && (
           <>
             <span className="text-sm flex-1">{label}</span>
-            <ChevronDown className="h-3 w-3 ml-auto transition-transform" />
+            {faseBadge}
+            <ChevronDown className="h-3 w-3 ml-1 transition-transform" />
           </>
         )}
       </NavLink>
@@ -96,7 +123,8 @@ function CollapsibleSection({
       {!collapsed && (
         <>
           <span className="text-sm flex-1">{label}</span>
-          <ChevronDown className="h-3 w-3 ml-auto transition-transform" />
+          {faseBadge}
+          <ChevronDown className="h-3 w-3 ml-1 transition-transform" />
         </>
       )}
     </SidebarMenuButton>
@@ -360,6 +388,7 @@ export function AppSidebar() {
                       >
                         <sub.icon className="mr-2 h-4 w-4 shrink-0" />
                         {!collapsed && <span className="text-sm">{sub.title}</span>}
+                        {!collapsed && sub.badge && <NavPill text={sub.badge} tone="blue" />}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -396,6 +425,7 @@ export function AppSidebar() {
                     items={s.items}
                     collapsed={collapsed}
                     linkTo={s.linkTo}
+                    fase={s.fase}
                     open={openKey === s.key}
                     onOpenChange={(isOpen) => setOpenKey(isOpen ? s.key : null)}
                   />
