@@ -41,6 +41,7 @@ export interface OfertaPublica {
   categoria: string | null;
   ubicacion: string | null;
   tipo_jornada: string | null;
+  tipo_contrato: string | null;
   salario_rango: string | null;
   cuestionario: boolean;
   fecha_creacion: string;
@@ -111,6 +112,7 @@ interface VacanteRow {
   categoria: string | null;
   ubicacion: string | null;
   tipo_jornada: string | null;
+  tipo_contrato: string | null;
   salario_rango: string | null;
   cuestionario: boolean;
   cuestionario_plantilla_id: string | null;
@@ -146,6 +148,7 @@ function rowToOferta(r: VacanteRow): OfertaPublica {
     categoria: r.categoria,
     ubicacion: r.ubicacion,
     tipo_jornada: r.tipo_jornada,
+    tipo_contrato: r.tipo_contrato,
     salario_rango: r.salario_rango,
     cuestionario: r.cuestionario,
     fecha_creacion: r.fecha_creacion,
@@ -170,7 +173,7 @@ export async function fetchPortalEmpleoPorSlug(slug: string): Promise<EmpleoPort
       .from("vacantes")
       .select(`
         id, empresa_id, titulo, descripcion, categoria, ubicacion,
-        tipo_jornada, salario_rango, cuestionario, fecha_creacion, orden,
+        tipo_jornada, tipo_contrato, salario_rango, cuestionario, fecha_creacion, orden,
         visible_publicamente, estado_publicacion,
         departamento_id, puesto_id,
         departamentos(nombre, area),
@@ -211,7 +214,7 @@ export async function fetchOfertaPublica(
       .from("vacantes")
       .select(`
         id, empresa_id, titulo, descripcion, categoria, ubicacion,
-        tipo_jornada, salario_rango, cuestionario, cuestionario_plantilla_id,
+        tipo_jornada, tipo_contrato, salario_rango, cuestionario, cuestionario_plantilla_id,
         fecha_creacion, orden,
         visible_publicamente, estado_publicacion,
         departamento_id, puesto_id,

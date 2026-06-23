@@ -297,7 +297,7 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Jornada</Label>
+                <Label>Jornada *</Label>
                 <Select value={form.tipo_jornada} onValueChange={(v) => setForm({ ...form, tipo_jornada: v })}>
                   <SelectTrigger><SelectValue placeholder="Selecciona…" /></SelectTrigger>
                   <SelectContent>
@@ -312,13 +312,29 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Rango salarial (opcional)</Label>
-                <Input
-                  value={form.salario_rango}
-                  onChange={(e) => setForm({ ...form, salario_rango: e.target.value })}
-                  placeholder="Ej. 18.000 - 22.000 € brutos/año"
-                />
+                <Label>Tipo de contrato *</Label>
+                <Select value={form.tipo_contrato} onValueChange={(v) => setForm({ ...form, tipo_contrato: v })}>
+                  <SelectTrigger><SelectValue placeholder="Selecciona…" /></SelectTrigger>
+                  <SelectContent>
+                    {tiposContrato.length === 0 ? (
+                      <SelectItem value="__none__" disabled>Sin tipos de contrato (créalos en Ajustes → RRHH)</SelectItem>
+                    ) : (
+                      tiposContrato.map((tc) => (
+                        <SelectItem key={tc.id} value={tc.nombre}>{tc.nombre}</SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Rango salarial (opcional)</Label>
+              <Input
+                value={form.salario_rango}
+                onChange={(e) => setForm({ ...form, salario_rango: e.target.value })}
+                placeholder="Ej. 18.000 - 22.000 € brutos/año"
+              />
             </div>
 
             <div className="space-y-1.5">
