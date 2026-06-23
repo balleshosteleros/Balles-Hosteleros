@@ -21,15 +21,8 @@ type BoolKey = {
 const EMAILS: { key: BoolKey; label: string }[] = [
   { key: "emails_auto_cambio_fase", label: "Activar emails automáticos al cambiar de fase" },
   { key: "emails_pedir_confirmacion", label: "Pedir confirmación antes de enviar cada email" },
-  { key: "emails_copia_reclutador", label: "Enviar copia al reclutador asignado" },
+  { key: "emails_copia_reclutador", label: "Enviar copia a quien gestiona el cambio (RRHH)" },
   { key: "emails_firma_corporativa", label: "Incluir firma corporativa en los emails" },
-];
-
-const ROLES: { key: BoolKey; label: string }[] = [
-  { key: "directores_mueven_fases", label: "Directores pueden mover candidatos entre fases" },
-  { key: "reclutadores_mueven_fases", label: "Reclutadores pueden mover candidatos entre fases" },
-  { key: "rrhh_edita_vacantes", label: "RRHH puede ver y editar vacantes" },
-  { key: "otros_roles_ven_vacantes", label: "Otros roles pueden ver vacantes (solo lectura)" },
 ];
 
 const GENERALES: { key: BoolKey; label: string }[] = [
@@ -107,7 +100,6 @@ export function ConfigGeneralConfig({ embedded = false }: { embedded?: boolean }
       )}
 
       {seccionToggles("Emails automáticos", "Controla cuándo se envían emails a los candidatos", EMAILS)}
-      {seccionToggles("Usuarios autorizados y roles", "Quién puede gestionar el módulo de reclutamiento", ROLES)}
 
       {/* Idioma y regional */}
       <Card>

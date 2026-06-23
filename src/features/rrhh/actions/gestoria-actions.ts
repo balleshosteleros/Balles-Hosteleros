@@ -76,10 +76,6 @@ export interface ReclutamientoConfigGeneral {
   emails_pedir_confirmacion: boolean;
   emails_copia_reclutador: boolean;
   emails_firma_corporativa: boolean;
-  directores_mueven_fases: boolean;
-  reclutadores_mueven_fases: boolean;
-  rrhh_edita_vacantes: boolean;
-  otros_roles_ven_vacantes: boolean;
   idioma_portal: string;
   formato_fecha: string;
   permitir_candidaturas_duplicadas: boolean;
@@ -93,10 +89,6 @@ const CONFIG_GENERAL_DEFAULT: ReclutamientoConfigGeneral = {
   emails_pedir_confirmacion: true,
   emails_copia_reclutador: false,
   emails_firma_corporativa: true,
-  directores_mueven_fases: true,
-  reclutadores_mueven_fases: true,
-  rrhh_edita_vacantes: true,
-  otros_roles_ven_vacantes: false,
   idioma_portal: "es",
   formato_fecha: "dd/mm/yyyy",
   permitir_candidaturas_duplicadas: false,
