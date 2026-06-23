@@ -209,6 +209,10 @@ export interface Candidato {
   resenas?: ResenaCandidato[];
   notas?: NotaCandidato[];
   marcadoComoNoVisto?: boolean;
+  /** Fecha en que se promovió a empleado (no null = ya contratado). */
+  promovidoAt?: string | null;
+  /** Empleado creado al contratar, si ya se promovió. */
+  empleadoId?: string | null;
 }
 
 // ─── Email plantillas por estado ────────────────────────────────
@@ -242,6 +246,8 @@ export interface Vacante {
   favorita: boolean;
   candidatos: Candidato[];
   empresaId: string;
+  /** Puesto plantilla del que es espejo la vacante (para contratar precargando el puesto). */
+  puestoId?: string | null;
   /** Posición manual fijada por drag & drop (mismo orden en el portal público). */
   orden?: number | null;
 }

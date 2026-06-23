@@ -207,3 +207,17 @@ export async function addResenaCandidato(
     },
   };
 }
+
+export async function deleteResenaCandidato(
+  resenaId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { supabase, empresaId } = await ctx();
+  if (!empresaId) return { ok: false, error: "Sin empresa activa" };
+  const { error } = await supabase
+    .from("candidato_resenas")
+    .delete()
+    .eq("id", resenaId)
+    .eq("empresa_id", empresaId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}

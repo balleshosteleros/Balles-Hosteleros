@@ -4,15 +4,17 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-export function ConfigGeneralConfig() {
+export function ConfigGeneralConfig({ embedded = false }: { embedded?: boolean }) {
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-bold text-foreground">Configuración</h2>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Ajustes generales del sistema de reclutamiento
-        </p>
-      </div>
+      {!embedded && (
+        <div>
+          <h2 className="text-lg font-bold text-foreground">Configuración</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Ajustes generales del sistema de reclutamiento
+          </p>
+        </div>
+      )}
 
       {/* Emails automáticos */}
       <Card>

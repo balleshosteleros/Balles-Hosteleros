@@ -170,6 +170,80 @@ export async function moverCandidatoFase(
   }
 }
 
+/**
+ * Mueve un candidato a OTRA vacante (corrección cuando se inscribió en la
+ * vacante equivocada). Permite indicar también la fase/estado de destino dentro
+ * de esa vacante. Registra la actividad. No permite mover candidatos ya
+ * promovidos a empleado.
+ */
+export async function moverCandidatoAVacante(
+  id: string,
+  vacanteId: string,
+  fase:
+    | "seleccion"
+    | "formacion"
+    | "descartado"
+    | "nuevo"
+    | "en_progreso"
+    | "oferta"
+    | "seleccionado",
+  estado: string,
+) {
+  try {
+    const { supabase, user, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    const { data: cand } = await supabase
+      .from("candidatos")
+      .select("promovido_at, vacante_id, fase, estado")
+      .eq("id", id)
+      .eq("empresa_id", empresaId)
+      .single();
+
+    if (cand?.promovido_at) {
+      return { ok: false, error: "Este candidato ya es empleado; no se puede cambiar de vacante." };
+    }
+
+    // Verifica que la vacante destino pertenece a la empresa.
+    const { data: vac } = await supabase
+      .from("vacantes")
+      .select("id")
+      .eq("id", vacanteId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (!vac) return { ok: false, error: "La vacante de destino no existe" };
+
+    const { error } = await supabase
+      .from("candidatos")
+      .update({ vacante_id: vacanteId, fase, estado, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("empresa_id", empresaId);
+    if (error) throw error;
+
+    // Registra el movimiento de vacante en la actividad del candidato.
+    if (user && cand) {
+      const usuarioNombre = await nombreUsuarioActual(supabase, user.id);
+      const { error: histErr } = await supabase.from("candidato_historial").insert({
+        empresa_id: empresaId,
+        candidato_id: id,
+        fase_anterior: cand.fase ?? null,
+        estado_anterior: cand.estado ?? null,
+        fase_nueva: fase,
+        estado_nuevo: estado,
+        usuario_id: user.id,
+        usuario_nombre: usuarioNombre,
+        email_enviado: false,
+      });
+      if (histErr) console.error("[candidatos] historial vacante:", histErr.message);
+    }
+
+    revalidatePath("/rrhh/reclutamiento");
+    return { ok: true };
+  } catch (err: unknown) {
+    return { ok: false, error: mensajeError(err) };
+  }
+}
+
 export async function eliminarCandidato(id: string) {
   try {
     const { supabase, empresaId } = await getContext();

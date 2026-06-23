@@ -24,7 +24,6 @@ import {
 } from "@/features/rrhh/data/reclutamiento";
 import {
   listCandidatosReales,
-  moverCandidatoFase,
   iniciarOffboarding,
   eliminarCandidato,
 } from "@/features/rrhh/actions/candidatos-actions";
@@ -54,14 +53,6 @@ interface CandidatoReal {
   vacantes?: { id: string; titulo: string; departamento_id: string | null; puesto_id: string | null } | null;
   created_at: string;
 }
-
-const ESTADOS_POR_FASE: Record<Fase, Estado[]> = {
-  nuevo: ["nuevo"],
-  en_progreso: ["elegido", "papelera"],
-  oferta: ["entrevista"],
-  seleccionado: ["teorica", "practica", "prueba", "empleado"],
-  descartado: ["no_se_presenta", "suspenso_formacion"],
-};
 
 function fmtFecha(iso: string): string {
   if (!iso) return "—";
@@ -139,34 +130,6 @@ export function CandidatosRealesTab() {
   }, []);
 
   useEffect(() => { void cargar(); }, [cargar]);
-
-  function moverEstado(c: CandidatoReal, nuevoEstado: Estado) {
-    // Encontrar la fase principal a la que pertenece nuevoEstado
-    const fase = (Object.entries(ESTADOS_POR_FASE) as Array<[Fase, Estado[]]>)
-      .find(([, estados]) => estados.includes(nuevoEstado))?.[0];
-    if (!fase) return;
-
-    startTransition(async () => {
-      const res = await moverCandidatoFase(c.id, fase, nuevoEstado);
-      if (res.ok) {
-        if (res.empleadoYaContratado) {
-          toast.info("Este candidato ya es empleado. El movimiento es solo organizativo y no afecta a su contrato.");
-        }
-        setItems((prev) => prev.map((x) => x.id === c.id ? { ...x, fase, estado: nuevoEstado } : x));
-        setSelected((prev) => (prev && prev.id === c.id ? { ...prev, fase, estado: nuevoEstado } : prev));
-      } else if ("error" in res && res.error === "OFFBOARDING_REQUIRED") {
-        const empleadoId = (res as { empleadoId?: string }).empleadoId;
-        if (empleadoId) {
-          setOffboardingDe({
-            empleadoId,
-            nombre: `${c.nombre} ${c.apellidos ?? ""}`.trim(),
-          });
-        }
-      } else {
-        toast.error(("error" in res && res.error) || "Error al mover el candidato");
-      }
-    });
-  }
 
   function handleEliminar(c: CandidatoReal) {
     void (async () => {
@@ -358,10 +321,6 @@ export function CandidatosRealesTab() {
         vacante={vacanteParaModal(selected)}
         onSelectCandidato={(c) => setSelected(c ? items.find((x) => x.id === c.id) ?? null : null)}
         onUpdateCandidato={() => { /* ediciones de sidebar no persisten aquí */ }}
-        onMoverEstado={(c, estado) => {
-          const real = items.find((x) => x.id === c.id);
-          if (real) moverEstado(real, estado as Estado);
-        }}
         onEliminar={(c) => {
           const real = items.find((x) => x.id === c.id);
           if (real) handleEliminar(real);

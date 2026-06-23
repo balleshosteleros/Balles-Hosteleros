@@ -6,7 +6,7 @@ import { listVacantesConCandidatos, asegurarVacantesPorPuesto } from "@/features
 import {
   publicarVacante, despublicarVacante, reordenarVacantes,
 } from "@/features/rrhh/actions/vacantes-actions";
-import { moverCandidatoFase } from "@/features/rrhh/actions/candidatos-actions";
+import { moverCandidatoFase, moverCandidatoAVacante } from "@/features/rrhh/actions/candidatos-actions";
 import {
   DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors,
   closestCenter, type DragEndEvent,
@@ -42,7 +42,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  Search, Star, MoreHorizontal, MapPin, Clock, CalendarDays,
+  Search, MoreHorizontal, MapPin, Clock, CalendarDays,
   FileText, Users, Send, ArrowLeft, User, Phone, Mail, Tag, Kanban, List,
   Pencil, Utensils, Building2, Settings, Check,
   GripVertical,
@@ -93,9 +93,6 @@ function VacanteCard({
       <div className="flex items-center justify-between px-5 py-4 border-b border-border">
         <div className="flex items-center gap-3">
           {dragHandle}
-          <button className="text-muted-foreground hover:text-amber-400 transition-colors">
-            <Star className={`h-4 w-4 ${vacante.favorita ? "fill-amber-400 text-amber-400" : ""}`} />
-          </button>
           <h3
             className="text-base font-semibold text-foreground cursor-pointer hover:text-primary transition-colors"
             onClick={() => onSelectFase(vacante, null)}
@@ -330,7 +327,7 @@ function Row({ icon, label, value }: { icon: React.ReactNode; label: string; val
 }
 
 // ─── Candidates List for a Vacancy ─────────────────────────────
-function CandidatosView({ vacante, faseInicial, onBack }: { vacante: Vacante; faseInicial: FaseReclutamiento | null; onBack: () => void }) {
+function CandidatosView({ vacante, vacantes = [], faseInicial, onBack, onMoved }: { vacante: Vacante; vacantes?: Vacante[]; faseInicial: FaseReclutamiento | null; onBack: () => void; onMoved?: () => void }) {
   const [faseFilter, setFaseFilter] = useState<string>(faseInicial || "todas");
   const [search, setSearch] = useState("");
   const [selectedCandidato, setSelectedCandidato] = useState<Candidato | null>(null);
@@ -353,20 +350,18 @@ function CandidatosView({ vacante, faseInicial, onBack }: { vacante: Vacante; fa
     setSelectedCandidato(updated);
   };
 
-  const handleMoverEstado = async (c: Candidato, estado: EstadoReclutamiento) => {
-    if (c.fase === estado) return;
-    // Optimista en UI; persiste y registra la actividad (quién/cuándo) en BD.
-    handleUpdateCandidato({ ...c, fase: estado });
+  const handleMoverVacante = async (c: Candidato, vacanteId: string, estado: EstadoReclutamiento) => {
     const fase = getFasePrincipal(estado);
-    const res = await moverCandidatoFase(c.id, fase, estado);
+    const res = await moverCandidatoAVacante(c.id, vacanteId, fase, estado);
     if (!res.ok) {
-      if ("error" in res && res.error === "OFFBOARDING_REQUIRED") {
-        toast.error("Este candidato ya es empleado. Inicia el offboarding desde la pestaña Candidatos.");
-      } else {
-        toast.error(("error" in res && res.error) || "No se pudo mover al candidato");
-      }
-      handleUpdateCandidato({ ...c }); // revierte
+      toast.error(("error" in res && res.error) || "No se pudo mover de vacante");
+      return;
     }
+    // Sale de la lista de esta vacante.
+    setCandidatosLocal((prev) => prev.filter((x) => x.id !== c.id));
+    setSelectedCandidato(null);
+    toast.success("Candidato movido de vacante");
+    onMoved?.();
   };
 
   return (
@@ -448,9 +443,10 @@ function CandidatosView({ vacante, faseInicial, onBack }: { vacante: Vacante; fa
         candidato={selectedCandidato}
         candidatos={filtered}
         vacante={vacante}
+        vacantes={vacantes}
         onSelectCandidato={setSelectedCandidato}
         onUpdateCandidato={handleUpdateCandidato}
-        onMoverEstado={handleMoverEstado}
+        onMoverVacante={handleMoverVacante}
       />
     </div>
   );
@@ -520,7 +516,6 @@ export function ReclutamientoView() {
     if (campo === "estadoPublicacion") return ESTADO_PUBLICACION_LABELS[v.estadoPublicacion];
     if (campo === "categoria") return v.categoria;
     if (campo === "tipoJornada") return TIPO_JORNADA_LABELS[v.tipoJornada];
-    if (campo === "favorita") return v.favorita;
     if (campo === "puesto") return v.puesto;
     if (campo === "ubicacion") return v.ubicacion;
     return (v as unknown as Record<string, unknown>)[campo];
@@ -613,6 +608,8 @@ export function ReclutamientoView() {
           <div className="flex-1">
             <KanbanPipeline
               vacante={selectedVacante}
+              vacantes={vacantes}
+              onMoved={recargar}
               onBack={() => setSelectedVacante(null)}
               onUpdateCandidatos={async (updated) => {
                 // Detecta candidatos cuyo `fase` (= estado real) cambió y persiste a Supabase.
@@ -646,7 +643,7 @@ export function ReclutamientoView() {
     return (
       <div className="p-4 md:p-6 max-w-[1400px] mx-auto">
         <div className="flex items-center justify-end mb-4">{viewToggle}</div>
-        <CandidatosView vacante={selectedVacante} faseInicial={selectedFase} onBack={() => setSelectedVacante(null)} />
+        <CandidatosView vacante={selectedVacante} vacantes={vacantes} faseInicial={selectedFase} onBack={() => setSelectedVacante(null)} onMoved={recargar} />
       </div>
     );
   }

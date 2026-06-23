@@ -30,6 +30,8 @@ import { FichajesConfigPanel } from "@/features/ajustes/components/FichajesConfi
 import { NotifLiquidacionesConfigPanel } from "@/features/notificaciones/components/NotifLiquidacionesConfigPanel";
 import { JornadasVacantesPanel } from "@/features/ajustes/components/JornadasVacantesPanel";
 import { TiposContratoPanel } from "@/features/ajustes/components/TiposContratoPanel";
+import { GestoriaConfig } from "@/features/rrhh/components/reclutamiento/config/GestoriaConfig";
+import { ConfigGeneralConfig } from "@/features/rrhh/components/reclutamiento/config/ConfigGeneralConfig";
 
 // ============================================================
 // Tipado del estado local
@@ -238,6 +240,17 @@ function SubmoduloRow({
               />
 
               {submodulo.key === "proveedores" && <OperativaCompraProveedores />}
+
+              {submodulo.key === "reclutamiento" && (
+                <>
+                  <div className="border-t pt-3">
+                    <GestoriaConfig embedded />
+                  </div>
+                  <div className="border-t pt-3">
+                    <ConfigGeneralConfig embedded />
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>

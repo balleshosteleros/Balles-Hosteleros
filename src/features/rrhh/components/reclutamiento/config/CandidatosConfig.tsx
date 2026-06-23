@@ -4,6 +4,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Plus, GripVertical } from "lucide-react";
+import { OrigenesCandidatoConfig } from "./OrigenesCandidatoConfig";
 
 export function CandidatosConfig() {
   const camposFormulario = [
@@ -52,6 +53,9 @@ export function CandidatosConfig() {
           ))}
         </CardContent>
       </Card>
+
+      {/* ¿Cómo nos has conocido? — orígenes configurables (BD) */}
+      <OrigenesCandidatoConfig />
 
       {/* Permisos de visualización */}
       <Card>

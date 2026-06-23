@@ -78,6 +78,7 @@ interface VacanteRowReal {
   cuestionario: boolean;
   favorita: boolean;
   orden: number | null;
+  puesto_id: string | null;
   departamentos: { nombre: string; area: string | null } | null;
   puestos: { nombre: string } | null;
 }
@@ -121,7 +122,7 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
         .select(`
           id, empresa_id, titulo, categoria, ubicacion, tipo_jornada,
           estado_publicacion, visible_publicamente, fecha_creacion,
-          cuestionario, favorita, orden,
+          cuestionario, favorita, orden, puesto_id,
           departamentos(nombre, area),
           puestos(nombre)
         `)
@@ -195,6 +196,7 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
         reclutadores: [] as string[],
         favorita: v.favorita,
         empresaId: v.empresa_id,
+        puestoId: v.puesto_id ?? null,
         visiblePublicamente: v.visible_publicamente,
         orden: v.orden ?? null,
         area,

@@ -38,11 +38,16 @@ import {
   parsearEnlacesCuerpo,
 } from "@/features/rrhh/lib/reclutamiento-email";
 import { CandidatoDetailModal } from "@/features/rrhh/components/reclutamiento/CandidatoDetailModal";
+import { moverCandidatoAVacante } from "@/features/rrhh/actions/candidatos-actions";
 
 interface KanbanPipelineProps {
   vacante: Vacante;
+  /** Todas las vacantes (para reasignar un candidato a otra). */
+  vacantes?: Vacante[];
   onBack: () => void;
   onUpdateCandidatos: (candidatos: Candidato[]) => void;
+  /** Se llama tras reasignar un candidato a otra vacante (para refrescar). */
+  onMoved?: () => void;
 }
 
 const CURRENT_USER = "Admin RRHH";
@@ -339,10 +344,26 @@ function EmailConfirmDialog({
 }
 
 // ─── Main Kanban Pipeline ───────────────────────────────────────
-export function KanbanPipeline({ vacante, onBack, onUpdateCandidatos }: KanbanPipelineProps) {
+export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandidatos, onMoved }: KanbanPipelineProps) {
   const [candidatos, setCandidatos] = useState<Candidato[]>(vacante.candidatos);
   const [selectedCandidato, setSelectedCandidato] = useState<Candidato | null>(null);
   const draggedCandidato = useRef<Candidato | null>(null);
+
+  const handleMoverVacante = useCallback(
+    async (c: Candidato, vacanteId: string, estado: EstadoReclutamiento) => {
+      const fase = getFasePrincipal(estado);
+      const res = await moverCandidatoAVacante(c.id, vacanteId, fase, estado);
+      if (!res.ok) {
+        toast.error(("error" in res && res.error) || "No se pudo mover de vacante");
+        return;
+      }
+      setCandidatos((prev) => prev.filter((x) => x.id !== c.id));
+      setSelectedCandidato(null);
+      toast.success("Candidato movido de vacante");
+      onMoved?.();
+    },
+    [onMoved],
+  );
 
   // Estados (columnas) de esta vacante que tienen un email activo configurado:
   // se marca con un check verde en la cabecera de cada columna.
@@ -457,17 +478,13 @@ export function KanbanPipeline({ vacante, onBack, onUpdateCandidatos }: KanbanPi
         candidato={selectedCandidato}
         candidatos={candidatos}
         vacante={vacante}
+        vacantes={vacantes}
         onSelectCandidato={setSelectedCandidato}
         onUpdateCandidato={(updated) => {
           setCandidatos((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
           setSelectedCandidato(updated);
         }}
-        onMoverEstado={(c, estado) => {
-          if (c.fase === estado) return;
-          // Reusa el flujo de confirmación de email del Kanban.
-          setSelectedCandidato(null);
-          setEmailConfirm({ candidato: c, estadoNuevo: estado });
-        }}
+        onMoverVacante={handleMoverVacante}
       />
 
       <EmailConfirmDialog

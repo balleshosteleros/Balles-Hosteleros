@@ -21,10 +21,10 @@ import {
   Phone,
   Copy,
   FileText,
-  Plus,
   Star,
   Mail,
   History,
+  UserPlus,
   Tag,
   Clock,
   Send,
@@ -81,7 +81,13 @@ import {
   addNotaCandidato,
   listResenasCandidato,
   addResenaCandidato,
+  deleteResenaCandidato,
 } from "@/features/rrhh/actions/candidato-ficha-actions";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import {
+  listOrigenesCandidato,
+  type OrigenCandidatoConfig,
+} from "@/features/rrhh/actions/reclutamiento-origenes-actions";
 import { llamarDesdeApp } from "@/features/google-workspace/components/TelefonoDrawer";
 import { toast } from "sonner";
 
@@ -91,13 +97,16 @@ interface CandidatoDetailModalProps {
   candidato: Candidato | null;
   candidatos: Candidato[];
   vacante: Vacante;
+  /** Todas las vacantes de la empresa (para poder reasignar el candidato). */
+  vacantes?: Vacante[];
   onSelectCandidato: (c: Candidato | null) => void;
   onUpdateCandidato: (updated: Candidato) => void;
-  onMoverEstado: (c: Candidato, estado: EstadoReclutamiento) => void;
+  /** Reasigna el candidato a otra vacante en la fase/estado indicados. */
+  onMoverVacante?: (c: Candidato, vacanteId: string, estado: EstadoReclutamiento) => void;
   onEliminar?: (c: Candidato) => void;
 }
 
-type TabKey = "informacion" | "cuestionarios" | "actividad" | "resenas" | "notas";
+type TabKey = "cuestionarios" | "actividad" | "resenas" | "notas";
 
 export function CandidatoDetailModal({
   open,
@@ -105,12 +114,24 @@ export function CandidatoDetailModal({
   candidato,
   candidatos,
   vacante,
+  vacantes = [],
   onSelectCandidato,
   onUpdateCandidato,
-  onMoverEstado,
+  onMoverVacante,
   onEliminar,
 }: CandidatoDetailModalProps) {
-  const [tab, setTab] = useState<TabKey>("informacion");
+  const [tab, setTab] = useState<TabKey>("cuestionarios");
+  // Footer: reasignación a otra vacante (vacante + fase de destino).
+  const [destVacanteId, setDestVacanteId] = useState<string>("");
+  const [destEstado, setDestEstado] = useState<EstadoReclutamiento | "">("");
+  // Catálogo configurable de "¿Cómo nos has conocido?" (BD por empresa).
+  const [origenesCfg, setOrigenesCfg] = useState<OrigenCandidatoConfig[]>([]);
+
+  useEffect(() => {
+    let cancel = false;
+    void listOrigenesCandidato().then((data) => { if (!cancel) setOrigenesCfg(data); });
+    return () => { cancel = true; };
+  }, []);
   const [respuestaCuest, setRespuestaCuest] = useState<RespuestaCuestionarioCandidato | null>(null);
   // Datos de la ficha persistidos en BD (no en memoria del cliente).
   const [historial, setHistorial] = useState<HistorialCambioFase[]>([]);
@@ -146,6 +167,12 @@ export function CandidatoDetailModal({
     return () => { cancel = true; };
   }, [candidatoId, candidatoFase]);
 
+  // Limpia la reasignación de vacante al cambiar de candidato.
+  useEffect(() => {
+    setDestVacanteId("");
+    setDestEstado("");
+  }, [candidatoId]);
+
   const index = useMemo(() => {
     if (!candidato) return -1;
     return candidatos.findIndex((c) => c.id === candidato.id);
@@ -158,11 +185,6 @@ export function CandidatoDetailModal({
   const total = candidatos.length;
   const goPrev = () => index > 0 && onSelectCandidato(candidatos[index - 1]);
   const goNext = () => index >= 0 && index < total - 1 && onSelectCandidato(candidatos[index + 1]);
-
-  const handleEstadoChange = (estado: EstadoReclutamiento) => {
-    if (estado === candidato.fase) return;
-    onMoverEstado(candidato, estado);
-  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -244,6 +266,7 @@ export function CandidatoDetailModal({
                 onUpdate={onUpdateCandidato}
                 respuestaCuest={respuestaCuest}
                 resenas={resenas}
+                origenes={origenesCfg}
               />
             </ScrollArea>
 
@@ -252,16 +275,19 @@ export function CandidatoDetailModal({
               <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)} className="flex flex-col flex-1 min-h-0">
                 <div className="px-5 pt-4 border-b border-border shrink-0">
                   <TabsList className="bg-transparent p-0 h-auto gap-2">
-                    <TabTriggerWithCount label="Información" value="informacion" />
                     <TabTriggerWithCount
                       label="Cuestionarios"
                       value="cuestionarios"
-                      count={respuestaCuest ? `${respuestaCuest.nota}/10` : undefined}
+                      count={
+                        respuestaCuest
+                          ? `${respuestaCuest.aciertos}/${respuestaCuest.totalPreguntas}`
+                          : undefined
+                      }
                       tone={
                         respuestaCuest
-                          ? respuestaCuest.nota >= 7
+                          ? respuestaCuest.aciertos === respuestaCuest.totalPreguntas
                             ? "good"
-                            : respuestaCuest.nota >= 5
+                            : respuestaCuest.aciertos >= respuestaCuest.totalPreguntas / 2
                               ? "warn"
                               : "bad"
                           : "auto"
@@ -287,20 +313,20 @@ export function CandidatoDetailModal({
 
                 <ScrollArea className="flex-1">
                   <div className="p-5">
-                    <TabsContent value="informacion" className="m-0 outline-none">
-                      <InformacionTab candidato={candidato} />
-                    </TabsContent>
                     <TabsContent value="cuestionarios" className="m-0 outline-none">
                       <CuestionariosTab vacante={vacante} respuesta={respuestaCuest} />
                     </TabsContent>
                     <TabsContent value="actividad" className="m-0 outline-none">
-                      <ActividadTab historial={historial} />
+                      <ActividadTab historial={historial} candidato={candidato} vacante={vacante} />
                     </TabsContent>
                     <TabsContent value="resenas" className="m-0 outline-none">
                       <ResenasTab
                         candidatoId={candidato.id}
                         resenas={resenas}
                         onSaved={(r) => setResenas((prev) => [...prev, r])}
+                        onDeleted={(id) =>
+                          setResenas((prev) => prev.filter((x) => x.id !== id))
+                        }
                       />
                     </TabsContent>
                     <TabsContent value="notas" className="m-0 outline-none">
@@ -330,11 +356,43 @@ export function CandidatoDetailModal({
 
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground mr-1">
-                Mover de estado al candidato
+                Cambiar de vacante
               </span>
-              <Select value={candidato.fase} onValueChange={(v) => handleEstadoChange(v as EstadoReclutamiento)}>
+              {/* Reasignar a otra vacante (por si se inscribió en la equivocada). */}
+              <Select
+                value={destVacanteId}
+                onValueChange={(v) => {
+                  setDestVacanteId(v);
+                  setDestEstado(""); // al cambiar de vacante, vuelve a pedir la fase
+                }}
+              >
                 <SelectTrigger className="h-9 w-[170px] text-xs">
-                  <SelectValue />
+                  <SelectValue placeholder="Mover a vacante" />
+                </SelectTrigger>
+                <SelectContent>
+                  {vacantes
+                    .filter((v) => v.id !== vacante.id)
+                    .map((v) => (
+                      <SelectItem key={v.id} value={v.id} className="text-xs">
+                        {v.puesto}
+                      </SelectItem>
+                    ))}
+                  {vacantes.filter((v) => v.id !== vacante.id).length === 0 && (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                      No hay otras vacantes
+                    </div>
+                  )}
+                </SelectContent>
+              </Select>
+
+              {/* Fase de destino dentro de la vacante elegida. */}
+              <Select
+                value={destEstado}
+                onValueChange={(v) => setDestEstado(v as EstadoReclutamiento)}
+                disabled={!destVacanteId}
+              >
+                <SelectTrigger className="h-9 w-[170px] text-xs">
+                  <SelectValue placeholder="Fase de destino" />
                 </SelectTrigger>
                 <SelectContent>
                   {FASES_PRINCIPALES_ORDER.flatMap((fp) =>
@@ -347,21 +405,16 @@ export function CandidatoDetailModal({
                 </SelectContent>
               </Select>
 
-              <Select disabled>
-                <SelectTrigger className="h-9 w-[160px] text-xs">
-                  <SelectValue placeholder="Mover a vacante" />
-                </SelectTrigger>
-                <SelectContent />
-              </Select>
-
               <Button
                 size="sm"
                 className="h-9 gap-1.5 text-xs"
-                onClick={() =>
-                  toast.info("Crear empleado disponible al mover a la columna 'Prueba'.")
-                }
+                disabled={!destVacanteId || !destEstado || !onMoverVacante}
+                onClick={() => {
+                  if (!destVacanteId || !destEstado || !onMoverVacante) return;
+                  onMoverVacante(candidato, destVacanteId, destEstado as EstadoReclutamiento);
+                }}
               >
-                Añadir como empleado
+                Mover de vacante
               </Button>
             </div>
           </div>
@@ -377,11 +430,13 @@ function CandidatoSidebar({
   onUpdate,
   respuestaCuest,
   resenas,
+  origenes,
 }: {
   candidato: Candidato;
   onUpdate: (c: Candidato) => void;
   respuestaCuest: RespuestaCuestionarioCandidato | null;
   resenas: ResenaCandidato[];
+  origenes: OrigenCandidatoConfig[];
 }) {
   // Cuestionario: tick verde solo si TODAS las respuestas son correctas; en
   // cuanto falla una, X roja. null = aún sin responder.
@@ -410,6 +465,24 @@ function CandidatoSidebar({
           Inscrito el {candidato.fechaInscripcion}
         </p>
       </div>
+
+      {/* Currículum adjunto del candidato. */}
+      {candidato.cvAdjunto && (
+        <a
+          href={`/api/empleo/cv?path=${encodeURIComponent(candidato.cvAdjunto)}`}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-3 p-2 rounded-lg border border-border hover:bg-muted/40 transition-colors group"
+        >
+          <div className="h-8 w-8 rounded bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+            <FileText className="h-4 w-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-foreground truncate">Currículum (PDF)</p>
+            <p className="text-xs text-muted-foreground">Abrir en una pestaña nueva</p>
+          </div>
+        </a>
+      )}
 
       {/* Resumen: resultado del cuestionario y nota final de reviews. */}
       <div className="rounded-lg border border-border divide-y divide-border">
@@ -577,20 +650,30 @@ function CandidatoSidebar({
 
       <Field label="¿Cómo nos has conocido?">
         <Select
-          value={candidato.origen}
+          value={candidato.origen ?? ""}
           onValueChange={(v) =>
             onUpdate({ ...candidato, origen: v as Candidato["origen"] })
           }
         >
           <SelectTrigger className="h-9 text-sm">
-            <SelectValue />
+            <SelectValue placeholder="Seleccionar" />
           </SelectTrigger>
           <SelectContent>
-            {Object.entries(ORIGEN_LABELS).map(([key, label]) => (
-              <SelectItem key={key} value={key} className="text-sm">
-                {label}
-              </SelectItem>
-            ))}
+            {origenes
+              .filter((o) => o.activo)
+              .map((o) => (
+                <SelectItem key={o.id} value={o.nombre} className="text-sm">
+                  {o.nombre}
+                </SelectItem>
+              ))}
+            {/* Valor histórico que ya no está en el catálogo: se muestra igualmente. */}
+            {candidato.origen &&
+              !origenes.some((o) => o.activo && o.nombre === candidato.origen) && (
+                <SelectItem value={candidato.origen} className="text-sm">
+                  {ORIGEN_LABELS[candidato.origen as keyof typeof ORIGEN_LABELS] ??
+                    candidato.origen}
+                </SelectItem>
+              )}
           </SelectContent>
         </Select>
       </Field>
@@ -659,60 +742,11 @@ function TabTriggerWithCount({
   );
 }
 
-// ─── Información Tab ──────────────────────────────────────────
-function InformacionTab({ candidato }: { candidato: Candidato }) {
-  return (
-    <div className="space-y-4">
-      <Section title={`Adjuntos (${candidato.cvAdjunto ? 1 : 0})`} action={<Plus className="h-4 w-4 text-muted-foreground" />}>
-        {candidato.cvAdjunto ? (
-          <a
-            href={`/api/empleo/cv?path=${encodeURIComponent(candidato.cvAdjunto)}`}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-3 p-2 rounded-md hover:bg-muted/40 transition-colors group"
-          >
-            <div className="h-8 w-8 rounded bg-rose-100 text-rose-600 flex items-center justify-center">
-              <FileText className="h-4 w-4" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-foreground truncate">Currículum (PDF)</p>
-              <p className="text-xs text-muted-foreground">Abrir en una pestaña nueva</p>
-            </div>
-            <span className="inline-flex items-center gap-1 text-xs font-medium text-primary opacity-0 group-hover:opacity-100 transition-opacity">
-              <FileText className="h-3.5 w-3.5" /> Ver CV
-            </span>
-          </a>
-        ) : (
-          <p className="text-xs text-muted-foreground">Sin adjuntos</p>
-        )}
-      </Section>
-
-      <Section title="Enlaces (0)">
-        <div className="space-y-3">
-          <div>
-            <label className="text-[11px] font-medium text-muted-foreground">LinkedIn</label>
-            <p className="text-sm text-muted-foreground/80">Añadir url de LinkedIn</p>
-          </div>
-          <div>
-            <label className="text-[11px] font-medium text-muted-foreground">Sitio web</label>
-            <p className="text-sm text-muted-foreground/80">Añadir url del candidato</p>
-          </div>
-        </div>
-      </Section>
-
-      <Section title="Otras vacantes (0)">
-        <p className="text-xs text-muted-foreground">
-          Este candidato no aparece en otras vacantes.
-        </p>
-      </Section>
-    </div>
-  );
-}
-
 // ─── Cuestionarios Tab ────────────────────────────────────────
-function notaColor(nota: number): string {
-  if (nota >= 7) return "hsl(145, 63%, 42%)";
-  if (nota >= 5) return "hsl(45, 90%, 45%)";
+/** Color según el ratio de aciertos (0–1): verde ≥80%, ámbar ≥50%, rojo resto. */
+function notaColor(ratio: number): string {
+  if (ratio >= 0.8) return "hsl(145, 63%, 42%)";
+  if (ratio >= 0.5) return "hsl(45, 90%, 45%)";
   return "hsl(0, 72%, 51%)";
 }
 
@@ -733,7 +767,8 @@ function CuestionariosTab({
     );
   }
 
-  const color = notaColor(respuesta.nota);
+  const ratio = respuesta.totalPreguntas > 0 ? respuesta.aciertos / respuesta.totalPreguntas : 0;
+  const color = notaColor(ratio);
 
   return (
     <div className="space-y-5">
@@ -743,8 +778,8 @@ function CuestionariosTab({
           className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-full font-bold"
           style={{ backgroundColor: `${color}22`, color }}
         >
-          <span className="text-xl leading-none">{respuesta.nota}</span>
-          <span className="text-[10px] font-medium opacity-80">/ 10</span>
+          <span className="text-xl leading-none">{respuesta.aciertos}</span>
+          <span className="text-[10px] font-medium opacity-80">/ {respuesta.totalPreguntas}</span>
         </div>
         <div>
           <h4 className="text-sm font-semibold text-foreground">
@@ -808,18 +843,25 @@ function CuestionariosTab({
 }
 
 // ─── Actividad Tab (historial) ────────────────────────────────
-function ActividadTab({ historial }: { historial: HistorialCambioFase[] }) {
-  if (historial.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Aún no hay actividad registrada para este candidato.
-      </p>
-    );
-  }
+function ActividadTab({
+  historial,
+  candidato,
+  vacante,
+}: {
+  historial: HistorialCambioFase[];
+  candidato: Candidato;
+  vacante: Vacante;
+}) {
+  // Fase/estado con el que el candidato ENTRÓ: si hay historial, es el estado
+  // anterior del primer cambio; si no, su fase actual (aún no se ha movido).
+  const estadoEntrada = historial.length > 0 ? historial[0].estadoAnterior : candidato.fase;
+  const faseEntrada =
+    historial.length > 0 ? historial[0].faseAnterior : getFasePrincipal(candidato.fase);
 
   return (
-    <Section title="Historial de cambios" icon={<History className="h-4 w-4" />}>
+    <Section title="Historial de actividad" icon={<History className="h-4 w-4" />}>
       <div className="space-y-2">
+        {/* Cambios de fase y envíos de email (más reciente arriba). */}
         {[...historial].reverse().map((h) => (
           <div
             key={h.id}
@@ -847,6 +889,32 @@ function ActividadTab({ historial }: { historial: HistorialCambioFase[] }) {
             </div>
           </div>
         ))}
+
+        {/* Evento de inscripción en el portal (siempre el más antiguo, al final). */}
+        <div className="flex items-start gap-3 p-2.5 rounded-lg bg-emerald-50 text-xs">
+          <UserPlus className="h-3.5 w-3.5 text-emerald-600 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <div className="text-foreground font-medium">
+              Se inscribió en el portal de empleo
+            </div>
+            <div className="text-muted-foreground mt-0.5">
+              Vacante: <span className="font-medium text-foreground">{vacante.puesto}</span>
+              <span className="mx-1">·</span>
+              Fase:{" "}
+              <span className="font-medium text-foreground">
+                {FASES_PRINCIPALES[faseEntrada].label} / {ESTADOS_CONFIG[estadoEntrada].label}
+              </span>
+              <span className="mx-1">·</span>
+              {candidato.fechaInscripcion}
+              {candidato.canal && (
+                <>
+                  <span className="mx-1">·</span>
+                  Canal: <span className="font-medium text-foreground">{candidato.canal}</span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </Section>
   );
@@ -857,14 +925,32 @@ function ResenasTab({
   candidatoId,
   resenas,
   onSaved,
+  onDeleted,
 }: {
   candidatoId: string;
   resenas: ResenaCandidato[];
   onSaved: (r: ResenaCandidato) => void;
+  onDeleted: (id: string) => void;
 }) {
   const criterios = useCriteriosResena();
   const [comentario, setComentario] = useState("");
   const [guardando, setGuardando] = useState(false);
+  const { confirm, dialog } = useConfirmDelete();
+
+  const borrar = async (id: string) => {
+    const ok = await confirm({
+      title: "Borrar reseña",
+      description: "Se eliminará esta valoración del candidato. Esta acción no se puede deshacer.",
+    });
+    if (!ok) return;
+    const res = await deleteResenaCandidato(id);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    onDeleted(id);
+    toast.success("Reseña borrada");
+  };
 
   // Borrador en blanco para cada nueva reseña (cada entrevista se valora aparte).
   const puntuacionesIniciales: ResenaCriterio[] = useMemo(
@@ -931,6 +1017,7 @@ function ResenasTab({
 
   return (
     <div className="space-y-5">
+      {dialog}
       <Section title="Puntúa al candidato">
         <div className="space-y-3">
           {criterios.map((c) => {
@@ -985,7 +1072,17 @@ function ResenasTab({
               <div key={r.id} className="rounded-lg border border-border p-3 text-xs">
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-medium text-foreground">{r.autor}</span>
-                  <span className="text-muted-foreground">{r.fecha}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">{r.fecha}</span>
+                    <button
+                      type="button"
+                      onClick={() => borrar(r.id)}
+                      className="inline-flex items-center justify-center h-6 w-6 rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                      title="Borrar reseña"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
                 {media !== null && (
                   <div className="mb-2 flex items-center gap-2 rounded-md bg-amber-50 px-2 py-1.5">
