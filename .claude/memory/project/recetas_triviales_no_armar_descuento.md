@@ -6,6 +6,8 @@ type: project
 
 **Verificado 2026-06-23 (Claude, lado Fernando). Para el equipo / agente de Iván.**
 
+> ✅ **DECISIÓN (Fernando, 2026-06-23): recuperar las recetas reales desde el BACKUP DEL EXCEL** (vía 1 de abajo). **Acción pendiente y prioritaria del equipo / Iván:** localizar el Excel original con las recetas multi-ingrediente (el que alimentó `migrar-catalogo.mjs`) y **cargarlo a `producto_composicion`** (producto_venta → ingrediente_id + cantidad + merma). De momento NO se tira de Ágora (custom-query) ni se recrean a mano en Cocina; esas quedan como plan B si el backup no aparece. **Hasta que las recetas reales estén cargadas, NO armar el descuento de stock de platos** (`empresas.stock_descuento_desde`).
+
 Estado de las recetas en BD: `producto_composicion` tiene **203 filas**, y **TODAS son de 1 solo ingrediente con cantidad 1** (distribución `{"1": 203}`, **0 recetas multi-ingrediente**). Son las gemelas venta→compra 1:1 que creó la migración del Excel del 10-jun (`scripts/agora/migrar-catalogo.mjs`); **las ~208 recetas reales multi-ingrediente que había antes se perdieron en esa migración** y no se han recuperado. El "top por nº de ingredientes" son todas bebidas (Absolut, Dyc, Jose Cuervo…); no hay ni un plato con sus ingredientes desglosados.
 
 **Cobertura** (productos `tipo=venta` con alguna receta, aunque sea 1:1): Habana 106/192, Bacanal 97/205. El resto (86 + 108) sin receta.
