@@ -75,13 +75,13 @@ function CandidatoCard({
             </span>
           </div>
           <div className="space-y-0.5 text-[11px] text-muted-foreground pl-8">
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 min-w-0">
               <Mail className="h-3 w-3 shrink-0" />
               <span className="truncate">{candidato.email}</span>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 min-w-0">
               <MapPin className="h-3 w-3 shrink-0" />
-              <span>{candidato.canal ? `${ORIGEN_LABELS[candidato.origen]} · ${candidato.canal}` : ORIGEN_LABELS[candidato.origen]}</span>
+              <span className="truncate">{candidato.canal ? `${ORIGEN_LABELS[candidato.origen]} · ${candidato.canal}` : ORIGEN_LABELS[candidato.origen]}</span>
             </div>
           </div>
         </div>
@@ -124,7 +124,7 @@ function EstadoColumn({
       </div>
 
       {/* Cards */}
-      <ScrollArea className="flex-1 px-1 pb-1" style={{ maxHeight: "calc(100vh - 280px)" }}>
+      <ScrollArea className="flex-1 px-1 pb-1 [&>[data-radix-scroll-area-viewport]>div]:!block [&>[data-radix-scroll-area-viewport]>div]:!min-w-0" style={{ maxHeight: "calc(100vh - 280px)" }}>
         <div className="space-y-1.5">
           {candidatos.map((c) => (
             <CandidatoCard key={c.id} candidato={c} onDragStart={onDragStart} onClick={onCardClick} />
