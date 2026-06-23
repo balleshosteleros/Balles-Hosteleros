@@ -77,6 +77,7 @@ interface VacanteRowReal {
   fecha_creacion: string;
   cuestionario: boolean;
   favorita: boolean;
+  orden: number | null;
   departamentos: { nombre: string; area: string | null } | null;
   puestos: { nombre: string } | null;
 }
@@ -120,11 +121,12 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
         .select(`
           id, empresa_id, titulo, categoria, ubicacion, tipo_jornada,
           estado_publicacion, visible_publicamente, fecha_creacion,
-          cuestionario, favorita,
+          cuestionario, favorita, orden,
           departamentos(nombre, area),
           puestos(nombre)
         `)
         .eq("empresa_id", empresaId)
+        .order("orden", { ascending: true, nullsFirst: false })
         .order("created_at", { ascending: false }),
       supabase
         .from("candidatos")
@@ -194,6 +196,7 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
         favorita: v.favorita,
         empresaId: v.empresa_id,
         visiblePublicamente: v.visible_publicamente,
+        orden: v.orden ?? null,
         area,
         organigramaNodeId: nodo?.id ?? null,
         candidatos: cands.map((c) => ({

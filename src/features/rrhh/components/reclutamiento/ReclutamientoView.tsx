@@ -4,12 +4,21 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { listVacantesConCandidatos, asegurarVacantesPorPuesto } from "@/features/rrhh/actions/reclutamiento-actions";
 import {
-  publicarVacante, despublicarVacante, deleteVacante,
+  publicarVacante, despublicarVacante, deleteVacante, reordenarVacantes,
 } from "@/features/rrhh/actions/vacantes-actions";
 import { moverCandidatoFase } from "@/features/rrhh/actions/candidatos-actions";
+import {
+  DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors,
+  closestCenter, type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext, useSortable, verticalListSortingStrategy, arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { toast } from "sonner";
 import {
   contarCandidatosPorFase,
+  getFasePrincipal,
   FASES_PRINCIPALES,
   FASES_PRINCIPALES_ORDER,
   ESTADOS_CONFIG,
@@ -36,6 +45,7 @@ import {
   Search, Star, MoreHorizontal, MapPin, Clock, CalendarDays,
   FileText, Users, Send, ArrowLeft, User, Phone, Mail, Tag, Kanban, List,
   Pencil, Share2, Trash2, Utensils, Building2, Settings, Check, Link2,
+  GripVertical,
 } from "lucide-react";
 import { DialogSnippetEmbed } from "@/features/empleo-publico/components/DialogSnippetEmbed";
 import { EnlacesEmpleoDialog } from "@/features/rrhh/components/reclutamiento/EnlacesEmpleoDialog";
@@ -68,11 +78,13 @@ interface VacanteCardProps {
   onDespublicar?: (id: string) => void;
   onEliminar?: (id: string) => void;
   onEditar?: (v: Vacante) => void;
+  /** Asa de arrastre (drag & drop). Solo se pinta si se pasa. */
+  dragHandle?: React.ReactNode;
 }
 
 function VacanteCard({
   vacante, onSelectFase,
-  onPublicar, onDespublicar, onEliminar, onEditar,
+  onPublicar, onDespublicar, onEliminar, onEditar, dragHandle,
 }: VacanteCardProps) {
   const counts = contarCandidatosPorFase(vacante.candidatos);
   const visiblePublicamente = !!vacante.visiblePublicamente;
@@ -84,6 +96,7 @@ function VacanteCard({
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between px-5 py-4 border-b border-border">
         <div className="flex items-center gap-3">
+          {dragHandle}
           <button className="text-muted-foreground hover:text-amber-400 transition-colors">
             <Star className={`h-4 w-4 ${vacante.favorita ? "fill-amber-400 text-amber-400" : ""}`} />
           </button>
@@ -186,6 +199,39 @@ function VacanteCard({
         <span className="inline-flex items-center gap-1"><Users className="h-3.5 w-3.5" />{vacante.reclutadores.join(", ")}</span>
       </div>
     </Card>
+  );
+}
+
+// ─── Vacancy Card arrastrable (drag & drop para fijar el orden) ──
+// El orden manual se persiste en `vacantes.orden` y el portal público
+// (/empleo) muestra las ofertas en este mismo orden.
+function SortableVacanteCard(props: VacanteCardProps & { id: string }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: props.id });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : undefined,
+    position: "relative",
+    opacity: isDragging ? 0.85 : 1,
+  };
+  return (
+    <div ref={setNodeRef} style={style}>
+      <VacanteCard
+        {...props}
+        dragHandle={
+          <button
+            type="button"
+            className="shrink-0 cursor-grab touch-none text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing"
+            aria-label="Reordenar vacante"
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
+        }
+      />
+    </div>
   );
 }
 
@@ -313,8 +359,20 @@ function CandidatosView({ vacante, faseInicial, onBack }: { vacante: Vacante; fa
     setSelectedCandidato(updated);
   };
 
-  const handleMoverEstado = (c: Candidato, estado: EstadoReclutamiento) => {
+  const handleMoverEstado = async (c: Candidato, estado: EstadoReclutamiento) => {
+    if (c.fase === estado) return;
+    // Optimista en UI; persiste y registra la actividad (quién/cuándo) en BD.
     handleUpdateCandidato({ ...c, fase: estado });
+    const fase = getFasePrincipal(estado);
+    const res = await moverCandidatoFase(c.id, fase, estado);
+    if (!res.ok) {
+      if ("error" in res && res.error === "OFFBOARDING_REQUIRED") {
+        toast.error("Este candidato ya es empleado. Inicia el offboarding desde la pestaña Candidatos.");
+      } else {
+        toast.error(("error" in res && res.error) || "No se pudo mover al candidato");
+      }
+      handleUpdateCandidato({ ...c }); // revierte
+    }
   };
 
   return (
@@ -524,6 +582,44 @@ export function ReclutamientoView() {
     setSelectedFase(f);
   };
 
+  // ── Drag & drop para ordenar vacantes a mano ─────────────────────
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor),
+  );
+  // Solo se puede arrastrar con la lista "natural": sin búsqueda/filtros/orden,
+  // que reordenarían y romperían la correspondencia con lo que se persiste.
+  const puedeReordenar = !search && filtros.length === 0 && !orden;
+
+  const handleDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = filtered.findIndex((v) => v.id === active.id);
+    const newIndex = filtered.findIndex((v) => v.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+
+    // Reordena el área visible y reconstruye la lista completa para persistir.
+    const reordenadaArea = arrayMove(filtered, oldIndex, newIndex);
+    const areaDe = (v: Vacante) => (v as Vacante & { area?: string }).area ?? "administrativa";
+    const operativas = areaFiltro === "operativa"
+      ? reordenadaArea
+      : vacantes.filter((v) => areaDe(v) === "operativa");
+    const administrativas = areaFiltro === "administrativa"
+      ? reordenadaArea
+      : vacantes.filter((v) => areaDe(v) === "administrativa");
+    const full = [...operativas, ...administrativas];
+
+    setVacantes(full); // optimista: el portal usará este mismo orden
+    (async () => {
+      const res = await reordenarVacantes(full.map((v) => v.id));
+      if (!res.ok) {
+        toast.error("No se pudo guardar el orden");
+        recargar();
+      }
+    })();
+  };
+
   if (selectedVacante) {
     const isKanban = viewMode === "kanban";
     const viewToggle = (
@@ -697,17 +793,38 @@ export function ReclutamientoView() {
                 No hay vacantes en esta área.
               </CardContent></Card>
             )}
-            {!loading && filtered.map((v) => (
-              <VacanteCard
-                key={v.id}
-                vacante={v as Vacante & { visiblePublicamente?: boolean }}
-                onSelectFase={handleSelectFase}
-                onPublicar={handlePublicar}
-                onDespublicar={handleDespublicar}
-                onEliminar={handleEliminar}
-                onEditar={(vc) => { setOfertaEditando(vc); setNuevaOfertaOpen(true); }}
-              />
-            ))}
+            {!loading && filtered.length > 0 && (
+              puedeReordenar ? (
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                  <SortableContext items={filtered.map((v) => v.id)} strategy={verticalListSortingStrategy}>
+                    {filtered.map((v) => (
+                      <SortableVacanteCard
+                        key={v.id}
+                        id={v.id}
+                        vacante={v as Vacante & { visiblePublicamente?: boolean }}
+                        onSelectFase={handleSelectFase}
+                        onPublicar={handlePublicar}
+                        onDespublicar={handleDespublicar}
+                        onEliminar={handleEliminar}
+                        onEditar={(vc) => { setOfertaEditando(vc); setNuevaOfertaOpen(true); }}
+                      />
+                    ))}
+                  </SortableContext>
+                </DndContext>
+              ) : (
+                filtered.map((v) => (
+                  <VacanteCard
+                    key={v.id}
+                    vacante={v as Vacante & { visiblePublicamente?: boolean }}
+                    onSelectFase={handleSelectFase}
+                    onPublicar={handlePublicar}
+                    onDespublicar={handleDespublicar}
+                    onEliminar={handleEliminar}
+                    onEditar={(vc) => { setOfertaEditando(vc); setNuevaOfertaOpen(true); }}
+                  />
+                ))
+              )
+            )}
           </div>
         </div>
 

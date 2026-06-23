@@ -151,12 +151,15 @@ export interface CriterioResena {
   nombre: string;
 }
 
+// Los 5 puntos canónicos que el reclutador valora tras la entrevista. Lista
+// fija e igual para todas las empresas (hostelería): pensados para medir lo que
+// más importa hoy en sala/cocina, no solo la experiencia técnica.
 export const CRITERIOS_RESENA_DEFAULT: CriterioResena[] = [
-  { id: "actitud", nombre: "Actitud" },
-  { id: "experiencia", nombre: "Experiencia previa" },
-  { id: "disponibilidad", nombre: "Disponibilidad" },
-  { id: "comunicacion", nombre: "Comunicación" },
-  { id: "encaje_cultural", nombre: "Encaje cultural" },
+  { id: "actitud", nombre: "Actitud y motivación" },
+  { id: "experiencia", nombre: "Experiencia y aptitud para el puesto" },
+  { id: "comunicacion", nombre: "Comunicación y trato" },
+  { id: "trabajo_equipo", nombre: "Trabajo en equipo" },
+  { id: "disponibilidad", nombre: "Disponibilidad y flexibilidad horaria" },
 ];
 
 export interface ResenaCriterio {
@@ -239,6 +242,8 @@ export interface Vacante {
   favorita: boolean;
   candidatos: Candidato[];
   empresaId: string;
+  /** Posición manual fijada por drag & drop (mismo orden en el portal público). */
+  orden?: number | null;
 }
 
 // ─── Métricas del embudo ───────────────────────────────────────

@@ -61,6 +61,7 @@ import {
   type Candidato,
   type EstadoReclutamiento,
   type Genero,
+  type HistorialCambioFase,
   type NotaCandidato,
   type ResenaCandidato,
   type ResenaCriterio,
@@ -71,9 +72,14 @@ import {
   getRespuestaCuestionarioCandidato,
   type RespuestaCuestionarioCandidato,
 } from "@/features/rrhh/actions/cuestionarios-vacante-actions";
+import {
+  getActividadCandidato,
+  listNotasCandidato,
+  addNotaCandidato,
+  listResenasCandidato,
+  addResenaCandidato,
+} from "@/features/rrhh/actions/candidato-ficha-actions";
 import { toast } from "sonner";
-
-const CURRENT_USER = "Admin RRHH";
 
 interface CandidatoDetailModalProps {
   open: boolean;
@@ -100,15 +106,39 @@ export function CandidatoDetailModal({
 }: CandidatoDetailModalProps) {
   const [tab, setTab] = useState<TabKey>("informacion");
   const [respuestaCuest, setRespuestaCuest] = useState<RespuestaCuestionarioCandidato | null>(null);
+  // Datos de la ficha persistidos en BD (no en memoria del cliente).
+  const [historial, setHistorial] = useState<HistorialCambioFase[]>([]);
+  const [notas, setNotas] = useState<NotaCandidato[]>([]);
+  const [resenas, setResenas] = useState<ResenaCandidato[]>([]);
+
+  const candidatoId = candidato?.id ?? null;
+  const candidatoFase = candidato?.fase ?? null;
 
   useEffect(() => {
-    if (!candidato) { setRespuestaCuest(null); return; }
+    if (!candidatoId) { setRespuestaCuest(null); return; }
     let cancel = false;
-    void getRespuestaCuestionarioCandidato(candidato.id).then((res) => {
+    void getRespuestaCuestionarioCandidato(candidatoId).then((res) => {
       if (!cancel) setRespuestaCuest(res.data ?? null);
     });
     return () => { cancel = true; };
-  }, [candidato]);
+  }, [candidatoId]);
+
+  // Notas y reseñas: se cargan al abrir/cambiar de candidato.
+  useEffect(() => {
+    if (!candidatoId) { setNotas([]); setResenas([]); return; }
+    let cancel = false;
+    void listNotasCandidato(candidatoId).then((n) => { if (!cancel) setNotas(n); });
+    void listResenasCandidato(candidatoId).then((r) => { if (!cancel) setResenas(r); });
+    return () => { cancel = true; };
+  }, [candidatoId]);
+
+  // Actividad: se recarga también cuando cambia el estado (tras un movimiento).
+  useEffect(() => {
+    if (!candidatoId) { setHistorial([]); return; }
+    let cancel = false;
+    void getActividadCandidato(candidatoId).then((h) => { if (!cancel) setHistorial(h); });
+    return () => { cancel = true; };
+  }, [candidatoId, candidatoFase]);
 
   const index = useMemo(() => {
     if (!candidato) return -1;
@@ -226,17 +256,17 @@ export function CandidatoDetailModal({
                     <TabTriggerWithCount
                       label="Actividad"
                       value="actividad"
-                      count={candidato.historial.length || undefined}
+                      count={historial.length || undefined}
                     />
                     <TabTriggerWithCount
                       label="Reseñas"
                       value="resenas"
-                      count={(candidato.resenas?.length || 0) || undefined}
+                      count={resenas.length || undefined}
                     />
                     <TabTriggerWithCount
                       label="Notas"
                       value="notas"
-                      count={(candidato.notas?.length || 0) || undefined}
+                      count={notas.length || undefined}
                     />
                   </TabsList>
                 </div>
@@ -250,13 +280,21 @@ export function CandidatoDetailModal({
                       <CuestionariosTab vacante={vacante} respuesta={respuestaCuest} />
                     </TabsContent>
                     <TabsContent value="actividad" className="m-0 outline-none">
-                      <ActividadTab candidato={candidato} />
+                      <ActividadTab historial={historial} />
                     </TabsContent>
                     <TabsContent value="resenas" className="m-0 outline-none">
-                      <ResenasTab candidato={candidato} onUpdate={onUpdateCandidato} />
+                      <ResenasTab
+                        candidatoId={candidato.id}
+                        resenas={resenas}
+                        onSaved={(r) => setResenas((prev) => [...prev, r])}
+                      />
                     </TabsContent>
                     <TabsContent value="notas" className="m-0 outline-none">
-                      <NotasTab candidato={candidato} onUpdate={onUpdateCandidato} />
+                      <NotasTab
+                        candidatoId={candidato.id}
+                        notas={notas}
+                        onSaved={(n) => setNotas((prev) => [...prev, n])}
+                      />
                     </TabsContent>
                   </div>
                 </ScrollArea>
@@ -549,17 +587,23 @@ function InformacionTab({ candidato }: { candidato: Candidato }) {
     <div className="space-y-4">
       <Section title={`Adjuntos (${candidato.cvAdjunto ? 1 : 0})`} action={<Plus className="h-4 w-4 text-muted-foreground" />}>
         {candidato.cvAdjunto ? (
-          <div className="flex items-center gap-3 p-2 rounded-md hover:bg-muted/40 transition-colors">
+          <a
+            href={`/api/empleo/cv?path=${encodeURIComponent(candidato.cvAdjunto)}`}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-3 p-2 rounded-md hover:bg-muted/40 transition-colors group"
+          >
             <div className="h-8 w-8 rounded bg-rose-100 text-rose-600 flex items-center justify-center">
               <FileText className="h-4 w-4" />
             </div>
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-foreground truncate">{candidato.cvAdjunto}</p>
-              <p className="text-xs text-muted-foreground">
-                {candidato.cvTamanoKb ?? 120} KB
-              </p>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-foreground truncate">Currículum (PDF)</p>
+              <p className="text-xs text-muted-foreground">Abrir en una pestaña nueva</p>
             </div>
-          </div>
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+              <FileText className="h-3.5 w-3.5" /> Ver CV
+            </span>
+          </a>
         ) : (
           <p className="text-xs text-muted-foreground">Sin adjuntos</p>
         )}
@@ -686,8 +730,8 @@ function CuestionariosTab({
 }
 
 // ─── Actividad Tab (historial) ────────────────────────────────
-function ActividadTab({ candidato }: { candidato: Candidato }) {
-  if (candidato.historial.length === 0) {
+function ActividadTab({ historial }: { historial: HistorialCambioFase[] }) {
+  if (historial.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
         Aún no hay actividad registrada para este candidato.
@@ -698,7 +742,7 @@ function ActividadTab({ candidato }: { candidato: Candidato }) {
   return (
     <Section title="Historial de cambios" icon={<History className="h-4 w-4" />}>
       <div className="space-y-2">
-        {candidato.historial.map((h) => (
+        {[...historial].reverse().map((h) => (
           <div
             key={h.id}
             className="flex items-start gap-3 p-2.5 rounded-lg bg-muted/40 text-xs"
@@ -732,30 +776,30 @@ function ActividadTab({ candidato }: { candidato: Candidato }) {
 
 // ─── Reseñas Tab ──────────────────────────────────────────────
 function ResenasTab({
-  candidato,
-  onUpdate,
+  candidatoId,
+  resenas,
+  onSaved,
 }: {
-  candidato: Candidato;
-  onUpdate: (c: Candidato) => void;
+  candidatoId: string;
+  resenas: ResenaCandidato[];
+  onSaved: (r: ResenaCandidato) => void;
 }) {
   const criterios = useCriteriosResena();
   const [comentario, setComentario] = useState("");
+  const [guardando, setGuardando] = useState(false);
 
-  // Find or initialize a working draft based on the latest reseña (or empty)
-  const ultimaResena = candidato.resenas?.[candidato.resenas.length - 1];
-  const puntuacionesIniciales: ResenaCriterio[] = useMemo(() => {
-    return criterios.map((c) => {
-      const prev = ultimaResena?.puntuaciones.find((p) => p.criterioId === c.id);
-      return { criterioId: c.id, estrellas: prev?.estrellas ?? 0 };
-    });
-  }, [criterios, ultimaResena]);
+  // Borrador en blanco para cada nueva reseña (cada entrevista se valora aparte).
+  const puntuacionesIniciales: ResenaCriterio[] = useMemo(
+    () => criterios.map((c) => ({ criterioId: c.id, estrellas: 0 })),
+    [criterios],
+  );
 
   const [draft, setDraft] = useState<ResenaCriterio[]>(puntuacionesIniciales);
 
   // Si cambian los criterios o cargas un candidato distinto, resincroniza el borrador.
   useEffect(() => {
     setDraft(puntuacionesIniciales);
-  }, [puntuacionesIniciales]);
+  }, [puntuacionesIniciales, candidatoId]);
 
   const setEstrellas = (criterioId: string, estrellas: number) => {
     setDraft((prev) => {
@@ -765,19 +809,25 @@ function ResenasTab({
     });
   };
 
-  const guardar = () => {
-    const nueva: ResenaCandidato = {
-      id: `r-${candidato.id}-${(candidato.resenas?.length ?? 0) + 1}`,
-      autor: CURRENT_USER,
-      fecha: new Date().toLocaleString("es-ES"),
-      puntuaciones: draft.filter((p) => p.estrellas > 0),
+  const guardar = async () => {
+    const puntuaciones = draft.filter((p) => p.estrellas > 0);
+    if (puntuaciones.length === 0 && !comentario.trim()) {
+      toast.error("Puntúa al menos un criterio o escribe un comentario");
+      return;
+    }
+    setGuardando(true);
+    const res = await addResenaCandidato(candidatoId, {
+      puntuaciones,
       comentario: comentario.trim() || undefined,
-    };
-    onUpdate({
-      ...candidato,
-      resenas: [...(candidato.resenas ?? []), nueva],
     });
+    setGuardando(false);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    onSaved(res.resena);
     setComentario("");
+    setDraft(puntuacionesIniciales);
     toast.success("Reseña guardada");
   };
 
@@ -819,16 +869,16 @@ function ResenasTab({
           className="text-sm resize-none"
         />
         <div className="flex justify-end mt-2">
-          <Button size="sm" onClick={guardar} className="h-8 text-xs">
-            Guardar reseña
+          <Button size="sm" onClick={guardar} disabled={guardando} className="h-8 text-xs">
+            {guardando ? "Guardando…" : "Guardar reseña"}
           </Button>
         </div>
       </Section>
 
-      {(candidato.resenas?.length ?? 0) > 0 && (
-        <Section title={`Reseñas previas (${candidato.resenas?.length ?? 0})`}>
+      {resenas.length > 0 && (
+        <Section title={`Reseñas previas (${resenas.length})`}>
           <div className="space-y-3">
-            {[...(candidato.resenas ?? [])].reverse().map((r) => (
+            {[...resenas].reverse().map((r) => (
               <div key={r.id} className="rounded-lg border border-border p-3 text-xs">
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-medium text-foreground">{r.autor}</span>
@@ -897,25 +947,28 @@ function StarRating({
 
 // ─── Notas Tab ────────────────────────────────────────────────
 function NotasTab({
-  candidato,
-  onUpdate,
+  candidatoId,
+  notas,
+  onSaved,
 }: {
-  candidato: Candidato;
-  onUpdate: (c: Candidato) => void;
+  candidatoId: string;
+  notas: NotaCandidato[];
+  onSaved: (n: NotaCandidato) => void;
 }) {
   const [texto, setTexto] = useState("");
-  const notas = candidato.notas ?? [];
+  const [enviando, setEnviando] = useState(false);
 
-  const enviar = () => {
+  const enviar = async () => {
     const trimmed = texto.trim();
     if (!trimmed) return;
-    const nueva: NotaCandidato = {
-      id: `n-${candidato.id}-${notas.length + 1}`,
-      autor: CURRENT_USER,
-      fecha: new Date().toLocaleString("es-ES"),
-      texto: trimmed,
-    };
-    onUpdate({ ...candidato, notas: [...notas, nueva] });
+    setEnviando(true);
+    const res = await addNotaCandidato(candidatoId, trimmed);
+    setEnviando(false);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    onSaved(res.nota);
     setTexto("");
   };
 
@@ -950,8 +1003,8 @@ function NotasTab({
           className="text-sm resize-none border-0 focus-visible:ring-0 p-0"
         />
         <div className="flex justify-end">
-          <Button size="sm" onClick={enviar} disabled={!texto.trim()} className="h-8 text-xs">
-            Enviar
+          <Button size="sm" onClick={enviar} disabled={!texto.trim() || enviando} className="h-8 text-xs">
+            {enviando ? "Enviando…" : "Enviar"}
           </Button>
         </div>
       </div>

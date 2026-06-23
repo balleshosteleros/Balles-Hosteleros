@@ -16,6 +16,21 @@ async function getContext() {
   return { supabase, user, empresaId };
 }
 
+/** Nombre legible del usuario (nombre+apellidos → full_name → email). */
+async function nombreUsuarioActual(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+): Promise<string> {
+  const { data } = await supabase
+    .from("usuarios")
+    .select("nombre, apellidos, full_name, email")
+    .eq("id", userId)
+    .maybeSingle();
+  if (!data) return "Usuario";
+  const completo = [data.nombre, data.apellidos].filter(Boolean).join(" ").trim();
+  return completo || (data.full_name as string | null) || (data.email as string | null) || "Usuario";
+}
+
 export async function listCandidatosReales() {
   try {
     const { supabase, empresaId } = await getContext();
@@ -87,13 +102,13 @@ export async function moverCandidatoFase(
   estado: string,
 ) {
   try {
-    const { supabase, empresaId } = await getContext();
+    const { supabase, user, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
 
     // Bloquear movimiento si ya fue promovido (gestionar como "ya es empleado")
     const { data: cand } = await supabase
       .from("candidatos")
-      .select("promovido_at, empleado_id")
+      .select("promovido_at, empleado_id, fase, estado")
       .eq("id", id)
       .single();
 
@@ -112,6 +127,26 @@ export async function moverCandidatoFase(
       .eq("empresa_id", empresaId);
 
     if (error) throw error;
+
+    // Registra la actividad (apartado "Actividad" de la ficha): quién, cuándo y
+    // de qué estado a cuál. El flag email_enviado lo marca después el envío del
+    // correo de fase, si lo hubo. No bloquea el movimiento si fallara.
+    if (user && cand && (cand.fase !== fase || cand.estado !== estado)) {
+      const usuarioNombre = await nombreUsuarioActual(supabase, user.id);
+      const { error: histErr } = await supabase.from("candidato_historial").insert({
+        empresa_id: empresaId,
+        candidato_id: id,
+        fase_anterior: cand.fase ?? null,
+        estado_anterior: cand.estado ?? null,
+        fase_nueva: fase,
+        estado_nuevo: estado,
+        usuario_id: user.id,
+        usuario_nombre: usuarioNombre,
+        email_enviado: false,
+      });
+      if (histErr) console.error("[candidatos] historial:", histErr.message);
+    }
+
     revalidatePath("/rrhh/reclutamiento");
     return { ok: true, empleadoYaContratado: !!cand?.promovido_at };
   } catch (err: unknown) {
