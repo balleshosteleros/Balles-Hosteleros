@@ -1,14 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Plus, ChevronRight, Pencil, Trash2, GripVertical } from "lucide-react";
-import {
-  FASES_PRINCIPALES_ORDER,
-  FASES_PRINCIPALES,
-  ESTADOS_CONFIG,
-  TIPO_JORNADA_LABELS,
-} from "@/features/rrhh/data/reclutamiento";
-import { CuestionariosVacanteManager } from "./CuestionariosVacanteManager";
+import { Plus, Pencil, Trash2, GripVertical } from "lucide-react";
+import { TIPO_JORNADA_LABELS } from "@/features/rrhh/data/reclutamiento";
 
 export function OfertasTrabajoConfig() {
   return (
@@ -16,7 +9,7 @@ export function OfertasTrabajoConfig() {
       <div>
         <h2 className="text-lg font-bold text-foreground">Vacantes</h2>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Configura tipos de jornada y fases del proceso de selección
+          Configura los tipos de jornada de las vacantes
         </p>
       </div>
 
@@ -43,40 +36,6 @@ export function OfertasTrabajoConfig() {
           ))}
         </CardContent>
       </Card>
-
-      {/* Fases y estados */}
-      <Card>
-        <div className="px-5 py-4 border-b border-border">
-          <h3 className="font-semibold text-foreground text-sm">Fases y estados del proceso</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Estructura jerárquica del pipeline de selección</p>
-        </div>
-        <CardContent className="p-5 space-y-3">
-          {FASES_PRINCIPALES_ORDER.map((fp) => {
-            const cfg = FASES_PRINCIPALES[fp];
-            return (
-              <div key={fp} className="rounded-lg border border-border overflow-hidden">
-                <div className="flex items-center gap-2 px-4 py-2.5" style={{ background: `linear-gradient(90deg, ${cfg.colorFrom}15, ${cfg.colorTo}08)` }}>
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cfg.color }} />
-                  <span className="text-sm font-semibold text-foreground">{cfg.label}</span>
-                  <Badge variant="secondary" className="text-[10px] ml-auto">{cfg.estados.length} estados</Badge>
-                </div>
-                <div className="px-4 py-2 space-y-1">
-                  {cfg.estados.map((est) => (
-                    <div key={est} className="flex items-center gap-2 py-1.5 pl-4 text-sm text-muted-foreground">
-                      <ChevronRight className="h-3 w-3" />
-                      <span>{ESTADOS_CONFIG[est].label}</span>
-                      <span className="text-xs">{ESTADOS_CONFIG[est].icono}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </CardContent>
-      </Card>
-
-      {/* Cuestionarios */}
-      <CuestionariosVacanteManager />
     </div>
   );
 }
