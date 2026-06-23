@@ -64,7 +64,7 @@ export function EscandalloIcon({ className }: { className?: string }) {
 // ─── Tipos ─────────────────────────────────────────────────────────────────
 
 export type IconType = React.ElementType;
-export type SubItem = { title: string; url: string; icon: IconType };
+export type SubItem = { title: string; url: string; icon: IconType; badge?: string };
 export type Section = {
   key: string;
   modulo: string;       // permiso para puedeVer()
@@ -73,18 +73,19 @@ export type Section = {
   prefix: string;
   items: SubItem[];
   linkTo: string;
+  fase?: 1 | 2;         // etiqueta de despliegue por fases (1ª verde / 2ª amarilla)
 };
 
 // ─── Submenús (fuente única — los consume el sidebar y el header) ─────────
 
 export const miPanelSubs: SubItem[] = [
   { title: "PERFIL", url: "/mi-panel/datos-personales", icon: UserCircle },
-  { title: "POINTS", url: "/mi-panel/points", icon: Trophy },
+  { title: "POINTS", url: "/mi-panel/points", icon: Trophy, badge: "Pronto" },
   { title: "CALENDARIO", url: "/mi-panel/calendario", icon: CalendarDays },
   { title: "CRONOGRAMA", url: "/mi-panel/cronograma", icon: CalendarClock },
   { title: "HORARIO", url: "/mi-panel/horario", icon: Timer },
   { title: "FICHAJES", url: "/mi-panel/fichajes", icon: Fingerprint },
-  { title: "FORMACIÓN", url: "/mi-panel/formacion", icon: GraduationCap },
+  { title: "FORMACIÓN", url: "/mi-panel/formacion", icon: GraduationCap, badge: "Pronto" },
   { title: "CONDICIONES", url: "/mi-panel/condiciones", icon: ClipboardCheck },
   { title: "ENCUESTAS", url: "/mi-panel/encuestas", icon: ClipboardList },
   { title: "CUESTIONARIOS", url: "/mi-panel/cuestionarios", icon: FileQuestion },
@@ -159,10 +160,10 @@ export const rrhhSubs: SubItem[] = [
   { title: "RECLUTAMIENTO", url: "/rrhh/reclutamiento", icon: UserRoundSearch },
   { title: "BOARDING", url: "/rrhh/boarding", icon: UserCheck },
   { title: "BONUS", url: "/rrhh/bonus", icon: Gift },
-  { title: "POINTS", url: "/rrhh/points", icon: Trophy },
+  { title: "POINTS", url: "/rrhh/points", icon: Trophy, badge: "Pronto" },
   { title: "PAGOS", url: "/rrhh/pagos", icon: HandCoins },
   { title: "PUESTOS", url: "/rrhh/salarios", icon: Banknote },
-  { title: "FORMACIÓN", url: "/rrhh/formacion", icon: GraduationCap },
+  { title: "FORMACIÓN", url: "/rrhh/formacion", icon: GraduationCap, badge: "Pronto" },
   { title: "ENCUESTAS", url: "/rrhh/encuestas", icon: ClipboardList },
 ];
 
