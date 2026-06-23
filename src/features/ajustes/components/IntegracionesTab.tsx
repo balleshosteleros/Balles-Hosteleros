@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Database, Plug, Loader2, CheckCircle2 } from "lucide-react";
+import { Database, Plug, Loader2, CheckCircle2, Briefcase, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
@@ -183,6 +183,60 @@ export function IntegracionesTab() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ── Portales de empleo ───────────────────────────────
+          La conexión vive aquí (Ajustes generales), fuera del módulo de
+          RRHH, por seguridad. En RRHH solo se activa/desactiva la
+          publicación una vez conectado el portal. */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <Briefcase className="h-5 w-5 text-blue-600" />
+            Portales de empleo
+            <Badge variant="secondary" className="ml-auto gap-1 font-normal">
+              <Clock className="h-3 w-3" /> Pendiente
+            </Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <p className="flex items-start gap-2 text-sm text-muted-foreground">
+            <Plug className="mt-0.5 h-4 w-4 shrink-0" />
+            Conecta tus cuentas de portales de empleo para publicar vacantes
+            directamente desde aquí. Las claves se gestionan en Ajustes —fuera
+            del módulo de RRHH— por seguridad. La integración está en preparación.
+          </p>
+
+          <div className="divide-y rounded-lg border">
+            {PORTALES_EMPLEO.map((portal) => (
+              <div key={portal.nombre} className="flex items-center justify-between px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">{portal.icono}</span>
+                  <span className="text-sm font-medium text-foreground">{portal.nombre}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Badge variant="secondary" className="gap-1 font-normal">
+                    <Clock className="h-3 w-3" /> Pendiente
+                  </Badge>
+                  <Button variant="outline" size="sm" disabled title="Próximamente">
+                    Conectar
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            Una vez conectado un portal, podrás activar o desactivar la publicación
+            de tus vacantes desde RRHH → Reclutamiento → Portal de empleo.
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }
+
+/** Portales de empleo disponibles para integrar (conexión gestionada aquí). */
+const PORTALES_EMPLEO = [
+  { nombre: "InfoJobs", icono: "🔵" },
+  { nombre: "JobToday", icono: "🟢" },
+];

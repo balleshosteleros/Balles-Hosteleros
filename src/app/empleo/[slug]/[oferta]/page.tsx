@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, MapPin, Clock, Briefcase, Calendar } from "lucide-react";
+import { ArrowLeft, MapPin, Clock, Briefcase, Calendar, FileText } from "lucide-react";
 import { fetchOfertaPublica } from "@/features/empleo-publico/services/empleo-fetch";
 import { EmpleoBrandingShell } from "@/features/empleo-publico/components/EmpleoBrandingShell";
 import { FormCandidaturaPublica } from "@/features/empleo-publico/components/FormCandidaturaPublica";
@@ -60,6 +60,12 @@ export default async function OfertaPublicaPage({
               <span className="inline-flex items-center gap-1.5">
                 <Clock className="h-4 w-4" />
                 {JORNADA_LABEL[oferta.tipo_jornada] ?? oferta.tipo_jornada}
+              </span>
+            )}
+            {oferta.tipo_contrato && (
+              <span className="inline-flex items-center gap-1.5">
+                <FileText className="h-4 w-4" />
+                {oferta.tipo_contrato}
               </span>
             )}
             {oferta.fecha_creacion && (

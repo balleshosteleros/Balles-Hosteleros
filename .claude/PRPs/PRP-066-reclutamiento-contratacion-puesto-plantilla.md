@@ -10,6 +10,8 @@
 
 Convertir el **puesto** en la plantilla completa de contratación (datos económicos + horario + cronograma + datos legales de gestoría) y añadir un flujo **CONTRATAR** de 2 pasos en el pipeline de reclutamiento que, con un solo clic, cree el **empleado + usuario** heredando todo del puesto y dispare la **alta a la gestoría por email**. La vacante se **desacopla** del puesto (lo guarda solo como snapshot informativo): el vínculo real empleado↔puesto nace al contratar.
 
+Cada puesto tiene uno o varios **Niveles** (Nivel 1, 2, 3…): plantillas de condiciones reutilizables que comparten cronograma, rol y vacante, pero con **salario, horario y condiciones propios** por nivel. El Nivel 1 se crea automáticamente con el puesto. Al contratar se **copia (snapshot)** el nivel elegido al empleado: editar un nivel después solo afecta a **futuras** contrataciones, nunca a empleados ya dados de alta.
+
 ## Por Qué
 
 | Problema | Solución |
@@ -25,6 +27,8 @@ Convertir el **puesto** en la plantilla completa de contratación (datos económ
 ## Qué
 
 ### Criterios de Éxito
+- [ ] Cada puesto tiene **Niveles** (1..N): el Nivel 1 se crea automático con el puesto; se pueden añadir Nivel 2, 3… Cada nivel guarda su **salario, horario y condiciones**; comparten cronograma, rol y vacante del puesto.
+- [ ] Al contratar se **copia** el nivel elegido al empleado (snapshot). Editar después un nivel **no** altera a los empleados ya contratados; solo aplica a futuras contrataciones.
 - [ ] El puesto guarda datos de gestoría: convenio colectivo, tipo de contrato por defecto (indefinido/temporal), grupo/categoría profesional y epígrafe/código de cotización (todos opcionales).
 - [ ] Al crear un puesto, su cronograma 1:1 lleva el **nombre** del puesto; al renombrarlo o moverlo de departamento, el cronograma le **sigue** (nombre y departamento).
 - [ ] En PUESTOS (`/rrhh/salarios`) el selector de departamento es **editable al editar**; `updatePuesto(nombre, descripcion, departamento_id)` existe y un trigger BD cascada `departamento_id` a `cronogramas_operativos` y a `empleados` cuyo puesto **principal** sea ese. Las vacantes NO entran en la cascada.
@@ -74,13 +78,13 @@ Convertir el **puesto** en la plantilla completa de contratación (datos económ
 src/features/rrhh/
 ├── actions/
 │   ├── vacantes-actions.ts        # createPuesto nombra cronograma; updatePuesto(nombre,desc,departamento_id)
-│   ├── salarios-actions.ts        # leer/escribir campos gestoría del puesto
+│   ├── salarios-actions.ts        # niveles (1:N) + campos gestoría del puesto
 │   ├── contratacion-actions.ts    # NUEVO: contratarCandidato() (paso 1) + enviarAltaGestoria() (paso 2)
 │   └── promocion-actions.ts       # se refactoriza/absorbe en contratacion-actions
 ├── services/
 │   └── empleados-core.ts          # herencia del puesto + email login por área del depto
 ├── components/
-│   ├── salarios/PuestoSalarioDialog.tsx   # departamento editable + campos gestoría
+│   ├── salarios/PuestoSalarioDialog.tsx   # departamento editable + campos gestoría + niveles (1,2,3…)
 │   ├── ajustes/ReclutamientoConfigPanel.tsx  # NUEVO: ajuste correos gestoría (Ajustes→RRHH→Reclutamiento)
 │   └── reclutamiento/
 │       ├── ContratarDialog.tsx    # NUEVO: wizard 2 pasos
@@ -91,13 +95,25 @@ src/features/rrhh/
 
 ### Modelo de Datos
 ```sql
--- 1) Campos de gestoría en el puesto (opcionales). Tabla destino a confirmar
---    en Fase 1: puestos vs puesto_salarios. Probable: puestos (datos de plantilla).
+-- 0) NIVELES del puesto. puesto_salarios ya guarda salario + horario; se amplía
+--    a 1:N por puesto añadiendo `nivel`. Cada fila = un Nivel (plantilla de
+--    condiciones). El Nivel 1 se crea con el puesto. Migrar filas existentes a nivel 1.
+ALTER TABLE puesto_salarios ADD COLUMN IF NOT EXISTS nivel int NOT NULL DEFAULT 1;
+-- Cambiar la unicidad de (puesto_id) 1:1 a (puesto_id, nivel):
+--   DROP CONSTRAINT/UNIQUE viejo por puesto_id; CREATE UNIQUE (puesto_id, nivel).
+-- (incluye tipo/duración de contrato por nivel si difiere del puesto)
+
+-- 1) Datos de gestoría COMPARTIDOS a nivel de puesto (opcionales): convenio común
+--    a todos los niveles. (tipo_contrato puede vivir por nivel; convenio en puesto.)
 ALTER TABLE puestos
   ADD COLUMN IF NOT EXISTS convenio_colectivo      text,
   ADD COLUMN IF NOT EXISTS tipo_contrato_defecto   text,  -- 'indefinido' | 'temporal'
   ADD COLUMN IF NOT EXISTS grupo_categoria_prof    text,
   ADD COLUMN IF NOT EXISTS epigrafe_cotizacion     text;
+
+-- Al CONTRATAR: copiar (snapshot) salario+horario+condiciones del nivel elegido a
+-- las condiciones PROPIAS del empleado (no enlace vivo). Definir el almacén de
+-- condiciones del empleado en Fase 5 (p.ej. empleado_puestos o empleado_condiciones).
 
 -- 2) Cronograma sigue al puesto (nombre + departamento). Trigger sobre puestos.
 --    Al UPDATE de puestos.nombre/departamento_id:
@@ -141,17 +157,17 @@ CREATE TABLE IF NOT EXISTS reclutamiento_config (
 **Objetivo**: `updatePuesto(nombre, descripcion, departamento_id)` + selector de departamento editable al EDITAR en `PuestoSalarioDialog`; trigger BD que cascada `departamento_id` a `cronogramas_operativos` y a `empleados` con ese puesto principal. Vacantes excluidas.
 **Validación**: editar el departamento de un puesto mueve su cronograma y a los empleados cuyo puesto principal es ese; ninguna vacante cambia.
 
-### Fase 3: El puesto como plantilla de gestoría (punto 1)
-**Objetivo**: campos de gestoría en el puesto (convenio, tipo de contrato por defecto, grupo/categoría, epígrafe/cotización), editables en `PuestoSalarioDialog`, leídos por `listSalariosEmpresa`/`rowToPuesto`.
-**Validación**: guardar y releer los 4 campos en un puesto; opcionales (vacíos permitidos); typecheck.
+### Fase 3: El puesto como plantilla — Niveles + datos de gestoría (punto 1)
+**Objetivo**: (a) **Niveles** del puesto: `puesto_salarios` pasa a 1:N con `nivel`; el Nivel 1 se crea con el puesto; UI en `PuestoSalarioDialog` para añadir/editar Nivel 2, 3… (cada uno con su salario/horario/condiciones); cronograma y rol siguen compartidos. (b) campos de gestoría compartidos en el puesto (convenio, tipo de contrato por defecto, grupo/categoría, epígrafe/cotización), leídos por `listSalariosEmpresa`/`rowToPuesto`.
+**Validación**: un puesto nuevo trae Nivel 1; añadir Nivel 2 con datos propios y releer ambos; editar un nivel no toca a otros; guardar/releer los 4 campos de gestoría (opcionales); typecheck.
 
 ### Fase 4: Desacople vacante ↔ puestos (punto 7)
 **Objetivo**: la vacante guarda el puesto solo como snapshot/texto informativo; se revierten dependencias de cascada hacia vacantes; el puesto sigue pre-seleccionable en CONTRATAR desde el snapshot.
 **Validación**: renombrar/mover un puesto no altera vacantes; la vacante muestra el puesto informativo; CONTRATAR pre-selecciona desde el snapshot.
 
 ### Fase 5: Pantalla CONTRATAR de 2 pasos + botón en pipeline (puntos 4 y 5)
-**Objetivo**: botón único CONTRATAR en columnas Prueba/Empleado → `ContratarDialog` (wizard 2 pasos). Paso 1: confirmar puesto (editable) + primer día + tipo/duración contrato + regla email de login por área; crea empleado+usuario heredando horario/calendario/salario/convenio del puesto y vincula `empleado_puestos`. Paso 2: alta en gestoría (UI pre-rellenada). Reemplaza "Crear en sistema". Idempotente (no contratar dos veces).
-**Validación**: contratar un candidato crea empleado+usuario con datos heredados, email de login según área correcto, vínculo de puesto correcto; segundo intento bloqueado.
+**Objetivo**: botón único CONTRATAR en columnas Prueba/Empleado → `ContratarDialog` (wizard 2 pasos). Paso 1: confirmar puesto (editable) + **elegir Nivel** + primer día + tipo/duración contrato + regla email de login por área; crea empleado+usuario **copiando (snapshot)** salario/horario/condiciones del nivel elegido a las condiciones propias del empleado (no enlace vivo), hereda cronograma/rol del puesto y vincula `empleado_puestos`. Paso 2: alta en gestoría (UI pre-rellenada). Reemplaza "Crear en sistema". Idempotente (no contratar dos veces).
+**Validación**: contratar un candidato crea empleado+usuario con las condiciones del nivel copiadas, email de login según área correcto, vínculo de puesto correcto; editar luego el nivel no cambia a ese empleado; segundo intento bloqueado.
 
 ### Fase 6: Cadena de emails completa + ajuste de correos de gestoría (punto 6)
 **Objetivo**: mantener los emails por cambio de estado (ya existen); añadir email de **acceso al trabajador** (enlace primer login) al contratar y email de **alta a la gestoría** (paso 2) con plantilla predefinida y variables (empleado/puesto/convenio/primer día/datos legales). Seed canónico propagable. Crear el **ajuste de correos de gestoría** (`reclutamiento_config`: principal + CC opcional) con su panel en Ajustes → RRHH → Reclutamiento; el paso 2 lee de ahí los destinatarios.
@@ -187,6 +203,9 @@ CREATE TABLE IF NOT EXISTS reclutamiento_config (
 - [ ] Confirmaciones internas vía `useConfirmDelete`, **nunca** `confirm()` nativo.
 - [ ] Plantillas email = biblioteca por nombre; asociación email↔estado vive en `reclutamiento_plantillas_estado` + override `vacantes.email_plantillas`. No reacoplar a estados (memoria `project_reclutamiento_emails_sueltos`). El email de acceso y el de gestoría son **plantillas nuevas de evento**, no de estado.
 - [ ] `getEmpresaActivaForUser` / cookie `bh_empresa_activa`: respetar empresa activa, no `profiles.empresa_id` por defecto.
+- [ ] **Niveles = snapshot, no enlace vivo**: al contratar se COPIAN salario/horario/condiciones del nivel al empleado. Editar un nivel NUNCA debe alterar empleados ya contratados (solo futuros). El empleado necesita almacén propio de condiciones.
+- [ ] **Nivel 1 automático**: crear un puesto crea su Nivel 1; la numeración es secuencial (1, 2, 3…). No permitir un puesto sin al menos Nivel 1.
+- [ ] `puesto_salarios` pasa de 1:1 a 1:N por `nivel`: migrar filas existentes a `nivel = 1` y cambiar la unicidad a `(puesto_id, nivel)` antes de tocar `upsertPuestoSalario` (hoy hace `onConflict: puesto_id`).
 
 ## Anti-Patrones
 - NO crear un modelo paralelo de puesto/cronograma (cronograma 1:1 ya existe; nombrar y sincronizar).

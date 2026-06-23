@@ -5,8 +5,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Copy, ExternalLink, Eye, Globe, Loader2, Palette, Share2, Clock } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Copy, ExternalLink, Eye, Globe, Loader2, Palette, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   getEmpleoUrlConfig,
@@ -206,27 +206,29 @@ export function PortalEmpleoConfig() {
         </div>
         <CardContent className="p-5 space-y-3">
           <p className="text-xs text-muted-foreground">
-            Próximamente podrás publicar tus vacantes directamente en estos portales de empleo.
-            La integración está en preparación.
+            Activa o desactiva la publicación de tus vacantes en cada portal. La conexión y las
+            claves de acceso se configuran en <span className="text-foreground font-medium">Ajustes → Integraciones</span>,
+            fuera de RRHH, por seguridad.
           </p>
           <div className="rounded-lg border bg-card divide-y">
             {PORTALES.map((portal) => (
               <div key={portal.nombre} className="flex items-center justify-between px-4 py-3">
                 <div className="flex items-center gap-3">
                   <span className="text-xl">{portal.icono}</span>
-                  <span className="text-sm font-medium text-foreground">{portal.nombre}</span>
+                  <div>
+                    <div className="text-sm font-medium text-foreground">{portal.nombre}</div>
+                    <div className="text-[11px] text-muted-foreground">Pendiente de conexión en Ajustes</div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <Badge className="gap-1 text-[11px] border-0 bg-amber-100 text-amber-700">
-                    <Clock className="h-3.5 w-3.5" /> Pendiente
-                  </Badge>
-                  <Button variant="outline" size="sm" className="text-xs h-8" disabled>
-                    Conectar
-                  </Button>
-                </div>
+                <Switch checked={false} disabled title="Conecta el portal en Ajustes → Integraciones" />
               </div>
             ))}
           </div>
+          <Button variant="outline" size="sm" className="gap-1.5" asChild>
+            <Link href="/ajustes?tab=integraciones">
+              <ExternalLink className="h-4 w-4" /> Gestionar conexión en Ajustes
+            </Link>
+          </Button>
         </CardContent>
       </Card>
 

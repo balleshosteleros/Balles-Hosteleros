@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { MapPin, Clock, Briefcase, ChevronRight, Utensils, Building2 } from "lucide-react";
+import { MapPin, Clock, Briefcase, ChevronRight, Utensils, Building2, FileText } from "lucide-react";
 import type { EmpleoPortal, OfertaPublica } from "../services/empleo-fetch";
 
 const JORNADA_LABEL: Record<string, string> = {
@@ -51,6 +51,12 @@ function OfertaCard({ o, empleoSlug, canalQuery }: { o: OfertaPublica; empleoSlu
               <span className="inline-flex items-center gap-1">
                 <Clock className="h-3.5 w-3.5" />
                 {JORNADA_LABEL[o.tipo_jornada] ?? o.tipo_jornada}
+              </span>
+            )}
+            {o.tipo_contrato && (
+              <span className="inline-flex items-center gap-1">
+                <FileText className="h-3.5 w-3.5" />
+                {o.tipo_contrato}
               </span>
             )}
           </div>

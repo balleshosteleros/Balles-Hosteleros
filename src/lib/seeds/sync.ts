@@ -660,6 +660,50 @@ export async function syncCategoriasProductoAEmpresa(
   return { creadas: aCrear.length };
 }
 
+/** Catálogos canónicos de vacantes (mismos valores que las migraciones). */
+const JORNADAS_SEED = [
+  { nombre: "Completa", orden: 1 },
+  { nombre: "Media jornada", orden: 2 },
+  { nombre: "Por horas", orden: 3 },
+];
+const TIPOS_CONTRATO_SEED = [
+  { nombre: "Indefinido", orden: 1 },
+  { nombre: "Temporal", orden: 2 },
+  { nombre: "Fijo discontinuo", orden: 3 },
+  { nombre: "Formación y prácticas", orden: 4 },
+];
+
+/**
+ * Siembra los catálogos de jornadas y tipos de contrato de una empresa.
+ * Aditivo e idempotente: solo crea los que falten (por nombre, case-insensitive).
+ */
+export async function syncCatalogosVacanteAEmpresa(
+  admin: Admin,
+  empresaId: string,
+): Promise<{ jornadasCreadas: number; contratosCreados: number }> {
+  const seedCatalogo = async (
+    tabla: "jornadas" | "tipos_contrato",
+    seed: Array<{ nombre: string; orden: number }>,
+  ): Promise<number> => {
+    const { data: existentes } = await admin
+      .from(tabla)
+      .select("nombre")
+      .eq("empresa_id", empresaId);
+    const set = new Set((existentes ?? []).map((x) => (x.nombre as string).toLowerCase()));
+    const aCrear = seed
+      .filter((x) => !set.has(x.nombre.toLowerCase()))
+      .map((x) => ({ empresa_id: empresaId, nombre: x.nombre, orden: x.orden, activo: true }));
+    if (aCrear.length === 0) return 0;
+    const { error } = await admin.from(tabla).insert(aCrear);
+    if (error) throw error;
+    return aCrear.length;
+  };
+
+  const jornadasCreadas = await seedCatalogo("jornadas", JORNADAS_SEED);
+  const contratosCreados = await seedCatalogo("tipos_contrato", TIPOS_CONTRATO_SEED);
+  return { jornadasCreadas, contratosCreados };
+}
+
 /**
  * Siembra una empresa nueva con todos los pilares canónicos.
  * Llamar desde `createEmpresa()` justo después del INSERT en `empresas`.
@@ -672,6 +716,7 @@ export async function seedEmpresaDefaults(
   await syncDepartamentosAEmpresa(admin, empresaId);
   await syncRolesAEmpresa(admin, empresaId);
   await syncOrganigramaAEmpresa(admin, empresaSlug);
+  await syncCatalogosVacanteAEmpresa(admin, empresaId);
   await syncVacantesAEmpresa(admin, empresaId, empresaSlug);
   await syncInspectorEmailPlantillasAEmpresa(admin, empresaId);
   await syncInspeccionPresentacionAEmpresa(admin, empresaId);
@@ -742,6 +787,7 @@ export async function syncSeedsToAllEmpresas(): Promise<{
       const d = await syncDepartamentosAEmpresa(admin, empresaId);
       const r = await syncRolesAEmpresa(admin, empresaId);
       const o = await syncOrganigramaAEmpresa(admin, empresaSlug);
+      await syncCatalogosVacanteAEmpresa(admin, empresaId);
       const v = await syncVacantesAEmpresa(admin, empresaId, empresaSlug);
       const iep = await syncInspectorEmailPlantillasAEmpresa(admin, empresaId);
       const ipres = await syncInspeccionPresentacionAEmpresa(admin, empresaId);
