@@ -22,6 +22,7 @@ export interface VacanteInput {
   categoria?: string | null;
   ubicacion?: string | null;
   tipo_jornada?: string | null;
+  tipo_contrato?: string | null;
   salario_rango?: string | null;
   estado_publicacion?: "publicada" | "borrador" | "cerrada" | "archivada";
   visible_publicamente?: boolean;
@@ -96,6 +97,7 @@ export async function createVacante(input: VacanteInput) {
         categoria: input.categoria ?? null,
         ubicacion: input.ubicacion ?? null,
         tipo_jornada: input.tipo_jornada ?? null,
+        tipo_contrato: input.tipo_contrato ?? null,
         salario_rango: input.salario_rango ?? null,
         estado_publicacion: input.estado_publicacion ?? "borrador",
         visible_publicamente: input.visible_publicamente ?? false,

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { sendEmail } from "@/lib/email/send";
-import { sustituirVariablesReclutamiento } from "@/features/rrhh/lib/reclutamiento-email";
+import { sustituirVariablesReclutamiento, parsearEnlacesCuerpo } from "@/features/rrhh/lib/reclutamiento-email";
 import { type EstadoReclutamiento } from "@/features/rrhh/data/reclutamiento";
 
 /**
@@ -304,6 +304,73 @@ export async function previewReclutamientoFaseEmail(
   return { asunto: tpl.asunto, cuerpo: tpl.cuerpo, activa: tpl.activa };
 }
 
+/**
+ * Devuelve la lista de `key` de estados de una vacante que tienen un email
+ * ACTIVO asociado (override por vacante o email por defecto del estado en la
+ * plantilla de estados de la vacante, o la predeterminada de la empresa). Se usa
+ * en el Kanban para marcar con un check verde qué columnas enviarán correo.
+ */
+export async function estadosConEmailDeVacante(
+  vacanteId: string,
+): Promise<string[]> {
+  const { supabase, empresaId } = await ctx();
+  if (!empresaId || !vacanteId) return [];
+
+  const { data: vac } = await supabase
+    .from("vacantes")
+    .select("plantilla_estado_id, email_plantillas")
+    .eq("id", vacanteId)
+    .maybeSingle();
+
+  const overrides = (vac?.email_plantillas ?? {}) as Record<string, string | null>;
+
+  // Plantilla de estados de la vacante; si no tiene, la predeterminada de la empresa.
+  let plantillaEstadoId = (vac?.plantilla_estado_id as string | null) ?? null;
+  if (!plantillaEstadoId) {
+    const { data: def } = await supabase
+      .from("reclutamiento_plantillas_estado")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .eq("es_predeterminada", true)
+      .maybeSingle();
+    plantillaEstadoId = (def?.id as string | null) ?? null;
+  }
+
+  const emailPorEstadoPlantilla: Record<string, string | null> = {};
+  if (plantillaEstadoId) {
+    const { data: pt } = await supabase
+      .from("reclutamiento_plantillas_estado")
+      .select("estados")
+      .eq("id", plantillaEstadoId)
+      .maybeSingle();
+    const items = (pt?.estados ?? []) as Array<{ key: string; email_plantilla_id?: string | null }>;
+    for (const it of items) emailPorEstadoPlantilla[it.key] = it.email_plantilla_id ?? null;
+  }
+
+  // email_plantilla_id por estado (el override de la vacante gana).
+  const idPorEstado: Record<string, string> = {};
+  const keys = new Set([...Object.keys(overrides), ...Object.keys(emailPorEstadoPlantilla)]);
+  for (const k of keys) {
+    const id = overrides[k] ?? emailPorEstadoPlantilla[k] ?? null;
+    if (id) idPorEstado[k] = id;
+  }
+
+  const ids = [...new Set(Object.values(idPorEstado))];
+  if (ids.length === 0) return [];
+
+  // Solo cuentan las plantillas que existen y están activas.
+  const { data: tpls } = await supabase
+    .from("reclutamiento_email_plantillas")
+    .select("id, activa")
+    .eq("empresa_id", empresaId)
+    .in("id", ids);
+  const activos = new Set((tpls ?? []).filter((t) => t.activa).map((t) => t.id as string));
+
+  return Object.entries(idPorEstado)
+    .filter(([, id]) => activos.has(id))
+    .map(([estado]) => estado);
+}
+
 // ─── Envío del correo al cambiar de fase ────────────────────────
 function escapeHtml(s: string): string {
   return s
@@ -315,11 +382,15 @@ function escapeHtml(s: string): string {
 }
 
 function bodyToHtml(text: string): string {
-  const escaped = escapeHtml(text);
-  const linked = escaped.replace(/(https?:\/\/[^\s<]+)/g, (url) =>
-    `<a href="${url}" target="_blank" rel="noreferrer" style="color:#2563eb;text-decoration:underline">${url}</a>`,
-  );
-  const html = linked.replace(/\n/g, "<br>");
+  // Tokeniza en texto + enlaces (sintaxis `[texto](url)` y URLs sueltas) para
+  // que el correo enviado coincida con la vista previa del editor.
+  const html = parsearEnlacesCuerpo(text)
+    .map((seg) =>
+      seg.type === "link"
+        ? `<a href="${escapeHtml(seg.href)}" target="_blank" rel="noreferrer" style="color:#2563eb;text-decoration:underline">${escapeHtml(seg.text)}</a>`
+        : escapeHtml(seg.value).replace(/\n/g, "<br>"),
+    )
+    .join("");
   return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:15px;line-height:1.55;color:#111827;max-width:600px;margin:0 auto;padding:24px">${html}</div>`;
 }
 
@@ -361,12 +432,8 @@ export async function enviarReclutamientoFaseEmail(
   const empresaNombre = vars.empresa_nombre || "la empresa";
   const pieText =
     "Este mensaje se ha enviado de forma automática desde una dirección que no admite respuestas. Por favor, no respondas a este correo.";
-  // Cabecera con el logo de la empresa centrado (si hay logo configurado).
-  const logoHtml = vars.empresa_logo
-    ? `<div style="text-align:center;max-width:600px;margin:0 auto;padding:28px 24px 4px"><img src="${vars.empresa_logo}" alt="${escapeHtml(empresaNombre)}" style="max-height:72px;max-width:240px;height:auto;width:auto;display:inline-block" /></div>`
-    : "";
+  // La cabecera con el isotipo de la empresa la añade `sendEmail` (empresaId).
   const html =
-    logoHtml +
     bodyToHtml(bodyText) +
     `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:600px;margin:0 auto;padding:0 24px 24px"><p style="color:#9ca3af;font-size:12px;line-height:1.5;border-top:1px solid #e5e7eb;margin-top:8px;padding-top:12px">${escapeHtml(pieText)}</p></div>`;
 
@@ -376,6 +443,7 @@ export async function enviarReclutamientoFaseEmail(
     html,
     text: `${bodyText}\n\n—\n${pieText}`,
     fromName: empresaNombre,
+    empresaId,
   });
   if (res.ok) {
     // Marca en la actividad que este cambio de estado envió correo al candidato.

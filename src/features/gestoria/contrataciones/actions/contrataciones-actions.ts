@@ -211,7 +211,7 @@ export async function crearAlta(input: AltaInput, emailExtra?: string | null): P
     let emailOk = true;
     let emailError: string | undefined;
     for (const to of recipients) {
-      const r = await sendEmail({ to, subject, html, text });
+      const r = await sendEmail({ to, subject, html, text, empresaId });
       if (!r.ok) {
         emailOk = false;
         emailError = "configured" in r && r.configured ? r.error : "Email no configurado";
@@ -296,7 +296,7 @@ export async function crearBaja(input: BajaInput, emailExtra?: string | null): P
     let emailOk = true;
     let emailError: string | undefined;
     for (const to of recipients) {
-      const r = await sendEmail({ to, subject, html, text });
+      const r = await sendEmail({ to, subject, html, text, empresaId });
       if (!r.ok) {
         emailOk = false;
         emailError = "configured" in r && r.configured ? r.error : "Email no configurado";
@@ -386,7 +386,7 @@ export async function crearModificacion(input: ModificacionInput, emailExtra?: s
     let emailOk = true;
     let emailError: string | undefined;
     for (const to of recipients) {
-      const r = await sendEmail({ to, subject, html, text });
+      const r = await sendEmail({ to, subject, html, text, empresaId });
       if (!r.ok) {
         emailOk = false;
         emailError = "configured" in r && r.configured ? r.error : "Email no configurado";

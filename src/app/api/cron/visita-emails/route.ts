@@ -63,6 +63,7 @@ export async function GET(request: Request) {
       to: row.to_email as string,
       subject: row.asunto as string,
       html: row.cuerpo_html as string,
+      empresaId: row.empresa_id as string,
     });
 
     if (r.ok) {

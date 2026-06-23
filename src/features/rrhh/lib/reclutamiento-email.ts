@@ -82,3 +82,52 @@ export function sustituirVariablesReclutamiento(
     return val != null && val !== "" ? val : "";
   });
 }
+
+// ─── Enlaces en el cuerpo ───────────────────────────────────────
+/**
+ * Sintaxis para insertar un enlace con texto visible dentro del cuerpo:
+ * `[texto a mostrar](https://destino-externo.com)`. También se reconocen las
+ * URLs sueltas (`https://…`), que se enlazan mostrando la propia dirección.
+ */
+export type SegmentoCuerpo =
+  | { type: "text"; value: string }
+  | { type: "link"; text: string; href: string };
+
+/** Construye la sintaxis de enlace que se inserta en el editor. */
+export function formatearEnlaceMarkdown(texto: string, url: string): string {
+  const t = (texto || url).trim();
+  return `[${t}](${url.trim()})`;
+}
+
+/** Divide una porción de texto en segmentos de texto + URLs sueltas enlazadas. */
+function trocearUrlsSueltas(chunk: string, out: SegmentoCuerpo[]): void {
+  const bare = /(https?:\/\/[^\s<)]+)/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = bare.exec(chunk)) !== null) {
+    if (m.index > last) out.push({ type: "text", value: chunk.slice(last, m.index) });
+    out.push({ type: "link", text: m[1], href: m[1] });
+    last = bare.lastIndex;
+  }
+  if (last < chunk.length) out.push({ type: "text", value: chunk.slice(last) });
+}
+
+/**
+ * Tokeniza el cuerpo en segmentos de texto y enlaces. Primero detecta los
+ * enlaces con texto `[texto](url)` y, en lo que queda, las URLs sueltas. Lo
+ * usan tanto la vista previa (cliente) como el render del email (servidor) para
+ * que coincidan exactamente.
+ */
+export function parsearEnlacesCuerpo(texto: string): SegmentoCuerpo[] {
+  const segments: SegmentoCuerpo[] = [];
+  const mdLink = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g;
+  let lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = mdLink.exec(texto)) !== null) {
+    if (m.index > lastIndex) trocearUrlsSueltas(texto.slice(lastIndex, m.index), segments);
+    segments.push({ type: "link", text: m[1], href: m[2] });
+    lastIndex = mdLink.lastIndex;
+  }
+  if (lastIndex < texto.length) trocearUrlsSueltas(texto.slice(lastIndex), segments);
+  return segments;
+}

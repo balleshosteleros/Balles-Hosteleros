@@ -2141,7 +2141,8 @@ async function notificarBajaContratoRecibida(args: {
     subject,
     html,
     text,
-    // Correo interno a empleado → no-reply: no se responde al software.
+    empresaId: args.empresaId,
+    // Reply-To siempre no-reply: no se responde al software.
   });
 }
 
@@ -2279,7 +2280,8 @@ async function onBajaContratoCreada(args: {
       subject,
       html,
       text,
-      // Aviso interno → no-reply: la empresa lo gestiona desde el panel de RRHH.
+      empresaId: args.empresaId,
+      // Reply-To siempre no-reply: la empresa lo gestiona desde el panel de RRHH.
     });
   } else {
     console.warn(

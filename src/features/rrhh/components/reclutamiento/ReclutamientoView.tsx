@@ -44,10 +44,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import {
   Search, Star, MoreHorizontal, MapPin, Clock, CalendarDays,
   FileText, Users, Send, ArrowLeft, User, Phone, Mail, Tag, Kanban, List,
-  Pencil, Trash2, Utensils, Building2, Settings, Check, Link2,
+  Pencil, Trash2, Utensils, Building2, Settings, Check,
   GripVertical,
 } from "lucide-react";
-import { EnlacesEmpleoDialog } from "@/features/rrhh/components/reclutamiento/EnlacesEmpleoDialog";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import {
   SubmoduleToolbar,
@@ -531,10 +530,9 @@ export function ReclutamientoView() {
   const [selectedFase, setSelectedFase] = useState<FaseReclutamiento | null>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "tabla">("kanban");
 
-  // Dialogs (creación/edición + share)
+  // Dialogs (creación/edición)
   const [nuevaOfertaOpen, setNuevaOfertaOpen] = useState(false);
   const [ofertaEditando, setOfertaEditando] = useState<Vacante | null>(null);
-  const [enlacesOpen, setEnlacesOpen] = useState(false);
 
   // Selector de área (vacantes operativas vs. administrativas)
   const [areaFiltro, setAreaFiltro] = useState<"operativa" | "administrativa">("operativa");
@@ -760,21 +758,16 @@ export function ReclutamientoView() {
               </Button>
             }
             extraDerecha={
-              <>
-                <Button variant="outline" size="sm" onClick={() => setEnlacesOpen(true)} className="gap-1.5">
-                  <Link2 className="h-3.5 w-3.5" /> Enlaces
-                </Button>
-                <Button
-                  size="icon"
-                  variant="outline"
-                  className="h-9 w-9"
-                  onClick={() => setShowConfig(true)}
-                  title="Configuración"
-                  aria-label="Configuración"
-                >
-                  <Settings className="h-4 w-4" strokeWidth={1.75} />
-                </Button>
-              </>
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-9 w-9"
+                onClick={() => setShowConfig(true)}
+                title="Configuración"
+                aria-label="Configuración"
+              >
+                <Settings className="h-4 w-4" strokeWidth={1.75} />
+              </Button>
             }
           />
 
@@ -833,12 +826,6 @@ export function ReclutamientoView() {
         }}
         vacanteId={ofertaEditando?.id ?? null}
         onSaved={recargar}
-      />
-
-      <EnlacesEmpleoDialog
-        open={enlacesOpen}
-        onOpenChange={setEnlacesOpen}
-        empresaNombre={empresaActual.nombre}
       />
 
       {confirmDeleteDialog}

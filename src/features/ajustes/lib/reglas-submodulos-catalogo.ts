@@ -325,6 +325,7 @@ export const CATALOGO: ModuloDef[] = [
         obligatorios: ["titulo", "departamento_id", "puesto_id", "descripcion"],
       },
       placeholder("jornadas", "Jornadas de vacantes"),
+      placeholder("contratos", "Tipos de contrato"),
       placeholder("boarding", "Boarding"),
       placeholder("bonus", "Bonus"),
       placeholder("points", "Points"),

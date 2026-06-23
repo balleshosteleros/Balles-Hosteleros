@@ -50,6 +50,7 @@ const BADGE_POR_TIPO: Record<ReservaEmailTipo, string> = {
 type EmpresaRow = {
   nombre: string;
   logo_url: string | null;
+  isotipo_url: string | null;
   color: string | null;
   color_secundario: string | null;
 };
@@ -154,7 +155,7 @@ export async function enviarReservaEmail(
     await Promise.all([
       admin
         .from("empresas")
-        .select("nombre, logo_url, color, color_secundario")
+        .select("nombre, logo_url, isotipo_url, color, color_secundario")
         .eq("id", empresaId)
         .maybeSingle(),
       admin
@@ -175,6 +176,7 @@ export async function enviarReservaEmail(
   const empresa: EmpresaRow = {
     nombre: (empresaData?.nombre as string | undefined) ?? "",
     logo_url: (empresaData?.logo_url as string | null | undefined) ?? null,
+    isotipo_url: (empresaData?.isotipo_url as string | null | undefined) ?? null,
     color: (empresaData?.color as string | null | undefined) ?? null,
     color_secundario:
       (empresaData?.color_secundario as string | null | undefined) ?? null,
@@ -378,8 +380,11 @@ function renderHtml(input: RenderInput): string {
   const textoSobrePrimario = colorContraste(primario);
   const empresaNombre = input.empresa.nombre || "";
 
-  const cabeceraHtml = input.empresa.logo_url
-    ? `<img src="${escapeAttr(input.empresa.logo_url)}" alt="${escapeAttr(empresaNombre)}" style="max-height:56px;max-width:220px;display:block;margin:0 auto;" />`
+  // Prefiere el isotipo (icono) de la empresa; si no hay, el logo completo; si
+  // tampoco, el nombre en texto.
+  const marcaSrc = input.empresa.isotipo_url || input.empresa.logo_url;
+  const cabeceraHtml = marcaSrc
+    ? `<img src="${escapeAttr(marcaSrc)}" alt="${escapeAttr(empresaNombre)}" style="max-height:60px;max-width:220px;display:block;margin:0 auto;" />`
     : `<div style="font-size:22px;font-weight:700;color:${textoSobrePrimario};letter-spacing:0.2px;">${escapeHtml(empresaNombre)}</div>`;
 
   const filas: string[] = [
@@ -666,6 +671,7 @@ export interface PreviewInput {
   tipo: ReservaEmailTipo;
   empresaNombre: string;
   logoUrl: string | null;
+  isotipoUrl?: string | null;
   colorPrimario: string | null;
   asuntoOverride: string | null;
   mensajeOverride: string | null;
@@ -715,6 +721,7 @@ export function previewReservaEmail(input: PreviewInput): {
     empresa: {
       nombre: input.empresaNombre || "Tu restaurante",
       logo_url: input.logoUrl,
+      isotipo_url: input.isotipoUrl ?? null,
       color: input.colorPrimario,
       color_secundario: null,
     },

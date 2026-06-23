@@ -350,7 +350,8 @@ export async function promoverCandidato(input: PromoverInput): Promise<PromoverR
         subject,
         html,
         text,
-        // Correo interno a empleado → no-reply: no se responde al software.
+        empresaId,
+        // Reply-To siempre no-reply: no se responde al software.
       });
       magicLinkSent = sendRes.ok;
     }

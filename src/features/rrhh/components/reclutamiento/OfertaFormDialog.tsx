@@ -20,6 +20,7 @@ import {
   listPuestosCatalogo, listDepartamentosCatalogo,
 } from "@/features/rrhh/actions/vacantes-actions";
 import { listJornadas, type JornadaRow } from "@/features/rrhh/actions/jornadas-actions";
+import { listTiposContrato, type TipoContratoRow } from "@/features/rrhh/actions/tipos-contrato-actions";
 import { listCuestionariosVacante } from "@/features/rrhh/actions/cuestionarios-vacante-actions";
 import type { CuestionarioVacante } from "@/features/rrhh/data/cuestionario-vacante";
 import {
@@ -46,6 +47,7 @@ interface FormState {
   puesto_id: string;
   departamento_id: string;
   tipo_jornada: string;
+  tipo_contrato: string;
   salario_rango: string;
   estado_publicacion: EstadoPub;
   visible_publicamente: boolean;
@@ -64,6 +66,7 @@ const FORM_VACIO: FormState = {
   puesto_id: "",
   departamento_id: "",
   tipo_jornada: "",
+  tipo_contrato: "",
   salario_rango: "",
   estado_publicacion: "borrador",
   visible_publicamente: false,
@@ -87,6 +90,7 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
   const [puestos, setPuestos] = useState<PuestoRef[]>([]);
   const [departamentos, setDepartamentos] = useState<DepartamentoRef[]>([]);
   const [jornadas, setJornadas] = useState<JornadaRow[]>([]);
+  const [tiposContrato, setTiposContrato] = useState<TipoContratoRow[]>([]);
   const [cuestionarios, setCuestionarios] = useState<CuestionarioVacante[]>([]);
   const [plantillasEstado, setPlantillasEstado] = useState<PlantillaEstadoRow[]>([]);
   const [emailPlantillas, setEmailPlantillas] = useState<ReclutamientoEmailPlantilla[]>([]);
@@ -102,11 +106,12 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
     if (!open) return;
     void Promise.all([
       listPuestosCatalogo(), listDepartamentosCatalogo(), listJornadas(), listCuestionariosVacante(),
-      listPlantillasEstado(), listReclutamientoEmailPlantillas(),
-    ]).then(([p, d, j, c, pe, ep]) => {
+      listPlantillasEstado(), listReclutamientoEmailPlantillas(), listTiposContrato(),
+    ]).then(([p, d, j, c, pe, ep, tc]) => {
       setPuestos((p.data ?? []) as PuestoRef[]);
       setDepartamentos((d.data ?? []) as DepartamentoRef[]);
       setJornadas((j.data ?? []) as JornadaRow[]);
+      setTiposContrato((tc.data ?? []) as TipoContratoRow[]);
       const cuests = (c.data ?? []) as CuestionarioVacante[];
       setCuestionarios(cuests);
       const plEstado = (pe.data ?? []) as PlantillaEstadoRow[];
@@ -138,6 +143,7 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
         titulo?: string; descripcion?: string | null;
         puesto_id?: string | null; departamento_id?: string | null;
         tipo_jornada?: string | null;
+        tipo_contrato?: string | null;
         salario_rango?: string | null;
         estado_publicacion?: EstadoPub; visible_publicamente?: boolean;
         cuestionario_plantilla_id?: string | null;
@@ -151,6 +157,7 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
           puesto_id: v.puesto_id ?? "",
           departamento_id: v.departamento_id ?? "",
           tipo_jornada: v.tipo_jornada ?? "",
+          tipo_contrato: v.tipo_contrato ?? "",
           salario_rango: v.salario_rango ?? "",
           estado_publicacion: v.estado_publicacion ?? "borrador",
           visible_publicamente: !!v.visible_publicamente,
@@ -164,6 +171,15 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
   }, [open, vacanteId, tituloPrefill]);
 
   function guardar() {
+    // Jornada y tipo de contrato son obligatorios siempre (crear y editar).
+    if (!form.tipo_jornada) {
+      toast.error("La jornada es obligatoria");
+      return;
+    }
+    if (!form.tipo_contrato) {
+      toast.error("El tipo de contrato es obligatorio");
+      return;
+    }
     // Solo validamos reglas de submódulo al CREAR. Al editar dejamos pasar.
     if (!vacanteId) {
       const { labelsFaltantes } = validar({
@@ -187,6 +203,7 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
         puesto_id: form.puesto_id || null,
         departamento_id: form.departamento_id || null,
         tipo_jornada: form.tipo_jornada || null,
+        tipo_contrato: form.tipo_contrato || null,
         salario_rango: form.salario_rango.trim() || null,
         estado_publicacion: form.estado_publicacion,
         visible_publicamente: form.visible_publicamente,
@@ -237,7 +254,14 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Departamento</Label>
-                <Select value={form.departamento_id} onValueChange={(v) => setForm({ ...form, departamento_id: v })}>
+                <Select
+                  value={form.departamento_id}
+                  onValueChange={(v) => {
+                    // Al cambiar de departamento, descartar el puesto si ya no pertenece a él.
+                    const sigueValido = puestos.some((p) => p.id === form.puesto_id && p.departamento_id === v);
+                    setForm({ ...form, departamento_id: v, puesto_id: sigueValido ? form.puesto_id : "" });
+                  }}
+                >
                   <SelectTrigger><SelectValue placeholder="Selecciona…" /></SelectTrigger>
                   <SelectContent>
                     {departamentos.map((d) => (
@@ -250,15 +274,22 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
               <div className="space-y-1.5">
                 <Label>Puesto</Label>
                 <Select value={form.puesto_id} onValueChange={(v) => setForm({ ...form, puesto_id: v })}>
-                  <SelectTrigger><SelectValue placeholder="Selecciona…" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={form.departamento_id ? "Selecciona…" : "Elige un departamento primero"} /></SelectTrigger>
                   <SelectContent>
-                    {puestos.length === 0 ? (
-                      <SelectItem value="__none__" disabled>Sin puestos creados</SelectItem>
-                    ) : (
-                      puestos.map((p) => (
+                    {(() => {
+                      const puestosDelDepto = form.departamento_id
+                        ? puestos.filter((p) => p.departamento_id === form.departamento_id)
+                        : [];
+                      if (!form.departamento_id) {
+                        return <SelectItem value="__none__" disabled>Elige un departamento primero</SelectItem>;
+                      }
+                      if (puestosDelDepto.length === 0) {
+                        return <SelectItem value="__none__" disabled>Sin puestos en este departamento</SelectItem>;
+                      }
+                      return puestosDelDepto.map((p) => (
                         <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>
-                      ))
-                    )}
+                      ));
+                    })()}
                   </SelectContent>
                 </Select>
               </div>

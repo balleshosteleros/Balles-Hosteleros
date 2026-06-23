@@ -8,6 +8,7 @@ export interface HorarioDia {
 export interface PuestoSalarial {
   id: string;
   departamento: string;
+  departamentoId: string;
   puesto: string;
   vacaciones: string;
   nominaNeta: number;

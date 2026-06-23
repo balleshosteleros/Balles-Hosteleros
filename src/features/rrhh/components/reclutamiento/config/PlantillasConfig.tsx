@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useTransition, useCallback } from "react";
+import { useState, useMemo, useEffect, useTransition, useCallback, useRef } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import {
   Pencil, Mail, Eye, Search, Plus, Copy, Trash2,
   Variable, CheckCircle2, XCircle, Loader2,
-  Workflow, ClipboardList,
+  Workflow, ClipboardList, Link2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
@@ -25,6 +25,8 @@ import {
   GRUPOS_VARIABLES_RECLUTAMIENTO,
   VARIABLES_RECLUTAMIENTO_EJEMPLO,
   sustituirVariablesReclutamiento,
+  parsearEnlacesCuerpo,
+  formatearEnlaceMarkdown,
 } from "@/features/rrhh/lib/reclutamiento-email";
 import {
   listReclutamientoEmailPlantillas,
@@ -59,6 +61,10 @@ function PlantillaEditorDialog({
   const [activa, setActiva] = useState(true);
   const [tab, setTab] = useState<"editar" | "preview">(initialTab);
   const [pending, startTransition] = useTransition();
+  const cuerpoRef = useRef<HTMLTextAreaElement>(null);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkTexto, setLinkTexto] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
 
   // Sincroniza el formulario al abrir o cambiar de plantilla.
   const plantillaId = plantilla?.id ?? null;
@@ -73,6 +79,37 @@ function PlantillaEditorDialog({
 
   const insertVariable = (variable: string) => {
     setCuerpo((prev) => (prev.endsWith(" ") || prev === "" ? prev : prev + " ") + variable);
+  };
+
+  // Abre el diálogo de enlace, precargando el texto seleccionado en el cuerpo.
+  const openLinkDialog = () => {
+    const el = cuerpoRef.current;
+    const sel = el ? cuerpo.slice(el.selectionStart, el.selectionEnd) : "";
+    setLinkTexto(sel.trim());
+    setLinkUrl("");
+    setLinkOpen(true);
+  };
+
+  // Inserta `[texto](url)` en la posición del cursor (o reemplaza la selección).
+  const insertLink = () => {
+    let url = linkUrl.trim();
+    if (!url) return;
+    if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+    const snippet = formatearEnlaceMarkdown(linkTexto, url);
+    const el = cuerpoRef.current;
+    const start = el?.selectionStart ?? cuerpo.length;
+    const end = el?.selectionEnd ?? cuerpo.length;
+    const next = cuerpo.slice(0, start) + snippet + cuerpo.slice(end);
+    setCuerpo(next);
+    setLinkOpen(false);
+    // Devuelve el foco y coloca el cursor tras el enlace insertado.
+    requestAnimationFrame(() => {
+      const node = cuerpoRef.current;
+      if (!node) return;
+      node.focus();
+      const pos = start + snippet.length;
+      node.setSelectionRange(pos, pos);
+    });
   };
 
   const previewVars = { ...VARIABLES_RECLUTAMIENTO_EJEMPLO, empresa_nombre: empresaNombre };
@@ -141,13 +178,29 @@ function PlantillaEditorDialog({
               </div>
 
               <div>
-                <Label className="text-xs">Cuerpo del email</Label>
+                <div className="flex items-center justify-between mb-1">
+                  <Label className="text-xs">Cuerpo del email</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1.5 text-xs"
+                    onClick={openLinkDialog}
+                  >
+                    <Link2 className="h-3.5 w-3.5" /> Insertar enlace
+                  </Button>
+                </div>
                 <Textarea
+                  ref={cuerpoRef}
                   value={cuerpo}
                   onChange={(e) => setCuerpo(e.target.value)}
-                  className="mt-1 min-h-[220px] text-sm"
+                  className="min-h-[220px] text-sm"
                   placeholder="Escribe el contenido del email..."
                 />
+                <p className="text-[11px] text-muted-foreground mt-1.5">
+                  Para enlazar a una web externa: selecciona el texto y pulsa «Insertar enlace», o escribe{" "}
+                  <span className="font-mono">[texto](https://…)</span>. Las direcciones sueltas también se enlazan solas.
+                </p>
               </div>
 
               <Separator />
@@ -196,7 +249,21 @@ function PlantillaEditorDialog({
                   </p>
                 </div>
                 <div className="p-5 text-sm text-foreground leading-relaxed whitespace-pre-wrap">
-                  {sustituirVariablesReclutamiento(cuerpo, previewVars)}
+                  {parsearEnlacesCuerpo(sustituirVariablesReclutamiento(cuerpo, previewVars)).map((seg, i) =>
+                    seg.type === "link" ? (
+                      <a
+                        key={i}
+                        href={seg.href}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-blue-600 underline"
+                      >
+                        {seg.text}
+                      </a>
+                    ) : (
+                      <span key={i}>{seg.value}</span>
+                    ),
+                  )}
                 </div>
               </div>
               <p className="text-[11px] text-muted-foreground italic">
@@ -214,6 +281,52 @@ function PlantillaEditorDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Sub-diálogo: insertar enlace externo */}
+      <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Link2 className="h-5 w-5 text-primary" /> Insertar enlace
+            </DialogTitle>
+            <DialogDescription>
+              El texto se mostrará como enlace y al pulsarlo abrirá la dirección externa en una pestaña nueva.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-1">
+            <div>
+              <Label className="text-xs">Texto a mostrar</Label>
+              <Input
+                value={linkTexto}
+                onChange={(e) => setLinkTexto(e.target.value)}
+                className="mt-1"
+                placeholder="Ej. Rellena el formulario"
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Dirección (URL)</Label>
+              <Input
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+                className="mt-1"
+                placeholder="https://..."
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    insertLink();
+                  }
+                }}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLinkOpen(false)}>Cancelar</Button>
+            <Button onClick={insertLink} disabled={!linkUrl.trim()} className="gap-1.5">
+              <Link2 className="h-4 w-4" /> Insertar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

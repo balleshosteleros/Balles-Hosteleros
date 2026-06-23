@@ -21,6 +21,7 @@
 import "server-only";
 import nodemailer from "nodemailer";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fetchEmpresaBrand, brandHeaderHtml, inyectarCabecera } from "@/lib/email/brand-header";
 
 /** Dirección no-reply: capa cualquier respuesta a los correos del software. */
 const NOREPLY =
@@ -45,6 +46,16 @@ export type SendEmailInput = {
    * ve el destinatario en su bandeja (p.ej. "HABANA <notificaciones@…>").
    */
   fromName?: string;
+  /**
+   * Empresa cuya cabecera corporativa (isotipo) se antepone al HTML del correo.
+   * Si se omite, no se añade cabecera.
+   */
+  empresaId?: string;
+  /**
+   * Pon a `false` para NO anteponer la cabecera de marca aunque haya `empresaId`
+   * (correos que ya construyen su propia cabecera, p.ej. reservas). Default: true.
+   */
+  brandHeader?: boolean;
 };
 
 /** Extrae la dirección de un From que puede venir como "Nombre <email>" o "email". */
@@ -97,6 +108,14 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   // Reply-To siempre no-reply: nadie responde a un correo del software.
   const replyTo = NOREPLY;
 
+  // Cabecera corporativa: antepone el isotipo de la empresa al HTML (best-effort:
+  // si falla la lectura de marca, se envía el correo sin cabecera).
+  let html = input.html;
+  if (input.empresaId && input.brandHeader !== false) {
+    const brand = await fetchEmpresaBrand(input.empresaId);
+    if (brand) html = inyectarCabecera(html, brandHeaderHtml(brand));
+  }
+
   try {
     const transporter = nodemailer.createTransport({
       host: cfg.host,
@@ -110,7 +129,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
         : cfg.from,
       to: input.to,
       subject: input.subject,
-      html: input.html,
+      html,
       text: input.text,
       replyTo,
     });

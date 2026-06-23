@@ -279,6 +279,7 @@ export async function sendPasswordResetEmail(profileId: string) {
     subject,
     html,
     text,
+    empresaId: (profile.empresa_id as string | null) ?? undefined,
     // Correo de sistema (recuperación de contraseña) → no-reply: no se responde al software.
   })
 

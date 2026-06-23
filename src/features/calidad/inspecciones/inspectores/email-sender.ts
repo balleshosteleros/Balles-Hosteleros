@@ -121,6 +121,7 @@ export async function sendInspectorFaseEmail(
       subject,
       html,
       text: bodyText,
+      empresaId,
     });
 
     if (res.ok) return { sent: true, transport: res.transport };

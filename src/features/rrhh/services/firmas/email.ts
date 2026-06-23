@@ -14,20 +14,16 @@ function shellHtml(opts: {
   titulo: string;
   cuerpoHtml: string;
   footerEmpresa: string;
-  empresaLogoUrl?: string | null;
 }) {
   const fontStack =
     "'Inter','Inter Placeholder',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
-  const logoHtml = opts.empresaLogoUrl
-    ? `<img src="${esc(opts.empresaLogoUrl)}" alt="${esc(opts.footerEmpresa)}" height="72" style="display:block;height:72px;width:auto;max-width:220px;border:0;outline:none;text-decoration:none;margin:0 auto;" />`
-    : `<div style="font-size:24px;font-weight:700;color:#0f172a;letter-spacing:-0.01em;text-align:center;">${esc(opts.footerEmpresa)}</div>`;
+  // El isotipo de la empresa lo antepone `sendEmail` (empresaId).
   return `<!doctype html>
 <html lang="es">
   <body style="margin:0;padding:0;background:#ffffff;font-family:${fontStack};color:#0f172a;-webkit-font-smoothing:antialiased;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;">
-      <tr><td align="center" style="padding:32px 16px;">
+      <tr><td align="center" style="padding:16px 16px 32px 16px;">
         <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
-          <tr><td align="center" style="padding:0 4px 28px 4px;text-align:center;">${logoHtml}</td></tr>
           <tr><td style="padding:4px 4px 6px 4px;">
             <h1 style="margin:0;font-size:22px;font-weight:600;color:#0f172a;letter-spacing:-0.015em;line-height:1.25;">${esc(opts.titulo)}</h1>
           </td></tr>
@@ -93,10 +89,10 @@ export async function enviarInvitacionFirma(input: InvitacionFirmaInput): Promis
       titulo: "Documento para firmar",
       cuerpoHtml,
       footerEmpresa: input.empresaNombre,
-      empresaLogoUrl: input.empresaLogoUrl,
     }),
     text,
-    // Correo interno a empleado → no-reply (sin empresaId): no se responde al software.
+    empresaId: input.empresaId,
+    // Reply-To siempre no-reply: no se responde al software.
   });
 }
 
@@ -134,10 +130,10 @@ export async function enviarCodigoOTP(input: CodigoOTPInput): Promise<SendEmailR
       titulo: "Código de verificación",
       cuerpoHtml,
       footerEmpresa: input.empresaNombre,
-      empresaLogoUrl: input.empresaLogoUrl,
     }),
     text,
-    // Correo interno a empleado → no-reply (sin empresaId): no se responde al software.
+    empresaId: input.empresaId,
+    // Reply-To siempre no-reply: no se responde al software.
   });
 }
 
@@ -183,9 +179,9 @@ export async function enviarCopiaFirmada(input: CopiaFirmadaInput): Promise<Send
       titulo: "Documento firmado",
       cuerpoHtml,
       footerEmpresa: input.empresaNombre,
-      empresaLogoUrl: input.empresaLogoUrl,
     }),
     text,
-    // Correo interno a empleado → no-reply (sin empresaId): no se responde al software.
+    empresaId: input.empresaId,
+    // Reply-To siempre no-reply: no se responde al software.
   });
 }

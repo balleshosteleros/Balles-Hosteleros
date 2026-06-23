@@ -4,15 +4,13 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   Copy, Check, Power, Trash2, Link2, Code, Sparkles, ExternalLink, Globe,
 } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
-} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import {
@@ -34,7 +32,7 @@ function formatFecha(iso: string) {
 /** Deriva el código de URL a partir del nombre del canal (sin tildes, MAYÚSCULAS, _). */
 function codigoDesdeNombre(nombre: string): string {
   return nombre
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
     .toUpperCase()
     .replace(/[^A-Z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
@@ -42,12 +40,14 @@ function codigoDesdeNombre(nombre: string): string {
 }
 
 interface Props {
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
   empresaNombre: string;
 }
 
-export function EnlacesEmpleoDialog({ open, onOpenChange, empresaNombre }: Props) {
+/**
+ * Enlaces del portal de empleo (antes diálogo «Enlaces» en la toolbar).
+ * Vive embebido dentro de la página «Portal de empleo» de la configuración.
+ */
+export function EnlacesEmpleoSection({ empresaNombre }: Props) {
   const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
   const [links, setLinks] = useState<EmpleoLink[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,8 +64,8 @@ export function EnlacesEmpleoDialog({ open, onOpenChange, empresaNombre }: Props
   }
 
   useEffect(() => {
-    if (open) refrescar();
-  }, [open]);
+    refrescar();
+  }, []);
 
   const webLink = useMemo(() => links.find((l) => l.protegido) ?? null, [links]);
   const canales = useMemo(() => links.filter((l) => !l.protegido), [links]);
@@ -145,27 +145,20 @@ export function EnlacesEmpleoDialog({ open, onOpenChange, empresaNombre }: Props
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-        {confirmDeleteDialog}
-        <DialogHeader>
-          <DialogTitle>Enlaces del portal de empleo</DialogTitle>
-          <DialogDescription>
-            Comparte el enlace web por defecto en tu página y redes, o crea un canal por cada
-            sitio (Instagram, InfoJobs, cartel…) para saber por dónde llega cada CV.
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      {confirmDeleteDialog}
 
-        {/* ── Enlace WEB por defecto ─────────────────────────── */}
-        <div className="rounded-lg border bg-card p-4 space-y-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Globe className="h-4 w-4 text-primary" />
-            <span className="font-medium">Enlace web</span>
-            <Badge variant="secondary" className="text-[10px]">Por defecto</Badge>
-            <span className="text-xs text-muted-foreground">
-              El que pones en tu web. Todo CV sin un canal concreto cuenta como «Web».
-            </span>
-          </div>
+      {/* ── Enlace web por defecto + incrustar ─────────────── */}
+      <Card>
+        <div className="px-5 py-3 border-b border-border bg-primary/5 flex items-center gap-2">
+          <Globe className="h-4 w-4 text-primary" />
+          <span className="text-sm font-semibold text-foreground">Enlace web e incrustar</span>
+        </div>
+        <CardContent className="p-5 space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Comparte el enlace web por defecto en tu página y redes. Todo CV que llegue sin un canal
+            concreto cuenta como «Web».
+          </p>
 
           {loading && !webLink ? (
             <p className="text-sm text-muted-foreground py-2">Cargando…</p>
@@ -214,16 +207,20 @@ export function EnlacesEmpleoDialog({ open, onOpenChange, empresaNombre }: Props
               </TabsContent>
             </Tabs>
           )}
-        </div>
+        </CardContent>
+      </Card>
 
-        {/* ── Otros canales ──────────────────────────────────── */}
-        <div className="space-y-3">
-          <div>
-            <h3 className="text-sm font-medium">Otros canales</h3>
-            <p className="text-xs text-muted-foreground">
-              Un enlace distinto por sitio. Cada CV que llegue por él queda etiquetado con su canal.
-            </p>
-          </div>
+      {/* ── Otros canales ──────────────────────────────────── */}
+      <Card>
+        <div className="px-5 py-3 border-b border-border bg-primary/5 flex items-center gap-2">
+          <Link2 className="h-4 w-4 text-primary" />
+          <span className="text-sm font-semibold text-foreground">Enlaces por canal</span>
+        </div>
+        <CardContent className="p-5 space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Crea un enlace distinto por sitio (Instagram, InfoJobs, cartel…). Cada CV que llegue por
+            él queda etiquetado con su canal, así sabes por dónde llega cada candidatura.
+          </p>
 
           {/* Alta de canal */}
           <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
@@ -306,8 +303,8 @@ export function EnlacesEmpleoDialog({ open, onOpenChange, empresaNombre }: Props
               </tbody>
             </table>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </CardContent>
+      </Card>
+    </>
   );
 }

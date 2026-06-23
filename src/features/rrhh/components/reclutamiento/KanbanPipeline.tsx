@@ -5,8 +5,6 @@ import {
   ESTADOS_CONFIG,
   ORIGEN_LABELS,
   getFasePrincipal,
-  puedeMoverA,
-  siguienteEstado,
   type Candidato,
   type EstadoReclutamiento,
   type FasePrincipal,
@@ -25,18 +23,21 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  ArrowLeft, Phone, Mail, CalendarDays, MapPin, User,
-  GripVertical, Clock, History, Send, X,
+  ArrowLeft, Mail, MailCheck, MapPin,
+  GripVertical, Send, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   enviarReclutamientoFaseEmail,
   previewReclutamientoFaseEmail,
+  estadosConEmailDeVacante,
 } from "@/features/rrhh/actions/reclutamiento-email-plantillas-actions";
 import {
   sustituirVariablesReclutamiento,
   VARIABLES_RECLUTAMIENTO_EJEMPLO,
+  parsearEnlacesCuerpo,
 } from "@/features/rrhh/lib/reclutamiento-email";
+import { CandidatoDetailModal } from "@/features/rrhh/components/reclutamiento/CandidatoDetailModal";
 
 interface KanbanPipelineProps {
   vacante: Vacante;
@@ -66,15 +67,10 @@ function CandidatoCard({
       <div className="flex items-start gap-2">
         <GripVertical className="h-3.5 w-3.5 text-muted-foreground/30 mt-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="h-6 w-6 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-[10px] shrink-0">
-              {candidato.nombre[0]}{candidato.apellidos[0]}
-            </div>
-            <span className="font-medium text-xs text-foreground truncate">
-              {candidato.nombre} {candidato.apellidos}
-            </span>
-          </div>
-          <div className="space-y-0.5 text-[11px] text-muted-foreground pl-8">
+          <span className="block font-semibold text-xs text-foreground truncate mb-1">
+            {candidato.nombre} {candidato.apellidos}
+          </span>
+          <div className="space-y-0.5 text-[11px] text-muted-foreground">
             <div className="flex items-center gap-1 min-w-0">
               <Mail className="h-3 w-3 shrink-0" />
               <span className="truncate">{candidato.email}</span>
@@ -94,12 +90,14 @@ function CandidatoCard({
 function EstadoColumn({
   estado,
   candidatos,
+  tieneEmail,
   onDragStart,
   onDrop,
   onCardClick,
 }: {
   estado: EstadoReclutamiento;
   candidatos: Candidato[];
+  tieneEmail: boolean;
   onDragStart: (e: React.DragEvent, c: Candidato) => void;
   onDrop: (estado: EstadoReclutamiento) => void;
   onCardClick: (c: Candidato) => void;
@@ -120,7 +118,17 @@ function EstadoColumn({
       <div className="flex items-center gap-1.5 px-2 py-2">
         <span className="text-[11px] font-medium text-muted-foreground truncate">{cfg.label}</span>
         <Badge variant="secondary" className="text-[10px] h-4 px-1.5 font-bold shrink-0">{candidatos.length}</Badge>
-        <Mail className="h-3 w-3 text-muted-foreground/40 ml-auto shrink-0" />
+        {tieneEmail ? (
+          <MailCheck
+            className="h-3 w-3 text-emerald-600 ml-auto shrink-0"
+            aria-label="Esta fase tiene email configurado"
+          />
+        ) : (
+          <Mail
+            className="h-3 w-3 text-muted-foreground/40 ml-auto shrink-0"
+            aria-label="Esta fase no tiene email configurado"
+          />
+        )}
       </div>
 
       {/* Cards */}
@@ -139,12 +147,14 @@ function EstadoColumn({
 function FaseGroup({
   fasePrincipal,
   candidatos,
+  estadosConEmail,
   onDragStart,
   onDrop,
   onCardClick,
 }: {
   fasePrincipal: FasePrincipal;
   candidatos: Candidato[];
+  estadosConEmail: Set<string>;
   onDragStart: (e: React.DragEvent, c: Candidato) => void;
   onDrop: (estado: EstadoReclutamiento) => void;
   onCardClick: (c: Candidato) => void;
@@ -180,100 +190,13 @@ function FaseGroup({
             key={est}
             estado={est}
             candidatos={candidatosPorEstado[est]}
+            tieneEmail={estadosConEmail.has(est)}
             onDragStart={onDragStart}
             onDrop={onDrop}
             onCardClick={onCardClick}
           />
         ))}
       </div>
-    </div>
-  );
-}
-
-// ─── Candidate Detail with History ──────────────────────────────
-function CandidatoDetailDialog({
-  candidato, open, onOpenChange,
-}: {
-  candidato: Candidato | null; open: boolean; onOpenChange: (o: boolean) => void;
-}) {
-  if (!candidato) return null;
-  const fasePrincipal = getFasePrincipal(candidato.fase);
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm">
-              {candidato.nombre[0]}{candidato.apellidos[0]}
-            </div>
-            <div>
-              <div>{candidato.nombre} {candidato.apellidos}</div>
-              <div className="flex items-center gap-1.5 mt-1">
-                <Badge variant="outline" className="text-[10px]" style={{ borderColor: FASES_PRINCIPALES[fasePrincipal].color, color: FASES_PRINCIPALES[fasePrincipal].color }}>
-                  {FASES_PRINCIPALES[fasePrincipal].label}
-                </Badge>
-                <span className="text-muted-foreground text-[10px]">→</span>
-                <Badge variant="secondary" className="text-[10px]">
-                  {ESTADOS_CONFIG[candidato.fase].label}
-                </Badge>
-              </div>
-            </div>
-          </DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 mt-2">
-          <div className="grid gap-2 text-sm">
-            <InfoRow icon={<Phone className="h-4 w-4" />} label="Teléfono" value={candidato.telefono} />
-            <InfoRow icon={<Mail className="h-4 w-4" />} label="Email" value={candidato.email} />
-            <InfoRow icon={<CalendarDays className="h-4 w-4" />} label="Inscripción" value={candidato.fechaInscripcion} />
-            <InfoRow icon={<MapPin className="h-4 w-4" />} label="Origen" value={candidato.canal ? `${ORIGEN_LABELS[candidato.origen]} · ${candidato.canal}` : ORIGEN_LABELS[candidato.origen]} />
-            <InfoRow icon={<User className="h-4 w-4" />} label="Reclutador" value={candidato.reclutadorAsignado} />
-          </div>
-          {candidato.historial.length > 0 && (
-            <div>
-              <h4 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3">
-                <History className="h-4 w-4" /> Historial de cambios
-              </h4>
-              <div className="space-y-2">
-                {candidato.historial.map((h) => (
-                  <div key={h.id} className="flex items-start gap-3 p-2.5 rounded-lg bg-muted/50 text-xs">
-                    <Clock className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
-                    <div className="flex-1">
-                      <div className="text-foreground">
-                        <span className="font-medium">{FASES_PRINCIPALES[h.faseAnterior].label}</span>
-                        <span className="text-muted-foreground mx-0.5">/</span>
-                        <span>{ESTADOS_CONFIG[h.estadoAnterior].label}</span>
-                        <span className="text-muted-foreground mx-1">→</span>
-                        <span className="font-medium">{FASES_PRINCIPALES[h.faseNueva].label}</span>
-                        <span className="text-muted-foreground mx-0.5">/</span>
-                        <span>{ESTADOS_CONFIG[h.estadoNuevo].label}</span>
-                      </div>
-                      <div className="text-muted-foreground mt-0.5">
-                        {h.usuario} · {h.fecha}
-                        {h.emailEnviado && (
-                          <span className="ml-2 inline-flex items-center gap-1 text-primary">
-                            <Send className="h-3 w-3" /> Email enviado
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return (
-    <div className="flex items-center gap-3 py-1.5 border-b border-border last:border-0">
-      <span className="text-muted-foreground">{icon}</span>
-      <span className="font-medium text-muted-foreground w-24">{label}</span>
-      <span className="text-foreground">{value}</span>
     </div>
   );
 }
@@ -372,7 +295,17 @@ function EmailConfirmDialog({
             </p>
             <p className="text-xs text-muted-foreground"><span className="font-medium">Para:</span> {candidato.email}</p>
             <p className="text-xs text-muted-foreground"><span className="font-medium">Asunto:</span> {reemplazarVariablesEmail(tpl.asunto, candidato, vacante)}</p>
-            <p className="text-xs text-muted-foreground leading-relaxed mt-1">{reemplazarVariablesEmail(tpl.cuerpo, candidato, vacante)}</p>
+            <p className="text-xs text-muted-foreground leading-relaxed mt-1 whitespace-pre-wrap">
+              {parsearEnlacesCuerpo(reemplazarVariablesEmail(tpl.cuerpo, candidato, vacante)).map((seg, i) =>
+                seg.type === "link" ? (
+                  <a key={i} href={seg.href} target="_blank" rel="noreferrer" className="text-blue-600 underline">
+                    {seg.text}
+                  </a>
+                ) : (
+                  <span key={i}>{seg.value}</span>
+                ),
+              )}
+            </p>
           </div>
         )}
 
@@ -411,6 +344,17 @@ export function KanbanPipeline({ vacante, onBack, onUpdateCandidatos }: KanbanPi
   const [selectedCandidato, setSelectedCandidato] = useState<Candidato | null>(null);
   const draggedCandidato = useRef<Candidato | null>(null);
 
+  // Estados (columnas) de esta vacante que tienen un email activo configurado:
+  // se marca con un check verde en la cabecera de cada columna.
+  const [estadosConEmail, setEstadosConEmail] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    let cancel = false;
+    estadosConEmailDeVacante(vacante.id)
+      .then((ests) => { if (!cancel) setEstadosConEmail(new Set(ests)); })
+      .catch(() => { if (!cancel) setEstadosConEmail(new Set()); });
+    return () => { cancel = true; };
+  }, [vacante.id]);
+
   const [emailConfirm, setEmailConfirm] = useState<{
     candidato: Candidato;
     estadoNuevo: EstadoReclutamiento;
@@ -426,15 +370,7 @@ export function KanbanPipeline({ vacante, onBack, onUpdateCandidatos }: KanbanPi
       draggedCandidato.current = null;
       return;
     }
-    if (!puedeMoverA(c.fase, estadoDestino)) {
-      const siguiente = siguienteEstado(c.fase);
-      const sugerencia = siguiente
-        ? ` Debe pasar primero por ${ESTADOS_CONFIG[siguiente].label}.`
-        : "";
-      toast.error("No se pueden saltar fases." + sugerencia);
-      draggedCandidato.current = null;
-      return;
-    }
+    // Movimiento libre: cualquier estado/fase, hacia delante o hacia atrás.
     setEmailConfirm({ candidato: c, estadoNuevo: estadoDestino });
     draggedCandidato.current = null;
   }, []);
@@ -492,7 +428,7 @@ export function KanbanPipeline({ vacante, onBack, onUpdateCandidatos }: KanbanPi
           <div>
             <h2 className="text-xl font-bold text-foreground">{vacante.puesto}</h2>
             <p className="text-sm text-muted-foreground">
-              {candidatos.length} candidatos · {vacante.ubicacion} · Pipeline de selección
+              {candidatos.length} candidatos · {vacante.ubicacion}
             </p>
           </div>
         </div>
@@ -506,6 +442,7 @@ export function KanbanPipeline({ vacante, onBack, onUpdateCandidatos }: KanbanPi
               key={fase}
               fasePrincipal={fase}
               candidatos={candidatos.filter((c) => getFasePrincipal(c.fase) === fase)}
+              estadosConEmail={estadosConEmail}
               onDragStart={handleDragStart}
               onDrop={handleDrop}
               onCardClick={setSelectedCandidato}
@@ -514,10 +451,23 @@ export function KanbanPipeline({ vacante, onBack, onUpdateCandidatos }: KanbanPi
         </div>
       </div>
 
-      <CandidatoDetailDialog
-        candidato={selectedCandidato}
+      <CandidatoDetailModal
         open={!!selectedCandidato}
         onOpenChange={(o) => !o && setSelectedCandidato(null)}
+        candidato={selectedCandidato}
+        candidatos={candidatos}
+        vacante={vacante}
+        onSelectCandidato={setSelectedCandidato}
+        onUpdateCandidato={(updated) => {
+          setCandidatos((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+          setSelectedCandidato(updated);
+        }}
+        onMoverEstado={(c, estado) => {
+          if (c.fase === estado) return;
+          // Reusa el flujo de confirmación de email del Kanban.
+          setSelectedCandidato(null);
+          setEmailConfirm({ candidato: c, estadoNuevo: estado });
+        }}
       />
 
       <EmailConfirmDialog

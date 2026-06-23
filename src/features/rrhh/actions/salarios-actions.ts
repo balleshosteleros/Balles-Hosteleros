@@ -44,7 +44,7 @@ type SalarioEmbed = {
 type PuestoRow = {
   id: string; // puestos.id
   nombre: string | null;
-  departamentos: { nombre: string | null } | null;
+  departamentos: { id: string; nombre: string | null } | null;
   puesto_salarios: SalarioEmbed[] | SalarioEmbed | null;
 };
 
@@ -55,6 +55,7 @@ function rowToPuesto(r: PuestoRow): PuestoSalarial {
   return {
     id: r.id, // identificador del PUESTO (clave estable; el upsert es por puesto_id)
     departamento: r.departamentos?.nombre ?? "",
+    departamentoId: r.departamentos?.id ?? "",
     puesto: r.nombre ?? "",
     vacaciones: sal?.vacaciones ?? "",
     nominaNeta: Number(sal?.nomina_neta) || 0,
@@ -82,7 +83,7 @@ export async function listSalariosEmpresa(): Promise<{
     const { data, error } = await supabase
       .from("puestos")
       .select(
-        "id, nombre, departamentos(nombre), puesto_salarios(nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal, observaciones, objetivos, estado, updated_at)",
+        "id, nombre, departamentos(id, nombre), puesto_salarios(nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal, observaciones, objetivos, estado, updated_at)",
       )
       .eq("empresa_id", empresaId);
     if (error) throw error;

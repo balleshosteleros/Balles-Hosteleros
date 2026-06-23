@@ -5,12 +5,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Copy, ExternalLink, Eye, Globe, Code, Loader2, Palette } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Copy, ExternalLink, Eye, Globe, Loader2, Palette, Share2, Clock } from "lucide-react";
 import { toast } from "sonner";
 import {
   getEmpleoUrlConfig,
   updateEmpleoUrlSlug,
 } from "@/features/rrhh/actions/reclutamiento-actions";
+import { EnlacesEmpleoSection } from "./EnlacesEmpleoSection";
 
 /** Solo deja el nombre apto para URL (igual que el servidor) — feedback en vivo. */
 function sanitize(raw: string): string {
@@ -22,6 +24,12 @@ function sanitize(raw: string): string {
     .replace(/-+/g, "-")
     .replace(/^-+/, "");
 }
+
+/** Portales de empleo externos. Integración pendiente de conectar (futuro). */
+const PORTALES = [
+  { nombre: "InfoJobs", icono: "🔵" },
+  { nombre: "JobToday", icono: "🟢" },
+];
 
 export function PortalEmpleoConfig() {
   const { empresaActual } = useEmpresa();
@@ -63,13 +71,6 @@ export function PortalEmpleoConfig() {
   const urlPreview = useMemo(
     () => (origin && valor ? `${origin}/empleo/${valor}` : ""),
     [origin, valor],
-  );
-  const iframeCode = useMemo(
-    () =>
-      urlGuardada
-        ? `<iframe src="${urlGuardada}" width="100%" height="800" frameborder="0" style="border:none; border-radius:8px;"></iframe>`
-        : "",
-    [urlGuardada],
   );
 
   const hayCambios = valor !== guardado;
@@ -118,7 +119,7 @@ export function PortalEmpleoConfig() {
         <div>
           <h2 className="text-lg font-bold text-foreground">Portal de empleo</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Personaliza la URL pública donde tus candidatos verán las vacantes — {empresaActual.nombre}
+            Personaliza la URL pública, comparte tus enlaces y conecta tus portales — {empresaActual.nombre}
           </p>
         </div>
         <Button variant="outline" size="sm" className="gap-1.5 shrink-0" asChild disabled={!urlGuardada}>
@@ -194,34 +195,38 @@ export function PortalEmpleoConfig() {
         </CardContent>
       </Card>
 
-      {/* ── Iframe ───────────────────────────────────────── */}
+      {/* ── Enlaces e incrustar (antes botón «Enlaces») ──── */}
+      <EnlacesEmpleoSection empresaNombre={empresaActual.nombre} />
+
+      {/* ── Publicación en portales externos ─────────────── */}
       <Card>
         <div className="px-5 py-3 border-b border-border bg-primary/5 flex items-center gap-2">
-          <Code className="h-4 w-4 text-primary" />
-          <span className="text-sm font-semibold text-foreground">Código iframe para incrustar</span>
+          <Share2 className="h-4 w-4 text-primary" />
+          <span className="text-sm font-semibold text-foreground">Publicar en portales de empleo</span>
         </div>
         <CardContent className="p-5 space-y-3">
           <p className="text-xs text-muted-foreground">
-            Utiliza este código para incrustar el portal de empleo en la página web de tu empresa.
-            Copia el código y pégalo en el HTML de tu sitio.
+            Próximamente podrás publicar tus vacantes directamente en estos portales de empleo.
+            La integración está en preparación.
           </p>
-          <div className="relative">
-            <pre className="bg-muted/50 rounded-lg p-4 text-xs font-mono text-foreground border border-border overflow-x-auto whitespace-pre-wrap break-all min-h-[3rem]">
-              {iframeCode || "Guarda la URL para generar el código."}
-            </pre>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="absolute top-2 right-2 gap-1.5"
-              onClick={() => copiar(iframeCode, "Código iframe")}
-              disabled={!iframeCode}
-            >
-              <Copy className="h-3.5 w-3.5" /> Copiar
-            </Button>
+          <div className="rounded-lg border bg-card divide-y">
+            {PORTALES.map((portal) => (
+              <div key={portal.nombre} className="flex items-center justify-between px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">{portal.icono}</span>
+                  <span className="text-sm font-medium text-foreground">{portal.nombre}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Badge className="gap-1 text-[11px] border-0 bg-amber-100 text-amber-700">
+                    <Clock className="h-3.5 w-3.5" /> Pendiente
+                  </Badge>
+                  <Button variant="outline" size="sm" className="text-xs h-8" disabled>
+                    Conectar
+                  </Button>
+                </div>
+              </div>
+            ))}
           </div>
-          <p className="text-[11px] text-muted-foreground italic">
-            Ajusta el atributo «height» según las necesidades de tu web. El ancho se adapta automáticamente al contenedor.
-          </p>
         </CardContent>
       </Card>
 
