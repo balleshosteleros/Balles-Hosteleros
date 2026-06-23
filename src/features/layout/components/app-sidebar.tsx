@@ -62,7 +62,7 @@ function SubMenu({ items, collapsed }: { items: SubItem[]; collapsed: boolean })
             >
               <sub.icon className="mr-2 h-4 w-4 shrink-0" />
               {!collapsed && <span className="text-sm">{sub.title}</span>}
-              {!collapsed && sub.badge && <NavPill text={sub.badge} tone="blue" />}
+              {!collapsed && sub.badge && <NavPill text={sub.badge} tone="yellow" />}
             </NavLink>
           </SidebarMenuButton>
         </SidebarMenuSubItem>
@@ -373,7 +373,8 @@ export function AppSidebar() {
                       activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold"
                     >
                       <LayoutDashboard className="mr-2 h-4 w-4 shrink-0" />
-                      {!collapsed && <span className="text-sm">DASHBOARD</span>}
+                      {!collapsed && <span className="text-sm flex-1">DASHBOARD</span>}
+                      {!collapsed && <NavPill text="2ª fase" tone="yellow" />}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -388,7 +389,7 @@ export function AppSidebar() {
                       >
                         <sub.icon className="mr-2 h-4 w-4 shrink-0" />
                         {!collapsed && <span className="text-sm">{sub.title}</span>}
-                        {!collapsed && sub.badge && <NavPill text={sub.badge} tone="blue" />}
+                        {!collapsed && sub.badge && <NavPill text={sub.badge} tone="yellow" />}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -412,7 +413,8 @@ export function AppSidebar() {
                       activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold"
                     >
                       <LayoutDashboard className="mr-2 h-4 w-4 shrink-0" />
-                      {!collapsed && <span className="text-sm">DASHBOARD</span>}
+                      {!collapsed && <span className="text-sm flex-1">DASHBOARD</span>}
+                      {!collapsed && <NavPill text="2ª fase" tone="yellow" />}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

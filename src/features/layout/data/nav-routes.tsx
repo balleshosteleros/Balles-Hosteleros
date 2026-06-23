@@ -80,12 +80,12 @@ export type Section = {
 
 export const miPanelSubs: SubItem[] = [
   { title: "PERFIL", url: "/mi-panel/datos-personales", icon: UserCircle },
-  { title: "POINTS", url: "/mi-panel/points", icon: Trophy, badge: "Pronto" },
+  { title: "POINTS", url: "/mi-panel/points", icon: Trophy, badge: "2ª fase" },
   { title: "CALENDARIO", url: "/mi-panel/calendario", icon: CalendarDays },
   { title: "CRONOGRAMA", url: "/mi-panel/cronograma", icon: CalendarClock },
   { title: "HORARIO", url: "/mi-panel/horario", icon: Timer },
   { title: "FICHAJES", url: "/mi-panel/fichajes", icon: Fingerprint },
-  { title: "FORMACIÓN", url: "/mi-panel/formacion", icon: GraduationCap, badge: "Pronto" },
+  { title: "FORMACIÓN", url: "/mi-panel/formacion", icon: GraduationCap, badge: "2ª fase" },
   { title: "CONDICIONES", url: "/mi-panel/condiciones", icon: ClipboardCheck },
   { title: "ENCUESTAS", url: "/mi-panel/encuestas", icon: ClipboardList },
   { title: "CUESTIONARIOS", url: "/mi-panel/cuestionarios", icon: FileQuestion },
@@ -160,10 +160,10 @@ export const rrhhSubs: SubItem[] = [
   { title: "RECLUTAMIENTO", url: "/rrhh/reclutamiento", icon: UserRoundSearch },
   { title: "BOARDING", url: "/rrhh/boarding", icon: UserCheck },
   { title: "BONUS", url: "/rrhh/bonus", icon: Gift },
-  { title: "POINTS", url: "/rrhh/points", icon: Trophy, badge: "Pronto" },
+  { title: "POINTS", url: "/rrhh/points", icon: Trophy, badge: "2ª fase" },
   { title: "PAGOS", url: "/rrhh/pagos", icon: HandCoins },
   { title: "PUESTOS", url: "/rrhh/salarios", icon: Banknote },
-  { title: "FORMACIÓN", url: "/rrhh/formacion", icon: GraduationCap, badge: "Pronto" },
+  { title: "FORMACIÓN", url: "/rrhh/formacion", icon: GraduationCap, badge: "2ª fase" },
   { title: "ENCUESTAS", url: "/rrhh/encuestas", icon: ClipboardList },
 ];
 
