@@ -109,7 +109,7 @@ function EstadoColumn({
 
   return (
     <div
-      className={`flex flex-col min-w-[140px] flex-1 transition-colors rounded-lg ${
+      className={`flex flex-col min-w-0 flex-1 transition-colors rounded-lg ${
         dragOver ? "bg-primary/5 ring-1 ring-primary/30" : ""
       }`}
       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
@@ -117,10 +117,10 @@ function EstadoColumn({
       onDrop={(e) => { e.preventDefault(); setDragOver(false); onDrop(estado); }}
     >
       {/* Estado header */}
-      <div className="flex items-center gap-2 px-2 py-2">
-        <span className="text-[11px] font-medium text-muted-foreground">{cfg.label}</span>
-        <Badge variant="secondary" className="text-[10px] h-4 px-1.5 font-bold">{candidatos.length}</Badge>
-        <Mail className="h-3 w-3 text-muted-foreground/40 ml-auto" />
+      <div className="flex items-center gap-1.5 px-2 py-2">
+        <span className="text-[11px] font-medium text-muted-foreground truncate">{cfg.label}</span>
+        <Badge variant="secondary" className="text-[10px] h-4 px-1.5 font-bold shrink-0">{candidatos.length}</Badge>
+        <Mail className="h-3 w-3 text-muted-foreground/40 ml-auto shrink-0" />
       </div>
 
       {/* Cards */}
@@ -159,7 +159,7 @@ function FaseGroup({
   }
 
   return (
-    <div className="flex flex-col shrink-0" style={{ minWidth: cfg.estados.length === 1 ? "160px" : `${cfg.estados.length * 150}px` }}>
+    <div className="flex flex-col min-w-0" style={{ flex: cfg.estados.length }}>
       {/* Phase header bar with gradient */}
       <div
         className="h-2 rounded-t-lg"
@@ -503,7 +503,7 @@ export function KanbanPipeline({ vacante, onBack, onUpdateCandidatos }: KanbanPi
 
       {/* Kanban Board */}
       <div className="flex-1 overflow-x-auto p-4">
-        <div className="flex gap-2 min-w-max">
+        <div className="flex gap-2 w-full">
           {FASES_PRINCIPALES_ORDER.map((fase) => (
             <FaseGroup
               key={fase}
