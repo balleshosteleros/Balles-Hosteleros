@@ -797,18 +797,20 @@ export function ReclutamientoView() {
               puedeReordenar ? (
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                   <SortableContext items={filtered.map((v) => v.id)} strategy={verticalListSortingStrategy}>
-                    {filtered.map((v) => (
-                      <SortableVacanteCard
-                        key={v.id}
-                        id={v.id}
-                        vacante={v as Vacante & { visiblePublicamente?: boolean }}
-                        onSelectFase={handleSelectFase}
-                        onPublicar={handlePublicar}
-                        onDespublicar={handleDespublicar}
-                        onEliminar={handleEliminar}
-                        onEditar={(vc) => { setOfertaEditando(vc); setNuevaOfertaOpen(true); }}
-                      />
-                    ))}
+                    <div className="space-y-4">
+                      {filtered.map((v) => (
+                        <SortableVacanteCard
+                          key={v.id}
+                          id={v.id}
+                          vacante={v as Vacante & { visiblePublicamente?: boolean }}
+                          onSelectFase={handleSelectFase}
+                          onPublicar={handlePublicar}
+                          onDespublicar={handleDespublicar}
+                          onEliminar={handleEliminar}
+                          onEditar={(vc) => { setOfertaEditando(vc); setNuevaOfertaOpen(true); }}
+                        />
+                      ))}
+                    </div>
                   </SortableContext>
                 </DndContext>
               ) : (
