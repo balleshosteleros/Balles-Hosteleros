@@ -209,6 +209,8 @@ export interface Candidato {
   resenas?: ResenaCandidato[];
   notas?: NotaCandidato[];
   marcadoComoNoVisto?: boolean;
+  /** Inactivo = se conserva en BD y en el listado, pero no se ve en el pipeline. Default true. */
+  activo?: boolean;
   /** Fecha en que se promovió a empleado (no null = ya contratado). */
   promovidoAt?: string | null;
   /** Empleado creado al contratar, si ya se promovió. */

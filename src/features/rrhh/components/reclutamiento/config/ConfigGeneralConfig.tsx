@@ -1,10 +1,100 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  getReclutamientoConfigGeneral,
+  saveReclutamientoConfigGeneral,
+  type ReclutamientoConfigGeneral,
+} from "@/features/rrhh/actions/gestoria-actions";
+
+type BoolKey = {
+  [K in keyof ReclutamientoConfigGeneral]: ReclutamientoConfigGeneral[K] extends boolean ? K : never;
+}[keyof ReclutamientoConfigGeneral];
+
+const EMAILS: { key: BoolKey; label: string }[] = [
+  { key: "emails_auto_cambio_fase", label: "Activar emails automáticos al cambiar de fase" },
+  { key: "emails_pedir_confirmacion", label: "Pedir confirmación antes de enviar cada email" },
+  { key: "emails_copia_reclutador", label: "Enviar copia al reclutador asignado" },
+  { key: "emails_firma_corporativa", label: "Incluir firma corporativa en los emails" },
+];
+
+const ROLES: { key: BoolKey; label: string }[] = [
+  { key: "directores_mueven_fases", label: "Directores pueden mover candidatos entre fases" },
+  { key: "reclutadores_mueven_fases", label: "Reclutadores pueden mover candidatos entre fases" },
+  { key: "rrhh_edita_vacantes", label: "RRHH puede ver y editar vacantes" },
+  { key: "otros_roles_ven_vacantes", label: "Otros roles pueden ver vacantes (solo lectura)" },
+];
+
+const GENERALES: { key: BoolKey; label: string }[] = [
+  { key: "permitir_candidaturas_duplicadas", label: "Permitir candidaturas duplicadas (mismo email)" },
+  { key: "archivar_vacantes_cerradas_30d", label: "Archivar automáticamente vacantes cerradas tras 30 días" },
+  { key: "mostrar_contador_candidatos", label: "Mostrar contador de candidatos en la vista principal" },
+  { key: "notificar_reclutador_nueva_candidatura", label: "Notificar al reclutador cuando llega una nueva candidatura" },
+];
 
 export function ConfigGeneralConfig({ embedded = false }: { embedded?: boolean }) {
+  const [config, setConfig] = useState<ReclutamientoConfigGeneral | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    void getReclutamientoConfigGeneral().then((r) => setConfig(r.data));
+  }, []);
+
+  const setBool = (key: BoolKey) => {
+    setConfig((c) => (c ? { ...c, [key]: !c[key] } : c));
+  };
+  const setText = (key: "idioma_portal" | "formato_fecha", value: string) => {
+    setConfig((c) => (c ? { ...c, [key]: value } : c));
+  };
+
+  const guardar = async () => {
+    if (!config) return;
+    setSaving(true);
+    try {
+      const res = await saveReclutamientoConfigGeneral(config);
+      if (res.ok) toast.success("Configuración guardada");
+      else toast.error(res.error ?? "No se pudo guardar");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!config) {
+    return (
+      <div className="flex items-center gap-2 text-muted-foreground py-8">
+        <Loader2 className="h-4 w-4 animate-spin" /> Cargando…
+      </div>
+    );
+  }
+
+  const seccionToggles = (
+    titulo: string,
+    descripcion: string | null,
+    items: { key: BoolKey; label: string }[],
+  ) => (
+    <Card>
+      <div className="px-5 py-4 border-b border-border">
+        <h3 className="font-semibold text-foreground text-sm">{titulo}</h3>
+        {descripcion && <p className="text-xs text-muted-foreground mt-0.5">{descripcion}</p>}
+      </div>
+      <CardContent className="p-5 space-y-4">
+        {items.map((item) => (
+          <div key={item.key} className="flex items-center justify-between">
+            <Label className="text-sm text-foreground">{item.label}</Label>
+            <Switch checked={config[item.key]} onCheckedChange={() => setBool(item.key)} />
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+
   return (
     <div className="space-y-6">
       {!embedded && (
@@ -16,47 +106,8 @@ export function ConfigGeneralConfig({ embedded = false }: { embedded?: boolean }
         </div>
       )}
 
-      {/* Emails automáticos */}
-      <Card>
-        <div className="px-5 py-4 border-b border-border">
-          <h3 className="font-semibold text-foreground text-sm">Emails automáticos</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Controla cuándo se envían emails a los candidatos</p>
-        </div>
-        <CardContent className="p-5 space-y-4">
-          {[
-            { label: "Activar emails automáticos al cambiar de fase", checked: true },
-            { label: "Pedir confirmación antes de enviar cada email", checked: true },
-            { label: "Enviar copia al reclutador asignado", checked: false },
-            { label: "Incluir firma corporativa en los emails", checked: true },
-          ].map((item) => (
-            <div key={item.label} className="flex items-center justify-between">
-              <Label className="text-sm text-foreground">{item.label}</Label>
-              <Switch checked={item.checked} />
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      {/* Roles y acceso */}
-      <Card>
-        <div className="px-5 py-4 border-b border-border">
-          <h3 className="font-semibold text-foreground text-sm">Usuarios autorizados y roles</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Quién puede gestionar el módulo de reclutamiento</p>
-        </div>
-        <CardContent className="p-5 space-y-4">
-          {[
-            { label: "Directores pueden mover candidatos entre fases", checked: true },
-            { label: "Reclutadores pueden mover candidatos entre fases", checked: true },
-            { label: "RRHH puede ver y editar vacantes", checked: true },
-            { label: "Otros roles pueden ver vacantes (solo lectura)", checked: false },
-          ].map((item) => (
-            <div key={item.label} className="flex items-center justify-between">
-              <Label className="text-sm text-foreground">{item.label}</Label>
-              <Switch checked={item.checked} />
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      {seccionToggles("Emails automáticos", "Controla cuándo se envían emails a los candidatos", EMAILS)}
+      {seccionToggles("Usuarios autorizados y roles", "Quién puede gestionar el módulo de reclutamiento", ROLES)}
 
       {/* Idioma y regional */}
       <Card>
@@ -66,7 +117,7 @@ export function ConfigGeneralConfig({ embedded = false }: { embedded?: boolean }
         <CardContent className="p-5 space-y-4">
           <div className="flex items-center justify-between">
             <Label className="text-sm text-foreground">Idioma del portal de empleo</Label>
-            <Select defaultValue="es">
+            <Select value={config.idioma_portal} onValueChange={(v) => setText("idioma_portal", v)}>
               <SelectTrigger className="w-44 h-9"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="es">Español</SelectItem>
@@ -77,7 +128,7 @@ export function ConfigGeneralConfig({ embedded = false }: { embedded?: boolean }
           </div>
           <div className="flex items-center justify-between">
             <Label className="text-sm text-foreground">Formato de fecha</Label>
-            <Select defaultValue="dd/mm/yyyy">
+            <Select value={config.formato_fecha} onValueChange={(v) => setText("formato_fecha", v)}>
               <SelectTrigger className="w-44 h-9"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="dd/mm/yyyy">DD/MM/AAAA</SelectItem>
@@ -89,28 +140,12 @@ export function ConfigGeneralConfig({ embedded = false }: { embedded?: boolean }
         </CardContent>
       </Card>
 
-      {/* General */}
-      <Card>
-        <div className="px-5 py-4 border-b border-border">
-          <h3 className="font-semibold text-foreground text-sm">Ajustes generales</h3>
-        </div>
-        <CardContent className="p-5 space-y-4">
-          {[
-            { label: "Permitir candidaturas duplicadas (mismo email)", checked: false },
-            { label: "Archivar automáticamente vacantes cerradas tras 30 días", checked: true },
-            { label: "Mostrar contador de candidatos en la vista principal", checked: true },
-            { label: "Notificar al reclutador cuando llega una nueva candidatura", checked: true },
-          ].map((item) => (
-            <div key={item.label} className="flex items-center justify-between">
-              <Label className="text-sm text-foreground">{item.label}</Label>
-              <Switch checked={item.checked} />
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      {seccionToggles("Ajustes generales", null, GENERALES)}
 
       <div className="flex justify-end">
-        <Button>Guardar cambios</Button>
+        <Button onClick={guardar} disabled={saving}>
+          {saving ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Guardando…</> : "Guardar cambios"}
+        </Button>
       </div>
     </div>
   );

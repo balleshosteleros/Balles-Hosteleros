@@ -40,6 +40,8 @@ export type SendEmailInput = {
   subject: string;
   html: string;
   text?: string;
+  /** Copia (CC) opcional. Recibe una copia visible del correo. */
+  cc?: string;
   /**
    * Nombre visible del remitente (display name). La dirección de correo sigue
    * siendo siempre la del SMTP de la plataforma; esto solo cambia el nombre que
@@ -128,6 +130,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
         ? { name: input.fromName, address: addressOf(cfg.from) }
         : cfg.from,
       to: input.to,
+      cc: input.cc || undefined,
       subject: input.subject,
       html,
       text: input.text,

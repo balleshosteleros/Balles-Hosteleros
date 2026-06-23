@@ -49,6 +49,7 @@ interface CandidatoReal {
   estado: Estado;
   promovido_at: string | null;
   empleado_id: string | null;
+  activo: boolean | null;
   vacante_id: string | null;
   vacantes?: { id: string; titulo: string; departamento_id: string | null; puesto_id: string | null } | null;
   created_at: string;
@@ -84,6 +85,7 @@ function toCandidato(c: CandidatoReal): Candidato {
     vacanteId: c.vacante_id ?? "",
     reclutadorAsignado: "",
     historial: [],
+    activo: c.activo ?? true,
   };
 }
 
@@ -239,6 +241,11 @@ export function CandidatosRealesTab() {
                             Empleado
                           </Badge>
                         )}
+                        {c.activo === false && (
+                          <Badge variant="outline" className="text-[9px] bg-muted border-border text-muted-foreground shrink-0">
+                            Inactivo
+                          </Badge>
+                        )}
                       </div>
                       <span className="text-xs text-muted-foreground">{c.email}</span>
                     </div>
@@ -320,7 +327,13 @@ export function CandidatosRealesTab() {
         candidatos={items.map(toCandidato)}
         vacante={vacanteParaModal(selected)}
         onSelectCandidato={(c) => setSelected(c ? items.find((x) => x.id === c.id) ?? null : null)}
-        onUpdateCandidato={() => { /* ediciones de sidebar no persisten aquí */ }}
+        onUpdateCandidato={(updated) => {
+          // El toggle Activo/Inactivo de la ficha ya persiste en BD; aquí solo
+          // reflejamos el cambio en la fila para que el badge se actualice al
+          // instante. El resto de ediciones de sidebar no persisten desde aquí.
+          setItems((prev) => prev.map((x) => (x.id === updated.id ? { ...x, activo: updated.activo ?? true } : x)));
+          setSelected((prev) => (prev && prev.id === updated.id ? { ...prev, activo: updated.activo ?? true } : prev));
+        }}
         onEliminar={(c) => {
           const real = items.find((x) => x.id === c.id);
           if (real) handleEliminar(real);

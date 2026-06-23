@@ -171,7 +171,7 @@ export async function POST(req: Request) {
     // Verificar que la oferta existe y es pública
     const { data: vacante, error: vacErr } = await supabase
       .from("vacantes")
-      .select("id, empresa_id, puesto_id, departamento_id, estado_publicacion, visible_publicamente, cuestionario_plantilla_id")
+      .select("id, empresa_id, titulo, puesto_id, departamento_id, estado_publicacion, visible_publicamente, cuestionario_plantilla_id")
       .eq("id", ofertaId)
       .eq("empresa_id", empresaId)
       .maybeSingle();
@@ -181,6 +181,34 @@ export async function POST(req: Request) {
     }
     if (!vacante.visible_publicamente || vacante.estado_publicacion !== "publicada") {
       return NextResponse.json({ ok: false, error: "Esta oferta no está abierta" }, { status: 410 });
+    }
+
+    // Configuración general de reclutamiento (Ajustes → RRHH → Reclutamiento).
+    // Gobierna si se admiten candidaturas duplicadas y si se avisa al equipo.
+    const { data: cfgRow } = await supabase
+      .from("reclutamiento_config")
+      .select("permitir_candidaturas_duplicadas, notificar_reclutador_nueva_candidatura")
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    const permitirDuplicadas = cfgRow?.permitir_candidaturas_duplicadas ?? false;
+    const notificarNuevaCandidatura = cfgRow?.notificar_reclutador_nueva_candidatura ?? true;
+
+    // Candidaturas duplicadas: si NO se permiten, rechaza un email que ya se
+    // inscribió en ESTA misma oferta (mismo candidato, misma vacante).
+    if (!permitirDuplicadas) {
+      const { data: yaInscrito } = await supabase
+        .from("candidatos")
+        .select("id")
+        .eq("empresa_id", empresaId)
+        .eq("vacante_id", vacante.id)
+        .ilike("email", email)
+        .maybeSingle();
+      if (yaInscrito) {
+        return NextResponse.json(
+          { ok: false, error: "Ya hay una candidatura registrada con este correo para esta oferta." },
+          { status: 409 },
+        );
+      }
     }
 
     // Cuestionario obligatorio: si la vacante lo tiene asignado, validamos y
@@ -320,6 +348,32 @@ export async function POST(req: Request) {
           .from("candidatos")
           .update({ puntuacion: Math.round(cuestionarioCalc.nota) })
           .eq("id", candidato.id);
+      }
+    }
+
+    // Aviso al equipo de reclutamiento de que entró una nueva candidatura.
+    // Best-effort: nunca rompe el alta si el aviso falla. Sin "reclutador
+    // asignado" en el modelo, se notifica al área administrativa (RRHH).
+    if (notificarNuevaCandidatura) {
+      try {
+        const { emitirNotificacion } = await import(
+          "@/features/notificaciones/actions/notificaciones-actions"
+        );
+        const nombreCompleto = `${normalizarNombre(nombre)} ${normalizarNombre(apellidos)}`.trim();
+        await emitirNotificacion({
+          empresaId,
+          system: true,
+          tipo: "nueva_candidatura",
+          titulo: `Nueva candidatura: ${nombreCompleto}`,
+          mensaje: `${nombreCompleto} se ha inscrito en «${vacante.titulo ?? "una vacante"}».`,
+          segmento: { tipo: "area", area: "ADMINISTRATIVA" },
+          refTabla: "candidatos",
+          refId: candidato.id,
+          accionUrl: "/rrhh/reclutamiento",
+          dedupeKey: `candidatura:${candidato.id}`,
+        });
+      } catch (e) {
+        console.error("[candidatura] aviso nueva candidatura:", e);
       }
     }
 

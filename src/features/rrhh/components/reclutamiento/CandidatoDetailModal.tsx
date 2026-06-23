@@ -89,6 +89,7 @@ import {
   type OrigenCandidatoConfig,
 } from "@/features/rrhh/actions/reclutamiento-origenes-actions";
 import { llamarDesdeApp } from "@/features/google-workspace/components/TelefonoDrawer";
+import { setCandidatoActivo } from "@/features/rrhh/actions/candidatos-actions";
 import { toast } from "sonner";
 
 interface CandidatoDetailModalProps {
@@ -104,6 +105,8 @@ interface CandidatoDetailModalProps {
   /** Reasigna el candidato a otra vacante en la fase/estado indicados. */
   onMoverVacante?: (c: Candidato, vacanteId: string, estado: EstadoReclutamiento) => void;
   onEliminar?: (c: Candidato) => void;
+  /** Abre el flujo de contratación. Solo se ofrece en fase Prueba o Empleado. */
+  onContratar?: (c: Candidato) => void;
 }
 
 type TabKey = "cuestionarios" | "actividad" | "resenas" | "notas";
@@ -119,6 +122,7 @@ export function CandidatoDetailModal({
   onUpdateCandidato,
   onMoverVacante,
   onEliminar,
+  onContratar,
 }: CandidatoDetailModalProps) {
   const [tab, setTab] = useState<TabKey>("cuestionarios");
   // Footer: reasignación a otra vacante (vacante + fase de destino).
@@ -344,17 +348,55 @@ export function CandidatoDetailModal({
 
           {/* ─── Footer ─── */}
           <div className="flex items-center justify-between px-5 py-3 border-t border-border bg-card shrink-0">
-            <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
-              <Switch
-                checked={candidato.marcadoComoNoVisto ?? false}
-                onCheckedChange={(v) =>
-                  onUpdateCandidato({ ...candidato, marcadoComoNoVisto: v })
-                }
-              />
-              Marcar como no visto
-            </label>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                <Switch
+                  checked={candidato.marcadoComoNoVisto ?? false}
+                  onCheckedChange={(v) =>
+                    onUpdateCandidato({ ...candidato, marcadoComoNoVisto: v })
+                  }
+                />
+                Marcar como no visto
+              </label>
+              {/* Activo/Inactivo: persiste en BD. Inactivo = sigue en el listado
+                  pero desaparece del pipeline de la vacante (no genera ruido). */}
+              <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                <Switch
+                  checked={candidato.activo ?? true}
+                  onCheckedChange={async (v) => {
+                    onUpdateCandidato({ ...candidato, activo: v });
+                    const res = await setCandidatoActivo(candidato.id, v);
+                    if (!res.ok) {
+                      onUpdateCandidato({ ...candidato, activo: !v });
+                      toast.error(("error" in res && res.error) || "No se pudo actualizar el estado");
+                    } else {
+                      toast.success(v ? "Candidato activado" : "Candidato inactivo (oculto del pipeline)");
+                    }
+                  }}
+                />
+                {(candidato.activo ?? true) ? "Activo" : "Inactivo"}
+              </label>
+            </div>
 
             <div className="flex items-center gap-2">
+              {/* Contratar: solo cuando el candidato está en Prueba o ya marcado
+                  Empleado y todavía no se promovió. Para contratar debe estar en
+                  una de esas dos columnas. */}
+              {onContratar &&
+                (candidato.fase === "prueba" || candidato.fase === "empleado") &&
+                !candidato.promovidoAt && (
+                  <>
+                    <Button
+                      size="sm"
+                      className="h-9 gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-700"
+                      onClick={() => onContratar(candidato)}
+                    >
+                      <UserPlus className="h-4 w-4" /> Contratar
+                    </Button>
+                    <span className="mx-1 h-6 w-px bg-border" />
+                  </>
+                )}
+
               <span className="text-xs text-muted-foreground mr-1">
                 Cambiar de vacante
               </span>

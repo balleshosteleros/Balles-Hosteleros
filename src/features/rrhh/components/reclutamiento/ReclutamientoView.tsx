@@ -82,7 +82,9 @@ function VacanteCard({
   vacante, onSelectFase,
   onPublicar, onDespublicar, onEditar, dragHandle,
 }: VacanteCardProps) {
-  const counts = contarCandidatosPorFase(vacante.candidatos);
+  // Los candidatos inactivos no cuentan en la vista principal (no generan ruido);
+  // se conservan y siguen visibles en el listado de Candidatos.
+  const counts = contarCandidatosPorFase(vacante.candidatos.filter((c) => c.activo !== false));
   const visiblePublicamente = !!vacante.visiblePublicamente;
   const estaPublicada = vacante.estadoPublicacion === "publicada";
   // En el portal de empleo solo aparece si está publicada Y visible.

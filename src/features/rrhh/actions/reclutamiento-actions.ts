@@ -99,6 +99,7 @@ interface CandidatoRowReal {
   estado: string;
   promovido_at: string | null;
   empleado_id: string | null;
+  activo: boolean | null;
   created_at: string;
 }
 
@@ -134,7 +135,7 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
         .select(`
           id, empresa_id, vacante_id, nombre, apellidos, email, telefono,
           cv_url, notas, origen, canal_nombre, fase, estado, promovido_at, empleado_id,
-          created_at
+          activo, created_at
         `)
         .eq("empresa_id", empresaId)
         .order("created_at", { ascending: false }),
@@ -216,6 +217,7 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
           vacanteId: v.id,
           reclutadorAsignado: "",
           historial: [] as never[],
+          activo: c.activo ?? true,
           // Extras útiles para el botón "Crear en sistema" y avisos
           promovidoAt: c.promovido_at,
           empleadoId: c.empleado_id,

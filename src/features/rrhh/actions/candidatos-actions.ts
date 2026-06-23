@@ -55,7 +55,7 @@ export async function listCandidatosReales() {
       .select(`
         id, empresa_id, vacante_id, empleado_id, nombre, apellidos, email,
         telefono, dni_nie, cv_url, origen, fase, estado, puntuacion, notas,
-        promovido_at, created_at,
+        promovido_at, activo, created_at,
         vacantes(id, titulo, departamento_id, puesto_id)
       `)
       .eq("empresa_id", empresaId)
@@ -237,6 +237,27 @@ export async function moverCandidatoAVacante(
       if (histErr) console.error("[candidatos] historial vacante:", histErr.message);
     }
 
+    revalidatePath("/rrhh/reclutamiento");
+    return { ok: true };
+  } catch (err: unknown) {
+    return { ok: false, error: mensajeError(err) };
+  }
+}
+
+/**
+ * Activa/desactiva un candidato. Inactivo = se conserva todo en BD y sigue en el
+ * listado de Candidatos, pero desaparece del pipeline (kanban) de su vacante.
+ */
+export async function setCandidatoActivo(id: string, activo: boolean) {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+    const { error } = await supabase
+      .from("candidatos")
+      .update({ activo, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("empresa_id", empresaId);
+    if (error) throw error;
     revalidatePath("/rrhh/reclutamiento");
     return { ok: true };
   } catch (err: unknown) {

@@ -38,7 +38,12 @@ import {
   parsearEnlacesCuerpo,
 } from "@/features/rrhh/lib/reclutamiento-email";
 import { CandidatoDetailModal } from "@/features/rrhh/components/reclutamiento/CandidatoDetailModal";
+import { ContratarDialog } from "@/features/rrhh/components/reclutamiento/ContratarDialog";
 import { moverCandidatoAVacante } from "@/features/rrhh/actions/candidatos-actions";
+import {
+  getReclutamientoConfigGeneral,
+  type ReclutamientoConfigGeneral,
+} from "@/features/rrhh/actions/gestoria-actions";
 
 interface KanbanPipelineProps {
   vacante: Vacante;
@@ -96,6 +101,7 @@ function EstadoColumn({
   estado,
   candidatos,
   tieneEmail,
+  mostrarContador,
   onDragStart,
   onDrop,
   onCardClick,
@@ -103,6 +109,7 @@ function EstadoColumn({
   estado: EstadoReclutamiento;
   candidatos: Candidato[];
   tieneEmail: boolean;
+  mostrarContador: boolean;
   onDragStart: (e: React.DragEvent, c: Candidato) => void;
   onDrop: (estado: EstadoReclutamiento) => void;
   onCardClick: (c: Candidato) => void;
@@ -122,7 +129,9 @@ function EstadoColumn({
       {/* Estado header */}
       <div className="flex items-center gap-1.5 px-2 py-2">
         <span className="text-[11px] font-medium text-muted-foreground truncate">{cfg.label}</span>
-        <Badge variant="secondary" className="text-[10px] h-4 px-1.5 font-bold shrink-0">{candidatos.length}</Badge>
+        {mostrarContador && (
+          <Badge variant="secondary" className="text-[10px] h-4 px-1.5 font-bold shrink-0">{candidatos.length}</Badge>
+        )}
         {tieneEmail ? (
           <MailCheck
             className="h-3 w-3 text-emerald-600 ml-auto shrink-0"
@@ -153,6 +162,7 @@ function FaseGroup({
   fasePrincipal,
   candidatos,
   estadosConEmail,
+  mostrarContador,
   onDragStart,
   onDrop,
   onCardClick,
@@ -160,6 +170,7 @@ function FaseGroup({
   fasePrincipal: FasePrincipal;
   candidatos: Candidato[];
   estadosConEmail: Set<string>;
+  mostrarContador: boolean;
   onDragStart: (e: React.DragEvent, c: Candidato) => void;
   onDrop: (estado: EstadoReclutamiento) => void;
   onCardClick: (c: Candidato) => void;
@@ -185,7 +196,9 @@ function FaseGroup({
       <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-x border-border">
         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cfg.color }} />
         <span className="text-xs font-semibold text-foreground uppercase tracking-wide">{cfg.label}</span>
-        <Badge variant="outline" className="text-[10px] h-4 px-1.5 font-bold">{totalCount}</Badge>
+        {mostrarContador && (
+          <Badge variant="outline" className="text-[10px] h-4 px-1.5 font-bold">{totalCount}</Badge>
+        )}
       </div>
 
       {/* Estado columns inside */}
@@ -196,6 +209,7 @@ function FaseGroup({
             estado={est}
             candidatos={candidatosPorEstado[est]}
             tieneEmail={estadosConEmail.has(est)}
+            mostrarContador={mostrarContador}
             onDragStart={onDragStart}
             onDrop={onDrop}
             onCardClick={onCardClick}
@@ -347,6 +361,7 @@ function EmailConfirmDialog({
 export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandidatos, onMoved }: KanbanPipelineProps) {
   const [candidatos, setCandidatos] = useState<Candidato[]>(vacante.candidatos);
   const [selectedCandidato, setSelectedCandidato] = useState<Candidato | null>(null);
+  const [contratarCand, setContratarCand] = useState<Candidato | null>(null);
   const draggedCandidato = useRef<Candidato | null>(null);
 
   const handleMoverVacante = useCallback(
@@ -376,6 +391,21 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
     return () => { cancel = true; };
   }, [vacante.id]);
 
+  // Configuración general de reclutamiento (Ajustes → RRHH → Reclutamiento).
+  // Gobierna el envío de emails al cambiar de fase y el contador de candidatos.
+  const [config, setConfig] = useState<ReclutamientoConfigGeneral | null>(null);
+  useEffect(() => {
+    let cancel = false;
+    getReclutamientoConfigGeneral()
+      .then((r) => { if (!cancel) setConfig(r.data); })
+      .catch(() => { /* defaults se aplican abajo */ });
+    return () => { cancel = true; };
+  }, []);
+  const mostrarContador = config?.mostrar_contador_candidatos ?? true;
+
+  // Candidatos inactivos: se conservan, pero NO aparecen en el pipeline.
+  const candidatosVisibles = candidatos.filter((c) => c.activo !== false);
+
   const [emailConfirm, setEmailConfirm] = useState<{
     candidato: Candidato;
     estadoNuevo: EstadoReclutamiento;
@@ -385,20 +415,10 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
     draggedCandidato.current = c;
   }, []);
 
-  const handleDrop = useCallback((estadoDestino: EstadoReclutamiento) => {
-    const c = draggedCandidato.current;
-    if (!c || c.fase === estadoDestino) {
-      draggedCandidato.current = null;
-      return;
-    }
-    // Movimiento libre: cualquier estado/fase, hacia delante o hacia atrás.
-    setEmailConfirm({ candidato: c, estadoNuevo: estadoDestino });
-    draggedCandidato.current = null;
-  }, []);
-
-  const handleConfirmMove = useCallback(async (enviarEmail: boolean) => {
-    if (!emailConfirm) return;
-    const { candidato: c, estadoNuevo } = emailConfirm;
+  // Aplica el movimiento (estado local + persistencia vía onUpdateCandidatos) y,
+  // si procede, envía el email de fase. Se usa tanto desde el diálogo de
+  // confirmación como en el envío directo (sin confirmación).
+  const performMove = useCallback(async (c: Candidato, estadoNuevo: EstadoReclutamiento, enviarEmail: boolean) => {
     const faseAnterior = getFasePrincipal(c.fase);
     const faseNueva = getFasePrincipal(estadoNuevo);
 
@@ -421,7 +441,6 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
 
     setCandidatos(updated);
     onUpdateCandidatos(updated);
-    setEmailConfirm(null);
 
     const label = `${FASES_PRINCIPALES[faseNueva].label} / ${ESTADOS_CONFIG[estadoNuevo].label}`;
     if (enviarEmail) {
@@ -436,7 +455,33 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
     } else {
       toast.info(`${c.nombre} ${c.apellidos} movido a ${label}`, { description: "Sin envío de email" });
     }
-  }, [emailConfirm, candidatos, onUpdateCandidatos]);
+  }, [candidatos, onUpdateCandidatos]);
+
+  const handleDrop = useCallback((estadoDestino: EstadoReclutamiento) => {
+    const c = draggedCandidato.current;
+    draggedCandidato.current = null;
+    if (!c || c.fase === estadoDestino) return;
+    // Movimiento libre: cualquier estado/fase, hacia delante o hacia atrás.
+    // Emails automáticos al cambiar de fase: si están desactivados, se mueve sin
+    // correo y sin preguntar. Si están activos, se pide confirmación o se envía
+    // directamente según "Pedir confirmación antes de enviar cada email".
+    if (!config?.emails_auto_cambio_fase) {
+      void performMove(c, estadoDestino, false);
+      return;
+    }
+    if (config.emails_pedir_confirmacion) {
+      setEmailConfirm({ candidato: c, estadoNuevo: estadoDestino });
+      return;
+    }
+    void performMove(c, estadoDestino, true);
+  }, [config, performMove]);
+
+  const handleConfirmMove = useCallback((enviarEmail: boolean) => {
+    if (!emailConfirm) return;
+    const { candidato, estadoNuevo } = emailConfirm;
+    setEmailConfirm(null);
+    void performMove(candidato, estadoNuevo, enviarEmail);
+  }, [emailConfirm, performMove]);
 
   return (
     <div className="flex flex-col h-full">
@@ -449,7 +494,7 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
           <div>
             <h2 className="text-xl font-bold text-foreground">{vacante.puesto}</h2>
             <p className="text-sm text-muted-foreground">
-              {candidatos.length} candidatos · {vacante.ubicacion}
+              {mostrarContador ? `${candidatosVisibles.length} candidatos · ` : ""}{vacante.ubicacion}
             </p>
           </div>
         </div>
@@ -462,8 +507,9 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
             <FaseGroup
               key={fase}
               fasePrincipal={fase}
-              candidatos={candidatos.filter((c) => getFasePrincipal(c.fase) === fase)}
+              candidatos={candidatosVisibles.filter((c) => getFasePrincipal(c.fase) === fase)}
               estadosConEmail={estadosConEmail}
+              mostrarContador={mostrarContador}
               onDragStart={handleDragStart}
               onDrop={handleDrop}
               onCardClick={setSelectedCandidato}
@@ -485,6 +531,28 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
           setSelectedCandidato(updated);
         }}
         onMoverVacante={handleMoverVacante}
+        onContratar={(c) => {
+          setSelectedCandidato(null);
+          setContratarCand(c);
+        }}
+      />
+
+      <ContratarDialog
+        open={!!contratarCand}
+        onOpenChange={(o) => !o && setContratarCand(null)}
+        candidato={contratarCand ? {
+          id: contratarCand.id,
+          nombre: contratarCand.nombre,
+          apellidos: contratarCand.apellidos,
+          email: contratarCand.email,
+          vacantePuestoId: vacante.puestoId ?? null,
+        } : null}
+        onDone={() => {
+          // Tras contratar (paso 1) el candidato queda promovido: refresca desde
+          // BD. NO cerramos el diálogo: sigue en el paso 2 (alta a gestoría)
+          // hasta que el usuario lo cierre.
+          onMoved?.();
+        }}
       />
 
       <EmailConfirmDialog

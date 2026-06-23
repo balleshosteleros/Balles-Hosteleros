@@ -6,6 +6,7 @@ import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { sendEmail } from "@/lib/email/send";
 import { sustituirVariablesReclutamiento, parsearEnlacesCuerpo } from "@/features/rrhh/lib/reclutamiento-email";
 import { type EstadoReclutamiento } from "@/features/rrhh/data/reclutamiento";
+import { getReclutamientoConfigGeneral } from "@/features/rrhh/actions/gestoria-actions";
 
 /**
  * Biblioteca de plantillas de email del RECLUTAMIENTO. Cada plantilla es SUELTA
@@ -406,12 +407,18 @@ export async function enviarReclutamientoFaseEmail(
   candidatoId: string,
   estado: EstadoReclutamiento,
 ): Promise<{ sent: boolean; reason?: string }> {
-  const { supabase, empresaId } = await ctx();
+  const { supabase, user, empresaId } = await ctx();
   if (!empresaId) return { sent: false, reason: "Sin empresa activa" };
 
   const tpl = await resolverEmailParaEstado(supabase, empresaId, candidatoId, estado);
   if (!tpl) return { sent: false, reason: "Sin plantilla de email asociada a este estado" };
   if (!tpl.activa) return { sent: false, reason: "Plantilla desactivada" };
+
+  // Configuración general (Ajustes → RRHH → Reclutamiento):
+  //  · firma corporativa = cabecera (isotipo) + pie del correo.
+  //  · copia al reclutador = CC al usuario que está realizando el cambio.
+  const cfg = (await getReclutamientoConfigGeneral()).data;
+  const cc = cfg.emails_copia_reclutador ? (user?.email ?? undefined) : undefined;
 
   // Destinatario.
   const { data: cand } = await supabase
@@ -432,18 +439,23 @@ export async function enviarReclutamientoFaseEmail(
   const empresaNombre = vars.empresa_nombre || "la empresa";
   const pieText =
     "Este mensaje se ha enviado de forma automática desde una dirección que no admite respuestas. Por favor, no respondas a este correo.";
-  // La cabecera con el isotipo de la empresa la añade `sendEmail` (empresaId).
-  const html =
-    bodyToHtml(bodyText) +
-    `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:600px;margin:0 auto;padding:0 24px 24px"><p style="color:#9ca3af;font-size:12px;line-height:1.5;border-top:1px solid #e5e7eb;margin-top:8px;padding-top:12px">${escapeHtml(pieText)}</p></div>`;
+  // Firma corporativa ON: cabecera (isotipo, vía sendEmail.empresaId) + pie.
+  // Firma corporativa OFF: ni cabecera ni pie (correo limpio).
+  const firma = cfg.emails_firma_corporativa;
+  const html = firma
+    ? bodyToHtml(bodyText) +
+      `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:600px;margin:0 auto;padding:0 24px 24px"><p style="color:#9ca3af;font-size:12px;line-height:1.5;border-top:1px solid #e5e7eb;margin-top:8px;padding-top:12px">${escapeHtml(pieText)}</p></div>`
+    : bodyToHtml(bodyText);
 
   const res = await sendEmail({
     to,
+    cc,
     subject,
     html,
-    text: `${bodyText}\n\n—\n${pieText}`,
+    text: firma ? `${bodyText}\n\n—\n${pieText}` : bodyText,
     fromName: empresaNombre,
     empresaId,
+    brandHeader: firma,
   });
   if (res.ok) {
     // Marca en la actividad que este cambio de estado envió correo al candidato.

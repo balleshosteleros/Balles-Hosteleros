@@ -66,6 +66,82 @@ export async function saveReclutamientoConfig(input: ReclutamientoConfig) {
   }
 }
 
+// ============================================================
+// Configuración general de Reclutamiento (toggles + idioma/regional).
+// Vive en la misma fila por empresa de `reclutamiento_config`.
+// ============================================================
+
+export interface ReclutamientoConfigGeneral {
+  emails_auto_cambio_fase: boolean;
+  emails_pedir_confirmacion: boolean;
+  emails_copia_reclutador: boolean;
+  emails_firma_corporativa: boolean;
+  directores_mueven_fases: boolean;
+  reclutadores_mueven_fases: boolean;
+  rrhh_edita_vacantes: boolean;
+  otros_roles_ven_vacantes: boolean;
+  idioma_portal: string;
+  formato_fecha: string;
+  permitir_candidaturas_duplicadas: boolean;
+  archivar_vacantes_cerradas_30d: boolean;
+  mostrar_contador_candidatos: boolean;
+  notificar_reclutador_nueva_candidatura: boolean;
+}
+
+const CONFIG_GENERAL_DEFAULT: ReclutamientoConfigGeneral = {
+  emails_auto_cambio_fase: true,
+  emails_pedir_confirmacion: true,
+  emails_copia_reclutador: false,
+  emails_firma_corporativa: true,
+  directores_mueven_fases: true,
+  reclutadores_mueven_fases: true,
+  rrhh_edita_vacantes: true,
+  otros_roles_ven_vacantes: false,
+  idioma_portal: "es",
+  formato_fecha: "dd/mm/yyyy",
+  permitir_candidaturas_duplicadas: false,
+  archivar_vacantes_cerradas_30d: true,
+  mostrar_contador_candidatos: true,
+  notificar_reclutador_nueva_candidatura: true,
+};
+
+const CONFIG_GENERAL_COLS = Object.keys(CONFIG_GENERAL_DEFAULT).join(", ");
+
+export async function getReclutamientoConfigGeneral(): Promise<{ ok: boolean; data: ReclutamientoConfigGeneral }> {
+  try {
+    const { supabase, empresaId } = await getCtx();
+    if (!empresaId) return { ok: false, data: CONFIG_GENERAL_DEFAULT };
+    const { data } = await supabase
+      .from("reclutamiento_config")
+      .select(CONFIG_GENERAL_COLS)
+      .eq("empresa_id", empresaId)
+      .maybeSingle<ReclutamientoConfigGeneral>();
+    return { ok: true, data: { ...CONFIG_GENERAL_DEFAULT, ...(data ?? {}) } };
+  } catch (err) {
+    console.error("[rrhh] getReclutamientoConfigGeneral:", err);
+    return { ok: false, data: CONFIG_GENERAL_DEFAULT };
+  }
+}
+
+export async function saveReclutamientoConfigGeneral(input: ReclutamientoConfigGeneral) {
+  try {
+    const { supabase, empresaId } = await getCtx();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+    const { error } = await supabase
+      .from("reclutamiento_config")
+      .upsert({
+        empresa_id: empresaId,
+        ...input,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "empresa_id" });
+    if (error) throw error;
+    return { ok: true };
+  } catch (err) {
+    console.error("[rrhh] saveReclutamientoConfigGeneral:", err);
+    return { ok: false, error: "No se pudo guardar la configuración" };
+  }
+}
+
 const eur = (n: number) => (Number(n) || 0).toLocaleString("es-ES", { style: "currency", currency: "EUR", minimumFractionDigits: 0 });
 
 export async function enviarAltaGestoria(empleadoId: string) {
