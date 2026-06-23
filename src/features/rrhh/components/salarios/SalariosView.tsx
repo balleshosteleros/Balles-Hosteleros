@@ -9,11 +9,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ConfigButton } from "@/shared/components/config-button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   ArrowLeft, Plus, Eye, Settings, Settings2, DollarSign, Clock, Calendar,
-  Briefcase, ChevronDown, ChevronRight, Target, AlertTriangle, FileText, Pencil,
+  Briefcase, ChevronDown, ChevronRight, Target, FileText, Pencil,
 } from "lucide-react";
 import {
   SubmoduleToolbar,
@@ -55,7 +54,7 @@ export function SalariosView() {
     return () => { activo = false; };
   }, [empresaActual.id]);
 
-  type View = "list" | "detail" | "config" | "normas";
+  type View = "list" | "detail" | "config";
   const [view, setView] = useState<View>("list");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -63,14 +62,12 @@ export function SalariosView() {
 
   if (view === "detail" && selected) return <DetalleView puesto={selected} onBack={() => setView("list")} />;
   if (view === "config") return <ConfigView puestos={data.puestos} normas={data.normas} onBack={() => setView("list")} />;
-  if (view === "normas") return <NormasView normas={data.normas} onBack={() => setView("list")} />;
 
   return (
     <ListView
       puestos={data.puestos}
       onDetail={(id) => { setSelectedId(id); setView("detail"); }}
       onConfig={() => setView("config")}
-      onNormas={() => setView("normas")}
       onChanged={reload}
       empresaId={empresaActual.id}
     />
@@ -81,14 +78,12 @@ function ListView({
   puestos,
   onDetail,
   onConfig,
-  onNormas,
   onChanged,
   empresaId,
 }: {
   puestos: PuestoSalarial[];
   onDetail: (id: string) => void;
   onConfig: () => void;
-  onNormas: () => void;
   onChanged: () => void;
   empresaId: string;
 }) {
@@ -102,12 +97,6 @@ function ListView({
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [showConfig, setShowConfig] = useState(false);
-
-  const deptos = useMemo(
-    () => [...new Set(puestos.map((p) => p.departamento))].sort(),
-    [puestos],
-  );
 
   const acceso = (p: PuestoSalarial, campo: string): unknown => {
     if (campo === "departamento") return p.departamento;
@@ -153,7 +142,16 @@ function ListView({
   const columnDefs: Record<string, { th: ReactNode; td: (p: PuestoSalarial) => ReactNode }> = {
     puesto: {
       th: <TableHead key="puesto">Puesto</TableHead>,
-      td: (p) => <TableCell key="puesto" className="font-medium">{p.puesto}</TableCell>,
+      td: (p) => (
+        <TableCell key="puesto" className="font-medium">
+          <span className="inline-flex items-center gap-2">
+            {p.puesto}
+            {p.nivelesCount > 1 && (
+              <Badge variant="secondary" className="text-[10px]">{p.nivelesCount} niveles</Badge>
+            )}
+          </span>
+        </TableCell>
+      ),
     },
     nominaNeta: {
       th: <TableHead key="nominaNeta" className="text-right">Nómina neta</TableHead>,
@@ -191,47 +189,10 @@ function ListView({
 
   return (
     <div className="space-y-4 p-4 md:p-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-4">
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={onNormas}>
-            <AlertTriangle className="h-4 w-4 mr-1" /> Normas y cláusulas
-          </Button>
-          <ConfigButton onClick={onConfig} />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center"><Briefcase className="h-5 w-5 text-primary" /></div>
-            <div><p className="text-xs text-muted-foreground">Puestos</p><p className="text-xl font-bold">{puestos.length}</p></div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center"><DollarSign className="h-5 w-5 text-emerald-600" /></div>
-            <div><p className="text-xs text-muted-foreground">Salario medio</p><p className="text-xl font-bold">{eur(Math.round(puestos.reduce((a, p) => a + p.salarioNeto, 0) / (puestos.filter(p => p.salarioNeto > 0).length || 1)))}</p></div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center"><Clock className="h-5 w-5 text-blue-600" /></div>
-            <div><p className="text-xs text-muted-foreground">Departamentos</p><p className="text-xl font-bold">{deptos.length}</p></div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center"><Calendar className="h-5 w-5 text-amber-600" /></div>
-            <div><p className="text-xs text-muted-foreground">Activos</p><p className="text-xl font-bold">{puestos.filter(p => p.estado === "activo").length}</p></div>
-          </CardContent>
-        </Card>
-      </div>
-
       <SubmoduleToolbar
         busqueda={busqueda}
         onBusquedaChange={setBusqueda}
         placeholderBusqueda="Buscar"
-        textoNuevo="Nuevo puesto"
         onNuevo={() => { setEditingPuesto(null); setDialogOpen(true); }}
         filtros={filtros}
         onFiltrosChange={setFiltros}
@@ -251,9 +212,9 @@ function ListView({
             />
             <Button
               size="icon"
-              variant={showConfig ? "default" : "outline"}
+              variant="outline"
               className="h-9 w-9"
-              onClick={() => setShowConfig((v) => !v)}
+              onClick={onConfig}
               title="Configuración"
               aria-label="Configuración"
             >
@@ -566,34 +527,3 @@ function ConfigView({ puestos, normas, onBack }: { puestos: PuestoSalarial[]; no
   );
 }
 
-function NormasView({ normas, onBack }: { normas: NormaSalarial[]; onBack: () => void }) {
-  return (
-    <div className="space-y-4 p-4 md:p-6">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="h-4 w-4" /></Button>
-        <div>
-          <h2 className="text-base font-semibold text-foreground">Normas y cláusulas salariales</h2>
-          <p className="text-muted-foreground text-sm">Reglas aplicables a toda la estructura salarial de la empresa</p>
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        {normas.map((n, i) => (
-          <Card key={n.id}>
-            <CardContent className="p-5">
-              <div className="flex items-start gap-4">
-                <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold shrink-0">
-                  {i + 1}
-                </div>
-                <div>
-                  <h3 className="font-semibold text-foreground mb-1">{n.titulo}</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{n.descripcion}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    </div>
-  );
-}
