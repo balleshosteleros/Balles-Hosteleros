@@ -247,14 +247,29 @@ async function resolverEmailParaEstado(
   const overrides = (vac?.email_plantillas ?? {}) as Record<string, string | null>;
   let emailId: string | null = overrides[estado] ?? null;
 
-  if (!emailId && vac?.plantilla_estado_id) {
-    const { data: pt } = await supabase
-      .from("reclutamiento_plantillas_estado")
-      .select("estados")
-      .eq("id", vac.plantilla_estado_id as string)
-      .maybeSingle();
-    const items = (pt?.estados ?? []) as Array<{ key: string; email_plantilla_id?: string | null }>;
-    emailId = items.find((it) => it.key === estado)?.email_plantilla_id ?? null;
+  if (!emailId) {
+    // La vacante puede no tener una plantilla de estados asignada: en ese caso
+    // se usa la plantilla predeterminada de la empresa. Así el email por estado
+    // funciona sin necesidad de cablear cada vacante (presente y futuras).
+    let plantillaEstadoId = (vac?.plantilla_estado_id as string | null) ?? null;
+    if (!plantillaEstadoId) {
+      const { data: def } = await supabase
+        .from("reclutamiento_plantillas_estado")
+        .select("id")
+        .eq("empresa_id", empresaId)
+        .eq("es_predeterminada", true)
+        .maybeSingle();
+      plantillaEstadoId = (def?.id as string | null) ?? null;
+    }
+    if (plantillaEstadoId) {
+      const { data: pt } = await supabase
+        .from("reclutamiento_plantillas_estado")
+        .select("estados")
+        .eq("id", plantillaEstadoId)
+        .maybeSingle();
+      const items = (pt?.estados ?? []) as Array<{ key: string; email_plantilla_id?: string | null }>;
+      emailId = items.find((it) => it.key === estado)?.email_plantilla_id ?? null;
+    }
   }
   if (!emailId) return null;
 
@@ -346,7 +361,12 @@ export async function enviarReclutamientoFaseEmail(
   const empresaNombre = vars.empresa_nombre || "la empresa";
   const pieText =
     "Este mensaje se ha enviado de forma automática desde una dirección que no admite respuestas. Por favor, no respondas a este correo.";
+  // Cabecera con el logo de la empresa centrado (si hay logo configurado).
+  const logoHtml = vars.empresa_logo
+    ? `<div style="text-align:center;max-width:600px;margin:0 auto;padding:28px 24px 4px"><img src="${vars.empresa_logo}" alt="${escapeHtml(empresaNombre)}" style="max-height:72px;max-width:240px;height:auto;width:auto;display:inline-block" /></div>`
+    : "";
   const html =
+    logoHtml +
     bodyToHtml(bodyText) +
     `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:600px;margin:0 auto;padding:0 24px 24px"><p style="color:#9ca3af;font-size:12px;line-height:1.5;border-top:1px solid #e5e7eb;margin-top:8px;padding-top:12px">${escapeHtml(pieText)}</p></div>`;
 
@@ -413,7 +433,7 @@ export async function buildReclutamientoEmailVars(
 
   const { data: emp } = await supabase
     .from("empresas")
-    .select("nombre, email_contacto, direccion, datos_generales")
+    .select("nombre, email_contacto, direccion, datos_generales, logo_url, isotipo_url")
     .eq("id", empresaId)
     .maybeSingle();
   const dg = (emp?.datos_generales as Record<string, unknown> | null) ?? {};
@@ -421,8 +441,15 @@ export async function buildReclutamientoEmailVars(
     const v = dg[k];
     return typeof v === "string" ? v : "";
   };
+  // Logo para la cabecera del email. Solo URLs absolutas https funcionan en correo.
+  const logoCandidato =
+    ((emp?.logo_url as string | null) ?? "") ||
+    dgStr("logoUrl") ||
+    ((emp?.isotipo_url as string | null) ?? "");
+  const empresaLogo = /^https?:\/\//i.test(logoCandidato) ? logoCandidato : "";
 
   const vars: Record<string, string> = {
+    empresa_logo: empresaLogo,
     candidato_nombre: nombre,
     candidato_apellidos: apellidos,
     candidato_nombre_completo: nombreCompleto || nombre,
