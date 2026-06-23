@@ -480,7 +480,6 @@ export function EmpleadosView() {
         busqueda={busqueda}
         onBusquedaChange={setBusqueda}
         placeholderBusqueda="Buscar"
-        onNuevo={() => router.push("/rrhh/empleados/nuevo")}
         filtros={filtros}
         onFiltrosChange={setFiltros}
         orden={orden}
@@ -560,7 +559,7 @@ export function EmpleadosView() {
               {!loading && empleados.length === 0 && (
                 <tr>
                   <td colSpan={columnasRender.length + 1} className="text-center py-12 text-muted-foreground">
-                    No hay empleados todavía. Pulsa <span className="font-medium text-foreground">+ Nuevo</span> para dar de alta el primero.
+                    No hay empleados todavía. Los empleados se incorporan desde el <span className="font-medium text-foreground">portal de empleo</span> (Reclutamiento → contratación).
                   </td>
                 </tr>
               )}
