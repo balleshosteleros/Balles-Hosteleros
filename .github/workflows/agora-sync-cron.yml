@@ -1,0 +1,67 @@
+name: Cron Ágora (ventas) — disparador externo
+
+# POR QUÉ EXISTE (2026-06-23):
+# Los cron jobs de Vercel (vercel.json) NO se disparan de forma fiable en el plan
+# actual: el de Ágora se saltó el 22 y 23-jun y las ejecuciones que sí ocurren van
+# a horas dispersas (08:04/08:33/08:48 UTC) en vez de la hora exacta — síntoma del
+# plan Hobby (límite 2 crons; en vercel.json hay 16). Verificado que NO es el código
+# ni Ágora (responde 200 en <2s con datos).
+#
+# Este workflow llama al MISMO endpoint a hora fija desde GitHub Actions. Es
+# idempotente, así que convive con el cron de Vercel sin duplicar nada.
+#
+# ⚠️ Iván / equipo: esto SOLO cubre el cron de Ágora. Los otros 15 crons siguen sin
+# disparador fiable. Ver .claude/memory/project/crons_vercel_no_se_disparan.md y
+# docs/AGORA_INTEGRACION_ESTADO_Y_PLAN.md. Arreglo de fondo = Vercel Pro o ampliar
+# este workflow a los 16 endpoints (y vaciar "crons" en vercel.json para no duplicar).
+
+on:
+  schedule:
+    # 09:37 UTC diario (11:37 España). Hora no-redonda para esquivar el pico de
+    # Actions; procesa el día anterior (ya cerrado). Ajustar si hace falta.
+    - cron: "37 9 * * *"
+  workflow_dispatch:
+    inputs:
+      fecha:
+        description: "Día a reprocesar (YYYY-MM-DD). Vacío = ayer."
+        required: false
+        default: ""
+
+permissions: {}
+
+concurrency:
+  group: agora-sync-cron
+  cancel-in-progress: false
+
+jobs:
+  disparar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Llamar al cron de ingesta de ventas de Ágora
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          FECHA: ${{ inputs.fecha }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::Falta el secret CRON_SECRET en el repositorio (Settings → Secrets → Actions)."
+            exit 1
+          fi
+          BASE="https://sistema.balleshosteleros.com/api/cron/agora-sync"
+          URL="$BASE"
+          if [ -n "$FECHA" ]; then URL="${BASE}?fecha=${FECHA}"; fi
+          echo "Llamando a: $URL"
+          CODE=$(curl -sS -o /tmp/resp.json -w "%{http_code}" --max-time 290 \
+            -H "Authorization: Bearer ${CRON_SECRET}" "$URL" || echo "000")
+          echo "HTTP $CODE"
+          echo "----- respuesta -----"
+          head -c 6000 /tmp/resp.json || true
+          echo
+          if [ "$CODE" = "401" ]; then
+            echo "::error::401 No autorizado — el CRON_SECRET de GitHub no coincide con el de Vercel."
+            exit 1
+          fi
+          if [ "$CODE" != "200" ] && [ "$CODE" != "207" ]; then
+            echo "::error::El cron devolvió HTTP $CODE"
+            exit 1
+          fi
+          echo "OK ($CODE)"
