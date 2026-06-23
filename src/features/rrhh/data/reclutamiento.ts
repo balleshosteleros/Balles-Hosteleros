@@ -433,8 +433,9 @@ export const ORIGEN_LABELS: Record<OrigenCandidatura, string> = {
 };
 
 // ─── Reglas de movimiento entre estados ─────────────────────────
-// Cadena de progreso secuencial: solo +1 (o −1 para corregir). Cualquier
-// estado puede ir directo a un descartado (rescate al revés también vale).
+// Movimiento libre: un candidato puede moverse a cualquier estado/fase, hacia
+// delante o hacia atrás, sin tener que pasar por los intermedios. La única
+// restricción es no soltarlo en su mismo estado.
 const CADENA_PROGRESO: EstadoReclutamiento[] = [
   "nuevo",
   "elegido",
@@ -449,15 +450,7 @@ export function puedeMoverA(
   origen: EstadoReclutamiento,
   destino: EstadoReclutamiento,
 ): boolean {
-  if (origen === destino) return false;
-  const destinoFase = getFasePrincipal(destino);
-  if (destinoFase === "descartado") return true;
-  const origenFase = getFasePrincipal(origen);
-  if (origenFase === "descartado") return true; // rescate
-  const idxOrigen = CADENA_PROGRESO.indexOf(origen);
-  const idxDestino = CADENA_PROGRESO.indexOf(destino);
-  if (idxOrigen === -1 || idxDestino === -1) return false;
-  return Math.abs(idxDestino - idxOrigen) === 1;
+  return origen !== destino;
 }
 
 export function siguienteEstado(

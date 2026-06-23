@@ -16,6 +16,21 @@ async function getContext() {
   return { supabase, user, empresaId };
 }
 
+/**
+ * Mensaje legible de un error. Los errores de Supabase (`PostgrestError`) NO
+ * son instancias de `Error`, sino objetos `{ message, details, hint, code }`,
+ * por lo que `err instanceof Error` los descartaba y se mostraba el genérico
+ * "Error desconocido", ocultando la causa real (p.ej. violación de un CHECK).
+ */
+function mensajeError(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === "object" && "message" in err) {
+    const m = (err as { message?: unknown }).message;
+    if (typeof m === "string" && m) return m;
+  }
+  return "Error desconocido";
+}
+
 /** Nombre legible del usuario (nombre+apellidos → full_name → email). */
 async function nombreUsuarioActual(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -83,7 +98,7 @@ export async function createCandidato(input: {
     revalidatePath("/rrhh/reclutamiento");
     return { ok: true } as const;
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = mensajeError(err);
     return { ok: false, error: msg } as const;
   }
 }
@@ -150,7 +165,7 @@ export async function moverCandidatoFase(
     revalidatePath("/rrhh/reclutamiento");
     return { ok: true, empleadoYaContratado: !!cand?.promovido_at };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = mensajeError(err);
     return { ok: false, error: msg };
   }
 }
@@ -168,7 +183,7 @@ export async function eliminarCandidato(id: string) {
     revalidatePath("/rrhh/reclutamiento");
     return { ok: true };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = mensajeError(err);
     return { ok: false, error: msg };
   }
 }
@@ -225,7 +240,7 @@ export async function iniciarOffboarding(empleadoId: string) {
 
     return { ok: true, procesoId: proceso.id };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = mensajeError(err);
     return { ok: false, error: msg };
   }
 }
