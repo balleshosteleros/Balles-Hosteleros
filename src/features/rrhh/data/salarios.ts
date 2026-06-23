@@ -5,11 +5,31 @@ export interface HorarioDia {
   turno: string; // e.g. "10:00 - 18:00" or "LIBRE"
 }
 
+/** Condiciones de un Nivel del puesto (plantilla reutilizable de salario+horario). */
+export interface NivelSalarial {
+  nivel: number;
+  vacaciones: string;
+  nominaNeta: number;
+  efectivoExtra: number;
+  salarioNeto: number;
+  jornadaContrato: string;
+  horasSemanales: number;
+  diasLibres: number;
+  horarioSemanal: HorarioDia[];
+  observaciones: string;
+  objetivos: string[];
+  estado: "activo" | "borrador" | "inactivo";
+}
+
 export interface PuestoSalarial {
   id: string;
   departamento: string;
   departamentoId: string;
   puesto: string;
+  /** Nivel cabecera (el más bajo, normalmente 1). */
+  nivel: number;
+  /** Nº de niveles del puesto (1..N). */
+  nivelesCount: number;
   vacaciones: string;
   nominaNeta: number;
   efectivoExtra: number;
@@ -22,6 +42,11 @@ export interface PuestoSalarial {
   objetivos: string[];
   estado: "activo" | "borrador" | "inactivo";
   updatedAt: string;
+  // Datos de gestoría (compartidos por el puesto, comunes a todos los niveles)
+  convenioColectivo: string;
+  tipoContratoDefecto: string;
+  grupoCategoriaProf: string;
+  epigrafeCotizacion: string;
 }
 
 export interface NormaSalarial {

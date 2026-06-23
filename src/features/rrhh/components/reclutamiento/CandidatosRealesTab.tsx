@@ -3,19 +3,12 @@
 import { useEffect, useState, useTransition, useCallback } from "react";
 import { toast } from "sonner";
 import {
-  Loader2, FileText, ArrowRight, Sparkles,
-  AlertTriangle, Inbox, Copy, Check, KeyRound, Trash2,
+  Loader2, FileText, Sparkles,
+  AlertTriangle, Inbox, Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  Dialog, DialogContent, DialogDescription, DialogFooter,
-  DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -35,11 +28,7 @@ import {
   iniciarOffboarding,
   eliminarCandidato,
 } from "@/features/rrhh/actions/candidatos-actions";
-import { promoverCandidato } from "@/features/rrhh/actions/promocion-actions";
-import {
-  listPuestosCatalogo, listDepartamentosCatalogo,
-} from "@/features/rrhh/actions/vacantes-actions";
-import { listLocales } from "@/features/ajustes/actions/locales-actions";
+import { ContratarDialog } from "@/features/rrhh/components/reclutamiento/ContratarDialog";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
@@ -73,9 +62,6 @@ const ESTADOS_POR_FASE: Record<Fase, Estado[]> = {
   seleccionado: ["teorica", "practica", "prueba", "empleado"],
   descartado: ["no_se_presenta", "suspenso_formacion"],
 };
-
-interface PuestoRef { id: string; nombre: string; departamento_id?: string | null }
-interface DepartamentoRef { id: string; nombre: string }
 
 function fmtFecha(iso: string): string {
   if (!iso) return "—";
@@ -130,25 +116,15 @@ function vacanteParaModal(c: CandidatoReal | null): Vacante {
 
 export function CandidatosRealesTab() {
   const [items, setItems] = useState<CandidatoReal[]>([]);
-  const [puestos, setPuestos] = useState<PuestoRef[]>([]);
-  const [departamentos, setDepartamentos] = useState<DepartamentoRef[]>([]);
   const [loading, setLoading] = useState(true);
   useGlobalLoadingSync(loading);
   const [pending, startTransition] = useTransition();
   const { confirm, dialog: confirmDialog } = useConfirmDelete();
 
-  // Dialog promoción
-  const [promoverCand, setPromoverCand] = useState<CandidatoReal | null>(null);
-  const [promoverDepto, setPromoverDepto] = useState<string>("");
-  const [promoverPuesto, setPromoverPuesto] = useState<string>("");
-  const [promoverLocal, setPromoverLocal] = useState<string>("");
-  const [locales, setLocales] = useState<Array<{ id: string; nombre: string }>>([]);
+  // Dialog de contratación (wizard 2 pasos)
+  const [contratarCand, setContratarCand] = useState<CandidatoReal | null>(null);
 
-  // Credenciales temporales tras alta nueva (no reactivación)
-  const [credenciales, setCredenciales] = useState<{ email: string; password: string } | null>(null);
-  const [copiado, setCopiado] = useState(false);
-
-  // Aviso post-promoción → offboarding
+  // Aviso post-contratación → offboarding
   const [offboardingDe, setOffboardingDe] = useState<{ empleadoId: string; nombre: string } | null>(null);
 
   // Ficha del candidato (modal completo: actividad, notas, reseñas, cuestionario, CV).
@@ -157,21 +133,8 @@ export function CandidatosRealesTab() {
   // Toast informativo de "ya es empleado, movimiento solo organizativo"
   const cargar = useCallback(async () => {
     setLoading(true);
-    const [c, p, d, l] = await Promise.all([
-      listCandidatosReales(),
-      listPuestosCatalogo(),
-      listDepartamentosCatalogo(),
-      listLocales(),
-    ]);
+    const c = await listCandidatosReales();
     setItems(((c.data ?? []) as unknown) as CandidatoReal[]);
-    setPuestos((p.data ?? []) as PuestoRef[]);
-    setDepartamentos((d.data ?? []) as DepartamentoRef[]);
-    setLocales(
-      ((l.data ?? []) as Array<{ id: string; nombre: string }>).map((x) => ({
-        id: x.id,
-        nombre: x.nombre,
-      })),
-    );
     setLoading(false);
   }, []);
 
@@ -227,60 +190,6 @@ export function CandidatosRealesTab() {
         }
       });
     })();
-  }
-
-  function abrirPromover(c: CandidatoReal) {
-    setPromoverCand(c);
-    setPromoverDepto(c.vacantes?.departamento_id ?? "");
-    setPromoverPuesto(c.vacantes?.puesto_id ?? "");
-    // Si solo hay un local, lo pre-seleccionamos.
-    setPromoverLocal(locales.length === 1 ? locales[0].id : "");
-  }
-
-  function ejecutarPromover() {
-    if (!promoverCand) return;
-    if (!promoverLocal) {
-      toast.error("Selecciona el local del nuevo empleado");
-      return;
-    }
-    const emailCand = promoverCand.email;
-    startTransition(async () => {
-      const res = await promoverCandidato({
-        candidatoId: promoverCand.id,
-        departamentoId: promoverDepto || null,
-        puestoId: promoverPuesto || null,
-        localId: promoverLocal,
-      });
-      if (res.ok) {
-        setPromoverCand(null);
-        if (res.tempPassword) {
-          // Alta nueva: mostramos credenciales temporales para el primer acceso.
-          setCredenciales({ email: emailCand, password: res.tempPassword });
-        } else {
-          toast.success(
-            res.reactivado
-              ? "Empleado reactivado (re-contratación)"
-              : "Empleado creado",
-          );
-        }
-        void cargar();
-      } else {
-        toast.error(res.error ?? "Error al promover");
-      }
-    });
-  }
-
-  async function copiarCredenciales() {
-    if (!credenciales) return;
-    try {
-      await navigator.clipboard.writeText(
-        `Email: ${credenciales.email}\nContraseña: ${credenciales.password}`,
-      );
-      setCopiado(true);
-      setTimeout(() => setCopiado(false), 2000);
-    } catch {
-      toast.error("No se pudo copiar al portapapeles");
-    }
   }
 
   function ejecutarOffboarding() {
@@ -350,7 +259,7 @@ export function CandidatosRealesTab() {
             {items.map((c) => {
               const cfgEstado = ESTADOS_CONFIG[c.estado as EstadoReclutamiento];
               const mostrarBoton =
-                c.fase === "seleccionado" && c.estado === "prueba" && c.promovido_at === null;
+                (c.estado === "prueba" || c.estado === "empleado") && c.promovido_at === null;
               const yaPromovido = !!c.promovido_at;
               return (
                 <TableRow
@@ -411,10 +320,10 @@ export function CandidatosRealesTab() {
                         <Button
                           size="sm"
                           className="h-8 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700"
-                          onClick={() => abrirPromover(c)}
+                          onClick={() => setContratarCand(c)}
                           disabled={pending}
                         >
-                          <Sparkles className="h-3.5 w-3.5" /> Crear en sistema
+                          <Sparkles className="h-3.5 w-3.5" /> Contratar
                         </Button>
                       ) : (
                         <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setSelected(c)}>
@@ -459,114 +368,19 @@ export function CandidatosRealesTab() {
         }}
       />
 
-      {/* ── Dialog Promover ──────────────────── */}
-      <Dialog open={!!promoverCand} onOpenChange={(o) => !o && setPromoverCand(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-emerald-600" />
-              Crear empleado en el sistema
-            </DialogTitle>
-            <DialogDescription>
-              Vas a contratar a <b>{promoverCand?.nombre} {promoverCand?.apellidos}</b>. Se creará su cuenta y se te mostrará una <b>contraseña temporal</b> para el primer acceso. Si hay SMTP configurado, además recibirá un enlace por email.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="grid gap-3 py-2">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Departamento</label>
-              <Select value={promoverDepto} onValueChange={setPromoverDepto}>
-                <SelectTrigger><SelectValue placeholder="Selecciona…" /></SelectTrigger>
-                <SelectContent>
-                  {departamentos.map((d) => (
-                    <SelectItem key={d.id} value={d.id}>{d.nombre}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Puesto</label>
-              <Select value={promoverPuesto} onValueChange={setPromoverPuesto}>
-                <SelectTrigger><SelectValue placeholder="Selecciona…" /></SelectTrigger>
-                <SelectContent>
-                  {puestos.length === 0 ? (
-                    <SelectItem value="__none__" disabled>Sin puestos creados</SelectItem>
-                  ) : (
-                    puestos.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">
-                Local <span className="text-rose-500">*</span>
-              </label>
-              <Select value={promoverLocal} onValueChange={setPromoverLocal}>
-                <SelectTrigger>
-                  <SelectValue placeholder={locales.length === 0 ? "Sin locales disponibles" : "Selecciona…"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {locales.length === 0 ? (
-                    <SelectItem value="__none__" disabled>Esta empresa no tiene locales</SelectItem>
-                  ) : (
-                    locales.map((l) => (
-                      <SelectItem key={l.id} value={l.id}>{l.nombre}</SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="rounded-md bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-800 flex gap-2 items-start">
-              <ArrowRight className="h-4 w-4 mt-0.5 shrink-0" />
-              <span>
-                Si esta persona ya estuvo contratada (mismo email o DNI), <b>se reactivará su ficha antigua</b> en lugar de crear una nueva.
-              </span>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPromoverCand(null)} disabled={pending}>
-              Cancelar
-            </Button>
-            <Button onClick={ejecutarPromover} disabled={pending} className="bg-emerald-600 hover:bg-emerald-700">
-              {pending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Confirmar y crear
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Credenciales temporales (alta nueva) ──────────────────── */}
-      <Dialog open={credenciales !== null} onOpenChange={(o) => { if (!o) setCredenciales(null); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <KeyRound className="h-5 w-5 text-emerald-600" />
-              Empleado creado
-            </DialogTitle>
-            <DialogDescription>
-              Credenciales temporales para el primer acceso al portal. Se le pedirá cambiar la contraseña al iniciar sesión. Entrégaselas tú: el email solo sale si hay SMTP configurado.
-            </DialogDescription>
-          </DialogHeader>
-          {credenciales && (
-            <div className="rounded-lg border bg-muted/40 p-4 space-y-2 font-mono text-sm">
-              <div><span className="text-muted-foreground">Email: </span>{credenciales.email}</div>
-              <div><span className="text-muted-foreground">Contraseña: </span>{credenciales.password}</div>
-            </div>
-          )}
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={copiarCredenciales} className="gap-2">
-              {copiado ? <><Check className="h-4 w-4" />Copiado</> : <><Copy className="h-4 w-4" />Copiar</>}
-            </Button>
-            <Button onClick={() => setCredenciales(null)}>Hecho</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* ── Wizard de contratación (2 pasos) ──────────────────── */}
+      <ContratarDialog
+        open={!!contratarCand}
+        onOpenChange={(o) => !o && setContratarCand(null)}
+        candidato={contratarCand ? {
+          id: contratarCand.id,
+          nombre: contratarCand.nombre,
+          apellidos: contratarCand.apellidos,
+          email: contratarCand.email,
+          vacantePuestoId: contratarCand.vacantes?.puesto_id ?? null,
+        } : null}
+        onDone={() => void cargar()}
+      />
 
       {/* ── Aviso offboarding obligatorio ──────────────────── */}
       <AlertDialog open={!!offboardingDe} onOpenChange={(o) => !o && setOffboardingDe(null)}>

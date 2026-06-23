@@ -1,26 +1,29 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import {
-  Briefcase, Users, Settings, Globe, FileText,
+  Briefcase, Users, Settings, Globe, FileText, Building2,
 } from "lucide-react";
 import { OfertasTrabajoConfig } from "./OfertasTrabajoConfig";
 import { CandidatosConfig } from "./CandidatosConfig";
 import { ConfigGeneralConfig } from "./ConfigGeneralConfig";
 import { PortalEmpleoConfig } from "./PortalEmpleoConfig";
 import { PlantillasConfig } from "./PlantillasConfig";
+import { GestoriaConfig } from "./GestoriaConfig";
 
 type ConfigSection =
   | "ofertas"
   | "candidatos"
   | "configuracion"
   | "portal"
-  | "plantillas";
+  | "plantillas"
+  | "gestoria";
 
 const SECTIONS: { id: ConfigSection; label: string; icon: React.ReactNode }[] = [
   { id: "ofertas", label: "Vacantes", icon: <Briefcase className="h-4 w-4" /> },
   { id: "candidatos", label: "Candidatos", icon: <Users className="h-4 w-4" /> },
   { id: "portal", label: "Portal de empleo", icon: <Globe className="h-4 w-4" /> },
   { id: "plantillas", label: "Plantillas", icon: <FileText className="h-4 w-4" /> },
+  { id: "gestoria", label: "Gestoría", icon: <Building2 className="h-4 w-4" /> },
   { id: "configuracion", label: "Configuración general", icon: <Settings className="h-4 w-4" strokeWidth={1.75} /> },
 ];
 
@@ -30,6 +33,7 @@ const CONTENT: Record<ConfigSection, React.ReactNode> = {
   configuracion: <ConfigGeneralConfig />,
   portal: <PortalEmpleoConfig />,
   plantillas: <PlantillasConfig />,
+  gestoria: <GestoriaConfig />,
 };
 
 export function ReclutamientoConfigView() {

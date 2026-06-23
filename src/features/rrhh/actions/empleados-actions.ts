@@ -821,11 +821,12 @@ export async function getDatosCopiaEmpleado(input: {
     // Puestos del empleado → ¿existen por nombre en destino?
     const { data: epO } = await admin
       .from("empleado_puestos")
-      .select("es_principal, puestos!inner(nombre)")
+      .select("es_principal, puesto_nombre, puestos(nombre)")
       .eq("empleado_id", input.empleadoId);
     const puestosOrigen = (epO ?? []).map((r) => {
-      const row = r as unknown as { es_principal: boolean; puestos: { nombre: string } };
-      return { nombre: row.puestos?.nombre, esPrincipal: Boolean(row.es_principal) };
+      const row = r as unknown as { es_principal: boolean; puesto_nombre: string | null; puestos: { nombre: string } | null };
+      // Puesto vivo si existe; si fue borrado (plantilla), el nombre copiado.
+      return { nombre: row.puestos?.nombre ?? row.puesto_nombre ?? undefined, esPrincipal: Boolean(row.es_principal) };
     }).filter((p) => p.nombre);
     let puestosDest = new Set<string>();
     if (puestosOrigen.length) {
@@ -966,10 +967,10 @@ export async function copiarEmpleadoAEmpresa(input: {
     const nuevoId = creado.id as string;
 
     // Puestos por NOMBRE (los que existan en destino).
-    const { data: epO } = await admin.from("empleado_puestos").select("es_principal, puestos!inner(nombre)").eq("empleado_id", input.empleadoId);
+    const { data: epO } = await admin.from("empleado_puestos").select("es_principal, puesto_nombre, puestos(nombre)").eq("empleado_id", input.empleadoId);
     const puestosOrigen = (epO ?? []).map((r) => {
-      const row = r as unknown as { es_principal: boolean; puestos: { nombre: string } };
-      return { nombre: row.puestos?.nombre, esPrincipal: Boolean(row.es_principal) };
+      const row = r as unknown as { es_principal: boolean; puesto_nombre: string | null; puestos: { nombre: string } | null };
+      return { nombre: row.puestos?.nombre ?? row.puesto_nombre ?? undefined, esPrincipal: Boolean(row.es_principal) };
     }).filter((p) => p.nombre);
     if (puestosOrigen.length) {
       const { data: pD } = await admin.from("puestos").select("id, nombre").eq("empresa_id", input.empresaDestinoId).in("nombre", puestosOrigen.map((p) => p.nombre as string));
@@ -977,7 +978,7 @@ export async function copiarEmpleadoAEmpresa(input: {
       const hoy = new Date().toISOString().split("T")[0];
       const filas = puestosOrigen
         .filter((p) => idPorNombre.has(p.nombre as string))
-        .map((p) => ({ empleado_id: nuevoId, puesto_id: idPorNombre.get(p.nombre as string), es_principal: p.esPrincipal, vigente_desde: hoy }));
+        .map((p) => ({ empleado_id: nuevoId, puesto_id: idPorNombre.get(p.nombre as string), puesto_nombre: p.nombre as string, es_principal: p.esPrincipal, vigente_desde: hoy }));
       if (filas.length) await admin.from("empleado_puestos").insert(filas);
     }
 

@@ -8,15 +8,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { createPuesto, updatePuesto, listDepartamentosCatalogo } from "@/features/rrhh/actions/vacantes-actions";
-import { upsertPuestoSalario } from "@/features/rrhh/actions/salarios-actions";
-import type { PuestoSalarial } from "@/features/rrhh/data/salarios";
+import { createPuesto, updatePuesto, deletePuesto, listDepartamentosCatalogo } from "@/features/rrhh/actions/vacantes-actions";
+import { upsertPuestoSalario, listNivelesDePuesto } from "@/features/rrhh/actions/salarios-actions";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import type { PuestoSalarial, NivelSalarial } from "@/features/rrhh/data/salarios";
 
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  /** null = crear puesto nuevo; si viene, se edita su salario. */
+  /** null = crear puesto nuevo; si viene, se edita el puesto y sus niveles. */
   editing: PuestoSalarial | null;
   onSaved: () => void;
 }
@@ -29,41 +31,98 @@ const ESTADOS: { value: PuestoSalarial["estado"]; label: string }[] = [
   { value: "inactivo", label: "Inactivo" },
 ];
 
+function nivelVacio(nivel: number): NivelSalarial {
+  return {
+    nivel,
+    vacaciones: "",
+    nominaNeta: 0,
+    efectivoExtra: 0,
+    salarioNeto: 0,
+    jornadaContrato: "",
+    horasSemanales: 0,
+    diasLibres: 0,
+    horarioSemanal: [],
+    observaciones: "",
+    objetivos: [],
+    estado: "borrador",
+  };
+}
+
 export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Props) {
   const esNuevo = editing === null;
 
   const [departamentos, setDepartamentos] = useState<Depto[]>([]);
+  // Datos compartidos del puesto
   const [nombre, setNombre] = useState("");
   const [departamentoId, setDepartamentoId] = useState("");
-  const [nominaNeta, setNominaNeta] = useState(0);
-  const [efectivoExtra, setEfectivoExtra] = useState(0);
-  const [jornadaContrato, setJornadaContrato] = useState("");
-  const [horasSemanales, setHorasSemanales] = useState(0);
-  const [diasLibres, setDiasLibres] = useState(0);
-  const [vacaciones, setVacaciones] = useState("");
-  const [observaciones, setObservaciones] = useState("");
-  const [estado, setEstado] = useState<PuestoSalarial["estado"]>("borrador");
+  // Datos de gestoría (compartidos por el puesto)
+  const [convenio, setConvenio] = useState("");
+  const [tipoContrato, setTipoContrato] = useState("");
+  const [grupoCategoria, setGrupoCategoria] = useState("");
+  const [epigrafe, setEpigrafe] = useState("");
+  // Niveles (condiciones por nivel)
+  const [niveles, setNiveles] = useState<NivelSalarial[]>([nivelVacio(1)]);
+  const [idx, setIdx] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
-  const salarioNeto = nominaNeta + efectivoExtra;
+  const cur = niveles[idx] ?? niveles[0];
+  const salarioNeto = (cur?.nominaNeta ?? 0) + (cur?.efectivoExtra ?? 0);
+
+  const setCur = (patch: Partial<NivelSalarial>) => {
+    setNiveles((prev) => prev.map((n, i) => (i === idx ? { ...n, ...patch } : n)));
+  };
 
   useEffect(() => {
     if (!open) return;
     void listDepartamentosCatalogo().then((r) => {
       if (r.ok) setDepartamentos(r.data as Depto[]);
     });
-    // Prefill
+    // Datos compartidos
     setNombre(editing?.puesto ?? "");
     setDepartamentoId(editing?.departamentoId ?? "");
-    setNominaNeta(editing?.nominaNeta ?? 0);
-    setEfectivoExtra(editing?.efectivoExtra ?? 0);
-    setJornadaContrato(editing?.jornadaContrato ?? "");
-    setHorasSemanales(editing?.horasSemanales ?? 0);
-    setDiasLibres(editing?.diasLibres ?? 0);
-    setVacaciones(editing?.vacaciones ?? "");
-    setObservaciones(editing?.observaciones ?? "");
-    setEstado(editing?.estado ?? "borrador");
+    setConvenio(editing?.convenioColectivo ?? "");
+    setTipoContrato(editing?.tipoContratoDefecto ?? "");
+    setGrupoCategoria(editing?.grupoCategoriaProf ?? "");
+    setEpigrafe(editing?.epigrafeCotizacion ?? "");
+    setIdx(0);
+    // Niveles: si edita, cargar de BD; si nuevo, un Nivel 1 vacío.
+    if (editing) {
+      setNiveles([nivelVacio(1)]); // placeholder mientras carga
+      void listNivelesDePuesto(editing.id).then((r) => {
+        if (r.ok && r.data.length > 0) setNiveles(r.data);
+      });
+    } else {
+      setNiveles([nivelVacio(1)]);
+    }
   }, [open, editing]);
+
+  const addNivel = () => {
+    const siguiente = Math.max(0, ...niveles.map((n) => n.nivel)) + 1;
+    setNiveles((prev) => [...prev, nivelVacio(siguiente)]);
+    setIdx(niveles.length);
+  };
+
+  const handleDelete = async () => {
+    if (!editing) return;
+    const ok = await confirmDelete({
+      title: "¿Eliminar puesto?",
+      description: `Se eliminará el puesto "${editing.puesto}" y su vacante. No se podrá si tiene empleados o candidatos asociados.`,
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
+    setDeleting(true);
+    try {
+      const res = await deletePuesto(editing.id);
+      if (!res.ok) { toast.error(res.error ?? "No se pudo eliminar el puesto"); return; }
+      toast.success("Puesto eliminado");
+      onSaved();
+      onOpenChange(false);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!nombre.trim()) { toast.error("El nombre del puesto es obligatorio"); return; }
@@ -76,25 +135,46 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
         if (!res.ok || !res.data) { toast.error(res.error ?? "No se pudo crear el puesto"); return; }
         puestoId = (res.data as { id: string }).id;
       } else {
-        const upd = await updatePuesto({ id: puestoId, nombre: nombre.trim(), departamento_id: departamentoId });
+        const upd = await updatePuesto({
+          id: puestoId,
+          nombre: nombre.trim(),
+          departamento_id: departamentoId,
+          convenio_colectivo: convenio,
+          tipo_contrato_defecto: tipoContrato,
+          grupo_categoria_prof: grupoCategoria,
+          epigrafe_cotizacion: epigrafe,
+        });
         if (!upd.ok) { toast.error(upd.error ?? "No se pudo actualizar el puesto"); return; }
       }
-      const sal = await upsertPuestoSalario({
-        id: undefined,
-        puestoId,
-        nominaNeta,
-        efectivoExtra,
-        salarioNeto,
-        jornadaContrato,
-        horasSemanales,
-        diasLibres,
-        vacaciones,
-        observaciones,
-        estado,
-        horarioSemanal: editing?.horarioSemanal ?? [],
-        objetivos: editing?.objetivos ?? [],
-      });
-      if (!sal.ok) { toast.error(sal.error ?? "No se pudo guardar el salario"); return; }
+      // Guardar cada nivel (snapshot por puesto_id + nivel)
+      for (const n of niveles) {
+        const sal = await upsertPuestoSalario({
+          puestoId,
+          nivel: n.nivel,
+          nominaNeta: n.nominaNeta,
+          efectivoExtra: n.efectivoExtra,
+          salarioNeto: n.nominaNeta + n.efectivoExtra,
+          jornadaContrato: n.jornadaContrato,
+          horasSemanales: n.horasSemanales,
+          diasLibres: n.diasLibres,
+          vacaciones: n.vacaciones,
+          observaciones: n.observaciones,
+          estado: n.estado,
+          horarioSemanal: n.horarioSemanal,
+          objetivos: n.objetivos,
+        });
+        if (!sal.ok) { toast.error(sal.error ?? "No se pudo guardar el nivel"); return; }
+      }
+      // Guardar datos de gestoría también al crear (updatePuesto tras crear).
+      if (esNuevo && (convenio || tipoContrato || grupoCategoria || epigrafe)) {
+        await updatePuesto({
+          id: puestoId,
+          convenio_colectivo: convenio,
+          tipo_contrato_defecto: tipoContrato,
+          grupo_categoria_prof: grupoCategoria,
+          epigrafe_cotizacion: epigrafe,
+        });
+      }
       toast.success(esNuevo ? "Puesto creado" : "Puesto actualizado");
       onSaved();
       onOpenChange(false);
@@ -109,15 +189,14 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{esNuevo ? "Nuevo puesto" : `Salario · ${editing?.puesto}`}</DialogTitle>
+          <DialogTitle>{esNuevo ? "Nuevo puesto" : `Puesto · ${editing?.puesto}`}</DialogTitle>
           <DialogDescription>
-            {esNuevo
-              ? "Crea un puesto de trabajo (hijo de un departamento) y define su salario."
-              : "Edita las condiciones salariales del puesto."}
+            Define el puesto y sus niveles (plantillas de condiciones). Al contratar se copia el nivel elegido al empleado.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          {/* Datos compartidos del puesto */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="ps-nombre">Puesto</Label>
@@ -139,64 +218,135 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="ps-nomina">Nómina neta (€)</Label>
-              <Input id="ps-nomina" type="number" min={0} value={nominaNeta} onChange={(e) => setNominaNeta(Number(e.target.value) || 0)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="ps-efectivo">Efectivo extra (€)</Label>
-              <Input id="ps-efectivo" type="number" min={0} value={efectivoExtra} onChange={(e) => setEfectivoExtra(Number(e.target.value) || 0)} />
-            </div>
-          </div>
-
-          <div className="rounded-md bg-muted/40 px-3 py-2 text-sm flex justify-between">
-            <span className="text-muted-foreground">Salario neto total</span>
-            <span className="font-semibold">{eur(salarioNeto)}</span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="ps-jornada">Jornada</Label>
-              <Input id="ps-jornada" value={jornadaContrato} onChange={(e) => setJornadaContrato(e.target.value)} placeholder="Ej. Completa" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="ps-horas">Horas/semana</Label>
-              <Input id="ps-horas" type="number" min={0} value={horasSemanales} onChange={(e) => setHorasSemanales(Number(e.target.value) || 0)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="ps-dias">Días libres</Label>
-              <Input id="ps-dias" type="number" min={0} value={diasLibres} onChange={(e) => setDiasLibres(Number(e.target.value) || 0)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="ps-vac">Vacaciones</Label>
-              <Input id="ps-vac" value={vacaciones} onChange={(e) => setVacaciones(e.target.value)} placeholder="Ej. 30 días" />
-            </div>
-          </div>
-
+          {/* Selector de niveles */}
           <div className="space-y-1.5">
-            <Label htmlFor="ps-estado">Estado</Label>
-            <select
-              id="ps-estado"
-              value={estado}
-              onChange={(e) => setEstado(e.target.value as PuestoSalarial["estado"])}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-            >
-              {ESTADOS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
+            <Label>Niveles</Label>
+            <div className="flex items-center gap-2 flex-wrap">
+              {niveles.map((n, i) => (
+                <Button
+                  key={n.nivel}
+                  type="button"
+                  size="sm"
+                  variant={i === idx ? "default" : "outline"}
+                  onClick={() => setIdx(i)}
+                >
+                  Nivel {n.nivel}
+                </Button>
+              ))}
+              <Button type="button" size="sm" variant="ghost" onClick={addNivel}>
+                <Plus className="h-4 w-4 mr-1" /> Añadir nivel
+              </Button>
+            </div>
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="ps-obs">Observaciones</Label>
-            <Textarea id="ps-obs" value={observaciones} onChange={(e) => setObservaciones(e.target.value)} rows={2} />
+          {/* Condiciones del nivel seleccionado */}
+          <div className="rounded-md border border-border/60 p-3 space-y-4">
+            <p className="text-xs font-medium text-muted-foreground">Condiciones · Nivel {cur?.nivel}</p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="ps-nomina">Nómina neta (€)</Label>
+                <Input id="ps-nomina" type="number" min={0} value={cur?.nominaNeta ?? 0} onChange={(e) => setCur({ nominaNeta: Number(e.target.value) || 0 })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="ps-efectivo">Efectivo extra (€)</Label>
+                <Input id="ps-efectivo" type="number" min={0} value={cur?.efectivoExtra ?? 0} onChange={(e) => setCur({ efectivoExtra: Number(e.target.value) || 0 })} />
+              </div>
+            </div>
+
+            <div className="rounded-md bg-muted/40 px-3 py-2 text-sm flex justify-between">
+              <span className="text-muted-foreground">Salario neto total</span>
+              <span className="font-semibold">{eur(salarioNeto)}</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="ps-jornada">Jornada</Label>
+                <Input id="ps-jornada" value={cur?.jornadaContrato ?? ""} onChange={(e) => setCur({ jornadaContrato: e.target.value })} placeholder="Ej. Completa" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="ps-horas">Horas/semana</Label>
+                <Input id="ps-horas" type="number" min={0} value={cur?.horasSemanales ?? 0} onChange={(e) => setCur({ horasSemanales: Number(e.target.value) || 0 })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="ps-dias">Días libres</Label>
+                <Input id="ps-dias" type="number" min={0} value={cur?.diasLibres ?? 0} onChange={(e) => setCur({ diasLibres: Number(e.target.value) || 0 })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="ps-vac">Vacaciones</Label>
+                <Input id="ps-vac" value={cur?.vacaciones ?? ""} onChange={(e) => setCur({ vacaciones: e.target.value })} placeholder="Ej. 30 días" />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="ps-estado">Estado</Label>
+              <select
+                id="ps-estado"
+                value={cur?.estado ?? "borrador"}
+                onChange={(e) => setCur({ estado: e.target.value as PuestoSalarial["estado"] })}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+              >
+                {ESTADOS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="ps-obs">Observaciones</Label>
+              <Textarea id="ps-obs" value={cur?.observaciones ?? ""} onChange={(e) => setCur({ observaciones: e.target.value })} rows={2} />
+            </div>
+          </div>
+
+          {/* Datos de gestoría (compartidos por el puesto) */}
+          <div className="rounded-md border border-border/60 p-3 space-y-4">
+            <p className="text-xs font-medium text-muted-foreground">Datos de gestoría (comunes a todos los niveles)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="ps-convenio">Convenio colectivo</Label>
+                <Input id="ps-convenio" value={convenio} onChange={(e) => setConvenio(e.target.value)} placeholder="Ej. Hostelería de Madrid" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="ps-tipocontrato">Tipo de contrato</Label>
+                <select
+                  id="ps-tipocontrato"
+                  value={tipoContrato}
+                  onChange={(e) => setTipoContrato(e.target.value)}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                >
+                  <option value="">Sin definir</option>
+                  <option value="indefinido">Indefinido</option>
+                  <option value="temporal">Temporal</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="ps-grupo">Grupo / categoría</Label>
+                <Input id="ps-grupo" value={grupoCategoria} onChange={(e) => setGrupoCategoria(e.target.value)} placeholder="Ej. Grupo III" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="ps-epigrafe">Epígrafe / cotización</Label>
+                <Input id="ps-epigrafe" value={epigrafe} onChange={(e) => setEpigrafe(e.target.value)} placeholder="Opcional" />
+              </div>
+            </div>
           </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={saving}>{saving ? "Guardando…" : esNuevo ? "Crear puesto" : "Guardar"}</Button>
+        <DialogFooter className="sm:justify-between">
+          {!esNuevo ? (
+            <Button
+              variant="ghost"
+              onClick={handleDelete}
+              disabled={saving || deleting}
+              className="text-destructive hover:text-destructive"
+            >
+              <Trash2 className="h-4 w-4 mr-2" /> {deleting ? "Eliminando…" : "Eliminar puesto"}
+            </Button>
+          ) : <span />}
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving || deleting}>Cancelar</Button>
+            <Button onClick={handleSave} disabled={saving || deleting}>{saving ? "Guardando…" : esNuevo ? "Crear puesto" : "Guardar"}</Button>
+          </div>
         </DialogFooter>
       </DialogContent>
+      {confirmDeleteDialog}
     </Dialog>
   );
 }

@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import {
   NORMAS_BASE,
   type PuestoSalarial,
+  type NivelSalarial,
   type NormaSalarial,
   type HorarioDia,
 } from "@/features/rrhh/data/salarios";
@@ -24,8 +25,9 @@ async function getContext() {
   return { supabase, user, empresaId };
 }
 
-// Salario embebido dentro de un puesto.
+// Salario embebido dentro de un puesto (una fila por NIVEL).
 type SalarioEmbed = {
+  nivel: number | null;
   nomina_neta: number | string | null;
   efectivo_extra: number | string | null;
   salario_neto: number | string | null;
@@ -40,35 +42,65 @@ type SalarioEmbed = {
   updated_at: string;
 };
 
-// Fila puesto-céntrica: el puesto con su salario (LEFT JOIN) y su departamento.
+// Fila puesto-céntrica: el puesto con sus niveles (LEFT JOIN), departamento y gestoría.
 type PuestoRow = {
   id: string; // puestos.id
   nombre: string | null;
   departamentos: { id: string; nombre: string | null } | null;
   puesto_salarios: SalarioEmbed[] | SalarioEmbed | null;
+  convenio_colectivo: string | null;
+  tipo_contrato_defecto: string | null;
+  grupo_categoria_prof: string | null;
+  epigrafe_cotizacion: string | null;
 };
 
-function rowToPuesto(r: PuestoRow): PuestoSalarial {
-  const sal = Array.isArray(r.puesto_salarios)
-    ? r.puesto_salarios[0]
-    : r.puesto_salarios;
+function embedToNivel(sal: SalarioEmbed): NivelSalarial {
   return {
-    id: r.id, // identificador del PUESTO (clave estable; el upsert es por puesto_id)
+    nivel: sal.nivel ?? 1,
+    vacaciones: sal.vacaciones ?? "",
+    nominaNeta: Number(sal.nomina_neta) || 0,
+    efectivoExtra: Number(sal.efectivo_extra) || 0,
+    salarioNeto: Number(sal.salario_neto) || 0,
+    jornadaContrato: sal.jornada_contrato ?? "",
+    horasSemanales: Number(sal.horas_semanales) || 0,
+    diasLibres: sal.dias_libres ?? 0,
+    horarioSemanal: sal.horario_semanal ?? [],
+    observaciones: sal.observaciones ?? "",
+    objetivos: sal.objetivos ?? [],
+    estado: sal.estado ?? "borrador",
+  };
+}
+
+function rowToPuesto(r: PuestoRow): PuestoSalarial {
+  const niveles = (Array.isArray(r.puesto_salarios)
+    ? r.puesto_salarios
+    : r.puesto_salarios ? [r.puesto_salarios] : []
+  ).slice().sort((a, b) => (a.nivel ?? 1) - (b.nivel ?? 1));
+  // Cabecera = nivel más bajo (normalmente 1).
+  const cab = niveles[0];
+  return {
+    id: r.id, // identificador del PUESTO (clave estable; el upsert es por puesto_id+nivel)
     departamento: r.departamentos?.nombre ?? "",
     departamentoId: r.departamentos?.id ?? "",
     puesto: r.nombre ?? "",
-    vacaciones: sal?.vacaciones ?? "",
-    nominaNeta: Number(sal?.nomina_neta) || 0,
-    efectivoExtra: Number(sal?.efectivo_extra) || 0,
-    salarioNeto: Number(sal?.salario_neto) || 0,
-    jornadaContrato: sal?.jornada_contrato ?? "",
-    horasSemanales: Number(sal?.horas_semanales) || 0,
-    diasLibres: sal?.dias_libres ?? 0,
-    horarioSemanal: sal?.horario_semanal ?? [],
-    observaciones: sal?.observaciones ?? "",
-    objetivos: sal?.objetivos ?? [],
-    estado: sal?.estado ?? "borrador",
-    updatedAt: sal?.updated_at?.slice(0, 10) ?? "",
+    nivel: cab?.nivel ?? 1,
+    nivelesCount: niveles.length || 1,
+    vacaciones: cab?.vacaciones ?? "",
+    nominaNeta: Number(cab?.nomina_neta) || 0,
+    efectivoExtra: Number(cab?.efectivo_extra) || 0,
+    salarioNeto: Number(cab?.salario_neto) || 0,
+    jornadaContrato: cab?.jornada_contrato ?? "",
+    horasSemanales: Number(cab?.horas_semanales) || 0,
+    diasLibres: cab?.dias_libres ?? 0,
+    horarioSemanal: cab?.horario_semanal ?? [],
+    observaciones: cab?.observaciones ?? "",
+    objetivos: cab?.objetivos ?? [],
+    estado: cab?.estado ?? "borrador",
+    updatedAt: cab?.updated_at?.slice(0, 10) ?? "",
+    convenioColectivo: r.convenio_colectivo ?? "",
+    tipoContratoDefecto: r.tipo_contrato_defecto ?? "",
+    grupoCategoriaProf: r.grupo_categoria_prof ?? "",
+    epigrafeCotizacion: r.epigrafe_cotizacion ?? "",
   };
 }
 
@@ -83,7 +115,7 @@ export async function listSalariosEmpresa(): Promise<{
     const { data, error } = await supabase
       .from("puestos")
       .select(
-        "id, nombre, departamentos(id, nombre), puesto_salarios(nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal, observaciones, objetivos, estado, updated_at)",
+        "id, nombre, convenio_colectivo, tipo_contrato_defecto, grupo_categoria_prof, epigrafe_cotizacion, departamentos(id, nombre), puesto_salarios(nivel, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal, observaciones, objetivos, estado, updated_at)",
       )
       .eq("empresa_id", empresaId);
     if (error) throw error;
@@ -103,6 +135,8 @@ export async function listSalariosEmpresa(): Promise<{
 export interface UpsertSalarioInput {
   id?: string;
   puestoId: string;
+  /** Nivel del puesto (1..N). Por defecto 1. */
+  nivel?: number;
   nominaNeta?: number;
   efectivoExtra?: number;
   salarioNeto?: number;
@@ -116,7 +150,7 @@ export interface UpsertSalarioInput {
   estado?: "activo" | "borrador" | "inactivo";
 }
 
-/** Crea o actualiza el salario (1:1) de un puesto. */
+/** Crea o actualiza el salario de un NIVEL del puesto (clave: puesto_id + nivel). */
 export async function upsertPuestoSalario(input: UpsertSalarioInput) {
   try {
     const { supabase, empresaId } = await getContext();
@@ -124,6 +158,7 @@ export async function upsertPuestoSalario(input: UpsertSalarioInput) {
     const payload = {
       empresa_id: empresaId,
       puesto_id: input.puestoId,
+      nivel: input.nivel ?? 1,
       nomina_neta: input.nominaNeta ?? 0,
       efectivo_extra: input.efectivoExtra ?? 0,
       salario_neto: input.salarioNeto ?? 0,
@@ -138,7 +173,7 @@ export async function upsertPuestoSalario(input: UpsertSalarioInput) {
     };
     const { data, error } = await supabase
       .from("puesto_salarios")
-      .upsert(payload, { onConflict: "puesto_id" })
+      .upsert(payload, { onConflict: "puesto_id,nivel" })
       .select("id")
       .single();
     if (error) throw error;
@@ -147,6 +182,30 @@ export async function upsertPuestoSalario(input: UpsertSalarioInput) {
   } catch (err) {
     console.error("[rrhh] upsertPuestoSalario:", err);
     return { ok: false, error: "No se pudo guardar el salario" };
+  }
+}
+
+/** Lista los niveles (condiciones) de un puesto, ordenados por nivel. */
+export async function listNivelesDePuesto(
+  puestoId: string,
+): Promise<{ ok: boolean; data: NivelSalarial[] }> {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, data: [] };
+    const { data, error } = await supabase
+      .from("puesto_salarios")
+      .select(
+        "nivel, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal, observaciones, objetivos, estado, updated_at",
+      )
+      .eq("empresa_id", empresaId)
+      .eq("puesto_id", puestoId)
+      .order("nivel");
+    if (error) throw error;
+    const niveles = ((data ?? []) as unknown as SalarioEmbed[]).map(embedToNivel);
+    return { ok: true, data: niveles };
+  } catch (err) {
+    console.error("[rrhh] listNivelesDePuesto:", err);
+    return { ok: false, data: [] };
   }
 }
 

@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { listVacantesConCandidatos, asegurarVacantesPorPuesto } from "@/features/rrhh/actions/reclutamiento-actions";
 import {
-  publicarVacante, despublicarVacante, deleteVacante, reordenarVacantes,
+  publicarVacante, despublicarVacante, reordenarVacantes,
 } from "@/features/rrhh/actions/vacantes-actions";
 import { moverCandidatoFase } from "@/features/rrhh/actions/candidatos-actions";
 import {
@@ -44,7 +44,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import {
   Search, Star, MoreHorizontal, MapPin, Clock, CalendarDays,
   FileText, Users, Send, ArrowLeft, User, Phone, Mail, Tag, Kanban, List,
-  Pencil, Trash2, Utensils, Building2, Settings, Check,
+  Pencil, Utensils, Building2, Settings, Check,
   GripVertical,
 } from "lucide-react";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
@@ -66,7 +66,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 // ─── Vacancy Card ────────────────────────────────────────────────
 interface VacanteCardProps {
@@ -74,7 +73,6 @@ interface VacanteCardProps {
   onSelectFase: (v: Vacante, f: FaseReclutamiento | null) => void;
   onPublicar?: (id: string) => void;
   onDespublicar?: (id: string) => void;
-  onEliminar?: (id: string) => void;
   onEditar?: (v: Vacante) => void;
   /** Asa de arrastre (drag & drop). Solo se pinta si se pasa. */
   dragHandle?: React.ReactNode;
@@ -82,7 +80,7 @@ interface VacanteCardProps {
 
 function VacanteCard({
   vacante, onSelectFase,
-  onPublicar, onDespublicar, onEliminar, onEditar, dragHandle,
+  onPublicar, onDespublicar, onEditar, dragHandle,
 }: VacanteCardProps) {
   const counts = contarCandidatosPorFase(vacante.candidatos);
   const visiblePublicamente = !!vacante.visiblePublicamente;
@@ -145,11 +143,8 @@ function VacanteCard({
               <DropdownMenuItem onClick={() => onSelectFase(vacante, null)}>
                 <Users className="h-4 w-4 mr-2" /> Ver candidatos
               </DropdownMenuItem>
-              {onEliminar && (
-                <DropdownMenuItem onClick={() => onEliminar(vacante.id)} className="text-destructive">
-                  <Trash2 className="h-4 w-4 mr-2" /> Eliminar
-                </DropdownMenuItem>
-              )}
+              {/* Las vacantes NO se borran aquí: son espejo del puesto activo
+                  (se regenerarían). Se gestionan desde Salarios → Puestos. */}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -469,7 +464,6 @@ export function ReclutamientoView() {
   useGlobalLoadingSync(loading);
   const [reloadKey, setReloadKey] = useState(0);
   const recargar = useCallback(() => setReloadKey((k) => k + 1), []);
-  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
   useEffect(() => {
     let cancelled = false;
@@ -495,24 +489,6 @@ export function ReclutamientoView() {
       recargar();
     } else toast.error("No se pudo publicar");
   }, [recargar]);
-
-  const handleEliminar = useCallback(async (id: string) => {
-    const v = vacantes.find((x) => x.id === id);
-    const titulo = v?.puesto ?? "esta vacante";
-    const ok = await confirmDelete({
-      title: "¿Eliminar vacante?",
-      description: `Se eliminará definitivamente la vacante "${titulo}". Esta acción no se puede deshacer.`,
-      confirmLabel: "Eliminar",
-    });
-    if (!ok) return;
-    const res = await deleteVacante(id);
-    if (res.ok) {
-      toast.success("Vacante eliminada");
-      recargar();
-    } else {
-      toast.error(("error" in res && res.error) || "No se pudo eliminar");
-    }
-  }, [recargar, vacantes, confirmDelete]);
 
   const handleDespublicar = useCallback(async (id: string) => {
     const res = await despublicarVacante(id);
@@ -793,7 +769,6 @@ export function ReclutamientoView() {
                           onSelectFase={handleSelectFase}
                           onPublicar={handlePublicar}
                           onDespublicar={handleDespublicar}
-                          onEliminar={handleEliminar}
                           onEditar={(vc) => { setOfertaEditando(vc); setNuevaOfertaOpen(true); }}
                         />
                       ))}
@@ -808,7 +783,6 @@ export function ReclutamientoView() {
                     onSelectFase={handleSelectFase}
                     onPublicar={handlePublicar}
                     onDespublicar={handleDespublicar}
-                    onEliminar={handleEliminar}
                     onEditar={(vc) => { setOfertaEditando(vc); setNuevaOfertaOpen(true); }}
                   />
                 ))
@@ -827,8 +801,6 @@ export function ReclutamientoView() {
         vacanteId={ofertaEditando?.id ?? null}
         onSaved={recargar}
       />
-
-      {confirmDeleteDialog}
     </div>
   );
 }

@@ -80,11 +80,26 @@ export async function getVacanteById(id: string) {
   }
 }
 
+/**
+ * Resuelve el NOMBRE actual de un puesto para guardarlo como snapshot informativo
+ * en la vacante (desacople: la vacante no depende en vivo del puesto).
+ */
+async function resolverPuestoSnapshot(
+  supabase: Awaited<ReturnType<typeof getContext>>["supabase"],
+  puestoId?: string | null,
+): Promise<string | null> {
+  if (!puestoId) return null;
+  const { data } = await supabase.from("puestos").select("nombre").eq("id", puestoId).maybeSingle();
+  return (data?.nombre as string | undefined) ?? null;
+}
+
 export async function createVacante(input: VacanteInput) {
   try {
     const { supabase, user, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
     if (!input.titulo?.trim()) return { ok: false, error: "El título es obligatorio" };
+
+    const puestoSnapshot = await resolverPuestoSnapshot(supabase, input.puesto_id);
 
     const { data, error } = await supabase
       .from("vacantes")
@@ -93,6 +108,7 @@ export async function createVacante(input: VacanteInput) {
         titulo: input.titulo.trim(),
         descripcion: input.descripcion ?? null,
         puesto_id: input.puesto_id ?? null,
+        puesto_snapshot: puestoSnapshot,
         departamento_id: input.departamento_id ?? null,
         categoria: input.categoria ?? null,
         ubicacion: input.ubicacion ?? null,
@@ -126,9 +142,15 @@ export async function updateVacante(id: string, input: Partial<VacanteInput>) {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
 
+    // Si cambia el puesto, refrescamos el snapshot informativo del nombre.
+    const patch: Record<string, unknown> = { ...input, updated_at: new Date().toISOString() };
+    if ("puesto_id" in input) {
+      patch.puesto_snapshot = await resolverPuestoSnapshot(supabase, input.puesto_id);
+    }
+
     const { error } = await supabase
       .from("vacantes")
-      .update({ ...input, updated_at: new Date().toISOString() })
+      .update(patch)
       .eq("id", id)
       .eq("empresa_id", empresaId);
 
@@ -146,6 +168,22 @@ export async function deleteVacante(id: string) {
   try {
     const { supabase, user } = await getContext();
     if (!user) return { ok: false, error: "No autenticado" };
+
+    // Protección: una vacante con candidatos NO se puede borrar (se perdería el
+    // histórico del pipeline). Hay que mover o eliminar antes esos candidatos.
+    const { count: candidatos, error: countError } = await supabase
+      .from("candidatos")
+      .select("id", { count: "exact", head: true })
+      .eq("vacante_id", id);
+    if (countError) throw countError;
+    if ((candidatos ?? 0) > 0) {
+      return {
+        ok: false,
+        error:
+          `No se puede borrar: la vacante tiene ${candidatos} candidato(s) en el pipeline. ` +
+          "Muévelos o elimínalos antes de borrar la vacante.",
+      };
+    }
 
     // El id es PK única; RLS se encarga de la autorización. No filtramos por
     // empresa_id porque el contexto seleccionado en cliente puede no coincidir
@@ -236,7 +274,7 @@ export async function listDepartamentosCatalogo() {
     if (!empresaId) return { ok: false, data: [] };
     const { data, error } = await supabase
       .from("departamentos")
-      .select("id,nombre")
+      .select("id,nombre,area")
       .eq("empresa_id", empresaId)
       .order("nombre");
     if (error) throw error;
@@ -288,6 +326,11 @@ export async function updatePuesto(input: {
   nombre?: string;
   descripcion?: string | null;
   departamento_id?: string;
+  // Datos de gestoría (compartidos por el puesto)
+  convenio_colectivo?: string | null;
+  tipo_contrato_defecto?: string | null;
+  grupo_categoria_prof?: string | null;
+  epigrafe_cotizacion?: string | null;
 }) {
   try {
     const { supabase, empresaId } = await getContext();
@@ -304,6 +347,10 @@ export async function updatePuesto(input: {
       if (!input.departamento_id) return { ok: false, error: "El departamento es obligatorio" };
       patch.departamento_id = input.departamento_id;
     }
+    if (input.convenio_colectivo !== undefined) patch.convenio_colectivo = input.convenio_colectivo || null;
+    if (input.tipo_contrato_defecto !== undefined) patch.tipo_contrato_defecto = input.tipo_contrato_defecto || null;
+    if (input.grupo_categoria_prof !== undefined) patch.grupo_categoria_prof = input.grupo_categoria_prof || null;
+    if (input.epigrafe_cotizacion !== undefined) patch.epigrafe_cotizacion = input.epigrafe_cotizacion || null;
     if (Object.keys(patch).length === 0) return { ok: true };
 
     const { data, error } = await supabase
@@ -321,6 +368,81 @@ export async function updatePuesto(input: {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[rrhh] updatePuesto:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Borra un puesto (plantilla) y su vacante espejo.
+ *
+ * IMPORTANTE: el puesto es una PLANTILLA. Sus condiciones se copian dentro del
+ * empleado al contratarlo y viven ahí de forma independiente, así que borrar el
+ * puesto NO debe tocar a los empleados ni bloquearse por ellos.
+ *
+ * Solo BLOQUEA si la vacante del puesto tiene candidatos en el pipeline (se
+ * perdería el histórico de reclutamiento). Sin candidatos: borra la vacante
+ * espejo (evita huérfanas por SET NULL) y el puesto (cascada cronograma/salarios).
+ */
+export async function deletePuesto(id: string) {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+    if (!id) return { ok: false, error: "Falta el puesto" };
+
+    const { data: puesto } = await supabase
+      .from("puestos")
+      .select("nombre")
+      .eq("id", id)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (!puesto) return { ok: false, error: "No se encontró el puesto o sin permisos" };
+    const nombre = (puesto.nombre as string) ?? "";
+
+    // ¿La vacante del puesto tiene candidatos?
+    const { data: vacs } = await supabase
+      .from("vacantes")
+      .select("id")
+      .eq("puesto_id", id)
+      .eq("empresa_id", empresaId);
+    const vacIds = (vacs ?? []).map((v) => v.id as string);
+    if (vacIds.length > 0) {
+      const { count: candidatos, error: countError } = await supabase
+        .from("candidatos")
+        .select("id", { count: "exact", head: true })
+        .in("vacante_id", vacIds);
+      if (countError) throw countError;
+      if ((candidatos ?? 0) > 0) {
+        return {
+          ok: false,
+          error:
+            `No se puede borrar: la vacante de "${nombre}" tiene ${candidatos} candidato(s) en el pipeline. ` +
+            "Muévelos o elimínalos antes de borrar el puesto.",
+        };
+      }
+      // Sin candidatos → borrar la vacante espejo para que no quede huérfana.
+      const { error: delVacErr } = await supabase.from("vacantes").delete().in("id", vacIds);
+      if (delVacErr) throw delVacErr;
+    }
+
+    // 3) Borrar el puesto (cascada: cronograma, puesto_salarios, etc.)
+    const { data, error } = await supabase
+      .from("puestos")
+      .delete()
+      .eq("id", id)
+      .eq("empresa_id", empresaId)
+      .select("id");
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      return { ok: false, error: "No se encontró el puesto o sin permisos" };
+    }
+
+    revalidatePath("/rrhh/salarios");
+    revalidatePath("/rrhh/reclutamiento");
+    revalidatePath("/direccion/cronogramas");
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[rrhh] deletePuesto:", msg);
     return { ok: false, error: msg };
   }
 }

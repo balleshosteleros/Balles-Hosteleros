@@ -116,22 +116,28 @@ export async function getMisPuestosNombres(): Promise<{ ok: boolean; data: strin
   try {
     const { supabase, userId, empresaId } = await ctx();
     if (!userId || !empresaId) return { ok: true, data: [] };
-    const { data: emps } = await supabase.from("empleados").select("id").eq("user_id", userId);
+    // Solo la empresa activa: así el nombre puede caer al snapshot copiado
+    // (puesto_nombre) si el puesto plantilla fue borrado, sin perder el scope.
+    const { data: emps } = await supabase
+      .from("empleados")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("empresa_id", empresaId);
     const ids = (emps ?? []).map((e) => e.id as string);
     if (ids.length === 0) return { ok: true, data: [] };
     const { data, error } = await supabase
       .from("empleado_puestos")
-      .select("es_principal, puesto:puestos(nombre, empresa_id)")
+      .select("es_principal, puesto_nombre, puesto:puestos(nombre)")
       .in("empleado_id", ids)
       .order("es_principal", { ascending: false });
     if (error) throw error;
     const nombres: string[] = [];
     for (const r of data ?? []) {
       const p = (r as { puesto?: unknown }).puesto;
-      const obj = (Array.isArray(p) ? p[0] : p) as { nombre?: string; empresa_id?: string } | null;
-      if (obj?.nombre && obj.empresa_id === empresaId && !nombres.includes(obj.nombre)) {
-        nombres.push(obj.nombre);
-      }
+      const obj = (Array.isArray(p) ? p[0] : p) as { nombre?: string } | null;
+      // Puesto vivo si existe; si fue borrado, el nombre copiado en el empleado.
+      const nombre = obj?.nombre ?? (r as { puesto_nombre?: string | null }).puesto_nombre ?? null;
+      if (nombre && !nombres.includes(nombre)) nombres.push(nombre);
     }
     return { ok: true, data: nombres };
   } catch (err) {

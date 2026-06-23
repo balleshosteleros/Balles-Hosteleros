@@ -28,22 +28,24 @@ export async function getPuestosDeEmpleado(empleadoId: string): Promise<PuestoDe
     const { supabase } = await getContext();
     const { data, error } = await supabase
       .from("empleado_puestos")
-      .select("es_principal, puestos(id, nombre, departamento_id, departamentos(nombre))")
+      .select("es_principal, puesto_nombre, puestos(id, nombre, departamento_id, departamentos(nombre))")
       .eq("empleado_id", empleadoId);
     if (error) throw error;
     type Row = {
       es_principal: boolean;
+      puesto_nombre: string | null;
       puestos: { id: string; nombre: string; departamento_id: string | null; departamentos: { nombre: string } | null } | null;
     };
     return ((data ?? []) as unknown as Row[])
-      .filter((r) => r.puestos)
+      // El puesto vivo si existe; si la plantilla fue borrada, el nombre copiado.
       .map((r) => ({
-        puestoId: r.puestos!.id,
-        nombre: r.puestos!.nombre,
-        departamentoId: r.puestos!.departamento_id,
-        departamentoNombre: r.puestos!.departamentos?.nombre ?? null,
+        puestoId: r.puestos?.id ?? "",
+        nombre: r.puestos?.nombre ?? r.puesto_nombre ?? "",
+        departamentoId: r.puestos?.departamento_id ?? null,
+        departamentoNombre: r.puestos?.departamentos?.nombre ?? null,
         esPrincipal: r.es_principal,
       }))
+      .filter((p) => p.nombre)
       .sort((a, b) => Number(b.esPrincipal) - Number(a.esPrincipal) || a.nombre.localeCompare(b.nombre));
   } catch (err) {
     console.error("[rrhh] getPuestosDeEmpleado:", err);
@@ -91,11 +93,21 @@ export async function setPuestosDeEmpleado(
       }
     }
 
-    // 2) Altas: vínculo + asignación de plantilla vigente
+    // 2) Altas: vínculo (con NOMBRE copiado) + asignación de plantilla vigente
+    let nombrePorId = new Map<string, string>();
+    if (aAnadir.length) {
+      const { data: pNoms } = await supabase.from("puestos").select("id, nombre").in("id", aAnadir);
+      nombrePorId = new Map(((pNoms ?? []) as { id: string; nombre: string }[]).map((p) => [p.id, p.nombre]));
+    }
     for (const puestoId of aAnadir) {
       const { error: insErr } = await supabase
         .from("empleado_puestos")
-        .insert({ empleado_id: empleadoId, puesto_id: puestoId, vigente_desde: vigenteDesde });
+        .insert({
+          empleado_id: empleadoId,
+          puesto_id: puestoId,
+          puesto_nombre: nombrePorId.get(puestoId) ?? null,
+          vigente_desde: vigenteDesde,
+        });
       if (insErr) throw insErr;
       await asignarPlantillaPuestoAEmpleado(empleadoId, puestoId, vigenteDesde);
     }
