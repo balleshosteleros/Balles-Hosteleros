@@ -278,6 +278,54 @@ export async function createPuesto(input: { nombre: string; departamento_id?: st
 }
 
 /**
+ * Edita un puesto existente (nombre, descripción y/o departamento). El cambio de
+ * nombre o departamento se propaga automáticamente a cronograma y empleados con
+ * ese puesto principal vía trigger BD (`tg_sync_puesto_cambios`). Las vacantes
+ * NO se ven afectadas (están desacopladas).
+ */
+export async function updatePuesto(input: {
+  id: string;
+  nombre?: string;
+  descripcion?: string | null;
+  departamento_id?: string;
+}) {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+    if (!input.id) return { ok: false, error: "Falta el puesto" };
+
+    const patch: Record<string, unknown> = {};
+    if (input.nombre !== undefined) {
+      if (!input.nombre.trim()) return { ok: false, error: "El nombre es obligatorio" };
+      patch.nombre = input.nombre.trim();
+    }
+    if (input.descripcion !== undefined) patch.descripcion = input.descripcion;
+    if (input.departamento_id !== undefined) {
+      if (!input.departamento_id) return { ok: false, error: "El departamento es obligatorio" };
+      patch.departamento_id = input.departamento_id;
+    }
+    if (Object.keys(patch).length === 0) return { ok: true };
+
+    const { data, error } = await supabase
+      .from("puestos")
+      .update(patch)
+      .eq("id", input.id)
+      .eq("empresa_id", empresaId)
+      .select()
+      .single();
+    if (error) throw error;
+
+    revalidatePath("/rrhh/salarios");
+    revalidatePath("/direccion/cronogramas");
+    return { ok: true, data };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[rrhh] updatePuesto:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
  * Crea (si no existe) el cronograma operativo pendiente del puesto. Idempotente:
  * SOLO puede haber UN cronograma por puesto. Devuelve `yaExistia` si ya lo tenía.
  */

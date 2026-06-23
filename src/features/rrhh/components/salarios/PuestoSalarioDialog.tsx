@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { createPuesto, listDepartamentosCatalogo } from "@/features/rrhh/actions/vacantes-actions";
+import { createPuesto, updatePuesto, listDepartamentosCatalogo } from "@/features/rrhh/actions/vacantes-actions";
 import { upsertPuestoSalario } from "@/features/rrhh/actions/salarios-actions";
 import type { PuestoSalarial } from "@/features/rrhh/data/salarios";
 
@@ -54,7 +54,7 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
     });
     // Prefill
     setNombre(editing?.puesto ?? "");
-    setDepartamentoId("");
+    setDepartamentoId(editing?.departamentoId ?? "");
     setNominaNeta(editing?.nominaNeta ?? 0);
     setEfectivoExtra(editing?.efectivoExtra ?? 0);
     setJornadaContrato(editing?.jornadaContrato ?? "");
@@ -66,10 +66,8 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
   }, [open, editing]);
 
   const handleSave = async () => {
-    if (esNuevo) {
-      if (!nombre.trim()) { toast.error("El nombre del puesto es obligatorio"); return; }
-      if (!departamentoId) { toast.error("Selecciona el departamento"); return; }
-    }
+    if (!nombre.trim()) { toast.error("El nombre del puesto es obligatorio"); return; }
+    if (!departamentoId) { toast.error("Selecciona el departamento"); return; }
     setSaving(true);
     try {
       let puestoId = editing?.id ?? "";
@@ -77,6 +75,9 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
         const res = await createPuesto({ nombre: nombre.trim(), departamento_id: departamentoId });
         if (!res.ok || !res.data) { toast.error(res.error ?? "No se pudo crear el puesto"); return; }
         puestoId = (res.data as { id: string }).id;
+      } else {
+        const upd = await updatePuesto({ id: puestoId, nombre: nombre.trim(), departamento_id: departamentoId });
+        if (!upd.ok) { toast.error(upd.error ?? "No se pudo actualizar el puesto"); return; }
       }
       const sal = await upsertPuestoSalario({
         id: undefined,
@@ -94,7 +95,7 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
         objetivos: editing?.objetivos ?? [],
       });
       if (!sal.ok) { toast.error(sal.error ?? "No se pudo guardar el salario"); return; }
-      toast.success(esNuevo ? "Puesto creado" : "Salario actualizado");
+      toast.success(esNuevo ? "Puesto creado" : "Puesto actualizado");
       onSaved();
       onOpenChange(false);
     } finally {
@@ -117,32 +118,26 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          {esNuevo ? (
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="ps-nombre">Puesto</Label>
-                <Input id="ps-nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej. Jefe de cocina" />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="ps-depto">Departamento</Label>
-                <select
-                  id="ps-depto"
-                  value={departamentoId}
-                  onChange={(e) => setDepartamentoId(e.target.value)}
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                >
-                  <option value="">Selecciona…</option>
-                  {departamentos.map((d) => (
-                    <option key={d.id} value={d.id}>{d.nombre}</option>
-                  ))}
-                </select>
-              </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="ps-nombre">Puesto</Label>
+              <Input id="ps-nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej. Jefe de cocina" />
             </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Departamento: <span className="font-medium text-foreground">{editing?.departamento || "—"}</span>
-            </p>
-          )}
+            <div className="space-y-1.5">
+              <Label htmlFor="ps-depto">Departamento</Label>
+              <select
+                id="ps-depto"
+                value={departamentoId}
+                onChange={(e) => setDepartamentoId(e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+              >
+                <option value="">Selecciona…</option>
+                {departamentos.map((d) => (
+                  <option key={d.id} value={d.id}>{d.nombre}</option>
+                ))}
+              </select>
+            </div>
+          </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
