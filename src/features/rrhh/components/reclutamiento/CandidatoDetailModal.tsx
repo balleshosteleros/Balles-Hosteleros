@@ -28,6 +28,8 @@ import {
   Tag,
   Clock,
   Send,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 
 function WhatsAppIcon({ className }: { className?: string }) {
@@ -79,6 +81,7 @@ import {
   listResenasCandidato,
   addResenaCandidato,
 } from "@/features/rrhh/actions/candidato-ficha-actions";
+import { llamarDesdeApp } from "@/features/google-workspace/components/TelefonoDrawer";
 import { toast } from "sonner";
 
 interface CandidatoDetailModalProps {
@@ -230,6 +233,8 @@ export function CandidatoDetailModal({
                 candidato={candidato}
                 cfgFase={cfgFase}
                 onUpdate={onUpdateCandidato}
+                respuestaCuest={respuestaCuest}
+                resenas={resenas}
               />
             </ScrollArea>
 
@@ -362,11 +367,22 @@ function CandidatoSidebar({
   candidato,
   cfgFase,
   onUpdate,
+  respuestaCuest,
+  resenas,
 }: {
   candidato: Candidato;
   cfgFase: (typeof FASES_PRINCIPALES)[keyof typeof FASES_PRINCIPALES];
   onUpdate: (c: Candidato) => void;
+  respuestaCuest: RespuestaCuestionarioCandidato | null;
+  resenas: ResenaCandidato[];
 }) {
+  // Cuestionario: tick verde solo si TODAS las respuestas son correctas; en
+  // cuanto falla una, X roja. null = aún sin responder.
+  const cuestionarioOk = respuestaCuest
+    ? respuestaCuest.aciertos === respuestaCuest.totalPreguntas
+    : null;
+  // Reviews: nota final = media de todas las estrellas de todas las reseñas.
+  const reviewMedia = promedioEstrellas(resenas.flatMap((r) => r.puntuaciones));
   const copyEmail = () => {
     if (typeof navigator !== "undefined" && navigator.clipboard) {
       navigator.clipboard.writeText(candidato.email).catch(() => {});
@@ -374,7 +390,6 @@ function CandidatoSidebar({
     }
   };
 
-  const telLink = `tel:${candidato.telefono.replace(/\s/g, "")}`;
   const whatsappLink = getWhatsAppLink(candidato.telefono);
 
   return (
@@ -398,18 +413,83 @@ function CandidatoSidebar({
         </div>
       </div>
 
+      {/* Resumen: resultado del cuestionario y nota final de reviews. */}
+      <div className="rounded-lg border border-border divide-y divide-border">
+        <div className="flex items-center justify-between px-3 py-2">
+          <span className="text-sm font-semibold text-foreground">Cuestionario</span>
+          {cuestionarioOk === null ? (
+            <span className="text-xs text-muted-foreground">Sin responder</span>
+          ) : cuestionarioOk ? (
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600">
+              <CheckCircle2 className="h-5 w-5" /> Correcto
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-rose-600">
+              <XCircle className="h-5 w-5" /> Suspenso
+            </span>
+          )}
+        </div>
+        <div className="flex items-center justify-between px-3 py-2">
+          <span className="text-sm font-semibold text-foreground">Reviews</span>
+          {reviewMedia === null ? (
+            <span className="text-xs text-muted-foreground">Sin valorar</span>
+          ) : (
+            <span className="flex items-center gap-2">
+              <StarRatingFraccion value={reviewMedia} />
+              <span className="text-sm font-bold text-amber-600 tabular-nums">
+                {reviewMedia.toFixed(1)}
+                <span className="text-xs font-medium text-muted-foreground"> / 5</span>
+              </span>
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Acciones de contacto: llamar (desde el software), email y WhatsApp. */}
+      <div className="grid grid-cols-3 gap-2">
+        <button
+          type="button"
+          onClick={() => candidato.telefono && llamarDesdeApp(candidato.telefono)}
+          disabled={!candidato.telefono}
+          title="Llamar desde el software"
+          className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border py-2.5 text-xs font-medium text-foreground hover:bg-sky-50 hover:border-sky-200 hover:text-sky-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <Phone className="h-4 w-4" />
+          Llamar
+        </button>
+        <a
+          href={`mailto:${candidato.email}`}
+          title="Enviar email"
+          className={`flex flex-col items-center justify-center gap-1 rounded-lg border border-border py-2.5 text-xs font-medium text-foreground hover:bg-muted/60 hover:border-primary/30 hover:text-primary transition-colors ${candidato.email ? "" : "pointer-events-none opacity-40"}`}
+        >
+          <Mail className="h-4 w-4" />
+          Email
+        </a>
+        <a
+          href={whatsappLink}
+          target="_blank"
+          rel="noreferrer"
+          title="Abrir la conversación de WhatsApp con el candidato"
+          className={`flex flex-col items-center justify-center gap-1 rounded-lg border border-border py-2.5 text-xs font-medium text-foreground hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700 transition-colors ${candidato.telefono ? "" : "pointer-events-none opacity-40"}`}
+        >
+          <WhatsAppIcon className="h-4 w-4 text-[#25D366]" />
+          WhatsApp
+        </a>
+      </div>
+
       {/* Phone */}
       <div className="space-y-2">
         <div className="flex items-center gap-2 text-sm">
           <span className="text-muted-foreground">+34</span>
           <span className="text-foreground font-medium">{candidato.telefono}</span>
-          <a
-            href={telLink}
+          <button
+            type="button"
+            onClick={() => candidato.telefono && llamarDesdeApp(candidato.telefono)}
             className="ml-auto inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-muted/60 text-muted-foreground"
-            title="Llamar"
+            title="Llamar desde el software"
           >
             <Phone className="h-3.5 w-3.5" />
-          </a>
+          </button>
           <a
             href={whatsappLink}
             target="_blank"
@@ -810,11 +890,16 @@ function ResenasTab({
   };
 
   const guardar = async () => {
-    const puntuaciones = draft.filter((p) => p.estrellas > 0);
-    if (puntuaciones.length === 0 && !comentario.trim()) {
-      toast.error("Puntúa al menos un criterio o escribe un comentario");
+    // Para guardar hay que valorar TODOS los criterios: no se permite dejar
+    // unos puntuados y otros sin puntuar.
+    const sinPuntuar = criterios.filter(
+      (c) => (draft.find((p) => p.criterioId === c.id)?.estrellas ?? 0) === 0,
+    );
+    if (sinPuntuar.length > 0) {
+      toast.error("Completa la valoración de todos los criterios para poder guardar la reseña");
       return;
     }
+    const puntuaciones = draft.filter((p) => p.estrellas > 0);
     setGuardando(true);
     const res = await addResenaCandidato(candidatoId, {
       puntuaciones,
@@ -844,6 +929,8 @@ function ResenasTab({
     );
   }
 
+  const mediaDraft = promedioEstrellas(draft);
+
   return (
     <div className="space-y-5">
       <Section title="Puntúa al candidato">
@@ -857,6 +944,22 @@ function ResenasTab({
               </div>
             );
           })}
+        </div>
+
+        {/* Valoración final = media de los criterios puntuados (en vivo). */}
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5">
+          <span className="text-sm font-semibold text-foreground">Valoración final</span>
+          {mediaDraft === null ? (
+            <span className="text-xs text-muted-foreground">Puntúa los criterios</span>
+          ) : (
+            <div className="flex items-center gap-2">
+              <StarRatingFraccion value={mediaDraft} />
+              <span className="text-sm font-bold text-amber-600 tabular-nums">
+                {mediaDraft.toFixed(1)}
+                <span className="text-xs font-medium text-muted-foreground"> / 5</span>
+              </span>
+            </div>
+          )}
         </div>
       </Section>
 
@@ -878,12 +981,23 @@ function ResenasTab({
       {resenas.length > 0 && (
         <Section title={`Reseñas previas (${resenas.length})`}>
           <div className="space-y-3">
-            {[...resenas].reverse().map((r) => (
+            {[...resenas].reverse().map((r) => {
+              const media = promedioEstrellas(r.puntuaciones);
+              return (
               <div key={r.id} className="rounded-lg border border-border p-3 text-xs">
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-medium text-foreground">{r.autor}</span>
                   <span className="text-muted-foreground">{r.fecha}</span>
                 </div>
+                {media !== null && (
+                  <div className="mb-2 flex items-center gap-2 rounded-md bg-amber-50 px-2 py-1.5">
+                    <StarRatingFraccion value={media} />
+                    <span className="text-sm font-bold text-amber-600 tabular-nums">
+                      {media.toFixed(1)}
+                      <span className="text-[11px] font-medium text-muted-foreground"> / 5</span>
+                    </span>
+                  </div>
+                )}
                 <div className="space-y-1">
                   {r.puntuaciones.map((p) => {
                     const nombre =
@@ -905,10 +1019,37 @@ function ResenasTab({
                   </p>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </Section>
       )}
+    </div>
+  );
+}
+
+/** Media (1 decimal) de los criterios puntuados; null si no hay ninguno. */
+function promedioEstrellas(puntuaciones: { estrellas: number }[]): number | null {
+  const vals = puntuaciones.map((p) => p.estrellas).filter((n) => n > 0);
+  if (vals.length === 0) return null;
+  return vals.reduce((a, b) => a + b, 0) / vals.length;
+}
+
+/** Fila de 5 estrellas con relleno fraccionado (admite decimales: 4.2 → 4 llenas + 20%). */
+function StarRatingFraccion({ value }: { value: number }) {
+  return (
+    <div className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map((n) => {
+        const fill = Math.max(0, Math.min(1, value - (n - 1)));
+        return (
+          <div key={n} className="relative h-4 w-4">
+            <Star className="absolute inset-0 h-4 w-4 text-amber-400/30" />
+            <div className="absolute inset-0 overflow-hidden" style={{ width: `${fill * 100}%` }}>
+              <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
