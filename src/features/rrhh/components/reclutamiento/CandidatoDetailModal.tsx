@@ -30,6 +30,7 @@ import {
   Send,
   CheckCircle2,
   XCircle,
+  Trash2,
 } from "lucide-react";
 
 function WhatsAppIcon({ className }: { className?: string }) {
@@ -93,6 +94,7 @@ interface CandidatoDetailModalProps {
   onSelectCandidato: (c: Candidato | null) => void;
   onUpdateCandidato: (updated: Candidato) => void;
   onMoverEstado: (c: Candidato, estado: EstadoReclutamiento) => void;
+  onEliminar?: (c: Candidato) => void;
 }
 
 type TabKey = "informacion" | "cuestionarios" | "actividad" | "resenas" | "notas";
@@ -106,6 +108,7 @@ export function CandidatoDetailModal({
   onSelectCandidato,
   onUpdateCandidato,
   onMoverEstado,
+  onEliminar,
 }: CandidatoDetailModalProps) {
   const [tab, setTab] = useState<TabKey>("informacion");
   const [respuestaCuest, setRespuestaCuest] = useState<RespuestaCuestionarioCandidato | null>(null);
@@ -150,8 +153,6 @@ export function CandidatoDetailModal({
 
   if (!candidato) return null;
 
-  const fasePrincipal = getFasePrincipal(candidato.fase);
-  const cfgFase = FASES_PRINCIPALES[fasePrincipal];
   const cfgEstado = ESTADOS_CONFIG[candidato.fase];
 
   const total = candidatos.length;
@@ -219,6 +220,15 @@ export function CandidatoDetailModal({
               >
                 Ver todos los candidatos
               </button>
+              {onEliminar && (
+                <button
+                  onClick={() => onEliminar(candidato)}
+                  className="ml-1 p-1.5 rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                  title="Borrar candidato"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
               <DialogPrimitive.Close className="ml-1 p-1.5 rounded hover:bg-muted/60">
                 <X className="h-4 w-4" />
               </DialogPrimitive.Close>
@@ -231,7 +241,6 @@ export function CandidatoDetailModal({
             <ScrollArea className="border-r border-border">
               <CandidatoSidebar
                 candidato={candidato}
-                cfgFase={cfgFase}
                 onUpdate={onUpdateCandidato}
                 respuestaCuest={respuestaCuest}
                 resenas={resenas}
@@ -365,13 +374,11 @@ export function CandidatoDetailModal({
 // ─── Sidebar (left column) ────────────────────────────────────
 function CandidatoSidebar({
   candidato,
-  cfgFase,
   onUpdate,
   respuestaCuest,
   resenas,
 }: {
   candidato: Candidato;
-  cfgFase: (typeof FASES_PRINCIPALES)[keyof typeof FASES_PRINCIPALES];
   onUpdate: (c: Candidato) => void;
   respuestaCuest: RespuestaCuestionarioCandidato | null;
   resenas: ResenaCandidato[];
@@ -394,23 +401,14 @@ function CandidatoSidebar({
 
   return (
     <div className="p-5 space-y-4">
-      {/* Avatar + name */}
-      <div className="flex items-start gap-3">
-        <div
-          className="h-12 w-12 rounded-full flex items-center justify-center font-bold text-base shrink-0"
-          style={{ backgroundColor: `${cfgFase.color}22`, color: cfgFase.color }}
-        >
-          {candidato.nombre[0]}
-          {candidato.apellidos[0]}
-        </div>
-        <div className="min-w-0">
-          <h2 className="text-base font-bold text-foreground leading-tight">
-            {candidato.nombre} {candidato.apellidos}
-          </h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {candidato.fechaInscripcion} <span className="text-muted-foreground/70">(10:00)</span>
-          </p>
-        </div>
+      {/* Nombre del candidato (sin icono delante) */}
+      <div className="min-w-0">
+        <h2 className="text-lg font-bold text-foreground leading-tight">
+          {candidato.nombre} {candidato.apellidos}
+        </h2>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Inscrito el {candidato.fechaInscripcion}
+        </p>
       </div>
 
       {/* Resumen: resultado del cuestionario y nota final de reviews. */}

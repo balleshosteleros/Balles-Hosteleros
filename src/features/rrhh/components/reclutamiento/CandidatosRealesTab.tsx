@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState, useTransition, useCallback, useMemo } from "react";
+import { useEffect, useState, useTransition, useCallback } from "react";
 import { toast } from "sonner";
 import {
-  Loader2, Mail, Phone, FileText, ArrowRight, Sparkles,
-  AlertTriangle, ExternalLink, Inbox, Copy, Check, KeyRound,
+  Loader2, FileText, ArrowRight, Sparkles,
+  AlertTriangle, Inbox, Copy, Check, KeyRound, Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,14 +17,23 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { CandidatoDetailModal } from "@/features/rrhh/components/reclutamiento/CandidatoDetailModal";
+import {
+  ESTADOS_CONFIG,
+  type Candidato, type Vacante, type EstadoReclutamiento, type OrigenCandidatura,
+} from "@/features/rrhh/data/reclutamiento";
 import {
   listCandidatosReales,
   moverCandidatoFase,
   iniciarOffboarding,
+  eliminarCandidato,
 } from "@/features/rrhh/actions/candidatos-actions";
 import { promoverCandidato } from "@/features/rrhh/actions/promocion-actions";
 import {
@@ -32,6 +41,7 @@ import {
 } from "@/features/rrhh/actions/vacantes-actions";
 import { listLocales } from "@/features/ajustes/actions/locales-actions";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 type Fase = "nuevo" | "en_progreso" | "oferta" | "seleccionado" | "descartado";
 type Estado =
@@ -45,6 +55,8 @@ interface CandidatoReal {
   email: string;
   telefono: string | null;
   cv_url: string | null;
+  origen: string | null;
+  puntuacion: number | null;
   fase: Fase;
   estado: Estado;
   promovido_at: string | null;
@@ -54,24 +66,6 @@ interface CandidatoReal {
   created_at: string;
 }
 
-const FASES_ORDER: Fase[] = ["nuevo", "en_progreso", "oferta", "seleccionado", "descartado"];
-
-const FASE_LABEL: Record<Fase, string> = {
-  nuevo: "Nuevo",
-  en_progreso: "En progreso",
-  oferta: "Oferta",
-  seleccionado: "Seleccionado",
-  descartado: "Descartado",
-};
-
-const FASE_COLOR: Record<Fase, string> = {
-  nuevo: "from-blue-500/15 to-blue-500/5 border-blue-500/30",
-  en_progreso: "from-sky-500/15 to-sky-500/5 border-sky-500/30",
-  oferta: "from-emerald-500/15 to-emerald-500/5 border-emerald-500/30",
-  seleccionado: "from-emerald-700/20 to-emerald-700/10 border-emerald-700/40",
-  descartado: "from-rose-500/15 to-rose-500/5 border-rose-500/30",
-};
-
 const ESTADOS_POR_FASE: Record<Fase, Estado[]> = {
   nuevo: ["nuevo"],
   en_progreso: ["elegido", "papelera"],
@@ -80,21 +74,59 @@ const ESTADOS_POR_FASE: Record<Fase, Estado[]> = {
   descartado: ["no_se_presenta", "suspenso_formacion"],
 };
 
-const ESTADO_LABEL: Record<Estado, string> = {
-  nuevo: "Nuevo",
-  elegido: "Elegido",
-  papelera: "Papelera",
-  entrevista: "Entrevista",
-  teorica: "Teórica",
-  practica: "Práctica",
-  prueba: "Prueba",
-  empleado: "Empleado",
-  no_se_presenta: "No presentado",
-  suspenso_formacion: "Suspendió",
-};
-
 interface PuestoRef { id: string; nombre: string; departamento_id?: string | null }
 interface DepartamentoRef { id: string; nombre: string }
+
+function fmtFecha(iso: string): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("es-ES", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+  });
+}
+
+const ORIGENES_VALIDOS = new Set<OrigenCandidatura>([
+  "web", "formulario", "redes_sociales", "recomendacion", "base_datos", "portal_empleo", "otros",
+]);
+
+/** Mapea la fila real de BD a la forma `Candidato` que consume la ficha modal. */
+function toCandidato(c: CandidatoReal): Candidato {
+  const origen = (c.origen && ORIGENES_VALIDOS.has(c.origen as OrigenCandidatura)
+    ? c.origen
+    : "otros") as OrigenCandidatura;
+  return {
+    id: c.id,
+    nombre: c.nombre,
+    apellidos: c.apellidos ?? "",
+    telefono: c.telefono ?? "",
+    email: c.email,
+    cvAdjunto: c.cv_url ?? undefined,
+    fechaInscripcion: c.created_at?.slice(0, 10) ?? "",
+    origen,
+    notasInternas: "",
+    fase: c.estado as EstadoReclutamiento,
+    vacanteId: c.vacante_id ?? "",
+    reclutadorAsignado: "",
+    historial: [],
+  };
+}
+
+/** Vacante mínima para la cabecera/cuestionario de la ficha. */
+function vacanteParaModal(c: CandidatoReal | null): Vacante {
+  return {
+    id: c?.vacante_id ?? "",
+    puesto: c?.vacantes?.titulo ?? "Candidatura",
+    categoria: "",
+    ubicacion: "",
+    tipoJornada: "completa",
+    estadoPublicacion: "publicada",
+    fechaCreacion: "",
+    cuestionario: true,
+    reclutadores: [],
+    favorita: false,
+    candidatos: [],
+    empresaId: "",
+  };
+}
 
 export function CandidatosRealesTab() {
   const [items, setItems] = useState<CandidatoReal[]>([]);
@@ -103,6 +135,7 @@ export function CandidatosRealesTab() {
   const [loading, setLoading] = useState(true);
   useGlobalLoadingSync(loading);
   const [pending, startTransition] = useTransition();
+  const { confirm, dialog: confirmDialog } = useConfirmDelete();
 
   // Dialog promoción
   const [promoverCand, setPromoverCand] = useState<CandidatoReal | null>(null);
@@ -117,6 +150,9 @@ export function CandidatosRealesTab() {
 
   // Aviso post-promoción → offboarding
   const [offboardingDe, setOffboardingDe] = useState<{ empleadoId: string; nombre: string } | null>(null);
+
+  // Ficha del candidato (modal completo: actividad, notas, reseñas, cuestionario, CV).
+  const [selected, setSelected] = useState<CandidatoReal | null>(null);
 
   // Toast informativo de "ya es empleado, movimiento solo organizativo"
   const cargar = useCallback(async () => {
@@ -154,6 +190,7 @@ export function CandidatosRealesTab() {
           toast.info("Este candidato ya es empleado. El movimiento es solo organizativo y no afecta a su contrato.");
         }
         setItems((prev) => prev.map((x) => x.id === c.id ? { ...x, fase, estado: nuevoEstado } : x));
+        setSelected((prev) => (prev && prev.id === c.id ? { ...prev, fase, estado: nuevoEstado } : prev));
       } else if ("error" in res && res.error === "OFFBOARDING_REQUIRED") {
         const empleadoId = (res as { empleadoId?: string }).empleadoId;
         if (empleadoId) {
@@ -166,6 +203,30 @@ export function CandidatosRealesTab() {
         toast.error(("error" in res && res.error) || "Error al mover el candidato");
       }
     });
+  }
+
+  function handleEliminar(c: CandidatoReal) {
+    void (async () => {
+      const nombre = `${c.nombre} ${c.apellidos ?? ""}`.trim();
+      const ok = await confirm({
+        title: "Borrar candidato",
+        description: c.promovido_at
+          ? `Se eliminará la candidatura de ${nombre} (notas, reseñas y actividad). Su ficha de empleado NO se borra. Esta acción no se puede deshacer.`
+          : `Se eliminará a ${nombre} junto con sus notas, reseñas y actividad. Esta acción no se puede deshacer.`,
+        confirmLabel: "Borrar candidato",
+      });
+      if (!ok) return;
+      startTransition(async () => {
+        const res = await eliminarCandidato(c.id);
+        if (res.ok) {
+          setItems((prev) => prev.filter((x) => x.id !== c.id));
+          setSelected((prev) => (prev && prev.id === c.id ? null : prev));
+          toast.success("Candidato borrado");
+        } else {
+          toast.error(("error" in res && res.error) || "No se pudo borrar el candidato");
+        }
+      });
+    })();
   }
 
   function abrirPromover(c: CandidatoReal) {
@@ -238,14 +299,6 @@ export function CandidatosRealesTab() {
     });
   }
 
-  const grupos = useMemo(() => {
-    const m: Record<Fase, CandidatoReal[]> = {
-      nuevo: [], en_progreso: [], oferta: [], seleccionado: [], descartado: [],
-    };
-    for (const c of items) m[c.fase]?.push(c);
-    return m;
-  }, [items]);
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16 text-muted-foreground">
@@ -273,120 +326,138 @@ export function CandidatosRealesTab() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-lg font-semibold">Pipeline de candidaturas</h2>
+        <h2 className="text-lg font-semibold">Candidatos</h2>
         <p className="text-sm text-muted-foreground">
-          Mueve los candidatos por las fases. Al llegar a <b>Seleccionado · Prueba</b> aparece el botón para crearlos en el sistema.
+          Pulsa un candidato para abrir su ficha (actividad, notas, reseñas, cuestionario y CV). Al llegar a <b>Prueba</b> aparece el botón para crearlo en el sistema.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-        {FASES_ORDER.map((fase) => (
-          <div key={fase} className={`rounded-lg border bg-gradient-to-b p-3 ${FASE_COLOR[fase]}`}>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-bold uppercase tracking-wide text-foreground/80">
-                {FASE_LABEL[fase]}
-              </h3>
-              <Badge variant="secondary" className="text-[10px]">{grupos[fase]?.length ?? 0}</Badge>
-            </div>
-
-            <div className="space-y-2">
-              {(grupos[fase] ?? []).length === 0 && (
-                <div className="text-[11px] text-muted-foreground/60 text-center py-4">Vacío</div>
-              )}
-              {(grupos[fase] ?? []).map((c) => {
-                const mostrarBoton =
-                  c.fase === "seleccionado" &&
-                  c.estado === "prueba" &&
-                  c.promovido_at === null;
-                const yaPromovido = !!c.promovido_at;
-                return (
-                  <Card key={c.id} className="bg-card border shadow-sm">
-                    <CardContent className="p-3 space-y-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold truncate">
-                            {c.nombre} {c.apellidos}
-                          </p>
-                          {c.vacantes?.titulo && (
-                            <p className="text-[10px] text-muted-foreground truncate">
-                              {c.vacantes.titulo}
-                            </p>
-                          )}
-                        </div>
+      <Card>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Candidato</TableHead>
+              <TableHead>Vacante</TableHead>
+              <TableHead>Estado</TableHead>
+              <TableHead>Teléfono</TableHead>
+              <TableHead className="text-center">Cuestionario</TableHead>
+              <TableHead>CV</TableHead>
+              <TableHead>Perfil creado</TableHead>
+              <TableHead className="text-right">Opciones</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {items.map((c) => {
+              const cfgEstado = ESTADOS_CONFIG[c.estado as EstadoReclutamiento];
+              const mostrarBoton =
+                c.fase === "seleccionado" && c.estado === "prueba" && c.promovido_at === null;
+              const yaPromovido = !!c.promovido_at;
+              return (
+                <TableRow
+                  key={c.id}
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => setSelected(c)}
+                >
+                  <TableCell>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-foreground">{c.nombre} {c.apellidos}</span>
                         {yaPromovido && (
                           <Badge variant="outline" className="text-[9px] bg-emerald-50 border-emerald-200 text-emerald-700 shrink-0">
                             Empleado
                           </Badge>
                         )}
                       </div>
-
-                      <div className="flex flex-wrap gap-1 text-[10px] text-muted-foreground">
-                        {c.email && (
-                          <span className="inline-flex items-center gap-0.5">
-                            <Mail className="h-2.5 w-2.5" /> {c.email}
-                          </span>
-                        )}
-                        {c.telefono && (
-                          <span className="inline-flex items-center gap-0.5">
-                            <Phone className="h-2.5 w-2.5" /> {c.telefono}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Estado dropdown */}
-                      <Select
-                        value={c.estado}
-                        onValueChange={(v) => moverEstado(c, v as Estado)}
-                        disabled={pending}
+                      <span className="text-xs text-muted-foreground">{c.email}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{c.vacantes?.titulo ?? "—"}</TableCell>
+                  <TableCell>
+                    {cfgEstado ? (
+                      <Badge variant="outline" className="text-[11px]" style={{ borderColor: cfgEstado.color, color: cfgEstado.color }}>
+                        {cfgEstado.label}
+                      </Badge>
+                    ) : "—"}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground tabular-nums">{c.telefono ?? "—"}</TableCell>
+                  <TableCell className="text-center">
+                    {c.puntuacion == null ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : (
+                      <span className={`font-semibold tabular-nums ${c.puntuacion >= 5 ? "text-emerald-600" : "text-rose-600"}`}>
+                        {c.puntuacion}/10
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {c.cv_url ? (
+                      <a
+                        href={`/api/empleo/cv?path=${encodeURIComponent(c.cv_url)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
                       >
-                        <SelectTrigger className="h-7 text-[11px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(ESTADOS_POR_FASE).map(([f, ests]) => (
-                            <div key={f}>
-                              <div className="px-2 py-1 text-[9px] font-bold text-muted-foreground uppercase">
-                                {FASE_LABEL[f as Fase]}
-                              </div>
-                              {ests.map((e) => (
-                                <SelectItem key={e} value={e} className="text-[11px]">
-                                  {ESTADO_LABEL[e]}
-                                </SelectItem>
-                              ))}
-                            </div>
-                          ))}
-                        </SelectContent>
-                      </Select>
-
-                      {c.cv_url && (
-                        <a
-                          href={`/api/empleo/cv?path=${encodeURIComponent(c.cv_url)}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline"
-                        >
-                          <FileText className="h-3 w-3" /> Ver CV <ExternalLink className="h-2.5 w-2.5" />
-                        </a>
-                      )}
-
-                      {mostrarBoton && (
+                        <FileText className="h-3.5 w-3.5" /> Ver CV
+                      </a>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground tabular-nums">{fmtFecha(c.created_at)}</TableCell>
+                  <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-end gap-1">
+                      {mostrarBoton ? (
                         <Button
                           size="sm"
-                          className="w-full h-8 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700"
+                          className="h-8 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700"
                           onClick={() => abrirPromover(c)}
                           disabled={pending}
                         >
                           <Sparkles className="h-3.5 w-3.5" /> Crear en sistema
                         </Button>
+                      ) : (
+                        <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setSelected(c)}>
+                          Ver ficha
+                        </Button>
                       )}
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => handleEliminar(c)}
+                        disabled={pending}
+                        title="Borrar candidato"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </Card>
+
+      {/* ── Ficha del candidato ──────────────────── */}
+      <CandidatoDetailModal
+        open={!!selected}
+        onOpenChange={(o) => !o && setSelected(null)}
+        candidato={selected ? toCandidato(selected) : null}
+        candidatos={items.map(toCandidato)}
+        vacante={vacanteParaModal(selected)}
+        onSelectCandidato={(c) => setSelected(c ? items.find((x) => x.id === c.id) ?? null : null)}
+        onUpdateCandidato={() => { /* ediciones de sidebar no persisten aquí */ }}
+        onMoverEstado={(c, estado) => {
+          const real = items.find((x) => x.id === c.id);
+          if (real) moverEstado(real, estado as Estado);
+        }}
+        onEliminar={(c) => {
+          const real = items.find((x) => x.id === c.id);
+          if (real) handleEliminar(real);
+        }}
+      />
 
       {/* ── Dialog Promover ──────────────────── */}
       <Dialog open={!!promoverCand} onOpenChange={(o) => !o && setPromoverCand(null)}>
@@ -521,6 +592,9 @@ export function CandidatosRealesTab() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── Confirmación de borrado de candidato ──────────────────── */}
+      {confirmDialog}
     </div>
   );
 }
