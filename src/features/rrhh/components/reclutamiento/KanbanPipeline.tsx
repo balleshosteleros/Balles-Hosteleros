@@ -496,9 +496,6 @@ export function KanbanPipeline({ vacante, onBack, onUpdateCandidatos }: KanbanPi
             </p>
           </div>
         </div>
-        <Badge variant="secondary" className="text-xs">
-          Arrastra candidatos entre estados para cambiar su fase
-        </Badge>
       </div>
 
       {/* Kanban Board */}
