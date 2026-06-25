@@ -102,3 +102,28 @@ Inventario recibido (18-19/06/2026), referencia para la siembra:
 - **Zona compartida con Iván** (`logistica/`, `sala/`): él la ha delegado para compras, pero hay trabajo concurrente → coordinar antes de tocar y commits atómicos.
 - **Regla de Seguridad Ágora**: ante cualquier error de Ágora/persistencia, parar, mostrar el error exacto y pedir aprobación.
 - **A 2026-06-24 NO se ha tocado código ni BD** — todo este documento es diagnóstico (lectura). HEAD `8286bce`.
+
+---
+
+## 9. ACTUALIZACIÓN 2026-06-25 — decisiones de Iván + hallazgos + orden revisado
+
+Iván respondió las 6 dudas (detalle en `docs/LOGISTICA_COMPRAS_RESPUESTAS_IVAN.md`). Resumen de decisiones:
+1. **Reposición por ventas** = cobertura por días, presets **3/7/14 + personalizado** (entre 2 fechas), ventana **desde AYER** (hoy no cuenta).
+2. **Stock máximo por TEMPORADAS**: 2 por defecto (verano/invierno), cobertura total del año sin huecos; **Auto** = semana de más venta de esa temporada el **año anterior** ×7 días; **Manual** por producto; flag Auto/Manual por producto con cambio en caliente.
+3. **`ingredientes_proveedor` automático**: cada producto compra con **1 proveedor principal obligatorio** (+ secundarios); en pedidos prevalece el principal; **precio de referencia = el de la ficha**, NO el del último albarán.
+4. **Envío = WhatsApp + Email**, ambos con **PDF**; email **desde dentro del software** a `proveedores.email_pedidos`.
+5. **Recepción 100% MÓVIL**: crear **"Mis Departamentos" → Logística → Albaranes** (hoy el móvil solo tiene "Mis Paneles"); abrir albarán pendiente, foto del albarán del proveedor, **chequeo automático** (tick verde / errores), foto adjunta al albarán nuestro.
+6. **Stock LIVE al CONFIRMAR**: descuenta ventas + suma albaranes confirmados; pendientes no cuentan; **barrido manual inicial** (la semana que viene); si va bien, migrar Ágora→Balles **solo en compras**.
+
+### Hallazgos (verificados en BD el 2026-06-25) que reordenan el plan
+- **NO hay histórico de 1 año.** `pos_tickets` = 308 tickets, **99% de junio 2026** (abril/mayo: 1 cada uno); rango 2026-04-17 → 2026-06-24. → **El cálculo Auto del stock máximo (§2) es imposible ahora**; se construye pero queda dormido hasta acumular histórico (~jun-2027). **Arrancamos en Manual** (confirmado por Iván).
+- **La reposición por ventas (§1) depende de las recetas** (explotar ventas→productos de compra por escandallo), que son **triviales 1:1** → solo fiable para lo vendido casi directo (**bebidas**) hasta cargar las recetas reales del Excel. La reposición **por stock** NO tiene esta dependencia.
+- `pos_tickets.stock_descontado` = **False en los 308** → el stock nunca se ha movido; §6 (live) es greenfield.
+
+### Orden revisado (a falta de confirmar archivos por incremento)
+- **Incremento 1 (viable ya, sin histórico ni recetas) — "Reponer almacén POR STOCK" E2E:** §2 en **Manual** (stock máximo por producto) + §3 (sembrar `ingredientes_proveedor` con proveedor principal desde los 11 albaranes). Salida: pedido real agrupado por proveedor.
+- **Paralelo (frontend):** §4 envío (WhatsApp Business API + email interno con PDF), §5 recepción móvil.
+- **Después:** §1 por-ventas (con aviso de recetas), §6 stock live (con barrido manual), §2 **Auto** (cuando haya histórico).
+- Matiz §4: el botón de WhatsApp que **auto-adjunta PDF** requiere la **API de WhatsApp Business** (la de marketing); `wa.me` simple solo lleva texto.
+
+**Decisión de Fernando (2026-06-25): arrancar por el Incremento 1.** Pendiente: confirmar archivos exactos antes de escribir código.
