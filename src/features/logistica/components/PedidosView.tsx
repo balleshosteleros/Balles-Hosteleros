@@ -5,12 +5,13 @@ import { usePathname } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
   calcularTotalesLineas,
-  ESTADOS_PEDIDO, PROVEEDOR_EMAILS,
+  ESTADOS_PEDIDO,
   type Pedido, type Albaran, type EstadoPedido, type EstadoAlbaran,
 } from "@/features/logistica/data/pedidos";
 import { listPedidos, getPedido, createPedido, updatePedidoEstado as serverUpdatePedidoEstado, deletePedido as serverDeletePedido } from "@/features/logistica/actions/pedidos-actions";
 import { listAlbaranes, createAlbaran, updateAlbaranEstado as serverUpdateAlbaranEstado } from "@/features/logistica/actions/albaranes-actions";
 import { sumarStockDesdeAlbaran } from "@/features/logistica/actions/stock-actions";
+import { enviarPedidoEmail, prepararWhatsappPedido } from "@/features/logistica/actions/enviar-pedido-actions";
 import { EstadoPedidoBadge } from "@/features/logistica/components/pedidos/BadgesPedido";
 import { DetallePedido } from "@/features/logistica/components/pedidos/DetallePedido";
 import { DetalleAlbaran } from "@/features/logistica/components/pedidos/DetalleAlbaran";
@@ -272,16 +273,25 @@ export function PedidosView() {
     else { toast.error("Error al eliminar pedido"); loadPedidos(); }
   };
 
-  const handleEnviarProveedor = (ped: Pedido) => {
-    const email = PROVEEDOR_EMAILS[ped.proveedor] || "";
-    if (!email) {
-      toast.error("El proveedor no tiene email configurado. No se puede enviar.");
+  const handleEnviarProveedor = async (ped: Pedido) => {
+    const res = await enviarPedidoEmail(ped.id);
+    if (!res.ok) {
+      toast.error(res.error || "No se pudo enviar el pedido por email.");
       return;
     }
     const now = new Date().toISOString();
-    setPedidos((prev) => prev.map((p) => p.id === ped.id ? { ...p, estado: "Enviado" as EstadoPedido, enviadoAt: now, enviadoEmail: email, ultimaActualizacion: now.slice(0, 10) } : p));
-    setDetallePedido((prev) => prev && prev.id === ped.id ? { ...prev, estado: "Enviado", enviadoAt: now, enviadoEmail: email } : prev);
-    toast.success(`Pedido enviado a ${email}`);
+    setPedidos((prev) => prev.map((p) => p.id === ped.id ? { ...p, estado: "Enviado" as EstadoPedido, enviadoAt: now, enviadoEmail: res.email ?? null, ultimaActualizacion: now.slice(0, 10) } : p));
+    setDetallePedido((prev) => prev && prev.id === ped.id ? { ...prev, estado: "Enviado", enviadoAt: now, enviadoEmail: res.email ?? null } : prev);
+    toast.success(`Pedido enviado por email a ${res.email}`);
+  };
+
+  const handleEnviarWhatsapp = async (ped: Pedido) => {
+    const res = await prepararWhatsappPedido(ped.id);
+    if (!res.ok || !res.url) {
+      toast.error(res.error || "No se pudo preparar el WhatsApp.");
+      return;
+    }
+    window.open(res.url, "_blank");
   };
 
   const handleCopy = () => {
@@ -401,6 +411,7 @@ export function PedidosView() {
           onConfirmar={handleConfirmarPedido}
           onOpenAlbaran={openAlbaran}
           onEnviarProveedor={handleEnviarProveedor}
+          onEnviarWhatsapp={handleEnviarWhatsapp}
         />
       </div>
     );

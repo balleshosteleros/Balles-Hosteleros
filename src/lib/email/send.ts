@@ -58,6 +58,12 @@ export type SendEmailInput = {
    * (correos que ya construyen su propia cabecera, p.ej. reservas). Default: true.
    */
   brandHeader?: boolean;
+  /**
+   * Adjuntos opcionales (nodemailer). P.ej. el PDF de un pedido al proveedor.
+   * `content` admite Buffer/Uint8Array o string. Aditivo: los llamadores que no
+   * lo usan no se ven afectados.
+   */
+  attachments?: { filename: string; content: Buffer | Uint8Array | string; contentType?: string }[];
 };
 
 /** Extrae la dirección de un From que puede venir como "Nombre <email>" o "email". */
@@ -135,6 +141,11 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
       html,
       text: input.text,
       replyTo,
+      attachments: input.attachments?.map((a) => ({
+        filename: a.filename,
+        content: a.content instanceof Uint8Array ? Buffer.from(a.content) : a.content,
+        contentType: a.contentType,
+      })),
     });
     // Cuenta el envío y avisa si nos acercamos al límite diario (best-effort:
     // nunca rompe ni ralentiza de forma crítica el flujo de negocio).

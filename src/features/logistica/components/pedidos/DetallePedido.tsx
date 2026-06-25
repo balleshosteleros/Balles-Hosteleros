@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/u
 import { Separator } from "@/components/ui/separator";
 import { EstadoPedidoBadge } from "./BadgesPedido";
 import { ESTADOS_PEDIDO, PROVEEDOR_EMAILS, calcularTotalesLineas, type Pedido, type Albaran } from "@/features/logistica/data/pedidos";
-import { ArrowLeft, FileText, Send, CheckCircle2, AlertTriangle, PackageCheck, Mail } from "lucide-react";
+import { ArrowLeft, FileText, MessageCircle, CheckCircle2, AlertTriangle, PackageCheck, Mail } from "lucide-react";
 
 interface Props {
   pedido: Pedido;
@@ -14,9 +14,10 @@ interface Props {
   onConfirmar: (pedido: Pedido) => void;
   onOpenAlbaran: (albaranId: string) => void;
   onEnviarProveedor: (pedido: Pedido) => void;
+  onEnviarWhatsapp: (pedido: Pedido) => void;
 }
 
-export function DetallePedido({ pedido, albaran, onBack, onUpdateEstado, onConfirmar, onOpenAlbaran, onEnviarProveedor }: Props) {
+export function DetallePedido({ pedido, albaran, onBack, onUpdateEstado, onConfirmar, onOpenAlbaran, onEnviarProveedor, onEnviarWhatsapp }: Props) {
   const totales = calcularTotalesLineas(pedido.lineas);
   const canConfirm = pedido.estado === "Borrador" || pedido.estado === "Pendiente";
   const canSend = pedido.estado !== "Borrador" && pedido.estado !== "Cancelado" && !pedido.enviadoAt;
@@ -29,11 +30,7 @@ export function DetallePedido({ pedido, albaran, onBack, onUpdateEstado, onConfi
         <Button variant="ghost" size="sm" onClick={onBack} className="gap-1"><ArrowLeft className="h-4 w-4" /> Volver</Button>
         <div className="flex-1" />
         <Button variant="outline" size="sm" className="gap-1" onClick={() => window.print()}><FileText className="h-4 w-4" /> Guardar PDF</Button>
-        <Button variant="outline" size="sm" className="gap-1" onClick={() => {
-          const asunto = encodeURIComponent(`Pedido ${pedido.numero}`);
-          const cuerpo = encodeURIComponent(`Adjunto información del pedido ${pedido.numero} (${pedido.proveedor}).\nTotal: ${totales.total.toFixed(2)} €`);
-          window.location.href = `mailto:${proveedorEmail}?subject=${asunto}&body=${cuerpo}`;
-        }}><Send className="h-4 w-4" /> Enviar</Button>
+        <Button variant="outline" size="sm" className="gap-1 border-green-300 text-green-700 hover:bg-green-50 dark:border-green-700 dark:text-green-400 dark:hover:bg-green-900/20" onClick={() => onEnviarWhatsapp(pedido)}><MessageCircle className="h-4 w-4" /> WhatsApp</Button>
         {canSend && (
           <Button size="sm" variant="outline" className="gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-900/20" onClick={() => onEnviarProveedor(pedido)}>
             <Mail className="h-4 w-4" /> Enviar al proveedor
