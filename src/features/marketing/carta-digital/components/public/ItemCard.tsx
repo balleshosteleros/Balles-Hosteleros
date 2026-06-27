@@ -63,14 +63,13 @@ export function ItemCard({
 
         {item.destacado ? (
           <span
-            className="absolute left-1.5 top-1.5 inline-flex h-6 w-6 items-center justify-center rounded-full backdrop-blur"
-            style={{
-              backgroundColor: "color-mix(in srgb, var(--carta-acento) 90%, transparent)",
-              color: "var(--carta-sobre-marca)",
-            }}
-            title="Destacado"
+            className="absolute left-1.5 top-1.5 inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/90 shadow-[0_2px_6px_rgba(180,83,9,0.45)] ring-1 ring-amber-200/80 backdrop-blur"
+            title="Plato destacado"
           >
-            <Star className="h-3 w-3 fill-current" strokeWidth={1.5} />
+            <Star
+              className="h-4 w-4 fill-amber-400 text-amber-500 drop-shadow-[0_1px_1.5px_rgba(146,64,14,0.6)]"
+              strokeWidth={1.5}
+            />
           </span>
         ) : null}
       </div>

@@ -90,13 +90,9 @@ export function ItemFichaModal({
 
           {item.destacado ? (
             <span
-              className="absolute left-4 top-4 inline-flex items-center gap-1 rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] backdrop-blur"
-              style={{
-                backgroundColor: "color-mix(in srgb, var(--carta-acento) 90%, transparent)",
-                color: "var(--carta-sobre-marca)",
-              }}
+              className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-amber-700 shadow-[0_2px_8px_rgba(180,83,9,0.45)] ring-1 ring-amber-200/80 backdrop-blur"
             >
-              <Star className="h-2.5 w-2.5 fill-current" strokeWidth={1.5} />
+              <Star className="h-3 w-3 fill-amber-400 text-amber-500 drop-shadow-[0_1px_1.5px_rgba(146,64,14,0.6)]" strokeWidth={1.5} />
               Destacado
             </span>
           ) : null}

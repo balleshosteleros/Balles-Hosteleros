@@ -58,7 +58,6 @@ export type CartaEmpresaPublica = {
   nombre: string;
   carta_slug: string;
   carta_publicada: boolean;
-  carta_horarios: CartaHorarios | null;
   carta_descripcion: string | null;
   logo_url?: string | null;
   logo_alt_url?: string | null;
@@ -72,12 +71,6 @@ export type CartaEmpresaPublica = {
   carta_hero_url?: string | null;
   carta_estilo_cards?: EstiloCards | null;
   carta_modo?: ModoCarta | null;
-};
-
-export type CartaHorarios = {
-  // Estructura libre por día. Ejemplo:
-  // { lunes: ["13:00-16:00", "20:00-23:30"], martes: [...] }
-  [dia: string]: string[];
 };
 
 /** Carta completa lista para render público. */

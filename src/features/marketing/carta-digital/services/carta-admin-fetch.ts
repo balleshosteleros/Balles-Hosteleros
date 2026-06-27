@@ -49,7 +49,7 @@ export async function fetchCartaAdmin(): Promise<CartaAdminData> {
   const [empresaRes, catRes, itemsRes] = await Promise.all([
     supabase
       .from("empresas")
-      .select("id, slug, nombre, carta_slug, carta_publicada, carta_horarios, carta_descripcion")
+      .select("id, slug, nombre, carta_slug, carta_publicada, carta_descripcion")
       .eq("id", empresaId)
       .maybeSingle(),
     supabase
@@ -74,7 +74,6 @@ export async function fetchCartaAdmin(): Promise<CartaAdminData> {
         nombre: string;
         carta_slug: string | null;
         carta_publicada: boolean;
-        carta_horarios: unknown;
         carta_descripcion: string | null;
       }
     | null;
@@ -86,8 +85,6 @@ export async function fetchCartaAdmin(): Promise<CartaAdminData> {
         nombre: empresaRow.nombre,
         carta_slug: empresaRow.carta_slug ?? "",
         carta_publicada: empresaRow.carta_publicada ?? false,
-        carta_horarios:
-          (empresaRow.carta_horarios as CartaEmpresaPublica["carta_horarios"]) ?? null,
         carta_descripcion: empresaRow.carta_descripcion,
       }
     : null;

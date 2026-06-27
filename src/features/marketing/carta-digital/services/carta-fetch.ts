@@ -34,7 +34,6 @@ interface EmpresaRow {
   nombre: string;
   carta_slug: string;
   carta_publicada: boolean;
-  carta_horarios: unknown;
   carta_descripcion: string | null;
   logo_url: string | null;
   logo_alt_url: string | null;
@@ -126,7 +125,7 @@ export async function fetchCartaPorSlug(slug: string): Promise<CartaPublica | nu
     const { data: empresa, error: empresaErr } = await supabase
       .from("empresas")
       .select(
-        "id, nombre, carta_slug, carta_publicada, carta_horarios, carta_descripcion, logo_url, logo_alt_url, color, color_secundario, color_texto, carta_color_fondo, carta_color_acento, carta_fuente_titulos, carta_fuente_cuerpo, carta_hero_url, carta_estilo_cards, carta_modo",
+        "id, nombre, carta_slug, carta_publicada, carta_descripcion, logo_url, logo_alt_url, color, color_secundario, color_texto, carta_color_fondo, carta_color_acento, carta_fuente_titulos, carta_fuente_cuerpo, carta_hero_url, carta_estilo_cards, carta_modo",
       )
       .eq("carta_slug", slug)
       .eq("carta_publicada", true)
@@ -143,7 +142,6 @@ export async function fetchCartaPorSlug(slug: string): Promise<CartaPublica | nu
       nombre: empresa.nombre,
       carta_slug: empresa.carta_slug,
       carta_publicada: empresa.carta_publicada,
-      carta_horarios: (empresa.carta_horarios as CartaPublica["empresa"]["carta_horarios"]) ?? null,
       carta_descripcion: empresa.carta_descripcion,
       logo_url: empresa.logo_url,
       logo_alt_url: empresa.logo_alt_url,
@@ -184,14 +182,14 @@ export async function fetchCartaPorSlug(slug: string): Promise<CartaPublica | nu
     const productoIds = Array.from(
       new Set(itemsRows.map((i) => i.producto_id).filter((v): v is string => !!v)),
     );
-    const productosOverride = new Map<string, { carta_nombre: string | null; carta_texto: string | null }>();
+    const productosOverride = new Map<string, { carta_nombre: string | null; carta_texto: string | null; carta_destacado: boolean }>();
     if (productoIds.length > 0) {
       const { data: prodRows } = await supabase
         .from("productos")
-        .select("id, carta_nombre, carta_texto")
+        .select("id, carta_nombre, carta_texto, carta_destacado")
         .in("id", productoIds);
-      for (const p of (prodRows ?? []) as { id: string; carta_nombre: string | null; carta_texto: string | null }[]) {
-        productosOverride.set(p.id, { carta_nombre: p.carta_nombre, carta_texto: p.carta_texto });
+      for (const p of (prodRows ?? []) as { id: string; carta_nombre: string | null; carta_texto: string | null; carta_destacado: boolean | null }[]) {
+        productosOverride.set(p.id, { carta_nombre: p.carta_nombre, carta_texto: p.carta_texto, carta_destacado: p.carta_destacado ?? false });
       }
     }
 
@@ -201,6 +199,8 @@ export async function fetchCartaPorSlug(slug: string): Promise<CartaPublica | nu
         const ov = productosOverride.get(row.producto_id);
         if (ov?.carta_nombre && ov.carta_nombre.trim()) item.nombre = ov.carta_nombre;
         if (ov?.carta_texto && ov.carta_texto.trim()) item.descripcion = ov.carta_texto;
+        // La estrella destacada se gobierna desde la ficha del producto de venta.
+        if (ov) item.destacado = ov.carta_destacado;
       }
       return item;
     });

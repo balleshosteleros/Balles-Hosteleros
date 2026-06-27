@@ -42,6 +42,7 @@ const productoInputSchema = z.object({
   textoComanda: z.string().nullable().optional(),
   cartaNombre: z.string().nullable().optional(),
   cartaTexto: z.string().nullable().optional(),
+  cartaDestacado: z.boolean().optional(),
   alergenos: z.array(z.string()).optional(),
 });
 
@@ -73,6 +74,7 @@ type ProductoRow = {
   texto_comanda: string | null;
   carta_nombre: string | null;
   carta_texto: string | null;
+  carta_destacado: boolean | null;
   alergenos: string[] | null;
   created_at: string;
   updated_at: string;
@@ -103,6 +105,7 @@ function rowToProducto(r: ProductoRow): Producto {
     textoComanda: r.texto_comanda ?? undefined,
     cartaNombre: r.carta_nombre ?? null,
     cartaTexto: r.carta_texto ?? null,
+    cartaDestacado: r.carta_destacado ?? false,
     alergenos: Array.isArray(r.alergenos) ? r.alergenos : [],
     createdAt: r.created_at ?? undefined,
     ultimaActualizacion: r.updated_at?.slice(0, 10) ?? "",
@@ -279,6 +282,7 @@ export async function createProducto(
         texto_comanda: parsed.data.textoComanda ?? null,
         carta_nombre: parsed.data.cartaNombre ?? null,
         carta_texto: parsed.data.cartaTexto ?? null,
+        carta_destacado: parsed.data.cartaDestacado ?? false,
         alergenos: parsed.data.alergenos ?? [],
         created_by: user.id,
       })
@@ -395,6 +399,7 @@ export async function bulkImportProductos(
       texto_comanda: p.textoComanda ?? null,
       carta_nombre: p.cartaNombre ?? null,
       carta_texto: p.cartaTexto ?? null,
+      carta_destacado: p.cartaDestacado ?? false,
       alergenos: p.alergenos ?? [],
       created_by: user.id,
     }));
@@ -469,6 +474,7 @@ export async function updateProducto(
     if (input.textoComanda !== undefined) updates.texto_comanda = input.textoComanda;
     if (input.cartaNombre !== undefined) updates.carta_nombre = input.cartaNombre;
     if (input.cartaTexto !== undefined) updates.carta_texto = input.cartaTexto;
+    if (input.cartaDestacado !== undefined) updates.carta_destacado = input.cartaDestacado;
     if (input.alergenos !== undefined) updates.alergenos = input.alergenos ?? [];
 
     const { error } = await supabase.from("productos").update(updates).eq("id", id);

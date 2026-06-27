@@ -125,6 +125,8 @@ export interface Producto {
   textoComanda?: string;
   cartaNombre?: string | null;
   cartaTexto?: string | null;
+  /** Estrella dorada en la carta digital. Se configura desde la ficha del producto de venta. */
+  cartaDestacado?: boolean;
   alergenos: string[];
 }
 
