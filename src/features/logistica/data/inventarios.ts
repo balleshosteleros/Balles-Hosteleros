@@ -38,6 +38,8 @@ export interface Inventario {
   estado: EstadoInventario;
   usuario: string;
   conteos: Conteo[];
+  /** true cuando las líneas ya se cargaron desde BD (lazy en el detalle). */
+  conteosCargados?: boolean;
   empresaId: string;
   confirmadoAt?: string;
   confirmadoPor?: string;
@@ -58,7 +60,7 @@ export interface ResultadoLinea {
   diferenciaCoste: number;
 }
 
-export const ALMACENES_INVENTARIO = ["COCINA", "BARRA"];
+export const ALMACENES_INVENTARIO = ["Cocina", "Barra"];
 
 // Precios de coste por producto (se poblará con datos reales desde Supabase)
 export const PRECIOS_COSTE: Record<string, number> = {};
@@ -132,7 +134,7 @@ export function calcularResultados(
   for (const pid of productIds) {
     const sp = stockProducts.find((p) => p.id === pid);
     if (!sp) continue;
-    const precioCoste = PRECIOS_COSTE[pid] || 0;
+    const precioCoste = sp.precioCoste ?? PRECIOS_COSTE[pid] ?? 0;
     const stockTeorico = sp.stockActual;
     const stockReal = realMap[pid] ?? stockTeorico;
     const diferenciaCantidad = stockReal - stockTeorico;

@@ -9,7 +9,7 @@ import { EstadoAlbaranBadge } from "./BadgesPedido";
 import { AlbaranUploadModal } from "./AlbaranUploadModal";
 import { ComparativaAlbaran } from "./ComparativaAlbaran";
 import { calcularTotalesLineas, diaSemanaDeFechaISO, formatoHoraReparto, type Albaran, type Pedido, type AnalisisAlbaran, type DocumentoAdjunto } from "@/features/logistica/data/pedidos";
-import { updateAlbaranNumeroProveedor } from "@/features/logistica/actions/albaranes-actions";
+import { updateAlbaranNumeroProveedor, subirDocumentoAlbaran } from "@/features/logistica/actions/albaranes-actions";
 import { ArrowLeft, FileText, Send, Paperclip, CheckCircle2, Loader2, AlertTriangle, FileWarning, Eye, Receipt, Trash2 } from "lucide-react";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -42,7 +42,7 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, onBack, onEntregar, onDe
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analisisResult, setAnalisisResult] = useState<AnalisisAlbaran | null>(null);
-  const [documentos, setDocumentos] = useState<DocumentoAdjunto[]>([]);
+  const [documentos, setDocumentos] = useState<DocumentoAdjunto[]>(albaran.documentos ?? []);
   const [showComparativa, setShowComparativa] = useState(false);
   const [numProv, setNumProv] = useState<string>(albaran.numeroProveedor ?? "");
 
@@ -74,22 +74,24 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, onBack, onEntregar, onDe
       setAnalisisResult(analisis);
       setShowComparativa(true);
 
-      const newDoc: DocumentoAdjunto = {
-        id: `doc-${Date.now()}`,
-        fileName: file.name,
-        fileUrl: "",
-        mimeType: file.type,
-        uploadedAt: new Date().toISOString(),
-        uploadedBy: albaran.creador,
-        analisis,
-        hayAlerta: analisis.resumen.hayAlerta,
-      };
-      setDocumentos((prev) => [...prev, newDoc]);
+      // Persistir el archivo en Storage + el análisis en BD (antes solo vivía en estado).
+      const fd = new FormData();
+      fd.append("albaranId", albaran.id);
+      fd.append("file", file);
+      fd.append("analisis", JSON.stringify(analisis));
+      fd.append("hayAlerta", String(analisis.resumen.hayAlerta));
+      fd.append("uploadedBy", albaran.creador);
+      const persistRes = await subirDocumentoAlbaran(fd);
+      if (persistRes.ok) {
+        setDocumentos((prev) => [...prev, persistRes.data as DocumentoAdjunto]);
+      } else {
+        toast.error(persistRes.error ?? "No se pudo guardar el documento adjunto");
+      }
 
       if (analisis.resumen.hayAlerta) {
         toast.warning("Se han detectado discrepancias en el albarán del proveedor");
-      } else {
-        toast.success("Albarán analizado correctamente. Sin discrepancias.");
+      } else if (persistRes.ok) {
+        toast.success("Albarán analizado y guardado. Sin discrepancias.");
       }
     } catch (err) {
       console.error("Error analyzing albaran:", err);
@@ -106,12 +108,12 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, onBack, onEntregar, onDe
       <div className="flex items-center gap-3 flex-wrap">
         <Button variant="ghost" size="sm" onClick={onBack} className="gap-1"><ArrowLeft className="h-4 w-4" /> Volver</Button>
         <div className="flex-1" />
-        <Button variant="outline" size="sm" className="gap-1" onClick={() => window.print()}><FileText className="h-4 w-4" /> Guardar PDF</Button>
+        <Button variant="outline" size="sm" className="gap-1" onClick={() => window.print()}><FileText className="h-4 w-4" /> Imprimir</Button>
         <Button variant="outline" size="sm" className="gap-1" onClick={() => {
           const asunto = encodeURIComponent(`Albarán ${albaran.numero}`);
           const cuerpo = encodeURIComponent(`Adjunto información del albarán ${albaran.numero} (${albaran.proveedor}).\nTotal: ${formatEur(totales.total)}`);
           window.location.href = `mailto:?subject=${asunto}&body=${cuerpo}`;
-        }}><Send className="h-4 w-4" /> Enviar</Button>
+        }}><Send className="h-4 w-4" /> Enviar por correo</Button>
         <Button variant="outline" size="sm" className="gap-1" onClick={() => setUploadOpen(true)}>
           <Paperclip className="h-4 w-4" /> Asociar archivo
         </Button>
@@ -163,7 +165,7 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, onBack, onEntregar, onDe
         <div className="flex items-center gap-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-4 py-3">
           <FileWarning className="h-5 w-5 text-red-600 dark:text-red-400 shrink-0" />
           <div className="flex-1">
-            <p className="font-semibold text-red-700 dark:text-red-400 text-sm">ALERTA — Discrepancias en albarán del proveedor</p>
+            <p className="font-semibold text-red-700 dark:text-red-400 text-sm">Alerta — discrepancias en el albarán del proveedor</p>
             <p className="text-xs text-red-600 dark:text-red-400/80">Se han detectado diferencias entre el pedido interno y el albarán recibido.</p>
           </div>
           <Button size="sm" variant="outline" className="gap-1 border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400" onClick={() => setShowComparativa(true)}>
@@ -181,7 +183,7 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, onBack, onEntregar, onDe
       {documentos.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">DOCUMENTOS ADJUNTOS</CardTitle>
+            <CardTitle className="text-base">Documentos adjuntos</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
@@ -221,7 +223,7 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, onBack, onEntregar, onDe
             <div className="flex items-center gap-2">
               {documentos.some((d) => d.hayAlerta) && (
                 <Badge className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-0 gap-1">
-                  <AlertTriangle className="h-3 w-3" /> ALERTA
+                  <AlertTriangle className="h-3 w-3" /> Alerta
                 </Badge>
               )}
               <EstadoAlbaranBadge value={albaran.estado} />
@@ -251,7 +253,7 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, onBack, onEntregar, onDe
             <div><span className="text-muted-foreground text-xs block">Fecha</span><span className="font-medium">{albaran.fecha}</span></div>
             {diaReparto && <div><span className="text-muted-foreground text-xs block">Día de reparto</span><span className="font-medium">{diaReparto}</span></div>}
             {horaReparto && <div><span className="text-muted-foreground text-xs block">Hora de reparto</span><span className="font-medium">{horaReparto}</span></div>}
-            <div><span className="text-muted-foreground text-xs block">Pedido origen</span><span className="font-medium">{albaran.pedidoId}</span></div>
+            <div><span className="text-muted-foreground text-xs block">Pedido origen</span><span className="font-medium">{pedidoOrigen?.numero || "—"}</span></div>
             <div><span className="text-muted-foreground text-xs block">Creador</span><span className="font-medium">{albaran.creador}</span></div>
             <div>
               <span className="text-muted-foreground text-xs block">Estado</span>
@@ -263,7 +265,7 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, onBack, onEntregar, onDe
 
       {/* Products table */}
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base">PRODUCTOS DEL ALBARÁN</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-base">Productos del albarán</CardTitle></CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -295,7 +297,7 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, onBack, onEntregar, onDe
       {/* Pie + Totales */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">PIE</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Pie</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
             <div className="flex justify-between"><span className="text-muted-foreground">Dto %</span><span>{albaran.dtoPct}%</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Dto €</span><span>{formatEur(albaran.dtoEur)}</span></div>
@@ -304,12 +306,12 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, onBack, onEntregar, onDe
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">TOTALES</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Totales</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
             <div className="flex justify-between"><span className="text-muted-foreground">Base</span><span className="font-semibold">{formatEur(totales.base)}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Cuota impuesto</span><span className="font-semibold">{formatEur(totales.cuota)}</span></div>
             <Separator />
-            <div className="flex justify-between text-lg font-black"><span>TOTAL</span><span>{formatEur(totales.total)}</span></div>
+            <div className="flex justify-between text-lg font-black"><span>Total</span><span>{formatEur(totales.total)}</span></div>
           </CardContent>
         </Card>
       </div>

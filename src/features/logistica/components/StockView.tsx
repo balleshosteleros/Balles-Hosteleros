@@ -7,7 +7,7 @@ import {
   getStockConTemporada,
   CATEGORIAS_STOCK, type ProductoStock, type TemporadaStock,
 } from "@/features/logistica/data/stock";
-import { listTemporadas } from "@/features/logistica/actions/temporadas-actions";
+import { listTemporadas, updateTemporada } from "@/features/logistica/actions/temporadas-actions";
 import { listStock, updateStock as updateStockAction, updateStockBatch } from "@/features/logistica/actions/stock-actions";
 import { listProductos } from "@/features/logistica/actions/producto-actions";
 import TemporadasConfig from "@/features/logistica/components/stock/TemporadasConfig";
@@ -66,7 +66,7 @@ const statusColors: Record<string, string> = {
   warning: "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300",
   ok: "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-300",
 };
-const statusLabels: Record<string, string> = { critical: "BAJO", warning: "ATENCIÓN", ok: "OK" };
+const statusLabels: Record<string, string> = { critical: "Bajo", warning: "Atención", ok: "Correcto" };
 
 function InventarioBadge({ value }: { value: number }) {
   if (value > 0) return <span className="text-emerald-700 dark:text-emerald-400 font-semibold">+{value}</span>;
@@ -581,7 +581,7 @@ export function StockView() {
           onClick={() => { setTipoActivo("compra"); setSelected(new Set()); }}
         >
           <ShoppingCart className="h-4 w-4" />
-          COMPRA
+          Compra
           <Badge variant="secondary" className="text-[10px] ml-1">{stockPorTipo.compra.length}</Badge>
         </Button>
         <Button
@@ -590,7 +590,7 @@ export function StockView() {
           onClick={() => { setTipoActivo("elaboracion"); setSelected(new Set()); }}
         >
           <FlaskConical className="h-4 w-4" />
-          ELABORACIONES
+          Elaboraciones
           <Badge variant="secondary" className="text-[10px] ml-1">{stockPorTipo.elaboracion.length}</Badge>
         </Button>
       </div>
@@ -674,7 +674,7 @@ export function StockView() {
             }
             extraDerecha={
               <>
-                <IOActions config={stockIO} onSuccess={() => window.location.reload()} />
+                <IOActions config={stockIO} onSuccess={() => loadStockData()} />
                 <Button size="icon" variant={showConfig ? "default" : "outline"} className="h-9 w-9" onClick={() => setShowConfig((v) => !v)} title="Configuración" aria-label="Configuración">
                   <Settings className="h-4 w-4" strokeWidth={1.75} />
                 </Button>

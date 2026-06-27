@@ -11,6 +11,8 @@ export interface ProductoStock {
   ultimoInventario: number;
   ultimoInventarioFecha: string | null;
   empresaId: string;
+  /** Precio de coste unitario (€), para valorar inventarios. */
+  precioCoste?: number;
 }
 
 export interface TemporadaStock {
@@ -62,27 +64,13 @@ export function getStockConTemporada(
 // Datos reales vendrán de Supabase en próxima iteración.
 // Vacío hasta que se migren los stocks reales desde la antigua plataforma.
 
+// El stock y las temporadas reales se leen vía server actions
+// (`listStock` / `listTemporadas`). Estos accesores quedan solo como
+// compatibilidad de tipos y devuelven vacío (sin datos de demo).
 export function getStockPorEmpresa(_empresaId: string): ProductoStock[] {
   return [];
 }
 
-export function getTemporadasPorEmpresa(empresaId: string): TemporadaStock[] {
-  return [
-    {
-      id: "temp-verano",
-      nombre: "Verano",
-      fechaInicio: "2025-06-01",
-      fechaFin: "2025-09-30",
-      empresaId,
-      overrides: {},
-    },
-    {
-      id: "temp-invierno",
-      nombre: "Invierno",
-      fechaInicio: "2025-12-01",
-      fechaFin: "2026-02-28",
-      empresaId,
-      overrides: {},
-    },
-  ];
+export function getTemporadasPorEmpresa(_empresaId: string): TemporadaStock[] {
+  return [];
 }

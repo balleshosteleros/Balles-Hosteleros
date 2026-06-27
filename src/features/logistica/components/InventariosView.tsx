@@ -5,15 +5,24 @@ import { usePathname } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import {
-  getTiposPorEmpresa,
-  getPlantillasPorEmpresa,
   type Inventario,
   type EstadoInventario,
   type TipoInventario,
   type PlantillaInventario,
 } from "@/features/logistica/data/inventarios";
-import { getStockPorEmpresa, type ProductoStock } from "@/features/logistica/data/stock";
-import { listInventarios as listInventariosAction, createInventario as createInventarioAction, updateInventarioEstado as updateInventarioEstadoAction, confirmarInventarioKardex, revertirInventarioKardex } from "@/features/logistica/actions/inventarios-actions";
+import { type ProductoStock } from "@/features/logistica/data/stock";
+import {
+  listInventarios as listInventariosAction,
+  createInventario as createInventarioAction,
+  updateInventarioEstado as updateInventarioEstadoAction,
+  confirmarInventarioKardex,
+  revertirInventarioKardex,
+  getStockInventario,
+  listTiposInventario,
+  listPlantillasInventario,
+  getConteosInventario,
+  guardarConteosInventario,
+} from "@/features/logistica/actions/inventarios-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -60,30 +69,50 @@ export function InventariosView() {
   const loadInventarios = useCallback(async () => {
     setLoadingInv(true);
     try {
-      const res = await listInventariosAction();
+      const [res, stockRes, tiposRes, plantRes] = await Promise.all([
+        listInventariosAction(),
+        getStockInventario(),
+        listTiposInventario(),
+        listPlantillasInventario(),
+      ]);
+
       if (res.ok) {
         const mapped: Inventario[] = (res.data as Array<Record<string, unknown>>).map((r) => ({
           id: r.id as string,
           fecha: ((r.fecha as string) ?? (r.created_at as string) ?? "").slice(0, 10),
-          almacen: (r.almacen as string) ?? (r.tipo as string) ?? "COCINA",
+          almacen: (r.almacen as string) ?? (r.tipo as string) ?? "—",
           motivo: (r.motivo as string) ?? (r.nombre as string) ?? "",
           estado: ((r.estado as string)?.toLowerCase() === "confirmado" ? "Confirmado" : "Borrador") as EstadoInventario,
-          usuario: (r.usuario as string) || (r.created_by_nombre as string) || "—",
+          usuario: (r.usuario as string) || "—",
           conteos: [],
+          conteosCargados: false,
           empresaId: empresaActual.id,
+          plantillaId: (r.plantilla_id as string) ?? undefined,
+          confirmadoAt: (r.confirmado_at as string) ?? undefined,
+          confirmadoPor: (r.confirmado_por as string) ?? undefined,
         }));
         setInventarios(mapped);
       } else {
         setInventarios([]);
       }
+
+      setStock((stockRes.data ?? []) as unknown as ProductoStock[]);
+      setTipos(((tiposRes.data ?? []) as Array<Record<string, unknown>>).map((t) => ({
+        id: t.id as string,
+        nombre: t.nombre as string,
+        empresaId: empresaActual.id,
+      })));
+      setPlantillas(((plantRes.data ?? []) as Array<Record<string, unknown>>).map((p) => ({
+        id: p.id as string,
+        nombre: p.nombre as string,
+        empresaId: empresaActual.id,
+        productosIds: Array.isArray(p.productos_ids) ? (p.productos_ids as string[]) : [],
+      })));
     } catch {
       setInventarios([]);
     } finally {
       setLoadingInv(false);
     }
-    setStock(getStockPorEmpresa(empresaActual.id));
-    setTipos(getTiposPorEmpresa(empresaActual.id));
-    setPlantillas(getPlantillasPorEmpresa(empresaActual.id));
   }, [empresaActual.id]);
 
   useEffect(() => {
@@ -147,20 +176,6 @@ export function InventariosView() {
         }]
       : [];
 
-    const newInv: Inventario = {
-      id: `inv-${Date.now()}`,
-      fecha: data.fecha,
-      almacen: data.almacen,
-      motivo: data.motivo,
-      estado: "Borrador",
-      usuario: usuarioNombre,
-      conteos: initialConteos,
-      empresaId: empresaActual.id,
-      tipoId: data.tipoId,
-      plantillaId: data.plantillaId,
-    };
-    setInventarios((prev) => [newInv, ...prev]);
-    setDetalleId(newInv.id);
     const res = await createInventarioAction({
       nombre: `${data.almacen} - ${data.motivo}`,
       fecha: data.fecha,
@@ -170,53 +185,112 @@ export function InventariosView() {
       usuario: usuarioNombre,
       tipo: data.tipoId,
     });
-    if (res.ok) toast.success("Inventario creado");
-    else toast.error(res.error ?? "Error al crear inventario");
+    if (!res.ok || !res.data) {
+      toast.error(res.error ?? "Error al crear inventario");
+      return;
+    }
+    const realId = (res.data as Record<string, unknown>).id as string;
+
+    const newInv: Inventario = {
+      id: realId,
+      fecha: data.fecha,
+      almacen: data.almacen,
+      motivo: data.motivo,
+      estado: "Borrador",
+      usuario: usuarioNombre,
+      conteos: initialConteos,
+      conteosCargados: true,
+      empresaId: empresaActual.id,
+      tipoId: data.tipoId,
+      plantillaId: data.plantillaId,
+    };
+    // Persiste las líneas iniciales de la plantilla (si las hay).
+    if (initialConteos.length > 0) {
+      await guardarConteosInventario(realId, initialConteos.map((c) => ({
+        nombre: c.nombre,
+        lineas: c.lineas.map((l) => ({
+          productoId: l.productoId,
+          producto: l.producto,
+          unidad: l.unidad,
+          cantidadReal: l.cantidadReal,
+          cantidadTeorica: stock.find((p) => p.id === l.productoId)?.stockActual ?? 0,
+        })),
+      })));
+    }
+    setInventarios((prev) => [newInv, ...prev]);
+    setDetalleId(realId);
+    toast.success("Inventario creado");
   };
 
+  // Persiste los conteos del inventario abierto (sólo en Borrador). Devuelve ok.
+  const persistirConteos = useCallback(async (inv: Inventario) => {
+    return guardarConteosInventario(inv.id, inv.conteos.map((c) => ({
+      nombre: c.nombre,
+      lineas: c.lineas.map((l) => ({
+        productoId: l.productoId,
+        producto: l.producto,
+        unidad: l.unidad,
+        cantidadReal: l.cantidadReal,
+        cantidadTeorica: stock.find((p) => p.id === l.productoId)?.stockActual ?? 0,
+      })),
+    })));
+  }, [stock]);
+
   const handleConfirmar = async (inv: Inventario) => {
-    const now = new Date().toISOString();
-    setInventarios((prev) => prev.map((i) =>
-      i.id === inv.id ? { ...i, estado: "Confirmado" as const, confirmadoAt: now, confirmadoPor: usuarioNombre } : i
-    ));
-    await updateInventarioEstadoAction(inv.id, "Confirmado");
-    // PRP-058: registra los ajustes en el kardex (no-op si aún no hay líneas persistidas con producto_id).
-    await confirmarInventarioKardex(inv.id);
-
-    const realMap: Record<string, number> = {};
-    for (const conteo of inv.conteos) {
-      for (const linea of conteo.lineas) {
-        realMap[linea.productoId] = (realMap[linea.productoId] || 0) + linea.cantidadReal;
-      }
-    }
-
-    setStock((prev) => prev.map((p) => {
-      if (!(p.id in realMap)) return p;
-      const stockReal = realMap[p.id];
-      const diferencia = stockReal - p.stockActual;
-      return {
-        ...p,
-        stockActual: stockReal,
-        ultimoInventario: Math.round(diferencia * 100) / 100,
-        ultimoInventarioFecha: inv.fecha,
-      };
-    }));
-
-    toast.success("Inventario confirmado. Stock actualizado.");
+    // 1. Persistir las líneas contadas antes de ajustar el stock.
+    const guardado = await persistirConteos(inv);
+    if (!guardado.ok) { toast.error("No se pudieron guardar los conteos."); return; }
+    // 2. Marcar confirmado y ajustar stock real vía kardex (PRP-058).
+    const estadoRes = await updateInventarioEstadoAction(inv.id, "Confirmado", usuarioNombre);
+    if (!estadoRes.ok) { toast.error(estadoRes.error ?? "No se pudo confirmar."); return; }
+    const kardex = await confirmarInventarioKardex(inv.id);
+    if (!kardex.ok) { toast.error(kardex.error ?? "No se pudo ajustar el stock."); return; }
+    toast.success(`Inventario confirmado. ${kardex.ajustados ?? 0} producto(s) ajustados.`);
+    await loadInventarios();
+    setDetalleId(null);
   };
 
   const handleDeshacerConfirmacion = async (inv: Inventario) => {
-    setInventarios((prev) => prev.map((i) =>
-      i.id === inv.id ? { ...i, estado: "Borrador" as const, confirmadoAt: undefined, confirmadoPor: undefined } : i
-    ));
-    await updateInventarioEstadoAction(inv.id, "Borrador");
-    await revertirInventarioKardex(inv.id); // PRP-058: revierte los movimientos del kardex
-    toast.info("Confirmacion deshecha. El inventario vuelve a estado Borrador.");
+    const estadoRes = await updateInventarioEstadoAction(inv.id, "Borrador");
+    if (!estadoRes.ok) { toast.error("No se pudo deshacer."); return; }
+    await revertirInventarioKardex(inv.id);
+    toast.info("Confirmación deshecha. El inventario vuelve a Borrador.");
+    await loadInventarios();
   };
 
   const handleUpdateInventario = (updated: Inventario) => {
     setInventarios((prev) => prev.map((i) => i.id === updated.id ? updated : i));
   };
+
+  // ── Carga lazy de conteos al abrir un inventario ──
+  useEffect(() => {
+    if (!detalleId) return;
+    const inv = inventarios.find((i) => i.id === detalleId);
+    if (!inv || inv.conteosCargados) return;
+    let cancel = false;
+    (async () => {
+      const res = await getConteosInventario(detalleId);
+      if (cancel) return;
+      setInventarios((prev) => prev.map((i) =>
+        i.id === detalleId ? { ...i, conteos: (res.data as Inventario["conteos"]) ?? [], conteosCargados: true } : i
+      ));
+    })();
+    return () => { cancel = true; };
+  }, [detalleId, inventarios]);
+
+  // ── Autosave de conteos (debounce) para el inventario abierto en Borrador ──
+  const detalleConteos = detalleId ? inventarios.find((i) => i.id === detalleId)?.conteos : undefined;
+  const detalleEstado = detalleId ? inventarios.find((i) => i.id === detalleId)?.estado : undefined;
+  const detalleCargado = detalleId ? inventarios.find((i) => i.id === detalleId)?.conteosCargados : undefined;
+  useEffect(() => {
+    if (!detalleId || detalleEstado !== "Borrador" || !detalleCargado || !detalleConteos) return;
+    const t = setTimeout(() => {
+      const inv = inventarios.find((i) => i.id === detalleId);
+      if (inv) persistirConteos(inv);
+    }, 800);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detalleId, detalleEstado, detalleCargado, JSON.stringify(detalleConteos)]);
 
   // ── Config view ──
   if (showConfig) {
@@ -224,11 +298,9 @@ export function InventariosView() {
       <div className="p-4 md:p-6">
         <InventarioConfigView
           tipos={tipos}
-          onTiposChange={setTipos}
           plantillas={plantillas}
-          onPlantillasChange={setPlantillas}
           productos={stock}
-          empresaId={empresaActual.id}
+          onReload={loadInventarios}
           onBack={() => setShowConfig(false)}
         />
       </div>
@@ -391,7 +463,7 @@ export function InventariosView() {
         onColumnasOrdenChange={setColumnasOrden}
         extraDerecha={
           <>
-            <IOActions config={inventariosIO} onSuccess={() => window.location.reload()} />
+            <IOActions config={inventariosIO} onSuccess={() => loadInventarios()} />
             <Button size="icon" variant={showConfig ? "default" : "outline"} className="h-9 w-9" onClick={() => setShowConfig((v) => !v)} title="Configuración" aria-label="Configuración">
               <Settings className="h-4 w-4" strokeWidth={1.75} />
             </Button>

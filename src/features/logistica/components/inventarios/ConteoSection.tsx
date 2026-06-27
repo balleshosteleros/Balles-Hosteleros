@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Pencil, Trash2, Package } from "lucide-react";
 import { toast } from "sonner";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 interface Props {
   conteos: Conteo[];
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export default function ConteoSection({ conteos, onConteosChange, productos, readOnly }: Props) {
+  const { confirm: confirmDelete, dialog } = useConfirmDelete();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingConteoId, setEditingConteoId] = useState<string | null>(null);
   const [conteoNombre, setConteoNombre] = useState("");
@@ -51,8 +53,13 @@ export default function ConteoSection({ conteos, onConteosChange, productos, rea
     toast.success(editingConteoId ? "Conteo actualizado" : "Conteo creado");
   };
 
-  const deleteConteo = (id: string) => {
-    onConteosChange(conteos.filter((c) => c.id !== id));
+  const deleteConteo = async (c: Conteo) => {
+    const ok = await confirmDelete({
+      title: "Eliminar conteo",
+      description: `¿Eliminar el conteo «${c.nombre}» y sus ${c.lineas.length} línea(s)?`,
+    });
+    if (!ok) return;
+    onConteosChange(conteos.filter((x) => x.id !== c.id));
     toast.success("Conteo eliminado");
   };
 
@@ -98,7 +105,7 @@ export default function ConteoSection({ conteos, onConteosChange, productos, rea
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold text-foreground">CONTEOS</h3>
+        <h3 className="text-sm font-bold text-foreground">Conteos</h3>
         {!readOnly && (
           <Button size="sm" variant="outline" className="gap-1" onClick={openNew}>
             <Plus className="h-3.5 w-3.5" /> Añadir conteo
@@ -126,7 +133,7 @@ export default function ConteoSection({ conteos, onConteosChange, productos, rea
                 <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(c)}>
                   <Pencil className="h-3.5 w-3.5" />
                 </Button>
-                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => deleteConteo(c.id)}>
+                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => deleteConteo(c)}>
                   <Trash2 className="h-3.5 w-3.5 text-destructive" />
                 </Button>
               </div>
@@ -214,6 +221,8 @@ export default function ConteoSection({ conteos, onConteosChange, productos, rea
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {dialog}
     </div>
   );
 }

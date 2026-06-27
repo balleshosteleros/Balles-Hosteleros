@@ -10,6 +10,7 @@ import {
   updateAgoraId,
   type ConexionAgora,
 } from "@/features/logistica/actions/conexion-agora-actions";
+import { toast } from "sonner";
 
 /** Conexión con Ágora del producto: ID de Ágora (editable), nombre con que lo vende Ágora
  *  y si se ha vendido. "Configurable desde Balles" (PRP-057). */
@@ -39,8 +40,11 @@ export function ConexionAgoraSection({ productoId }: { productoId: string }) {
     startTransition(async () => {
       const res = await updateAgoraId(productoId, agoraId);
       if (res.ok) {
+        setInfo((prev) => (prev ? { ...prev, agoraId: agoraId.trim() } : prev));
         setGuardado(true);
         setTimeout(() => setGuardado(false), 2000);
+      } else {
+        toast.error(res.error ?? "No se pudo guardar el ID de Ágora");
       }
     });
   }

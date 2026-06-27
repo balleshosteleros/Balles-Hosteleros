@@ -60,7 +60,7 @@ export default function DetalleInventario({ inventario, productos, plantilla, on
         </div>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" className="gap-1.5" onClick={() => window.print()}>
-            <FileDown className="h-4 w-4" /> Guardar PDF
+            <FileDown className="h-4 w-4" /> Imprimir
           </Button>
           {!isConfirmed && (
             <Button size="sm" className="gap-1.5" onClick={handleConfirmarClick}>
@@ -97,14 +97,14 @@ export default function DetalleInventario({ inventario, productos, plantilla, on
       )}
 
       {plantilla && validacion.completa && !isConfirmed && (
-        <div className="rounded-lg border border-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 p-3 text-xs text-emerald-800 dark:text-emerald-300">
-          ✓ Plantilla «{plantilla.nombre}» completada. Puedes confirmar el inventario.
+        <div className="rounded-lg border border-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 p-3 text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> Plantilla «{plantilla.nombre}» completada. Puedes confirmar el inventario.
         </div>
       )}
 
       {isConfirmed && inventario.confirmadoAt && (
-        <div className="rounded-lg border bg-emerald-50 dark:bg-emerald-900/20 p-3 text-xs text-emerald-800 dark:text-emerald-300">
-          ✓ Confirmado el {new Date(inventario.confirmadoAt).toLocaleString("es-ES")} por {inventario.confirmadoPor}
+        <div className="rounded-lg border bg-emerald-50 dark:bg-emerald-900/20 p-3 text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> Confirmado el {new Date(inventario.confirmadoAt).toLocaleString("es-ES")} por {inventario.confirmadoPor}
         </div>
       )}
 

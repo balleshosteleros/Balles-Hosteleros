@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Separator } from "@/components/ui/separator";
 import { Plus, Pencil, Trash2, CalendarDays, Sun } from "lucide-react";
 import { toast } from "sonner";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 interface Props {
   temporadas: TemporadaStock[];
@@ -27,6 +28,7 @@ const emptyForm = (): Omit<TemporadaStock, "empresaId"> => ({
 });
 
 export default function TemporadasConfig({ temporadas, setTemporadas, productos, empresaId, temporadaActiva }: Props) {
+  const { confirm: confirmDelete, dialog: confirmDialog } = useConfirmDelete();
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [editId, setEditId] = useState<string | null>(null);
@@ -59,10 +61,15 @@ export default function TemporadasConfig({ temporadas, setTemporadas, productos,
     setModalOpen(false);
   };
 
-  const remove = async (id: string) => {
-    const res = await deleteTemporada(id);
+  const remove = async (t: TemporadaStock) => {
+    const ok = await confirmDelete({
+      title: "Eliminar temporada",
+      description: `¿Eliminar la temporada «${t.nombre}» y sus reglas de stock?`,
+    });
+    if (!ok) return;
+    const res = await deleteTemporada(t.id);
     if (!res.ok) { toast.error(`Error al eliminar: ${res.error}`); return; }
-    setTemporadas((prev) => prev.filter((t) => t.id !== id));
+    setTemporadas((prev) => prev.filter((x) => x.id !== t.id));
     toast.success("Temporada eliminada");
   };
 
@@ -125,7 +132,7 @@ export default function TemporadasConfig({ temporadas, setTemporadas, productos,
                   <div className="flex gap-1">
                     {isActiva && <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/30">ACTIVA</Badge>}
                     <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(t)}><Pencil className="h-3.5 w-3.5" /></Button>
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => remove(t.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => remove(t)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground">{Object.keys(t.overrides).length} producto(s) con valores especiales</p>
@@ -204,6 +211,7 @@ export default function TemporadasConfig({ temporadas, setTemporadas, productos,
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {confirmDialog}
     </div>
   );
 }

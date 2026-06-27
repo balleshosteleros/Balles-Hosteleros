@@ -224,7 +224,7 @@ export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNom
     id: `ped-${Date.now()}`, numero: `PED-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900) + 100)}`,
     empresaId, empresa: empresaNombre, proveedor: "", proveedorId: "",
     almacen: almacenes[0] ?? "", fecha: new Date().toISOString().slice(0, 10),
-    fechaEntrega: "", horaEntrega: "", horaEntregaHasta: "", estado: "Borrador" as const,
+    fechaEntrega: "", horaEntrega: "", horaEntregaHasta: "", estado: "Pendiente" as const,
     lineas: [emptyLinea()], dtoPct: 0, dtoEur: 0, notas: "",
     albaranId: null, creador: "Usuario actual", ultimaActualizacion: new Date().toISOString().slice(0, 10),
   });

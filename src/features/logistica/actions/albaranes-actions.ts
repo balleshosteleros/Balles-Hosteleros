@@ -222,6 +222,15 @@ export async function updateAlbaranNumeroProveedor(id: string, numeroProveedor: 
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
+    // Guarda de inmutabilidad: si ya tiene factura (Confirmado) no se edita.
+    const { data: alb } = await supabase
+      .from("albaranes")
+      .select("estado")
+      .eq("id", id)
+      .maybeSingle();
+    if (alb?.estado === "Confirmado") {
+      return { ok: false, error: "El albarán tiene factura y no se puede editar." };
+    }
     const { error } = await supabase
       .from("albaranes")
       .update({ numero_proveedor: numeroProveedor })
@@ -233,6 +242,89 @@ export async function updateAlbaranNumeroProveedor(id: string, numeroProveedor: 
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[albaranes] updateAlbaranNumeroProveedor:", msg);
     return { ok: false, error: msg };
+  }
+}
+
+const BUCKET_ALBARANES = "logistica-albaranes";
+
+function sanitizeFilenameAlb(name: string): string {
+  return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120);
+}
+
+/**
+ * Sube el archivo del albarán del proveedor a Storage y persiste el documento
+ * (con su análisis OCR) en `albaranes.documentos`. Devuelve el documento guardado.
+ */
+export async function subirDocumentoAlbaran(formData: FormData) {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false as const, error: "No autenticado" };
+
+    const albaranId = String(formData.get("albaranId") ?? "");
+    const file = formData.get("file") as File | null;
+    const analisisRaw = String(formData.get("analisis") ?? "");
+    const hayAlerta = String(formData.get("hayAlerta") ?? "false") === "true";
+    const uploadedBy = String(formData.get("uploadedBy") ?? "");
+    if (!albaranId) return { ok: false as const, error: "Falta albaranId" };
+    if (!file || file.size === 0) return { ok: false as const, error: "No se recibió ningún archivo" };
+    if (file.size > 20 * 1024 * 1024) return { ok: false as const, error: "El archivo supera los 20 MB" };
+
+    const path = `${empresaId}/${albaranId}/${Date.now()}_${sanitizeFilenameAlb(file.name)}`;
+    const { error: upErr } = await supabase.storage
+      .from(BUCKET_ALBARANES)
+      .upload(path, file, { upsert: false, contentType: file.type || "application/octet-stream" });
+    if (upErr) return { ok: false as const, error: `No se pudo subir el archivo: ${upErr.message}` };
+
+    let analisis: unknown = null;
+    try { analisis = analisisRaw ? JSON.parse(analisisRaw) : null; } catch { analisis = null; }
+
+    const doc = {
+      id: `doc-${Date.now()}`,
+      fileName: file.name,
+      fileUrl: path,
+      mimeType: file.type,
+      uploadedAt: new Date().toISOString(),
+      uploadedBy,
+      analisis,
+      hayAlerta,
+    };
+
+    // Append al array documentos (lee actual y reescribe).
+    const { data: alb } = await supabase
+      .from("albaranes")
+      .select("documentos")
+      .eq("id", albaranId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    const prev = Array.isArray(alb?.documentos) ? (alb!.documentos as unknown[]) : [];
+    const { error: updErr } = await supabase
+      .from("albaranes")
+      .update({ documentos: [...prev, doc] })
+      .eq("id", albaranId)
+      .eq("empresa_id", empresaId);
+    if (updErr) {
+      await supabase.storage.from(BUCKET_ALBARANES).remove([path]);
+      return { ok: false as const, error: updErr.message };
+    }
+
+    return { ok: true as const, data: doc };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[albaranes] subirDocumentoAlbaran:", msg);
+    return { ok: false as const, error: msg };
+  }
+}
+
+/** URL firmada para ver/descargar el archivo de un documento de albarán. */
+export async function getDocumentoAlbaranSignedUrl(path: string) {
+  try {
+    const { supabase } = await getContext();
+    const signed = await supabase.storage.from(BUCKET_ALBARANES).createSignedUrl(path, 60 * 10);
+    if (!signed.data?.signedUrl) return { ok: false as const, error: "No se pudo generar la URL" };
+    return { ok: true as const, url: signed.data.signedUrl };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    return { ok: false as const, error: msg };
   }
 }
 

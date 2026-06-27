@@ -16,27 +16,27 @@ import {
 const ALL = "__ALL__";
 type Periodo = "dia" | "semana" | "mes" | "año";
 
-// ── Mock histórico (preparado para datos reales) ──────────
+// ── Histórico de alertas ──────────────────────────────────
+// No inventamos datos: hasta que se acumulen movimientos reales (stock_movimientos),
+// la serie refleja el estado ACTUAL como línea base constante. Cuando exista
+// histórico real, esta función se alimentará de snapshots/movimientos por fecha.
 function generateHistory(stock: ProductoStock[], temporadaActiva: TemporadaStock | null) {
   const today = new Date();
   const days: { fecha: string; bajoSeguridad: number; sinStock: number }[] = [];
 
+  // Conteo real actual (mismo criterio que los KPIs).
+  let bajoHoy = 0;
+  let sinHoy = 0;
+  stock.forEach((p) => {
+    const s = getStockConTemporada(p, temporadaActiva);
+    if (p.stockActual === 0) sinHoy++;
+    else if (p.stockActual < s.stockSeguridad) bajoHoy++;
+  });
+
   for (let i = 364; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
-    const label = d.toISOString().slice(0, 10);
-
-    // Simulate slight variation from current state
-    const jitter = () => (Math.random() - 0.5) * 0.3;
-    let bajo = 0;
-    let sin = 0;
-    stock.forEach((p) => {
-      const s = getStockConTemporada(p, temporadaActiva);
-      const simulated = Math.max(0, p.stockActual + p.stockActual * jitter());
-      if (simulated === 0) sin++;
-      else if (simulated < s.stockSeguridad) bajo++;
-    });
-    days.push({ fecha: label, bajoSeguridad: bajo, sinStock: sin });
+    days.push({ fecha: d.toISOString().slice(0, 10), bajoSeguridad: bajoHoy, sinStock: sinHoy });
   }
   return days;
 }
@@ -256,6 +256,7 @@ export default function StockAnalytics({ stock, temporadaActiva }: Props) {
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-bold">Evolución de alertas de stock</CardTitle>
+            <p className="text-[11px] text-muted-foreground">Línea base con el estado actual; el histórico se completará a medida que se registren movimientos de stock.</p>
           </CardHeader>
           <CardContent>
             <ChartContainer config={chartConfig} className="h-[260px] w-full">

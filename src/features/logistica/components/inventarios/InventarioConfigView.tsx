@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { type TipoInventario, type PlantillaInventario } from "@/features/logistica/data/inventarios";
 import { type ProductoStock } from "@/features/logistica/data/stock";
+import {
+  upsertTipoInventario,
+  deleteTipoInventario,
+  upsertPlantillaInventario,
+  deletePlantillaInventario,
+} from "@/features/logistica/actions/inventarios-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,40 +16,44 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Pencil, Trash2, Settings, FileText, ClipboardList } from "lucide-react";
 import { toast } from "sonner";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 interface Props {
   tipos: TipoInventario[];
-  onTiposChange: (tipos: TipoInventario[]) => void;
   plantillas: PlantillaInventario[];
-  onPlantillasChange: (plantillas: PlantillaInventario[]) => void;
   productos: ProductoStock[];
-  empresaId: string;
+  onReload: () => void | Promise<void>;
   onBack: () => void;
 }
 
-export default function InventarioConfigView({
-  tipos, onTiposChange, plantillas, onPlantillasChange, productos, empresaId, onBack,
-}: Props) {
+export default function InventarioConfigView({ tipos, plantillas, productos, onReload, onBack }: Props) {
+  const { confirm: confirmDelete, dialog } = useConfirmDelete();
+
   // ── Tipos state ──
   const [tipoModal, setTipoModal] = useState(false);
   const [editTipoId, setEditTipoId] = useState<string | null>(null);
   const [tipoNombre, setTipoNombre] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const openNewTipo = () => { setEditTipoId(null); setTipoNombre(""); setTipoModal(true); };
   const openEditTipo = (t: TipoInventario) => { setEditTipoId(t.id); setTipoNombre(t.nombre); setTipoModal(true); };
-  const saveTipo = () => {
+  const saveTipo = async () => {
     if (!tipoNombre.trim()) return;
-    if (editTipoId) {
-      onTiposChange(tipos.map((t) => t.id === editTipoId ? { ...t, nombre: tipoNombre } : t));
-    } else {
-      onTiposChange([...tipos, { id: `tipo-${Date.now()}`, nombre: tipoNombre, empresaId }]);
-    }
+    setSaving(true);
+    const res = await upsertTipoInventario({ id: editTipoId ?? undefined, nombre: tipoNombre.trim() });
+    setSaving(false);
+    if (!res.ok) { toast.error(res.error ?? "No se pudo guardar"); return; }
     setTipoModal(false);
     toast.success(editTipoId ? "Tipo actualizado" : "Tipo creado");
+    await onReload();
   };
-  const deleteTipo = (id: string) => {
-    onTiposChange(tipos.filter((t) => t.id !== id));
+  const deleteTipo = async (t: TipoInventario) => {
+    const ok = await confirmDelete({ title: "Eliminar tipo", description: `¿Eliminar el tipo «${t.nombre}»?` });
+    if (!ok) return;
+    const res = await deleteTipoInventario(t.id);
+    if (!res.ok) { toast.error(res.error ?? "No se pudo eliminar"); return; }
     toast.success("Tipo eliminado");
+    await onReload();
   };
 
   // ── Plantillas state ──
@@ -64,26 +74,28 @@ export default function InventarioConfigView({
     setPlantillaProductos(new Set(p.productosIds));
     setPlantillaModal(true);
   };
-  const savePlantilla = () => {
+  const savePlantilla = async () => {
     if (!plantillaNombre.trim()) return;
     if (plantillaProductos.size === 0) { toast.error("Selecciona al menos un producto"); return; }
-    const data: PlantillaInventario = {
-      id: editPlantillaId || `plt-${Date.now()}`,
-      nombre: plantillaNombre,
-      empresaId,
+    setSaving(true);
+    const res = await upsertPlantillaInventario({
+      id: editPlantillaId ?? undefined,
+      nombre: plantillaNombre.trim(),
       productosIds: [...plantillaProductos],
-    };
-    if (editPlantillaId) {
-      onPlantillasChange(plantillas.map((p) => p.id === editPlantillaId ? data : p));
-    } else {
-      onPlantillasChange([...plantillas, data]);
-    }
+    });
+    setSaving(false);
+    if (!res.ok) { toast.error(res.error ?? "No se pudo guardar"); return; }
     setPlantillaModal(false);
     toast.success(editPlantillaId ? "Plantilla actualizada" : "Plantilla creada");
+    await onReload();
   };
-  const deletePlantilla = (id: string) => {
-    onPlantillasChange(plantillas.filter((p) => p.id !== id));
+  const deletePlantilla = async (p: PlantillaInventario) => {
+    const ok = await confirmDelete({ title: "Eliminar plantilla", description: `¿Eliminar la plantilla «${p.nombre}»?` });
+    if (!ok) return;
+    const res = await deletePlantillaInventario(p.id);
+    if (!res.ok) { toast.error(res.error ?? "No se pudo eliminar"); return; }
     toast.success("Plantilla eliminada");
+    await onReload();
   };
 
   const toggleProducto = (pid: string) => {
@@ -121,7 +133,7 @@ export default function InventarioConfigView({
                 <span className="text-sm font-medium text-foreground">{t.nombre}</span>
                 <div className="flex gap-1">
                   <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEditTipo(t)}><Pencil className="h-3.5 w-3.5" /></Button>
-                  <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => deleteTipo(t.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+                  <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => deleteTipo(t)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
                 </div>
               </div>
             ))}
@@ -144,7 +156,7 @@ export default function InventarioConfigView({
                 </div>
                 <div className="flex gap-1">
                   <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEditPlantilla(p)}><Pencil className="h-3.5 w-3.5" /></Button>
-                  <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => deletePlantilla(p.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+                  <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => deletePlantilla(p)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
                 </div>
               </div>
             ))}
@@ -162,7 +174,7 @@ export default function InventarioConfigView({
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setTipoModal(false)}>Cancelar</Button>
-            <Button onClick={saveTipo}>{editTipoId ? "Guardar" : "Crear"}</Button>
+            <Button onClick={saveTipo} disabled={saving}>{editTipoId ? "Guardar" : "Crear"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -191,10 +203,12 @@ export default function InventarioConfigView({
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPlantillaModal(false)}>Cancelar</Button>
-            <Button onClick={savePlantilla}>{editPlantillaId ? "Guardar" : "Crear"}</Button>
+            <Button onClick={savePlantilla} disabled={saving}>{editPlantillaId ? "Guardar" : "Crear"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {dialog}
     </div>
   );
 }

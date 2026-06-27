@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useState, useCallback } from "react";
+import { toast } from "sonner";
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -96,6 +97,8 @@ export function MovimientosStockSection({
     setGuardando(false);
     if (res.ok) {
       setControla(pendiente);
+    } else {
+      toast.error((res as { error?: string }).error ?? "No se pudo cambiar el control de stock");
     }
     setPendiente(null);
   }

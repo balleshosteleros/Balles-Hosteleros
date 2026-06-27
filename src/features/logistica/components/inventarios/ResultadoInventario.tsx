@@ -35,7 +35,7 @@ export default function ResultadoInventario({ resultados }: Props) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold text-foreground">RESULTADO DEL INVENTARIO</h3>
+        <h3 className="text-sm font-bold text-foreground">Resultado del inventario</h3>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -62,7 +62,7 @@ export default function ResultadoInventario({ resultados }: Props) {
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b bg-muted/50">
-              {["Producto", "Ud.", "Stock Teórico", "Coste Teórico", "Stock Real", "Coste Real", "Pr. Coste", "Dif. Cantidad", "Dif. Coste"].map((h) => (
+              {["Producto", "Ud.", "Stock teórico", "Coste teórico", "Stock real", "Coste real", "Pr. coste", "Dif. cantidad", "Dif. coste"].map((h) => (
                 <th key={h} className="px-3 py-2.5 text-left font-bold text-muted-foreground whitespace-nowrap">{h}</th>
               ))}
             </tr>

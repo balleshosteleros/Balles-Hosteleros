@@ -58,6 +58,7 @@ import type { ImportadorEntityConfig } from "@/features/logistica/types/importad
 import { useReglasSubmodulo } from "@/features/ajustes/hooks/use-reglas-submodulo";
 import { ValidacionFaltantesDialog } from "@/features/ajustes/components/ValidacionFaltantesDialog";
 import { toast } from "sonner";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 function EstadoBadge({ value }: { value: EstadoProveedor }) {
   const cls: Record<string, string> = {
@@ -525,7 +526,7 @@ export function ProveedoresView() {
               <>
                 <IOActions
                   config={proveedoresIO}
-                  onSuccess={() => window.location.reload()}
+                  onSuccess={() => loadProveedores()}
                   onCustomImport={() => setIaProvOpen(true)}
                 />
                 <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => setShowConfig(true)} title="Configuración" aria-label="Configuración">
@@ -806,6 +807,7 @@ function CategoriasProveedorManager({
   items: CategoriaProveedorRow[];
   onChanged: () => Promise<void>;
 }) {
+  const { confirm: confirmDelete, dialog: confirmDialog } = useConfirmDelete();
   const [editId, setEditId] = useState<string | null>(null);
   const [editVal, setEditVal] = useState("");
   const [newVal, setNewVal] = useState("");
@@ -844,7 +846,9 @@ function CategoriasProveedorManager({
     toast.success("Categoría actualizada");
   };
 
-  const remove = async (id: string) => {
+  const remove = async (id: string, nombre: string) => {
+    const ok = await confirmDelete({ title: "Eliminar categoría", description: `¿Eliminar la categoría «${nombre}»?` });
+    if (!ok) return;
     setBusy(true);
     const res = await deleteCategoriaProveedor(id);
     setBusy(false);
@@ -918,7 +922,7 @@ function CategoriasProveedorManager({
                   variant="ghost"
                   className="h-7 w-7 p-0 text-destructive hover:text-destructive"
                   disabled={busy}
-                  onClick={() => remove(it.id)}
+                  onClick={() => remove(it.id, it.nombre)}
                 >
                   <Trash2 className="h-3 w-3" />
                 </Button>
@@ -950,6 +954,7 @@ function CategoriasProveedorManager({
           void onChanged();
         }}
       />
+      {confirmDialog}
     </div>
   );
 }

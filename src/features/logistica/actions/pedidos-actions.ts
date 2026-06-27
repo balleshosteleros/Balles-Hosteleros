@@ -171,6 +171,103 @@ export async function createPedido(input: {
   }
 }
 
+/**
+ * Actualiza cabecera y líneas de un pedido. Sólo permitido mientras el pedido
+ * es editable (estado "Pendiente" y sin albarán asociado): respeta la cadena de
+ * inmutabilidad pedido→albarán→factura.
+ */
+export async function updatePedido(id: string, input: {
+  proveedorId?: string;
+  proveedorNombre: string;
+  numero?: string;
+  fechaEntrega?: string;
+  horaEntrega?: string;
+  horaEntregaHasta?: string;
+  notas?: string;
+  lineas: {
+    productoId: string;
+    productoNombre: string;
+    cantidad: number;
+    unidad?: string;
+    precioUnitario: number;
+  }[];
+}) {
+  try {
+    const { supabase } = await getContext();
+
+    // Guarda de inmutabilidad: no editar si está confirmado o tiene albarán.
+    const { data: actual, error: getErr } = await supabase
+      .from("pedidos")
+      .select("estado")
+      .eq("id", id)
+      .single();
+    if (getErr) throw getErr;
+    if (actual?.estado === "Confirmado") {
+      return { ok: false, error: "El pedido está confirmado y no se puede editar." };
+    }
+    const { count: albCount } = await supabase
+      .from("albaranes")
+      .select("id", { count: "exact", head: true })
+      .eq("pedido_id", id);
+    if ((albCount ?? 0) > 0) {
+      return { ok: false, error: "El pedido tiene un albarán asociado y no se puede editar." };
+    }
+
+    // Validar productos
+    const productoIds = input.lineas.map((l) => l.productoId);
+    if (productoIds.length > 0) {
+      const { data: existentes } = await supabase.from("productos").select("id").in("id", productoIds);
+      const encontrados = new Set((existentes ?? []).map((p: { id: string }) => p.id));
+      const noExisten = productoIds.filter((pid) => !encontrados.has(pid));
+      if (noExisten.length > 0) {
+        return { ok: false, error: `Productos no encontrados: ${noExisten.join(", ")}` };
+      }
+    }
+
+    const lineasConTotal = input.lineas.map((l, i) => ({
+      pedido_id: id,
+      producto_id: l.productoId,
+      producto_nombre: l.productoNombre,
+      cantidad: l.cantidad,
+      unidad: l.unidad ?? "ud",
+      precio_unitario: l.precioUnitario,
+      total: Math.round(l.cantidad * l.precioUnitario * 100) / 100,
+      orden: i,
+    }));
+    const total = lineasConTotal.reduce((sum, l) => sum + l.total, 0);
+
+    const { error: updErr } = await supabase
+      .from("pedidos")
+      .update({
+        proveedor_id: input.proveedorId ?? null,
+        proveedor_nombre: input.proveedorNombre,
+        numero: input.numero ?? null,
+        fecha_entrega: input.fechaEntrega ?? null,
+        hora_entrega: input.horaEntrega ?? null,
+        hora_entrega_hasta: input.horaEntregaHasta ?? null,
+        notas: input.notas ?? "",
+        total,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+    if (updErr) throw updErr;
+
+    // Reescribir líneas
+    const { error: delErr } = await supabase.from("lineas_pedido").delete().eq("pedido_id", id);
+    if (delErr) throw delErr;
+    if (lineasConTotal.length > 0) {
+      const { error: insErr } = await supabase.from("lineas_pedido").insert(lineasConTotal);
+      if (insErr) throw insErr;
+    }
+
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[pedidos] updatePedido:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
 export async function updatePedidoEstado(id: string, estado: string) {
   try {
     const { supabase } = await getContext();

@@ -8,10 +8,10 @@ import {
   ESTADOS_PEDIDO,
   type Pedido, type Albaran, type EstadoPedido, type EstadoAlbaran,
 } from "@/features/logistica/data/pedidos";
-import { listPedidos, getPedido, createPedido, updatePedidoEstado as serverUpdatePedidoEstado, deletePedido as serverDeletePedido } from "@/features/logistica/actions/pedidos-actions";
+import { listPedidos, getPedido, createPedido, updatePedido as serverUpdatePedido, deletePedido as serverDeletePedido } from "@/features/logistica/actions/pedidos-actions";
 import { listAlbaranes, createAlbaran, updateAlbaranEstado as serverUpdateAlbaranEstado, deleteAlbaran as serverDeleteAlbaran } from "@/features/logistica/actions/albaranes-actions";
 import { enviarPedidoEmail, prepararWhatsappPedido } from "@/features/logistica/actions/enviar-pedido-actions";
-import { EstadoPedidoBadge } from "@/features/logistica/components/pedidos/BadgesPedido";
+import { EstadoPedidoBadge, EstadoAlbaranBadge } from "@/features/logistica/components/pedidos/BadgesPedido";
 import { DetallePedido } from "@/features/logistica/components/pedidos/DetallePedido";
 import { DetalleAlbaran } from "@/features/logistica/components/pedidos/DetalleAlbaran";
 import { PedidoModal } from "@/features/logistica/components/pedidos/PedidoModal";
@@ -173,6 +173,7 @@ export function PedidosView() {
           pedidoId: (r.pedido_id as string) ?? "",
           creador: (r.creador as string) ?? "",
           ultimaActualizacion: (r.updated_at as string) ?? "",
+          documentos: Array.isArray(r.documentos) ? (r.documentos as Albaran["documentos"]) : [],
         }));
         setAlbaranes(mapped);
       }
@@ -232,8 +233,24 @@ export function PedidosView() {
     });
 
     if (exists) {
-      const res = await serverUpdatePedidoEstado(item.id, item.estado);
-      if (!res.ok) { toast.error("Error al actualizar pedido"); loadPedidos(); }
+      const res = await serverUpdatePedido(item.id, {
+        proveedorNombre: item.proveedor,
+        proveedorId: item.proveedorId || undefined,
+        numero: item.numero || undefined,
+        fechaEntrega: item.fechaEntrega || undefined,
+        horaEntrega: item.horaEntrega || undefined,
+        horaEntregaHasta: item.horaEntregaHasta || undefined,
+        notas: item.notas || undefined,
+        lineas: item.lineas.map((l) => ({
+          productoId: l.productoId,
+          productoNombre: l.producto,
+          cantidad: l.cantidad,
+          unidad: l.unidad,
+          precioUnitario: l.precioUC,
+        })),
+      });
+      if (res.ok) { toast.success("Pedido actualizado"); loadPedidos(); }
+      else { toast.error(res.error ?? "Error al actualizar pedido"); loadPedidos(); }
     } else {
       const res = await createPedido({
         proveedorNombre: item.proveedor,
@@ -291,20 +308,27 @@ export function PedidosView() {
     window.open(res.url, "_blank");
   };
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     if (selected.size !== 1) { toast.info("Selecciona un pedido para copiar"); return; }
     const src = pedidos.find((p) => selected.has(p.id));
     if (!src) return;
-    const copy: Pedido = {
-      ...structuredClone(src),
-      id: `ped-${Date.now()}`,
-      // numero/numero_secuencial los asigna el servidor al guardar el pedido nuevo.
-      numero: "",
-      numeroSecuencial: undefined,
-      estado: "Pendiente", albaranId: null, ultimaActualizacion: new Date().toISOString().slice(0, 10),
-    };
-    setPedidos((prev) => [copy, ...prev]);
-    toast.success("Pedido copiado como borrador");
+    const res = await createPedido({
+      proveedorNombre: src.proveedor,
+      proveedorId: src.proveedorId || undefined,
+      fechaEntrega: src.fechaEntrega || undefined,
+      horaEntrega: src.horaEntrega || undefined,
+      horaEntregaHasta: src.horaEntregaHasta || undefined,
+      notas: src.notas || undefined,
+      lineas: src.lineas.map((l) => ({
+        productoId: l.productoId,
+        productoNombre: l.producto,
+        cantidad: l.cantidad,
+        unidad: l.unidad,
+        precioUnitario: l.precioUC,
+      })),
+    });
+    if (res.ok) { toast.success("Pedido copiado"); setSelected(new Set()); loadPedidos(); }
+    else { toast.error(res.error ?? "No se pudo copiar el pedido"); }
   };
 
   const handleConfirmarPedido = async (ped: Pedido) => {
@@ -671,7 +695,12 @@ export function PedidosView() {
                       <DropdownMenuItem onClick={() => {
                         if (selected.size !== 1) { toast.info("Selecciona un pedido"); return; }
                         const p = pedidos.find((x) => selected.has(x.id));
-                        if (p) { setEditItem(p); setModalOpen(true); }
+                        if (!p) return;
+                        if (p.albaranId || p.estado === "Confirmado") {
+                          toast.error("Este pedido tiene un albarán o está confirmado: no se puede editar.");
+                          return;
+                        }
+                        setEditItem(p); setModalOpen(true);
                       }}><Pencil className="h-4 w-4 mr-2" /> Editar</DropdownMenuItem>
                       <DropdownMenuItem onClick={() => window.print()}><Printer className="h-4 w-4 mr-2" /> Imprimir</DropdownMenuItem>
                       <DropdownMenuSeparator />
@@ -686,7 +715,7 @@ export function PedidosView() {
             }
             extraDerecha={
               <>
-                <IOActions config={pedidosIO} onSuccess={() => window.location.reload()} />
+                <IOActions config={pedidosIO} onSuccess={() => { loadPedidos(); loadAlbaranes(); }} />
                 <Button size="icon" variant={showConfig ? "default" : "outline"} className="h-9 w-9" onClick={() => setShowConfig((v) => !v)} title="Configuración" aria-label="Configuración">
                   <Settings className="h-4 w-4" strokeWidth={1.75} />
                 </Button>
@@ -869,7 +898,7 @@ export function PedidosView() {
                                 case "estado":
                                   return (
                                     <td key={c.campo} className="px-3 py-2.5">
-                                      <Badge variant="outline" className="text-[11px]">{a.estado}</Badge>
+                                      <EstadoAlbaranBadge value={a.estado} />
                                     </td>
                                   );
                                 case "pedidoNumero":

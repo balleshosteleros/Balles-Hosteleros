@@ -46,8 +46,9 @@ export async function createInventario(input: {
         empresa_id: empresaId,
         nombre: input.nombre,
         fecha: input.fecha ?? new Date().toISOString().slice(0, 10),
-        almacen: input.almacen ?? "COCINA",
-        motivo: input.motivo ?? input.tipo ?? "periodico",
+        almacen: input.almacen ?? null,
+        motivo: input.motivo ?? null,
+        tipo: input.tipo ?? null,
         estado: "Borrador",
         plantilla_id: input.plantillaId ?? null,
         usuario: input.usuario ?? "",
@@ -57,24 +58,7 @@ export async function createInventario(input: {
       .select()
       .single();
 
-    // Si falla por columnas no existentes, reintenta con schema mínimo
-    if (error) {
-      const { data: d2, error: e2 } = await supabase
-        .from("inventarios")
-        .insert({
-          empresa_id: empresaId,
-          nombre: input.nombre,
-          estado: "Borrador",
-          tipo: input.almacen ?? input.tipo ?? "general",
-          notas: input.notas ?? null,
-          created_by: user?.id ?? null,
-        })
-        .select()
-        .single();
-      if (e2) throw e2;
-      return { ok: true, data: d2 };
-    }
-
+    if (error) throw error;
     return { ok: true, data };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
@@ -107,13 +91,19 @@ export async function getInventario(id: string) {
   }
 }
 
-export async function updateInventarioEstado(id: string, estado: string) {
+export async function updateInventarioEstado(id: string, estado: string, usuario?: string) {
   try {
     const { supabase } = await getContext();
-    const { error } = await supabase
-      .from("inventarios")
-      .update({ estado, updated_at: new Date().toISOString() })
-      .eq("id", id);
+    const now = new Date().toISOString();
+    const patch: Record<string, unknown> = { estado, updated_at: now };
+    if (estado === "Confirmado") {
+      patch.confirmado_at = now;
+      patch.confirmado_por = usuario ?? null;
+    } else {
+      patch.confirmado_at = null;
+      patch.confirmado_por = null;
+    }
+    const { error } = await supabase.from("inventarios").update(patch).eq("id", id);
     if (error) throw error;
     return { ok: true };
   } catch (err: unknown) {
@@ -200,6 +190,233 @@ export async function confirmarInventarioKardex(
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[inventarios] confirmarInventarioKardex:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+// ─── Conteos (persistencia de líneas) ─────────────────────────────────────
+export interface ConteoInput {
+  nombre: string;
+  lineas: { productoId: string; producto: string; unidad: string; cantidadReal: number; cantidadTeorica?: number }[];
+}
+
+/**
+ * Reescribe TODAS las líneas de un inventario a partir de sus conteos.
+ * Cada línea guarda el conteo de origen (conteo_nombre) para reconstruir la
+ * agrupación al releer. Idempotente: borra y vuelve a insertar.
+ */
+export async function guardarConteosInventario(inventarioId: string, conteos: ConteoInput[]) {
+  try {
+    const { supabase } = await getContext();
+    const { error: delErr } = await supabase
+      .from("lineas_inventario")
+      .delete()
+      .eq("inventario_id", inventarioId);
+    if (delErr) throw delErr;
+
+    const filas: Record<string, unknown>[] = [];
+    let orden = 0;
+    for (const c of conteos) {
+      for (const l of c.lineas) {
+        const teorica = l.cantidadTeorica ?? 0;
+        filas.push({
+          inventario_id: inventarioId,
+          conteo_nombre: c.nombre,
+          producto_id: l.productoId || null,
+          producto_nombre: l.producto,
+          unidad: l.unidad,
+          cantidad_teorica: teorica,
+          cantidad_real: l.cantidadReal,
+          diferencia: Math.round((l.cantidadReal - teorica) * 100) / 100,
+          orden: orden++,
+        });
+      }
+    }
+    if (filas.length > 0) {
+      const { error: insErr } = await supabase.from("lineas_inventario").insert(filas);
+      if (insErr) throw insErr;
+    }
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[inventarios] guardarConteosInventario:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/** Reconstruye los conteos (con sus líneas) de un inventario desde la BD. */
+export async function getConteosInventario(inventarioId: string) {
+  try {
+    const { supabase } = await getContext();
+    const { data, error } = await supabase
+      .from("lineas_inventario")
+      .select("*")
+      .eq("inventario_id", inventarioId)
+      .order("orden", { ascending: true });
+    if (error) throw error;
+
+    const grupos = new Map<string, { id: string; nombre: string; lineas: unknown[] }>();
+    for (const r of (data ?? []) as Array<Record<string, unknown>>) {
+      const nombre = (r.conteo_nombre as string) || "Conteo";
+      if (!grupos.has(nombre)) grupos.set(nombre, { id: `cnt-${nombre}`, nombre, lineas: [] });
+      grupos.get(nombre)!.lineas.push({
+        productoId: (r.producto_id as string) ?? "",
+        producto: (r.producto_nombre as string) ?? "",
+        unidad: (r.unidad as string) ?? "ud",
+        cantidadReal: Number(r.cantidad_real ?? 0),
+        cantidadTeorica: Number(r.cantidad_teorica ?? 0),
+      });
+    }
+    return { ok: true, data: [...grupos.values()] };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[inventarios] getConteosInventario:", msg);
+    return { ok: false, data: [] as unknown[] };
+  }
+}
+
+/** Stock real de la empresa para inventarios, con precio de coste por producto. */
+export async function getStockInventario() {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, data: [] as Record<string, unknown>[] };
+
+    const [{ data: stock }, { data: productos }] = await Promise.all([
+      supabase.from("stock").select("*").eq("empresa_id", empresaId).order("producto_nombre", { ascending: true }),
+      supabase.from("productos").select("id, precio_compra, coste").eq("empresa_id", empresaId),
+    ]);
+
+    const costeMap = new Map<string, number>();
+    for (const p of (productos ?? []) as Array<Record<string, unknown>>) {
+      const raw = (p.precio_compra as string) ?? (p.coste as string) ?? "0";
+      const num = parseFloat(String(raw).replace(",", "."));
+      costeMap.set(p.id as string, Number.isFinite(num) ? num : 0);
+    }
+
+    const data = ((stock ?? []) as Array<Record<string, unknown>>).map((r) => ({
+      id: (r.producto_id as string) ?? (r.id as string),
+      nombre: (r.producto_nombre as string) ?? "",
+      categoria: "",
+      unidad: (r.unidad as string) ?? "ud",
+      stockMaximo: Number(r.cantidad_maxima ?? 0),
+      stockSeguridad: Number(r.cantidad_minima ?? 0),
+      stockActual: Number(r.cantidad_actual ?? 0),
+      ultimoInventario: 0,
+      ultimoInventarioFecha: null as string | null,
+      empresaId,
+      precioCoste: costeMap.get((r.producto_id as string) ?? "") ?? 0,
+    }));
+    return { ok: true, data };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[inventarios] getStockInventario:", msg);
+    return { ok: false, data: [] as Record<string, unknown>[] };
+  }
+}
+
+// ─── Tipos de inventario ──────────────────────────────────────────────────
+export async function listTiposInventario() {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, data: [] as Record<string, unknown>[] };
+    const { data, error } = await supabase
+      .from("inventario_tipos")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .order("nombre", { ascending: true });
+    if (error) throw error;
+    return { ok: true, data: data ?? [] };
+  } catch (err) {
+    console.error("[inventarios] listTiposInventario:", err);
+    return { ok: false, data: [] as Record<string, unknown>[] };
+  }
+}
+
+export async function upsertTipoInventario(input: { id?: string; nombre: string }) {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+    if (input.id) {
+      const { error } = await supabase.from("inventario_tipos").update({ nombre: input.nombre }).eq("id", input.id);
+      if (error) throw error;
+      return { ok: true, id: input.id };
+    }
+    const { data, error } = await supabase
+      .from("inventario_tipos")
+      .insert({ empresa_id: empresaId, nombre: input.nombre })
+      .select("id")
+      .single();
+    if (error) throw error;
+    return { ok: true, id: data.id as string };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    return { ok: false, error: msg };
+  }
+}
+
+export async function deleteTipoInventario(id: string) {
+  try {
+    const { supabase } = await getContext();
+    const { error } = await supabase.from("inventario_tipos").delete().eq("id", id);
+    if (error) throw error;
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    return { ok: false, error: msg };
+  }
+}
+
+// ─── Plantillas de inventario ─────────────────────────────────────────────
+export async function listPlantillasInventario() {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, data: [] as Record<string, unknown>[] };
+    const { data, error } = await supabase
+      .from("inventario_plantillas")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .order("nombre", { ascending: true });
+    if (error) throw error;
+    return { ok: true, data: data ?? [] };
+  } catch (err) {
+    console.error("[inventarios] listPlantillasInventario:", err);
+    return { ok: false, data: [] as Record<string, unknown>[] };
+  }
+}
+
+export async function upsertPlantillaInventario(input: { id?: string; nombre: string; productosIds: string[] }) {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+    if (input.id) {
+      const { error } = await supabase
+        .from("inventario_plantillas")
+        .update({ nombre: input.nombre, productos_ids: input.productosIds })
+        .eq("id", input.id);
+      if (error) throw error;
+      return { ok: true, id: input.id };
+    }
+    const { data, error } = await supabase
+      .from("inventario_plantillas")
+      .insert({ empresa_id: empresaId, nombre: input.nombre, productos_ids: input.productosIds })
+      .select("id")
+      .single();
+    if (error) throw error;
+    return { ok: true, id: data.id as string };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    return { ok: false, error: msg };
+  }
+}
+
+export async function deletePlantillaInventario(id: string) {
+  try {
+    const { supabase } = await getContext();
+    const { error } = await supabase.from("inventario_plantillas").delete().eq("id", id);
+    if (error) throw error;
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
     return { ok: false, error: msg };
   }
 }

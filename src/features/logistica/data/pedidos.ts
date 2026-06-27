@@ -133,6 +133,8 @@ export interface Albaran {
   pedidoId: string;
   creador: string;
   ultimaActualizacion: string;
+  /** Documentos adjuntos persistidos (archivo del proveedor + análisis OCR). */
+  documentos?: DocumentoAdjunto[];
 }
 
 // ─── Helpers ──────────────────────────────────────────────
