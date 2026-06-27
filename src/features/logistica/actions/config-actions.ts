@@ -56,9 +56,17 @@ export async function saveProductoConfigSection(
   }
 }
 
-function defaultValues(_tipo: ConfigTipo, seccion: Seccion): string[] {
+function defaultValues(tipo: ConfigTipo, seccion: Seccion): string[] {
   if (seccion === "estados") return [...ESTADOS_PRODUCTO];
   if (seccion === "umbral_coste") return ["30", "40"];
+  if (seccion === "iva_default") {
+    // IVA por defecto del software (mientras la empresa no lo cambie en Ajustes):
+    //   venta  → 10% (tipo reducido de hostelería)
+    //   compra → 21% (general; un precio de compra nunca queda sin IVA)
+    if (tipo === "venta") return ["10%"];
+    if (tipo === "compra") return ["21%"];
+    return [];
+  }
   return [];
 }
 

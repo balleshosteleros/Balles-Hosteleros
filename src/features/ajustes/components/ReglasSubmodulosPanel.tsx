@@ -23,6 +23,7 @@ import {
   saveProveedoresConfig,
   type ProveedoresConfig,
 } from "@/features/logistica/actions/categorias-proveedor-actions";
+import { IvaDefaultConfig } from "@/features/logistica/components/productos/IvaDefaultConfig";
 import { Checkbox } from "@/components/ui/checkbox";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { ValidadoresSolicitudesConfig } from "@/features/ajustes/components/RrhhConfigTab";
@@ -240,6 +241,8 @@ function SubmoduloRow({
               />
 
               {submodulo.key === "proveedores" && <OperativaCompraProveedores />}
+
+              {submodulo.key === "productos" && <IvaDefaultConfig />}
 
               {submodulo.key === "reclutamiento" && (
                 <>

@@ -17,7 +17,8 @@ import {
   type Tarifa,
   type ProductoTarifaPrecio,
 } from "@/features/logistica/actions/tarifas-actions";
-import { parseDecimal } from "@/shared/lib/numero";
+import { parseDecimal, formatEur } from "@/shared/lib/numero";
+import { desglosarIva } from "@/features/logistica/data/productos";
 
 function parseImporte(s: string | number | null | undefined): number {
   if (s === null || s === undefined || s === "") return NaN;
@@ -27,8 +28,12 @@ function parseImporte(s: string | number | null | undefined): number {
 
 export function TarifaPreciosSection({
   productoId,
+  iva,
 }: {
   productoId: string;
+  // IVA del producto de venta ("10%", "21%"…). El precio de tarifa es el PVP
+  // (con IVA); de aquí derivamos el precio sin IVA para mostrarlo desglosado.
+  iva?: string | null;
 }) {
   const [tarifas, setTarifas] = useState<Tarifa[]>([]);
   const [precios, setPrecios] = useState<ProductoTarifaPrecio[]>([]);
@@ -146,7 +151,8 @@ export function TarifaPreciosSection({
               <thead>
                 <tr className="border-b text-xs text-muted-foreground">
                   <th className="text-left py-2 font-bold">TARIFA</th>
-                  <th className="text-right py-2 font-bold">PRECIO</th>
+                  <th className="text-right py-2 font-bold">PRECIO CON IVA</th>
+                  <th className="text-right py-2 font-bold">SIN IVA</th>
                   <th className="text-right py-2 font-bold">Δ vs BASE</th>
                   <th className="py-2"></th>
                 </tr>
@@ -186,10 +192,22 @@ export function TarifaPreciosSection({
                               setDraft((d) => ({ ...d, [t.id]: e.target.value }))
                             }
                             placeholder="0,00"
-                            className="h-8 w-24 text-right"
+                            className="h-8 w-24 text-right font-bold"
                           />
                           <span className="text-xs text-muted-foreground">€</span>
                         </div>
+                      </td>
+                      <td className="py-2 text-right text-muted-foreground tabular-nums whitespace-nowrap">
+                        {(() => {
+                          const base =
+                            draftVal !== undefined ? parseImporte(draftVal) : efectivo;
+                          const { sinIva } = desglosarIva(
+                            base !== null && Number.isFinite(base) ? base : null,
+                            iva,
+                            true,
+                          );
+                          return sinIva !== null ? formatEur(sinIva) : "—";
+                        })()}
                       </td>
                       <td className="py-2 text-right">
                         {t.esDefault ? (
@@ -245,7 +263,7 @@ export function TarifaPreciosSection({
           </div>
         )}
         <p className="mt-3 text-[11px] text-muted-foreground italic">
-          Cada tarifa tiene su propio precio de venta. La marcada como base sirve de referencia para calcular el Δ del resto.
+          Cada tarifa tiene su propio precio de venta (PVP, con IVA); la columna «sin IVA» se calcula con el IVA del producto. La marcada como base sirve de referencia para calcular el Δ del resto.
         </p>
       </CardContent>
     </Card>

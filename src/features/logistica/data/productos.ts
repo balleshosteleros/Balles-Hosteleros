@@ -19,6 +19,35 @@ export function pickDefaultIva(ivas: readonly string[]): string {
   return ivas[0] ?? IVA_DEFAULT;
 }
 
+/**
+ * Convierte un tipo de IVA ("10%", "21 %", "4") en fracción decimal (0.10, 0.21,
+ * 0.04). Devuelve null si no es un número válido.
+ */
+export function parseIvaRate(iva?: string | null): number | null {
+  if (!iva) return null;
+  const n = parseFloat(String(iva).replace("%", "").replace(",", ".").trim());
+  if (!Number.isFinite(n)) return null;
+  return n / 100;
+}
+
+/**
+ * Dado un precio base, su IVA y si el precio base ya incluye IVA, devuelve ambos
+ * importes (sin IVA y con IVA). Si no hay tipo de IVA, ambos son iguales al base.
+ *
+ *  - Venta: el precio guardado es CON IVA (PVP)  → baseConIva = true.
+ *  - Compra: el precio guardado es SIN IVA (neto) → baseConIva = false.
+ */
+export function desglosarIva(
+  precio: number | null,
+  iva: string | null | undefined,
+  baseConIva: boolean,
+): { sinIva: number | null; conIva: number | null } {
+  if (precio === null || !Number.isFinite(precio)) return { sinIva: null, conIva: null };
+  const rate = parseIvaRate(iva) ?? 0;
+  if (baseConIva) return { conIva: precio, sinIva: precio / (1 + rate) };
+  return { sinIva: precio, conIva: precio * (1 + rate) };
+}
+
 export const CONSERVACION_OPCIONES = ["Ambiente", "Refrigeración", "Congelación"] as const;
 export type Conservacion = typeof CONSERVACION_OPCIONES[number];
 

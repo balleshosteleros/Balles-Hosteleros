@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, type ReactNode } from "react";
+import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
@@ -9,7 +9,7 @@ import {
   getUnidadDeFormato,
   ALERGENOS_UE_14,
   IVA_DEFAULT,
-  pickDefaultIva,
+  desglosarIva,
 } from "@/features/logistica/data/productos";
 import {
   listProductos, createProducto, updateProducto, deleteProducto, getProductoById,
@@ -17,7 +17,7 @@ import {
 import { listPartidas } from "@/features/cocina/actions/partidas-actions";
 import {
   getProductoConfigSection, saveProductoConfigSection,
-  getDefaultIva, saveDefaultIva,
+  getDefaultIva,
 } from "@/features/logistica/actions/config-actions";
 import { EscandalloEditor } from "@/features/logistica/components/EscandalloEditor";
 import { MovimientosStockSection } from "@/features/logistica/components/productos/MovimientosStockSection";
@@ -309,7 +309,7 @@ function ProductoDetalle({
     const errs: string[] = [];
     if (!nombre.trim()) errs.push("El nombre es obligatorio");
     if (!categoria) errs.push("Selecciona una categoría");
-    if (!unidad) errs.push("Selecciona una unidad");
+    if (!esVenta && !unidad) errs.push("Selecciona una unidad");
     if (errs.length > 0) { setErrors(errs); return; }
 
     setSaving(true);
@@ -498,15 +498,17 @@ function ProductoDetalle({
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label className="text-xs text-muted-foreground block mb-1">Medida *</Label>
-              <Select value={unidad} onValueChange={setUnidad}>
-                <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                <SelectContent>
-                  {catalogos.unidades.map((u) => <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+            {!esVenta && (
+              <div>
+                <Label className="text-xs text-muted-foreground block mb-1">Medida *</Label>
+                <Select value={unidad} onValueChange={setUnidad}>
+                  <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                  <SelectContent>
+                    {catalogos.unidades.map((u) => <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             {esCompra && !(isNew && esCompra) && (
               <div>
                 <Label className="text-xs text-muted-foreground block mb-1">Envase</Label>
@@ -886,7 +888,7 @@ function ProductoDetalle({
 
       {/* Tarifas — solo productos de venta ya creados */}
       {!isNew && esVenta && (
-        <TarifaPreciosSection productoId={producto!.id} />
+        <TarifaPreciosSection productoId={producto!.id} iva={iva} />
       )}
 
       {/* Conexión con Ágora — productos de venta ya creados */}
@@ -940,14 +942,21 @@ function TablaProductos({
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadProductos = useCallback(async () => {
     setLoading(true);
-    listProductos(tipo)
-      .then((data) => { if (!cancelled) setProductos(data); })
-      .catch((err) => console.error("Error cargando productos:", err))
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+    try {
+      const data = await listProductos(tipo);
+      setProductos(data);
+    } catch (err) {
+      console.error("Error cargando productos:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [tipo]);
+
+  useEffect(() => {
+    loadProductos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tipo, empresaActual.id, reloadKey]);
 
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>(
@@ -996,6 +1005,16 @@ function TablaProductos({
       const val = parseFloat(raw ?? "");
       return Number.isNaN(val) ? null : val;
     }
+    if (campo === "precioSinIva" || campo === "precioConIva") {
+      // Compra: el precio guardado es neto (sin IVA). Venta: es PVP (con IVA).
+      const base = parseImporte(esCompra ? p.precioCompra : p.precioVenta);
+      const { sinIva, conIva } = desglosarIva(
+        Number.isFinite(base) ? base : null,
+        p.iva,
+        !esCompra,
+      );
+      return campo === "precioSinIva" ? sinIva : conIva;
+    }
     if (campo === "fecha") return p.ultimaActualizacion;
     return (p as unknown as Record<string, unknown>)[campo];
   };
@@ -1022,12 +1041,19 @@ function TablaProductos({
     ...(esCompra
       ? [
           { campo: "proveedor", label: "Proveedor" },
-          { campo: "precio", label: "Precio compra" },
+          { campo: "precioSinIva", label: "Precio compra sin IVA" },
+          { campo: "precioConIva", label: "Precio compra con IVA" },
+        ]
+      : esElaboracion
+      ? [
+          { campo: "precio", label: "Precio elaboración" },
+          { campo: "coste", label: "Coste" },
         ]
       : [
-          { campo: "precio", label: esElaboracion ? "Precio elaboración" : "Precio venta" },
+          { campo: "precioSinIva", label: "Precio venta sin IVA" },
+          { campo: "precioConIva", label: "Precio venta con IVA" },
           { campo: "coste", label: "Coste" },
-          ...(esVenta ? [{ campo: "porcCoste", label: "% Coste" }] : []),
+          { campo: "porcCoste", label: "% Coste" },
         ]),
     ...(mostrarIva ? [{ campo: "iva", label: "IVA" }] : []),
     { campo: "medida", label: "Medida" },
@@ -1186,6 +1212,54 @@ function TablaProductos({
         </td>
       ),
     },
+    precioSinIva: {
+      th: (
+        <TableColumnHeader
+          key="precioSinIva"
+          label={esCompra ? "Precio compra sin IVA" : "Precio venta sin IVA"}
+          campo="precioSinIva"
+          filtroTipo="numero"
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (p) => {
+        const base = parseImporte(esCompra ? p.precioCompra : p.precioVenta);
+        const { sinIva } = desglosarIva(Number.isFinite(base) ? base : null, p.iva, !esCompra);
+        return (
+          <td key="precioSinIva" className="px-3 py-1.5 text-foreground">
+            {sinIva !== null ? formatEur(sinIva, { max: esCompra ? 4 : 2 }) : "—"}
+          </td>
+        );
+      },
+    },
+    precioConIva: {
+      th: (
+        <TableColumnHeader
+          key="precioConIva"
+          label={esCompra ? "Precio compra con IVA" : "Precio venta con IVA"}
+          campo="precioConIva"
+          filtroTipo="numero"
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (p) => {
+        const base = parseImporte(esCompra ? p.precioCompra : p.precioVenta);
+        const { conIva } = desglosarIva(Number.isFinite(base) ? base : null, p.iva, !esCompra);
+        return (
+          <td key="precioConIva" className="px-3 py-1.5 font-bold text-foreground">
+            {conIva !== null ? formatEur(conIva, { max: esCompra ? 4 : 2 }) : "—"}
+          </td>
+        );
+      },
+    },
     coste: {
       th: <TableColumnHeader key="coste" label="Coste" />,
       td: (p) => (
@@ -1291,7 +1365,7 @@ function TablaProductos({
                   ? productosVentaIO
                   : productosElaboracionIO
               }
-              onSuccess={() => window.location.reload()}
+              onSuccess={() => loadProductos()}
               onCustomImport={() => setImportadorIAOpen(true)}
             />
             <Button size="icon" variant={showConfig ? "default" : "outline"} className="h-9 w-9" onClick={onToggleConfig} title="Configuración" aria-label="Configuración">
@@ -1338,7 +1412,7 @@ function TablaProductos({
         open={importadorIAOpen}
         onOpenChange={setImportadorIAOpen}
         tipo={tipo}
-        onImportSuccess={() => window.location.reload()}
+        onImportSuccess={() => loadProductos()}
       />
     </div>
   );
@@ -1510,73 +1584,6 @@ function UmbralCosteEditor({
 }
 
 /* ─── IVA por defecto por tipo de producto ─── */
-function IvaDefaultEditor({ tipo }: { tipo: "compra" | "venta" }) {
-  const catalogos = useCatalogosLogistica();
-  const [valor, setValor] = useState<string>("");
-  const [cargando, setCargando] = useState(true);
-  const [guardando, setGuardando] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    getDefaultIva(tipo).then((v) => {
-      if (cancelled) return;
-      setValor(v ?? "");
-      setCargando(false);
-    });
-    return () => { cancelled = true; };
-  }, [tipo]);
-
-  const handleChange = async (v: string) => {
-    const previo = valor;
-    setValor(v);
-    setGuardando(true);
-    const res = await saveDefaultIva(tipo, v);
-    setGuardando(false);
-    if (res.ok) {
-      toast.success("IVA por defecto guardado");
-    } else {
-      setValor(previo);
-      toast.error(res.error ?? "No se pudo guardar el IVA por defecto");
-    }
-  };
-
-  const etiqueta = tipo === "compra" ? "compra" : "venta";
-  // Si la empresa aún no lo configuró, mostramos el IVA efectivo (el que ya se
-  // aplica por fallback) para que el selector nunca aparezca vacío.
-  const valorMostrado = valor || (cargando ? "" : pickDefaultIva(catalogos.ivas));
-
-  return (
-    <div className="space-y-3">
-      <div>
-        <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-          IVA por defecto
-        </h4>
-        <p className="text-xs text-muted-foreground/80 mt-1">
-          Tipo de IVA que se preselecciona automáticamente al crear un producto de {etiqueta} y al añadir precios. Siempre se puede cambiar en cada producto.
-        </p>
-      </div>
-      <div className="rounded-lg border bg-card p-4">
-        <div className="max-w-xs">
-          <Select
-            value={valorMostrado || undefined}
-            onValueChange={handleChange}
-            disabled={cargando || guardando || catalogos.ivas.length === 0}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder={cargando ? "Cargando…" : "Seleccionar IVA"} />
-            </SelectTrigger>
-            <SelectContent>
-              {catalogos.ivas.map((v) => (
-                <SelectItem key={v} value={v}>{v}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function ConfigProductos({
   tipo, onCategoriasChanged,
   mostrarUmbralCoste = false, umbralVerde = 30, umbralNaranja = 40, onUmbralesChange,
@@ -1676,9 +1683,6 @@ function ConfigProductos({
           save: guardarIvasIA,
         }}
       />
-
-      {/* IVA por defecto: solo aplica a productos de compra y de venta. */}
-      {(tipo === "compra" || tipo === "venta") && <IvaDefaultEditor tipo={tipo} />}
 
       <GestorCatalogoEstandar
         titulo="Conservación"
@@ -1822,7 +1826,7 @@ export function ProductosView() {
           onClick={() => cambiarTipo("compra")}
         >
           <ShoppingCart className="h-4 w-4" />
-          COMPRA
+          Compra
           <Badge variant="secondary" className="text-[10px] ml-1">{countCompra}</Badge>
         </Button>
         <Button
@@ -1831,7 +1835,7 @@ export function ProductosView() {
           onClick={() => cambiarTipo("elaboracion")}
         >
           <FlaskConical className="h-4 w-4" />
-          ELABORACIONES
+          Elaboraciones
           <Badge variant="secondary" className="text-[10px] ml-1">{countElab}</Badge>
         </Button>
         <Button
@@ -1840,7 +1844,7 @@ export function ProductosView() {
           onClick={() => cambiarTipo("venta")}
         >
           <Store className="h-4 w-4" />
-          VENTA
+          Venta
           <Badge variant="secondary" className="text-[10px] ml-1">{countVenta}</Badge>
         </Button>
 

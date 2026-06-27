@@ -16,7 +16,6 @@ import { IVA_DEFAULT } from "@/features/logistica/data/productos";
 
 const ESTADOS = ["Activo", "Inactivo"] as const;
 const TIPOS = ["compra", "venta", "elaboracion"] as const;
-const CONSERVACIONES = ["Frigorífico", "Congelador", "Seco"] as const;
 
 const productoInputSchema = z.object({
   nombre: z.string().min(1, "El nombre es obligatorio").transform(capitalizeText),
@@ -34,7 +33,8 @@ const productoInputSchema = z.object({
   formato: z.string().nullable().optional(),
   envase: z.string().nullable().optional(),
   observaciones: z.string().nullable().optional(),
-  conservacion: z.enum(CONSERVACIONES).nullable().optional(),
+  // Catálogo configurable por el usuario (tabla `conservaciones`): texto libre.
+  conservacion: z.string().nullable().optional(),
   partida: z.string().nullable().optional(),
   estiloColor: z.string().nullable().optional(),
   estiloImagenUrl: z.string().nullable().optional(),
@@ -60,6 +60,7 @@ type ProductoRow = {
   precio_compra: string | null;
   precio_venta: string | null;
   coste: string | null;
+  iva: string | null;
   medida: string;
   formato: string | null;
   envase: string | null;
@@ -89,6 +90,7 @@ function rowToProducto(r: ProductoRow): Producto {
     precioCompra: r.precio_compra ?? undefined,
     precioVenta: r.precio_venta ?? undefined,
     coste: r.coste ?? undefined,
+    iva: r.iva ?? undefined,
     medida: r.medida,
     formato: r.formato ?? undefined,
     envase: r.envase ?? undefined,
@@ -262,6 +264,9 @@ export async function createProducto(
         precio_compra: parsed.data.precioCompra,
         precio_venta: parsed.data.precioVenta,
         coste: parsed.data.coste,
+        // El IVA de compra vive en el histórico de precios (producto_precios_compra),
+        // no en la columna. Para venta/elaboración sí se guarda aquí.
+        iva: parsed.data.tipo === "compra" ? null : (parsed.data.iva ?? null),
         medida: parsed.data.medida,
         formato: parsed.data.formato ?? null,
         envase: parsed.data.envase ?? null,
@@ -451,6 +456,7 @@ export async function updateProducto(
     if (input.precioCompra !== undefined) updates.precio_compra = input.precioCompra;
     if (input.precioVenta !== undefined) updates.precio_venta = input.precioVenta;
     if (input.coste !== undefined) updates.coste = input.coste;
+    if (input.iva !== undefined) updates.iva = input.iva;
     if (input.medida !== undefined) updates.medida = input.medida;
     if (input.formato !== undefined) updates.formato = input.formato;
     if (input.envase !== undefined) updates.envase = input.envase;
