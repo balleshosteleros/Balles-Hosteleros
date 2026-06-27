@@ -3,33 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { ChefHat, Plus, X } from "lucide-react";
-import { toast } from "sonner";
+import { ChefHat, Lock } from "lucide-react";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import {
   listEscandallosConPrecios,
-  addEscandallo,
-  removeEscandallo,
   getCosteEscandallo,
 } from "@/features/logistica/actions/escandallos-actions";
-import { listProductos } from "@/features/logistica/actions/producto-actions";
 import { formatEur, parseDecimal } from "@/shared/lib/numero";
 
 type EscandalloLinea = {
@@ -43,25 +22,21 @@ type EscandalloLinea = {
   subtotal: number;
 };
 
-type Ingrediente = { id: string; nombre: string; unidad: string };
-
+/**
+ * Vista de SOLO LECTURA del escandallo (receta) de un producto venta/elaboración.
+ * La receta se crea y edita en Cocina › Escandallos (editor con barras). Aquí
+ * solo se muestra: no hay botones para añadir, quitar ni modificar ingredientes.
+ */
 export function EscandalloEditor({
   productoVentaId,
   precioVenta,
-  onChanged,
 }: {
   productoVentaId: string;
   precioVenta?: string | number;
-  onChanged?: () => void;
 }) {
   const [lineas, setLineas] = useState<EscandalloLinea[]>([]);
   const [costeTotal, setCosteTotal] = useState<number>(0);
   const [loading, setLoading] = useState(true);
-  const [ingredientes, setIngredientes] = useState<Ingrediente[]>([]);
-  const [addOpen, setAddOpen] = useState(false);
-  const [selIng, setSelIng] = useState<string>("");
-  const [cantidad, setCantidad] = useState("");
-  const [merma, setMerma] = useState("0");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -78,61 +53,6 @@ export function EscandalloEditor({
     load();
   }, [load]);
 
-  useEffect(() => {
-    Promise.all([listProductos("compra"), listProductos("elaboracion")]).then(
-      ([compra, elab]) => {
-        const items = [...compra, ...elab]
-          .map((p) => ({
-            id: p.id,
-            nombre: p.tipo === "elaboracion" ? `[Elab.] ${p.nombre}` : p.nombre,
-            unidad: p.medida,
-          }))
-          .sort((a, b) => a.nombre.localeCompare(b.nombre));
-        setIngredientes(items);
-      },
-    );
-  }, []);
-
-  const handleAdd = async () => {
-    if (!selIng) {
-      toast.error("Selecciona un ingrediente");
-      return;
-    }
-    const c = parseDecimal(cantidad) ?? NaN;
-    if (isNaN(c) || c <= 0) {
-      toast.error("Cantidad inválida");
-      return;
-    }
-    const m = parseDecimal(merma) ?? 0;
-    const res = await addEscandallo({
-      productoVentaId,
-      ingredienteId: selIng,
-      cantidad: c,
-      mermaPct: m,
-    });
-    if (!res.ok) {
-      toast.error(res.error ?? "Error al añadir");
-      return;
-    }
-    toast.success("Ingrediente añadido");
-    setAddOpen(false);
-    setSelIng("");
-    setCantidad("");
-    setMerma("0");
-    await load();
-    onChanged?.();
-  };
-
-  const handleRemove = async (id: string) => {
-    const res = await removeEscandallo(id);
-    if (!res.ok) {
-      toast.error("Error al eliminar");
-      return;
-    }
-    await load();
-    onChanged?.();
-  };
-
   const pvNum =
     typeof precioVenta === "number"
       ? precioVenta
@@ -148,16 +68,16 @@ export function EscandalloEditor({
             {lineas.length}
           </Badge>
         </CardTitle>
-        <Button size="sm" className="gap-1" onClick={() => setAddOpen(true)}>
-          <Plus className="h-3.5 w-3.5" /> Añadir ingrediente
-        </Button>
+        <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+          <Lock className="h-3 w-3" /> Solo lectura · se edita en Cocina
+        </span>
       </CardHeader>
       <CardContent>
         {loading ? (
           <LoadingSpinner className="py-6" />
         ) : lineas.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-6">
-            Este plato no tiene escandallo. Añade ingredientes para definirlo.
+            Este plato no tiene escandallo. Créalo en Cocina › Escandallos y asócialo a este producto.
           </p>
         ) : (
           <div className="space-y-3">
@@ -172,7 +92,6 @@ export function EscandalloEditor({
                     <th className="text-right py-2 font-bold">COSTE MERMA</th>
                     <th className="text-right py-2 font-bold">PRECIO/U</th>
                     <th className="text-right py-2 font-bold">SUBTOTAL</th>
-                    <th className="py-2"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -206,16 +125,6 @@ export function EscandalloEditor({
                         </td>
                         <td className="py-2 text-right font-medium">
                           {l.subtotal > 0 ? formatEur(l.subtotal, { min: 3, max: 3 }) : "—"}
-                        </td>
-                        <td className="py-2 text-right">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => handleRemove(l.id)}
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </Button>
                         </td>
                       </tr>
                     );
@@ -268,55 +177,6 @@ export function EscandalloEditor({
           </div>
         )}
       </CardContent>
-
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Añadir ingrediente al escandallo</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label className="text-xs font-bold">Ingrediente *</Label>
-              <Select value={selIng} onValueChange={setSelIng}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar ingrediente" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ingredientes.map((i) => (
-                    <SelectItem key={i.id} value={i.id}>
-                      {i.nombre} ({i.unidad})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs font-bold">Cantidad *</Label>
-                <Input
-                  value={cantidad}
-                  onChange={(e) => setCantidad(e.target.value)}
-                  placeholder="0,250"
-                />
-              </div>
-              <div>
-                <Label className="text-xs font-bold">Merma %</Label>
-                <Input
-                  value={merma}
-                  onChange={(e) => setMerma(e.target.value)}
-                  placeholder="0"
-                />
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleAdd}>Añadir</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </Card>
   );
 }

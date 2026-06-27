@@ -37,11 +37,14 @@ export function ResizableColumnsProvider({
   const [widths, setWidths] = useState<Widths>({});
 
   useEffect(() => {
+    // Al cambiar de storageKey (p.ej. otra pestaña de productos) hay que RESETEAR
+    // los anchos aunque la nueva clave no tenga nada guardado. Si no, los anchos de
+    // la pestaña anterior se quedan pegados y descuadran columnas con claves comunes.
     try {
       const raw = localStorage.getItem(STORAGE_PREFIX + storageKey);
-      if (raw) setWidths(JSON.parse(raw));
+      setWidths(raw ? JSON.parse(raw) : {});
     } catch {
-      // ignore
+      setWidths({});
     }
   }, [storageKey]);
 

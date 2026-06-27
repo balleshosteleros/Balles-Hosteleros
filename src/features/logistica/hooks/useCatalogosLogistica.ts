@@ -46,14 +46,24 @@ const FALLBACK: Omit<CatalogosLogistica, "cargando"> = {
  * Los catálogos son INDEPENDIENTES por tipo de producto: hay que indicar el
  * `tipo` (compra / venta / elaboración) para leer los suyos.
  */
+// Caché en memoria por tipo (stale-while-revalidate): al volver a una pestaña ya
+// visitada mostramos sus catálogos al instante y revalidamos en segundo plano.
+// Así no se ve spinner ni se piden de cero cada vez, pero los cambios de Config
+// siguen apareciendo en cuanto termina la revalidación (regla "config propaga").
+const cache = new Map<TipoProducto, Omit<CatalogosLogistica, "cargando">>();
+
 export function useCatalogosLogistica(tipo: TipoProducto): CatalogosLogistica {
-  const [estado, setEstado] = useState<CatalogosLogistica>({
-    ...FALLBACK,
-    cargando: true,
+  const [estado, setEstado] = useState<CatalogosLogistica>(() => {
+    const cached = cache.get(tipo);
+    return cached ? { ...cached, cargando: false } : { ...FALLBACK, cargando: true };
   });
 
   useEffect(() => {
     let cancelled = false;
+    // Al cambiar de tipo: si hay caché la mostramos al instante (sin spinner);
+    // si no, marcamos cargando para no enseñar los catálogos del tipo anterior.
+    const cached = cache.get(tipo);
+    setEstado(cached ? { ...cached, cargando: false } : { ...FALLBACK, cargando: true });
     Promise.all([
       listUnidadesMedida(tipo),
       listFormatosMedida(tipo),
@@ -89,7 +99,7 @@ export function useCatalogosLogistica(tipo: TipoProducto): CatalogosLogistica {
 
       const envases = envRes.ok ? envRes.data.map((e) => e.nombre) : [];
 
-      setEstado({
+      const datos: Omit<CatalogosLogistica, "cargando"> = {
         unidades,
         ivas,
         conservaciones,
@@ -97,8 +107,9 @@ export function useCatalogosLogistica(tipo: TipoProducto): CatalogosLogistica {
           ? formatosPorUnidad
           : FALLBACK.formatosPorUnidad,
         envases,
-        cargando: false,
-      });
+      };
+      cache.set(tipo, datos);
+      setEstado({ ...datos, cargando: false });
     });
 
     return () => {

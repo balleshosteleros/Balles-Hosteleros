@@ -16,6 +16,7 @@ export interface EscandalloIngredienteInput {
   formato?: string;
   precio?: number;          // precio = cantidad × coste (calculado en cliente)
   costeUnitario?: number;
+  mermaPct?: number;        // % merma (limpieza/cocción)
 }
 
 export interface PasoElaboracionInput {
@@ -52,6 +53,7 @@ export interface EscandalloInput {
   responsable?: string | null;
   shareToken?: string | null;
   shareEnabled?: boolean;
+  productoId?: string | null;   // producto venta/elaboración asociado (sincroniza receta)
   ingredientes?: EscandalloIngredienteInput[];
 }
 
@@ -99,6 +101,7 @@ function toRow(input: EscandalloInput, opts: { isUpdate?: boolean; empresaId?: s
   if (input.responsable !== undefined) row.responsable = input.responsable;
   if (input.shareToken !== undefined) row.share_token = input.shareToken;
   if (input.shareEnabled !== undefined) row.share_enabled = input.shareEnabled;
+  if (input.productoId !== undefined) row.producto_id = input.productoId;
   if (opts.isUpdate) row.updated_at = new Date().toISOString();
   return row;
 }
@@ -125,6 +128,7 @@ async function replaceIngredientes(
     unidad: ing.unidad || "ud",
     coste_unitario: ing.costeUnitario ?? 0,
     coste_total: ing.precio ?? +(((ing.costeUnitario ?? 0) * ing.cantidad).toFixed(2)),
+    merma_pct: ing.mermaPct ?? 0,
     tipo: ing.tipo ?? null,
     formato: ing.formato ?? null,
     orden: idx,
@@ -135,6 +139,64 @@ async function replaceIngredientes(
 
   const { error: insErr } = await supabase.from("escandallo_ingredientes").insert(rows);
   if (insErr) throw insErr;
+}
+
+// Sincroniza la receta del escandallo hacia producto_composicion (la tabla que
+// descuenta stock por kardex y alimenta coste_escandallo()). Reescribe la
+// composición completa del producto desde los ingredientes del escandallo.
+// Solo se incluyen ingredientes vinculados a un producto (ing.productoId).
+// Los duplicados por ingrediente se agregan (suma de cantidad) para respetar el
+// unique (producto_venta_id, ingrediente_id).
+async function syncProductoComposicion(
+  supabase: Awaited<ReturnType<typeof getAppContext>>["supabase"],
+  productoId: string,
+  ingredientes: EscandalloIngredienteInput[],
+): Promise<void> {
+  const { error: delErr } = await supabase
+    .from("producto_composicion")
+    .delete()
+    .eq("producto_venta_id", productoId);
+  if (delErr) throw delErr;
+
+  const byIng = new Map<string, { producto_venta_id: string; ingrediente_id: string; cantidad: number; merma_pct: number }>();
+  for (const ing of ingredientes) {
+    if (!ing.productoId) continue;
+    const prev = byIng.get(ing.productoId);
+    if (prev) {
+      prev.cantidad += ing.cantidad;
+    } else {
+      byIng.set(ing.productoId, {
+        producto_venta_id: productoId,
+        ingrediente_id: ing.productoId,
+        cantidad: ing.cantidad,
+        merma_pct: ing.mermaPct ?? 0,
+      });
+    }
+  }
+
+  const rows = Array.from(byIng.values());
+  if (rows.length === 0) return;
+
+  const { error: insErr } = await supabase.from("producto_composicion").insert(rows);
+  if (insErr) throw insErr;
+}
+
+// Recalcula el coste del escandallo con coste_escandallo() — la MISMA función que
+// usa Productos y el descuento de stock — y lo persiste en escandallos.coste_total.
+// Garantiza que el coste mostrado en cocina y en Productos sea idéntico.
+async function fijarCosteAutoritativo(
+  supabase: Awaited<ReturnType<typeof getAppContext>>["supabase"],
+  escandalloId: string,
+  productoId: string,
+): Promise<void> {
+  const { data, error } = await supabase.rpc("coste_escandallo", { p_producto_venta_id: productoId });
+  if (error) throw error;
+  if (data == null) return;
+  const { error: upErr } = await supabase
+    .from("escandallos")
+    .update({ coste_total: Number(data) })
+    .eq("id", escandalloId);
+  if (upErr) throw upErr;
 }
 
 // ─── Lectura ───────────────────────────────────────────────────────
@@ -157,6 +219,55 @@ export async function listEscandallos() {
   } catch (err) {
     console.error("[escandallos] listEscandallos:", err);
     return { ok: false as const, data: [] };
+  }
+}
+
+// ─── Costes unitarios de ingredientes ──────────────────────────────
+// Devuelve, por producto (compra/elaboración), el coste unitario EFECTIVO y el
+// factor de conversión, replicando EXACTAMENTE la fuente de coste_escandallo():
+//   coste_unitario = precio_unitario del proveedor preferido, si existe;
+//                    si no, productos.coste (numérico).
+// Así el coste calculado en directo en cocina coincide con el de Productos/stock.
+export async function getCostesIngredientes() {
+  const vacio = {} as Record<string, { costeUnitario: number; factor: number }>;
+  try {
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false as const, data: vacio };
+
+    const { data: prods, error } = await supabase
+      .from("productos")
+      .select("id, coste, factor_conversion")
+      .eq("empresa_id", empresaId)
+      .in("tipo", ["compra", "elaboracion"]);
+    if (error) throw error;
+
+    const ids = (prods ?? []).map((p) => p.id as string);
+    const prefMap = new Map<string, number>();
+    if (ids.length > 0) {
+      const { data: precios } = await supabase
+        .from("ingredientes_proveedor")
+        .select("producto_id, precio_unitario")
+        .in("producto_id", ids)
+        .eq("es_preferido", true);
+      for (const r of precios ?? []) {
+        prefMap.set(r.producto_id as string, Number(r.precio_unitario ?? 0));
+      }
+    }
+
+    const map: Record<string, { costeUnitario: number; factor: number }> = {};
+    for (const p of prods ?? []) {
+      const costeRaw = String(p.coste ?? "");
+      const costeNum = /^[0-9]+(\.[0-9]+)?$/.test(costeRaw) ? Number(costeRaw) : 0;
+      const pref = prefMap.get(p.id as string);
+      map[p.id as string] = {
+        costeUnitario: pref != null ? pref : costeNum,
+        factor: Number(p.factor_conversion ?? 1) || 1,
+      };
+    }
+    return { ok: true as const, data: map };
+  } catch (err) {
+    console.error("[escandallos] getCostesIngredientes:", err);
+    return { ok: false as const, data: vacio };
   }
 }
 
@@ -201,6 +312,13 @@ export async function createEscandallo(input: EscandalloInput) {
       await replaceIngredientes(supabase, escandallo.id, input.ingredientes);
     }
 
+    // Si el escandallo está asociado a un producto, sincronizamos su receta y
+    // fijamos el coste con la MISMA función oficial que usan Productos/stock.
+    if (input.productoId && input.ingredientes !== undefined) {
+      await syncProductoComposicion(supabase, input.productoId, input.ingredientes);
+      await fijarCosteAutoritativo(supabase, escandallo.id, input.productoId);
+    }
+
     return { ok: true as const, data: escandallo };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
@@ -224,6 +342,12 @@ export async function updateEscandallo(id: string, input: EscandalloInput) {
 
     if (input.ingredientes !== undefined) {
       await replaceIngredientes(supabase, id, input.ingredientes);
+    }
+
+    // Sincronizamos la receta al producto asociado (si lo hay) y fijamos el coste.
+    if (input.productoId && input.ingredientes !== undefined) {
+      await syncProductoComposicion(supabase, input.productoId, input.ingredientes);
+      await fijarCosteAutoritativo(supabase, id, input.productoId);
     }
 
     return { ok: true as const };

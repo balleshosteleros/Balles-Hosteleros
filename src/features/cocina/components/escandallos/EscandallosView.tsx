@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect, type ReactNode } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useTabQuery } from "@/shared/hooks/use-tab-query";
@@ -14,7 +14,7 @@ import {
 } from "@/features/cocina/data/escandallos";
 import {
   listEscandallos, createEscandallo, updateEscandallo,
-  listEmpleadosCreadores,
+  listEmpleadosCreadores, getCostesIngredientes,
 } from "@/features/cocina/actions/escandallos-actions";
 import { useEscandallosConfig, type EscandalloConfigItem, type GrupoCodigo } from "@/features/cocina/hooks/useEscandallosConfig";
 import { listConfigItems } from "@/features/cocina/actions/escandallos-config-actions";
@@ -30,6 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -46,13 +47,9 @@ import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
-  colVisible,
-  ordenarColumnas,
-  type ToolbarColumnaVisible,
-  type ToolbarColumna,
+  type ToolbarCampoFiltro,
   type ToolbarFiltroActivo,
 } from "@/shared/components/SubmoduleToolbar";
-import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { formatNumero, parseDecimal } from "@/shared/lib/numero";
 import { MargenesAnalisis } from "@/features/cocina/components/escandallos/MargenesAnalisis";
 
@@ -62,6 +59,26 @@ const ESTADO_COLORS: Record<EstadoEscandallo, string> = {
   borrador: "bg-amber-100 text-amber-700 border-amber-200",
   archivada: "bg-muted text-muted-foreground border-border",
 };
+
+// IVA de restauración (tipo general 10%). El PVP se guarda ya con IVA (precio
+// de carta); al coste de la receta le aplicamos el IVA para comparar ambos con IVA.
+const IVA_RESTAURACION = 0.1;
+
+/** Coste de la receta con IVA incluido. */
+function costeConIva(coste: number): number {
+  return coste * (1 + IVA_RESTAURACION);
+}
+
+/** % de coste sobre PVP (con IVA ambos). Menor = mejor. */
+function costePctConIva(pvp: number, coste: number): number {
+  if (pvp <= 0) return 0;
+  return Math.round((costeConIva(coste) / pvp) * 100);
+}
+
+/** Color del % de coste: ≤40% bueno, ≤60% medio, resto alto. */
+function costePctColor(pct: number): string {
+  return pct <= 40 ? "text-emerald-600" : pct <= 60 ? "text-amber-600" : "text-destructive";
+}
 
 // ─── Editor de items de configuración (Supabase) ───────────────
 function ConfigItemsEditor({
@@ -436,6 +453,10 @@ function EscandalloDetalle({
   const singular = routeMeta.title.replace(/S$/, "");
   const [form, setForm] = useState<Escandallo | null>(null);
   const [productosDisponibles, setProductosDisponibles] = useState<Producto[]>([]);
+  const [productosAsociables, setProductosAsociables] = useState<Producto[]>([]);
+  // Coste unitario efectivo por producto (proveedor preferido ?? coste) y factor.
+  // Misma fuente que coste_escandallo() → el coste en directo coincide con Productos.
+  const [costesIng, setCostesIng] = useState<Record<string, { costeUnitario: number; factor: number }>>({});
   useEffect(() => {
     if (!escandallo) return;
     const inicial: Escandallo = { ...escandallo };
@@ -455,10 +476,13 @@ function EscandalloDetalle({
     if (!open) return;
     let cancelled = false;
     (async () => {
-      const all = await listProductos();
+      const [all, costesRes] = await Promise.all([listProductos(), getCostesIngredientes()]);
       if (cancelled) return;
-      const elegibles = all.filter((p) => p.tipo !== "venta" && p.estado === "Activo");
-      setProductosDisponibles(elegibles);
+      // Ingredientes: compra + elaboración (no venta).
+      setProductosDisponibles(all.filter((p) => p.tipo !== "venta" && p.estado === "Activo"));
+      // Producto asociado: venta + elaboración (la receta se sincroniza a este).
+      setProductosAsociables(all.filter((p) => (p.tipo === "venta" || p.tipo === "elaboracion") && p.estado === "Activo"));
+      if (costesRes.ok) setCostesIng(costesRes.data);
     })();
     return () => { cancelled = true; };
   }, [open]);
@@ -504,11 +528,12 @@ function EscandalloDetalle({
   const update = (partial: Partial<Escandallo>) => setForm((prev) => prev ? { ...prev, ...partial } : prev);
   const toggleArray = (arr: string[], item: string) => arr.includes(item) ? arr.filter((x) => x !== item) : [...arr, item];
 
-  const calcularPrecio = (producto: Producto, cantidad: number): number => {
-    const raw = producto.coste ?? producto.precioCompra ?? "0";
-    const num = parseDecimal(raw);
-    if (num === null) return 0;
-    return +(num * cantidad).toFixed(2);
+  // Réplica exacta de coste_escandallo(): (proveedor preferido ?? coste) / factor.
+  const calcularPrecio = (producto: Producto, cantidad: number, merma = 0): number => {
+    const info = costesIng[producto.id];
+    const unit = info ? info.costeUnitario : (parseDecimal(producto.coste ?? producto.precioCompra ?? "0") ?? 0);
+    const factor = info?.factor || 1;
+    return +((unit / factor) * cantidad * (1 + merma / 100)).toFixed(2);
   };
 
   const recomputeCosteTotal = (ingredientes: IngredienteEscandallo[]): number => {
@@ -537,6 +562,7 @@ function EscandalloDetalle({
         return { ...i, ingrediente: "", tipo: undefined, productoId: undefined, unidad: "", formato: undefined, precio: 0 };
       }
       const cantidad = i.cantidad > 0 ? i.cantidad : 1;
+      const merma = i.merma ?? 0;
       return {
         ...i,
         ingrediente: producto.nombre,
@@ -545,7 +571,8 @@ function EscandalloDetalle({
         unidad: producto.medida,
         formato: producto.formato ?? "",
         cantidad,
-        precio: calcularPrecio(producto, cantidad),
+        merma,
+        precio: calcularPrecio(producto, cantidad, merma),
       };
     });
     update({ ingredientes: nuevos, costeTotal: recomputeCosteTotal(nuevos) });
@@ -555,8 +582,19 @@ function EscandalloDetalle({
     const nuevos = form.ingredientes.map((i) => {
       if (i.id !== id) return i;
       const producto = i.productoId ? productosDisponibles.find((p) => p.id === i.productoId) : undefined;
-      const precio = producto ? calcularPrecio(producto, cantidad) : 0;
+      const precio = producto ? calcularPrecio(producto, cantidad, i.merma ?? 0) : 0;
       return { ...i, cantidad, precio };
+    });
+    update({ ingredientes: nuevos, costeTotal: recomputeCosteTotal(nuevos) });
+  };
+
+  const handleIngredienteMerma = (id: string, merma: number) => {
+    const m = Math.max(0, Math.min(100, merma));
+    const nuevos = form.ingredientes.map((i) => {
+      if (i.id !== id) return i;
+      const producto = i.productoId ? productosDisponibles.find((p) => p.id === i.productoId) : undefined;
+      const precio = producto ? calcularPrecio(producto, i.cantidad, m) : 0;
+      return { ...i, merma: m, precio };
     });
     update({ ingredientes: nuevos, costeTotal: recomputeCosteTotal(nuevos) });
   };
@@ -708,7 +746,7 @@ function EscandalloDetalle({
               </div>
             </section>
 
-            {/* Ingredientes (productos de compra + elaboraciones) */}
+            {/* Ingredientes (productos de compra + elaboraciones) — editor con barras */}
             <section className="space-y-3">
               <div className="flex items-center justify-between border-b pb-1">
                 <h4 className="text-sm font-bold text-foreground uppercase tracking-wide">Ingredientes</h4>
@@ -716,34 +754,69 @@ function EscandalloDetalle({
                   <Plus className="h-3 w-3" /> Añadir
                 </Button>
               </div>
+
+              {/* Producto asociado — al guardar, la receta se sincroniza a este producto */}
+              <div className="rounded-lg border bg-primary/5 px-3 py-2 space-y-1.5">
+                <Label className="text-xs flex items-center gap-1.5">
+                  <LinkIcon className="h-3 w-3" /> Producto asociado
+                </Label>
+                <select
+                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  value={form.productoId ?? ""}
+                  onChange={(e) => update({ productoId: e.target.value || undefined })}
+                >
+                  <option value="">Sin asociar (no sincroniza)</option>
+                  {productosAsociables
+                    .slice()
+                    .sort((a, b) => {
+                      if (a.tipo !== b.tipo) return a.tipo === "venta" ? -1 : 1;
+                      return a.nombre.localeCompare(b.nombre);
+                    })
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.tipo === "elaboracion" ? "[ELAB] " : ""}{p.nombre}
+                      </option>
+                    ))}
+                </select>
+                <p className="text-[10px] text-muted-foreground">
+                  Al guardar, la receta se copia a este producto (queda en solo lectura en Productos).
+                </p>
+              </div>
+
+              {/* Resumen del coste — se actualiza en directo al mover las barras */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border bg-muted/30 px-3 py-2">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-xs text-muted-foreground">Coste receta</span>
+                  <span className="text-lg font-bold text-foreground">{formatNumero(form.costeTotal, { min: 2, max: 2 })}€</span>
+                </div>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-xs text-muted-foreground">con IVA</span>
+                  <span className="text-sm font-semibold text-foreground">{formatNumero(costeConIva(form.costeTotal), { min: 2, max: 2 })}€</span>
+                </div>
+                <div className="ml-auto flex items-baseline gap-1.5">
+                  <span className="text-xs text-muted-foreground">% coste</span>
+                  <span className={`text-xl font-bold ${costePctColor(costePctConIva(form.pvp, form.costeTotal))}`}>
+                    {costePctConIva(form.pvp, form.costeTotal)}%
+                  </span>
+                </div>
+              </div>
+
               {form.ingredientes.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-xs w-28">Tipo</TableHead>
-                      <TableHead className="text-xs">Nombre</TableHead>
-                      <TableHead className="text-xs w-20">Unidad</TableHead>
-                      <TableHead className="text-xs w-28">Formato</TableHead>
-                      <TableHead className="text-xs w-24">Cantidad</TableHead>
-                      <TableHead className="text-xs w-24 text-right">Precio</TableHead>
-                      <TableHead className="w-10" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {form.ingredientes.map((ing) => (
-                      <TableRow key={ing.id}>
-                        <TableCell>
+                <div className="space-y-2">
+                  {form.ingredientes.map((ing) => {
+                    const cant = ing.cantidad || 0;
+                    const sliderMax = Math.max(1, Math.ceil(cant * 2));
+                    const step = sliderMax > 100 ? 1 : sliderMax > 10 ? 0.1 : 0.01;
+                    return (
+                      <div key={ing.id} className="rounded-lg border bg-card p-3 space-y-2.5">
+                        <div className="flex items-center gap-2">
                           {ing.tipo === "elaboracion" ? (
-                            <Badge variant="secondary" className="text-[10px] bg-violet-100 text-violet-700 border-violet-200">ELABORACIÓN</Badge>
+                            <Badge variant="secondary" className="text-[10px] bg-violet-100 text-violet-700 border-violet-200 shrink-0">ELABORACIÓN</Badge>
                           ) : ing.tipo === "compra" ? (
-                            <Badge variant="outline" className="text-[10px] bg-sky-50 text-sky-700 border-sky-200">PRODUCTO</Badge>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
+                            <Badge variant="outline" className="text-[10px] bg-sky-50 text-sky-700 border-sky-200 shrink-0">PRODUCTO</Badge>
+                          ) : null}
                           <select
-                            className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                            className="h-8 flex-1 min-w-0 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                             value={ing.productoId ?? ""}
                             onChange={(e) => handleIngredienteProducto(ing.id, e.target.value)}
                           >
@@ -761,31 +834,72 @@ function EscandalloDetalle({
                                 </option>
                               ))}
                           </select>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{ing.unidad || "—"}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{ing.formato || "—"}</TableCell>
-                        <TableCell>
-                          <Input
-                            className="h-8 text-sm"
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={ing.cantidad || ""}
-                            onChange={(e) => handleIngredienteCantidad(ing.id, +e.target.value)}
-                          />
-                        </TableCell>
-                        <TableCell className="text-right text-sm font-medium">
-                          {formatNumero(ing.precio ?? 0, { min: 2, max: 2 })}€
-                        </TableCell>
-                        <TableCell>
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeIngrediente(ing.id)}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => removeIngrediente(ing.id)}>
                             <Trash2 className="h-3.5 w-3.5 text-destructive" />
                           </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                        </div>
+
+                        {ing.productoId ? (
+                          <div className="space-y-2">
+                            {/* Cantidad */}
+                            <div className="flex items-center gap-3">
+                              <span className="text-[11px] text-muted-foreground w-14 shrink-0">Cantidad</span>
+                              <Slider
+                                className="flex-1"
+                                min={0}
+                                max={sliderMax}
+                                step={step}
+                                value={[cant]}
+                                onValueChange={(v) => handleIngredienteCantidad(ing.id, v[0])}
+                              />
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Input
+                                  className="h-7 w-16 text-sm text-right"
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={ing.cantidad || ""}
+                                  onChange={(e) => handleIngredienteCantidad(ing.id, +e.target.value)}
+                                />
+                                <span className="text-[11px] text-muted-foreground w-8 truncate">{ing.unidad || ""}</span>
+                              </div>
+                              <span className="w-16 text-right text-sm font-semibold shrink-0">
+                                {formatNumero(ing.precio ?? 0, { min: 2, max: 2 })}€
+                              </span>
+                            </div>
+                            {/* Merma — también ajustable con la barra */}
+                            <div className="flex items-center gap-3">
+                              <span className="text-[11px] text-muted-foreground w-14 shrink-0">Merma</span>
+                              <Slider
+                                className="flex-1"
+                                min={0}
+                                max={100}
+                                step={1}
+                                value={[ing.merma ?? 0]}
+                                onValueChange={(v) => handleIngredienteMerma(ing.id, v[0])}
+                              />
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Input
+                                  className="h-7 w-16 text-sm text-right"
+                                  type="number"
+                                  step="1"
+                                  min="0"
+                                  max="100"
+                                  value={ing.merma ?? 0}
+                                  onChange={(e) => handleIngredienteMerma(ing.id, +e.target.value)}
+                                />
+                                <span className="text-[11px] text-muted-foreground w-8">%</span>
+                              </div>
+                              <span className="w-16 shrink-0" />
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">Selecciona un producto para ajustar la cantidad.</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               ) : (
                 <p className="text-sm text-muted-foreground text-center py-4">Sin ingredientes. Pulsa &quot;Añadir&quot; para empezar.</p>
               )}
@@ -1103,6 +1217,7 @@ export function EscandallosView() {
         productoId: (r.producto_id as string) ?? undefined,
         formato: (r.formato as string) ?? undefined,
         precio: r.coste_total != null ? Number(r.coste_total) : undefined,
+        merma: r.merma_pct != null ? Number(r.merma_pct) : 0,
         alergenos: Array.isArray(prod?.alergenos) ? prod!.alergenos! : [],
       };
     });
@@ -1116,6 +1231,7 @@ export function EscandallosView() {
       fechaCreacion: (row.created_at as string)?.slice(0, 10) ?? "",
       fechaActualizacion: (row.updated_at as string)?.slice(0, 10) ?? "",
       foto: (row.foto_url as string) ?? undefined,
+      productoId: (row.producto_id as string) ?? undefined,
       delicatessen: (row.delicatessen as boolean) ?? false,
       ingredientes,
       elaboracion: (row.elaboracion as string) ?? "",
@@ -1212,8 +1328,6 @@ export function EscandallosView() {
   const [tab, setTab] = useTabQuery(["escandallos", "analisis", "config"] as const, "escandallos");
   const [search, setSearch] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
-  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
-  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [detalleEscandallo, setDetalleEscandallo] = useState<Escandallo | null>(null);
   const [detalleOpen, setDetalleOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -1270,6 +1384,7 @@ export function EscandallosView() {
     responsable: f.responsable || null,
     shareToken: f.shareToken ?? null,
     shareEnabled: !!f.shareEnabled,
+    productoId: f.productoId ?? null,
     ingredientes: f.ingredientes.map((i) => ({
       productoId: i.productoId,
       nombre: i.ingrediente,
@@ -1278,6 +1393,7 @@ export function EscandallosView() {
       tipo: i.tipo,
       formato: i.formato,
       precio: i.precio,
+      mermaPct: i.merma ?? 0,
     })),
   }), []);
 
@@ -1349,10 +1465,6 @@ export function EscandallosView() {
   const toggleSelect = (id: string) => {
     setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   };
-  const toggleAll = () => {
-    if (selected.size === filtered.length) setSelected(new Set());
-    else setSelected(new Set(filtered.map((f) => f.id)));
-  };
 
   const handleMassPrint = () => {
     if (selected.size === 0) { toast.info("Selecciona al menos un escandallo"); return; }
@@ -1396,112 +1508,10 @@ export function EscandallosView() {
     return <LoadingSpinner className="p-4 md:p-6 min-h-[300px]" size="lg" />;
   }
 
-  const columnasDef: ToolbarColumna[] = [
-    { campo: "escandallo", label: "Escandallo", bloqueada: true },
-    { campo: "categoria", label: "Categoría" },
-    { campo: "ingredientes", label: "Ingredientes" },
-    { campo: "coste", label: "Coste" },
-    { campo: "pvp", label: "Precio de Venta" },
-    { campo: "margen", label: "Margen" },
-    { campo: "estado", label: "Estado" },
-    { campo: "actualizacion", label: "Actualización" },
-    { campo: "creador", label: "Creador" },
+  const camposFiltro: ToolbarCampoFiltro[] = [
+    { campo: "categoria", label: "Categoría", tipo: "lista", opciones: activeCats.map((c) => c.nombre) },
+    { campo: "estado", label: "Estado", tipo: "lista", opciones: (Object.keys(ESTADO_ESCANDALLO_LABELS) as EstadoEscandallo[]).map((e) => ESTADO_ESCANDALLO_LABELS[e]) },
   ];
-
-  const columnDefs: Record<string, { th: ReactNode; td: (f: Escandallo) => ReactNode }> = {
-    escandallo: {
-      th: <TableHead key="escandallo" className="text-xs min-w-[200px]">Escandallo</TableHead>,
-      td: (f) => (
-        <TableCell key="escandallo">
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-foreground">{f.nombre}</span>
-            {f.shareEnabled && <Link2 className="h-3 w-3 text-primary" />}
-          </div>
-        </TableCell>
-      ),
-    },
-    categoria: {
-      th: (
-        <TableColumnHeader
-          key="categoria"
-          label="Categoría"
-          campo="categoria"
-          filtroTipo="lista"
-          opciones={activeCats.map((c) => c.nombre)}
-          filtros={filtros}
-          onFiltrosChange={setFiltros}
-        />
-      ),
-      td: (f) => {
-        const cat = empresaCats.find((c) => c.id === f.categoriaId);
-        return <TableCell key="categoria"><Badge variant="outline" className="text-[10px]">{cat?.nombre}</Badge></TableCell>;
-      },
-    },
-    ingredientes: {
-      th: <TableHead key="ingredientes" className="text-xs text-center">Ingredientes</TableHead>,
-      td: (f) => {
-        const n = f.ingredientes?.length ?? 0;
-        return (
-          <TableCell key="ingredientes" className="text-center">
-            {n === 0 ? (
-              <Badge className="text-[10px] bg-red-100 text-red-700 border-red-200 border">PENDIENTE</Badge>
-            ) : (
-              <span className="text-sm font-medium text-foreground">{n}</span>
-            )}
-          </TableCell>
-        );
-      },
-    },
-    coste: {
-      th: <TableHead key="coste" className="text-xs text-right">Coste</TableHead>,
-      td: (f) => <TableCell key="coste" className="text-right text-sm">{formatNumero(f.costeTotal, { min: 2, max: 2 })}€</TableCell>,
-    },
-    pvp: {
-      th: <TableHead key="pvp" className="text-xs text-right">Precio de Venta</TableHead>,
-      td: (f) => <TableCell key="pvp" className="text-right text-sm font-medium">{formatNumero(f.pvp, { min: 2, max: 2 })}€</TableCell>,
-    },
-    margen: {
-      th: <TableHead key="margen" className="text-xs text-right">Margen</TableHead>,
-      td: (f) => {
-        const m = calcularMargen(f.pvp, f.costeTotal);
-        return (
-          <TableCell key="margen" className="text-right">
-            <span className={`text-sm font-semibold ${m >= 60 ? "text-emerald-600" : m >= 40 ? "text-amber-600" : "text-destructive"}`}>{m}%</span>
-          </TableCell>
-        );
-      },
-    },
-    estado: {
-      th: (
-        <TableColumnHeader
-          key="estado"
-          label="Estado"
-          campo="estado"
-          filtroTipo="lista"
-          opciones={(Object.keys(ESTADO_ESCANDALLO_LABELS) as EstadoEscandallo[]).map((e) => ESTADO_ESCANDALLO_LABELS[e])}
-          filtros={filtros}
-          onFiltrosChange={setFiltros}
-        />
-      ),
-      td: (f) => (
-        <TableCell key="estado" className="text-center">
-          <Badge className={`text-[10px] border ${ESTADO_COLORS[f.estado]}`}>{ESTADO_ESCANDALLO_LABELS[f.estado]}</Badge>
-        </TableCell>
-      ),
-    },
-    actualizacion: {
-      th: <TableHead key="actualizacion" className="text-xs">Actualización</TableHead>,
-      td: (f) => <TableCell key="actualizacion" className="text-sm text-muted-foreground">{f.fechaActualizacion}</TableCell>,
-    },
-    creador: {
-      th: <TableHead key="creador" className="text-xs">Creador</TableHead>,
-      td: (f) => <TableCell key="creador" className="text-sm text-muted-foreground">{f.responsable}</TableCell>,
-    },
-  };
-
-  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
-    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
-  );
 
   return (
     <div className="p-4 md:p-6 space-y-5">
@@ -1511,13 +1521,9 @@ export function EscandallosView() {
         onBusquedaChange={setSearch}
         placeholderBusqueda="Buscar"
         onNuevo={openNew}
+        campos={camposFiltro}
         filtros={filtros}
         onFiltrosChange={setFiltros}
-        columnas={columnasDef}
-        columnasVisibles={columnasVisibles}
-        onColumnasVisiblesChange={setColumnasVisibles}
-        columnasOrden={columnasOrden}
-        onColumnasOrdenChange={setColumnasOrden}
         extraDerecha={
           <>
             <Button
@@ -1557,54 +1563,92 @@ export function EscandallosView() {
             </div>
           )}
 
-          {/* List View */}
+          {/* Vista de tarjetas — foto grande + venta vs coste (con IVA) + % de coste */}
           {view === "lista" && (
-            <Card>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-10">
-                      <Checkbox checked={selected.size === filtered.length && filtered.length > 0} onCheckedChange={toggleAll} />
-                    </TableHead>
-                    <TableHead className="text-xs w-12" />
-                    {columnasRender.map((c) => columnDefs[c.campo]?.th)}
-                    <TableHead className="text-xs w-24" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.length === 0 && (
-                    <TableRow><TableCell colSpan={20} className="text-center py-12 text-muted-foreground">No se encontraron escandallos.</TableCell></TableRow>
-                  )}
-                  {filtered.map((f) => (
-                    <TableRow key={f.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openDetail(f)}>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <Checkbox checked={selected.has(f.id)} onCheckedChange={() => toggleSelect(f.id)} />
-                      </TableCell>
-                      <TableCell>
+            filtered.length === 0 ? (
+              <Card>
+                <CardContent className="text-center py-12 text-muted-foreground text-sm">
+                  No se encontraron escandallos.
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                {filtered.map((f) => {
+                  const cat = empresaCats.find((c) => c.id === f.categoriaId);
+                  const costeIva = costeConIva(f.costeTotal);
+                  const pct = costePctConIva(f.pvp, f.costeTotal);
+                  return (
+                    <Card
+                      key={f.id}
+                      className="group relative overflow-hidden cursor-pointer transition-shadow hover:shadow-lg p-0"
+                      onClick={() => openDetail(f)}
+                    >
+                      {/* Selección */}
+                      <div className="absolute top-2 left-2 z-10" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selected.has(f.id)}
+                          onCheckedChange={() => toggleSelect(f.id)}
+                          className="bg-white/90 border-white shadow data-[state=checked]:bg-primary"
+                        />
+                      </div>
+                      {/* Estado + delicatessen */}
+                      <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
+                        {f.delicatessen && <span className="text-amber-400 text-sm drop-shadow">★</span>}
+                        <Badge className={`text-[9px] border ${ESTADO_COLORS[f.estado]}`}>
+                          {ESTADO_ESCANDALLO_LABELS[f.estado]}
+                        </Badge>
+                      </div>
+
+                      {/* Foto cuadrada */}
+                      <div className="relative aspect-square w-full bg-muted/40">
                         {f.foto ? (
-                          <img src={f.foto} alt="" className="w-9 h-9 rounded object-cover" />
+                          <img src={f.foto} alt="" className="absolute inset-0 w-full h-full object-cover" />
                         ) : (
-                          <div className="w-9 h-9 rounded bg-muted/40 flex items-center justify-center">
-                            <ImageIcon className="h-4 w-4 text-muted-foreground/40" />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <ImageIcon className="h-10 w-10 text-muted-foreground/30" />
                           </div>
                         )}
-                      </TableCell>
-                      {columnasRender.map((c) => columnDefs[c.campo]?.td(f))}
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => duplicar(f)}>
+                        {/* Nombre sobre degradado */}
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent p-3">
+                          <p className="text-white font-semibold text-sm leading-tight line-clamp-2 drop-shadow">{f.nombre}</p>
+                          {cat && <p className="text-white/75 text-[10px] mt-0.5 truncate">{cat.nombre}</p>}
+                        </div>
+                        {/* Acciones rápidas (hover) */}
+                        <div
+                          className="absolute bottom-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Button variant="secondary" size="icon" className="h-7 w-7 bg-white/90 hover:bg-white" onClick={() => duplicar(f)} title="Duplicar">
                             <Copy className="h-3.5 w-3.5" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => archivar(f.id)}>
+                          <Button variant="secondary" size="icon" className="h-7 w-7 bg-white/90 hover:bg-white" onClick={() => archivar(f.id)} title="Archivar">
                             <Archive className="h-3.5 w-3.5" />
                           </Button>
                         </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </Card>
+                      </div>
+
+                      {/* Pie: precios con IVA + % de coste grande */}
+                      <div className="flex items-end justify-between gap-2 p-3">
+                        <div className="space-y-0.5 text-xs">
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-muted-foreground">Venta</span>
+                            <span className="font-semibold text-foreground">{formatNumero(f.pvp, { min: 2, max: 2 })}€</span>
+                          </div>
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-muted-foreground">Coste</span>
+                            <span className="font-medium text-foreground">{formatNumero(costeIva, { min: 2, max: 2 })}€</span>
+                          </div>
+                        </div>
+                        <div className="text-right leading-none">
+                          <span className={`text-3xl font-bold ${costePctColor(pct)}`}>{pct}%</span>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">coste</p>
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            )
           )}
 
           {/* Pipeline View */}

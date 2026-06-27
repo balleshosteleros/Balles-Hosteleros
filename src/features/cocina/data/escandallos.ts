@@ -62,6 +62,9 @@ export interface IngredienteEscandallo {
   productoId?: string;
   formato?: string;
   precio?: number;
+  // % de merma (limpieza/cocción). Afecta al coste y se sincroniza a
+  // producto_composicion.merma_pct al guardar.
+  merma?: number;
   // Alérgenos hidratados desde productos.alergenos (vía JOIN).
   // Permite a la UI derivar los alérgenos del escandallo automáticamente
   // mostrando de qué ingrediente viene cada uno.
@@ -114,6 +117,9 @@ export interface Escandallo {
   costeTotal: number;
   desglose: DesgloseEconomico[];
   empresaId: string;
+  // Producto de venta/elaboración asociado. Al guardar, la receta se
+  // sincroniza a ese producto (producto_composicion). Vacío = no sincroniza.
+  productoId?: string;
   foto?: string; // URL or data-url of main image
   shareToken?: string; // unique token for external sharing
   shareEnabled?: boolean; // whether share link is active
@@ -506,6 +512,7 @@ export function crearEscandalloVacio(empresaId: string, categoriaId: string): Es
     costeTotal: 0,
     desglose: [],
     empresaId,
+    productoId: undefined,
     foto: undefined,
     shareToken: undefined,
     shareEnabled: false,
