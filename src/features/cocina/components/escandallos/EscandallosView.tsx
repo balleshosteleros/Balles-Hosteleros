@@ -540,7 +540,7 @@ function EscandalloDetalle({
         ingrediente: producto.nombre,
         tipo: producto.tipo === "elaboracion" ? "elaboracion" as const : "compra" as const,
         productoId: producto.id,
-        unidad: producto.unidad,
+        unidad: producto.medida,
         formato: producto.formato ?? "",
         cantidad,
         precio: calcularPrecio(producto, cantidad),
@@ -755,7 +755,7 @@ function EscandalloDetalle({
                               .map((p) => (
                                 <option key={p.id} value={p.id}>
                                   {p.tipo === "elaboracion" ? "[ELAB] " : ""}{p.nombre}
-                                  {p.unidad ? ` · ${p.unidad}` : ""}{p.formato ? ` · ${p.formato}` : ""}
+                                  {p.medida ? ` · ${p.medida}` : ""}{p.formato ? ` · ${p.formato}` : ""}
                                 </option>
                               ))}
                           </select>

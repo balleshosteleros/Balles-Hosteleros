@@ -388,7 +388,7 @@ function sanearValores(
 ): FilaSugerida["valores"] {
   const out: FilaSugerida["valores"] = { ...v };
 
-  out.unidad = filtrarEnum(v.unidad, catalogosDinamicos.unidades);
+  out.medida = filtrarEnum(v.medida, catalogosDinamicos.unidades);
   out.iva = filtrarEnum(v.iva, catalogosDinamicos.ivas);
   out.estado = filtrarEnum(v.estado, ESTADOS_VALIDOS);
   out.conservacion = filtrarEnum(v.conservacion, catalogosDinamicos.conservaciones);

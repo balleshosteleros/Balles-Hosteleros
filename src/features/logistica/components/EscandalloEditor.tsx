@@ -84,7 +84,7 @@ export function EscandalloEditor({
           .map((p) => ({
             id: p.id,
             nombre: p.tipo === "elaboracion" ? `[Elab.] ${p.nombre}` : p.nombre,
-            unidad: p.unidad,
+            unidad: p.medida,
           }))
           .sort((a, b) => a.nombre.localeCompare(b.nombre));
         setIngredientes(items);

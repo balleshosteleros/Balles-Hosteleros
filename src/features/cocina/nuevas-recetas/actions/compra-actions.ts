@@ -111,7 +111,7 @@ export async function listProductosCompra(): Promise<ActionResult<ProductoCompra
     if (!empresaId) return { ok: true, data: [] };
     const { data, error } = await supabase
       .from("productos")
-      .select("id, nombre, categoria, unidad, unidad_uso, factor_conversion")
+      .select("id, nombre, categoria, unidad:medida, unidad_uso, factor_conversion")
       .eq("empresa_id", empresaId)
       .eq("tipo", "Compra")
       .order("nombre", { ascending: true });

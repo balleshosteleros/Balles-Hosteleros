@@ -121,7 +121,7 @@ export async function parseFileToProductos(
       precioCompra: mapped.precioCompra || null,
       precioVenta: mapped.precioVenta || null,
       coste: mapped.coste || null,
-      unidad: mapped.unidad || "ud",
+      medida: mapped.medida || "Unidades",
       observaciones: mapped.observaciones || null,
     });
   }

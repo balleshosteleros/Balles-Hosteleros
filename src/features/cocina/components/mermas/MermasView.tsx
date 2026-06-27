@@ -74,7 +74,7 @@ export function MermasView() {
   }, [tipoProd, open]);
 
   const productoSel = productos.find((p) => p.id === productoId);
-  const unidad = productoSel?.unidad ?? "";
+  const unidad = productoSel?.medida ?? "";
 
   function abrirNueva() {
     setTipoProd("compra");

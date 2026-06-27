@@ -7,7 +7,7 @@ export async function listElaboraciones() {
     const { supabase, empresaId } = await getAppContext();
     const query = supabase
       .from("elaboraciones")
-      .select("*, productos!elaboraciones_producto_elaboracion_id_fkey(id, nombre, unidad)")
+      .select("*, productos!elaboraciones_producto_elaboracion_id_fkey(id, nombre, unidad:medida)")
       .order("fecha", { ascending: false });
     if (empresaId) query.eq("empresa_id", empresaId);
     const { data, error } = await query;
@@ -25,7 +25,7 @@ export async function listProductosElaboracion() {
     if (!empresaId) return { ok: false, data: [] };
     const { data, error } = await supabase
       .from("productos")
-      .select("id, nombre, unidad, categoria, conservacion")
+      .select("id, nombre, unidad:medida, categoria, conservacion")
       .eq("empresa_id", empresaId)
       .eq("tipo", "elaboracion")
       .eq("estado", "Activo")

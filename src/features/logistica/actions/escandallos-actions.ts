@@ -17,7 +17,7 @@ export async function listEscandallos(productoVentaId: string) {
     const { supabase } = await getContext();
     const { data, error } = await supabase
       .from("producto_composicion")
-      .select("*, ingrediente:ingrediente_id(id, nombre, unidad, unidad_uso, factor_conversion)")
+      .select("*, ingrediente:ingrediente_id(id, nombre, unidad:medida, unidad_uso, factor_conversion)")
       .eq("producto_venta_id", productoVentaId);
     if (error) throw error;
     return { ok: true as const, data: data ?? [] };
@@ -215,7 +215,7 @@ export async function listEscandallosConPrecios(productoVentaId: string) {
 
     const { data, error } = await supabase
       .from("producto_composicion")
-      .select("id, ingrediente_id, cantidad, merma_pct, ingrediente:ingrediente_id(id, nombre, unidad, factor_conversion)")
+      .select("id, ingrediente_id, cantidad, merma_pct, ingrediente:ingrediente_id(id, nombre, unidad:medida, factor_conversion)")
       .eq("producto_venta_id", productoVentaId);
 
     if (error) throw error;

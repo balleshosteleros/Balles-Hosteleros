@@ -15,7 +15,7 @@ export type CampoProducto =
   | "precioVenta"
   | "coste"
   | "iva"
-  | "unidad"
+  | "medida"
   | "formato"
   | "observaciones"
   | "conservacion";
@@ -35,7 +35,7 @@ export const ETIQUETAS_CAMPOS: Record<CampoProducto, string> = {
   precioVenta: "Precio venta",
   coste: "Coste",
   iva: "IVA",
-  unidad: "Unidad",
+  medida: "Medida",
   formato: "Formato",
   observaciones: "Observaciones",
   conservacion: "Conservación",
@@ -105,7 +105,7 @@ export function filaToProductoInput(
     precioVenta: v.precioVenta ?? null,
     coste: v.coste ?? null,
     iva: v.iva ?? null,
-    unidad: (v.unidad ?? "").trim() || "ud",
+    medida: (v.medida ?? "").trim() || "Unidades",
     formato: v.formato ?? null,
     observaciones: v.observaciones ?? null,
     conservacion: (v.conservacion ?? null) as ProductoInput["conservacion"],

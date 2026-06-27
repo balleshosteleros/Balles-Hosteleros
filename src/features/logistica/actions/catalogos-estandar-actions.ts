@@ -23,6 +23,8 @@ export interface FormatoMedidaRow {
   empresa_id: string;
   unidad_id: string;
   nombre: string;
+  /** Equivalencia del formato en la medida base (p.ej. "24 Ud" = 24, "0,5 Kg" = 0,5). */
+  equivalencias: number | null;
   orden: number;
   activa: boolean;
   created_at: string;
@@ -130,8 +132,8 @@ export async function updateUnidadMedida(id: string, patch: Partial<{ codigo: st
 
     if (before?.codigo && patch.codigo !== undefined && patch.codigo.trim() && patch.codigo.trim() !== before.codigo) {
       const nuevoCodigo = patch.codigo.trim();
-      await supabase.from("productos").update({ unidad: nuevoCodigo })
-        .eq("empresa_id", empresaId).eq("unidad", before.codigo as string);
+      await supabase.from("productos").update({ medida: nuevoCodigo })
+        .eq("empresa_id", empresaId).eq("medida", before.codigo as string);
       await supabase.from("productos").update({ unidad_uso: nuevoCodigo })
         .eq("empresa_id", empresaId).eq("unidad_uso", before.codigo as string);
     }
@@ -158,7 +160,7 @@ export async function deleteUnidadMedida(id: string) {
     if (row?.codigo) {
       const { count } = await supabase
         .from("productos").select("id", { count: "exact", head: true })
-        .eq("empresa_id", empresaId).eq("unidad", row.codigo as string);
+        .eq("empresa_id", empresaId).eq("medida", row.codigo as string);
       if ((count ?? 0) > 0) {
         return { ok: false as const, error: `No se puede borrar: ${count} producto(s) usan la unidad "${row.codigo}".` };
       }
@@ -193,7 +195,7 @@ export async function listFormatosMedida(unidadId?: string) {
   }
 }
 
-export async function createFormatoMedida(input: { unidadId: string; nombre: string }) {
+export async function createFormatoMedida(input: { unidadId: string; nombre: string; equivalencias?: number | null }) {
   try {
     const { supabase, empresaId } = await getLogisticaContext();
     if (!empresaId) return { ok: false as const, error: "No autenticado" };
@@ -203,7 +205,7 @@ export async function createFormatoMedida(input: { unidadId: string; nombre: str
     const nextOrden = await getNextOrden(supabase, "formatos", empresaId, { unidad_id: input.unidadId });
 
     const { data, error } = await supabase.from("formatos")
-      .insert({ empresa_id: empresaId, unidad_id: input.unidadId, nombre, orden: nextOrden, activa: true })
+      .insert({ empresa_id: empresaId, unidad_id: input.unidadId, nombre, equivalencias: input.equivalencias ?? null, orden: nextOrden, activa: true })
       .select("*").single();
     if (error) {
       if (error.code === "23505") return { ok: false as const, error: `Ya existe el formato "${nombre}" para esa unidad.` };
@@ -216,13 +218,14 @@ export async function createFormatoMedida(input: { unidadId: string; nombre: str
   }
 }
 
-export async function updateFormatoMedida(id: string, patch: Partial<{ nombre: string; orden: number; activa: boolean }>) {
+export async function updateFormatoMedida(id: string, patch: Partial<{ nombre: string; equivalencias: number | null; orden: number; activa: boolean }>) {
   try {
     const { supabase, empresaId } = await getLogisticaContext();
     if (!empresaId) return { ok: false as const, error: "Sin empresa activa" };
 
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (patch.nombre !== undefined) updates.nombre = patch.nombre.trim();
+    if (patch.equivalencias !== undefined) updates.equivalencias = patch.equivalencias;
     if (patch.orden !== undefined) updates.orden = patch.orden;
     if (patch.activa !== undefined) updates.activa = patch.activa;
 
@@ -467,6 +470,107 @@ export async function deleteConservacion(id: string) {
     }
 
     const { error } = await supabase.from("conservaciones").delete()
+      .eq("id", id).eq("empresa_id", empresaId);
+    if (error) throw error;
+    revalidatePath("/logistica/productos");
+    return { ok: true as const };
+  } catch (err) {
+    return { ok: false as const, error: err instanceof Error ? err.message : "Error desconocido" };
+  }
+}
+
+/* =====================================================================
+   ENVASES (indicador independiente: Bolsa, Caja, Saco, Botella…)
+   ===================================================================== */
+
+export interface EnvaseRow {
+  id: string;
+  empresa_id: string;
+  nombre: string;
+  orden: number;
+  activa: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function listEnvases() {
+  try {
+    const { supabase, empresaId } = await getLogisticaContext();
+    if (!empresaId) return { ok: false as const, data: [] as EnvaseRow[], error: "Sin empresa activa" };
+    const { data, error } = await supabase.from("envases").select("*")
+      .eq("empresa_id", empresaId).order("orden", { ascending: true });
+    if (error) throw error;
+    return { ok: true as const, data: (data ?? []) as EnvaseRow[] };
+  } catch (err) {
+    return { ok: false as const, data: [] as EnvaseRow[], error: err instanceof Error ? err.message : "Error desconocido" };
+  }
+}
+
+export async function createEnvase(input: { nombre: string }) {
+  try {
+    const { supabase, empresaId } = await getLogisticaContext();
+    if (!empresaId) return { ok: false as const, error: "No autenticado" };
+    const nombre = input.nombre.trim();
+    if (!nombre) return { ok: false as const, error: "El nombre es obligatorio" };
+    const nextOrden = await getNextOrden(supabase, "envases", empresaId);
+    const { data, error } = await supabase.from("envases")
+      .insert({ empresa_id: empresaId, nombre, orden: nextOrden, activa: true })
+      .select("*").single();
+    if (error) {
+      if (error.code === "23505") return { ok: false as const, error: `Ya existe el envase "${nombre}".` };
+      throw error;
+    }
+    revalidatePath("/logistica/productos");
+    return { ok: true as const, data: data as EnvaseRow };
+  } catch (err) {
+    return { ok: false as const, error: err instanceof Error ? err.message : "Error desconocido" };
+  }
+}
+
+export async function updateEnvase(id: string, patch: Partial<{ nombre: string; orden: number; activa: boolean }>) {
+  try {
+    const { supabase, empresaId } = await getLogisticaContext();
+    if (!empresaId) return { ok: false as const, error: "Sin empresa activa" };
+    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (patch.nombre !== undefined) updates.nombre = patch.nombre.trim();
+    if (patch.orden !== undefined) updates.orden = patch.orden;
+    if (patch.activa !== undefined) updates.activa = patch.activa;
+
+    const { data: before } = await supabase.from("envases").select("nombre")
+      .eq("id", id).eq("empresa_id", empresaId).maybeSingle();
+
+    const { data, error } = await supabase.from("envases").update(updates)
+      .eq("id", id).eq("empresa_id", empresaId).select("*").single();
+    if (error) {
+      if (error.code === "23505") return { ok: false as const, error: "Ya existe un envase con ese nombre." };
+      throw error;
+    }
+    // Cascade: renombrar el envase actualiza los productos que lo usan.
+    if (before?.nombre && patch.nombre !== undefined && patch.nombre.trim() && patch.nombre.trim() !== before.nombre) {
+      await supabase.from("productos").update({ envase: patch.nombre.trim() })
+        .eq("empresa_id", empresaId).eq("envase", before.nombre as string);
+    }
+    revalidatePath("/logistica/productos");
+    return { ok: true as const, data: data as EnvaseRow };
+  } catch (err) {
+    return { ok: false as const, error: err instanceof Error ? err.message : "Error desconocido" };
+  }
+}
+
+export async function deleteEnvase(id: string) {
+  try {
+    const { supabase, empresaId } = await getLogisticaContext();
+    if (!empresaId) return { ok: false as const, error: "Sin empresa activa" };
+    const { data: row } = await supabase.from("envases").select("nombre")
+      .eq("id", id).eq("empresa_id", empresaId).maybeSingle();
+    if (row?.nombre) {
+      const { count } = await supabase.from("productos").select("id", { count: "exact", head: true })
+        .eq("empresa_id", empresaId).eq("envase", row.nombre as string);
+      if ((count ?? 0) > 0) {
+        return { ok: false as const, error: `No se puede borrar: ${count} producto(s) usan el envase "${row.nombre}".` };
+      }
+    }
+    const { error } = await supabase.from("envases").delete()
       .eq("id", id).eq("empresa_id", empresaId);
     if (error) throw error;
     revalidatePath("/logistica/productos");

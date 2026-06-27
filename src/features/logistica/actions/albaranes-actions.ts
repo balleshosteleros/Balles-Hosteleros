@@ -28,6 +28,93 @@ export async function listAlbaranes() {
   }
 }
 
+/** Estados que representan una compra ya confirmada (de "Confirmado" en adelante). */
+const ESTADOS_COMPRA_CONFIRMADA = ["Confirmado", "Recibido", "Facturado"];
+
+export interface CompraProductoRow {
+  albaranId: string;
+  numero: string;
+  numeroProveedor: string | null;
+  proveedor: string;
+  fecha: string;
+  estado: string;
+  lineaId: string;
+  producto: string;
+  cantidad: number;
+  unidad: string;
+  precioUC: number;
+  impuesto: number;
+  dtoPct: number;
+  dtoEur: number;
+  total: number;
+}
+
+interface LineaAlbaranJson {
+  id?: string;
+  productoId?: string;
+  producto?: string;
+  cantidad?: number;
+  unidad?: string;
+  precioUC?: number;
+  impuesto?: number;
+  dtoPct?: number;
+  dtoEur?: number;
+  total?: number;
+}
+
+/**
+ * Histórico de compras de un producto: recorre los albaranes ya confirmados de la
+ * empresa y extrae únicamente las líneas que corresponden a este producto.
+ */
+export async function listComprasPorProducto(
+  productoId: string,
+): Promise<{ ok: boolean; data: CompraProductoRow[] }> {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId || !productoId) return { ok: true, data: [] };
+
+    let query = supabase
+      .from("albaranes")
+      .select("id, numero, numero_proveedor, proveedor_nombre, fecha, estado, lineas")
+      .in("estado", ESTADOS_COMPRA_CONFIRMADA)
+      .order("fecha", { ascending: false });
+    if (empresaId) query = query.eq("empresa_id", empresaId);
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const rows: CompraProductoRow[] = [];
+    for (const alb of data ?? []) {
+      const lineas = Array.isArray(alb.lineas) ? (alb.lineas as LineaAlbaranJson[]) : [];
+      for (const l of lineas) {
+        if (l.productoId !== productoId) continue;
+        rows.push({
+          albaranId: alb.id as string,
+          numero: (alb.numero as string) ?? "",
+          numeroProveedor: (alb.numero_proveedor as string | null) ?? null,
+          proveedor: (alb.proveedor_nombre as string) ?? "",
+          fecha: (alb.fecha as string) ?? "",
+          estado: (alb.estado as string) ?? "",
+          lineaId: l.id ?? `${alb.id}-${rows.length}`,
+          producto: l.producto ?? "",
+          cantidad: Number(l.cantidad ?? 0),
+          unidad: l.unidad ?? "",
+          precioUC: Number(l.precioUC ?? 0),
+          impuesto: Number(l.impuesto ?? 0),
+          dtoPct: Number(l.dtoPct ?? 0),
+          dtoEur: Number(l.dtoEur ?? 0),
+          total: Number(l.total ?? 0),
+        });
+      }
+    }
+
+    return { ok: true, data: rows };
+  } catch (err) {
+    console.error("[albaranes] listComprasPorProducto:", err);
+    return { ok: false, data: [] };
+  }
+}
+
 type CreateAlbaranResult =
   | { ok: true; id: string; numero: string; numeroSecuencial: number }
   | { ok: false; error: string };
@@ -51,6 +138,25 @@ export async function createAlbaran(input: {
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    // Regla dura: ningún albarán puede guardarse con una línea sin productoId.
+    // El productoId es lo que vincula cada línea con su producto (stock, histórico de
+    // compras, etc.), así que un albarán sin él sería un dato roto.
+    const lineas = Array.isArray(input.lineas) ? input.lineas : [];
+    const lineasInvalidas = lineas.filter((l) => {
+      const pid = (l as { productoId?: unknown })?.productoId;
+      return typeof pid !== "string" || pid.trim() === "";
+    });
+    if (lineas.length === 0) {
+      return { ok: false, error: "El albarán no tiene líneas." };
+    }
+    if (lineasInvalidas.length > 0) {
+      return {
+        ok: false,
+        error:
+          "Hay líneas sin producto asociado. Cada línea debe corresponder a un producto del catálogo antes de confirmar el albarán.",
+      };
+    }
 
     const year = new Date(input.fecha || new Date().toISOString()).getFullYear();
     const insertPayload: Record<string, unknown> = {

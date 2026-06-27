@@ -610,7 +610,7 @@ export function ProveedorDetail({ proveedor, onBack, onSave }: Props) {
                       </td>
                       <td className="px-3 py-2 text-xs">{p.categoria || "—"}</td>
                       <td className="px-3 py-2 text-xs">{p.conservacion || "—"}</td>
-                      <td className="px-3 py-2 text-xs">{p.unidad || "—"}</td>
+                      <td className="px-3 py-2 text-xs">{p.medida || "—"}</td>
                       <td className="px-3 py-2 text-xs">{p.formato || "—"}</td>
                       <td className="px-3 py-2 text-xs">
                         {p.precioCompra ? `${p.precioCompra} €` : "—"}

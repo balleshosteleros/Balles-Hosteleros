@@ -73,7 +73,7 @@ async function aplicarSaldo(
   // No había fila de stock: la creamos copiando nombre/unidad del producto.
   const { data: prod } = await admin
     .from("productos")
-    .select("nombre, unidad")
+    .select("nombre, unidad:medida")
     .eq("id", productoId)
     .maybeSingle();
   await admin.from("stock").insert({

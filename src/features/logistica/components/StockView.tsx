@@ -121,7 +121,7 @@ export function StockView() {
           id: s?.id ?? p.id,
           nombre: p.nombre,
           categoria: p.categoria || "Otros",
-          unidad: p.unidad,
+          unidad: p.medida,
           stockMaximo: s?.maxima ?? 0,
           stockSeguridad: s?.minima ?? 0,
           stockActual: s?.cantidad ?? 0,

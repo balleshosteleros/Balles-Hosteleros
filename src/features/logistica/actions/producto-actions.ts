@@ -12,6 +12,7 @@ import type {
   EstadoProducto,
   Conservacion,
 } from "@/features/logistica/data/productos";
+import { IVA_DEFAULT } from "@/features/logistica/data/productos";
 
 const ESTADOS = ["Activo", "Inactivo"] as const;
 const TIPOS = ["compra", "venta", "elaboracion"] as const;
@@ -29,8 +30,9 @@ const productoInputSchema = z.object({
   precioVenta: z.string().nullable().optional(),
   coste: z.string().nullable().optional(),
   iva: z.string().nullable().optional(),
-  unidad: z.string().default("ud"),
+  medida: z.string().default("Unidades"),
   formato: z.string().nullable().optional(),
+  envase: z.string().nullable().optional(),
   observaciones: z.string().nullable().optional(),
   conservacion: z.enum(CONSERVACIONES).nullable().optional(),
   partida: z.string().nullable().optional(),
@@ -58,8 +60,9 @@ type ProductoRow = {
   precio_compra: string | null;
   precio_venta: string | null;
   coste: string | null;
-  unidad: string;
+  medida: string;
   formato: string | null;
+  envase: string | null;
   observaciones: string | null;
   conservacion: Conservacion | null;
   partida: string | null;
@@ -86,8 +89,9 @@ function rowToProducto(r: ProductoRow): Producto {
     precioCompra: r.precio_compra ?? undefined,
     precioVenta: r.precio_venta ?? undefined,
     coste: r.coste ?? undefined,
-    unidad: r.unidad,
+    medida: r.medida,
     formato: r.formato ?? undefined,
+    envase: r.envase ?? undefined,
     observaciones: r.observaciones ?? undefined,
     conservacion: r.conservacion ?? null,
     partida: r.partida ?? null,
@@ -258,8 +262,9 @@ export async function createProducto(
         precio_compra: parsed.data.precioCompra,
         precio_venta: parsed.data.precioVenta,
         coste: parsed.data.coste,
-        unidad: parsed.data.unidad,
+        medida: parsed.data.medida,
         formato: parsed.data.formato ?? null,
+        envase: parsed.data.envase ?? null,
         observaciones: parsed.data.observaciones,
         conservacion: parsed.data.conservacion ?? null,
         partida: parsed.data.partida ?? null,
@@ -303,7 +308,8 @@ export async function createProducto(
         await supabase.from("producto_precios_compra").insert({
           producto_id: inserted.id,
           precio: precioNum,
-          iva: parsed.data.iva ?? null,
+          // Nunca "sin IVA": si no vino uno explícito, aplicamos el tipo general.
+          iva: parsed.data.iva ?? IVA_DEFAULT,
           fecha_inicio: new Date().toISOString().slice(0, 10),
           created_by: user.id,
         });
@@ -372,8 +378,9 @@ export async function bulkImportProductos(
       precio_compra: p.precioCompra ?? null,
       precio_venta: p.precioVenta ?? null,
       coste: p.coste ?? null,
-      unidad: p.unidad,
+      medida: p.medida,
       formato: p.formato ?? null,
+      envase: p.envase ?? null,
       observaciones: p.observaciones ?? null,
       conservacion: p.conservacion ?? null,
       partida: p.partida ?? null,
@@ -444,8 +451,9 @@ export async function updateProducto(
     if (input.precioCompra !== undefined) updates.precio_compra = input.precioCompra;
     if (input.precioVenta !== undefined) updates.precio_venta = input.precioVenta;
     if (input.coste !== undefined) updates.coste = input.coste;
-    if (input.unidad !== undefined) updates.unidad = input.unidad;
+    if (input.medida !== undefined) updates.medida = input.medida;
     if (input.formato !== undefined) updates.formato = input.formato;
+    if (input.envase !== undefined) updates.envase = input.envase;
     if (input.observaciones !== undefined) updates.observaciones = input.observaciones;
     if (input.conservacion !== undefined) updates.conservacion = input.conservacion;
     if (input.partida !== undefined) updates.partida = input.partida;

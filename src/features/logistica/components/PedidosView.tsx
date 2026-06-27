@@ -336,7 +336,7 @@ export function PedidosView() {
     });
 
     if (!res.ok) {
-      toast.error("Error al crear el albarán");
+      toast.error(res.error ?? "Error al crear el albarán");
       return;
     }
 

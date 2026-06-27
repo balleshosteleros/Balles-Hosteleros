@@ -53,7 +53,7 @@ const COLUMNAS_POR_TIPO: Record<TipoProducto, CampoProducto[]> = {
     "proveedor",
     "precioCompra",
     "iva",
-    "unidad",
+    "medida",
     "formato",
     "observaciones",
   ],
@@ -62,14 +62,14 @@ const COLUMNAS_POR_TIPO: Record<TipoProducto, CampoProducto[]> = {
     "categoria",
     "precioVenta",
     "coste",
-    "unidad",
+    "medida",
     "observaciones",
   ],
   elaboracion: [
     "nombre",
     "categoria",
     "coste",
-    "unidad",
+    "medida",
     "formato",
     "observaciones",
   ],
@@ -393,7 +393,7 @@ export function ImportadorIADialog({
                       >
                         {columnas.map((c) => (
                           <td key={c} className="px-1 py-1 align-top">
-                            {c === "unidad" ? (
+                            {c === "medida" ? (
                               <CeldaCatalogo
                                 valor={f.valores[c] ?? ""}
                                 confianza={f.confianza?.[c]}

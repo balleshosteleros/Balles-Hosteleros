@@ -6,6 +6,7 @@ import {
   listFormatosMedida,
   listIvas,
   listConservaciones,
+  listEnvases,
 } from "@/features/logistica/actions/catalogos-estandar-actions";
 import {
   UNIDADES_PRODUCTO,
@@ -20,6 +21,8 @@ export interface CatalogosLogistica {
   conservaciones: string[];
   /** Map codigo unidad → lista de formatos. Si la unidad no está, devuelve [] al consultar. */
   formatosPorUnidad: Record<string, string[]>;
+  /** Envases disponibles (Bolsa, Caja, Saco, Botella…). */
+  envases: string[];
   /** True hasta que la primera carga de BD completa. */
   cargando: boolean;
 }
@@ -29,6 +32,7 @@ const FALLBACK: Omit<CatalogosLogistica, "cargando"> = {
   ivas: [...IVA_OPCIONES],
   conservaciones: [...CONSERVACION_OPCIONES],
   formatosPorUnidad: FORMATOS_POR_UNIDAD,
+  envases: [],
 };
 
 /**
@@ -51,7 +55,8 @@ export function useCatalogosLogistica(): CatalogosLogistica {
       listFormatosMedida(),
       listIvas(),
       listConservaciones(),
-    ]).then(([uRes, fRes, ivaRes, conRes]) => {
+      listEnvases(),
+    ]).then(([uRes, fRes, ivaRes, conRes, envRes]) => {
       if (cancelled) return;
 
       const unidades = uRes.ok && uRes.data.length > 0
@@ -78,6 +83,8 @@ export function useCatalogosLogistica(): CatalogosLogistica {
         ? conRes.data.map((c) => c.nombre)
         : FALLBACK.conservaciones;
 
+      const envases = envRes.ok ? envRes.data.map((e) => e.nombre) : [];
+
       setEstado({
         unidades,
         ivas,
@@ -85,6 +92,7 @@ export function useCatalogosLogistica(): CatalogosLogistica {
         formatosPorUnidad: Object.keys(formatosPorUnidad).length > 0
           ? formatosPorUnidad
           : FALLBACK.formatosPorUnidad,
+        envases,
         cargando: false,
       });
     });

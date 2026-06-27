@@ -40,7 +40,7 @@ async function getContext() {
 interface ProductoCompraRow {
   id: string;
   nombre: string;
-  unidad: string;
+  medida: string;
   stock_minimo: number | null;
   stock_maximo: number | null;
   ventas_dia_promedio: number | null;
@@ -72,7 +72,7 @@ async function fetchBase() {
   const [productosRes, stockRes, ingProvRes, proveedoresRes] = await Promise.all([
     supabase
       .from("productos")
-      .select("id, nombre, unidad, stock_minimo, stock_maximo, ventas_dia_promedio")
+      .select("id, nombre, medida, stock_minimo, stock_maximo, ventas_dia_promedio")
       .eq("empresa_id", empresaId)
       .eq("tipo", "compra")
       .eq("estado", "Activo"),
@@ -186,7 +186,7 @@ export async function getSugerenciasPorStock(): Promise<{
       lineas.push({
         producto_id: p.id,
         nombre: p.nombre,
-        unidad: p.unidad,
+        unidad: p.medida,
         stock_actual: stockActual,
         stock_maximo: stockMax,
         cantidad_propuesta: Math.ceil(necesidad),
@@ -244,7 +244,7 @@ export async function getSugerenciasPorVentas(opts?: {
       lineas.push({
         producto_id: p.id,
         nombre: p.nombre,
-        unidad: p.unidad,
+        unidad: p.medida,
         stock_actual: stockActual,
         stock_maximo: stockMax,
         cantidad_propuesta: Math.ceil(necesidad),
@@ -293,7 +293,7 @@ export async function getCatalogoProveedor(
 
     let q = supabase
       .from("productos")
-      .select("id, nombre, unidad, stock_maximo, ventas_dia_promedio")
+      .select("id, nombre, medida, stock_maximo, ventas_dia_promedio")
       .eq("empresa_id", empresaId)
       .eq("tipo", "compra")
       .eq("estado", "Activo")
@@ -319,7 +319,7 @@ export async function getCatalogoProveedor(
     const data: CatalogoProductoProveedor[] = (productos ?? []).map((p) => ({
       producto_id: p.id as string,
       nombre: p.nombre as string,
-      unidad: p.unidad as string,
+      unidad: p.medida as string,
       stock_actual: stockMap.get(p.id as string) ?? 0,
       stock_maximo: Number(p.stock_maximo ?? 0),
       precio_unitario: precioByProducto.get(p.id as string) ?? 0,

@@ -149,13 +149,13 @@ function ProductoSearch({ value, productoId, onSelectProduct, onClear, proveedor
                   onClick={() => {
                     const precio = parseFloat(p.precioCompra ?? "0") || 0;
                     const iva = parseFloat(p.iva ?? "10") || 10;
-                    onSelectProduct(p.nombre, p.unidad, precio, p.id, iva);
+                    onSelectProduct(p.nombre, p.medida, precio, p.id, iva);
                     setOpen(false);
                   }}
                   className="flex w-full items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-xs hover:bg-accent hover:text-accent-foreground transition-colors text-left"
                 >
                   <span className="truncate font-medium">{p.nombre}</span>
-                  <span className="text-muted-foreground shrink-0">{p.unidad}</span>
+                  <span className="text-muted-foreground shrink-0">{p.medida}</span>
                   {p.id === productoId && <Check className="h-3 w-3 text-green-500 shrink-0" />}
                 </button>
               ))

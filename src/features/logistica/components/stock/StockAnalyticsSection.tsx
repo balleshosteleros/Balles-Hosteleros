@@ -26,7 +26,7 @@ export function StockAnalyticsSection() {
       const merged: ProductoStock[] = productos.map((p) => {
         const s = byId.get(p.id) ?? byNombre.get(p.nombre.toLowerCase());
         return {
-          id: p.id, nombre: p.nombre, categoria: p.categoria || "Otros", unidad: p.unidad,
+          id: p.id, nombre: p.nombre, categoria: p.categoria || "Otros", unidad: p.medida,
           stockMaximo: 0, stockSeguridad: s?.minima ?? 0, stockActual: s?.cantidad ?? 0,
           ultimoInventario: 0, ultimoInventarioFecha: null, empresaId: empresaActual.id,
         };

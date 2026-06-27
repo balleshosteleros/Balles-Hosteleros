@@ -178,6 +178,7 @@ function ProductoDetalle({
   const [coste, setCoste] = useState(producto?.coste ?? "");
   const [iva, setIva] = useState(producto?.iva ?? "");
   const [formato, setFormato] = useState(producto?.formato ?? "");
+  const [envase, setEnvase] = useState(producto?.envase ?? "");
   const [conservacion, setConservacion] = useState<Conservacion | "">(producto?.conservacion ?? "");
   const [partida, setPartida] = useState(producto?.partida ?? "");
   const [partidasOpts, setPartidasOpts] = useState<string[]>([]);
@@ -306,6 +307,7 @@ function ProductoDetalle({
       coste: esElaboracion ? (coste || null) : null,
       medida: unidad,
       formato: mostrarFormato ? (formato || null) : null,
+      envase: esCompra ? (envase || null) : null,
       conservacion: mostrarConservacion ? (conservacion || null) : null,
       partida: esVenta ? (partida.trim() || null) : null,
       textoTicket: esVenta ? (textoTicket || null) : null,
@@ -474,7 +476,7 @@ function ProductoDetalle({
               </Select>
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground block mb-1">Unidad *</Label>
+              <Label className="text-xs text-muted-foreground block mb-1">Medida *</Label>
               <Select value={unidad} onValueChange={setUnidad}>
                 <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                 <SelectContent>
@@ -482,6 +484,18 @@ function ProductoDetalle({
                 </SelectContent>
               </Select>
             </div>
+            {esCompra && !(isNew && esCompra) && (
+              <div>
+                <Label className="text-xs text-muted-foreground block mb-1">Envase</Label>
+                <Select value={envase || "none"} onValueChange={(v) => setEnvase(v === "none" ? "" : v)}>
+                  <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin especificar</SelectItem>
+                    {catalogos.envases.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             {mostrarFormato && !(isNew && esCompra) && (
               <div>
                 <Label className="text-xs text-muted-foreground block mb-1">Formato</Label>
