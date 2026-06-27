@@ -44,16 +44,14 @@ function formatDuration(seconds: number): string {
   return `${m}:${s}`;
 }
 
-const MOCK_RECENTS: RecentCall[] = [
-  { id: "1", numero: "+34 612 345 678", nombre: "María García", tipo: "saliente", duracion: "04:32", hora: "Hoy 10:15" },
-  { id: "2", numero: "+34 698 765 432", nombre: "Proveedor Frutas SA", tipo: "entrante", duracion: "01:08", hora: "Hoy 09:03" },
-  { id: "3", numero: "+34 611 222 333", tipo: "perdida", hora: "Ayer 18:45" },
-];
+// Sin telefonía VoIP conectada todavía no hay registro de llamadas: lista vacía.
+// Cuando exista backend (B2COM/SIP/Twilio), poblar desde la tabla de llamadas reales.
+const RECENT_CALLS: RecentCall[] = [];
 
-// Mock hasta integrar VoIP real: cuenta llamadas entrantes nuevas no vistas (perdidas).
-// Cuando exista backend (Twilio/SIP), reemplazar por consulta con flag visto=false.
+// Cuenta llamadas entrantes nuevas no vistas (perdidas) para el badge de la barra.
+// Mientras no haya backend de llamadas reales, siempre 0 (no inventar perdidas).
 export function contarLlamadasNoVistas(): number {
-  return MOCK_RECENTS.filter((c) => c.tipo === "perdida").length;
+  return RECENT_CALLS.filter((c) => c.tipo === "perdida").length;
 }
 
 const DIAL_KEYS = [
@@ -290,7 +288,16 @@ export function TelefonoDrawer({ children }: { children: ReactNode }) {
           {/* ─── RECIENTES ─── */}
           {tab === "recientes" && (
             <div className="divide-y">
-              {MOCK_RECENTS.map((call) => (
+              {RECENT_CALLS.length === 0 && (
+                <div className="flex flex-col items-center justify-center gap-2 px-5 py-16 text-center">
+                  <PhoneOff className="h-8 w-8 text-muted-foreground/40" />
+                  <p className="text-sm text-muted-foreground">No hay llamadas recientes</p>
+                  <p className="text-xs text-muted-foreground/70">
+                    Aparecerán aquí cuando la telefonía esté conectada.
+                  </p>
+                </div>
+              )}
+              {RECENT_CALLS.map((call) => (
                 <div
                   key={call.id}
                   className="flex items-center gap-3 px-5 py-3 hover:bg-muted/20 transition-colors"
