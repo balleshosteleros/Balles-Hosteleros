@@ -1016,7 +1016,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                     const diaPasado = dayIso < nowIso;
                     return (
                       <div key={i} className={cn(
-                        "flex-1 min-h-[28px] border-r p-1 space-y-0.5",
+                        "flex-1 min-w-0 min-h-[28px] border-r p-1 space-y-0.5",
                         diaPasado && "bg-muted/30",
                       )}>
                         {evs.map((ev) => (
