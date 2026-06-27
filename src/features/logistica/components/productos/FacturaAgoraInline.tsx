@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { getFacturaAgora, type FacturaAgora } from "@/features/logistica/actions/kardex-actions";
+import { formatEur } from "@/shared/lib/numero";
 
 function eur(n: number | null): string {
   if (n == null) return "—";
-  return n.toLocaleString("es-ES", { style: "currency", currency: "EUR" });
+  return formatEur(n);
 }
 
 /** Detalle de la factura de Ágora desplegado inline (sin salir a Ágora). */

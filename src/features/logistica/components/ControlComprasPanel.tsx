@@ -7,8 +7,9 @@ import {
   type ControlCompras,
   type ProductosSinCompras,
 } from "@/features/logistica/actions/control-compras-actions";
+import { formatEur } from "@/shared/lib/numero";
 
-const eur = (n: number) => `${n.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+const eur = (n: number) => formatEur(n);
 
 const PERIODOS = [
   { dias: 7, label: "7 días" },

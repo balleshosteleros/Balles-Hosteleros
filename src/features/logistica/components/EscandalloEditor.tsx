@@ -30,6 +30,7 @@ import {
   getCosteEscandallo,
 } from "@/features/logistica/actions/escandallos-actions";
 import { listProductos } from "@/features/logistica/actions/producto-actions";
+import { formatEur, parseDecimal } from "@/shared/lib/numero";
 
 type EscandalloLinea = {
   id: string;
@@ -97,12 +98,12 @@ export function EscandalloEditor({
       toast.error("Selecciona un ingrediente");
       return;
     }
-    const c = parseFloat(cantidad.replace(",", "."));
+    const c = parseDecimal(cantidad) ?? NaN;
     if (isNaN(c) || c <= 0) {
       toast.error("Cantidad inválida");
       return;
     }
-    const m = parseFloat(merma.replace(",", ".")) || 0;
+    const m = parseDecimal(merma) ?? 0;
     const res = await addEscandallo({
       productoVentaId,
       ingredienteId: selIng,
@@ -135,7 +136,7 @@ export function EscandalloEditor({
   const pvNum =
     typeof precioVenta === "number"
       ? precioVenta
-      : parseFloat(String(precioVenta ?? "").replace(/[^0-9.,]/g, "").replace(",", ".")) || 0;
+      : parseDecimal(String(precioVenta ?? "")) ?? 0;
   const margen = pvNum > 0 && costeTotal > 0 ? ((pvNum - costeTotal) / pvNum) * 100 : null;
 
   return (
@@ -192,19 +193,19 @@ export function EscandalloEditor({
                           {real.toFixed(3)} {l.ingredienteUnidad}
                         </td>
                         <td className="py-2 text-right text-muted-foreground">
-                          {costeMerma > 0 ? `${costeMerma.toFixed(3)} €` : "—"}
+                          {costeMerma > 0 ? formatEur(costeMerma, { min: 3, max: 3 }) : "—"}
                         </td>
                         <td className="py-2 text-right">
                           {l.precioUnitario > 0 ? (
                             <span className="text-muted-foreground">
-                              {l.precioUnitario.toFixed(2)} €
+                              {formatEur(l.precioUnitario)}
                             </span>
                           ) : (
                             <span className="text-muted-foreground/50 text-xs">sin precio</span>
                           )}
                         </td>
                         <td className="py-2 text-right font-medium">
-                          {l.subtotal > 0 ? `${l.subtotal.toFixed(3)} €` : "—"}
+                          {l.subtotal > 0 ? formatEur(l.subtotal, { min: 3, max: 3 }) : "—"}
                         </td>
                         <td className="py-2 text-right">
                           <Button
@@ -229,13 +230,13 @@ export function EscandalloEditor({
                   <ChefHat className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
                   <span className="text-xs text-muted-foreground">Food cost:</span>
                   <span className="text-sm font-bold text-amber-700 dark:text-amber-300">
-                    {costeTotal.toFixed(2)} €
+                    {formatEur(costeTotal)}
                   </span>
                 </div>
                 {pvNum > 0 && (
                   <div className="flex items-center gap-2 rounded-md bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 px-3 py-1.5">
                     <span className="text-xs text-muted-foreground">P.V.P:</span>
-                    <span className="text-sm font-bold">{pvNum.toFixed(2)} €</span>
+                    <span className="text-sm font-bold">{formatEur(pvNum)}</span>
                   </div>
                 )}
                 {margen !== null && (

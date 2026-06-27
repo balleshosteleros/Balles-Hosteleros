@@ -9,6 +9,7 @@ import {
   type CompraProductoRow,
 } from "@/features/logistica/actions/albaranes-actions";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import { formatEur as fmtEur, formatNumero } from "@/shared/lib/numero";
 
 interface Props {
   productoId: string;
@@ -16,19 +17,11 @@ interface Props {
 }
 
 function formatEur(n: number): string {
-  return new Intl.NumberFormat("es-ES", {
-    style: "currency",
-    currency: "EUR",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 4,
-  }).format(n);
+  return fmtEur(n, { max: 4 });
 }
 
 function formatCantidad(n: number): string {
-  return new Intl.NumberFormat("es-ES", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 3,
-  }).format(n);
+  return formatNumero(n, { max: 3 });
 }
 
 function formatFecha(iso: string): string {

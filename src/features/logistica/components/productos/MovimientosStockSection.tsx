@@ -32,12 +32,13 @@ import {
   type StockMovimiento,
 } from "@/features/logistica/data/kardex";
 import { FacturaAgoraInline } from "./FacturaAgoraInline";
+import { formatNumero } from "@/shared/lib/numero";
 
 function fmtFecha(iso: string): string {
   return new Date(iso).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
 }
 function fmtNum(n: number): string {
-  return Number(n).toLocaleString("es-ES", { maximumFractionDigits: 2 });
+  return formatNumero(Number(n), { max: 2 });
 }
 
 // Icono y color por tipo de movimiento (Compra/Venta/Inventario/Merma/Ajuste).

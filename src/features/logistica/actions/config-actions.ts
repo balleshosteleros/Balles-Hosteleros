@@ -6,7 +6,7 @@ import {
   type TipoProducto,
 } from "@/features/logistica/data/productos";
 
-type Seccion = "categorias" | "estados" | "umbral_coste";
+type Seccion = "categorias" | "estados" | "umbral_coste" | "iva_default";
 type ConfigTipo = TipoProducto | "global";
 
 /** Lee los valores de una sección. Si no existe en BD devuelve los defaults. */
@@ -60,4 +60,25 @@ function defaultValues(_tipo: ConfigTipo, seccion: Seccion): string[] {
   if (seccion === "estados") return [...ESTADOS_PRODUCTO];
   if (seccion === "umbral_coste") return ["30", "40"];
   return [];
+}
+
+/* ─── IVA por defecto por tipo de producto ───
+   Configurable en Ajustes de Logística → Productos. Un único código por tipo
+   (p.ej. "21%"). Devuelve null si la empresa aún no lo ha configurado; el
+   consumidor decide el fallback (normalmente IVA_DEFAULT / pickDefaultIva). */
+
+/** Lee el IVA por defecto configurado para un tipo de producto (compra/venta). */
+export async function getDefaultIva(
+  tipo: "compra" | "venta",
+): Promise<string | null> {
+  const valores = await getProductoConfigSection(tipo, "iva_default");
+  return valores[0] ?? null;
+}
+
+/** Guarda el IVA por defecto para un tipo de producto (compra/venta). */
+export async function saveDefaultIva(
+  tipo: "compra" | "venta",
+  codigo: string,
+): Promise<{ ok: boolean; error?: string }> {
+  return saveProductoConfigSection(tipo, "iva_default", [codigo]);
 }

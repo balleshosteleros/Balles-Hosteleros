@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { formatNumero } from "@/shared/lib/numero";
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import {
@@ -147,19 +148,19 @@ export function FacturasTab({ openFacturaId, onOpened }: Props) {
       case "baseImponible":
         return (
           <td key={campo} className="px-3 py-2.5 text-xs font-semibold text-right tabular-nums">
-            {f.baseImponible.toFixed(2)}
+            {formatNumero(f.baseImponible, { min: 2, max: 2 })}
           </td>
         );
       case "ivaTotal":
         return (
           <td key={campo} className="px-3 py-2.5 text-xs text-right tabular-nums">
-            {f.ivaTotal.toFixed(2)}
+            {formatNumero(f.ivaTotal, { min: 2, max: 2 })}
           </td>
         );
       case "total":
         return (
           <td key={campo} className="px-3 py-2.5 text-xs font-bold text-right tabular-nums">
-            {f.total.toFixed(2)}
+            {formatNumero(f.total, { min: 2, max: 2 })}
           </td>
         );
       case "discrepancias": {

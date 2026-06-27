@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { formatEur } from "@/shared/lib/numero";
 import { EstadoPedidoBadge } from "./BadgesPedido";
 import { ESTADOS_PEDIDO, calcularTotalesLineas, evaluarReparto, describirReparto, formatoHoraReparto, type Pedido, type Albaran } from "@/features/logistica/data/pedidos";
 import { ArrowLeft, FileText, MessageCircle, CheckCircle2, AlertTriangle, PackageCheck, Mail } from "lucide-react";
@@ -126,11 +127,11 @@ export function DetallePedido({ pedido, albaran, onBack, onUpdateEstado, onConfi
                     <td className="px-3 py-2">{l.cantidad}</td>
                     <td className="px-3 py-2">{l.unidad}</td>
                     <td className="px-3 py-2">{l.servida}</td>
-                    <td className="px-3 py-2">{l.precioUC.toFixed(2)} €</td>
+                    <td className="px-3 py-2">{formatEur(l.precioUC)}</td>
                     <td className="px-3 py-2">{l.impuesto}%</td>
                     <td className="px-3 py-2">{l.dtoPct}%</td>
-                    <td className="px-3 py-2">{l.dtoEur.toFixed(2)} €</td>
-                    <td className="px-3 py-2 font-semibold">{l.total.toFixed(2)} €</td>
+                    <td className="px-3 py-2">{formatEur(l.dtoEur)}</td>
+                    <td className="px-3 py-2 font-semibold">{formatEur(l.total)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -145,7 +146,7 @@ export function DetallePedido({ pedido, albaran, onBack, onUpdateEstado, onConfi
           <CardHeader className="pb-2"><CardTitle className="text-base">PIE</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
             <div className="flex justify-between"><span className="text-muted-foreground">Dto %</span><span>{pedido.dtoPct}%</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Dto €</span><span>{pedido.dtoEur.toFixed(2)} €</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Dto €</span><span>{formatEur(pedido.dtoEur)}</span></div>
             <Separator />
             <div><span className="text-muted-foreground text-xs">Notas</span><p className="text-foreground mt-1">{pedido.notas || "—"}</p></div>
           </CardContent>
@@ -153,10 +154,10 @@ export function DetallePedido({ pedido, albaran, onBack, onUpdateEstado, onConfi
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-base">TOTALES</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-muted-foreground">Base</span><span className="font-semibold">{totales.base.toFixed(2)} €</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Cuota impuesto</span><span className="font-semibold">{totales.cuota.toFixed(2)} €</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Base</span><span className="font-semibold">{formatEur(totales.base)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Cuota impuesto</span><span className="font-semibold">{formatEur(totales.cuota)}</span></div>
             <Separator />
-            <div className="flex justify-between text-lg font-black"><span>TOTAL</span><span>{totales.total.toFixed(2)} €</span></div>
+            <div className="flex justify-between text-lg font-black"><span>TOTAL</span><span>{formatEur(totales.total)}</span></div>
           </CardContent>
         </Card>
       </div>

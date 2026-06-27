@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, CheckCircle2, Package, Info } from "lucide-react";
 import type { AnalisisAlbaran } from "@/features/logistica/data/pedidos";
+import { formatEur } from "@/shared/lib/numero";
 
 interface Props {
   analisis: AnalisisAlbaran;
@@ -137,7 +138,7 @@ export function ComparativaAlbaran({ analisis }: Props) {
                         {esFaltante ? <span className="text-orange-600 dark:text-orange-400 italic">{l.productoInterno || "—"}</span> : (l.productoInterno || "—")}
                       </td>
                       <td className="px-3 py-2">{esFaltante || esExtra ? "—" : `${l.cantidadInterna} ${l.unidadProveedor || ""}`}</td>
-                      <td className="px-3 py-2">{esFaltante || esExtra ? "—" : `${(l.precioInterno ?? 0).toFixed(2)} €`}</td>
+                      <td className="px-3 py-2">{esFaltante || esExtra ? "—" : formatEur(l.precioInterno ?? 0)}</td>
                       {/* Albarán proveedor */}
                       <td className={`px-3 py-2 font-medium ${esExtra ? "text-amber-600 dark:text-amber-400 italic" : esFaltante ? "text-muted-foreground" : "text-foreground"}`}>
                         {esFaltante ? "—" : l.productoProveedor}
@@ -146,7 +147,7 @@ export function ComparativaAlbaran({ analisis }: Props) {
                         {esFaltante ? "—" : `${l.cantidadProveedor} ${l.unidadProveedor || ""}`}
                       </td>
                       <td className={`px-3 py-2 font-semibold ${precioDif ? "text-red-600 dark:text-red-400" : ""}`}>
-                        {esFaltante ? "—" : `${(l.precioProveedor ?? 0).toFixed(2)} €`}
+                        {esFaltante ? "—" : formatEur(l.precioProveedor ?? 0)}
                       </td>
                     </tr>
                   );

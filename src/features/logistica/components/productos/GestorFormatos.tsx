@@ -14,6 +14,7 @@ import {
   type UnidadMedidaRow,
   type FormatoMedidaRow,
 } from "@/features/logistica/actions/catalogos-estandar-actions";
+import { parseDecimal } from "@/shared/lib/numero";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -26,7 +27,7 @@ import {
  *   "0,5 Kg" = 0,5). Es lo que permite que stock e inventarios cuadren.
  * - El envase es independiente (no se gestiona aquí).
  */
-export function GestorFormatos({ onChanged }: { onChanged?: () => void }) {
+export function GestorFormatos({ onChanged, refreshKey }: { onChanged?: () => void; refreshKey?: number }) {
   const [medidas, setMedidas] = useState<UnidadMedidaRow[]>([]);
   const [formatos, setFormatos] = useState<FormatoMedidaRow[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -55,15 +56,23 @@ export function GestorFormatos({ onChanged }: { onChanged?: () => void }) {
 
   useEffect(() => { recargar(); }, [recargar]);
 
-  const parseEquiv = (s: string): number | null => {
-    const n = parseFloat(s.replace(",", "."));
-    return Number.isFinite(n) ? n : null;
+  // Recargar cuando cambian las medidas en la sección hermana "Unidades de medida".
+  useEffect(() => { if (refreshKey !== undefined) recargar(); }, [refreshKey, recargar]);
+
+  const parseEquiv = (s: string): number | null => parseDecimal(s);
+
+  // La equivalencia es OBLIGATORIA y debe ser un número > 0: sin ella el stock
+  // y los inventarios no cuadran (ej.: "0,5 Kg" = 0,5, "24 Ud" = 24).
+  const equivValida = (s: string): boolean => {
+    const n = parseEquiv(s);
+    return n != null && n > 0;
   };
 
   const cerrarNuevo = () => { setCreandoEn(null); setNuevoNombre(""); setNuevaEquiv(""); };
 
   const onAdd = (unidadId: string) => {
     if (!nuevoNombre.trim()) return;
+    if (!equivValida(nuevaEquiv)) { toast.error("La equivalencia es obligatoria y debe ser un número mayor que 0"); return; }
     startTransition(async () => {
       const res = await createFormatoMedida({ unidadId, nombre: nuevoNombre.trim(), equivalencias: parseEquiv(nuevaEquiv) });
       if (!res.ok) { toast.error(res.error ?? "Error al crear"); return; }
@@ -76,6 +85,7 @@ export function GestorFormatos({ onChanged }: { onChanged?: () => void }) {
 
   const onSaveEdit = (id: string) => {
     if (!editNombre.trim()) return;
+    if (!equivValida(editEquiv)) { toast.error("La equivalencia es obligatoria y debe ser un número mayor que 0"); return; }
     startTransition(async () => {
       const res = await updateFormatoMedida(id, { nombre: editNombre.trim(), equivalencias: parseEquiv(editEquiv) });
       if (!res.ok) { toast.error(res.error ?? "Error al actualizar"); return; }
@@ -131,7 +141,7 @@ export function GestorFormatos({ onChanged }: { onChanged?: () => void }) {
                   <span className="text-[11px] text-muted-foreground">=</span>
                   <Input value={nuevaEquiv} onChange={(e) => setNuevaEquiv(e.target.value)} placeholder="equiv." className="h-8 text-xs w-24"
                     onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onAdd(m.id); } else if (e.key === "Escape") cerrarNuevo(); }} />
-                  <Button size="sm" onClick={() => onAdd(m.id)} disabled={isPending || !nuevoNombre.trim()} className="h-8 gap-1 shrink-0"><Check className="h-3.5 w-3.5" /></Button>
+                  <Button size="sm" onClick={() => onAdd(m.id)} disabled={isPending || !nuevoNombre.trim() || !equivValida(nuevaEquiv)} className="h-8 gap-1 shrink-0"><Check className="h-3.5 w-3.5" /></Button>
                   <Button size="sm" variant="outline" onClick={cerrarNuevo} className="h-8 shrink-0"><X className="h-3.5 w-3.5" /></Button>
                 </div>
               )}
@@ -149,7 +159,7 @@ export function GestorFormatos({ onChanged }: { onChanged?: () => void }) {
                           <span className="text-[11px] text-muted-foreground">=</span>
                           <Input value={editEquiv} onChange={(e) => setEditEquiv(e.target.value)} placeholder="equiv." className="h-7 text-xs w-24"
                             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onSaveEdit(f.id); } else if (e.key === "Escape") setEditId(null); }} />
-                          <button type="button" onClick={() => onSaveEdit(f.id)} disabled={isPending} className="rounded p-1 text-emerald-600 hover:bg-emerald-50 disabled:opacity-40" title="Guardar"><Check className="h-3.5 w-3.5" /></button>
+                          <button type="button" onClick={() => onSaveEdit(f.id)} disabled={isPending || !editNombre.trim() || !equivValida(editEquiv)} className="rounded p-1 text-emerald-600 hover:bg-emerald-50 disabled:opacity-40" title="Guardar"><Check className="h-3.5 w-3.5" /></button>
                           <button type="button" onClick={() => setEditId(null)} className="rounded p-1 text-muted-foreground hover:bg-muted" title="Cancelar"><X className="h-3.5 w-3.5" /></button>
                         </>
                       ) : (

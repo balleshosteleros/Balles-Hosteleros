@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { formatEur, formatNumero } from "@/shared/lib/numero";
 import { ALMACENES, type Pedido, type LineaPedido, type RepartoProveedor, calcLineaTotal, evaluarReparto, sugerirEntregaDesdeReparto, describirReparto, formatoHoraReparto } from "@/features/logistica/data/pedidos";
 import { listProveedores } from "@/features/logistica/actions/proveedores-actions";
 import { listProductos } from "@/features/logistica/actions/producto-actions";
@@ -402,7 +403,7 @@ export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNom
                     </td>
                     <td className="px-2 py-1"><Input className="h-8 text-xs w-14" type="number" value={l.dtoPct} onChange={(e) => updateLinea(i, "dtoPct", +e.target.value)} /></td>
                     <td className="px-2 py-1"><Input className="h-8 text-xs w-16" type="number" step="0.01" value={l.dtoEur} onChange={(e) => updateLinea(i, "dtoEur", +e.target.value)} /></td>
-                    <td className="px-2 py-1 font-semibold text-foreground">{calcLineaTotal(l).toFixed(2)}</td>
+                    <td className="px-2 py-1 font-semibold text-foreground">{formatNumero(calcLineaTotal(l), { min: 2, max: 2 })}</td>
                     <td className="px-2 py-1"><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeLinea(i)}><Trash2 className="h-3 w-3 text-destructive" /></Button></td>
                   </tr>
                 ))}
@@ -429,14 +430,14 @@ export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNom
             {/* Base bruta */}
             <div className="flex justify-between text-muted-foreground">
               <span>Base imponible</span>
-              <span className="font-medium text-foreground">{resumenIva.baseTotal.toFixed(2)} €</span>
+              <span className="font-medium text-foreground">{formatEur(resumenIva.baseTotal)}</span>
             </div>
 
             {/* Descuentos globales */}
             {resumenIva.dtoGlobal > 0 && (
               <div className="flex justify-between text-muted-foreground">
                 <span>Descuentos globales</span>
-                <span className="font-medium text-destructive">-{resumenIva.dtoGlobal.toFixed(2)} €</span>
+                <span className="font-medium text-destructive">-{formatEur(resumenIva.dtoGlobal)}</span>
               </div>
             )}
 

@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { formatEur } from "@/shared/lib/numero";
 import { EstadoAlbaranBadge } from "./BadgesPedido";
 import { AlbaranUploadModal } from "./AlbaranUploadModal";
 import { ComparativaAlbaran } from "./ComparativaAlbaran";
@@ -103,7 +104,7 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, onBack, onUpdateEstado, 
         <Button variant="outline" size="sm" className="gap-1" onClick={() => window.print()}><FileText className="h-4 w-4" /> Guardar PDF</Button>
         <Button variant="outline" size="sm" className="gap-1" onClick={() => {
           const asunto = encodeURIComponent(`Albarán ${albaran.numero}`);
-          const cuerpo = encodeURIComponent(`Adjunto información del albarán ${albaran.numero} (${albaran.proveedor}).\nTotal: ${totales.total.toFixed(2)} €`);
+          const cuerpo = encodeURIComponent(`Adjunto información del albarán ${albaran.numero} (${albaran.proveedor}).\nTotal: ${formatEur(totales.total)}`);
           window.location.href = `mailto:?subject=${asunto}&body=${cuerpo}`;
         }}><Send className="h-4 w-4" /> Enviar</Button>
         <Button variant="outline" size="sm" className="gap-1" onClick={() => setUploadOpen(true)}>
@@ -255,11 +256,11 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, onBack, onUpdateEstado, 
                     <td className="px-3 py-2 font-medium text-foreground">{l.producto}</td>
                     <td className="px-3 py-2">{l.cantidad}</td>
                     <td className="px-3 py-2">{l.unidad}</td>
-                    <td className="px-3 py-2">{l.precioUC.toFixed(2)} €</td>
+                    <td className="px-3 py-2">{formatEur(l.precioUC)}</td>
                     <td className="px-3 py-2">{l.impuesto}%</td>
                     <td className="px-3 py-2">{l.dtoPct}%</td>
-                    <td className="px-3 py-2">{l.dtoEur.toFixed(2)} €</td>
-                    <td className="px-3 py-2 font-semibold">{l.total.toFixed(2)} €</td>
+                    <td className="px-3 py-2">{formatEur(l.dtoEur)}</td>
+                    <td className="px-3 py-2 font-semibold">{formatEur(l.total)}</td>
                     <td className="px-3 py-2 text-muted-foreground">{l.docPedido}</td>
                   </tr>
                 ))}
@@ -275,7 +276,7 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, onBack, onUpdateEstado, 
           <CardHeader className="pb-2"><CardTitle className="text-base">PIE</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
             <div className="flex justify-between"><span className="text-muted-foreground">Dto %</span><span>{albaran.dtoPct}%</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Dto €</span><span>{albaran.dtoEur.toFixed(2)} €</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Dto €</span><span>{formatEur(albaran.dtoEur)}</span></div>
             <Separator />
             <div><span className="text-muted-foreground text-xs">Notas</span><p className="text-foreground mt-1">{albaran.notas || "—"}</p></div>
           </CardContent>
@@ -283,10 +284,10 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, onBack, onUpdateEstado, 
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-base">TOTALES</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-muted-foreground">Base</span><span className="font-semibold">{totales.base.toFixed(2)} €</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Cuota impuesto</span><span className="font-semibold">{totales.cuota.toFixed(2)} €</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Base</span><span className="font-semibold">{formatEur(totales.base)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Cuota impuesto</span><span className="font-semibold">{formatEur(totales.cuota)}</span></div>
             <Separator />
-            <div className="flex justify-between text-lg font-black"><span>TOTAL</span><span>{totales.total.toFixed(2)} €</span></div>
+            <div className="flex justify-between text-lg font-black"><span>TOTAL</span><span>{formatEur(totales.total)}</span></div>
           </CardContent>
         </Card>
       </div>

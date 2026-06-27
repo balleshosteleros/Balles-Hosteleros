@@ -8,6 +8,8 @@ import {
   ESTADOS_PRODUCTO, ESTADO_COLOR, EstadoProducto, type Producto, type Conservacion,
   getUnidadDeFormato,
   ALERGENOS_UE_14,
+  IVA_DEFAULT,
+  pickDefaultIva,
 } from "@/features/logistica/data/productos";
 import {
   listProductos, createProducto, updateProducto, deleteProducto, getProductoById,
@@ -37,6 +39,7 @@ import {
 import { toast } from "sonner";
 import { IOActions } from "@/shared/io";
 import { capitalizeText } from "@/shared/lib/utils";
+import { formatEur, parseDecimal } from "@/shared/lib/numero";
 import {
   productosCompraIO,
   productosVentaIO,
@@ -102,8 +105,7 @@ function EstadoBadge({ estado }: { estado: EstadoProducto }) {
 
 function parseImporte(s: string | null | undefined): number {
   if (!s) return NaN;
-  const n = parseFloat(String(s).replace(/[^0-9.,-]/g, "").replace(",", "."));
-  return Number.isFinite(n) ? n : NaN;
+  return parseDecimal(s) ?? NaN;
 }
 
 function calcularPorcCoste(coste?: string | null, precioVenta?: string | null): number | null {
@@ -202,6 +204,21 @@ function ProductoDetalle({
   // Solo en alta de productos de compra: precio de la primera entrada del histórico.
   // Se persiste vía addPrecioCompra justo después de createProducto.
   const [precioInicial, setPrecioInicial] = useState<string>("");
+
+  // Alta de producto: preseleccionar el IVA por defecto configurado en Ajustes
+  // para el tipo (compra/venta). Solo si el usuario aún no ha tocado el campo.
+  useEffect(() => {
+    if (!isNew) return;
+    if (esElaboracion) return;
+    if (iva) return;
+    let cancelled = false;
+    getDefaultIva(esCompra ? "compra" : "venta").then((def) => {
+      if (cancelled || !def) return;
+      setIva((actual) => (actual ? actual : def));
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isNew, esCompra, esElaboracion]);
 
   // Sincronización con precio vigente (solo productos de compra).
   // Persistimos la preferencia por producto en localStorage; default = true.
@@ -331,7 +348,7 @@ function ProductoDetalle({
       if (esCompra) {
         const raw = precioInicial.trim();
         if (raw) {
-          precioInicialNum = parseFloat(raw.replace(",", "."));
+          precioInicialNum = parseDecimal(raw) ?? NaN;
           if (!Number.isFinite(precioInicialNum) || precioInicialNum < 0) {
             setSaving(false);
             setErrors(["Precio inicial inválido"]);
@@ -340,6 +357,11 @@ function ProductoDetalle({
           if (!proveedor.trim()) {
             setSaving(false);
             setErrors(["Selecciona un proveedor para el primer precio"]);
+            return;
+          }
+          if (!iva || iva === "none") {
+            setSaving(false);
+            setErrors(["Selecciona un IVA para el primer precio"]);
             return;
           }
         }
@@ -359,7 +381,7 @@ function ProductoDetalle({
         const precioRes = await addPrecioCompra({
           productoId: res.producto.id,
           precio: precioInicialNum,
-          iva: iva && iva !== "none" ? iva : null,
+          iva: iva && iva !== "none" ? iva : IVA_DEFAULT,
           proveedor: proveedor.trim(),
           formato: formato || null,
           fechaInicio,
@@ -542,7 +564,7 @@ function ProductoDetalle({
                 <Label className="text-xs text-muted-foreground block mb-1">Coste (escandallo)</Label>
                 <div className="flex h-9 w-full items-center rounded-md border border-input bg-muted/30 px-3 text-sm text-muted-foreground">
                   {costeCalc !== null && costeCalc > 0
-                    ? `${costeCalc.toFixed(2)} €`
+                    ? formatEur(costeCalc)
                     : <span className="italic">Sin escandallo</span>}
                 </div>
               </div>
@@ -610,11 +632,10 @@ function ProductoDetalle({
                 />
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground block mb-1">IVA</Label>
-                <Select value={iva || "none"} onValueChange={(v) => setIva(v === "none" ? "" : v)}>
+                <Label className="text-xs text-muted-foreground block mb-1">IVA *</Label>
+                <Select value={iva || undefined} onValueChange={setIva}>
                   <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Sin especificar</SelectItem>
                     {catalogos.ivas.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -1382,8 +1403,8 @@ function UmbralCosteEditor({
   useEffect(() => { setVerde(String(umbralVerde)); setDirty(false); }, [umbralVerde]);
   useEffect(() => { setNaranja(String(umbralNaranja)); }, [umbralNaranja]);
 
-  const vNum = parseFloat(verde.replace(",", "."));
-  const nNum = parseFloat(naranja.replace(",", "."));
+  const vNum = parseDecimal(verde) ?? NaN;
+  const nNum = parseDecimal(naranja) ?? NaN;
   const valido =
     Number.isFinite(vNum) && Number.isFinite(nNum) &&
     vNum >= 0 && vNum < nNum && nNum <= 100;
@@ -1488,6 +1509,74 @@ function UmbralCosteEditor({
   );
 }
 
+/* ─── IVA por defecto por tipo de producto ─── */
+function IvaDefaultEditor({ tipo }: { tipo: "compra" | "venta" }) {
+  const catalogos = useCatalogosLogistica();
+  const [valor, setValor] = useState<string>("");
+  const [cargando, setCargando] = useState(true);
+  const [guardando, setGuardando] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getDefaultIva(tipo).then((v) => {
+      if (cancelled) return;
+      setValor(v ?? "");
+      setCargando(false);
+    });
+    return () => { cancelled = true; };
+  }, [tipo]);
+
+  const handleChange = async (v: string) => {
+    const previo = valor;
+    setValor(v);
+    setGuardando(true);
+    const res = await saveDefaultIva(tipo, v);
+    setGuardando(false);
+    if (res.ok) {
+      toast.success("IVA por defecto guardado");
+    } else {
+      setValor(previo);
+      toast.error(res.error ?? "No se pudo guardar el IVA por defecto");
+    }
+  };
+
+  const etiqueta = tipo === "compra" ? "compra" : "venta";
+  // Si la empresa aún no lo configuró, mostramos el IVA efectivo (el que ya se
+  // aplica por fallback) para que el selector nunca aparezca vacío.
+  const valorMostrado = valor || (cargando ? "" : pickDefaultIva(catalogos.ivas));
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+          IVA por defecto
+        </h4>
+        <p className="text-xs text-muted-foreground/80 mt-1">
+          Tipo de IVA que se preselecciona automáticamente al crear un producto de {etiqueta} y al añadir precios. Siempre se puede cambiar en cada producto.
+        </p>
+      </div>
+      <div className="rounded-lg border bg-card p-4">
+        <div className="max-w-xs">
+          <Select
+            value={valorMostrado || undefined}
+            onValueChange={handleChange}
+            disabled={cargando || guardando || catalogos.ivas.length === 0}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={cargando ? "Cargando…" : "Seleccionar IVA"} />
+            </SelectTrigger>
+            <SelectContent>
+              {catalogos.ivas.map((v) => (
+                <SelectItem key={v} value={v}>{v}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ConfigProductos({
   tipo, onCategoriasChanged,
   mostrarUmbralCoste = false, umbralVerde = 30, umbralNaranja = 40, onUmbralesChange,
@@ -1499,6 +1588,9 @@ function ConfigProductos({
   umbralNaranja?: number;
   onUmbralesChange?: (verde: number, naranja: number) => void;
 }) {
+  // Señal para que GestorFormatos recargue las medidas cuando se crean/editan/borran
+  // en la sección "Unidades de medida" (son catálogos hermanos independientes).
+  const [medidasVersion, setMedidasVersion] = useState(0);
   return (
     <div className="space-y-6">
       <GestorCategoriasProducto tipo={tipo} onChanged={onCategoriasChanged} />
@@ -1517,6 +1609,7 @@ function ConfigProductos({
         create={(input) => createUnidadMedida({ codigo: input.codigo, label: input.codigo })}
         update={(id, patch) => updateUnidadMedida(id, { codigo: patch.codigo, label: patch.codigo })}
         remove={deleteUnidadMedida}
+        onChanged={() => setMedidasVersion((v) => v + 1)}
         iaConfig={{
           titulo: "Importar unidades de medida con IA",
           campos: [
@@ -1531,7 +1624,7 @@ function ConfigProductos({
       {/* Formatos por medida + Envases — solo en productos de compra */}
       {tipo === "compra" && (
         <>
-          <GestorFormatos />
+          <GestorFormatos refreshKey={medidasVersion} />
           <GestorCatalogoEstandar
             titulo="Envases"
             hint="Indicador del continente (Bolsa, Caja, Saco, Botella…). Es independiente del formato."
@@ -1559,12 +1652,12 @@ function ConfigProductos({
         itemAPatch={(it) => ({ porcentaje: String(it.porcentaje), label: it.label ?? "" })}
         list={listIvas}
         create={(input) => {
-          const pct = parseFloat(input.porcentaje.replace(",", ".")) || 0;
+          const pct = parseDecimal(input.porcentaje) ?? 0;
           return createIva({ codigo: `${pct}%`, porcentaje: pct, label: input.label });
         }}
         update={(id, patch) => {
           const pct =
-            patch.porcentaje !== undefined ? parseFloat(patch.porcentaje.replace(",", ".")) : undefined;
+            patch.porcentaje !== undefined ? (parseDecimal(patch.porcentaje) ?? NaN) : undefined;
           return updateIva(id, {
             codigo: pct !== undefined ? `${pct}%` : undefined,
             porcentaje: pct,
@@ -1583,6 +1676,9 @@ function ConfigProductos({
           save: guardarIvasIA,
         }}
       />
+
+      {/* IVA por defecto: solo aplica a productos de compra y de venta. */}
+      {(tipo === "compra" || tipo === "venta") && <IvaDefaultEditor tipo={tipo} />}
 
       <GestorCatalogoEstandar
         titulo="Conservación"

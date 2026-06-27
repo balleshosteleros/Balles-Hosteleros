@@ -17,12 +17,12 @@ import {
   type Tarifa,
   type ProductoTarifaPrecio,
 } from "@/features/logistica/actions/tarifas-actions";
+import { parseDecimal } from "@/shared/lib/numero";
 
 function parseImporte(s: string | number | null | undefined): number {
   if (s === null || s === undefined || s === "") return NaN;
   if (typeof s === "number") return Number.isFinite(s) ? s : NaN;
-  const n = parseFloat(String(s).replace(/[^0-9.,-]/g, "").replace(",", "."));
-  return Number.isFinite(n) ? n : NaN;
+  return parseDecimal(s) ?? NaN;
 }
 
 export function TarifaPreciosSection({

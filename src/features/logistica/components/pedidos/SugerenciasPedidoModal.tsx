@@ -37,6 +37,7 @@ import {
 import { createPedido } from "@/features/logistica/actions/pedidos-actions";
 import { toast } from "sonner";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import { formatEur as fmtEur, parseDecimal } from "@/shared/lib/numero";
 
 type Modo = "stock" | "ventas";
 type Step = "mode" | "list";
@@ -49,16 +50,12 @@ interface GroupState {
 }
 
 function parseNum(v: string): number {
-  const n = parseFloat(v.replace(",", "."));
-  return Number.isFinite(n) && n >= 0 ? n : 0;
+  const n = parseDecimal(v) ?? 0;
+  return n >= 0 ? n : 0;
 }
 
 function formatEur(n: number): string {
-  return new Intl.NumberFormat("es-ES", {
-    style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: 2,
-  }).format(n);
+  return fmtEur(n);
 }
 
 export function SugerenciasPedidoModal({

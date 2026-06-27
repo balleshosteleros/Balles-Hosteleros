@@ -35,9 +35,12 @@ import {
 } from "@/features/logistica/actions/precios-compra-actions";
 import { ProveedorCombobox } from "@/features/logistica/components/productos/ProveedorCombobox";
 import { useCatalogosLogistica } from "@/features/logistica/hooks/useCatalogosLogistica";
+import { pickDefaultIva, IVA_DEFAULT } from "@/features/logistica/data/productos";
+import { getDefaultIva } from "@/features/logistica/actions/config-actions";
 import { toast } from "sonner";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { formatEur as fmtEur, parseDecimal } from "@/shared/lib/numero";
 
 interface Props {
   productoId: string;
@@ -45,8 +48,6 @@ interface Props {
   onCurrentChange?: (current: PrecioCompraRow | null) => void;
   onItemsChange?: () => void;
 }
-
-const IVA_NONE = "__none__";
 
 function todayIso() {
   const d = new Date();
@@ -57,12 +58,8 @@ function todayIso() {
 }
 
 function formatEur(n: number): string {
-  return new Intl.NumberFormat("es-ES", {
-    style: "currency",
-    currency: "EUR",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 4,
-  }).format(n);
+  // Norma es-ES (coma decimal, punto miles); precios de compra hasta 4 dec.
+  return fmtEur(n, { max: 4 });
 }
 
 function formatFecha(iso: string): string {
@@ -77,8 +74,7 @@ function pctChange(from: number, to: number): number {
 
 function ivaPorcentaje(iva: string | null | undefined): number {
   if (!iva) return 0;
-  const n = parseFloat(iva.replace("%", "").replace(",", "."));
-  return Number.isFinite(n) ? n : 0;
+  return parseDecimal(iva.replace("%", "")) ?? 0;
 }
 
 function calcularImporteIva(precio: number, iva: string | null | undefined): number {
@@ -118,13 +114,21 @@ export function PreciosCompraSection({ productoId, unidad, onCurrentChange, onIt
 
   // Form state (nuevo precio o edición de uno existente)
   const [precio, setPrecio] = useState("");
-  const [iva, setIva] = useState<string>(IVA_NONE);
+  const [iva, setIva] = useState<string>(IVA_DEFAULT);
   const [proveedor, setProveedor] = useState<string>("");
   const [formato, setFormato] = useState<string>("");
   const [fechaInicio, setFechaInicio] = useState(todayIso());
   const [fechaFin, setFechaFin] = useState<string>("");
 
   const catalogos = useCatalogosLogistica();
+  // IVA por defecto configurado en Ajustes (Logística → Productos de compra).
+  const [defaultIvaCfg, setDefaultIvaCfg] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getDefaultIva("compra").then((v) => { if (!cancelled) setDefaultIvaCfg(v); });
+    return () => { cancelled = true; };
+  }, []);
+  const ivaPorDefecto = () => defaultIvaCfg ?? pickDefaultIva(catalogos.ivas);
   const formatosUnidad = useMemo(
     () => (unidad ? catalogos.formatosPorUnidad[unidad] ?? [] : []),
     [unidad, catalogos.formatosPorUnidad],
@@ -207,7 +211,7 @@ export function PreciosCompraSection({ productoId, unidad, onCurrentChange, onIt
 
   const resetForm = () => {
     setPrecio("");
-    setIva(IVA_NONE);
+    setIva(ivaPorDefecto());
     setProveedor("");
     setFormato("");
     setFechaInicio(todayIso());
@@ -218,7 +222,7 @@ export function PreciosCompraSection({ productoId, unidad, onCurrentChange, onIt
   const openForm = () => {
     if (masReciente) {
       setPrecio(String(masReciente.precio).replace(".", ","));
-      setIva(masReciente.iva ?? IVA_NONE);
+      setIva(masReciente.iva ?? ivaPorDefecto());
       setProveedor(masReciente.proveedor ?? "");
       setFormato(masReciente.formato ?? "");
     } else {
@@ -233,7 +237,7 @@ export function PreciosCompraSection({ productoId, unidad, onCurrentChange, onIt
   const openEditForm = (row: PrecioCompraRow) => {
     setEditingId(row.id);
     setPrecio(String(row.precio).replace(".", ","));
-    setIva(row.iva ?? IVA_NONE);
+    setIva(row.iva ?? ivaPorDefecto());
     setProveedor(row.proveedor ?? "");
     setFormato(row.formato ?? "");
     setFechaInicio(row.fecha_inicio);
@@ -298,13 +302,17 @@ export function PreciosCompraSection({ productoId, unidad, onCurrentChange, onIt
   }, [fechaFin, fechaInicio]);
 
   const handleSave = async () => {
-    const precioNum = parseFloat(precio.replace(",", "."));
+    const precioNum = parseDecimal(precio) ?? NaN;
     if (!Number.isFinite(precioNum) || precioNum < 0) {
       toast.error("Introduce un precio válido");
       return;
     }
     if (!proveedor.trim()) {
       toast.error("Selecciona un proveedor para el precio");
+      return;
+    }
+    if (!iva) {
+      toast.error("Selecciona un IVA para el precio");
       return;
     }
     if (!fechaInicio) {
@@ -325,7 +333,7 @@ export function PreciosCompraSection({ productoId, unidad, onCurrentChange, onIt
       ? await updatePrecioCompra({
           id: editingId,
           precio: precioNum,
-          iva: iva === IVA_NONE ? null : iva,
+          iva,
           proveedor,
           formato: formato || null,
           fechaInicio,
@@ -333,7 +341,7 @@ export function PreciosCompraSection({ productoId, unidad, onCurrentChange, onIt
       : await addPrecioCompra({
           productoId,
           precio: precioNum,
-          iva: iva === IVA_NONE ? null : iva,
+          iva,
           proveedor: proveedor || null,
           formato: formato || null,
           fechaInicio,
@@ -436,13 +444,12 @@ export function PreciosCompraSection({ productoId, unidad, onCurrentChange, onIt
                 />
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground block mb-1">IVA</Label>
+                <Label className="text-xs text-muted-foreground block mb-1">IVA *</Label>
                 <Select value={iva} onValueChange={setIva}>
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={IVA_NONE}>Sin IVA</SelectItem>
                     {catalogos.ivas.map((v) => (
                       <SelectItem key={v} value={v}>
                         {v}
@@ -526,7 +533,7 @@ export function PreciosCompraSection({ productoId, unidad, onCurrentChange, onIt
                 type="button"
                 size="sm"
                 onClick={handleSave}
-                disabled={saving || !proveedor.trim() || !!fechaInicioError || !!fechaFinError}
+                disabled={saving || !proveedor.trim() || !iva || !!fechaInicioError || !!fechaFinError}
                 className="gap-1"
               >
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}

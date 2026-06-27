@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Check, X, Pencil, AlertTriangle } from "lucide-react";
+import { formatNumero } from "@/shared/lib/numero";
 import type {
   ComparativaResultado,
   DiscrepanciaTipo,
@@ -45,7 +46,7 @@ const TIPO_COLOR: Record<DiscrepanciaTipo, string> = {
 };
 
 function fmt(n: number): string {
-  return Number.isFinite(n) ? n.toFixed(2) : "—";
+  return Number.isFinite(n) ? formatNumero(n, { min: 2, max: 2 }) : "—";
 }
 
 export function FacturaComparativa({ lineas, comparativa, onResolver, busy }: Props) {

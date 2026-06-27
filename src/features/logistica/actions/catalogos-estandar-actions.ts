@@ -201,11 +201,15 @@ export async function createFormatoMedida(input: { unidadId: string; nombre: str
     if (!empresaId) return { ok: false as const, error: "No autenticado" };
     const nombre = input.nombre.trim();
     if (!nombre) return { ok: false as const, error: "El nombre es obligatorio" };
+    const equiv = input.equivalencias;
+    if (equiv == null || !Number.isFinite(equiv) || equiv <= 0) {
+      return { ok: false as const, error: "La equivalencia es obligatoria y debe ser un número mayor que 0" };
+    }
 
     const nextOrden = await getNextOrden(supabase, "formatos", empresaId, { unidad_id: input.unidadId });
 
     const { data, error } = await supabase.from("formatos")
-      .insert({ empresa_id: empresaId, unidad_id: input.unidadId, nombre, equivalencias: input.equivalencias ?? null, orden: nextOrden, activa: true })
+      .insert({ empresa_id: empresaId, unidad_id: input.unidadId, nombre, equivalencias: equiv, orden: nextOrden, activa: true })
       .select("*").single();
     if (error) {
       if (error.code === "23505") return { ok: false as const, error: `Ya existe el formato "${nombre}" para esa unidad.` };
@@ -225,7 +229,13 @@ export async function updateFormatoMedida(id: string, patch: Partial<{ nombre: s
 
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (patch.nombre !== undefined) updates.nombre = patch.nombre.trim();
-    if (patch.equivalencias !== undefined) updates.equivalencias = patch.equivalencias;
+    if (patch.equivalencias !== undefined) {
+      const equiv = patch.equivalencias;
+      if (equiv == null || !Number.isFinite(equiv) || equiv <= 0) {
+        return { ok: false as const, error: "La equivalencia es obligatoria y debe ser un número mayor que 0" };
+      }
+      updates.equivalencias = equiv;
+    }
     if (patch.orden !== undefined) updates.orden = patch.orden;
     if (patch.activa !== undefined) updates.activa = patch.activa;
 

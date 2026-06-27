@@ -35,6 +35,7 @@ import {
 } from "@/features/logistica/actions/facturas-actions";
 import type { Factura } from "@/features/logistica/types/facturas";
 import { FacturaComparativa } from "./FacturaComparativa";
+import { formatEur } from "@/shared/lib/numero";
 
 interface Props {
   open: boolean;
@@ -377,9 +378,9 @@ function CabeceraFactura({
       </div>
       <CampoLectura label="Fecha factura" value={factura.fechaFactura || "—"} />
       <CampoLectura label="Recepción" value={factura.fechaRecepcion} />
-      <CampoLectura label="Base" value={`${factura.baseImponible.toFixed(2)} €`} />
-      <CampoLectura label="IVA" value={`${factura.ivaTotal.toFixed(2)} €`} />
-      <CampoLectura label="Total" value={`${factura.total.toFixed(2)} €`} className="font-semibold" />
+      <CampoLectura label="Base" value={formatEur(factura.baseImponible)} />
+      <CampoLectura label="IVA" value={formatEur(factura.ivaTotal)} />
+      <CampoLectura label="Total" value={formatEur(factura.total)} className="font-semibold" />
       <CampoLectura label="Albarán" value={factura.albaranId ? "Vinculado" : "Huérfana"} />
     </div>
   );
