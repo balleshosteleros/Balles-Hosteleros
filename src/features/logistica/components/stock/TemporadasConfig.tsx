@@ -130,7 +130,7 @@ export default function TemporadasConfig({ temporadas, setTemporadas, productos,
                     <p className="text-xs text-muted-foreground">{t.fechaInicio} → {t.fechaFin}</p>
                   </div>
                   <div className="flex gap-1">
-                    {isActiva && <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/30">ACTIVA</Badge>}
+                    {isActiva && <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/30">Activa</Badge>}
                     <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(t)}><Pencil className="h-3.5 w-3.5" /></Button>
                     <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => remove(t)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
                   </div>

@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Camera, Upload, Loader2, FileImage, X } from "lucide-react";
+import { Camera, Upload, FileImage, X } from "lucide-react";
 
 interface Props {
   open: boolean;
@@ -107,7 +107,6 @@ export function AlbaranUploadModal({ open, onClose, onFileReady }: Props) {
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={reset}>Cambiar archivo</Button>
               <Button onClick={handleSubmit} className="gap-1">
-                <Loader2 className="h-4 w-4 animate-spin hidden" />
                 Analizar albarán
               </Button>
             </div>

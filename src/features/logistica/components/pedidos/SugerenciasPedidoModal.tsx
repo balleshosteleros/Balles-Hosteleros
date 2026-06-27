@@ -215,7 +215,7 @@ export function SugerenciasPedidoModal({
         <DialogHeader className="p-6 pb-2">
           <DialogTitle className="flex items-center gap-2 text-xl font-black">
             <ShoppingCart className="h-5 w-5 text-primary" />
-            SUGERENCIAS DE COMPRA AUTOMÁTICA
+            Sugerencias de compra automática
           </DialogTitle>
           <p className="text-sm text-muted-foreground">
             {step === "mode"

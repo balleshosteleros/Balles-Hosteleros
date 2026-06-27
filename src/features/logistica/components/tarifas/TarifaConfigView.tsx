@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Settings, Sliders } from "lucide-react";
 
@@ -28,6 +29,7 @@ export default function TarifaConfigView({ onBack }: Props) {
 
         <TabsContent value="reglas" className="space-y-3 mt-4">
           <div className="border rounded-lg bg-card p-6 text-center">
+            <Badge variant="secondary" className="mb-2">Próximamente</Badge>
             <p className="text-sm font-medium text-foreground">Sin reglas configuradas</p>
             <p className="mt-1 text-xs text-muted-foreground">
               Aquí podrás definir cuándo se aplica cada tarifa (horarios, días, salas, tipos de cliente…).

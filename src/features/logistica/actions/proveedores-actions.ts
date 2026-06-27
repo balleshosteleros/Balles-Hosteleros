@@ -278,6 +278,22 @@ export async function deleteProveedor(id: string) {
       .eq("id", id)
       .maybeSingle();
 
+    // Guarda de integridad: no borrar un proveedor con productos asociados.
+    // Para darlo de baja conservando el histórico, se marca Inactivo (no se borra).
+    if (before?.empresa_id && before.nombre_comercial) {
+      const { count } = await supabase
+        .from("productos")
+        .select("id", { count: "exact", head: true })
+        .eq("empresa_id", before.empresa_id as string)
+        .eq("proveedor", before.nombre_comercial as string);
+      if ((count ?? 0) > 0) {
+        return {
+          ok: false as const,
+          error: `Este proveedor tiene ${count} producto(s) asociados. Márcalo como Inactivo en lugar de borrarlo.`,
+        };
+      }
+    }
+
     const { error } = await supabase.from("proveedores").delete().eq("id", id);
     if (error) throw error;
 

@@ -372,7 +372,7 @@ export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNom
         {/* Lineas */}
         <div className="mt-4">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-bold text-foreground">PRODUCTOS</h3>
+            <h3 className="text-sm font-bold text-foreground">Productos</h3>
             <Button size="sm" variant="outline" onClick={addLinea} className="gap-1"><Plus className="h-3 w-3" /> Añadir línea</Button>
           </div>
           <div className="border rounded-lg overflow-x-auto">

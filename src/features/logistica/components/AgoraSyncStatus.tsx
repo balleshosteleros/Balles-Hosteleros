@@ -145,15 +145,13 @@ export function AgoraSyncStatus() {
     toast.info("Error ignorado. Los datos actuales de Ágora no han cambiado.");
   }
 
-  async function handleCrearBackup() {
-    // Backup: el error ya quedó registrado en agora_sync_log por el servicio.
-    // Informar al usuario que el log fue guardado como referencia.
+  function handleVerRegistro() {
+    // El error ya quedó registrado automáticamente en agora_sync_log por el servicio.
+    // Este botón solo lo confirma y refresca el panel (no crea nada nuevo).
     setErrorDialogOpen(false);
     setPendingError(null);
-    toast.success(
-      "Registro de backup guardado en agora_sync_log con todos los detalles del error."
-    );
-    await cargarUltimoLog();
+    toast.info("El error quedó registrado en el historial de sincronización (agora_sync_log).");
+    void cargarUltimoLog();
   }
 
   // ─── RENDER ──────────────────────────────────────────────────────────────
@@ -269,10 +267,10 @@ export function AgoraSyncStatus() {
             </Button>
             <Button
               variant="outline"
-              onClick={handleCrearBackup}
+              onClick={handleVerRegistro}
               className="w-full"
             >
-              Crear registro de backup
+              El error quedó registrado
             </Button>
             <Button
               variant="ghost"

@@ -20,7 +20,8 @@ export function DetallePedido({ pedido, albaran, onBack, onConfirmar, onOpenAlba
   const totales = calcularTotalesLineas(pedido.lineas);
   const bloqueado = pedido.estado === "Confirmado"; // tiene albarán → solo lectura
   const canConfirm = !bloqueado && !pedido.albaranId;   // "Crear albarán"
-  const canSend = pedido.estado === "Pendiente" && !pedido.enviadoAt;
+  // Se puede enviar/reenviar mientras no esté bloqueado (Confirmado/con albarán).
+  const canSend = pedido.estado === "Pendiente" || pedido.estado === "Enviado";
   const proveedorEmail = pedido.proveedorEmail || "";
   const reparto = evaluarReparto(pedido.fechaEntrega, pedido.horaEntrega, pedido.horaEntregaHasta, pedido.proveedorReparto);
   const repartoFuera = reparto.fueraDia || reparto.fueraHora;
@@ -32,11 +33,11 @@ export function DetallePedido({ pedido, albaran, onBack, onConfirmar, onOpenAlba
       <div className="flex items-center gap-3 flex-wrap">
         <Button variant="ghost" size="sm" onClick={onBack} className="gap-1"><ArrowLeft className="h-4 w-4" /> Volver</Button>
         <div className="flex-1" />
-        <Button variant="outline" size="sm" className="gap-1" onClick={() => window.print()}><FileText className="h-4 w-4" /> Guardar PDF</Button>
+        <Button variant="outline" size="sm" className="gap-1" onClick={() => window.print()}><FileText className="h-4 w-4" /> Imprimir</Button>
         <Button variant="outline" size="sm" className="gap-1 border-green-300 text-green-700 hover:bg-green-50 dark:border-green-700 dark:text-green-400 dark:hover:bg-green-900/20" onClick={() => onEnviarWhatsapp(pedido)}><MessageCircle className="h-4 w-4" /> WhatsApp</Button>
         {canSend && (
           <Button size="sm" variant="outline" className="gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-900/20" onClick={() => onEnviarProveedor(pedido)}>
-            <Mail className="h-4 w-4" /> Enviar al proveedor
+            <Mail className="h-4 w-4" /> {pedido.estado === "Enviado" ? "Reenviar al proveedor" : "Enviar al proveedor"}
           </Button>
         )}
         {canConfirm && (

@@ -7,7 +7,7 @@ import {
   ESTADOS_PROVEEDOR, CATEGORIAS_PROVEEDOR, DIAS_REPARTO, VIAS_PAGO, PLAZOS_PAGO,
   type Proveedor, type EstadoProveedor,
 } from "@/features/logistica/data/proveedores";
-import { listProveedores, createProveedor, updateProveedor } from "@/features/logistica/actions/proveedores-actions";
+import { listProveedores, createProveedor, updateProveedor, deleteProveedor } from "@/features/logistica/actions/proveedores-actions";
 import {
   listCategoriasProveedor,
   createCategoriaProveedor,
@@ -305,6 +305,16 @@ export function ProveedoresView() {
           if (ok) setDetalleProveedor(item);
           return ok;
         }}
+        onDelete={async (item) => {
+          const res = await deleteProveedor(item.id);
+          if (res.ok) {
+            toast.success("Proveedor borrado");
+            setDetalleProveedor(null);
+            await loadProveedores();
+          } else {
+            toast.error(res.error ?? "No se pudo borrar el proveedor");
+          }
+        }}
       />
     );
   }
@@ -450,7 +460,7 @@ export function ProveedoresView() {
       {showConfig ? (
         <div className="bg-card border rounded-lg p-5 space-y-5">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-foreground">CONFIGURACIÓN — PROVEEDORES</h3>
+            <h3 className="text-sm font-bold text-foreground">Configuración — proveedores</h3>
             <Button size="sm" variant="ghost" onClick={() => setShowConfig(false)} className="gap-1"><ArrowLeft className="h-4 w-4" /> Volver</Button>
           </div>
 

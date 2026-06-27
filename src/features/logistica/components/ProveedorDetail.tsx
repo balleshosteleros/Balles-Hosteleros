@@ -45,6 +45,7 @@ import {
   Tag,
   Package,
   Truck,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
@@ -53,12 +54,14 @@ type Props = {
   proveedor: Proveedor;
   onBack: () => void;
   onSave: (p: Proveedor) => Promise<boolean>;
+  onDelete?: (p: Proveedor) => Promise<void>;
 };
 
-export function ProveedorDetail({ proveedor, onBack, onSave }: Props) {
+export function ProveedorDetail({ proveedor, onBack, onSave, onDelete }: Props) {
   const [form, setForm] = useState<Proveedor>(proveedor);
   const [saving, setSaving] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loadingProductos, setLoadingProductos] = useState(true);
   useGlobalLoadingSync(saving || loadingProductos);
@@ -180,6 +183,17 @@ export function ProveedorDetail({ proveedor, onBack, onSave }: Props) {
           <ArrowLeft className="h-4 w-4" /> Volver
         </Button>
         <div className="flex-1" />
+        {onDelete && proveedor.id && !loadingProductos && productos.length === 0 && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1 border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={saving}
+          >
+            <Trash2 className="h-4 w-4" /> Borrar
+          </Button>
+        )}
         <Button
           size="sm"
           className="gap-1"
@@ -248,7 +262,7 @@ export function ProveedorDetail({ proveedor, onBack, onSave }: Props) {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
-            <Receipt className="h-4 w-4" /> DATOS FISCALES
+            <Receipt className="h-4 w-4" /> Datos fiscales
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -309,7 +323,7 @@ export function ProveedorDetail({ proveedor, onBack, onSave }: Props) {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
-            <CreditCard className="h-4 w-4" /> FORMAS DE PAGO
+            <CreditCard className="h-4 w-4" /> Formas de pago
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -382,7 +396,7 @@ export function ProveedorDetail({ proveedor, onBack, onSave }: Props) {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
-            <Truck className="h-4 w-4" /> REPARTO
+            <Truck className="h-4 w-4" /> Reparto
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -445,7 +459,7 @@ export function ProveedorDetail({ proveedor, onBack, onSave }: Props) {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
-            <Phone className="h-4 w-4" /> CONTACTO DE LA EMPRESA
+            <Phone className="h-4 w-4" /> Contacto de la empresa
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -477,7 +491,7 @@ export function ProveedorDetail({ proveedor, onBack, onSave }: Props) {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
-            <Phone className="h-4 w-4" /> COMERCIAL ASIGNADO
+            <Phone className="h-4 w-4" /> Comercial asignado
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -512,7 +526,7 @@ export function ProveedorDetail({ proveedor, onBack, onSave }: Props) {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
-            <Phone className="h-4 w-4" /> OTROS CORREOS
+            <Phone className="h-4 w-4" /> Otros correos
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -542,7 +556,7 @@ export function ProveedorDetail({ proveedor, onBack, onSave }: Props) {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
-            <Tag className="h-4 w-4" /> CATEGORÍAS
+            <Tag className="h-4 w-4" /> Categorías
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -572,7 +586,7 @@ export function ProveedorDetail({ proveedor, onBack, onSave }: Props) {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
-            <Package className="h-4 w-4" /> PRODUCTOS
+            <Package className="h-4 w-4" /> Productos
             <span className="text-xs font-normal text-muted-foreground ml-1">
               ({productosAsociados.length})
             </span>
@@ -685,6 +699,31 @@ export function ProveedorDetail({ proveedor, onBack, onSave }: Props) {
               }}
             >
               Guardar y volver
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Borrar proveedor?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se eliminará «{form.nombreComercial}» y su contacto de la agenda. Esta acción no se puede deshacer.
+              Si solo quieres darlo de baja conservando el histórico, márcalo como Inactivo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async (e) => {
+                e.preventDefault();
+                setShowDeleteConfirm(false);
+                await onDelete?.(proveedor);
+              }}
+            >
+              Borrar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

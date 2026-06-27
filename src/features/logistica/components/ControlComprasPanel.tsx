@@ -116,7 +116,7 @@ export function ControlComprasPanel({
       <div className="rounded-xl border bg-card shadow-sm">
         <div className="flex flex-wrap items-center gap-2 px-4 pt-4 pb-3 border-b">
           <PackageX className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-semibold tracking-wide">PRODUCTOS SIN COMPRAS</span>
+          <span className="text-sm font-semibold tracking-wide">Productos sin compras</span>
           <div className="ml-auto flex items-center gap-1">
             {PERIODOS.map((p) => (
               <button

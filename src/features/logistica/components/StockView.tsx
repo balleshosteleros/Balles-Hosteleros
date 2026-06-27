@@ -242,17 +242,29 @@ export function StockView() {
   };
   const saveEdit = async () => {
     if (!editingId) return;
-    if (temporadaActiva && temporadaActiva.overrides[editingId]) {
-      setTemporadas((prev) => prev.map((t) =>
-        t.id === temporadaActiva.id
-          ? { ...t, overrides: { ...t.overrides, [editingId]: { stockMaximo: editValues.stockMaximo, stockSeguridad: editValues.stockSeguridad } } }
-          : t
-      ));
-    } else {
-      setStock((prev) => prev.map((p) => p.id === editingId ? { ...p, stockMaximo: editValues.stockMaximo, stockSeguridad: editValues.stockSeguridad } : p));
-    }
     const savedId = editingId;
     setEditingId(null);
+
+    // Si hay una temporada activa, el valor editado pertenece a ESA temporada
+    // (override), no al stock base. Persistir en la temporada evita pisar el valor general.
+    if (temporadaActiva) {
+      const newOverrides = {
+        ...temporadaActiva.overrides,
+        [savedId]: { stockMaximo: editValues.stockMaximo, stockSeguridad: editValues.stockSeguridad },
+      };
+      setTemporadas((prev) => prev.map((t) => (t.id === temporadaActiva.id ? { ...t, overrides: newOverrides } : t)));
+      const res = await updateTemporada(temporadaActiva.id, {
+        nombre: temporadaActiva.nombre,
+        fechaInicio: temporadaActiva.fechaInicio,
+        fechaFin: temporadaActiva.fechaFin,
+        overrides: newOverrides,
+      });
+      if (res.ok) toast.success(`Valores guardados en la temporada ${temporadaActiva.nombre}`);
+      else { toast.error(res.error ?? "Error al guardar la temporada"); loadStockData(); }
+      return;
+    }
+
+    setStock((prev) => prev.map((p) => p.id === savedId ? { ...p, stockMaximo: editValues.stockMaximo, stockSeguridad: editValues.stockSeguridad } : p));
     const res = await updateStockAction(savedId, {
       cantidad_minima: editValues.stockSeguridad,
       cantidad_maxima: editValues.stockMaximo,
@@ -283,24 +295,29 @@ export function StockView() {
   const applyMassEdit = async () => {
     if (massTargetIds.size === 0) { toast.info("El ámbito seleccionado no contiene productos"); return; }
 
-    // Copy between temporadas (solo local — temporadas son configuración visual)
+    // Copiar stock entre temporadas — persiste las reglas en la temporada destino.
     if (massAction === "copiar-temporada") {
       if (!massCopyTempFrom || !massCopyTempTo) { toast.error("Selecciona temporada origen y destino"); return; }
       if (massCopyTempFrom === massCopyTempTo) { toast.error("Origen y destino deben ser diferentes"); return; }
+      const destTemp = temporadas.find((t) => t.id === massCopyTempTo);
+      if (!destTemp) { toast.error("La temporada destino no existe"); return; }
       const sourceTemp = massCopyTempFrom === "base" ? null : temporadas.find((t) => t.id === massCopyTempFrom);
-      setTemporadas((prev) => prev.map((t) => {
-        if (t.id !== massCopyTempTo) return t;
-        const newOverrides = { ...t.overrides };
-        for (const prodId of massTargetIds) {
-          const prod = stock.find((p) => p.id === prodId);
-          if (!prod) continue;
-          const srcVal = sourceTemp?.overrides[prodId] ?? { stockMaximo: prod.stockMaximo, stockSeguridad: prod.stockSeguridad };
-          newOverrides[prodId] = { ...srcVal };
-        }
-        return { ...t, overrides: newOverrides };
-      }));
-      const targetName = temporadas.find((t) => t.id === massCopyTempTo)?.nombre ?? "temporada";
-      toast.success(`Stock copiado a ${targetName} para ${massTargetIds.size} producto(s)`);
+      const newOverrides = { ...destTemp.overrides };
+      for (const prodId of massTargetIds) {
+        const prod = stock.find((p) => p.id === prodId);
+        if (!prod) continue;
+        const srcVal = sourceTemp?.overrides[prodId] ?? { stockMaximo: prod.stockMaximo, stockSeguridad: prod.stockSeguridad };
+        newOverrides[prodId] = { ...srcVal };
+      }
+      const res = await updateTemporada(massCopyTempTo, {
+        nombre: destTemp.nombre,
+        fechaInicio: destTemp.fechaInicio,
+        fechaFin: destTemp.fechaFin,
+        overrides: newOverrides,
+      });
+      if (!res.ok) { toast.error(res.error ?? "No se pudo guardar la temporada"); return; }
+      setTemporadas((prev) => prev.map((t) => (t.id === massCopyTempTo ? { ...t, overrides: newOverrides } : t)));
+      toast.success(`Stock copiado a ${destTemp.nombre} para ${massTargetIds.size} producto(s)`);
       setMassOpen(false);
       return;
     }
@@ -735,11 +752,11 @@ export function StockView() {
                           <td className="px-3 py-2.5">
                             {isEditing ? (
                               <div className="flex gap-1">
-                                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={saveEdit}><Check className="h-3.5 w-3.5 text-emerald-600" /></Button>
-                                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={cancelEdit}><X className="h-3.5 w-3.5 text-destructive" /></Button>
+                                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={saveEdit} title="Guardar" aria-label="Guardar"><Check className="h-3.5 w-3.5 text-emerald-600" /></Button>
+                                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={cancelEdit} title="Cancelar" aria-label="Cancelar"><X className="h-3.5 w-3.5 text-destructive" /></Button>
                               </div>
                             ) : (
-                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => startEdit(p)}><Pencil className="h-3.5 w-3.5" /></Button>
+                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => startEdit(p)} title="Editar" aria-label="Editar"><Pencil className="h-3.5 w-3.5" /></Button>
                             )}
                           </td>
                         </tr>
