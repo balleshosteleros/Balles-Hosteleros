@@ -321,6 +321,10 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
   const [busqueda, setBusqueda] = useState("");
   const [buscadorAbierto, setBuscadorAbierto] = useState(false);
   const [tzSecundaria, setTzSecundaria] = useState<string | null>(null);
+  // Ancho real de la barra de scroll vertical del cuerpo de la rejilla.
+  // Se reserva el mismo espacio en la cabecera de días y en la fila "Todo el día"
+  // para que las 7 columnas no se desalineen (0 en sistemas con scrollbar overlay).
+  const [scrollbarW, setScrollbarW] = useState(0);
   const [drag, setDrag] = useState<{
     dayIso: string;
     startMin: number;
@@ -444,6 +448,9 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
     if (!el) return;
     const horaObjetivo = Math.max(0, Math.min(22, Math.floor(nowMinutes / 60) - 1));
     el.scrollTop = horaObjetivo * HORA_PX;
+    // Mide el ancho que ocupa la barra de scroll para compensar la cabecera.
+    const w = el.offsetWidth - el.clientWidth;
+    setScrollbarW((prev) => (prev === w ? prev : w));
   };
 
   // Drag-to-create: mousedown en un slot, mousemove en la columna, mouseup abre el form.
@@ -950,7 +957,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
           {vista === "week" && (
             <div className="flex flex-1 min-h-0 flex-col">
               {/* Cabecera de días */}
-              <div className="flex shrink-0 border-b bg-card">
+              <div className="flex shrink-0 border-b bg-card" style={{ paddingRight: scrollbarW }}>
                 <div
                   className="shrink-0 border-r flex items-end justify-around pb-1 text-[9px] uppercase text-muted-foreground"
                   style={{ width: tzSecundaria ? 104 : 52 }}
@@ -996,7 +1003,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
 
               {/* Fila de all-day events */}
               {eventosAllDay.length > 0 && (
-                <div className="flex shrink-0 border-b bg-muted/10">
+                <div className="flex shrink-0 border-b bg-muted/10" style={{ paddingRight: scrollbarW }}>
                   <div
                     className="shrink-0 border-r px-1 py-1 text-right text-[9px] uppercase text-muted-foreground"
                     style={{ width: tzSecundaria ? 104 : 52 }}
