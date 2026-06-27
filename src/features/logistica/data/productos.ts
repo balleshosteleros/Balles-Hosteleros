@@ -5,7 +5,21 @@ export type EstadoProducto = "Activo" | "Inactivo";
 export const IVA_OPCIONES = ["0%", "4%", "10%", "21%"] as const;
 export type IvaOpcion = typeof IVA_OPCIONES[number];
 
-export const CONSERVACION_OPCIONES = ["Frigorífico", "Congelador", "Seco"] as const;
+// IVA por defecto: ningún precio de compra puede quedar "sin IVA". Cuando no se
+// elige uno explícito, se aplica el tipo general (21%). Orden de preferencia para
+// elegir un default válido a partir del catálogo de la empresa.
+export const IVA_DEFAULT: IvaOpcion = "21%";
+export const IVA_PREFERENCIA: readonly string[] = ["21%", "10%", "4%", "0%"];
+
+/** Devuelve un IVA por defecto válido a partir del catálogo disponible. */
+export function pickDefaultIva(ivas: readonly string[]): string {
+  for (const pref of IVA_PREFERENCIA) {
+    if (ivas.includes(pref)) return pref;
+  }
+  return ivas[0] ?? IVA_DEFAULT;
+}
+
+export const CONSERVACION_OPCIONES = ["Ambiente", "Refrigeración", "Congelación", "Caliente"] as const;
 export type Conservacion = typeof CONSERVACION_OPCIONES[number];
 
 export const UNIDADES_PRODUCTO = [
@@ -49,8 +63,9 @@ export interface Producto {
   precioVenta?: string;
   coste?: string;
   iva?: string;
-  unidad: string;
+  medida: string;
   formato?: string;
+  envase?: string;
   ultimaActualizacion: string;
   // Marca temporal de creación; se usa para asignar el nº correlativo estable.
   createdAt?: string;
