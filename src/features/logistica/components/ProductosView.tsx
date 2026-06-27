@@ -44,6 +44,7 @@ import {
 import { ImportadorIADialog } from "@/features/logistica/components/ImportadorIADialog";
 import { GestorCategoriasProducto } from "@/features/logistica/components/productos/GestorCategoriasProducto";
 import { GestorCatalogoEstandar } from "@/features/logistica/components/productos/GestorCatalogoEstandar";
+import { GestorFormatos } from "@/features/logistica/components/productos/GestorFormatos";
 import { listCategoriasProducto } from "@/features/logistica/actions/categorias-producto-actions";
 import {
   listUnidadesMedida,
@@ -58,6 +59,10 @@ import {
   createConservacion,
   updateConservacion,
   deleteConservacion,
+  listEnvases,
+  createEnvase,
+  updateEnvase,
+  deleteEnvase,
 } from "@/features/logistica/actions/catalogos-estandar-actions";
 import {
   analizarUnidadesIA,
@@ -145,7 +150,7 @@ function ProductoDetalle({
   const esElaboracion = tipo === "elaboracion";
   const mostrarConservacion = !esVenta;
   const mostrarIva = !esElaboracion;
-  const mostrarFormato = esCompra || esElaboracion;
+  const mostrarFormato = esCompra;
   const estadosList = estadosOpts ?? [...ESTADOS_PRODUCTO];
   const { empresaActual } = useEmpresa();
   const catalogos = useCatalogosLogistica();
@@ -166,7 +171,7 @@ function ProductoDetalle({
   const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
   const [nombre, setNombre] = useState(producto?.nombre ?? "");
   const [categoria, setCategoria] = useState(producto?.categoria ?? "");
-  const [unidad, setUnidad] = useState(producto?.unidad || "ud");
+  const [unidad, setUnidad] = useState(producto?.medida || "Unidades");
   const [estado, setEstado] = useState<EstadoProducto>(producto?.estado ?? "Activo");
   const [proveedor, setProveedor] = useState(producto?.proveedor ?? "");
   const [precioVenta, _setPrecioVenta] = useState(producto?.precioVenta ?? "");
@@ -299,7 +304,7 @@ function ProductoDetalle({
       proveedor: esCompra ? (proveedor || null) : null,
       precioVenta: esElaboracion ? (precioVenta || null) : null,
       coste: esElaboracion ? (coste || null) : null,
-      unidad,
+      medida: unidad,
       formato: mostrarFormato ? (formato || null) : null,
       conservacion: mostrarConservacion ? (conservacion || null) : null,
       partida: esVenta ? (partida.trim() || null) : null,
@@ -860,7 +865,7 @@ function ProductoDetalle({
       )}
 
       {!isNew && (
-        <div className="flex justify-end pt-2">
+        <div className="flex justify-start pt-2">
           <Button variant="outline" size="sm" className="gap-1 text-destructive" onClick={handleDelete}>
             <Trash2 className="h-4 w-4" /> Eliminar producto
           </Button>
@@ -922,7 +927,7 @@ function TablaProductos({
   const esElaboracion = tipo === "elaboracion";
   const mostrarConservacion = !esVenta;
   const mostrarIva = !esElaboracion;
-  const mostrarFormato = esCompra || esElaboracion;
+  const mostrarFormato = esCompra;
 
   useEffect(() => {
     setColumnasVisibles(
@@ -941,7 +946,7 @@ function TablaProductos({
     [productos],
   );
   const unidadesUsadas = useMemo(
-    () => [...new Set(productos.map((p) => p.unidad).filter(Boolean))].sort(),
+    () => [...new Set(productos.map((p) => p.medida).filter(Boolean))].sort(),
     [productos],
   );
   const partidasUsadas = useMemo(
@@ -989,7 +994,7 @@ function TablaProductos({
           ...(esVenta ? [{ campo: "porcCoste", label: "% Coste" }] : []),
         ]),
     ...(mostrarIva ? [{ campo: "iva", label: "IVA" }] : []),
-    { campo: "unidad", label: "Medida" },
+    { campo: "medida", label: "Medida" },
     ...(mostrarFormato ? [{ campo: "formato", label: "Formato" }] : []),
     { campo: "fecha", label: "Actualización" },
   ];
@@ -1174,12 +1179,12 @@ function TablaProductos({
         </td>
       ),
     },
-    unidad: {
+    medida: {
       th: (
         <TableColumnHeader
-          key="unidad"
+          key="medida"
           label="Medida"
-          campo="unidad"
+          campo="medida"
           filtroTipo="lista"
           opciones={unidadesUsadas}
           filtros={filtros}
@@ -1187,8 +1192,8 @@ function TablaProductos({
         />
       ),
       td: (p) => (
-        <td key="unidad" className="px-3 py-1.5 text-muted-foreground">
-          {p.unidad}
+        <td key="medida" className="px-3 py-1.5 text-muted-foreground">
+          {p.medida}
         </td>
       ),
     },
@@ -1507,6 +1512,25 @@ function ConfigProductos({
           save: guardarUnidadesIA,
         }}
       />
+
+      {/* Formatos por medida + Envases — solo en productos de compra */}
+      {tipo === "compra" && (
+        <>
+          <GestorFormatos />
+          <GestorCatalogoEstandar
+            titulo="Envases"
+            hint="Indicador del continente (Bolsa, Caja, Saco, Botella…). Es independiente del formato."
+            campos={[{ key: "nombre", label: "Envase (ej: Bolsa)", obligatorio: true, ancho: "flex-1" }]}
+            itemPrincipal={(it) => it.nombre}
+            itemSecundario={() => null}
+            itemAPatch={(it) => ({ nombre: it.nombre })}
+            list={listEnvases}
+            create={(input) => createEnvase({ nombre: input.nombre })}
+            update={(id, patch) => updateEnvase(id, { nombre: patch.nombre })}
+            remove={deleteEnvase}
+          />
+        </>
+      )}
 
       <GestorCatalogoEstandar
         titulo="IVA"
