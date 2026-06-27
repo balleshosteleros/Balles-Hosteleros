@@ -2,6 +2,24 @@ export type TipoProducto = "compra" | "venta" | "elaboracion";
 
 export type EstadoProducto = "Activo" | "Inactivo";
 
+// ─── ID visible del producto ───
+// La numeración es secuencial e independiente por tipo (1, 2, 3… por empresa y
+// tipo). El ID que ve el usuario antepone la inicial del tipo para que cada
+// familia tenga su propia serie: C-1 (compra), V-1 (venta), E-1 (elaboración).
+export const TIPO_PREFIJO: Record<TipoProducto, string> = {
+  compra: "C",
+  venta: "V",
+  elaboracion: "E",
+};
+
+/** Formatea el ID visible del producto (p. ej. "C-12"). "—" si aún no tiene número. */
+export function formatProductoId(
+  p: { tipo: TipoProducto; numeroSecuencial?: number | null },
+): string {
+  if (p.numeroSecuencial == null) return "—";
+  return `${TIPO_PREFIJO[p.tipo]}-${p.numeroSecuencial}`;
+}
+
 export const IVA_OPCIONES = ["0%", "4%", "10%", "21%"] as const;
 export type IvaOpcion = typeof IVA_OPCIONES[number];
 
