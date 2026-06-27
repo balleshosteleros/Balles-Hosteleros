@@ -25,7 +25,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { DirectorioEmpleados } from "@/features/llamadas-internas/components/DirectorioEmpleados";
+import { listHistorialLlamadas } from "@/features/llamadas-internas/actions/llamadas-actions";
+import type { LlamadaHistorialItem } from "@/features/llamadas-internas/types";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+
+/** localStorage: última vez que el usuario vio la pestaña Recientes (limpia el badge). */
+export const LLAMADAS_VISTAS_KEY = "bh_llamadas_vistas_at";
 
 type CallState = "idle" | "ringing" | "connected" | "ended";
 
@@ -44,14 +49,31 @@ function formatDuration(seconds: number): string {
   return `${m}:${s}`;
 }
 
-// Sin telefonía VoIP conectada todavía no hay registro de llamadas: lista vacía.
-// Cuando exista backend (B2COM/SIP/Twilio), poblar desde la tabla de llamadas reales.
-const RECENT_CALLS: RecentCall[] = [];
+/** "Hoy 10:15" / "Ayer 18:45" / "12/06 09:03" a partir de un ISO. */
+function formatHora(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const ayer = new Date(now);
+  ayer.setDate(now.getDate() - 1);
+  const hhmm = d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+  if (d.toDateString() === now.toDateString()) return `Hoy ${hhmm}`;
+  if (d.toDateString() === ayer.toDateString()) return `Ayer ${hhmm}`;
+  return `${d.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" })} ${hhmm}`;
+}
 
-// Cuenta llamadas entrantes nuevas no vistas (perdidas) para el badge de la barra.
-// Mientras no haya backend de llamadas reales, siempre 0 (no inventar perdidas).
-export function contarLlamadasNoVistas(): number {
-  return RECENT_CALLS.filter((c) => c.tipo === "perdida").length;
+/** Mapea una llamada interna del historial al item visual de Recientes. */
+function mapHistorialToRecent(h: LlamadaHistorialItem): RecentCall {
+  const entrante = h.direccion === "entrante";
+  const perdida =
+    entrante && (h.estado === "perdida" || (h.estado === "cancelada" && !h.conectadaAt));
+  return {
+    id: h.id,
+    numero: "", // llamada interna entre empleados: no hay número
+    nombre: h.contraparteNombre,
+    tipo: perdida ? "perdida" : entrante ? "entrante" : "saliente",
+    duracion: h.duracionSeg > 0 ? formatDuration(h.duracionSeg) : undefined,
+    hora: formatHora(h.iniciadaAt),
+  };
 }
 
 const DIAL_KEYS = [
@@ -77,11 +99,41 @@ export function TelefonoDrawer({ children }: { children: ReactNode }) {
   const [callSeconds, setCallSeconds] = useState(0);
   const [muted, setMuted] = useState(false);
   const [speakerOff, setSpeakerOff] = useState(false);
+  const [recientes, setRecientes] = useState<RecentCall[]>([]);
+  const [cargandoRec, setCargandoRec] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // La configuración del teléfono vive en Ajustes → Herramientas → Teléfono.
   const { ajustes } = useEmpresa();
   const isConnected = ajustes.telefonia.proveedor !== "none";
+
+  // Carga el historial real de llamadas internas al abrir el teléfono.
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    setCargandoRec(true);
+    listHistorialLlamadas(50)
+      .then((r) => {
+        if (alive) setRecientes(r.data.map(mapHistorialToRecent));
+      })
+      .finally(() => {
+        if (alive) setCargandoRec(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [open]);
+
+  // Al ver la pestaña Recientes, marca las perdidas como vistas (limpia el badge).
+  useEffect(() => {
+    if (open && tab === "recientes") {
+      try {
+        localStorage.setItem(LLAMADAS_VISTAS_KEY, new Date().toISOString());
+      } catch {
+        /* localStorage no disponible */
+      }
+    }
+  }, [open, tab]);
 
   useEffect(() => {
     function handler(e: Event) {
@@ -294,16 +346,21 @@ export function TelefonoDrawer({ children }: { children: ReactNode }) {
           {/* ─── RECIENTES ─── */}
           {tab === "recientes" && (
             <div className="divide-y">
-              {RECENT_CALLS.length === 0 && (
+              {cargandoRec && recientes.length === 0 && (
+                <p className="px-5 py-16 text-center text-sm text-muted-foreground">
+                  Cargando llamadas…
+                </p>
+              )}
+              {!cargandoRec && recientes.length === 0 && (
                 <div className="flex flex-col items-center justify-center gap-2 px-5 py-16 text-center">
                   <PhoneOff className="h-8 w-8 text-muted-foreground/40" />
                   <p className="text-sm text-muted-foreground">No hay llamadas recientes</p>
                   <p className="text-xs text-muted-foreground/70">
-                    Aparecerán aquí cuando la telefonía esté conectada.
+                    Aquí aparecerán tus llamadas, incluidas las perdidas.
                   </p>
                 </div>
               )}
-              {RECENT_CALLS.map((call) => (
+              {recientes.map((call) => (
                 <div
                   key={call.id}
                   className="flex items-center gap-3 px-5 py-3 hover:bg-muted/20 transition-colors"
@@ -331,7 +388,7 @@ export function TelefonoDrawer({ children }: { children: ReactNode }) {
                     <p className={`text-sm font-medium truncate ${call.tipo === "perdida" ? "text-red-600" : ""}`}>
                       {call.nombre ?? call.numero}
                     </p>
-                    {call.nombre && (
+                    {call.nombre && call.numero && (
                       <p className="text-xs text-muted-foreground truncate">{call.numero}</p>
                     )}
                     <p className="text-[10px] text-muted-foreground mt-0.5">
@@ -339,15 +396,18 @@ export function TelefonoDrawer({ children }: { children: ReactNode }) {
                     </p>
                   </div>
 
-                  {/* Botón llamar de vuelta */}
-                  <Button
-                    variant="ghost" size="icon"
-                    className="h-8 w-8 shrink-0 hover:bg-emerald-50 hover:text-emerald-600"
-                    onClick={() => { setNumero(call.numero.replace(/\s/g, "")); setTab("marcador"); }}
-                    title="Llamar"
-                  >
-                    <Phone className="h-4 w-4" />
-                  </Button>
+                  {/* Botón rellamar (solo para llamadas a número externo; las internas se
+                      rellaman desde la pestaña Equipo). */}
+                  {call.numero && (
+                    <Button
+                      variant="ghost" size="icon"
+                      className="h-8 w-8 shrink-0 hover:bg-emerald-50 hover:text-emerald-600"
+                      onClick={() => { setNumero(call.numero.replace(/\s/g, "")); setTab("marcador"); }}
+                      title="Llamar"
+                    >
+                      <Phone className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>

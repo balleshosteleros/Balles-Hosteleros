@@ -11,9 +11,6 @@ import {
 } from "../lib/push-client";
 import { savePushSubscription } from "@/features/mi-panel/actions/push-subscription-actions";
 
-const DISMISS_KEY = "bh_push_dismissed_at";
-const DISMISS_DAYS = 14;
-
 export function PushPermissionCard() {
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -36,14 +33,8 @@ export function PushPermissionCard() {
       if (permission === "granted" || permission === "denied") return;
     }
 
-    // No mostrar si la persona lo descartó hace poco
-    try {
-      const ts = Number(localStorage.getItem(DISMISS_KEY) ?? "0");
-      if (ts > 0 && Date.now() - ts < DISMISS_DAYS * 86_400_000) return;
-    } catch {
-      /* localStorage no disponible */
-    }
-
+    // Sin avisos activados las llamadas no suenan, así que insistimos cada vez:
+    // el botón de cerrar solo oculta la tarjeta en esta visita, vuelve a salir al entrar.
     setVisible(true);
   }, []);
 
@@ -76,11 +67,7 @@ export function PushPermissionCard() {
   };
 
   const onDismiss = () => {
-    try {
-      localStorage.setItem(DISMISS_KEY, String(Date.now()));
-    } catch {
-      /* ignorar */
-    }
+    // Solo se oculta en esta visita; al volver a entrar reaparece hasta que active los avisos.
     setVisible(false);
   };
 

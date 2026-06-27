@@ -228,6 +228,39 @@ export async function listHistorialLlamadas(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Contador de llamadas perdidas no vistas (para el badge de la barra)
+// "No vistas" = perdidas dirigidas a mí posteriores a la última vez que abrí
+// la pestaña Recientes (timestamp que el cliente guarda en localStorage).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function contarLlamadasPerdidasNoVistas(
+  desdeIso?: string | null,
+): Promise<number> {
+  try {
+    const { supabase, userId, empresaId } = await getAppContext();
+    if (!userId || !empresaId) return 0;
+
+    let q = supabase
+      .from("llamadas_internas")
+      .select("id", { count: "exact", head: true })
+      .eq("empresa_id", empresaId)
+      .eq("callee_id", userId)
+      .eq("estado", "perdida");
+    if (desdeIso) q = q.gt("iniciada_at", desdeIso);
+
+    const { count, error } = await q;
+    if (error) throw error;
+    return count ?? 0;
+  } catch (err) {
+    console.error(
+      "[llamadas] contarLlamadasPerdidasNoVistas:",
+      err instanceof Error ? err.message : err,
+    );
+    return 0;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Directorio de empleados llamables de la empresa activa (profiles ∪ user_empresas)
 // ─────────────────────────────────────────────────────────────────────────────
 

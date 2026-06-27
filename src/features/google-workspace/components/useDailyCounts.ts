@@ -6,7 +6,8 @@ import { contarPendientesHoy } from "@/features/tareas/actions/tareas-actions";
 import { getTareasValidacionPendientes } from "@/features/mi-panel/actions/mi-panel-actions";
 import { listCanales } from "@/features/comunicacion/actions/comunicacion-actions";
 import { contarContactosNuevos } from "@/features/agenda/actions/contactos-actions";
-import { contarLlamadasNoVistas } from "./TelefonoDrawer";
+import { contarLlamadasPerdidasNoVistas } from "@/features/llamadas-internas/actions/llamadas-actions";
+import { LLAMADAS_VISTAS_KEY } from "./TelefonoDrawer";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 
 function ymd(d: Date): string {
@@ -75,8 +76,19 @@ export function useDailyCounts(): DailyCounts {
       /* ignore */
     }
 
-    // Llamadas: entrantes nuevas no vistas (mock hasta que VoIP esté integrado)
-    const missedCalls = contarLlamadasNoVistas();
+    // Llamadas: perdidas internas posteriores a la última vez que se vio Recientes.
+    let missedCalls = 0;
+    try {
+      let vistasAt: string | null = null;
+      try {
+        vistasAt = localStorage.getItem(LLAMADAS_VISTAS_KEY);
+      } catch {
+        /* localStorage no disponible */
+      }
+      missedCalls = await contarLlamadasPerdidasNoVistas(vistasAt);
+    } catch {
+      /* ignore */
+    }
 
     // Agenda: contactos nuevos dentro de la ventana de anuncio configurada.
     let newContacts = 0;
