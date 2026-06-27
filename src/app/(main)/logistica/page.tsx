@@ -85,12 +85,9 @@ export default async function LogisticaDashboardPage() {
   // Pedidos stats
   const pedidos = pedidosRes.data ?? [];
   const pedidoStats = {
-    borrador: pedidos.filter((p) => (p as Record<string, unknown>).estado === "Borrador").length,
     pendiente: pedidos.filter((p) => (p as Record<string, unknown>).estado === "Pendiente").length,
-    confirmado: pedidos.filter((p) => (p as Record<string, unknown>).estado === "Confirmado").length,
     enviado: pedidos.filter((p) => (p as Record<string, unknown>).estado === "Enviado").length,
-    servido: pedidos.filter((p) => (p as Record<string, unknown>).estado === "Servido").length,
-    cancelado: pedidos.filter((p) => (p as Record<string, unknown>).estado === "Cancelado").length,
+    confirmado: pedidos.filter((p) => (p as Record<string, unknown>).estado === "Confirmado").length,
   };
 
   // Proveedores stats
@@ -188,12 +185,9 @@ export default async function LogisticaDashboardPage() {
         {/* Pedidos */}
         <ModuleCard icon={ShoppingCart} title="PEDIDOS" href="/logistica/pedidos">
           <div className="grid grid-cols-3 gap-2">
-            <StatCard value={pedidoStats.borrador} label="BORRADOR" color="gray" />
             <StatCard value={pedidoStats.pendiente} label="PENDIENTE" color="amber" />
-            <StatCard value={pedidoStats.confirmado} label="CONFIRMADO" color="blue" />
             <StatCard value={pedidoStats.enviado} label="ENVIADO" color="emerald" />
-            <StatCard value={pedidoStats.servido} label="SERVIDO" color="default" />
-            <StatCard value={pedidoStats.cancelado} label="CANCELADO" color="red" />
+            <StatCard value={pedidoStats.confirmado} label="CONFIRMADO" color="blue" />
           </div>
         </ModuleCard>
 

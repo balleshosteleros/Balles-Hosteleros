@@ -41,11 +41,16 @@ export interface DocumentoAdjunto {
   hayAlerta: boolean;
 }
 
-export type EstadoPedido = "Borrador" | "Pendiente" | "Confirmado" | "Enviado" | "Servido" | "Cancelado" | "Archivado";
-export type EstadoAlbaran = "Pendiente" | "Confirmado" | "Recibido" | "Facturado" | "Archivado";
+// Estados canónicos simplificados (vocabulario compartido pedido/albarán/factura).
+// Patrón: editable → Confirmado (🔒, tiene un hijo en la cadena). Sin "Anulado": si algo
+// está mal se borra y el documento anterior retrocede un puesto.
+//   Pedido:  Pendiente → Enviado   → Confirmado (tiene albarán)
+//   Albarán: Pendiente → Entregado → Confirmado (tiene factura)
+export type EstadoPedido = "Pendiente" | "Enviado" | "Confirmado";
+export type EstadoAlbaran = "Pendiente" | "Entregado" | "Confirmado";
 
-export const ESTADOS_PEDIDO: EstadoPedido[] = ["Borrador", "Pendiente", "Confirmado", "Enviado", "Servido", "Cancelado", "Archivado"];
-export const ESTADOS_ALBARAN: EstadoAlbaran[] = ["Pendiente", "Confirmado", "Recibido", "Facturado", "Archivado"];
+export const ESTADOS_PEDIDO: EstadoPedido[] = ["Pendiente", "Enviado", "Confirmado"];
+export const ESTADOS_ALBARAN: EstadoAlbaran[] = ["Pendiente", "Entregado", "Confirmado"];
 
 export interface LineaPedido {
   id: string;

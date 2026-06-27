@@ -187,8 +187,8 @@ export async function crearFacturaDesdeAlbaran(
       .eq("empresa_id", empresaId)
       .single();
     if (albErr || !alb) return fail("Albarán no encontrado");
-    if (alb.estado !== "Confirmado" && alb.estado !== "Recibido") {
-      return fail("Solo se puede facturar un albarán Confirmado o Recibido");
+    if (alb.estado !== "Entregado") {
+      return fail("Solo se puede facturar un albarán Entregado (recepcionado).");
     }
 
     // Convertir líneas del albarán (JSONB) al formato LineaFactura
@@ -227,7 +227,7 @@ export async function crearFacturaDesdeAlbaran(
       proveedor_id: alb.proveedor_id,
       proveedor_nombre: alb.proveedor_nombre,
       fecha_factura: alb.fecha,
-      estado: "Borrador",
+      estado: "Pendiente",
       lineas: lineas as unknown as object,
       base_imponible: totales.baseImponible,
       iva_total: totales.ivaTotal,
@@ -246,6 +246,13 @@ export async function crearFacturaDesdeAlbaran(
       .single();
 
     if (insErr || !nueva) return fail(insErr?.message ?? "No se pudo crear la factura");
+
+    // Encadenado: el albarán pasa a "Confirmado" (🔒) — tiene factura, ya no se edita.
+    await supabase
+      .from("albaranes")
+      .update({ estado: "Confirmado", updated_at: new Date().toISOString() })
+      .eq("id", alb.id)
+      .eq("empresa_id", empresaId);
 
     revalidatePath("/logistica/pedidos");
     return { ok: true, data: { id: nueva.id as string, numero: nueva.numero as string } };
@@ -273,7 +280,7 @@ export async function crearFacturaHuerfana(
         proveedor_id: parsed.data.proveedorId,
         proveedor_nombre: parsed.data.proveedorNombre,
         fecha_factura: parsed.data.fechaFactura ?? null,
-        estado: "Borrador",
+        estado: "Pendiente",
         notas: parsed.data.notas ?? null,
         creado_por: userId,
       })
@@ -462,8 +469,8 @@ export async function analizarFacturaVsAlbaran(facturaId: string): Promise<Actio
       diferenciaIva,
     };
 
-    const estadoNuevo = comparativa.resumen.hayAlerta ? "ConDiscrepancias" : "Analizada";
-
+    // El estado de la factura no cambia por el análisis (sigue "Pendiente"). Las
+    // discrepancias se reflejan en comparativa_resultado y en cada línea, no en el estado.
     const { error: upErr } = await supabase
       .from("facturas_proveedor")
       .update({
@@ -479,7 +486,6 @@ export async function analizarFacturaVsAlbaran(facturaId: string): Promise<Actio
         base_imponible: totales.baseImponible,
         iva_total: totales.ivaTotal,
         total: totales.total,
-        estado: estadoNuevo,
       })
       .eq("id", facturaId)
       .eq("empresa_id", empresaId);
@@ -543,10 +549,6 @@ export async function resolverDiscrepancia(
     });
 
     const totales = calcularTotales(updated);
-    const todasResueltas = updated.every(
-      (l) => l.discrepanciaTipo === null || l.discrepanciaResolucion !== null,
-    );
-    const estadoNuevo = todasResueltas ? "Analizada" : "ConDiscrepancias";
 
     const { error: upErr } = await supabase
       .from("facturas_proveedor")
@@ -555,7 +557,6 @@ export async function resolverDiscrepancia(
         base_imponible: totales.baseImponible,
         iva_total: totales.ivaTotal,
         total: totales.total,
-        estado: estadoNuevo,
       })
       .eq("id", parsed.data.facturaId)
       .eq("empresa_id", empresaId);
@@ -600,7 +601,7 @@ export async function validarFactura(input: ValidarFacturaInput): Promise<Action
     const { error: upErr } = await supabase
       .from("facturas_proveedor")
       .update({
-        estado: "Validada",
+        estado: "Confirmada",
         validated_at: new Date().toISOString(),
         validated_by: userId,
         notas: parsed.data.notas ?? null,
@@ -642,21 +643,53 @@ export async function updateNumeroFacturaProveedor(
   }
 }
 
-export async function anularFactura(id: string): Promise<ActionResult<{ id: string }>> {
+/**
+ * Borra una factura. No hay "anular": las facturas se borran. Al borrarla, el albarán de
+ * origen retrocede un puesto (Confirmado → Entregado) y vuelve a ser editable.
+ * Una factura ya Confirmada (contabilizada) NO se puede borrar.
+ */
+export async function deleteFactura(id: string): Promise<ActionResult<{ id: string }>> {
   try {
     const { supabase, empresaId } = await getLogisticaContext();
     if (!empresaId) return fail("No autenticado");
+
+    const { data: fact, error: readErr } = await supabase
+      .from("facturas_proveedor")
+      .select("id, estado, albaran_id, adjunto_path")
+      .eq("id", id)
+      .eq("empresa_id", empresaId)
+      .single();
+    if (readErr || !fact) return fail("Factura no encontrada");
+    if (fact.estado === "Confirmada") {
+      return fail("No se puede borrar una factura ya confirmada (contabilizada).");
+    }
+
     const { error } = await supabase
       .from("facturas_proveedor")
-      .update({ estado: "Anulada" })
+      .delete()
       .eq("id", id)
       .eq("empresa_id", empresaId);
     if (error) return fail(error.message);
+
+    // Limpieza del adjunto en Storage (best-effort).
+    if (fact.adjunto_path) {
+      await supabase.storage.from(BUCKET).remove([fact.adjunto_path as string]);
+    }
+
+    // Retroceso: el albarán vuelve a "Entregado" (recepcionado, editable) — ya no tiene factura.
+    if (fact.albaran_id) {
+      await supabase
+        .from("albaranes")
+        .update({ estado: "Entregado", updated_at: new Date().toISOString() })
+        .eq("id", fact.albaran_id as string)
+        .eq("empresa_id", empresaId);
+    }
+
     revalidatePath("/logistica/pedidos");
     return { ok: true, data: { id } };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error al anular factura";
-    console.error("[facturas] anularFactura:", msg);
+    const msg = err instanceof Error ? err.message : "Error al borrar factura";
+    console.error("[facturas] deleteFactura:", msg);
     return fail(msg);
   }
 }

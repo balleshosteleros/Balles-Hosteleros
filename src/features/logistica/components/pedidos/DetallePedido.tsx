@@ -1,27 +1,26 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { formatEur } from "@/shared/lib/numero";
 import { EstadoPedidoBadge } from "./BadgesPedido";
-import { ESTADOS_PEDIDO, calcularTotalesLineas, evaluarReparto, describirReparto, formatoHoraReparto, type Pedido, type Albaran } from "@/features/logistica/data/pedidos";
-import { ArrowLeft, FileText, MessageCircle, CheckCircle2, AlertTriangle, PackageCheck, Mail } from "lucide-react";
+import { calcularTotalesLineas, evaluarReparto, describirReparto, formatoHoraReparto, type Pedido, type Albaran } from "@/features/logistica/data/pedidos";
+import { ArrowLeft, FileText, MessageCircle, AlertTriangle, PackageCheck, Mail } from "lucide-react";
 
 interface Props {
   pedido: Pedido;
   albaran: Albaran | null;
   onBack: () => void;
-  onUpdateEstado: (id: string, estado: string) => void;
   onConfirmar: (pedido: Pedido) => void;
   onOpenAlbaran: (albaranId: string) => void;
   onEnviarProveedor: (pedido: Pedido) => void;
   onEnviarWhatsapp: (pedido: Pedido) => void;
 }
 
-export function DetallePedido({ pedido, albaran, onBack, onUpdateEstado, onConfirmar, onOpenAlbaran, onEnviarProveedor, onEnviarWhatsapp }: Props) {
+export function DetallePedido({ pedido, albaran, onBack, onConfirmar, onOpenAlbaran, onEnviarProveedor, onEnviarWhatsapp }: Props) {
   const totales = calcularTotalesLineas(pedido.lineas);
-  const canConfirm = pedido.estado === "Borrador" || pedido.estado === "Pendiente";
-  const canSend = pedido.estado !== "Borrador" && pedido.estado !== "Cancelado" && !pedido.enviadoAt;
+  const bloqueado = pedido.estado === "Confirmado"; // tiene albarán → solo lectura
+  const canConfirm = !bloqueado && !pedido.albaranId;   // "Crear albarán"
+  const canSend = pedido.estado === "Pendiente" && !pedido.enviadoAt;
   const proveedorEmail = pedido.proveedorEmail || "";
   const reparto = evaluarReparto(pedido.fechaEntrega, pedido.horaEntrega, pedido.horaEntregaHasta, pedido.proveedorReparto);
   const repartoFuera = reparto.fueraDia || reparto.fueraHora;
@@ -41,7 +40,7 @@ export function DetallePedido({ pedido, albaran, onBack, onUpdateEstado, onConfi
           </Button>
         )}
         {canConfirm && (
-          <Button size="sm" className="gap-1" onClick={() => onConfirmar(pedido)}><CheckCircle2 className="h-4 w-4" /> Confirmar pedido</Button>
+          <Button size="sm" className="gap-1" onClick={() => onConfirmar(pedido)}><PackageCheck className="h-4 w-4" /> Crear albarán</Button>
         )}
       </div>
 
@@ -84,10 +83,7 @@ export function DetallePedido({ pedido, albaran, onBack, onUpdateEstado, onConfi
             <div><span className="text-muted-foreground text-xs block">Creador</span><span className="font-medium">{pedido.creador}</span></div>
             <div>
               <span className="text-muted-foreground text-xs block">Estado</span>
-              <Select value={pedido.estado} onValueChange={(v) => onUpdateEstado(pedido.id, v)}>
-                <SelectTrigger className="h-8 text-xs w-[130px] border-0 p-0"><EstadoPedidoBadge value={pedido.estado} /></SelectTrigger>
-                <SelectContent>{ESTADOS_PEDIDO.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
-              </Select>
+              <div className="mt-0.5"><EstadoPedidoBadge value={pedido.estado} /></div>
             </div>
             {pedido.enviadoAt && (
               <>

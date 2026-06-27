@@ -28,8 +28,8 @@ export async function listAlbaranes() {
   }
 }
 
-/** Estados que representan una compra ya confirmada (de "Confirmado" en adelante). */
-const ESTADOS_COMPRA_CONFIRMADA = ["Confirmado", "Recibido", "Facturado"];
+/** Estados con la mercancía ya recepcionada (stock aplicado): "Entregado" y "Confirmado". */
+const ESTADOS_COMPRA_CONFIRMADA = ["Entregado", "Confirmado"];
 
 export interface CompraProductoRow {
   albaranId: string;
@@ -190,6 +190,14 @@ export async function createAlbaran(input: {
       .single();
     if (error) throw error;
 
+    // Encadenado: el pedido de origen pasa a "Confirmado" (🔒) y queda vinculado al albarán.
+    if (input.pedidoId) {
+      await supabase
+        .from("pedidos")
+        .update({ estado: "Confirmado", albaran_id: data.id, updated_at: new Date().toISOString() })
+        .eq("id", input.pedidoId);
+    }
+
     // Si el numero quedó vacío (caso huérfano), lo actualizamos con el secuencial asignado.
     if (!data.numero && typeof data.numero_secuencial === "number") {
       const numeroFinal = `ALB-${year}-${String(data.numero_secuencial).padStart(3, "0")}`;
@@ -232,7 +240,9 @@ export async function updateAlbaranEstado(id: string, estado: string) {
   try {
     const { supabase, user } = await getContext();
 
-    // Estado anterior para decidir si hay que mover stock (entrar/salir de "Recibido").
+    // Estado anterior para decidir si hay que mover stock al entrar/salir de la zona
+    // recepcionada ("Entregado"/"Confirmado"). El stock se aplica al recepcionar (Entregado)
+    // y permanece en Confirmado; solo se revierte al volver a "Pendiente".
     const { data: previo } = await supabase
       .from("albaranes")
       .select("estado")
@@ -247,14 +257,15 @@ export async function updateAlbaranEstado(id: string, estado: string) {
     if (error) throw error;
 
     // Movimientos de stock por recepción (PRP-057). Idempotente.
-    if (estado === "Recibido" && estadoAnterior !== "Recibido") {
+    const recibido = (e: string | null) => e === "Entregado" || e === "Confirmado";
+    if (recibido(estado) && !recibido(estadoAnterior)) {
       const res = await aplicarEntradasAlbaran(id, user?.id ?? null);
       if (!res.ok) {
         // Regla de seguridad: no tragarse el error de stock, pero el estado ya cambió.
         return { ok: true, stockAviso: res.error };
       }
-    } else if (estado !== "Recibido" && estadoAnterior === "Recibido") {
-      // Se revierte la recepción → devolver el stock.
+    } else if (!recibido(estado) && recibido(estadoAnterior)) {
+      // Se deshace la recepción (vuelve a Pendiente) → devolver el stock.
       await revertirEntradasAlbaran(id);
     }
 
@@ -262,6 +273,56 @@ export async function updateAlbaranEstado(id: string, estado: string) {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[albaranes] updateAlbaranEstado:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Borra un albarán. No se puede borrar si ya tiene factura (estado "Confirmado"): primero
+ * hay que borrar la factura. Al borrarlo: revierte el stock recepcionado y el pedido de
+ * origen retrocede un puesto (Confirmado → Enviado), volviendo a ser editable.
+ */
+export async function deleteAlbaran(id: string) {
+  try {
+    const { supabase } = await getContext();
+
+    const { data: alb } = await supabase
+      .from("albaranes")
+      .select("id, estado, pedido_id, empresa_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (!alb) return { ok: false, error: "Albarán no encontrado" };
+    if (alb.estado === "Confirmado") {
+      return { ok: false, error: "Este albarán tiene factura. Borra antes la factura." };
+    }
+
+    // Devolver el stock recepcionado antes de borrar.
+    if (alb.estado === "Entregado") {
+      await revertirEntradasAlbaran(id);
+    }
+
+    const { error } = await supabase.from("albaranes").delete().eq("id", id);
+    if (error) throw error;
+
+    // Retroceso del pedido: vuelve a "Enviado" SOLO si llegó a enviarse por correo
+    // (enviado_at); si fue directo a crear albarán, vuelve a "Pendiente". Se desvincula el albarán.
+    if (alb.pedido_id) {
+      const { data: ped } = await supabase
+        .from("pedidos")
+        .select("enviado_at")
+        .eq("id", alb.pedido_id as string)
+        .maybeSingle();
+      const estadoDestino = ped?.enviado_at ? "Enviado" : "Pendiente";
+      await supabase
+        .from("pedidos")
+        .update({ estado: estadoDestino, albaran_id: null, updated_at: new Date().toISOString() })
+        .eq("id", alb.pedido_id as string);
+    }
+
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[albaranes] deleteAlbaran:", msg);
     return { ok: false, error: msg };
   }
 }

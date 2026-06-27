@@ -9,8 +9,7 @@ import {
   type Pedido, type Albaran, type EstadoPedido, type EstadoAlbaran,
 } from "@/features/logistica/data/pedidos";
 import { listPedidos, getPedido, createPedido, updatePedidoEstado as serverUpdatePedidoEstado, deletePedido as serverDeletePedido } from "@/features/logistica/actions/pedidos-actions";
-import { listAlbaranes, createAlbaran, updateAlbaranEstado as serverUpdateAlbaranEstado } from "@/features/logistica/actions/albaranes-actions";
-import { sumarStockDesdeAlbaran } from "@/features/logistica/actions/stock-actions";
+import { listAlbaranes, createAlbaran, updateAlbaranEstado as serverUpdateAlbaranEstado, deleteAlbaran as serverDeleteAlbaran } from "@/features/logistica/actions/albaranes-actions";
 import { enviarPedidoEmail, prepararWhatsappPedido } from "@/features/logistica/actions/enviar-pedido-actions";
 import { EstadoPedidoBadge } from "@/features/logistica/components/pedidos/BadgesPedido";
 import { DetallePedido } from "@/features/logistica/components/pedidos/DetallePedido";
@@ -22,7 +21,6 @@ import { listFacturas, crearFacturaDesdeAlbaran } from "@/features/logistica/act
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import {
   Copy, Pencil, Trash2, Printer, MoreHorizontal, ClipboardList, Truck,
   ChevronDown, Package, Settings, Receipt, ArrowLeft,
@@ -83,7 +81,7 @@ function mapDbToPedido(row: Record<string, unknown>): Pedido {
     almacen: (row.almacen as string) ?? "",
     fecha: (row.fecha as string) ?? "",
     fechaEntrega: (row.fecha_entrega as string) ?? "",
-    estado: (row.estado as EstadoPedido) ?? "Borrador",
+    estado: (row.estado as EstadoPedido) ?? "Pendiente",
     lineas: rawLineas.map(mapDbLinea),
     dtoPct: (row.dto_pct as number) ?? 0,
     dtoEur: (row.dto_eur as number) ?? 0,
@@ -91,7 +89,7 @@ function mapDbToPedido(row: Record<string, unknown>): Pedido {
     albaranId: (row.albaran_id as string | null) ?? null,
     creador: (row.creador as string) ?? (row.created_by as string) ?? "",
     ultimaActualizacion: (row.updated_at as string) ?? "",
-    enviadoAt: null,
+    enviadoAt: (row.enviado_at as string | null) ?? null,
     enviadoEmail: null,
     proveedorEmail: (row.proveedor_email as string | null) ?? null,
     proveedorId: (row.proveedor_id as string | null) ?? null,
@@ -186,7 +184,7 @@ export function PedidosView() {
   const loadFacturasCount = useCallback(async () => {
     try {
       const res = await listFacturas();
-      if (res.ok) setFacturasCount(res.data.filter((f) => f.estado !== "Anulada").length);
+      if (res.ok) setFacturasCount(res.data.length);
     } catch {
       // silencioso
     }
@@ -213,9 +211,7 @@ export function PedidosView() {
 
   // Filtered pedidos
   const filteredPedidos = useMemo(() => {
-    let lista = pedidos.filter(
-      (p) => p.estado !== "Archivado" && coincideBusquedaUniversal(p, search),
-    );
+    let lista = pedidos.filter((p) => coincideBusquedaUniversal(p, search));
     lista = aplicarFiltrosToolbar(lista, filtros, accesoPedido);
     lista = aplicarOrdenToolbar(lista, orden, accesoPedido);
     return lista;
@@ -262,16 +258,8 @@ export function PedidosView() {
 
   const handleDelete = async (id: string) => {
     const ped = pedidos.find((p) => p.id === id);
-    if (ped?.albaranId) {
-      toast.error("No se puede eliminar un pedido con albaran vinculado");
-      return;
-    }
-    if (ped?.enviadoAt) {
-      toast.error("No se puede eliminar un pedido enviado.");
-      return;
-    }
-    if (ped?.estado === "Enviado") {
-      toast.error("No se puede eliminar un pedido en estado " + ped.estado);
+    if (ped?.albaranId || ped?.estado === "Confirmado") {
+      toast.error("No se puede borrar un pedido con albarán. Borra antes el albarán.");
       return;
     }
     setPedidos((prev) => prev.filter((p) => p.id !== id));
@@ -313,7 +301,7 @@ export function PedidosView() {
       // numero/numero_secuencial los asigna el servidor al guardar el pedido nuevo.
       numero: "",
       numeroSecuencial: undefined,
-      estado: "Borrador", albaranId: null, ultimaActualizacion: new Date().toISOString().slice(0, 10),
+      estado: "Pendiente", albaranId: null, ultimaActualizacion: new Date().toISOString().slice(0, 10),
     };
     setPedidos((prev) => [copy, ...prev]);
     toast.success("Pedido copiado como borrador");
@@ -352,46 +340,39 @@ export function PedidosView() {
       pedidoId: ped.id, creador: ped.creador, ultimaActualizacion: fecha,
     };
 
+    // El pedido pasa a "Confirmado" 🔒 (la action createAlbaran ya lo persiste en BD).
     setPedidos((prev) => prev.map((p) => p.id === ped.id ? { ...p, estado: "Confirmado" as EstadoPedido, albaranId: albId } : p));
     setAlbaranes((prev) => [newAlbaran, ...prev]);
     setDetallePedido((prev) => prev && prev.id === ped.id ? { ...prev, estado: "Confirmado", albaranId: albId } : prev);
 
-    await serverUpdatePedidoEstado(ped.id, "Confirmado");
-    toast.success(`Pedido confirmado. Albarán ${albNumero} creado.`);
+    toast.success(`Albarán ${albNumero} creado. El pedido queda confirmado.`);
   };
 
-  const handleConfirmarAlbaran = async (alb: Albaran) => {
-    // Actualizar estado en BD
-    const res = await serverUpdateAlbaranEstado(alb.id, "Confirmado");
-    if (!res.ok) { toast.error("Error al confirmar albarán"); return; }
+  // Recepción del albarán: pasa a "Entregado" y suma stock (la action aplica el kardex).
+  const handleEntregarAlbaran = async (alb: Albaran) => {
+    const res = await serverUpdateAlbaranEstado(alb.id, "Entregado");
+    if (!res.ok) { toast.error("Error al marcar el albarán como entregado"); return; }
 
-    // Sumar cantidades al stock (usar productoId cuando está disponible)
-    const lineasStock = alb.lineas.map((l) => ({
-      productoId: l.productoId || undefined,
-      productoNombre: l.producto,
-      cantidad: l.cantidad,
-      unidad: l.unidad,
+    setAlbaranes((prev) => prev.map((a) => a.id === alb.id ? { ...a, estado: "Entregado" as EstadoAlbaran } : a));
+    setDetalleAlbaran((prev) => prev && prev.id === alb.id ? { ...prev, estado: "Entregado" } : prev);
+
+    const aviso = (res as { stockAviso?: string }).stockAviso;
+    if (aviso) toast.warning(`Albarán entregado, pero el stock dio un aviso: ${aviso}`);
+    else toast.success("Albarán entregado — stock actualizado");
+  };
+
+  // Borrar albarán: revierte stock y el pedido retrocede a "Enviado" (editable).
+  const handleDeleteAlbaran = async (alb: Albaran) => {
+    const res = await serverDeleteAlbaran(alb.id);
+    if (!res.ok) { toast.error(res.error ?? "No se pudo borrar el albarán"); return; }
+    setAlbaranes((prev) => prev.filter((a) => a.id !== alb.id));
+    setPedidos((prev) => prev.map((p) => {
+      if (p.id !== alb.pedidoId) return p;
+      const destino: EstadoPedido = p.enviadoAt ? "Enviado" : "Pendiente";
+      return { ...p, estado: destino, albaranId: null };
     }));
-    const stockRes = await sumarStockDesdeAlbaran(lineasStock);
-
-    // Actualizar estado local
-    setAlbaranes((prev) => prev.map((a) => a.id === alb.id ? { ...a, estado: "Confirmado" as EstadoAlbaran } : a));
-    setDetalleAlbaran((prev) => prev && prev.id === alb.id ? { ...prev, estado: "Confirmado" } : prev);
-
-    if (stockRes.ok) toast.success("Albarán confirmado — stock actualizado");
-    else toast.warning("Albarán confirmado, pero hubo un error al actualizar el stock");
-  };
-
-  const updatePedidoEstado = async (id: string, estado: string) => {
-    setPedidos((prev) => prev.map((p) => p.id === id ? { ...p, estado: estado as EstadoPedido } : p));
-    setDetallePedido((prev) => prev && prev.id === id ? { ...prev, estado: estado as EstadoPedido } : prev);
-    const res = await serverUpdatePedidoEstado(id, estado);
-    if (!res.ok) { toast.error("Error al actualizar estado"); loadPedidos(); }
-  };
-
-  const updateAlbaranEstado = (id: string, estado: string) => {
-    setAlbaranes((prev) => prev.map((a) => a.id === id ? { ...a, estado: estado as EstadoAlbaran } : a));
-    setDetalleAlbaran((prev) => prev && prev.id === id ? { ...prev, estado: estado as EstadoAlbaran } : prev);
+    setDetalleAlbaran(null);
+    toast.success("Albarán borrado. El pedido vuelve a ser editable.");
   };
 
   const openAlbaran = (albId: string) => {
@@ -416,7 +397,6 @@ export function PedidosView() {
           pedido={detallePedido}
           albaran={albaranes.find((a) => a.id === detallePedido.albaranId) || null}
           onBack={() => setDetallePedido(null)}
-          onUpdateEstado={updatePedidoEstado}
           onConfirmar={handleConfirmarPedido}
           onOpenAlbaran={openAlbaran}
           onEnviarProveedor={handleEnviarProveedor}
@@ -433,11 +413,13 @@ export function PedidosView() {
           albaran={detalleAlbaran}
           pedidoOrigen={pedidos.find((p) => p.id === detalleAlbaran.pedidoId) || null}
           onBack={() => setDetalleAlbaran(null)}
-          onUpdateEstado={updateAlbaranEstado}
-          onConfirmar={handleConfirmarAlbaran}
+          onEntregar={handleEntregarAlbaran}
+          onDelete={handleDeleteAlbaran}
           onGenerarFactura={async (alb) => {
             const res = await crearFacturaDesdeAlbaran({ albaranId: alb.id });
             if (!res.ok) { toast.error(res.error); return; }
+            // El albarán pasa a "Confirmado" 🔒 (la action ya lo persiste).
+            setAlbaranes((prev) => prev.map((a) => a.id === alb.id ? { ...a, estado: "Confirmado" as EstadoAlbaran } : a));
             toast.success(`Factura ${res.data.numero} creada desde ${alb.numero}`);
             await loadFacturasCount();
             setDetalleAlbaran(null);
@@ -576,7 +558,7 @@ export function PedidosView() {
           label="Estado"
           campo="estado"
           filtroTipo="lista"
-          opciones={ESTADOS_PEDIDO.filter((e) => e !== "Archivado") as unknown as string[]}
+          opciones={ESTADOS_PEDIDO as unknown as string[]}
           filtros={filtros}
           onFiltrosChange={setFiltros}
           ordenable
@@ -585,11 +567,8 @@ export function PedidosView() {
         />
       ),
       td: (p) => (
-        <td key="estado" className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-          <Select value={p.estado} onValueChange={(v) => updatePedidoEstado(p.id, v)}>
-            <SelectTrigger className="h-8 text-xs w-[120px] border-0 p-0"><EstadoPedidoBadge value={p.estado} /></SelectTrigger>
-            <SelectContent>{ESTADOS_PEDIDO.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
-          </Select>
+        <td key="estado" className="px-3 py-2.5">
+          <EstadoPedidoBadge value={p.estado} />
         </td>
       ),
     },
@@ -966,16 +945,14 @@ export function PedidosView() {
             <AlertDialogDescription>
               {(() => {
                 const ped = pedidos.find((p) => p.id === deleteConfirm);
-                if (ped?.albaranId) return "Este pedido tiene un albarán vinculado y no puede eliminarse.";
-                if (ped?.enviadoAt || ped?.estado === "Enviado") return "Este pedido fue enviado al proveedor y no puede eliminarse.";
-                if (ped?.estado === "Archivado") return "Este pedido no puede eliminarse.";
+                if (ped?.albaranId || ped?.estado === "Confirmado") return "Este pedido tiene un albarán. Borra antes el albarán para poder borrar el pedido.";
                 return "Esta acción no se puede deshacer.";
               })()}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            {(() => { const ped = pedidos.find((p) => p.id === deleteConfirm); const blocked = ped?.albaranId || ped?.enviadoAt || ped?.estado === "Enviado"; return blocked ? null : <AlertDialogAction onClick={() => deleteConfirm && handleDelete(deleteConfirm)}>Eliminar</AlertDialogAction>; })()}
+            {(() => { const ped = pedidos.find((p) => p.id === deleteConfirm); const blocked = ped?.albaranId || ped?.estado === "Confirmado"; return blocked ? null : <AlertDialogAction onClick={() => deleteConfirm && handleDelete(deleteConfirm)}>Eliminar</AlertDialogAction>; })()}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

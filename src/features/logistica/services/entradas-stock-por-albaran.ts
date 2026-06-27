@@ -6,7 +6,7 @@ import { registrarMovimiento, revertirMovimientosPorDocumento } from "./kardex";
 /**
  * Entradas de stock por recepción de albarán (PRP-057, Fase 3).
  *
- * Al pasar un albarán a estado "Recibido", cada línea (productoId × cantidad) genera
+ * Al pasar un albarán a estado "Entregado" (recepción), cada línea (productoId × cantidad) genera
  * un movimiento de ENTRADA en el kardex con `referencia = numero de albarán` y suma
  * al stock. Idempotente: antes de aplicar se revierte cualquier entrada previa de ese
  * albarán, de modo que recepcionar dos veces no duplica.

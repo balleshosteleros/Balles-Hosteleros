@@ -7,6 +7,7 @@ import {
   FileText,
   Loader2,
   Sparkles,
+  Trash2,
   Upload,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -26,6 +27,7 @@ import { Label } from "@/components/ui/label";
 
 import {
   analizarFacturaVsAlbaran,
+  deleteFactura,
   getAdjuntoSignedUrl,
   getFactura,
   resolverDiscrepancia,
@@ -147,7 +149,7 @@ export function FacturaDialog({ open, facturaId, onOpenChange, onChanged }: Prop
     [facturaId, recargar, onChanged],
   );
 
-  const handleValidar = useCallback(() => {
+  const handleConfirmar = useCallback(() => {
     if (!facturaId) return;
     startTransition(async () => {
       const res = await validarFactura({ facturaId });
@@ -155,7 +157,21 @@ export function FacturaDialog({ open, facturaId, onOpenChange, onChanged }: Prop
         toast.error(res.error);
         return;
       }
-      toast.success("Factura validada");
+      toast.success("Factura confirmada");
+      onOpenChange(false);
+      onChanged?.();
+    });
+  }, [facturaId, onOpenChange, onChanged]);
+
+  const handleBorrar = useCallback(() => {
+    if (!facturaId) return;
+    startTransition(async () => {
+      const res = await deleteFactura(facturaId);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("Factura borrada. El albarán vuelve a Entregado.");
       onOpenChange(false);
       onChanged?.();
     });
@@ -316,13 +332,23 @@ export function FacturaDialog({ open, facturaId, onOpenChange, onChanged }: Prop
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
             Cerrar
           </Button>
+          {factura && factura.estado !== "Confirmada" && (
+            <Button
+              variant="outline"
+              onClick={handleBorrar}
+              disabled={isPending}
+              className="gap-2 border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
+            >
+              <Trash2 className="h-4 w-4" /> Borrar
+            </Button>
+          )}
           <Button
-            onClick={handleValidar}
+            onClick={handleConfirmar}
             disabled={
               !factura ||
               !factura.adjuntoPath ||
               isPending ||
-              factura.estado === "Validada" ||
+              factura.estado === "Confirmada" ||
               factura.lineas.some(
                 (l) => l.discrepanciaTipo !== null && l.discrepanciaResolucion === null,
               )
@@ -330,7 +356,7 @@ export function FacturaDialog({ open, facturaId, onOpenChange, onChanged }: Prop
             className="gap-2"
           >
             {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-            Validar factura
+            Confirmar factura
           </Button>
         </DialogFooter>
       </DialogContent>

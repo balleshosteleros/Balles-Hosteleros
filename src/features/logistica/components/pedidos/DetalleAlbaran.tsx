@@ -3,15 +3,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { formatEur } from "@/shared/lib/numero";
 import { EstadoAlbaranBadge } from "./BadgesPedido";
 import { AlbaranUploadModal } from "./AlbaranUploadModal";
 import { ComparativaAlbaran } from "./ComparativaAlbaran";
-import { ESTADOS_ALBARAN, calcularTotalesLineas, diaSemanaDeFechaISO, formatoHoraReparto, type Albaran, type Pedido, type AnalisisAlbaran, type DocumentoAdjunto } from "@/features/logistica/data/pedidos";
+import { calcularTotalesLineas, diaSemanaDeFechaISO, formatoHoraReparto, type Albaran, type Pedido, type AnalisisAlbaran, type DocumentoAdjunto } from "@/features/logistica/data/pedidos";
 import { updateAlbaranNumeroProveedor } from "@/features/logistica/actions/albaranes-actions";
-import { ArrowLeft, FileText, Send, Paperclip, CheckCircle2, Loader2, AlertTriangle, FileWarning, Eye, Receipt } from "lucide-react";
+import { ArrowLeft, FileText, Send, Paperclip, CheckCircle2, Loader2, AlertTriangle, FileWarning, Eye, Receipt, Trash2 } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 const supabase = createClient();
@@ -20,21 +23,23 @@ interface Props {
   albaran: Albaran;
   pedidoOrigen: Pedido | null;
   onBack: () => void;
-  onUpdateEstado: (id: string, estado: string) => void;
-  onConfirmar: (albaran: Albaran) => void;
+  onEntregar: (albaran: Albaran) => void;
+  onDelete?: (albaran: Albaran) => void;
   onGenerarFactura?: (albaran: Albaran) => void;
 }
 
-export function DetalleAlbaran({ albaran, pedidoOrigen, onBack, onUpdateEstado, onConfirmar, onGenerarFactura }: Props) {
+export function DetalleAlbaran({ albaran, pedidoOrigen, onBack, onEntregar, onDelete, onGenerarFactura }: Props) {
   const totales = calcularTotalesLineas(albaran.lineas);
   const diaReparto = pedidoOrigen?.fechaEntrega
     ? `${pedidoOrigen.fechaEntrega}${diaSemanaDeFechaISO(pedidoOrigen.fechaEntrega) ? ` · ${diaSemanaDeFechaISO(pedidoOrigen.fechaEntrega)}` : ""}`
     : "";
   const horaReparto = formatoHoraReparto(pedidoOrigen?.horaEntrega, pedidoOrigen?.horaEntregaHasta);
-  const canConfirm = albaran.estado === "Pendiente";
-  const canFacturar = albaran.estado === "Confirmado" || albaran.estado === "Recibido";
+  const canEntregar = albaran.estado === "Pendiente";        // recepción → suma stock
+  const canFacturar = albaran.estado === "Entregado";        // ya recepcionado → crear factura
+  const canDelete = albaran.estado !== "Confirmado";         // si tiene factura, no se borra
 
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analisisResult, setAnalisisResult] = useState<AnalisisAlbaran | null>(null);
   const [documentos, setDocumentos] = useState<DocumentoAdjunto[]>([]);
@@ -110,15 +115,35 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, onBack, onUpdateEstado, 
         <Button variant="outline" size="sm" className="gap-1" onClick={() => setUploadOpen(true)}>
           <Paperclip className="h-4 w-4" /> Asociar archivo
         </Button>
-        {canConfirm && (
-          <Button size="sm" className="gap-1" onClick={() => onConfirmar(albaran)}><CheckCircle2 className="h-4 w-4" /> Confirmar albarán</Button>
+        {canEntregar && (
+          <Button size="sm" className="gap-1" onClick={() => onEntregar(albaran)}><CheckCircle2 className="h-4 w-4" /> Marcar entregado</Button>
         )}
         {canFacturar && onGenerarFactura && (
           <Button size="sm" className="gap-1" onClick={() => onGenerarFactura(albaran)}>
-            <Receipt className="h-4 w-4" /> Generar factura
+            <Receipt className="h-4 w-4" /> Crear factura
+          </Button>
+        )}
+        {canDelete && onDelete && (
+          <Button size="sm" variant="outline" className="gap-1 border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20" onClick={() => setConfirmDelete(true)}>
+            <Trash2 className="h-4 w-4" /> Borrar
           </Button>
         )}
       </div>
+
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Borrar albarán?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se devolverá el stock recepcionado y el pedido de origen volverá a ser editable (a <strong>Enviado</strong> si se había enviado por correo, o a <strong>Pendiente</strong> si no). Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setConfirmDelete(false); onDelete?.(albaran); }}>Borrar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Analyzing state */}
       {analyzing && (
@@ -230,10 +255,7 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, onBack, onUpdateEstado, 
             <div><span className="text-muted-foreground text-xs block">Creador</span><span className="font-medium">{albaran.creador}</span></div>
             <div>
               <span className="text-muted-foreground text-xs block">Estado</span>
-              <Select value={albaran.estado} onValueChange={(v) => onUpdateEstado(albaran.id, v)}>
-                <SelectTrigger className="h-8 text-xs w-[130px] border-0 p-0"><EstadoAlbaranBadge value={albaran.estado} /></SelectTrigger>
-                <SelectContent>{ESTADOS_ALBARAN.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
-              </Select>
+              <div className="mt-0.5"><EstadoAlbaranBadge value={albaran.estado} /></div>
             </div>
           </div>
         </CardContent>

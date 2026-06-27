@@ -141,9 +141,10 @@ export async function enviarPedidoEmail(pedidoId: string): Promise<{ ok: boolean
       return { ok: false, error: msg };
     }
 
+    const ahora = new Date().toISOString();
     const { error: updErr } = await supabase
       .from("pedidos")
-      .update({ estado: "Enviado", updated_at: new Date().toISOString() })
+      .update({ estado: "Enviado", enviado_at: ahora, updated_at: ahora })
       .eq("id", pedidoId);
     // El email ya salió: si el marcado de estado falla, lo registramos pero NO
     // damos el envío por fallido (el proveedor ya recibió el pedido).

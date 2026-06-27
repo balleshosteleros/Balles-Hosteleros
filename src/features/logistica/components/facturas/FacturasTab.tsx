@@ -33,11 +33,8 @@ interface Props {
 }
 
 const ESTADO_COLOR: Record<string, string> = {
-  Borrador: "bg-zinc-100 text-zinc-800 border-zinc-200",
-  Analizada: "bg-emerald-50 text-emerald-900 border-emerald-200",
-  ConDiscrepancias: "bg-amber-50 text-amber-900 border-amber-200",
-  Validada: "bg-sky-50 text-sky-900 border-sky-200",
-  Anulada: "bg-rose-50 text-rose-900 border-rose-200",
+  Pendiente: "bg-amber-50 text-amber-900 border-amber-200",
+  Confirmada: "bg-blue-50 text-blue-900 border-blue-200",
 };
 
 export function FacturasTab({ openFacturaId, onOpened }: Props) {
@@ -80,9 +77,7 @@ export function FacturasTab({ openFacturaId, onOpened }: Props) {
     (f as unknown as Record<string, unknown>)[campo];
 
   const filtradas = useMemo(() => {
-    let lista = facturas.filter(
-      (f) => f.estado !== "Anulada" && coincideBusquedaUniversal(f, search),
-    );
+    let lista = facturas.filter((f) => coincideBusquedaUniversal(f, search));
     lista = aplicarFiltrosToolbar(lista, filtros, acceso);
     lista = aplicarOrdenToolbar(lista, orden, acceso);
     return lista;

@@ -275,7 +275,7 @@ export function SugerenciasPedidoModal({
                     <p className="text-xs text-amber-800 dark:text-amber-300">
                       <strong>{groups.length} proveedor(es)</strong> con productos a reponer.
                       Despliega cada proveedor para ajustar cantidades, eliminar líneas o añadir
-                      nuevos productos. Se creará un pedido en <strong>Borrador</strong> por proveedor.
+                      nuevos productos. Se creará un pedido en <strong>Pendiente</strong> por proveedor.
                     </p>
                   </div>
 

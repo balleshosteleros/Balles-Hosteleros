@@ -1,20 +1,12 @@
 // Tipos de la entidad Factura de Proveedor (PRP-038).
 // Espejo de la tabla public.facturas_proveedor y de la JSONB `lineas`.
 
-export type EstadoFactura =
-  | "Borrador"
-  | "Analizada"
-  | "ConDiscrepancias"
-  | "Validada"
-  | "Anulada";
+// Estados canónicos simplificados. La factura no se revisa de cantidad/precio (eso es el
+// albarán): solo Pendiente (editable) → Confirmada (🔒, contabilizada). Las discrepancias del
+// OCR se siguen mostrando en la comparativa, pero ya no son un estado del ciclo.
+export type EstadoFactura = "Pendiente" | "Confirmada";
 
-export const ESTADOS_FACTURA: EstadoFactura[] = [
-  "Borrador",
-  "Analizada",
-  "ConDiscrepancias",
-  "Validada",
-  "Anulada",
-];
+export const ESTADOS_FACTURA: EstadoFactura[] = ["Pendiente", "Confirmada"];
 
 export type OrigenLineaFactura = "albaran" | "ocr" | "manual";
 

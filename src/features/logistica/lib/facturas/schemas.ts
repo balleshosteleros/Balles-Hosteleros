@@ -3,13 +3,7 @@ import { z } from "zod";
 // Schemas Zod paralelos a src/features/logistica/types/facturas.ts.
 // Se usan para validar inputs/outputs de server actions y respuestas OCR.
 
-export const estadoFacturaSchema = z.enum([
-  "Borrador",
-  "Analizada",
-  "ConDiscrepancias",
-  "Validada",
-  "Anulada",
-]);
+export const estadoFacturaSchema = z.enum(["Pendiente", "Confirmada"]);
 
 export const origenLineaSchema = z.enum(["albaran", "ocr", "manual"]);
 
