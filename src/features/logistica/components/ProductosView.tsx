@@ -989,7 +989,7 @@ function TablaProductos({
           ...(esVenta ? [{ campo: "porcCoste", label: "% Coste" }] : []),
         ]),
     ...(mostrarIva ? [{ campo: "iva", label: "IVA" }] : []),
-    { campo: "unidad", label: "Unidad" },
+    { campo: "unidad", label: "Medida" },
     ...(mostrarFormato ? [{ campo: "formato", label: "Formato" }] : []),
     { campo: "fecha", label: "Actualización" },
   ];
@@ -1178,7 +1178,7 @@ function TablaProductos({
       th: (
         <TableColumnHeader
           key="unidad"
-          label="Unidad"
+          label="Medida"
           campo="unidad"
           filtroTipo="lista"
           opciones={unidadesUsadas}

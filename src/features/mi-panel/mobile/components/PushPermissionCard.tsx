@@ -20,17 +20,20 @@ export function PushPermissionCard() {
   const [needsInstall, setNeedsInstall] = useState(false);
 
   useEffect(() => {
-    if (!isPushSupported()) return;
-
-    const permission = getPushPermission();
-    if (permission === "granted" || permission === "denied") return;
-
-    // iOS: solo se pueden recibir push si la PWA está instalada (standalone)
+    // iOS: los push (y por tanto que suenen las llamadas) solo funcionan con la PWA
+    // instalada en la pantalla de inicio. Mientras no lo esté, el navegador ni siquiera
+    // expone Notification/PushManager, así que NO se puede gatear por isPushSupported():
+    // hay que mostrar el aviso de instalar igualmente.
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    const standalone = isStandalone();
-    if (isIOS && !standalone) {
-      // Mostrar solo el aviso de instalación
+    const iosNeedsInstall = isIOS && !isStandalone();
+
+    if (iosNeedsInstall) {
       setNeedsInstall(true);
+    } else {
+      // Resto de plataformas: si no hay soporte de push, no hay nada que ofrecer.
+      if (!isPushSupported()) return;
+      const permission = getPushPermission();
+      if (permission === "granted" || permission === "denied") return;
     }
 
     // No mostrar si la persona lo descartó hace poco
@@ -89,11 +92,12 @@ export function PushPermissionCard() {
         <BellOff className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold uppercase tracking-wider text-amber-900 dark:text-amber-100">
-            Activa los avisos
+            Activa las llamadas y avisos
           </p>
           <p className="mt-0.5 text-xs text-amber-900/80 dark:text-amber-100/80">
-            En iPhone los avisos solo llegan si añades esta app a tu pantalla de inicio:
-            toca <strong>Compartir</strong> → <strong>Añadir a inicio</strong>.
+            En iPhone, para que te suenen las llamadas y lleguen los avisos tienes que añadir
+            esta app a tu pantalla de inicio: toca <strong>Compartir</strong> →{" "}
+            <strong>Añadir a inicio</strong>. Después ábrela desde el icono y activa los avisos.
           </p>
         </div>
         <button
@@ -111,9 +115,10 @@ export function PushPermissionCard() {
     <div className="mx-5 mt-4 flex items-start gap-3 rounded-2xl border border-border bg-card p-3">
       <Bell className="mt-0.5 h-4 w-4 shrink-0 text-foreground" />
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium">Activar avisos</p>
+        <p className="text-sm font-medium">Activar llamadas y avisos</p>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          Te avisamos cuando aprueben tu solicitud, llegue un comunicado o cambie tu turno.
+          Necesario para que te suenen las llamadas de tus compañeros, y para avisarte cuando
+          aprueben tu solicitud, llegue un comunicado o cambie tu turno.
         </p>
         <div className="mt-2 flex gap-2">
           <button

@@ -16,7 +16,7 @@ import { ReactNode, useState, useEffect, useRef } from "react";
 import {
   Phone, PhoneOff, PhoneMissed, PhoneCall,
   Mic, MicOff, Volume2, VolumeX,
-  Delete, Wifi, WifiOff, Users,
+  Delete, Wifi, Users,
 } from "lucide-react";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
@@ -113,7 +113,12 @@ export function TelefonoDrawer({ children }: { children: ReactNode }) {
 
   const handleCall = () => {
     if (!numero.trim()) return;
-    if (!isConnected) return; // sin proveedor configurado en Ajustes → Teléfono
+    if (!isConnected) {
+      // Modo híbrido sin VoIP: se llama desde el propio teléfono del dispositivo (tel:).
+      // En móvil abre el marcador; en escritorio, la app que gestione las llamadas.
+      window.location.href = `tel:${numero.replace(/\s/g, "")}`;
+      return;
+    }
     // TODO: integrar Twilio Device.connect({ params: { To: numero } })
     //       o SIP.js session.invite(numero)
     setCallState("ringing");
@@ -143,7 +148,7 @@ export function TelefonoDrawer({ children }: { children: ReactNode }) {
                 </Badge>
               ) : (
                 <Badge variant="outline" className="text-muted-foreground text-[10px] h-5 gap-1">
-                  <WifiOff className="h-3 w-3" /> Sin configurar
+                  <Phone className="h-3 w-3" /> Desde tu teléfono
                 </Badge>
               )}
             </div>
@@ -274,12 +279,13 @@ export function TelefonoDrawer({ children }: { children: ReactNode }) {
                 </div>
               )}
 
-              {/* Aviso sin configurar */}
+              {/* Modo híbrido: sin VoIP se llama desde el teléfono propio */}
               {!isConnected && callState === "idle" && (
-                <p className="text-xs text-center text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 max-w-xs">
-                  Configura tu proveedor VoIP en{" "}
-                  <span className="font-semibold">Ajustes → Herramientas → Teléfono</span>{" "}
-                  para realizar llamadas reales.
+                <p className="text-xs text-center text-muted-foreground bg-muted/40 border rounded-lg px-3 py-2 max-w-xs">
+                  Llamarás desde tu propio teléfono. Para un{" "}
+                  <span className="font-semibold">número de empresa</span> y recibir llamadas en
+                  centralita, conecta un proveedor VoIP en{" "}
+                  <span className="font-semibold">Ajustes → Herramientas → Teléfono</span>.
                 </p>
               )}
             </div>
