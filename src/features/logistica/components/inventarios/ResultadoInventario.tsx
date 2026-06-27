@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { formatEur, formatNumero } from "@/shared/lib/numero";
 
 interface Props {
   resultados: ResultadoLinea[];
@@ -72,10 +73,10 @@ export default function ResultadoInventario({ resultados }: Props) {
                 <td className="px-3 py-2 font-semibold text-foreground">{r.producto}</td>
                 <td className="px-3 py-2 text-muted-foreground">{r.unidad}</td>
                 <td className="px-3 py-2 font-medium">{r.stockTeorico}</td>
-                <td className="px-3 py-2">{r.costeTeorico.toFixed(2)} €</td>
+                <td className="px-3 py-2">{formatEur(r.costeTeorico)}</td>
                 <td className="px-3 py-2 font-bold">{r.stockReal}</td>
-                <td className="px-3 py-2">{r.costeReal.toFixed(2)} €</td>
-                <td className="px-3 py-2 text-muted-foreground">{r.precioCoste.toFixed(2)} €</td>
+                <td className="px-3 py-2">{formatEur(r.costeReal)}</td>
+                <td className="px-3 py-2 text-muted-foreground">{formatEur(r.precioCoste)}</td>
                 <td className="px-3 py-2">
                   <DifBadge value={r.diferenciaCantidad} />
                 </td>
@@ -92,9 +93,9 @@ export default function ResultadoInventario({ resultados }: Props) {
             <tfoot>
               <tr className="border-t bg-muted/30 font-bold text-xs">
                 <td className="px-3 py-2.5" colSpan={3}>TOTALES</td>
-                <td className="px-3 py-2.5">{totalCosteTeorico.toFixed(2)} €</td>
+                <td className="px-3 py-2.5">{formatEur(totalCosteTeorico)}</td>
                 <td className="px-3 py-2.5" />
-                <td className="px-3 py-2.5">{totalCosteReal.toFixed(2)} €</td>
+                <td className="px-3 py-2.5">{formatEur(totalCosteReal)}</td>
                 <td className="px-3 py-2.5" />
                 <td className="px-3 py-2.5" />
                 <td className="px-3 py-2.5">
@@ -111,8 +112,8 @@ export default function ResultadoInventario({ resultados }: Props) {
 
 function DifBadge({ value, suffix = "" }: { value: number; suffix?: string }) {
   if (value > 0)
-    return <span className="text-emerald-700 dark:text-emerald-400 font-semibold">+{value.toFixed(2)}{suffix}</span>;
+    return <span className="text-emerald-700 dark:text-emerald-400 font-semibold">+{formatNumero(value, { min: 2, max: 2 })}{suffix}</span>;
   if (value < 0)
-    return <span className="text-red-700 dark:text-red-400 font-semibold">{value.toFixed(2)}{suffix}</span>;
+    return <span className="text-red-700 dark:text-red-400 font-semibold">{formatNumero(value, { min: 2, max: 2 })}{suffix}</span>;
   return <span className="text-muted-foreground font-medium">0{suffix}</span>;
 }

@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Plus, Trash2, ExternalLink } from "lucide-react";
+import { formatEur } from "@/shared/lib/numero";
 import { toast } from "sonner";
 import {
   listCompras, upsertCompra, deleteCompra,
@@ -168,7 +169,7 @@ export function CompraTab({ recetaId }: Props) {
                 <p className="text-xs text-muted-foreground">
                   {nombreProveedor(c)}
                   {c.cantidad ? ` · ${c.cantidad} ${c.unidad}` : ""}
-                  {c.precio_propuesto ? ` · ${c.precio_propuesto.toFixed(2)} €` : ""}
+                  {c.precio_propuesto ? ` · ${formatEur(c.precio_propuesto)}` : ""}
                   {c.fecha_recepcion_prevista ? ` · recibe ${c.fecha_recepcion_prevista}` : ""}
                 </p>
                 {c.notas && <p className="text-xs text-muted-foreground italic mt-1">{c.notas}</p>}

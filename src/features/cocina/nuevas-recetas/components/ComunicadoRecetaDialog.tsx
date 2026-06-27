@@ -15,6 +15,7 @@ import { Send, X, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { createComunicado } from "@/features/gerencia/actions/comunicados-actions";
 import type { RecetaConExtras } from "../actions/recetas-actions";
+import { formatEur } from "@/shared/lib/numero";
 
 interface Props {
   open: boolean;
@@ -39,7 +40,7 @@ function construirPlantilla(receta: RecetaConExtras, diaEntrada: string): { titu
     `¡Nueva receta disponible en carta!\n\n` +
     `Plato: ${receta.nombre}\n` +
     (receta.esc_descripcion ? `Descripción: ${receta.esc_descripcion}\n` : "") +
-    (receta.esc_pvp_propuesto ? `Precio: ${receta.esc_pvp_propuesto.toFixed(2)} €\n` : "") +
+    (receta.esc_pvp_propuesto ? `Precio: ${formatEur(receta.esc_pvp_propuesto)}\n` : "") +
     `Entra en carta oficial: ${fechaLegible}\n\n` +
     (linkEscandallo ? `Ver escandallo completo: ${linkEscandallo}\n\n` : "") +
     `Recordad revisar alérgenos y preparación antes del servicio.\n\n` +

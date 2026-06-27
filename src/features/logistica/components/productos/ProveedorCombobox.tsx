@@ -23,6 +23,8 @@ export function ProveedorCombobox({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Cargar al montar y recargar cada vez que se abre: así un proveedor creado
+  // en otra pantalla aparece sin recargar la página.
   useEffect(() => {
     listProveedores().then((res) => {
       if (!res.ok) return;
@@ -33,7 +35,7 @@ export function ProveedorCombobox({
         .sort((a, b) => a.localeCompare(b, "es"));
       setOpciones(Array.from(new Set(activos)));
     });
-  }, []);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;

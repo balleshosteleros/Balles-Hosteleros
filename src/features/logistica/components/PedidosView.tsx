@@ -44,6 +44,7 @@ import {
   type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
+import { formatNumero } from "@/shared/lib/numero";
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 import { IOActions } from "@/shared/io";
 import { pedidosIO } from "@/features/logistica/io/pedidos.io";
@@ -598,7 +599,7 @@ export function PedidosView() {
         const t = calcularTotalesLineas(p.lineas);
         return (
           <td key="base" className="px-3 py-2.5 text-xs font-semibold text-right">
-            {t.base.toFixed(2)}
+            {formatNumero(t.base, { min: 2, max: 2 })}
           </td>
         );
       },
@@ -609,7 +610,7 @@ export function PedidosView() {
         const t = calcularTotalesLineas(p.lineas);
         return (
           <td key="total" className="px-3 py-2.5 text-xs font-bold text-right">
-            {t.total.toFixed(2)}
+            {formatNumero(t.total, { min: 2, max: 2 })}
           </td>
         );
       },
@@ -901,7 +902,7 @@ export function PedidosView() {
                                 case "total":
                                   return (
                                     <td key={c.campo} className="px-3 py-2.5 text-xs font-bold text-right tabular-nums">
-                                      {t.total.toFixed(2)}
+                                      {formatNumero(t.total, { min: 2, max: 2 })}
                                     </td>
                                   );
                                 default:

@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Camera, QrCode, Save, Check } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { formatEur } from "@/shared/lib/numero";
 import { listCatas, upsertCata, procesarValoracion } from "../actions/catas-actions";
 import type { Cata, ValoracionCata } from "../types";
 import { VALORACION_LABELS } from "../types";
@@ -163,11 +164,11 @@ export function CataTab({ recetaId, numero, escandallo, onChanged }: Props) {
         <CardContent className="p-3 grid grid-cols-2 gap-3 text-center">
           <div>
             <p className="text-[10px] uppercase text-muted-foreground">Coste estimado</p>
-            <p className="text-lg font-bold">{escandallo.esc_coste_estimado?.toFixed(2) ?? "—"} €</p>
+            <p className="text-lg font-bold">{escandallo.esc_coste_estimado != null ? formatEur(escandallo.esc_coste_estimado) : "—"}</p>
           </div>
           <div>
             <p className="text-[10px] uppercase text-muted-foreground">PVP propuesto</p>
-            <p className="text-lg font-bold">{escandallo.esc_pvp_propuesto?.toFixed(2) ?? "—"} €</p>
+            <p className="text-lg font-bold">{escandallo.esc_pvp_propuesto != null ? formatEur(escandallo.esc_pvp_propuesto) : "—"}</p>
           </div>
         </CardContent>
       </Card>

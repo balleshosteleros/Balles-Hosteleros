@@ -53,6 +53,7 @@ import {
   type ToolbarFiltroActivo,
 } from "@/shared/components/SubmoduleToolbar";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
+import { formatNumero, parseDecimal } from "@/shared/lib/numero";
 
 // ─── Estado colors ─────────────────────────────────────────────
 const ESTADO_COLORS: Record<EstadoEscandallo, string> = {
@@ -504,8 +505,8 @@ function EscandalloDetalle({
 
   const calcularPrecio = (producto: Producto, cantidad: number): number => {
     const raw = producto.coste ?? producto.precioCompra ?? "0";
-    const num = parseFloat(String(raw).replace(/[^0-9,\.]/g, "").replace(",", "."));
-    if (!Number.isFinite(num)) return 0;
+    const num = parseDecimal(raw);
+    if (num === null) return 0;
     return +(num * cantidad).toFixed(2);
   };
 
@@ -773,7 +774,7 @@ function EscandalloDetalle({
                           />
                         </TableCell>
                         <TableCell className="text-right text-sm font-medium">
-                          {(ing.precio ?? 0).toFixed(2)}€
+                          {formatNumero(ing.precio ?? 0, { min: 2, max: 2 })}€
                         </TableCell>
                         <TableCell>
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeIngrediente(ing.id)}>
@@ -1045,10 +1046,10 @@ function EscandalloDetalle({
                         <TableRow key={d.id}>
                           <TableCell className="text-sm">{d.ingrediente}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">{d.cantidadUnidad}</TableCell>
-                          <TableCell className="text-sm text-right">{d.costeBruto.toFixed(2)}€</TableCell>
+                          <TableCell className="text-sm text-right">{formatNumero(d.costeBruto, { min: 2, max: 2 })}€</TableCell>
                           <TableCell className="text-sm text-right">{d.mermaPct}%</TableCell>
-                          <TableCell className="text-sm text-right">{d.costeMerma.toFixed(2)}€</TableCell>
-                          <TableCell className="text-sm text-right font-medium">{d.costeNeto.toFixed(2)}€</TableCell>
+                          <TableCell className="text-sm text-right">{formatNumero(d.costeMerma, { min: 2, max: 2 })}€</TableCell>
+                          <TableCell className="text-sm text-right font-medium">{formatNumero(d.costeNeto, { min: 2, max: 2 })}€</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -1367,7 +1368,7 @@ export function EscandallosView() {
       return [
         `═══ ${f.nombre} ═══`,
         `Categoría: ${cat?.nombre || "—"}`,
-        `PVP: ${f.pvp.toFixed(2)}€ | Coste: ${f.costeTotal.toFixed(2)}€ | Margen: ${calcularMargen(f.pvp, f.costeTotal)}%`,
+        `PVP: ${formatNumero(f.pvp, { min: 2, max: 2 })}€ | Coste: ${formatNumero(f.costeTotal, { min: 2, max: 2 })}€ | Margen: ${calcularMargen(f.pvp, f.costeTotal)}%`,
         `Ingredientes: ${f.ingredientes.map((i) => `${i.ingrediente} (${i.cantidad}${i.unidad})`).join(", ")}`,
         `Elaboración: ${f.elaboracion}`,
         f.guarnicion ? `Guarnición: ${f.guarnicion}` : "",
@@ -1452,11 +1453,11 @@ export function EscandallosView() {
     },
     coste: {
       th: <TableHead key="coste" className="text-xs text-right">Coste</TableHead>,
-      td: (f) => <TableCell key="coste" className="text-right text-sm">{f.costeTotal.toFixed(2)}€</TableCell>,
+      td: (f) => <TableCell key="coste" className="text-right text-sm">{formatNumero(f.costeTotal, { min: 2, max: 2 })}€</TableCell>,
     },
     pvp: {
       th: <TableHead key="pvp" className="text-xs text-right">Precio de Venta</TableHead>,
-      td: (f) => <TableCell key="pvp" className="text-right text-sm font-medium">{f.pvp.toFixed(2)}€</TableCell>,
+      td: (f) => <TableCell key="pvp" className="text-right text-sm font-medium">{formatNumero(f.pvp, { min: 2, max: 2 })}€</TableCell>,
     },
     margen: {
       th: <TableHead key="margen" className="text-xs text-right">Margen</TableHead>,
@@ -1621,7 +1622,7 @@ export function EscandallosView() {
                                 {f.delicatessen && <span className="text-amber-500 text-sm">★</span>}
                               </div>
                               <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                <span>{f.costeTotal.toFixed(2)}€ → {f.pvp.toFixed(2)}€</span>
+                                <span>{formatNumero(f.costeTotal, { min: 2, max: 2 })}€ → {formatNumero(f.pvp, { min: 2, max: 2 })}€</span>
                                 <span className={`font-semibold ${m >= 60 ? "text-emerald-600" : m >= 40 ? "text-amber-600" : "text-destructive"}`}>{m}%</span>
                               </div>
                               <Badge className={`text-[9px] border ${ESTADO_COLORS[f.estado]}`}>{ESTADO_ESCANDALLO_LABELS[f.estado]}</Badge>

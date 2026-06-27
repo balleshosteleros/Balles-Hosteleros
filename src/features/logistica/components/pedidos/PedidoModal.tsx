@@ -188,7 +188,11 @@ export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNom
   const [proveedores, setProveedores] = useState<ProveedorOpcion[]>([]);
   const [productosList, setProductosList] = useState<Producto[]>([]);
 
+  // Recargar proveedores/productos cada vez que se abre el modal: el modal queda
+  // montado (solo se oculta vía `open`), así que sin esto no vería catálogos
+  // creados después del primer montaje.
   useEffect(() => {
+    if (!open) return;
     listProveedores().then((res) => {
       if (res.ok) {
         const opts = (res.data as unknown as Array<Record<string, unknown>>)
@@ -214,7 +218,7 @@ export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNom
         }),
       }));
     });
-  }, []);
+  }, [open]);
 
   const [form, setForm] = useState(() => item ? { ...item } : {
     id: `ped-${Date.now()}`, numero: `PED-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900) + 100)}`,
@@ -447,7 +451,7 @@ export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNom
               .map(([rate, { cuota }]) => (
                 <div key={rate} className="flex justify-between text-muted-foreground">
                   <span>IVA {rate}%</span>
-                  <span className="font-medium text-foreground">{cuota.toFixed(2)} €</span>
+                  <span className="font-medium text-foreground">{formatEur(cuota)}</span>
                 </div>
               ))
             }
@@ -458,7 +462,7 @@ export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNom
             {/* Total con IVA */}
             <div className="flex justify-between text-base font-bold">
               <span>TOTAL</span>
-              <span>{resumenIva.totalConIva.toFixed(2)} €</span>
+              <span>{formatEur(resumenIva.totalConIva)}</span>
             </div>
           </div>
         </div>
