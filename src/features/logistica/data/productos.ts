@@ -19,7 +19,7 @@ export function pickDefaultIva(ivas: readonly string[]): string {
   return ivas[0] ?? IVA_DEFAULT;
 }
 
-export const CONSERVACION_OPCIONES = ["Ambiente", "Refrigeración", "Congelación", "Caliente"] as const;
+export const CONSERVACION_OPCIONES = ["Ambiente", "Refrigeración", "Congelación"] as const;
 export type Conservacion = typeof CONSERVACION_OPCIONES[number];
 
 export const UNIDADES_PRODUCTO = [

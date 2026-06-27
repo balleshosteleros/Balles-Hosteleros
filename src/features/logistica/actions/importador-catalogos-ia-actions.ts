@@ -539,8 +539,8 @@ export async function analizarConservacionesIA(payload: PayloadExtraido) {
     schema: SCHEMA_CONSERVACIONES,
     contexto:
       "Estás extrayendo modos de CONSERVACIÓN/almacenaje de alimentos (zonas APPCC). " +
-      "Para cada uno: 'nombre' (Congelación, Refrigeración, Ambiente, Caliente, etc.) " +
-      "y opcionalmente 'rangoTemp' (ej: '< -18 °C', '0–8 °C', '15–25 °C', '> 65 °C').",
+      "Para cada uno: 'nombre' (Congelación, Refrigeración, Ambiente, etc.) " +
+      "y opcionalmente 'rangoTemp' (ej: '< -18 °C', '0–8 °C', '15–25 °C').",
     deduplicarPorKey: "nombre",
   });
 }
