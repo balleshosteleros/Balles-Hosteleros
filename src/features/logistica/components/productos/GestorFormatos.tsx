@@ -15,6 +15,7 @@ import {
   type FormatoMedidaRow,
 } from "@/features/logistica/actions/catalogos-estandar-actions";
 import { parseDecimal } from "@/shared/lib/numero";
+import type { TipoProducto } from "@/features/logistica/data/productos";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -27,7 +28,7 @@ import {
  *   "0,5 Kg" = 0,5). Es lo que permite que stock e inventarios cuadren.
  * - El envase es independiente (no se gestiona aquí).
  */
-export function GestorFormatos({ onChanged, refreshKey }: { onChanged?: () => void; refreshKey?: number }) {
+export function GestorFormatos({ tipo, onChanged, refreshKey }: { tipo: TipoProducto; onChanged?: () => void; refreshKey?: number }) {
   const [medidas, setMedidas] = useState<UnidadMedidaRow[]>([]);
   const [formatos, setFormatos] = useState<FormatoMedidaRow[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -47,12 +48,12 @@ export function GestorFormatos({ onChanged, refreshKey }: { onChanged?: () => vo
 
   const recargar = useCallback(() => {
     setCargando(true);
-    Promise.all([listUnidadesMedida(), listFormatosMedida()]).then(([m, f]) => {
+    Promise.all([listUnidadesMedida(tipo), listFormatosMedida(tipo)]).then(([m, f]) => {
       setMedidas(m.ok ? m.data : []);
       setFormatos(f.ok ? f.data : []);
       setCargando(false);
     });
-  }, []);
+  }, [tipo]);
 
   useEffect(() => { recargar(); }, [recargar]);
 
@@ -74,7 +75,7 @@ export function GestorFormatos({ onChanged, refreshKey }: { onChanged?: () => vo
     if (!nuevoNombre.trim()) return;
     if (!equivValida(nuevaEquiv)) { toast.error("La equivalencia es obligatoria y debe ser un número mayor que 0"); return; }
     startTransition(async () => {
-      const res = await createFormatoMedida({ unidadId, nombre: nuevoNombre.trim(), equivalencias: parseEquiv(nuevaEquiv) });
+      const res = await createFormatoMedida({ unidadId, nombre: nuevoNombre.trim(), equivalencias: parseEquiv(nuevaEquiv), tipo });
       if (!res.ok) { toast.error(res.error ?? "Error al crear"); return; }
       toast.success("Formato añadido");
       cerrarNuevo();

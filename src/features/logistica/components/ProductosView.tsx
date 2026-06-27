@@ -10,6 +10,7 @@ import {
   ALERGENOS_UE_14,
   IVA_DEFAULT,
   desglosarIva,
+  formatProductoId,
 } from "@/features/logistica/data/productos";
 import {
   listProductos, createProducto, updateProducto, deleteProducto, getProductoById,
@@ -34,7 +35,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import {
   ShoppingCart, Store, Settings,
-  ArrowLeft, Trash2, AlertTriangle, FlaskConical,
+  ArrowLeft, Trash2, AlertTriangle, FlaskConical, Star,
 } from "lucide-react";
 import { toast } from "sonner";
 import { IOActions } from "@/shared/io";
@@ -156,7 +157,7 @@ function ProductoDetalle({
   const mostrarFormato = esCompra;
   const estadosList = estadosOpts ?? [...ESTADOS_PRODUCTO];
   const { empresaActual } = useEmpresa();
-  const catalogos = useCatalogosLogistica();
+  const catalogos = useCatalogosLogistica(tipo);
 
   // Cargamos las categorías directamente en el detalle (no a través del padre)
   // para evitar la carrera al abrir un producto antes de que el padre haya cargado.
@@ -192,6 +193,7 @@ function ProductoDetalle({
   const [estiloImagenUrl, setEstiloImagenUrl] = useState<string | null>(producto?.estiloImagenUrl ?? null);
   const [cartaNombre, setCartaNombre] = useState<string>(producto?.cartaNombre ?? "");
   const [cartaTexto, setCartaTexto] = useState<string>(producto?.cartaTexto ?? "");
+  const [cartaDestacado, setCartaDestacado] = useState<boolean>(producto?.cartaDestacado ?? false);
   const [alergenos, setAlergenos] = useState<string[]>(producto?.alergenos ?? []);
   const [alergenosDerivados, setAlergenosDerivados] = useState<string[]>([]);
   const [alergenosOrigenes, setAlergenosOrigenes] = useState<AlergenoOrigen[]>([]);
@@ -264,9 +266,9 @@ function ProductoDetalle({
     }
   }, [unidad]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Cargar partidas reales (de cocina/partidas) — solo productos de venta.
+  // Cargar partidas reales (de cocina/partidas) — venta y elaboración, nunca compra.
   useEffect(() => {
-    if (!esVenta) return;
+    if (esCompra) return;
     let cancelled = false;
     listPartidas().then((res) => {
       if (cancelled) return;
@@ -274,7 +276,7 @@ function ProductoDetalle({
       setPartidasOpts(nombres);
     });
     return () => { cancelled = true; };
-  }, [esVenta]);
+  }, [esCompra]);
 
   // Coste calculado desde el escandallo (productos de venta ya creados).
   useEffect(() => {
@@ -327,13 +329,14 @@ function ProductoDetalle({
       formato: mostrarFormato ? (formato || null) : null,
       envase: esCompra ? (envase || null) : null,
       conservacion: mostrarConservacion ? (conservacion || null) : null,
-      partida: esVenta ? (partida.trim() || null) : null,
+      partida: !esCompra ? (partida.trim() || null) : null,
       textoTicket: esVenta ? (textoTicket || null) : null,
       textoComanda: esVenta ? (textoComanda || null) : null,
       estiloColor: esVenta ? estiloColor : null,
       estiloImagenUrl: esVenta ? estiloImagenUrl : null,
       cartaNombre: esVenta ? (cartaNombre.trim() || null) : null,
       cartaTexto: esVenta ? (cartaTexto.trim() || null) : null,
+      cartaDestacado: esVenta ? cartaDestacado : false,
       alergenos: !esVenta ? alergenos : [],
     };
     if (!esCompra) {
@@ -472,7 +475,7 @@ function ProductoDetalle({
                 </Select>
               </div>
             )}
-            {esVenta && (
+            {!esCompra && (
               <div>
                 <Label className="text-xs text-muted-foreground block mb-1">Partida</Label>
                 <Select
@@ -877,6 +880,15 @@ function ProductoDetalle({
             <p className="mt-3 text-[11px] text-muted-foreground italic">
               Si dejas estos campos vacíos, la carta digital usará el nombre y la descripción del producto.
             </p>
+
+            <label className="mt-4 flex items-center gap-3 rounded-lg border p-3 cursor-pointer select-none hover:bg-muted/40 transition-colors">
+              <Checkbox checked={cartaDestacado} onCheckedChange={(v) => setCartaDestacado(v === true)} />
+              <Star className={`h-5 w-5 ${cartaDestacado ? "fill-amber-400 text-amber-500 drop-shadow-[0_1px_2px_rgba(217,119,6,0.5)]" : "text-muted-foreground"}`} />
+              <div>
+                <div className="text-sm font-medium">Destacar en la carta</div>
+                <div className="text-[11px] text-muted-foreground">Muestra una estrella dorada en este plato dentro de la carta digital.</div>
+              </div>
+            </label>
           </CardContent>
         </Card>
       )}
@@ -938,7 +950,7 @@ function TablaProductos({
   setOrden: (v: ToolbarOrdenActivo | null) => void;
 }) {
   const { empresaActual } = useEmpresa();
-  const catalogos = useCatalogosLogistica();
+  const catalogos = useCatalogosLogistica(tipo);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -1016,6 +1028,8 @@ function TablaProductos({
       return campo === "precioSinIva" ? sinIva : conIva;
     }
     if (campo === "fecha") return p.ultimaActualizacion;
+    // ID: ordenar/filtrar por el número correlativo, no por la cadena con prefijo.
+    if (campo === "numero") return p.numeroSecuencial ?? null;
     return (p as unknown as Record<string, unknown>)[campo];
   };
 
@@ -1036,7 +1050,7 @@ function TablaProductos({
     { campo: "nombre", label: "Nombre", bloqueada: true },
     { campo: "categoria", label: "Categoría" },
     ...(mostrarConservacion ? [{ campo: "conservacion", label: "Conservación" }] : []),
-    ...(esVenta ? [{ campo: "partida", label: "Partida" }] : []),
+    ...(!esCompra ? [{ campo: "partida", label: "Partida" }] : []),
     { campo: "estado", label: "Estado" },
     ...(esCompra
       ? [
@@ -1066,7 +1080,7 @@ function TablaProductos({
       th: <TableColumnHeader key="numero" label="ID" />,
       td: (p) => (
         <td key="numero" className="px-3 py-1.5 text-xs tabular-nums text-muted-foreground">
-          {p.numeroSecuencial ?? "—"}
+          {formatProductoId(p)}
         </td>
       ),
     },
@@ -1602,7 +1616,7 @@ function ConfigProductos({
     <div className="space-y-6">
       <GestorCategoriasProducto tipo={tipo} onChanged={onCategoriasChanged} />
 
-      {/* ── Catálogos transversales (mismos para los 3 tipos de producto) ── */}
+      {/* ── Catálogos INDEPENDIENTES por tipo de producto (compra/venta/elaboración) ── */}
       <GestorCatalogoEstandar
         titulo="Unidades de medida"
         hint="Unidades base con las que se miden los productos (kg, L, ud…). Vienen 3 estándar; añade más si las necesitas."
@@ -1612,8 +1626,8 @@ function ConfigProductos({
         itemPrincipal={(it) => it.codigo}
         itemSecundario={() => null}
         itemAPatch={(it) => ({ codigo: it.codigo })}
-        list={listUnidadesMedida}
-        create={(input) => createUnidadMedida({ codigo: input.codigo, label: input.codigo })}
+        list={() => listUnidadesMedida(tipo)}
+        create={(input) => createUnidadMedida({ codigo: input.codigo, label: input.codigo, tipo })}
         update={(id, patch) => updateUnidadMedida(id, { codigo: patch.codigo, label: patch.codigo })}
         remove={deleteUnidadMedida}
         onChanged={() => setMedidasVersion((v) => v + 1)}
@@ -1624,14 +1638,14 @@ function ConfigProductos({
             { key: "label", label: "Etiqueta", obligatorio: false, tipo: "texto" },
           ],
           analyze: analizarUnidadesIA,
-          save: guardarUnidadesIA,
+          save: (rows) => guardarUnidadesIA(rows, tipo),
         }}
       />
 
       {/* Formatos por medida + Envases — solo en productos de compra */}
       {tipo === "compra" && (
         <>
-          <GestorFormatos refreshKey={medidasVersion} />
+          <GestorFormatos tipo={tipo} refreshKey={medidasVersion} />
           <GestorCatalogoEstandar
             titulo="Envases"
             hint="Indicador del continente (Bolsa, Caja, Saco, Botella…). Es independiente del formato."
@@ -1639,8 +1653,8 @@ function ConfigProductos({
             itemPrincipal={(it) => it.nombre}
             itemSecundario={() => null}
             itemAPatch={(it) => ({ nombre: it.nombre })}
-            list={listEnvases}
-            create={(input) => createEnvase({ nombre: input.nombre })}
+            list={() => listEnvases(tipo)}
+            create={(input) => createEnvase({ nombre: input.nombre, tipo })}
             update={(id, patch) => updateEnvase(id, { nombre: patch.nombre })}
             remove={deleteEnvase}
           />
@@ -1657,10 +1671,10 @@ function ConfigProductos({
         itemPrincipal={(it) => `${it.porcentaje}%`}
         itemSecundario={(it) => it.label}
         itemAPatch={(it) => ({ porcentaje: String(it.porcentaje), label: it.label ?? "" })}
-        list={listIvas}
+        list={() => listIvas(tipo)}
         create={(input) => {
           const pct = parseDecimal(input.porcentaje) ?? 0;
-          return createIva({ codigo: `${pct}%`, porcentaje: pct, label: input.label });
+          return createIva({ codigo: `${pct}%`, porcentaje: pct, label: input.label, tipo });
         }}
         update={(id, patch) => {
           const pct =
@@ -1680,7 +1694,7 @@ function ConfigProductos({
             { key: "label", label: "Etiqueta", obligatorio: false, tipo: "texto" },
           ],
           analyze: analizarIvasIA,
-          save: guardarIvasIA,
+          save: (rows) => guardarIvasIA(rows, tipo),
         }}
       />
 
@@ -1694,8 +1708,8 @@ function ConfigProductos({
         itemPrincipal={(it) => it.nombre}
         itemSecundario={(it) => it.rango_temp}
         itemAPatch={(it) => ({ nombre: it.nombre, rangoTemp: it.rango_temp ?? "" })}
-        list={listConservaciones}
-        create={(input) => createConservacion({ nombre: input.nombre, rangoTemp: input.rangoTemp })}
+        list={() => listConservaciones(tipo)}
+        create={(input) => createConservacion({ nombre: input.nombre, rangoTemp: input.rangoTemp, tipo })}
         update={(id, patch) => updateConservacion(id, { nombre: patch.nombre, rangoTemp: patch.rangoTemp ?? null })}
         remove={deleteConservacion}
         iaConfig={{
@@ -1705,7 +1719,7 @@ function ConfigProductos({
             { key: "rangoTemp", label: "Rango temperatura", obligatorio: false, tipo: "texto" },
           ],
           analyze: analizarConservacionesIA,
-          save: guardarConservacionesIA,
+          save: (rows) => guardarConservacionesIA(rows, tipo),
         }}
       />
 

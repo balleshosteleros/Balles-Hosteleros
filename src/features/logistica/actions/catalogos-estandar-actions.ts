@@ -2,6 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
+import type { TipoProducto } from "@/features/logistica/data/productos";
+
+// Todos los catálogos estándar son INDEPENDIENTES por tipo de producto
+// (compra / venta / elaboración): cada lectura y escritura va siempre acotada
+// por `tipo`, y los renombrados/borrados solo afectan a productos de ese tipo.
 
 /* =====================================================================
    Tipos comunes
@@ -58,7 +63,7 @@ export interface ConservacionRow {
    UNIDADES DE MEDIDA
    ===================================================================== */
 
-export async function listUnidadesMedida() {
+export async function listUnidadesMedida(tipo: TipoProducto) {
   try {
     const { supabase, empresaId } = await getLogisticaContext();
     if (!empresaId) return { ok: false as const, data: [] as UnidadMedidaRow[], error: "Sin empresa activa" };
@@ -66,6 +71,7 @@ export async function listUnidadesMedida() {
       .from("medidas")
       .select("*")
       .eq("empresa_id", empresaId)
+      .eq("tipo", tipo)
       .order("orden", { ascending: true });
     if (error) throw error;
     return { ok: true as const, data: (data ?? []) as UnidadMedidaRow[] };
@@ -74,7 +80,7 @@ export async function listUnidadesMedida() {
   }
 }
 
-export async function createUnidadMedida(input: { codigo: string; label: string }) {
+export async function createUnidadMedida(input: { codigo: string; label: string; tipo: TipoProducto }) {
   try {
     const { supabase, empresaId } = await getLogisticaContext();
     if (!empresaId) return { ok: false as const, error: "No autenticado" };
@@ -82,11 +88,11 @@ export async function createUnidadMedida(input: { codigo: string; label: string 
     const label = (input.label || codigo).trim();
     if (!codigo) return { ok: false as const, error: "El código es obligatorio" };
 
-    const nextOrden = await getNextOrden(supabase, "medidas", empresaId);
+    const nextOrden = await getNextOrden(supabase, "medidas", empresaId, { tipo: input.tipo });
 
     const { data, error } = await supabase
       .from("medidas")
-      .insert({ empresa_id: empresaId, codigo, label, orden: nextOrden, activa: true })
+      .insert({ empresa_id: empresaId, codigo, label, orden: nextOrden, activa: true, tipo: input.tipo })
       .select("*")
       .single();
     if (error) {
@@ -113,7 +119,7 @@ export async function updateUnidadMedida(id: string, patch: Partial<{ codigo: st
 
     const { data: before } = await supabase
       .from("medidas")
-      .select("codigo")
+      .select("codigo, tipo")
       .eq("id", id)
       .eq("empresa_id", empresaId)
       .maybeSingle();
@@ -133,9 +139,9 @@ export async function updateUnidadMedida(id: string, patch: Partial<{ codigo: st
     if (before?.codigo && patch.codigo !== undefined && patch.codigo.trim() && patch.codigo.trim() !== before.codigo) {
       const nuevoCodigo = patch.codigo.trim();
       await supabase.from("productos").update({ medida: nuevoCodigo })
-        .eq("empresa_id", empresaId).eq("medida", before.codigo as string);
+        .eq("empresa_id", empresaId).eq("tipo", before.tipo as string).eq("medida", before.codigo as string);
       await supabase.from("productos").update({ unidad_uso: nuevoCodigo })
-        .eq("empresa_id", empresaId).eq("unidad_uso", before.codigo as string);
+        .eq("empresa_id", empresaId).eq("tipo", before.tipo as string).eq("unidad_uso", before.codigo as string);
     }
 
     revalidatePath("/logistica/productos");
@@ -152,7 +158,7 @@ export async function deleteUnidadMedida(id: string) {
 
     const { data: row } = await supabase
       .from("medidas")
-      .select("codigo")
+      .select("codigo, tipo")
       .eq("id", id)
       .eq("empresa_id", empresaId)
       .maybeSingle();
@@ -160,7 +166,7 @@ export async function deleteUnidadMedida(id: string) {
     if (row?.codigo) {
       const { count } = await supabase
         .from("productos").select("id", { count: "exact", head: true })
-        .eq("empresa_id", empresaId).eq("medida", row.codigo as string);
+        .eq("empresa_id", empresaId).eq("tipo", row.tipo as string).eq("medida", row.codigo as string);
       if ((count ?? 0) > 0) {
         return { ok: false as const, error: `No se puede borrar: ${count} producto(s) usan la unidad "${row.codigo}".` };
       }
@@ -180,12 +186,12 @@ export async function deleteUnidadMedida(id: string) {
    FORMATOS DE MEDIDA (por unidad)
    ===================================================================== */
 
-export async function listFormatosMedida(unidadId?: string) {
+export async function listFormatosMedida(tipo: TipoProducto, unidadId?: string) {
   try {
     const { supabase, empresaId } = await getLogisticaContext();
     if (!empresaId) return { ok: false as const, data: [] as FormatoMedidaRow[], error: "Sin empresa activa" };
     const query = supabase.from("formatos").select("*")
-      .eq("empresa_id", empresaId).order("orden", { ascending: true });
+      .eq("empresa_id", empresaId).eq("tipo", tipo).order("orden", { ascending: true });
     if (unidadId) query.eq("unidad_id", unidadId);
     const { data, error } = await query;
     if (error) throw error;
@@ -195,7 +201,7 @@ export async function listFormatosMedida(unidadId?: string) {
   }
 }
 
-export async function createFormatoMedida(input: { unidadId: string; nombre: string; equivalencias?: number | null }) {
+export async function createFormatoMedida(input: { unidadId: string; nombre: string; equivalencias?: number | null; tipo: TipoProducto }) {
   try {
     const { supabase, empresaId } = await getLogisticaContext();
     if (!empresaId) return { ok: false as const, error: "No autenticado" };
@@ -206,10 +212,10 @@ export async function createFormatoMedida(input: { unidadId: string; nombre: str
       return { ok: false as const, error: "La equivalencia es obligatoria y debe ser un número mayor que 0" };
     }
 
-    const nextOrden = await getNextOrden(supabase, "formatos", empresaId, { unidad_id: input.unidadId });
+    const nextOrden = await getNextOrden(supabase, "formatos", empresaId, { unidad_id: input.unidadId, tipo: input.tipo });
 
     const { data, error } = await supabase.from("formatos")
-      .insert({ empresa_id: empresaId, unidad_id: input.unidadId, nombre, equivalencias: equiv, orden: nextOrden, activa: true })
+      .insert({ empresa_id: empresaId, unidad_id: input.unidadId, nombre, equivalencias: equiv, orden: nextOrden, activa: true, tipo: input.tipo })
       .select("*").single();
     if (error) {
       if (error.code === "23505") return { ok: false as const, error: `Ya existe el formato "${nombre}" para esa unidad.` };
@@ -240,7 +246,7 @@ export async function updateFormatoMedida(id: string, patch: Partial<{ nombre: s
     if (patch.activa !== undefined) updates.activa = patch.activa;
 
     const { data: before } = await supabase.from("formatos")
-      .select("nombre").eq("id", id).eq("empresa_id", empresaId).maybeSingle();
+      .select("nombre, tipo").eq("id", id).eq("empresa_id", empresaId).maybeSingle();
 
     const { data, error } = await supabase.from("formatos")
       .update(updates).eq("id", id).eq("empresa_id", empresaId).select("*").single();
@@ -251,7 +257,7 @@ export async function updateFormatoMedida(id: string, patch: Partial<{ nombre: s
 
     if (before?.nombre && patch.nombre !== undefined && patch.nombre.trim() && patch.nombre.trim() !== before.nombre) {
       await supabase.from("productos").update({ formato: patch.nombre.trim() })
-        .eq("empresa_id", empresaId).eq("formato", before.nombre as string);
+        .eq("empresa_id", empresaId).eq("tipo", before.tipo as string).eq("formato", before.nombre as string);
     }
 
     revalidatePath("/logistica/productos");
@@ -267,12 +273,12 @@ export async function deleteFormatoMedida(id: string) {
     if (!empresaId) return { ok: false as const, error: "Sin empresa activa" };
 
     const { data: row } = await supabase.from("formatos")
-      .select("nombre").eq("id", id).eq("empresa_id", empresaId).maybeSingle();
+      .select("nombre, tipo").eq("id", id).eq("empresa_id", empresaId).maybeSingle();
 
     if (row?.nombre) {
       const { count } = await supabase.from("productos")
         .select("id", { count: "exact", head: true })
-        .eq("empresa_id", empresaId).eq("formato", row.nombre as string);
+        .eq("empresa_id", empresaId).eq("tipo", row.tipo as string).eq("formato", row.nombre as string);
       if ((count ?? 0) > 0) {
         return { ok: false as const, error: `No se puede borrar: ${count} producto(s) usan el formato "${row.nombre}".` };
       }
@@ -292,12 +298,12 @@ export async function deleteFormatoMedida(id: string) {
    IVAS
    ===================================================================== */
 
-export async function listIvas() {
+export async function listIvas(tipo: TipoProducto) {
   try {
     const { supabase, empresaId } = await getLogisticaContext();
     if (!empresaId) return { ok: false as const, data: [] as IvaRow[], error: "Sin empresa activa" };
     const { data, error } = await supabase.from("ivas").select("*")
-      .eq("empresa_id", empresaId).order("orden", { ascending: true });
+      .eq("empresa_id", empresaId).eq("tipo", tipo).order("orden", { ascending: true });
     if (error) throw error;
     return { ok: true as const, data: (data ?? []) as IvaRow[] };
   } catch (err) {
@@ -305,18 +311,18 @@ export async function listIvas() {
   }
 }
 
-export async function createIva(input: { codigo: string; porcentaje: number; label?: string }) {
+export async function createIva(input: { codigo: string; porcentaje: number; label?: string; tipo: TipoProducto }) {
   try {
     const { supabase, empresaId } = await getLogisticaContext();
     if (!empresaId) return { ok: false as const, error: "No autenticado" };
     const codigo = input.codigo.trim();
     if (!codigo) return { ok: false as const, error: "El código es obligatorio" };
 
-    const nextOrden = await getNextOrden(supabase, "ivas", empresaId);
+    const nextOrden = await getNextOrden(supabase, "ivas", empresaId, { tipo: input.tipo });
 
     const { data, error } = await supabase.from("ivas").insert({
       empresa_id: empresaId, codigo, porcentaje: input.porcentaje,
-      label: input.label?.trim() || null, orden: nextOrden, activa: true,
+      label: input.label?.trim() || null, orden: nextOrden, activa: true, tipo: input.tipo,
     }).select("*").single();
     if (error) {
       if (error.code === "23505") return { ok: false as const, error: `Ya existe el IVA "${codigo}".` };
@@ -341,7 +347,7 @@ export async function updateIva(id: string, patch: Partial<{ codigo: string; por
     if (patch.orden !== undefined) updates.orden = patch.orden;
     if (patch.activa !== undefined) updates.activa = patch.activa;
 
-    const { data: before } = await supabase.from("ivas").select("codigo")
+    const { data: before } = await supabase.from("ivas").select("codigo, tipo")
       .eq("id", id).eq("empresa_id", empresaId).maybeSingle();
 
     const { data, error } = await supabase.from("ivas").update(updates)
@@ -353,7 +359,7 @@ export async function updateIva(id: string, patch: Partial<{ codigo: string; por
 
     if (before?.codigo && patch.codigo !== undefined && patch.codigo.trim() && patch.codigo.trim() !== before.codigo) {
       await supabase.from("productos").update({ iva: patch.codigo.trim() })
-        .eq("empresa_id", empresaId).eq("iva", before.codigo as string);
+        .eq("empresa_id", empresaId).eq("tipo", before.tipo as string).eq("iva", before.codigo as string);
     }
 
     revalidatePath("/logistica/productos");
@@ -368,12 +374,12 @@ export async function deleteIva(id: string) {
     const { supabase, empresaId } = await getLogisticaContext();
     if (!empresaId) return { ok: false as const, error: "Sin empresa activa" };
 
-    const { data: row } = await supabase.from("ivas").select("codigo")
+    const { data: row } = await supabase.from("ivas").select("codigo, tipo")
       .eq("id", id).eq("empresa_id", empresaId).maybeSingle();
 
     if (row?.codigo) {
       const { count } = await supabase.from("productos").select("id", { count: "exact", head: true })
-        .eq("empresa_id", empresaId).eq("iva", row.codigo as string);
+        .eq("empresa_id", empresaId).eq("tipo", row.tipo as string).eq("iva", row.codigo as string);
       if ((count ?? 0) > 0) {
         return { ok: false as const, error: `No se puede borrar: ${count} producto(s) usan el IVA "${row.codigo}".` };
       }
@@ -393,12 +399,12 @@ export async function deleteIva(id: string) {
    CONSERVACIONES
    ===================================================================== */
 
-export async function listConservaciones() {
+export async function listConservaciones(tipo: TipoProducto) {
   try {
     const { supabase, empresaId } = await getLogisticaContext();
     if (!empresaId) return { ok: false as const, data: [] as ConservacionRow[], error: "Sin empresa activa" };
     const { data, error } = await supabase.from("conservaciones").select("*")
-      .eq("empresa_id", empresaId).order("orden", { ascending: true });
+      .eq("empresa_id", empresaId).eq("tipo", tipo).order("orden", { ascending: true });
     if (error) throw error;
     return { ok: true as const, data: (data ?? []) as ConservacionRow[] };
   } catch (err) {
@@ -406,18 +412,18 @@ export async function listConservaciones() {
   }
 }
 
-export async function createConservacion(input: { nombre: string; rangoTemp?: string }) {
+export async function createConservacion(input: { nombre: string; rangoTemp?: string; tipo: TipoProducto }) {
   try {
     const { supabase, empresaId } = await getLogisticaContext();
     if (!empresaId) return { ok: false as const, error: "No autenticado" };
     const nombre = input.nombre.trim();
     if (!nombre) return { ok: false as const, error: "El nombre es obligatorio" };
 
-    const nextOrden = await getNextOrden(supabase, "conservaciones", empresaId);
+    const nextOrden = await getNextOrden(supabase, "conservaciones", empresaId, { tipo: input.tipo });
 
     const { data, error } = await supabase.from("conservaciones").insert({
       empresa_id: empresaId, nombre, rango_temp: input.rangoTemp?.trim() || null,
-      orden: nextOrden, activa: true,
+      orden: nextOrden, activa: true, tipo: input.tipo,
     }).select("*").single();
     if (error) {
       if (error.code === "23505") return { ok: false as const, error: `Ya existe la conservación "${nombre}".` };
@@ -441,7 +447,7 @@ export async function updateConservacion(id: string, patch: Partial<{ nombre: st
     if (patch.orden !== undefined) updates.orden = patch.orden;
     if (patch.activa !== undefined) updates.activa = patch.activa;
 
-    const { data: before } = await supabase.from("conservaciones").select("nombre")
+    const { data: before } = await supabase.from("conservaciones").select("nombre, tipo")
       .eq("id", id).eq("empresa_id", empresaId).maybeSingle();
 
     const { data, error } = await supabase.from("conservaciones").update(updates)
@@ -453,7 +459,7 @@ export async function updateConservacion(id: string, patch: Partial<{ nombre: st
 
     if (before?.nombre && patch.nombre !== undefined && patch.nombre.trim() && patch.nombre.trim() !== before.nombre) {
       await supabase.from("productos").update({ conservacion: patch.nombre.trim() })
-        .eq("empresa_id", empresaId).eq("conservacion", before.nombre as string);
+        .eq("empresa_id", empresaId).eq("tipo", before.tipo as string).eq("conservacion", before.nombre as string);
     }
 
     revalidatePath("/logistica/productos");
@@ -468,12 +474,12 @@ export async function deleteConservacion(id: string) {
     const { supabase, empresaId } = await getLogisticaContext();
     if (!empresaId) return { ok: false as const, error: "Sin empresa activa" };
 
-    const { data: row } = await supabase.from("conservaciones").select("nombre")
+    const { data: row } = await supabase.from("conservaciones").select("nombre, tipo")
       .eq("id", id).eq("empresa_id", empresaId).maybeSingle();
 
     if (row?.nombre) {
       const { count } = await supabase.from("productos").select("id", { count: "exact", head: true })
-        .eq("empresa_id", empresaId).eq("conservacion", row.nombre as string);
+        .eq("empresa_id", empresaId).eq("tipo", row.tipo as string).eq("conservacion", row.nombre as string);
       if ((count ?? 0) > 0) {
         return { ok: false as const, error: `No se puede borrar: ${count} producto(s) usan la conservación "${row.nombre}".` };
       }
@@ -503,12 +509,12 @@ export interface EnvaseRow {
   updated_at: string;
 }
 
-export async function listEnvases() {
+export async function listEnvases(tipo: TipoProducto) {
   try {
     const { supabase, empresaId } = await getLogisticaContext();
     if (!empresaId) return { ok: false as const, data: [] as EnvaseRow[], error: "Sin empresa activa" };
     const { data, error } = await supabase.from("envases").select("*")
-      .eq("empresa_id", empresaId).order("orden", { ascending: true });
+      .eq("empresa_id", empresaId).eq("tipo", tipo).order("orden", { ascending: true });
     if (error) throw error;
     return { ok: true as const, data: (data ?? []) as EnvaseRow[] };
   } catch (err) {
@@ -516,15 +522,15 @@ export async function listEnvases() {
   }
 }
 
-export async function createEnvase(input: { nombre: string }) {
+export async function createEnvase(input: { nombre: string; tipo: TipoProducto }) {
   try {
     const { supabase, empresaId } = await getLogisticaContext();
     if (!empresaId) return { ok: false as const, error: "No autenticado" };
     const nombre = input.nombre.trim();
     if (!nombre) return { ok: false as const, error: "El nombre es obligatorio" };
-    const nextOrden = await getNextOrden(supabase, "envases", empresaId);
+    const nextOrden = await getNextOrden(supabase, "envases", empresaId, { tipo: input.tipo });
     const { data, error } = await supabase.from("envases")
-      .insert({ empresa_id: empresaId, nombre, orden: nextOrden, activa: true })
+      .insert({ empresa_id: empresaId, nombre, orden: nextOrden, activa: true, tipo: input.tipo })
       .select("*").single();
     if (error) {
       if (error.code === "23505") return { ok: false as const, error: `Ya existe el envase "${nombre}".` };
@@ -546,7 +552,7 @@ export async function updateEnvase(id: string, patch: Partial<{ nombre: string; 
     if (patch.orden !== undefined) updates.orden = patch.orden;
     if (patch.activa !== undefined) updates.activa = patch.activa;
 
-    const { data: before } = await supabase.from("envases").select("nombre")
+    const { data: before } = await supabase.from("envases").select("nombre, tipo")
       .eq("id", id).eq("empresa_id", empresaId).maybeSingle();
 
     const { data, error } = await supabase.from("envases").update(updates)
@@ -555,10 +561,10 @@ export async function updateEnvase(id: string, patch: Partial<{ nombre: string; 
       if (error.code === "23505") return { ok: false as const, error: "Ya existe un envase con ese nombre." };
       throw error;
     }
-    // Cascade: renombrar el envase actualiza los productos que lo usan.
+    // Cascade: renombrar el envase actualiza los productos del mismo tipo que lo usan.
     if (before?.nombre && patch.nombre !== undefined && patch.nombre.trim() && patch.nombre.trim() !== before.nombre) {
       await supabase.from("productos").update({ envase: patch.nombre.trim() })
-        .eq("empresa_id", empresaId).eq("envase", before.nombre as string);
+        .eq("empresa_id", empresaId).eq("tipo", before.tipo as string).eq("envase", before.nombre as string);
     }
     revalidatePath("/logistica/productos");
     return { ok: true as const, data: data as EnvaseRow };
@@ -571,11 +577,11 @@ export async function deleteEnvase(id: string) {
   try {
     const { supabase, empresaId } = await getLogisticaContext();
     if (!empresaId) return { ok: false as const, error: "Sin empresa activa" };
-    const { data: row } = await supabase.from("envases").select("nombre")
+    const { data: row } = await supabase.from("envases").select("nombre, tipo")
       .eq("id", id).eq("empresa_id", empresaId).maybeSingle();
     if (row?.nombre) {
       const { count } = await supabase.from("productos").select("id", { count: "exact", head: true })
-        .eq("empresa_id", empresaId).eq("envase", row.nombre as string);
+        .eq("empresa_id", empresaId).eq("tipo", row.tipo as string).eq("envase", row.nombre as string);
       if ((count ?? 0) > 0) {
         return { ok: false as const, error: `No se puede borrar: ${count} producto(s) usan el envase "${row.nombre}".` };
       }

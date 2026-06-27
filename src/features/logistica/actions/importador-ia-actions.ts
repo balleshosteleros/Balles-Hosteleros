@@ -219,9 +219,9 @@ export async function analizarImportacionIA(
     // (empresa recién creada antes de que el trigger termine, o BD caída),
     // caemos a las constantes estáticas — la UI no se queda muda.
     const [uRes, ivaRes, conRes] = await Promise.all([
-      listUnidadesMedida(),
-      listIvas(),
-      listConservaciones(),
+      listUnidadesMedida(tipo),
+      listIvas(tipo),
+      listConservaciones(tipo),
     ]);
     const unidadesValidas = uRes.ok && uRes.data.length > 0
       ? uRes.data.map((u) => u.codigo)

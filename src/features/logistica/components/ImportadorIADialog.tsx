@@ -92,7 +92,7 @@ export function ImportadorIADialog({
   const [isDragging, setIsDragging] = useState(false);
   const [proveedoresValidos, setProveedoresValidos] = useState<string[]>([]);
   const [categoriasValidas, setCategoriasValidas] = useState<string[]>([]);
-  const catalogos = useCatalogosLogistica();
+  const catalogos = useCatalogosLogistica(tipo);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const obligatorias = CAMPOS_OBLIGATORIOS_POR_TIPO[tipo];

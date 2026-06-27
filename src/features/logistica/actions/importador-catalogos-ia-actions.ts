@@ -432,11 +432,11 @@ export async function analizarUnidadesIA(payload: PayloadExtraido) {
   });
 }
 
-export async function guardarUnidadesIA(rows: Array<Record<string, string | null>>) {
+export async function guardarUnidadesIA(rows: Array<Record<string, string | null>>, tipo: TipoProducto) {
   return bulkCreate(rows, (r) => {
     const codigo = (r.codigo ?? "").trim();
     if (!codigo) return null;
-    return createUnidadMedida({ codigo, label: (r.label ?? codigo).trim() });
+    return createUnidadMedida({ codigo, label: (r.label ?? codigo).trim(), tipo });
   });
 }
 
@@ -489,13 +489,13 @@ export async function analizarIvasIA(payload: PayloadExtraido) {
   });
 }
 
-export async function guardarIvasIA(rows: Array<Record<string, string | null>>) {
+export async function guardarIvasIA(rows: Array<Record<string, string | null>>, tipo: TipoProducto) {
   return bulkCreate(rows, (r) => {
     const codigo = (r.codigo ?? "").trim();
     const porcentajeRaw = (r.porcentaje ?? "").trim().replace(",", ".");
     const porcentaje = parseFloat(porcentajeRaw);
     if (!codigo || !Number.isFinite(porcentaje)) return null;
-    return createIva({ codigo, porcentaje, label: r.label?.trim() || undefined });
+    return createIva({ codigo, porcentaje, label: r.label?.trim() || undefined, tipo });
   });
 }
 
@@ -545,11 +545,11 @@ export async function analizarConservacionesIA(payload: PayloadExtraido) {
   });
 }
 
-export async function guardarConservacionesIA(rows: Array<Record<string, string | null>>) {
+export async function guardarConservacionesIA(rows: Array<Record<string, string | null>>, tipo: TipoProducto) {
   return bulkCreate(rows, (r) => {
     const nombre = (r.nombre ?? "").trim();
     if (!nombre) return null;
-    return createConservacion({ nombre, rangoTemp: r.rangoTemp?.trim() || undefined });
+    return createConservacion({ nombre, rangoTemp: r.rangoTemp?.trim() || undefined, tipo });
   });
 }
 

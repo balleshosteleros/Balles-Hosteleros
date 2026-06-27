@@ -13,6 +13,7 @@ import {
   IVA_OPCIONES,
   CONSERVACION_OPCIONES,
   FORMATOS_POR_UNIDAD,
+  type TipoProducto,
 } from "@/features/logistica/data/productos";
 
 export interface CatalogosLogistica {
@@ -41,8 +42,11 @@ const FALLBACK: Omit<CatalogosLogistica, "cargando"> = {
  * constantes de código para que la UI nunca quede vacía mientras la migración termina.
  *
  * Una sola llamada por mount; ideal para usar en formularios.
+ *
+ * Los catálogos son INDEPENDIENTES por tipo de producto: hay que indicar el
+ * `tipo` (compra / venta / elaboración) para leer los suyos.
  */
-export function useCatalogosLogistica(): CatalogosLogistica {
+export function useCatalogosLogistica(tipo: TipoProducto): CatalogosLogistica {
   const [estado, setEstado] = useState<CatalogosLogistica>({
     ...FALLBACK,
     cargando: true,
@@ -51,11 +55,11 @@ export function useCatalogosLogistica(): CatalogosLogistica {
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      listUnidadesMedida(),
-      listFormatosMedida(),
-      listIvas(),
-      listConservaciones(),
-      listEnvases(),
+      listUnidadesMedida(tipo),
+      listFormatosMedida(tipo),
+      listIvas(tipo),
+      listConservaciones(tipo),
+      listEnvases(tipo),
     ]).then(([uRes, fRes, ivaRes, conRes, envRes]) => {
       if (cancelled) return;
 
@@ -100,7 +104,7 @@ export function useCatalogosLogistica(): CatalogosLogistica {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [tipo]);
 
   return estado;
 }

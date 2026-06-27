@@ -120,7 +120,7 @@ export function PreciosCompraSection({ productoId, unidad, onCurrentChange, onIt
   const [fechaInicio, setFechaInicio] = useState(todayIso());
   const [fechaFin, setFechaFin] = useState<string>("");
 
-  const catalogos = useCatalogosLogistica();
+  const catalogos = useCatalogosLogistica("compra");
   // IVA por defecto configurado en Ajustes (Logística → Productos de compra).
   const [defaultIvaCfg, setDefaultIvaCfg] = useState<string | null>(null);
   useEffect(() => {

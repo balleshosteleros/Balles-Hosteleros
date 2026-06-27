@@ -9,23 +9,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useCatalogosLogistica } from "@/features/logistica/hooks/useCatalogosLogistica";
+import { listIvas } from "@/features/logistica/actions/catalogos-estandar-actions";
 import { getDefaultIva, saveDefaultIva } from "@/features/logistica/actions/config-actions";
 import { pickDefaultIva } from "@/features/logistica/data/productos";
 
 // IVA por defecto a nivel empresa (compra / venta). Vive en
 // Ajustes → Departamentos → Logística → Productos. Autoguarda al cambiar.
+// Los IVAs son INDEPENDIENTES por tipo, así que cada select lee los suyos.
 
-function IvaDefaultSelect({ tipo, ivas }: { tipo: "compra" | "venta"; ivas: string[] }) {
+function IvaDefaultSelect({ tipo }: { tipo: "compra" | "venta" }) {
+  const [ivas, setIvas] = useState<string[]>([]);
   const [valor, setValor] = useState("");
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    getDefaultIva(tipo).then((v) => {
+    Promise.all([listIvas(tipo), getDefaultIva(tipo)]).then(([ivaRes, def]) => {
       if (cancelled) return;
-      setValor(v ?? "");
+      setIvas(ivaRes.ok ? ivaRes.data.map((i) => i.codigo) : []);
+      setValor(def ?? "");
       setCargando(false);
     });
     return () => {
@@ -75,8 +78,6 @@ function IvaDefaultSelect({ tipo, ivas }: { tipo: "compra" | "venta"; ivas: stri
 }
 
 export function IvaDefaultConfig() {
-  const catalogos = useCatalogosLogistica();
-
   return (
     <div className="space-y-1.5">
       <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -89,8 +90,8 @@ export function IvaDefaultConfig() {
           compra nunca pueden quedar sin IVA.
         </p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <IvaDefaultSelect tipo="compra" ivas={catalogos.ivas} />
-          <IvaDefaultSelect tipo="venta" ivas={catalogos.ivas} />
+          <IvaDefaultSelect tipo="compra" />
+          <IvaDefaultSelect tipo="venta" />
         </div>
       </div>
     </div>
