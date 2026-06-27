@@ -36,7 +36,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  Plus, Settings, Euro, Percent,
+  Plus, Settings, Euro, Percent, BarChart3,
   Copy, Archive, Trash2, Printer,
   Share2, Link2, LinkIcon, ImageIcon, Upload, X, FileDown,
   Video as VideoIcon, Pencil, ExternalLink,
@@ -54,6 +54,7 @@ import {
 } from "@/shared/components/SubmoduleToolbar";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { formatNumero, parseDecimal } from "@/shared/lib/numero";
+import { MargenesAnalisis } from "@/features/cocina/components/escandallos/MargenesAnalisis";
 
 // ─── Estado colors ─────────────────────────────────────────────
 const ESTADO_COLORS: Record<EstadoEscandallo, string> = {
@@ -1208,7 +1209,7 @@ export function EscandallosView() {
   const empresaConfig = configs[empresaActual.id] ?? defaultConfig;
 
   const view = "lista" as "lista" | "pipeline";
-  const [tab, setTab] = useTabQuery(["escandallos", "config"] as const, "escandallos");
+  const [tab, setTab] = useTabQuery(["escandallos", "analisis", "config"] as const, "escandallos");
   const [search, setSearch] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
@@ -1518,20 +1519,32 @@ export function EscandallosView() {
         columnasOrden={columnasOrden}
         onColumnasOrdenChange={setColumnasOrden}
         extraDerecha={
-          <Button
-            size="icon"
-            variant={tab === "config" ? "default" : "outline"}
-            className="h-9 w-9"
-            onClick={() => setTab(tab === "config" ? "escandallos" : "config")}
-            title="Configuración"
-            aria-label="Configuración"
-          >
-            <Settings className="h-4 w-4" strokeWidth={1.75} />
-          </Button>
+          <>
+            <Button
+              size="icon"
+              variant={tab === "analisis" ? "default" : "outline"}
+              className="h-9 w-9"
+              onClick={() => setTab(tab === "analisis" ? "escandallos" : "analisis")}
+              title="Análisis de márgenes"
+              aria-label="Análisis de márgenes"
+            >
+              <BarChart3 className="h-4 w-4" strokeWidth={1.75} />
+            </Button>
+            <Button
+              size="icon"
+              variant={tab === "config" ? "default" : "outline"}
+              className="h-9 w-9"
+              onClick={() => setTab(tab === "config" ? "escandallos" : "config")}
+              title="Configuración"
+              aria-label="Configuración"
+            >
+              <Settings className="h-4 w-4" strokeWidth={1.75} />
+            </Button>
+          </>
         }
       />
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as "escandallos" | "config")}>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "escandallos" | "analisis" | "config")}>
         <TabsContent value="escandallos" className="space-y-4 mt-4">
           {selected.size > 0 && (
             <div className="flex gap-1.5 justify-end">
@@ -1636,6 +1649,10 @@ export function EscandallosView() {
               })}
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="analisis" className="mt-4">
+          <MargenesAnalisis />
         </TabsContent>
 
         <TabsContent value="config" className="mt-4">
