@@ -80,6 +80,32 @@ function costePctColor(pct: number): string {
   return pct <= 40 ? "text-emerald-600" : pct <= 60 ? "text-amber-600" : "text-destructive";
 }
 
+// Tope máximo razonable de cantidad por ingrediente (1.000.000 ud/g/ml).
+// Backstop duro contra valores absurdos.
+const MAX_CANTIDAD = 1_000_000;
+
+/** Limita la cantidad a un rango finito y sano [0, MAX_CANTIDAD]. */
+function clampCantidad(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  return Math.min(MAX_CANTIDAD, Math.max(0, n));
+}
+
+/**
+ * Tope "bonito" (1/2/5 × 10ⁿ) ≥ x para el slider de cantidad.
+ * Es ESTABLE en los bordes: si el valor coincide con el tope, el tope no crece.
+ * Esto evita el bucle de realimentación (max = f(valor) → arrastrar al borde
+ * sube el valor al max → el max se duplica → …) que disparaba la cantidad
+ * de forma exponencial.
+ */
+function niceCeilCantidad(x: number): number {
+  if (!Number.isFinite(x) || x <= 0) return 1;
+  const exp = Math.floor(Math.log10(x));
+  const base = Math.pow(10, exp);
+  const f = x / base;
+  const nice = f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10;
+  return Math.min(MAX_CANTIDAD, nice * base);
+}
+
 // ─── Editor de items de configuración (Supabase) ───────────────
 function ConfigItemsEditor({
   grupo,
@@ -531,14 +557,21 @@ function EscandalloDetalle({
   // Réplica exacta de coste_escandallo(): (proveedor preferido ?? coste) / factor.
   const calcularPrecio = (producto: Producto, cantidad: number, merma = 0): number => {
     const info = costesIng[producto.id];
-    const unit = info ? info.costeUnitario : (parseDecimal(producto.coste ?? producto.precioCompra ?? "0") ?? 0);
-    const factor = info?.factor || 1;
-    return +((unit / factor) * cantidad * (1 + merma / 100)).toFixed(2);
+    const unitRaw = info ? info.costeUnitario : (parseDecimal(producto.coste ?? producto.precioCompra ?? "0") ?? 0);
+    const unit = Number.isFinite(unitRaw) ? unitRaw : 0;
+    const factor = info?.factor && Number.isFinite(info.factor) && info.factor !== 0 ? info.factor : 1;
+    const cant = clampCantidad(cantidad);
+    const m = Number.isFinite(merma) ? Math.max(0, Math.min(100, merma)) : 0;
+    const val = (unit / factor) * cant * (1 + m / 100);
+    return Number.isFinite(val) ? +val.toFixed(2) : 0;
   };
 
   const recomputeCosteTotal = (ingredientes: IngredienteEscandallo[]): number => {
-    const total = ingredientes.reduce((sum, i) => sum + (i.precio ?? 0), 0);
-    return +total.toFixed(2);
+    const total = ingredientes.reduce((sum, i) => {
+      const p = i.precio ?? 0;
+      return sum + (Number.isFinite(p) ? p : 0);
+    }, 0);
+    return Number.isFinite(total) ? +total.toFixed(2) : 0;
   };
 
   const addIngrediente = () => {
@@ -579,11 +612,12 @@ function EscandalloDetalle({
   };
 
   const handleIngredienteCantidad = (id: string, cantidad: number) => {
+    const cant = clampCantidad(cantidad);
     const nuevos = form.ingredientes.map((i) => {
       if (i.id !== id) return i;
       const producto = i.productoId ? productosDisponibles.find((p) => p.id === i.productoId) : undefined;
-      const precio = producto ? calcularPrecio(producto, cantidad, i.merma ?? 0) : 0;
-      return { ...i, cantidad, precio };
+      const precio = producto ? calcularPrecio(producto, cant, i.merma ?? 0) : 0;
+      return { ...i, cantidad: cant, precio };
     });
     update({ ingredientes: nuevos, costeTotal: recomputeCosteTotal(nuevos) });
   };
@@ -804,8 +838,10 @@ function EscandalloDetalle({
               {form.ingredientes.length > 0 ? (
                 <div className="space-y-2">
                   {form.ingredientes.map((ing) => {
-                    const cant = ing.cantidad || 0;
-                    const sliderMax = Math.max(1, Math.ceil(cant * 2));
+                    const cant = clampCantidad(ing.cantidad || 0);
+                    // Tope estable por tramos (1/2/5×10ⁿ): NO se deriva de forma
+                    // creciente del valor, así arrastrar al borde no dispara la cantidad.
+                    const sliderMax = niceCeilCantidad(Math.max(cant, 1));
                     const step = sliderMax > 100 ? 1 : sliderMax > 10 ? 0.1 : 0.01;
                     return (
                       <div key={ing.id} className="rounded-lg border bg-card p-3 space-y-2.5">
