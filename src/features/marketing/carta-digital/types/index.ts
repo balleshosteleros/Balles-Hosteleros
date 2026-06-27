@@ -87,25 +87,15 @@ export type CartaPublica = {
   destacados: CartaItem[];
 };
 
-/** Catálogo UE 14 alérgenos. */
-export const ALERGENOS_UE = [
-  "gluten",
-  "crustaceos",
-  "huevos",
-  "pescado",
-  "cacahuetes",
-  "soja",
-  "lacteos",
-  "frutos_cascara",
-  "apio",
-  "mostaza",
-  "sesamo",
-  "sulfitos",
-  "altramuces",
-  "moluscos",
-] as const;
-
-export type Alergeno = (typeof ALERGENOS_UE)[number];
+/**
+ * Catálogo UE 14 alérgenos — fuente ÚNICA en logística (PascalCase, valores
+ * literales: "Gluten", "Lácteos", …). No duplicar la lista aquí; se re-exporta
+ * para que la carta digital comparta exactamente los mismos valores que
+ * productos/escandallos y puedan heredarse sin traducción.
+ */
+import type { AlergenoUE } from "@/features/logistica/data/productos";
+export { ALERGENOS_UE_14 as ALERGENOS_UE } from "@/features/logistica/data/productos";
+export type Alergeno = AlergenoUE;
 
 export type EstadoCartaAdmin = "BORRADOR" | "PUBLICADA";
 

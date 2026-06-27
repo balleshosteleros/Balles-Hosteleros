@@ -24,22 +24,6 @@ import { crearItem, actualizarItem, borrarItem } from "../../actions/carta-admin
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { FotoUploader } from "./FotoUploader";
 
-const ALERGENO_LABEL: Record<string, string> = {
-  gluten: "Gluten",
-  crustaceos: "Crustáceos",
-  huevos: "Huevos",
-  pescado: "Pescado",
-  cacahuetes: "Cacahuetes",
-  soja: "Soja",
-  lacteos: "Lácteos",
-  frutos_cascara: "Frutos cáscara",
-  apio: "Apio",
-  mostaza: "Mostaza",
-  sesamo: "Sésamo",
-  sulfitos: "Sulfitos",
-  altramuces: "Altramuces",
-  moluscos: "Moluscos",
-};
 
 export function ItemEditorModal({
   open,
@@ -257,7 +241,7 @@ export function ItemEditorModal({
                     : "bg-white text-stone-700 ring-stone-300 hover:bg-stone-50"
                 }`}
               >
-                {ALERGENO_LABEL[a] ?? a}
+                {a}
               </button>
             ))}
           </div>

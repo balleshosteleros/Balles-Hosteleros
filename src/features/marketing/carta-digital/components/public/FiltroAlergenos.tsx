@@ -5,42 +5,27 @@ import { Filter, X, Wheat, Egg, Fish, Nut, Milk, Bean, Leaf } from "lucide-react
 import type { LucideIcon } from "lucide-react";
 import { ALERGENOS_UE, type Alergeno } from "../../types";
 
-const ALERGENO_LABEL: Record<Alergeno, string> = {
-  gluten: "Gluten",
-  crustaceos: "Crustáceos",
-  huevos: "Huevos",
-  pescado: "Pescado",
-  cacahuetes: "Cacahuetes",
-  soja: "Soja",
-  lacteos: "Lácteos",
-  frutos_cascara: "Frutos cáscara",
-  apio: "Apio",
-  mostaza: "Mostaza",
-  sesamo: "Sésamo",
-  sulfitos: "Sulfitos",
-  altramuces: "Altramuces",
-  moluscos: "Moluscos",
-};
-
 const ALERGENO_ICON: Record<Alergeno, LucideIcon> = {
-  gluten: Wheat,
-  crustaceos: Fish,
-  huevos: Egg,
-  pescado: Fish,
-  cacahuetes: Nut,
-  soja: Bean,
-  lacteos: Milk,
-  frutos_cascara: Nut,
-  apio: Leaf,
-  mostaza: Leaf,
-  sesamo: Leaf,
-  sulfitos: Leaf,
-  altramuces: Bean,
-  moluscos: Fish,
+  "Gluten": Wheat,
+  "Crustáceos": Fish,
+  "Huevos": Egg,
+  "Pescado": Fish,
+  "Cacahuetes": Nut,
+  "Soja": Bean,
+  "Lácteos": Milk,
+  "Frutos con cáscara": Nut,
+  "Apio": Leaf,
+  "Mostaza": Leaf,
+  "Sésamo": Leaf,
+  "Sulfitos": Leaf,
+  "Altramuces": Bean,
+  "Moluscos": Fish,
 };
 
+// El valor del catálogo ya es el label legible (PascalCase es-ES). Se mantiene
+// el helper por compatibilidad con los componentes que lo importan.
 export function alergenoLabel(a: Alergeno | string): string {
-  return ALERGENO_LABEL[a as Alergeno] ?? a;
+  return a;
 }
 
 export function AlergenoIcon({ alergeno, className }: { alergeno: Alergeno | string; className?: string }) {
@@ -147,7 +132,7 @@ export function FiltroAlergenos({
                   }}
                 >
                   <AlergenoIcon alergeno={a} className="h-3 w-3" />
-                  {ALERGENO_LABEL[a]}
+                  {alergenoLabel(a)}
                 </button>
               );
             })}
