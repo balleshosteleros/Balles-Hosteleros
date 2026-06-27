@@ -35,7 +35,7 @@ export interface RolContext {
   departamento: string | null
 }
 
-export async function getRolContext(targetUserId?: string): Promise<RolContext> {
+export async function getRolContext(targetUserId?: string, accessToken?: string): Promise<RolContext> {
   const vacio: RolContext = {
     rolId: null, rolNombre: null, permisos: [], esDirector: false, empresaId: null, departamento: null,
   }
@@ -43,7 +43,13 @@ export async function getRolContext(targetUserId?: string): Promise<RolContext> 
     let userId = targetUserId
     if (!userId) {
       const supabase = await createClient()
-      const { data: { user } } = await supabase.auth.getUser()
+      // Si el cliente pasa su `access_token`, lo validamos directamente contra el
+      // servidor de auth (no se puede falsificar). Así NO dependemos de que las
+      // cookies de sesión estén propagadas — la causa de la carrera tras el login
+      // que dejaba el dashboard en "No tienes departamentos" con un backoff lento.
+      const { data: { user } } = accessToken
+        ? await supabase.auth.getUser(accessToken)
+        : await supabase.auth.getUser()
       if (!user) return vacio
       userId = user.id
     }
@@ -85,8 +91,8 @@ export async function getRolContext(targetUserId?: string): Promise<RolContext> 
   }
 }
 
-export async function getUserPermisos(): Promise<UserPermisos> {
-  const ctx = await getRolContext()
+export async function getUserPermisos(accessToken?: string): Promise<UserPermisos> {
+  const ctx = await getRolContext(undefined, accessToken)
   // `appRoles` se deriva del flag de plataforma (paridad con usuario_roles, que
   // solo tenía director/empleado). Los lectores comprueban includes('director').
   const appRoles = ctx.esDirector ? ['director'] : ['empleado']

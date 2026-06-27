@@ -203,7 +203,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 .select("nombre, apellidos, email, empresa_id, avatar_url, avatar_obligatorio, rol_label, departamento")
                 .eq("user_id", userId)
                 .single(),
-              getUserPermisos().catch((e) => {
+              // Pasamos el access_token de la sesión para que el server action
+              // valide al usuario sin depender de las cookies (que tras el
+              // redirect del login pueden no estar propagadas → carrera que
+              // dejaba el dashboard vacío). Ver getRolContext.
+              getUserPermisos(session.access_token).catch((e) => {
                 console.error("[auth] error cargando permisos", e);
                 return null;
               }),
