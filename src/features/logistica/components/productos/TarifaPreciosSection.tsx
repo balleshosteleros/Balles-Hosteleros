@@ -150,10 +150,10 @@ export function TarifaPreciosSection({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-xs text-muted-foreground">
-                  <th className="text-left py-2 font-bold">TARIFA</th>
-                  <th className="text-right py-2 font-bold">PRECIO CON IVA</th>
-                  <th className="text-right py-2 font-bold">SIN IVA</th>
-                  <th className="text-right py-2 font-bold">Δ vs BASE</th>
+                  <th className="text-left py-2 font-bold">Tarifa</th>
+                  <th className="text-right py-2 font-bold">Precio con IVA</th>
+                  <th className="text-right py-2 font-bold">Sin IVA</th>
+                  <th className="text-right py-2 font-bold">Δ vs base</th>
                   <th className="py-2"></th>
                 </tr>
               </thead>
