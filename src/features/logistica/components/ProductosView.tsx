@@ -154,7 +154,7 @@ function ProductoDetalle({
   const esElaboracion = tipo === "elaboracion";
   const mostrarConservacion = !esVenta;
   const mostrarIva = !esElaboracion;
-  const mostrarFormato = esCompra;
+  const mostrarFormato = esCompra || esElaboracion;
   const estadosList = estadosOpts ?? [...ESTADOS_PRODUCTO];
   const { empresaActual } = useEmpresa();
   const catalogos = useCatalogosLogistica(tipo);
@@ -966,6 +966,13 @@ function TablaProductos({
     }
   }, [tipo]);
 
+  // Al cambiar de tipo (Compra/Venta/Elaboración) vaciamos la tabla de inmediato:
+  // si no, mientras llega la nueva consulta se siguen viendo las filas del tipo
+  // anterior bajo la cabecera nueva (el spinner solo aparece con la tabla vacía).
+  useEffect(() => {
+    setProductos([]);
+  }, [tipo]);
+
   useEffect(() => {
     loadProductos();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -984,7 +991,7 @@ function TablaProductos({
   const esElaboracion = tipo === "elaboracion";
   const mostrarConservacion = !esVenta;
   const mostrarIva = !esElaboracion;
-  const mostrarFormato = esCompra;
+  const mostrarFormato = esCompra || esElaboracion;
 
   useEffect(() => {
     setColumnasVisibles(
@@ -1027,7 +1034,6 @@ function TablaProductos({
       );
       return campo === "precioSinIva" ? sinIva : conIva;
     }
-    if (campo === "fecha") return p.ultimaActualizacion;
     // ID: ordenar/filtrar por el número correlativo, no por la cadena con prefijo.
     if (campo === "numero") return p.numeroSecuencial ?? null;
     return (p as unknown as Record<string, unknown>)[campo];
@@ -1055,24 +1061,22 @@ function TablaProductos({
     ...(esCompra
       ? [
           { campo: "proveedor", label: "Proveedor" },
-          { campo: "precioSinIva", label: "Precio compra sin IVA" },
-          { campo: "precioConIva", label: "Precio compra con IVA" },
+          { campo: "precioSinIva", label: "Precio sin IVA" },
+          { campo: "precioConIva", label: "Precio con IVA" },
         ]
       : esElaboracion
       ? [
-          { campo: "precio", label: "Precio elaboración" },
           { campo: "coste", label: "Coste" },
         ]
       : [
-          { campo: "precioSinIva", label: "Precio venta sin IVA" },
-          { campo: "precioConIva", label: "Precio venta con IVA" },
+          { campo: "precioSinIva", label: "Precio sin IVA" },
+          { campo: "precioConIva", label: "Precio con IVA" },
           { campo: "coste", label: "Coste" },
           { campo: "porcCoste", label: "% Coste" },
         ]),
     ...(mostrarIva ? [{ campo: "iva", label: "IVA" }] : []),
     { campo: "medida", label: "Medida" },
     ...(mostrarFormato ? [{ campo: "formato", label: "Formato" }] : []),
-    { campo: "fecha", label: "Actualización" },
   ];
 
   const columnDefs: Record<string, { th: ReactNode; td: (p: Producto) => ReactNode }> = {
@@ -1210,7 +1214,7 @@ function TablaProductos({
       th: (
         <TableColumnHeader
           key="precio"
-          label={esCompra ? "Precio compra" : esElaboracion ? "Precio de elaboración" : "Precio de venta"}
+          label="Precio"
           campo="precio"
           filtroTipo="numero"
           filtros={filtros}
@@ -1230,7 +1234,7 @@ function TablaProductos({
       th: (
         <TableColumnHeader
           key="precioSinIva"
-          label={esCompra ? "Precio compra sin IVA" : "Precio venta sin IVA"}
+          label="Precio sin IVA"
           campo="precioSinIva"
           filtroTipo="numero"
           filtros={filtros}
@@ -1254,7 +1258,7 @@ function TablaProductos({
       th: (
         <TableColumnHeader
           key="precioConIva"
-          label={esCompra ? "Precio compra con IVA" : "Precio venta con IVA"}
+          label="Precio con IVA"
           campo="precioConIva"
           filtroTipo="numero"
           filtros={filtros}
@@ -1326,26 +1330,6 @@ function TablaProductos({
       td: (p) => (
         <td key="formato" className="px-3 py-1.5 text-muted-foreground">
           {p.formato ?? "—"}
-        </td>
-      ),
-    },
-    fecha: {
-      th: (
-        <TableColumnHeader
-          key="fecha"
-          label="Actualización"
-          campo="fecha"
-          filtroTipo="fecha"
-          filtros={filtros}
-          onFiltrosChange={setFiltros}
-          ordenable
-          orden={orden}
-          onOrdenChange={setOrden}
-        />
-      ),
-      td: (p) => (
-        <td key="fecha" className="px-3 py-1.5 text-xs text-muted-foreground">
-          {p.ultimaActualizacion}
         </td>
       ),
     },
@@ -1642,23 +1626,25 @@ function ConfigProductos({
         }}
       />
 
-      {/* Formatos por medida + Envases — solo en productos de compra */}
+      {/* Formatos por medida — en compra y elaboración */}
+      {(tipo === "compra" || tipo === "elaboracion") && (
+        <GestorFormatos tipo={tipo} refreshKey={medidasVersion} />
+      )}
+
+      {/* Envases — solo en productos de compra */}
       {tipo === "compra" && (
-        <>
-          <GestorFormatos tipo={tipo} refreshKey={medidasVersion} />
-          <GestorCatalogoEstandar
-            titulo="Envases"
-            hint="Indicador del continente (Bolsa, Caja, Saco, Botella…). Es independiente del formato."
-            campos={[{ key: "nombre", label: "Envase (ej: Bolsa)", obligatorio: true, ancho: "flex-1" }]}
-            itemPrincipal={(it) => it.nombre}
-            itemSecundario={() => null}
-            itemAPatch={(it) => ({ nombre: it.nombre })}
-            list={() => listEnvases(tipo)}
-            create={(input) => createEnvase({ nombre: input.nombre, tipo })}
-            update={(id, patch) => updateEnvase(id, { nombre: patch.nombre })}
-            remove={deleteEnvase}
-          />
-        </>
+        <GestorCatalogoEstandar
+          titulo="Envases"
+          hint="Indicador del continente (Bolsa, Caja, Saco, Botella…). Es independiente del formato."
+          campos={[{ key: "nombre", label: "Envase (ej: Bolsa)", obligatorio: true, ancho: "flex-1" }]}
+          itemPrincipal={(it) => it.nombre}
+          itemSecundario={() => null}
+          itemAPatch={(it) => ({ nombre: it.nombre })}
+          list={() => listEnvases(tipo)}
+          create={(input) => createEnvase({ nombre: input.nombre, tipo })}
+          update={(id, patch) => updateEnvase(id, { nombre: patch.nombre })}
+          remove={deleteEnvase}
+        />
       )}
 
       <GestorCatalogoEstandar
