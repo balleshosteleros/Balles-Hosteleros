@@ -15,6 +15,7 @@ import {
 import { listPartidas } from "@/features/cocina/actions/partidas-actions";
 import {
   getProductoConfigSection, saveProductoConfigSection,
+  getDefaultIva, saveDefaultIva,
 } from "@/features/logistica/actions/config-actions";
 import { EscandalloEditor } from "@/features/logistica/components/EscandalloEditor";
 import { MovimientosStockSection } from "@/features/logistica/components/productos/MovimientosStockSection";
@@ -642,6 +643,48 @@ function ProductoDetalle({
         </Card>
       )}
 
+      {/* Alérgenos — Compra: fuente de verdad editable. Elaboración: derivados del escandallo (readonly). */}
+      {esCompra && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Alérgenos</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-xs text-muted-foreground mb-3">
+              Marca los alérgenos UE que contiene este producto. Se propagan automáticamente a las elaboraciones y escandallos que lo usen como ingrediente.
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+              {ALERGENOS_UE_14.map((a) => {
+                const checked = alergenos.includes(a);
+                return (
+                  <label
+                    key={a}
+                    className="flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs cursor-pointer hover:bg-muted/50"
+                  >
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={(v) => {
+                        setAlergenos((prev) =>
+                          v === true
+                            ? Array.from(new Set([...prev, a]))
+                            : prev.filter((x) => x !== a),
+                        );
+                      }}
+                    />
+                    <span className="select-none">{a}</span>
+                  </label>
+                );
+              })}
+            </div>
+            {alergenos.length === 0 && (
+              <p className="mt-3 text-[11px] text-muted-foreground italic">
+                Sin alérgenos marcados. Si el producto no contiene ninguno, déjalo así.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Histórico de precios de compra (solo productos de tipo compra ya creados) */}
       {esCompra && !isNew && (
         <>
@@ -706,48 +749,6 @@ function ProductoDetalle({
             setEstiloImagenUrl(u);
           }}
         />
-      )}
-
-      {/* Alérgenos — Compra: fuente de verdad editable. Elaboración: derivados del escandallo (readonly). */}
-      {esCompra && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Alérgenos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground mb-3">
-              Marca los alérgenos UE que contiene este producto. Se propagan automáticamente a las elaboraciones y escandallos que lo usen como ingrediente.
-            </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-              {ALERGENOS_UE_14.map((a) => {
-                const checked = alergenos.includes(a);
-                return (
-                  <label
-                    key={a}
-                    className="flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs cursor-pointer hover:bg-muted/50"
-                  >
-                    <Checkbox
-                      checked={checked}
-                      onCheckedChange={(v) => {
-                        setAlergenos((prev) =>
-                          v === true
-                            ? Array.from(new Set([...prev, a]))
-                            : prev.filter((x) => x !== a),
-                        );
-                      }}
-                    />
-                    <span className="select-none">{a}</span>
-                  </label>
-                );
-              })}
-            </div>
-            {alergenos.length === 0 && (
-              <p className="mt-3 text-[11px] text-muted-foreground italic">
-                Sin alérgenos marcados. Si el producto no contiene ninguno, déjalo así.
-              </p>
-            )}
-          </CardContent>
-        </Card>
       )}
 
       {esElaboracion && !isNew && (
