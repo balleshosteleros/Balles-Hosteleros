@@ -37,12 +37,12 @@ cross join (values
   -- Sólidos / secos
   ('Bolsa',1),('Caja',2),('Saco',3),('Malla',4),('Paquete',5),('Estuche',6),('Pack',7),
   -- Líquidos
-  ('Botella',8),('Garrafa',9),('Bidón',10),('Brick',11),('Bag-in-box',12),('Damajuana',13),('Barril',14),
+  ('Botella',8),('Garrafa',9),('Bidón',10),('Brick',11),('Damajuana',12),('Barril',13),
   -- Conservas / cierre hermético
-  ('Lata',15),('Bote',16),('Frasco',17),('Tarro',18),
+  ('Lata',14),('Bote',15),('Frasco',16),('Tarro',17),
   -- Fresco / porcionado
-  ('Bandeja',19),('Barqueta',20),('Tarrina',21),('Cubeta',22),
+  ('Bandeja',18),('Tarrina',19),('Cubeta',20),
   -- Otros formatos de transporte
-  ('Cubo',23),('Cuñete',24),('Spray',25),('Rollo',26),('Tubo',27),('Granel',28)
+  ('Cubo',21),('Cuñete',22),('Spray',23),('Rollo',24),('Tubo',25),('Granel',26)
 ) as x(nombre, orden)
 where not exists (select 1 from public.envases en where en.empresa_id = e.id and en.nombre = x.nombre);
