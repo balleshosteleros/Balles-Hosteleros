@@ -7,6 +7,8 @@ import { listProveedores } from "@/features/logistica/actions/proveedores-action
 import { listStock } from "@/features/logistica/actions/stock-actions";
 import { listProductos } from "@/features/logistica/actions/producto-actions";
 import { listInventarios } from "@/features/logistica/actions/inventarios-actions";
+import { getControlCompras, getProductosSinCompras } from "@/features/logistica/actions/control-compras-actions";
+import { ControlComprasPanel } from "@/features/logistica/components/ControlComprasPanel";
 
 function stockStatus(actual: number, seguridad: number): "critical" | "warning" | "ok" {
   if (actual < seguridad) return "critical";
@@ -70,12 +72,14 @@ function ModuleCard({
 
 export default async function LogisticaDashboardPage() {
   // Fetch all data in parallel
-  const [pedidosRes, proveedoresRes, stockRes, productosCompra, inventariosRes] = await Promise.all([
+  const [pedidosRes, proveedoresRes, stockRes, productosCompra, inventariosRes, controlCompras, sinComprasInit] = await Promise.all([
     listPedidos(),
     listProveedores(),
     listStock(),
     listProductos("compra"),
     listInventarios(),
+    getControlCompras(),
+    getProductosSinCompras(30),
   ]);
 
   // Pedidos stats
@@ -141,6 +145,9 @@ export default async function LogisticaDashboardPage() {
 
       {/* Ágora POS — estado de sincronización */}
       <AgoraSyncStatus />
+
+      {/* Control de compras: asociación a venta/elaboración + productos sin compras */}
+      <ControlComprasPanel control={controlCompras} sinComprasInit={sinComprasInit} />
 
       {/* Summary row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

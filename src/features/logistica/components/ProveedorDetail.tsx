@@ -7,7 +7,6 @@ import {
   DIAS_REPARTO,
   VIAS_PAGO,
   PLAZOS_PAGO,
-  FRANJAS_REPARTO,
   type Proveedor,
   type EstadoProveedor,
 } from "@/features/logistica/data/proveedores";
@@ -26,7 +25,6 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
@@ -115,32 +113,36 @@ export function ProveedorDetail({ proveedor, onBack, onSave }: Props) {
   const upd = <K extends keyof Proveedor>(key: K, val: Proveedor[K]) =>
     setForm((prev) => ({ ...prev, [key]: val }));
 
-  type RepartoScope = "generico" | "negociado";
-  const camposReparto = (scope: RepartoScope) =>
-    scope === "generico"
-      ? { dias: "diasReparto" as const, horario: "horarioReparto" as const }
-      : { dias: "diasRepartoNegociados" as const, horario: "horarioRepartoNegociado" as const };
+  // ── Reparto unificado (un solo bloque) ──────────────────────────────────────
+  // Modelo: diasRepartoNegociados = días con reparto; horarioRepartoNegociado[día] = "HH:MM-HH:MM";
+  // diaRepartoPrincipal = día principal (default de los pedidos).
+  const horaParte = (dia: string, parte: "desde" | "hasta"): string => {
+    const v = form.horarioRepartoNegociado?.[dia] ?? "";
+    const [desde, hasta] = v.split("-");
+    return parte === "desde" ? (desde ?? "") : (hasta ?? "");
+  };
 
-  const toggleDiaScope = (scope: RepartoScope, dia: string) =>
+  const toggleDiaReparto = (dia: string) =>
     setForm((prev) => {
-      const { dias, horario } = camposReparto(scope);
-      const listaActual = prev[dias] ?? [];
-      const horarioActual = prev[horario] ?? {};
-      const yaIncluido = listaActual.includes(dia);
-      const nuevosDias = yaIncluido
-        ? listaActual.filter((d) => d !== dia)
-        : [...listaActual, dia].sort(
-            (a, b) => DIAS_REPARTO.indexOf(a) - DIAS_REPARTO.indexOf(b),
-          );
-      const nuevoHorario = { ...horarioActual };
-      if (yaIncluido) delete nuevoHorario[dia];
-      return { ...prev, [dias]: nuevosDias, [horario]: nuevoHorario };
+      const lista = prev.diasRepartoNegociados ?? [];
+      const yaReparto = lista.includes(dia);
+      const nuevosDias = yaReparto
+        ? lista.filter((d) => d !== dia)
+        : [...lista, dia].sort((a, b) => DIAS_REPARTO.indexOf(a) - DIAS_REPARTO.indexOf(b));
+      const nuevoHorario = { ...(prev.horarioRepartoNegociado ?? {}) };
+      if (yaReparto) delete nuevoHorario[dia];
+      // Si quito el día principal, lo limpio.
+      const principal = yaReparto && prev.diaRepartoPrincipal === dia ? "" : prev.diaRepartoPrincipal;
+      return { ...prev, diasRepartoNegociados: nuevosDias, horarioRepartoNegociado: nuevoHorario, diaRepartoPrincipal: principal };
     });
 
-  const setHorarioDiaScope = (scope: RepartoScope, dia: string, valor: string) =>
+  const setHoraReparto = (dia: string, parte: "desde" | "hasta", valor: string) =>
     setForm((prev) => {
-      const { horario } = camposReparto(scope);
-      return { ...prev, [horario]: { ...(prev[horario] || {}), [dia]: valor } };
+      const actual = prev.horarioRepartoNegociado?.[dia] ?? "";
+      const [d0, h0] = actual.split("-");
+      const desde = parte === "desde" ? valor : (d0 ?? "");
+      const hasta = parte === "hasta" ? valor : (h0 ?? "");
+      return { ...prev, horarioRepartoNegociado: { ...(prev.horarioRepartoNegociado ?? {}), [dia]: `${desde}-${hasta}` } };
     });
 
   const persist = async (afterSave?: () => void) => {
@@ -383,105 +385,59 @@ export function ProveedorDetail({ proveedor, onBack, onSave }: Props) {
             <Truck className="h-4 w-4" /> REPARTO
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
-          {(["generico", "negociado"] as const).map((scope) => {
-            const esGenerico = scope === "generico";
-            const dias = esGenerico ? form.diasReparto : form.diasRepartoNegociados;
-            const horario = esGenerico ? form.horarioReparto : form.horarioRepartoNegociado;
-            const titulo = esGenerico
-              ? "Genérico del proveedor"
-              : "Negociado con nosotros";
-            const descripcion = esGenerico
-              ? "Días y horarios que oferta este proveedor."
-              : "Días y horarios pactados — la ficha de pedido los usará para fijar el día y la hora de entrega.";
-            return (
-              <div
-                key={scope}
-                className={
-                  esGenerico
-                    ? "space-y-3"
-                    : "rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-3"
-                }
-              >
-                <div>
-                  <h4 className="text-sm font-semibold tracking-tight">{titulo}</h4>
-                  <p className="text-xs text-muted-foreground mt-0.5">{descripcion}</p>
-                </div>
+        <CardContent className="space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Marca los días que reparte el proveedor y su horario (entre dos horas). El <span className="font-semibold">día principal</span> es el que el pedido cogerá por defecto.
+          </p>
 
-                <div>
-                  <Label className="mb-2 block text-xs uppercase tracking-wide text-muted-foreground">
-                    Días de reparto
-                  </Label>
-                  <div className="flex flex-wrap gap-3">
-                    {DIAS_REPARTO.map((d) => (
-                      <label
-                        key={d}
-                        className="flex items-center gap-1.5 text-sm cursor-pointer"
-                      >
-                        <Checkbox
-                          checked={dias.includes(d)}
-                          onCheckedChange={() => toggleDiaScope(scope, d)}
-                        />
-                        {d}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                {dias.length > 0 && (
-                  <div>
-                    <Label className="mb-2 block text-xs uppercase tracking-wide text-muted-foreground">
-                      Horario por día
-                    </Label>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {[...dias]
-                        .sort((a, b) => DIAS_REPARTO.indexOf(a) - DIAS_REPARTO.indexOf(b))
-                        .map((d) => {
-                          const valor = horario?.[d] ?? "";
-                          const esPersonalizado =
-                            valor !== "" &&
-                            !FRANJAS_REPARTO.includes(valor as typeof FRANJAS_REPARTO[number]);
-                          const valorSelect = esPersonalizado ? "Personalizado" : valor;
-                          return (
-                            <div key={d} className="space-y-1.5">
-                              <Label className="text-xs text-muted-foreground">{d}</Label>
-                              <Select
-                                value={valorSelect}
-                                onValueChange={(v) => {
-                                  if (v === "Personalizado") {
-                                    setHorarioDiaScope(scope, d, esPersonalizado ? valor : "");
-                                  } else {
-                                    setHorarioDiaScope(scope, d, v);
-                                  }
-                                }}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Seleccionar franja…" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {FRANJAS_REPARTO.map((f) => (
-                                    <SelectItem key={f} value={f}>
-                                      {f}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              {valorSelect === "Personalizado" && (
-                                <Input
-                                  value={esPersonalizado ? valor : ""}
-                                  onChange={(e) => setHorarioDiaScope(scope, d, e.target.value)}
-                                  placeholder="Ej: 09:00-13:00"
-                                />
-                              )}
-                            </div>
-                          );
-                        })}
-                    </div>
-                  </div>
+          {/* Día principal de reparto */}
+          <div className="max-w-xs">
+            <Label className="mb-1 block text-xs uppercase tracking-wide text-muted-foreground">Día principal de reparto</Label>
+            <Select value={form.diaRepartoPrincipal || ""} onValueChange={(v) => upd("diaRepartoPrincipal", v)}>
+              <SelectTrigger><SelectValue placeholder="Seleccionar día principal…" /></SelectTrigger>
+              <SelectContent>
+                {(form.diasRepartoNegociados ?? []).length === 0 ? (
+                  <div className="px-2 py-1.5 text-xs text-muted-foreground">Marca antes algún día de reparto</div>
+                ) : (
+                  [...form.diasRepartoNegociados]
+                    .sort((a, b) => DIAS_REPARTO.indexOf(a) - DIAS_REPARTO.indexOf(b))
+                    .map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)
                 )}
-              </div>
-            );
-          })}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Los 7 días */}
+          <div className="space-y-2">
+            {DIAS_REPARTO.map((d) => {
+              const esReparto = (form.diasRepartoNegociados ?? []).includes(d);
+              const esPrincipal = form.diaRepartoPrincipal === d;
+              return (
+                <div key={d} className={`flex flex-wrap items-center gap-3 rounded-md border px-3 py-2 ${esReparto ? "bg-primary/5 border-primary/20" : "bg-muted/30"}`}>
+                  <span className="w-24 text-sm font-medium">{d}</span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={esReparto ? "default" : "outline"}
+                    className="h-7 text-xs"
+                    onClick={() => toggleDiaReparto(d)}
+                  >
+                    {esReparto ? "Reparto" : "No reparto"}
+                  </Button>
+                  {esReparto ? (
+                    <div className="flex items-center gap-1.5">
+                      <Input type="time" className="h-8 w-28" value={horaParte(d, "desde")} onChange={(e) => setHoraReparto(d, "desde", e.target.value)} />
+                      <span className="text-xs text-muted-foreground">a</span>
+                      <Input type="time" className="h-8 w-28" value={horaParte(d, "hasta")} onChange={(e) => setHoraReparto(d, "hasta", e.target.value)} />
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground italic">El proveedor no reparte este día</span>
+                  )}
+                  {esPrincipal && <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide text-primary">Principal</span>}
+                </div>
+              );
+            })}
+          </div>
         </CardContent>
       </Card>
 

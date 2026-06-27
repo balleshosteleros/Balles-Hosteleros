@@ -84,7 +84,7 @@ export interface ProveedorRow {
   horario_reparto: Record<string, string> | null;
   dias_reparto_negociados: string[];
   horario_reparto_negociado: Record<string, string> | null;
-  dia_reparto_negociado: string | null;
+  dia_reparto_principal: string | null;
   via_pago: string | null;
   via_pago_negociada: string | null;
   plazo_pago: string | null;

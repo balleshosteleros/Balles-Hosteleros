@@ -5,11 +5,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { ALMACENES, type Pedido, type LineaPedido, calcLineaTotal } from "@/features/logistica/data/pedidos";
+import { ALMACENES, type Pedido, type LineaPedido, type RepartoProveedor, calcLineaTotal, evaluarReparto, sugerirEntregaDesdeReparto, describirReparto, formatoHoraReparto } from "@/features/logistica/data/pedidos";
 import { listProveedores } from "@/features/logistica/actions/proveedores-actions";
 import { listProductos } from "@/features/logistica/actions/producto-actions";
 import type { Producto } from "@/features/logistica/data/productos";
-import { Trash2, Plus, Check, ChevronsUpDown, Search } from "lucide-react";
+import { Trash2, Plus, Check, ChevronsUpDown, Search, AlertTriangle } from "lucide-react";
+
+/** Reparto vigente de un proveedor: negociado con nosotros con prioridad; si no, el genérico. */
+type ProveedorOpcion = { id: string; nombre: string; reparto: RepartoProveedor };
+function repartoDeRow(row: Record<string, unknown>): RepartoProveedor {
+  const diasNeg = (row.dias_reparto_negociados as string[] | null) ?? [];
+  const dias = diasNeg.length > 0 ? diasNeg : ((row.dias_reparto as string[] | null) ?? []);
+  const horario = (diasNeg.length > 0
+    ? (row.horario_reparto_negociado as Record<string, string> | null)
+    : (row.horario_reparto as Record<string, string> | null)) ?? {};
+  return { dias, horario, principal: (row.dia_reparto_principal as string | null) ?? null };
+}
 
 interface Props {
   open: boolean;
@@ -173,17 +184,21 @@ export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNom
   const [saveError, setSaveError] = useState<string | null>(null);
   const isEdit = !!item;
   const almacenes = ALMACENES[empresaId] || ALMACENES.habana || ["COCINA", "BARRA"];
-  const [proveedoresList, setProveedoresList] = useState<string[]>([]);
+  const [proveedores, setProveedores] = useState<ProveedorOpcion[]>([]);
   const [productosList, setProductosList] = useState<Producto[]>([]);
 
   useEffect(() => {
     listProveedores().then((res) => {
       if (res.ok) {
-        const names = (res.data as unknown as Array<Record<string, unknown>>)
-          .map((r) => (r.nombre_comercial as string) ?? (r.nombre as string) ?? "")
-          .filter((n) => !!n)
-          .sort();
-        setProveedoresList(names);
+        const opts = (res.data as unknown as Array<Record<string, unknown>>)
+          .map((r) => ({
+            id: (r.id as string) ?? "",
+            nombre: ((r.nombre_comercial as string) ?? (r.nombre as string) ?? ""),
+            reparto: repartoDeRow(r),
+          }))
+          .filter((o) => !!o.nombre)
+          .sort((a, b) => a.nombre.localeCompare(b.nombre));
+        setProveedores(opts);
       }
     });
     listProductos().then((list) => {
@@ -202,12 +217,37 @@ export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNom
 
   const [form, setForm] = useState(() => item ? { ...item } : {
     id: `ped-${Date.now()}`, numero: `PED-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900) + 100)}`,
-    empresaId, empresa: empresaNombre, proveedor: "",
+    empresaId, empresa: empresaNombre, proveedor: "", proveedorId: "",
     almacen: almacenes[0] ?? "", fecha: new Date().toISOString().slice(0, 10),
-    fechaEntrega: "", estado: "Borrador" as const,
+    fechaEntrega: "", horaEntrega: "", horaEntregaHasta: "", estado: "Borrador" as const,
     lineas: [emptyLinea()], dtoPct: 0, dtoEur: 0, notas: "",
     albaranId: null, creador: "Usuario actual", ultimaActualizacion: new Date().toISOString().slice(0, 10),
   });
+
+  // Proveedor seleccionado (para su reparto) + evaluación día/hora vs. lo estipulado.
+  const proveedorSel = useMemo(
+    () => proveedores.find((p) => p.nombre === form.proveedor) ?? null,
+    [proveedores, form.proveedor],
+  );
+  const evalReparto = useMemo(
+    () => evaluarReparto(form.fechaEntrega, form.horaEntrega, form.horaEntregaHasta, proveedorSel?.reparto),
+    [form.fechaEntrega, form.horaEntrega, form.horaEntregaHasta, proveedorSel],
+  );
+
+  /** Al elegir proveedor: fija id y auto-rellena día + rango de hora desde su reparto (si no hay valores ya). */
+  const onSelectProveedor = (nombre: string) => {
+    const prov = proveedores.find((p) => p.nombre === nombre) ?? null;
+    setForm((p) => {
+      const next = { ...p, proveedor: nombre, proveedorId: prov?.id ?? "" };
+      const sug = prov ? sugerirEntregaDesdeReparto(prov.reparto, p.fecha) : null;
+      // Solo auto-rellena si el usuario no ha fijado ya una fecha/hora manualmente.
+      if (sug && !p.fechaEntrega) next.fechaEntrega = sug.fecha;
+      if (sug && !p.horaEntrega) next.horaEntrega = sug.horaDesde;
+      if (sug && !p.horaEntregaHasta) next.horaEntregaHasta = sug.horaHasta;
+      return next;
+    });
+    setSaveError(null);
+  };
 
   const setField = (f: string, v: string | number) => setForm((p) => ({ ...p, [f]: v }));
 
@@ -283,11 +323,11 @@ export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNom
             <Label className="text-xs font-semibold">
               Proveedor <span className="text-destructive">*</span>
             </Label>
-            <Select value={form.proveedor} onValueChange={(v) => { setField("proveedor", v); setSaveError(null); }}>
+            <Select value={form.proveedor} onValueChange={onSelectProveedor}>
               <SelectTrigger className={`uppercase ${!form.proveedor ? "border-destructive" : ""}`}>
                 <SelectValue placeholder="Seleccionar proveedor..." />
               </SelectTrigger>
-              <SelectContent>{proveedoresList.map((p) => <SelectItem key={p} value={p} className="uppercase">{p}</SelectItem>)}</SelectContent>
+              <SelectContent>{proveedores.map((p) => <SelectItem key={p.id || p.nombre} value={p.nombre} className="uppercase">{p.nombre}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div><Label className="text-xs font-semibold">Almacén</Label>
@@ -297,8 +337,32 @@ export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNom
             </Select>
           </div>
           <div><Label className="text-xs font-semibold">Fecha</Label><Input type="date" value={form.fecha} onChange={(e) => setField("fecha", e.target.value)} /></div>
-          <div><Label className="text-xs font-semibold">Fecha Entrega</Label><Input type="date" value={form.fechaEntrega} onChange={(e) => setField("fechaEntrega", e.target.value)} /></div>
+          <div><Label className="text-xs font-semibold">Día de reparto (entrega)</Label><Input type="date" value={form.fechaEntrega} onChange={(e) => setField("fechaEntrega", e.target.value)} /></div>
+          <div>
+            <Label className="text-xs font-semibold">Hora de reparto (entre dos horas)</Label>
+            <div className="flex items-center gap-1.5">
+              <Input type="time" value={form.horaEntrega ?? ""} onChange={(e) => setField("horaEntrega", e.target.value)} />
+              <span className="text-muted-foreground text-xs">a</span>
+              <Input type="time" value={form.horaEntregaHasta ?? ""} onChange={(e) => setField("horaEntregaHasta", e.target.value)} />
+            </div>
+          </div>
         </div>
+
+        {/* Aviso: día/hora de entrega fuera del reparto estipulado por el proveedor */}
+        {proveedorSel && (evalReparto.fueraDia || evalReparto.fueraHora) && (
+          <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              <p className="font-semibold">Reparto fuera de lo estipulado con el proveedor</p>
+              <p>
+                {evalReparto.fueraDia && <>Has marcado entrega en <span className="font-semibold">{evalReparto.diaSemana}</span>. </>}
+                {evalReparto.fueraHora && <>El horario <span className="font-semibold">{formatoHoraReparto(form.horaEntrega, form.horaEntregaHasta)}</span> está fuera de su franja. </>}
+                El proveedor reparte: <span className="font-semibold">{describirReparto(proveedorSel.reparto)}</span>.
+              </p>
+              <p className="opacity-80">Puedes guardar igualmente; quedará marcado como aviso en el pedido y en el PDF.</p>
+            </div>
+          </div>
+        )}
 
         {/* Lineas */}
         <div className="mt-4">

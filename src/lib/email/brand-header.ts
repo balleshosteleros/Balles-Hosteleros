@@ -50,9 +50,9 @@ export function brandHeaderHtml(brand: EmpresaBrand): string {
   const alt = escapeAttr(brand.nombre || "");
   // Isotipo → icono cuadrado contenido; logo (fallback) → algo más ancho.
   const sizeStyle = isIsotipo
-    ? "max-height:60px;max-width:60px;"
-    : "max-height:52px;max-width:200px;";
-  return `<div style="text-align:center;padding:24px 24px 8px 24px;"><img src="${escapeAttr(src)}" alt="${alt}" style="${sizeStyle}height:auto;width:auto;display:inline-block;border:0;outline:none;text-decoration:none;" /></div>`;
+    ? "max-height:110px;max-width:110px;"
+    : "max-height:88px;max-width:300px;";
+  return `<div style="text-align:center;padding:32px 24px 12px 24px;"><img src="${escapeAttr(src)}" alt="${alt}" style="${sizeStyle}height:auto;width:auto;display:inline-block;border:0;outline:none;text-decoration:none;" /></div>`;
 }
 
 /** Lee marca de la empresa (nombre + isotipo + logo). Nunca lanza. */

@@ -55,7 +55,26 @@ export async function getPedido(id: string) {
       .order("orden", { ascending: true });
     if (lineasErr) throw lineasErr;
 
-    return { ok: true, data: { ...pedido, lineas: lineas ?? [] } };
+    // Email real + reparto vigente del proveedor (el negociado con nosotros tiene
+    // prioridad; si está vacío, cae al genérico que oferta el proveedor).
+    let proveedor_email: string | null = null;
+    let proveedor_reparto: { dias: string[]; horario: Record<string, string>; principal: string | null } | null = null;
+    if (pedido.proveedor_id) {
+      const { data: prov } = await supabase
+        .from("proveedores")
+        .select("email_pedidos, email_principal, dias_reparto, horario_reparto, dias_reparto_negociados, horario_reparto_negociado, dia_reparto_principal")
+        .eq("id", pedido.proveedor_id)
+        .single();
+      proveedor_email = (prov?.email_pedidos?.trim() || prov?.email_principal?.trim() || null);
+      const diasNeg = (prov?.dias_reparto_negociados as string[] | null) ?? [];
+      const dias = diasNeg.length > 0 ? diasNeg : ((prov?.dias_reparto as string[] | null) ?? []);
+      const horario = (diasNeg.length > 0
+        ? (prov?.horario_reparto_negociado as Record<string, string> | null)
+        : (prov?.horario_reparto as Record<string, string> | null)) ?? {};
+      proveedor_reparto = { dias, horario, principal: (prov?.dia_reparto_principal as string | null) ?? null };
+    }
+
+    return { ok: true, data: { ...pedido, lineas: lineas ?? [], proveedor_email, proveedor_reparto } };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[pedidos] getPedido:", msg);
@@ -68,6 +87,8 @@ export async function createPedido(input: {
   proveedorNombre: string;
   numero?: string;
   fechaEntrega?: string;
+  horaEntrega?: string;
+  horaEntregaHasta?: string;
   notas?: string;
   lineas: {
     productoId: string;
@@ -116,6 +137,8 @@ export async function createPedido(input: {
         numero: input.numero ?? null,
         fecha: new Date().toISOString().split("T")[0],
         fecha_entrega: input.fechaEntrega ?? null,
+        hora_entrega: input.horaEntrega ?? null,
+        hora_entrega_hasta: input.horaEntregaHasta ?? null,
         notas: input.notas ?? "",
         total,
         created_by: user?.id ?? null,

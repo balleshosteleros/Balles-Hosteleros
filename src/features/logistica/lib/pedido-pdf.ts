@@ -19,6 +19,18 @@ export type DatosPedidoPDF = {
   numero?: string | null;
   fecha: string;
   fechaEntrega?: string | null;
+  horaEntrega?: string | null;
+  horaEntregaHasta?: string | null;
+  /** Día de la semana de la fecha de entrega (es). */
+  diaSemanaReparto?: string | null;
+  /** Franja que el proveedor reparte ese día. */
+  franjaProveedor?: string | null;
+  /** Días que el proveedor reparte (para el aviso). */
+  diasProveedor?: string[];
+  /** Descripción legible del reparto del proveedor: "Viernes 09:00-15:00". */
+  repartoProveedorTexto?: string | null;
+  repartoFueraDia?: boolean;
+  repartoFueraHora?: boolean;
   notas?: string | null;
   lineas: LineaPedidoPDF[];
   total: number;
@@ -53,9 +65,58 @@ export async function generarPedidoPDF(d: DatosPedidoPDF): Promise<Uint8Array> {
   y -= 14;
   page.drawText(`Para: ${d.proveedorNombre}${d.proveedorEmail ? ` · ${d.proveedorEmail}` : ""}`, { x: margin, y, size: 10, font, color: texto });
   y -= 14;
-  const fechas = `Fecha: ${d.fecha}${d.fechaEntrega ? `   ·   Entrega prevista: ${d.fechaEntrega}` : ""}`;
+  const fechas = `Fecha: ${d.fecha}`;
   page.drawText(fechas, { x: margin, y, size: 10, font, color: label });
-  y -= 20;
+  y -= 14;
+  // Día y hora de reparto
+  if (d.fechaEntrega || d.horaEntrega) {
+    const dia = d.fechaEntrega
+      ? `${d.fechaEntrega}${d.diaSemanaReparto ? ` (${d.diaSemanaReparto})` : ""}`
+      : "";
+    const horaTxt = d.horaEntrega && d.horaEntregaHasta
+      ? `${d.horaEntrega} - ${d.horaEntregaHasta}`
+      : (d.horaEntrega || d.horaEntregaHasta || "");
+    const reparto = `Reparto: ${dia}${horaTxt ? `   ·   Hora: ${horaTxt}` : ""}`.trim();
+    page.drawText(reparto, { x: margin, y, size: 10, font, color: label });
+    y -= 20;
+  } else {
+    y -= 6;
+  }
+
+  // Recuadro de PELIGRO: reparto fuera del día/horario estipulado por el proveedor.
+  if (d.repartoFueraDia || d.repartoFueraHora) {
+    const peligro = rgb(0.86, 0.15, 0.15);
+    const peligroBg = rgb(0.99, 0.93, 0.93);
+    const lineasAviso: string[] = [];
+    if (d.repartoFueraDia) {
+      lineasAviso.push(
+        `Entrega marcada en ${d.diaSemanaReparto ?? "este día"}, fuera de los días de reparto del proveedor` +
+        (d.diasProveedor && d.diasProveedor.length ? ` (${d.diasProveedor.join(", ")}).` : "."),
+      );
+    }
+    if (d.repartoFueraHora) {
+      const horaTxt = d.horaEntrega && d.horaEntregaHasta ? `${d.horaEntrega} - ${d.horaEntregaHasta}` : (d.horaEntrega || d.horaEntregaHasta || "");
+      lineasAviso.push(
+        `Horario ${horaTxt} fuera de la franja de reparto` +
+        (d.franjaProveedor ? ` (${d.franjaProveedor}).` : "."),
+      );
+    }
+    if (d.repartoProveedorTexto && d.repartoProveedorTexto !== "—") {
+      lineasAviso.push(`El proveedor reparte: ${d.repartoProveedorTexto}.`);
+    }
+    const wrapped = lineasAviso.flatMap((t) => wrap(t, font, 9, right - margin - 28));
+    const boxH = 22 + wrapped.length * 12 + 6;
+    page.drawRectangle({ x: margin, y: y - boxH + 14, width: right - margin, height: boxH, color: peligroBg, borderColor: peligro, borderWidth: 1.2 });
+    let yy = y;
+    page.drawText("AVISO: REPARTO FUERA DE LO ESTIPULADO", { x: margin + 12, y: yy, size: 9, font: bold, color: peligro });
+    yy -= 14;
+    for (const ln of wrapped) {
+      page.drawText(ln, { x: margin + 12, y: yy, size: 9, font, color: peligro });
+      yy -= 12;
+    }
+    y = y - boxH + 2;
+  }
+
   page.drawLine({ start: { x: margin, y }, end: { x: right, y }, thickness: 0.5, color: rule });
   y -= 18;
 

@@ -71,8 +71,8 @@ export interface Proveedor {
   // Reparto negociado con nosotros (lo que la ficha de pedido usará para fijar día/hora)
   diasRepartoNegociados: string[];
   horarioRepartoNegociado: Record<string, string>;
-  /** @deprecated Sustituido por diasRepartoNegociados + horarioRepartoNegociado. Se mantiene solo para lectura de registros antiguos. */
-  diaRepartoNegociado: string;
+  /** Día principal de reparto: el que los pedidos cogen por defecto. */
+  diaRepartoPrincipal: string;
   // Legacy free-text (mantenidos para compatibilidad de importación / lectura)
   condicionesPago: string;
   plazo: string;

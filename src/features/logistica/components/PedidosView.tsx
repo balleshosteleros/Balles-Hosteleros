@@ -92,6 +92,11 @@ function mapDbToPedido(row: Record<string, unknown>): Pedido {
     ultimaActualizacion: (row.updated_at as string) ?? "",
     enviadoAt: null,
     enviadoEmail: null,
+    proveedorEmail: (row.proveedor_email as string | null) ?? null,
+    proveedorId: (row.proveedor_id as string | null) ?? null,
+    horaEntrega: (row.hora_entrega as string | null) ?? null,
+    horaEntregaHasta: (row.hora_entrega_hasta as string | null) ?? null,
+    proveedorReparto: (row.proveedor_reparto as { dias: string[]; horario: Record<string, string>; principal?: string | null } | null) ?? null,
   };
 }
 
@@ -235,8 +240,11 @@ export function PedidosView() {
     } else {
       const res = await createPedido({
         proveedorNombre: item.proveedor,
+        proveedorId: item.proveedorId || undefined,
         numero: item.numero || undefined,
         fechaEntrega: item.fechaEntrega || undefined,
+        horaEntrega: item.horaEntrega || undefined,
+        horaEntregaHasta: item.horaEntregaHasta || undefined,
         notas: item.notas || undefined,
         lineas: item.lineas.map(l => ({
           productoId: l.productoId,
@@ -443,7 +451,6 @@ export function PedidosView() {
   // ── Main list view ───
   const columnasDef: ToolbarColumna[] = [
     { campo: "idSecuencial", label: "ID", bloqueada: true },
-    { campo: "numero", label: "Nº", bloqueada: true },
     { campo: "fecha", label: "Fecha" },
     { campo: "fechaEntrega", label: "F. Entrega" },
     { campo: "almacen", label: "Almacén" },

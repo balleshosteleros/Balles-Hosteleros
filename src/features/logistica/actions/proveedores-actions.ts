@@ -152,7 +152,7 @@ export async function createProveedor(input: ProveedorImport) {
       horario_reparto: input.horarioReparto ?? {},
       dias_reparto_negociados: input.diasRepartoNegociados ?? [],
       horario_reparto_negociado: input.horarioRepartoNegociado ?? {},
-      dia_reparto_negociado: input.diaRepartoNegociado ?? null,
+      dia_reparto_principal: input.diaRepartoPrincipal ?? null,
       via_pago: input.viaPago ?? null,
       via_pago_negociada: input.viaPagoNegociada ?? null,
       plazo_pago: input.plazoPago ?? null,
@@ -221,7 +221,7 @@ export async function updateProveedor(id: string, input: Partial<ProveedorImport
     if (input.horarioReparto !== undefined) updates.horario_reparto = input.horarioReparto;
     if (input.diasRepartoNegociados !== undefined) updates.dias_reparto_negociados = input.diasRepartoNegociados;
     if (input.horarioRepartoNegociado !== undefined) updates.horario_reparto_negociado = input.horarioRepartoNegociado;
-    if (input.diaRepartoNegociado !== undefined) updates.dia_reparto_negociado = input.diaRepartoNegociado;
+    if (input.diaRepartoPrincipal !== undefined) updates.dia_reparto_principal = input.diaRepartoPrincipal;
     if (input.viaPago !== undefined) updates.via_pago = input.viaPago;
     if (input.viaPagoNegociada !== undefined) updates.via_pago_negociada = input.viaPagoNegociada;
     if (input.plazoPago !== undefined) updates.plazo_pago = input.plazoPago;
@@ -339,7 +339,7 @@ export async function bulkImportProveedores(proveedores: ProveedorImport[]) {
         horario_reparto: p.horarioReparto ?? {},
         dias_reparto_negociados: p.diasRepartoNegociados ?? [],
         horario_reparto_negociado: p.horarioRepartoNegociado ?? {},
-        dia_reparto_negociado: p.diaRepartoNegociado ?? null,
+        dia_reparto_principal: p.diaRepartoPrincipal ?? null,
         via_pago: p.viaPago ?? null,
         via_pago_negociada: p.viaPagoNegociada ?? null,
         plazo_pago: p.plazoPago ?? null,

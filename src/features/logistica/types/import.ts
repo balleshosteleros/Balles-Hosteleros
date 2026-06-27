@@ -31,7 +31,7 @@ export interface ProveedorImport {
   horarioReparto?: Record<string, string> | null;
   diasRepartoNegociados?: string[];
   horarioRepartoNegociado?: Record<string, string> | null;
-  diaRepartoNegociado?: string | null;
+  diaRepartoPrincipal?: string | null;
   viaPago?: string | null;
   viaPagoNegociada?: string | null;
   plazoPago?: string | null;

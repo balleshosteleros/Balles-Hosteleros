@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { EstadoPedidoBadge } from "./BadgesPedido";
-import { ESTADOS_PEDIDO, PROVEEDOR_EMAILS, calcularTotalesLineas, type Pedido, type Albaran } from "@/features/logistica/data/pedidos";
+import { ESTADOS_PEDIDO, calcularTotalesLineas, evaluarReparto, describirReparto, formatoHoraReparto, type Pedido, type Albaran } from "@/features/logistica/data/pedidos";
 import { ArrowLeft, FileText, MessageCircle, CheckCircle2, AlertTriangle, PackageCheck, Mail } from "lucide-react";
 
 interface Props {
@@ -21,7 +21,10 @@ export function DetallePedido({ pedido, albaran, onBack, onUpdateEstado, onConfi
   const totales = calcularTotalesLineas(pedido.lineas);
   const canConfirm = pedido.estado === "Borrador" || pedido.estado === "Pendiente";
   const canSend = pedido.estado !== "Borrador" && pedido.estado !== "Cancelado" && !pedido.enviadoAt;
-  const proveedorEmail = PROVEEDOR_EMAILS[pedido.proveedor] || "";
+  const proveedorEmail = pedido.proveedorEmail || "";
+  const reparto = evaluarReparto(pedido.fechaEntrega, pedido.horaEntrega, pedido.horaEntregaHasta, pedido.proveedorReparto);
+  const repartoFuera = reparto.fueraDia || reparto.fueraHora;
+  const horaRepartoTxt = formatoHoraReparto(pedido.horaEntrega, pedido.horaEntregaHasta);
 
   return (
     <div className="space-y-5">
@@ -41,11 +44,21 @@ export function DetallePedido({ pedido, albaran, onBack, onUpdateEstado, onConfi
         )}
       </div>
 
+      {/* Aviso discreto: reparto fuera del día/horario estipulado por el proveedor */}
+      {repartoFuera && (
+        <div className="flex items-start gap-1.5 rounded-md border border-amber-300/70 bg-amber-50/60 px-2.5 py-1.5 text-xs text-amber-700 dark:border-amber-800/60 dark:bg-amber-950/20 dark:text-amber-400">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          <span>
+            Reparto fuera de lo estipulado. El proveedor reparte: <span className="font-semibold">{describirReparto(pedido.proveedorReparto)}</span>.
+          </span>
+        </div>
+      )}
+
       {/* Header card */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <CardTitle className="text-xl font-black tracking-tight">{pedido.numero}</CardTitle>
+            <CardTitle className="text-xl font-black tracking-tight">{pedido.numeroSecuencial != null ? `PED-${pedido.numeroSecuencial}` : pedido.numero}</CardTitle>
             <EstadoPedidoBadge value={pedido.estado} />
           </div>
         </CardHeader>
@@ -55,7 +68,18 @@ export function DetallePedido({ pedido, albaran, onBack, onUpdateEstado, onConfi
             <div><span className="text-muted-foreground text-xs block">Email proveedor</span><span className="font-medium">{proveedorEmail || <span className="text-destructive">Sin email configurado</span>}</span></div>
             <div><span className="text-muted-foreground text-xs block">Almacén</span><span className="font-medium">{pedido.almacen}</span></div>
             <div><span className="text-muted-foreground text-xs block">Fecha</span><span className="font-medium">{pedido.fecha}</span></div>
-            <div><span className="text-muted-foreground text-xs block">Fecha Entrega</span><span className="font-medium">{pedido.fechaEntrega || "—"}</span></div>
+            <div>
+              <span className="text-muted-foreground text-xs block">Día de reparto</span>
+              <span className={`font-medium ${reparto.fueraDia ? "text-red-600 dark:text-red-400" : ""}`}>
+                {pedido.fechaEntrega ? `${pedido.fechaEntrega}${reparto.diaSemana ? ` · ${reparto.diaSemana}` : ""}` : "—"}
+              </span>
+            </div>
+            <div>
+              <span className="text-muted-foreground text-xs block">Hora de reparto</span>
+              <span className={`font-medium ${reparto.fueraHora ? "text-red-600 dark:text-red-400" : ""}`}>
+                {horaRepartoTxt || "—"}
+              </span>
+            </div>
             <div><span className="text-muted-foreground text-xs block">Creador</span><span className="font-medium">{pedido.creador}</span></div>
             <div>
               <span className="text-muted-foreground text-xs block">Estado</span>

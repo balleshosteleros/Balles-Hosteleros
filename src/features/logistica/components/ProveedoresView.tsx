@@ -100,7 +100,7 @@ function mapDbToProveedor(row: Record<string, unknown>): Proveedor {
     horarioRepartoNegociado: (row.horario_reparto_negociado && typeof row.horario_reparto_negociado === "object" && !Array.isArray(row.horario_reparto_negociado))
       ? (row.horario_reparto_negociado as Record<string, string>)
       : {},
-    diaRepartoNegociado: (row.dia_reparto_negociado as string) ?? "",
+    diaRepartoPrincipal: (row.dia_reparto_principal as string) ?? "",
     viaPago: (row.via_pago as string) ?? "",
     viaPagoNegociada: (row.via_pago_negociada as string) ?? "",
     plazoPago: (row.plazo_pago as string) ?? "",
@@ -270,7 +270,7 @@ export function ProveedoresView() {
       horarioReparto: item.horarioReparto,
       diasRepartoNegociados: item.diasRepartoNegociados,
       horarioRepartoNegociado: item.horarioRepartoNegociado,
-      diaRepartoNegociado: item.diaRepartoNegociado,
+      diaRepartoPrincipal: item.diaRepartoPrincipal,
       viaPago: item.viaPago,
       viaPagoNegociada: item.viaPagoNegociada,
       plazoPago: item.plazoPago,
@@ -585,7 +585,11 @@ function ProveedorModal({ open, onClose, onSave, item, empresaId, categorias }: 
     personaContacto: "", telefonoPrincipal: "", telefonoSecundario: "", telefonoComercial: "",
     emailPrincipal: "", emailComercial: "", emailPedidos: "", emailContabilidad: "", web: "",
     direccion: "", ciudad: "", provincia: "", pais: "España", codigoPostal: "",
-    diasReparto: [], horarioReparto: {}, diasRepartoNegociados: [], horarioRepartoNegociado: {}, diaRepartoNegociado: "",
+    // Default: reparto L-V 09:00-15:00, principal viernes; sábado y domingo NO reparto (cambiable).
+    diasReparto: [], horarioReparto: {},
+    diasRepartoNegociados: ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"],
+    horarioRepartoNegociado: { Lunes: "09:00-15:00", Martes: "09:00-15:00", "Miércoles": "09:00-15:00", Jueves: "09:00-15:00", Viernes: "09:00-15:00" },
+    diaRepartoPrincipal: "Viernes",
     viaPago: "", viaPagoNegociada: "", plazoPago: "", plazoPagoNegociado: "",
     condicionesPago: "", plazo: "", observacionesLogisticas: "", comentariosInternos: "",
     creador: "Usuario", createdAt: new Date().toISOString().slice(0, 10), ultimaActualizacion: new Date().toISOString().slice(0, 10),
@@ -760,9 +764,8 @@ function ProveedorModal({ open, onClose, onSave, item, empresaId, categorias }: 
                     </label>
                   ))}
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">El horario por día se configura desde la ficha del proveedor.</p>
+                <p className="text-xs text-muted-foreground mt-2">El día principal, el horario por día y los días de reparto se configuran en la ficha del proveedor.</p>
               </div>
-              <div><Label>Día / horario negociado</Label><Input value={form.diaRepartoNegociado} onChange={(e) => upd("diaRepartoNegociado", e.target.value)} placeholder="Ej: bajo demanda con 24h, según pedido mínimo…" /></div>
               <div><Label>Observaciones logísticas</Label><Textarea value={form.observacionesLogisticas} onChange={(e) => upd("observacionesLogisticas", e.target.value)} rows={2} /></div>
               <div><Label>Comentarios internos</Label><Textarea value={form.comentariosInternos} onChange={(e) => upd("comentariosInternos", e.target.value)} rows={2} /></div>
             </div>

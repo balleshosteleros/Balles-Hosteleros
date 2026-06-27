@@ -8,7 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { EstadoAlbaranBadge } from "./BadgesPedido";
 import { AlbaranUploadModal } from "./AlbaranUploadModal";
 import { ComparativaAlbaran } from "./ComparativaAlbaran";
-import { ESTADOS_ALBARAN, calcularTotalesLineas, type Albaran, type Pedido, type AnalisisAlbaran, type DocumentoAdjunto } from "@/features/logistica/data/pedidos";
+import { ESTADOS_ALBARAN, calcularTotalesLineas, diaSemanaDeFechaISO, formatoHoraReparto, type Albaran, type Pedido, type AnalisisAlbaran, type DocumentoAdjunto } from "@/features/logistica/data/pedidos";
 import { updateAlbaranNumeroProveedor } from "@/features/logistica/actions/albaranes-actions";
 import { ArrowLeft, FileText, Send, Paperclip, CheckCircle2, Loader2, AlertTriangle, FileWarning, Eye, Receipt } from "lucide-react";
 import { toast } from "sonner";
@@ -26,6 +26,10 @@ interface Props {
 
 export function DetalleAlbaran({ albaran, pedidoOrigen, onBack, onUpdateEstado, onConfirmar, onGenerarFactura }: Props) {
   const totales = calcularTotalesLineas(albaran.lineas);
+  const diaReparto = pedidoOrigen?.fechaEntrega
+    ? `${pedidoOrigen.fechaEntrega}${diaSemanaDeFechaISO(pedidoOrigen.fechaEntrega) ? ` · ${diaSemanaDeFechaISO(pedidoOrigen.fechaEntrega)}` : ""}`
+    : "";
+  const horaReparto = formatoHoraReparto(pedidoOrigen?.horaEntrega, pedidoOrigen?.horaEntregaHasta);
   const canConfirm = albaran.estado === "Pendiente";
   const canFacturar = albaran.estado === "Confirmado" || albaran.estado === "Recibido";
 
@@ -219,6 +223,8 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, onBack, onUpdateEstado, 
             </div>
             <div><span className="text-muted-foreground text-xs block">Almacén</span><span className="font-medium">{albaran.almacen}</span></div>
             <div><span className="text-muted-foreground text-xs block">Fecha</span><span className="font-medium">{albaran.fecha}</span></div>
+            {diaReparto && <div><span className="text-muted-foreground text-xs block">Día de reparto</span><span className="font-medium">{diaReparto}</span></div>}
+            {horaReparto && <div><span className="text-muted-foreground text-xs block">Hora de reparto</span><span className="font-medium">{horaReparto}</span></div>}
             <div><span className="text-muted-foreground text-xs block">Pedido origen</span><span className="font-medium">{albaran.pedidoId}</span></div>
             <div><span className="text-muted-foreground text-xs block">Creador</span><span className="font-medium">{albaran.creador}</span></div>
             <div>
