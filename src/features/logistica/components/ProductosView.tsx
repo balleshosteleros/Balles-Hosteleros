@@ -1785,6 +1785,17 @@ export function ProductosView() {
 
   const triggerReload = () => setReloadKey((k) => k + 1);
 
+  // Al cambiar de tipo (Compra/Elaboración/Venta) se resetean los filtros: las
+  // categorías/estados son propios de cada tipo, así que arrastrar un filtro de
+  // una pestaña a otra deja la tabla vacía ("Ningún producto coincide").
+  const cambiarTipo = (tipo: TipoProducto) => {
+    setTipoActivo(tipo);
+    setShowConfig(false);
+    setBusqueda("");
+    setFiltros([]);
+    setOrden(null);
+  };
+
   if (detalle || nuevoModo) {
     return (
       <div className="p-4 md:p-6">
@@ -1808,7 +1819,7 @@ export function ProductosView() {
         <Button
           variant={tipoActivo === "compra" ? "default" : "outline"}
           className="gap-2"
-          onClick={() => { setTipoActivo("compra"); setShowConfig(false); }}
+          onClick={() => cambiarTipo("compra")}
         >
           <ShoppingCart className="h-4 w-4" />
           COMPRA
@@ -1817,7 +1828,7 @@ export function ProductosView() {
         <Button
           variant={tipoActivo === "elaboracion" ? "default" : "outline"}
           className="gap-2"
-          onClick={() => { setTipoActivo("elaboracion"); setShowConfig(false); }}
+          onClick={() => cambiarTipo("elaboracion")}
         >
           <FlaskConical className="h-4 w-4" />
           ELABORACIONES
@@ -1826,7 +1837,7 @@ export function ProductosView() {
         <Button
           variant={tipoActivo === "venta" ? "default" : "outline"}
           className="gap-2"
-          onClick={() => { setTipoActivo("venta"); setShowConfig(false); }}
+          onClick={() => cambiarTipo("venta")}
         >
           <Store className="h-4 w-4" />
           VENTA
