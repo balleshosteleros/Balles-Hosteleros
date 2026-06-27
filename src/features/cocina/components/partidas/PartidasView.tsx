@@ -375,8 +375,6 @@ export function PartidasView() {
     { campo: "estado", label: "Estado" },
     { campo: "productos", label: "Productos" },
     { campo: "mise", label: "Mise en Place" },
-    { campo: "creador", label: "Creador" },
-    { campo: "actualizacion", label: "Actualización" },
   ];
 
   const columnDefs: Record<string, { th: ReactNode; td: (p: Partida) => ReactNode }> = {
@@ -419,17 +417,6 @@ export function PartidasView() {
     mise: {
       th: <TableHead key="mise" className="text-xs text-center">Mise en Place</TableHead>,
       td: (p) => <TableCell key="mise" className="text-center text-sm">{p.misEnPlace.length}</TableCell>,
-    },
-    creador: {
-      th: <TableHead key="creador" className="text-xs">Creador</TableHead>,
-      td: (p) => {
-        const emp = empleados.find((e) => e.empleadoId === p.creador);
-        return <TableCell key="creador" className="text-sm text-muted-foreground">{emp ? `${emp.nombre} ${emp.apellidos}` : "—"}</TableCell>;
-      },
-    },
-    actualizacion: {
-      th: <TableHead key="actualizacion" className="text-xs">Actualización</TableHead>,
-      td: (p) => <TableCell key="actualizacion" className="text-sm text-muted-foreground">{p.fechaActualizacion}</TableCell>,
     },
   };
 
