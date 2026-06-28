@@ -12,7 +12,7 @@ import {
 } from "@/features/rrhh/data/accesos-apps";
 
 /** Minutos que dura una verificación de identidad antes de volver a pedirla. */
-export const VERIFICACION_VALIDEZ_MIN = 5;
+const VERIFICACION_VALIDEZ_MIN = 5;
 
 /** Marca que sustituye a la contraseña en las listas (nunca se envía cifrada/clara al cliente sin verificar). */
 const PWD_OCULTA = "";
