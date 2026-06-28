@@ -141,7 +141,29 @@ export async function altaUsuarioEmpleado(
   }
   const userId = created.user.id;
 
-  // 2. Completar profile (el trigger handle_new_user crea la fila base).
+  // 2a. El rol del usuario = el DEPARTAMENTO al que pertenece el empleado.
+  //     Los roles (`empresa_roles`) son los departamentos (SALA, COCINA, …):
+  //     existe un rol por departamento con el mismo nombre. Una camarera de
+  //     SALA tiene rol SALA. NUNCA un rol inexistente como "EMPLEADO".
+  //     Resolvemos el nombre del departamento y lo usamos como rol_label; el
+  //     trigger `sync_usuario_rol_id` lo enlaza a `empresa_roles` (→ rol_id).
+  let rolLabel: string | null = null;
+  if (input.departamentoId) {
+    const { data: depto } = await admin
+      .from("departamentos")
+      .select("nombre")
+      .eq("id", input.departamentoId)
+      .maybeSingle();
+    rolLabel = (depto?.nombre as string | null) ?? null;
+  }
+  if (!rolLabel) {
+    // Sin departamento no podemos derivar un rol válido: abortamos en vez de
+    // dejar un usuario con rol_label inexistente y rol_id nulo (sin permisos).
+    await admin.auth.admin.deleteUser(userId);
+    return { ok: false, error: "No se pudo determinar el rol: el empleado debe tener un departamento asignado." };
+  }
+
+  // 2b. Completar profile (el trigger handle_new_user crea la fila base).
   //    profiles.id === profiles.user_id === auth.users.id (migración 002).
   await admin
     .from("usuarios")
@@ -150,7 +172,7 @@ export async function altaUsuarioEmpleado(
       full_name: input.fullName,
       nombre: input.nombre,
       apellidos: input.apellidos,
-      rol_label: "EMPLEADO",
+      rol_label: rolLabel,
       es_empleado: true,
       avatar_obligatorio: true,
     })
