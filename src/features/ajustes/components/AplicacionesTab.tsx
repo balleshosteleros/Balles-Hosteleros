@@ -28,7 +28,6 @@ import {
 import {
   CATEGORIAS_APP,
   MAX_ACCESOS_POR_APP,
-  faviconDesdeUrl,
   type AccesoApp,
   type AccesoCredencial,
   type EstadoApp,
@@ -333,16 +332,12 @@ function AplicacionesTabInner() {
       const rolesUnion = Array.from(
         new Set(form.accesos.flatMap((a) => a.roles ?? [])),
       );
-      // Logo: si el usuario subió uno manual (vive en el bucket app-logos), se
-      // respeta. Si no, se genera automáticamente (marca conocida o favicon).
-      const esLogoManual = (form.logoUrl ?? "").includes("/app-logos/");
-      const logoFinal = esLogoManual
-        ? form.logoUrl
-        : faviconDesdeUrl(form.url, form.nombre) || undefined;
+      // Logo SOLO manual: se conserva el que el usuario haya subido (bucket
+      // app-logos). Si no hay, queda vacío y la UI muestra la inicial en color.
       const payload = {
         ...form,
         rolesAutorizados: rolesUnion,
-        logoUrl: logoFinal,
+        logoUrl: form.logoUrl || undefined,
       };
       if (editingId) {
         const updated = await updateAccesoApp(editingId, payload);
@@ -579,11 +574,7 @@ function AplicacionesTabInner() {
               <div className="flex items-center gap-3">
                 <AppLogo
                   nombre={form.nombre || "?"}
-                  logoUrl={
-                    ((form.logoUrl ?? "").includes("/app-logos/")
-                      ? form.logoUrl
-                      : faviconDesdeUrl(form.url, form.nombre)) || undefined
-                  }
+                  logoUrl={form.logoUrl || undefined}
                 />
                 <input
                   ref={fileInputRef}
@@ -618,7 +609,7 @@ function AplicacionesTabInner() {
                 )}
               </div>
               <p className="text-[11px] text-muted-foreground">
-                Se obtiene automáticamente del nombre o la URL. Si falla, sube tu propia imagen (máx 2 MB).
+                Sube la imagen del logo (máx 2 MB). Si no, se muestra la inicial de la app.
               </p>
             </div>
 
