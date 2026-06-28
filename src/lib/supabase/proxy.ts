@@ -4,6 +4,12 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { esHostPrincipal } from '@/features/marketing/pagina-web/services/hostname-resolver'
 import { LANDING_PATH } from '@/features/auth/lib/role-redirect'
 import { checkProfileGuard } from '@/features/auth/lib/profile-guard'
+import {
+  SESION_INICIO_COOKIE,
+  SESION_EXPIRADA_CODE,
+  esDispositivoMovil,
+  sesionCaducada,
+} from '@/features/auth/lib/session-expiry'
 
 export type UpdateSessionResult = {
   response: NextResponse
@@ -86,6 +92,47 @@ export async function updateSession(
 
   const pathname = request.nextUrl.pathname
 
+  // ── Caducidad ABSOLUTA de sesión en ordenador (8h) ──────────────────
+  // Solo desktop: el móvil/PWA mantiene la sesión. Se siembra una cookie con el
+  // instante del login y, si han pasado 8h, cerramos sesión y devolvemos al
+  // login. El móvil queda exento (rutas /m o user-agent móvil).
+  // `sembrarInicioSesion` queda como nº (ms) a escribir en la cookie, o null si
+  // no hay que sembrar. Se aplica a cualquier response que devolvamos abajo.
+  let sembrarInicioSesion: number | null = null
+  if (user) {
+    const esMovil = esDispositivoMovil(request.headers.get('user-agent'), pathname)
+    if (!esMovil) {
+      const inicioCookie = request.cookies.get(SESION_INICIO_COOKIE)?.value
+      const ahora = Date.now()
+      if (sesionCaducada(inicioCookie, ahora)) {
+        await supabase.auth.signOut()
+        const url = new URL('/', request.url)
+        url.searchParams.set('error', SESION_EXPIRADA_CODE)
+        const res = NextResponse.redirect(url)
+        res.cookies.delete(SESION_INICIO_COOKIE)
+        return { response: res, user: null }
+      }
+      // Primera petición con sesión activa sin marca de inicio (login recién
+      // hecho, sea por contraseña, Google o demo): sembramos el reloj de 8h.
+      if (!inicioCookie) sembrarInicioSesion = ahora
+    }
+  }
+
+  // Escribe la cookie de inicio de sesión (8h) en el response dado, si procede.
+  const conInicioSesion = (res: NextResponse): NextResponse => {
+    if (sembrarInicioSesion !== null) {
+      res.cookies.set(SESION_INICIO_COOKIE, String(sembrarInicioSesion), {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        path: '/',
+        // Sin maxAge propio: el corte lo decide el proxy comparando el
+        // timestamp. Cookie de sesión del navegador.
+      })
+    }
+    return res
+  }
+
   // Rutas auth: callback, reset, etc. → libres
   // Rutas públicas: carta digital, sitios externos, assets, api → libres
   if (isAuthPath(pathname) || isPublicPath(pathname)) {
@@ -103,11 +150,11 @@ export async function updateSession(
         return { response: NextResponse.redirect(url), user: null }
       }
       return {
-        response: NextResponse.redirect(new URL(LANDING_PATH, request.url)),
+        response: conInicioSesion(NextResponse.redirect(new URL(LANDING_PATH, request.url))),
         user,
       }
     }
-    return { response: supabaseResponse, user }
+    return { response: conInicioSesion(supabaseResponse), user }
   }
 
   // Resto: privado → requiere sesión
@@ -126,5 +173,5 @@ export async function updateSession(
     return { response: NextResponse.redirect(url), user: null }
   }
 
-  return { response: supabaseResponse, user }
+  return { response: conInicioSesion(supabaseResponse), user }
 }

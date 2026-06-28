@@ -27,6 +27,18 @@ import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 import { IOActions } from "@/shared/io";
 import { empleadosIO } from "@/features/rrhh/io/empleados.io";
 
+// Filtro por defecto: la tabla arranca mostrando solo empleados activos. Se
+// pasa también como `filtrosDefault` al toolbar para que NO se pinte como
+// indicador (chip/badge) mientras coincida con el default; solo aparece si el
+// usuario cambia el estado. Constante module-level para compartir la misma forma
+// entre el estado inicial y `filtrosDefault`.
+const FILTRO_DEFAULT_ESTADO_ACTIVO: ToolbarFiltroActivo = {
+  id: "default-estado-activo",
+  campo: "estado",
+  etiqueta: "Estado",
+  valores: [ESTADOS_LABEL.Activo],
+};
+
 const AVATAR_COLORS = [
   "hsl(var(--primary))", "hsl(25 80% 55%)", "hsl(280 60% 55%)", "hsl(160 55% 42%)",
   "hsl(340 65% 50%)", "hsl(200 70% 50%)", "hsl(45 80% 48%)", "hsl(0 65% 50%)",
@@ -141,8 +153,8 @@ export function EmpleadosView() {
   const [busqueda, setBusqueda] = useState("");
   // Por defecto solo se muestran los empleados activos; los desactivados quedan
   // ocultos salvo que el usuario cambie manualmente este filtro de Estado.
-  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([
-    { id: "default-estado-activo", campo: "estado", etiqueta: "Estado", valores: [ESTADOS_LABEL.Activo] },
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>(() => [
+    { ...FILTRO_DEFAULT_ESTADO_ACTIVO },
   ]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
@@ -482,6 +494,7 @@ export function EmpleadosView() {
         placeholderBusqueda="Buscar"
         filtros={filtros}
         onFiltrosChange={setFiltros}
+        filtrosDefault={[FILTRO_DEFAULT_ESTADO_ACTIVO]}
         orden={orden}
         onOrdenChange={setOrden}
         columnas={columnasDef}

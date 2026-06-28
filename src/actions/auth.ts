@@ -1,10 +1,11 @@
 'use server'
 
-import { headers } from 'next/headers'
+import { headers, cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { LANDING_PATH } from '@/features/auth/lib/role-redirect'
+import { SESION_INICIO_COOKIE } from '@/features/auth/lib/session-expiry'
 import {
   checkProfileGuard,
   PROFILE_GUARD_MESSAGES,
@@ -103,6 +104,9 @@ export async function signout() {
   const isDemo = !!(user?.email && process.env.DEMO_EMAIL && user.email === process.env.DEMO_EMAIL)
 
   await supabase.auth.signOut(isDemo ? { scope: 'local' } : undefined)
+
+  // Reloj de caducidad de 8h: se borra para que el próximo login arranque limpio.
+  ;(await cookies()).delete(SESION_INICIO_COOKIE)
 
   revalidatePath('/', 'layout')
   redirect('/')

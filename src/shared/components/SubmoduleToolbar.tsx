@@ -112,6 +112,15 @@ interface SubmoduleToolbarProps {
   campos?: ToolbarCampoFiltro[];
   filtros?: ToolbarFiltroActivo[];
   onFiltrosChange?: (f: ToolbarFiltroActivo[]) => void;
+  /**
+   * Filtros "por defecto" que SÍ se aplican pero NO se muestran como indicador
+   * (ni en el badge numérico ni como chip) mientras coincidan exactamente con
+   * lo seleccionado. Sirve para defaults silenciosos como Estado = solo Activo:
+   * la tabla arranca filtrada pero sin que parezca que el usuario puso un filtro.
+   * En cuanto el usuario cambia ese filtro (otros valores), deja de coincidir y
+   * vuelve a aparecer como indicador normal.
+   */
+  filtrosDefault?: ToolbarFiltroActivo[];
 
   // Ordenar
   ordenOpciones?: ToolbarOrdenOpcion[];
@@ -155,6 +164,7 @@ export function SubmoduleToolbar({
   campos = [],
   filtros = [],
   onFiltrosChange,
+  filtrosDefault = [],
   ordenOpciones = [],
   orden = null,
   onOrdenChange,
@@ -170,6 +180,13 @@ export function SubmoduleToolbar({
 }: SubmoduleToolbarProps) {
   const tieneBusqueda = !!onBusquedaChange;
   const tieneFiltros = campos.length > 0 && !!onFiltrosChange;
+  // Filtros que cuentan como "indicador visible": se ocultan los que coinciden
+  // exactamente con un filtro por defecto (mismo campo + mismos valores). El
+  // filtro sigue aplicándose a los datos; solo no se pinta como chip/badge.
+  const filtrosVisibles =
+    filtrosDefault.length === 0
+      ? filtros
+      : filtros.filter((f) => !filtrosDefault.some((d) => filtrosEquivalentes(f, d)));
   const tieneOrden = ordenOpciones.length > 0 && !!onOrdenChange;
   const tieneColumnas = columnas.length > 0 && !!onColumnasVisiblesChange;
 
@@ -271,6 +288,7 @@ export function SubmoduleToolbar({
           <FiltrosPopover
             campos={campos}
             filtros={filtros}
+            conteoIndicador={filtrosVisibles.length}
             onChange={onFiltrosChange!}
           />
         )}
@@ -300,8 +318,12 @@ export function SubmoduleToolbar({
         {extraDerecha}
       </div>
 
-      {filtros.length > 0 && !!onFiltrosChange && (
-        <FiltrosChips filtros={filtros} onChange={onFiltrosChange} />
+      {filtrosVisibles.length > 0 && !!onFiltrosChange && (
+        <FiltrosChips
+          filtros={filtrosVisibles}
+          filtrosCompletos={filtros}
+          onChange={onFiltrosChange}
+        />
       )}
     </div>
   );
@@ -310,10 +332,14 @@ export function SubmoduleToolbar({
 function FiltrosPopover({
   campos,
   filtros,
+  conteoIndicador,
   onChange,
 }: {
   campos: ToolbarCampoFiltro[];
   filtros: ToolbarFiltroActivo[];
+  // Nº de filtros que cuentan como indicador (excluye los default silenciosos).
+  // Se usa solo para el badge; las operaciones siguen sobre `filtros` completo.
+  conteoIndicador: number;
   onChange: (f: ToolbarFiltroActivo[]) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -395,9 +421,9 @@ function FiltrosPopover({
         <Button variant="outline" size="sm" className="h-9 gap-1.5">
           <SlidersHorizontal className="h-4 w-4" />
           Filtrar
-          {filtros.length > 0 && (
+          {conteoIndicador > 0 && (
             <Badge className="ml-0.5 h-4 min-w-[16px] px-1 text-[10px] rounded-full">
-              {filtros.length}
+              {conteoIndicador}
             </Badge>
           )}
         </Button>
@@ -544,9 +570,14 @@ function FiltrosPopover({
 
 function FiltrosChips({
   filtros,
+  filtrosCompletos,
   onChange,
 }: {
+  // Filtros a pintar como chip (excluye los default silenciosos).
   filtros: ToolbarFiltroActivo[];
+  // Array real completo (incluye defaults); base para quitar/limpiar sin
+  // perder los filtros por defecto que no se muestran.
+  filtrosCompletos: ToolbarFiltroActivo[];
   onChange: (f: ToolbarFiltroActivo[]) => void;
 }) {
   function label(f: ToolbarFiltroActivo): string {
@@ -570,7 +601,7 @@ function FiltrosChips({
         >
           {label(f)}
           <button
-            onClick={() => onChange(filtros.filter((x) => x.id !== f.id))}
+            onClick={() => onChange(filtrosCompletos.filter((x) => x.id !== f.id))}
             className="hover:text-destructive ml-0.5"
           >
             <X className="h-3 w-3" />
@@ -579,7 +610,11 @@ function FiltrosChips({
       ))}
       {filtros.length > 1 && (
         <button
-          onClick={() => onChange([])}
+          onClick={() =>
+            // "Limpiar todo" quita los chips visibles pero conserva los filtros
+            // por defecto silenciosos (p. ej. Estado = Activo).
+            onChange(filtrosCompletos.filter((f) => !filtros.some((v) => v.id === f.id)))
+          }
           className="text-xs text-muted-foreground hover:text-foreground underline"
         >
           Limpiar todo
@@ -990,6 +1025,23 @@ export function ordenarColumnas(
     if (!usadas.has(col.campo)) ordenadas.push(col);
   }
   return [...bloqueadas, ...ordenadas];
+}
+
+// Dos filtros son equivalentes (a efectos de "indicador") si filtran lo mismo:
+// mismo campo y mismo criterio. El `id` se ignora — los filtros por defecto se
+// crean con ids fijos y los del usuario con uuids aleatorios.
+function filtrosEquivalentes(a: ToolbarFiltroActivo, b: ToolbarFiltroActivo): boolean {
+  if (a.campo !== b.campo) return false;
+  const valsA = [...(a.valores ?? [])].sort();
+  const valsB = [...(b.valores ?? [])].sort();
+  if (valsA.length !== valsB.length || valsA.some((v, i) => v !== valsB[i])) return false;
+  return (
+    a.operador === b.operador &&
+    a.numVal === b.numVal &&
+    a.desde === b.desde &&
+    a.hasta === b.hasta &&
+    a.bool === b.bool
+  );
 }
 
 export function aplicarFiltrosToolbar<T>(

@@ -16,6 +16,11 @@ const GENERIC_ACCESS_MESSAGE = 'Usuario o contraseña incorrectos.'
 const SIN_PASSWORD_MESSAGE =
   'Tienes una cuenta, pero primero debes elegir tu contraseña. Revisa el correo «Crea tu contraseña» que te enviamos.'
 
+// Sesión caducada por seguridad (8h en ordenador): no es un error de
+// credenciales, así que lo explicamos para que el usuario sepa que es normal.
+const SESION_EXPIRADA_MESSAGE =
+  'Tu sesión ha caducado por seguridad. Vuelve a iniciar sesión.'
+
 const ERROR_MESSAGES: Record<string, string> = {
   auth_callback_failed: GENERIC_ACCESS_MESSAGE,
   cuenta_inactiva: GENERIC_ACCESS_MESSAGE,
@@ -23,6 +28,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   sin_empresa: GENERIC_ACCESS_MESSAGE,
   sin_rol: GENERIC_ACCESS_MESSAGE,
   sin_password: SIN_PASSWORD_MESSAGE,
+  sesion_expirada: SESION_EXPIRADA_MESSAGE,
 }
 
 export function LoginForm() {
