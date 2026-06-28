@@ -294,6 +294,9 @@ function AplicacionesTabInner() {
       : [{ etiqueta: "", usuario: "", contrasena: "", roles: [] }];
     const accesos = accesosBase.map((a) => ({
       ...a,
+      // La contraseña NUNCA viaja al cliente (viene oculta/cifrada). Al editar
+      // se muestra vacía; si se deja vacía, la action preserva la cifrada previa.
+      contrasena: "",
       roles: a.roles?.length ? a.roles : [...(app.rolesAutorizados ?? [])],
     }));
     setForm({
@@ -649,7 +652,7 @@ function AplicacionesTabInner() {
                           value={acc.contrasena}
                           onChange={(e) => updateAcceso(idx, { contrasena: e.target.value })}
                           placeholder={editingId ? "Dejar vacío = no cambiar" : "Contraseña"}
-                          type="text"
+                          type="password"
                           autoComplete="new-password"
                           className="h-8 text-xs"
                         />
