@@ -12,7 +12,10 @@ export const VIEW_MODE_DASHBOARDS: Record<ViewMode, string> = {
 const STORAGE_KEY = "bh_view_mode";
 const COOKIE_KEY = "bh_view_mode";
 const COOKIE_MAX_AGE_DAYS = 365;
-const DEFAULT_MODE: ViewMode = "departamentos";
+// La landing por defecto del software es Mi Panel (modo "paneles"). Solo el rol
+// dirección aterriza en Mis Departamentos. Este default aplica en rutas ambiguas
+// (/ajustes, /accesos, /) cuando no hay un modo guardado previo.
+const DEFAULT_MODE: ViewMode = "paneles";
 
 function writeCookie(value: ViewMode) {
   if (typeof document === "undefined") return;

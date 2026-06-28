@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth, type AppRole } from "@/features/auth/contexts/auth-context";
 import { Card } from "@/components/ui/card";
@@ -72,8 +73,11 @@ function dashboardSubtitlePorRol(rol: AppRole | null): string {
 }
 
 export function MisDepartamentosView() {
-  const { profile, user, roles, puedeVer, permisosLoaded, hasRole } = useAuth();
+  const { profile, user, roles, puedeVer, permisosLoaded, hasRole, loading } = useAuth();
+  const router = useRouter();
   const rolPrincipal: AppRole | null = roles[0] ?? null;
+
+  const esDireccion = hasRole("director") || hasRole("admin");
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -94,6 +98,16 @@ export function MisDepartamentosView() {
   }, [mounted]);
   const rolesPendientes = roles.length === 0 && !graceElapsed;
 
+  // Esta vista (MIS DEPARTAMENTOS) es exclusiva del rol dirección. Cualquier
+  // otro rol que aterrice aquí se redirige a su panel personal (Mi Panel), que
+  // es su landing por defecto. Esperamos a que (a) auth deje de cargar y (b)
+  // pase el periodo de gracia de roles: así no rebotamos a un director cuyos
+  // roles aún no han llegado por la carrera post-login.
+  useEffect(() => {
+    if (loading || rolesPendientes) return;
+    if (!esDireccion) router.replace("/mi-panel");
+  }, [loading, rolesPendientes, esDireccion, router]);
+
   const tiles = useMemo(() => {
     // 'director' / 'admin' tienen bypass total — ven todos los departamentos.
     if (hasRole("director") || hasRole("admin")) return ALL_DEPARTAMENTOS;
@@ -103,15 +117,18 @@ export function MisDepartamentosView() {
     return ALL_DEPARTAMENTOS.filter((d) => puedeVer(d.modulo));
   }, [hasRole, permisosLoaded, puedeVer]);
 
-  // Loading hasta que (a) el componente esté montado y (b) los permisos hayan
-  // resuelto. admin/director cortocircuitan en `tiles` sin esperar permisos.
-  // `rolesPendientes` extiende el skeleton durante el periodo de gracia cuando
-  // aún no ha llegado ningún rol, para no pintar "No tienes departamentos" en
-  // falso mientras el rol (p.ej. director) termina de resolver.
+  // Loading hasta que (a) el componente esté montado, (b) los permisos hayan
+  // resuelto y (c) `rolesPendientes` haya pasado el periodo de gracia. admin/
+  // director cortocircuitan en `tiles` sin esperar permisos. Además, mientras un
+  // no-dirección está siendo redirigido a Mi Panel mantenemos el skeleton para
+  // no mostrar la cuadrícula. `rolesPendientes` también evita pintar "No tienes
+  // departamentos" en falso mientras el rol (p.ej. director) termina de resolver.
   const isLoading =
     !mounted ||
-    (!permisosLoaded && !hasRole("director") && !hasRole("admin")) ||
-    rolesPendientes;
+    loading ||
+    rolesPendientes ||
+    !esDireccion ||
+    (!permisosLoaded && !esDireccion);
 
   const userName = profile?.nombre
     ? profile.apellidos
