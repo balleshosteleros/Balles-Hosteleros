@@ -1,6 +1,9 @@
 /**
- * Tras login válido, todo usuario aterriza en /mis-departamentos (vista principal).
- * El acceso a Mi Panel queda disponible desde el sidebar.
+ * Tras login válido, todo usuario aterriza en /mis-departamentos. Allí, la vista
+ * MisDepartamentosView aplica la regla por rol:
+ *   - Rol dirección (director/admin) → permanece en Mis Departamentos (cuadrícula
+ *     de departamentos, con el botón DIRECCIÓN visible).
+ *   - Resto de roles → se redirigen a /mi-panel (su landing por defecto).
  *
  * IMPORTANTE: solo redirigir aquí cuando el profile haya pasado checkProfileGuard.
  * Si el caller no valida, hay que llamar a checkProfileGuard antes.
