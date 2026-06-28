@@ -1,12 +1,49 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { updatePassword } from '@/actions/auth'
+import { createClient } from '@/lib/supabase/client'
 
+/**
+ * Esta pantalla SOLO debe permitir cambiar la contraseña cuando se llega desde
+ * un enlace de correo (recuperación o alta inicial). Supabase emite el evento
+ * `PASSWORD_RECOVERY` al canjear ese enlace. Si un usuario YA logueado abre esta
+ * URL (p.ej. un enlace viejo o tecleando la dirección), NO debe poder cambiar su
+ * contraseña por error: bloqueamos el formulario hasta confirmar el recovery.
+ */
 export function UpdatePasswordForm() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  // null = comprobando; true = vino de enlace de correo; false = sesión normal.
+  const [esRecovery, setEsRecovery] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    const supabase = createClient()
+    if (!supabase) {
+      setEsRecovery(false)
+      return
+    }
+
+    // Si el enlace de correo es válido, Supabase dispara PASSWORD_RECOVERY al
+    // procesar el hash de la URL. Solo entonces habilitamos el formulario.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event) => {
+        if (event === 'PASSWORD_RECOVERY') setEsRecovery(true)
+      },
+    )
+
+    // Margen para que se procese el enlace; si no llegó el evento, es una
+    // sesión normal (o sin sesión) → bloqueamos.
+    const t = setTimeout(() => {
+      setEsRecovery((prev) => (prev === null ? false : prev))
+    }, 2500)
+
+    return () => {
+      subscription.unsubscribe()
+      clearTimeout(t)
+    }
+  }, [])
 
   async function handleSubmit(formData: FormData) {
     setLoading(true)
@@ -18,6 +55,29 @@ export function UpdatePasswordForm() {
       setError(result.error)
       setLoading(false)
     }
+  }
+
+  if (esRecovery === null) {
+    return (
+      <p className="text-sm text-slate-400">Validando el enlace…</p>
+    )
+  }
+
+  if (esRecovery === false) {
+    return (
+      <div className="space-y-4">
+        <p className="rounded-md border border-amber-900/50 bg-amber-950/40 px-3 py-3 text-sm text-amber-200">
+          Este enlace no es válido o ha caducado. Para cambiar tu contraseña,
+          solicita un correo nuevo desde <strong>«¿Has olvidado tu contraseña?»</strong>.
+        </p>
+        <a
+          href="/forgot-password"
+          className="block w-full rounded-lg bg-blue-600 px-4 py-3 text-center text-sm font-semibold text-white transition-all hover:bg-blue-500"
+        >
+          Solicitar enlace nuevo
+        </a>
+      </div>
+    )
   }
 
   return (
@@ -33,9 +93,12 @@ export function UpdatePasswordForm() {
           name="password"
           type={showPassword ? 'text' : 'password'}
           required
+          inputMode="numeric"
+          pattern="\d{6}"
+          maxLength={6}
           minLength={6}
           autoComplete="new-password"
-          placeholder="Nueva contraseña (mín. 6 caracteres)"
+          placeholder="Contraseña: 6 dígitos (ej. 042815)"
           className="block w-full rounded-lg border border-slate-800 bg-slate-900/60 py-3 pl-11 pr-11 text-sm text-white placeholder:text-slate-500 focus:border-blue-500 focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
         <button
@@ -58,6 +121,11 @@ export function UpdatePasswordForm() {
         </button>
       </div>
 
+      <p className="text-xs text-slate-500">
+        6 dígitos numéricos. Fácil de recordar y de teclear. La necesitarás para
+        entrar y para ver datos protegidos.
+      </p>
+
       {error && (
         <p className="rounded-md border border-red-900/50 bg-red-950/40 px-3 py-2 text-sm text-red-300">
           {error}
@@ -69,7 +137,7 @@ export function UpdatePasswordForm() {
         disabled={loading}
         className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-900/30 transition-all hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {loading ? 'Actualizando...' : 'Actualizar contraseña'}
+        {loading ? 'Guardando...' : 'Guardar contraseña'}
       </button>
     </form>
   )

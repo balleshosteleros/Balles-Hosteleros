@@ -11,23 +11,22 @@ export function bienvenidaEmpleadoEmail(opts: {
   recipientName: string;
   actionUrl: string;
   empresaNombre: string;
-  productName?: string;
 }): { subject: string; html: string; text: string } {
-  const product = opts.productName ?? "Balles Hosteleros";
-
   const subject = `Crea tu contraseña de acceso · ${opts.empresaNombre}`;
 
+  // Sin "Balles Hosteleros" en el contenido: el correo lo firma la empresa
+  // (su isotipo lo antepone sendEmail por cabecera). Fondo blanco entero.
   const html = `<!doctype html>
 <html lang="es">
-  <body style="margin:0;padding:0;background:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1f2937;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;padding:32px 16px;">
+  <body style="margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1f2937;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;padding:24px 16px;">
       <tr>
         <td align="center">
-          <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+          <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;">
             <tr>
-              <td style="padding:32px 32px 8px 32px;">
+              <td style="padding:8px 32px 8px 32px;">
                 <h1 style="margin:0;font-size:22px;font-weight:700;color:#0f172a;">¡Bienvenido/a, ${opts.recipientName}!</h1>
-                <p style="margin:8px 0 0 0;font-size:13px;color:#64748b;">${opts.empresaNombre} · ${product}</p>
+                <p style="margin:8px 0 0 0;font-size:13px;color:#64748b;">${opts.empresaNombre}</p>
               </td>
             </tr>
             <tr>
@@ -51,8 +50,8 @@ export function bienvenidaEmpleadoEmail(opts: {
                   <tr>
                     <td style="padding:14px 16px;">
                       <p style="margin:0 0 8px 0;font-size:13px;line-height:1.6;color:#334155;">
-                        🔑 <strong>Esta contraseña te permitirá moverte por todo el sistema de la empresa.</strong>
-                        Guárdala bien: la necesitarás siempre.
+                        🔑 Será un <strong>PIN de 6 dígitos</strong> que te permitirá moverte por
+                        todo el sistema de la empresa. Guárdalo bien: lo necesitarás siempre.
                       </p>
                       <p style="margin:0;font-size:13px;line-height:1.6;color:#334155;">
                         Podrás entrar siempre haciendo <strong>login con Google</strong>, pero
@@ -88,12 +87,12 @@ export function bienvenidaEmpleadoEmail(opts: {
 
   const text = `¡Bienvenido/a, ${opts.recipientName}!
 
-Tu cuenta en ${product} (${opts.empresaNombre}) ya está lista. Para empezar, elige tu contraseña con este enlace (caduca en 1 hora):
+Tu cuenta en ${opts.empresaNombre} ya está lista. Para empezar, elige tu contraseña con este enlace (caduca en 1 hora):
 ${opts.actionUrl}
 
-IMPORTANTE: esta contraseña te permitirá moverte por todo el sistema de la empresa. Guárdala bien, la necesitarás siempre.
+IMPORTANTE: será un PIN de 6 dígitos que te permitirá moverte por todo el sistema de la empresa. Guárdalo bien, lo necesitarás siempre.
 
-Podrás entrar siempre haciendo login con Google, pero aun así necesitarás esta contraseña para acciones de seguridad.
+Podrás entrar siempre haciendo login con Google, pero aun así necesitarás este PIN para acciones de seguridad.
 
 Si tienes dudas, contacta con tu responsable de RRHH.`;
 
