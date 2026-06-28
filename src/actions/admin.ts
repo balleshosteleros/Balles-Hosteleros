@@ -114,6 +114,9 @@ export async function createEmployee(formData: FormData) {
     rol_id: rolId,
     es_empleado: esEmpleado,
     avatar_obligatorio: esEmpleado,
+    // Alta manual desde Ajustes: el admin fija una contraseña real (no la
+    // aleatoria del alta de empleados), así que NO se le obliga a reelegirla.
+    password_set: true,
   }
   if (departamento) profilePatch.departamento = departamento
 
