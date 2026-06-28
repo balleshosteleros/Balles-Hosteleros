@@ -299,7 +299,7 @@ export function AgendaView() {
                     >
                       {c.origen === "manual" ? "Manual" : "Automático"}
                     </Badge>
-                    {!c.activo && (
+                    {!c.activo && !c.categoria.endsWith("_inactivos") && (
                       <Badge
                         variant="outline"
                         className="text-[10px] bg-gray-100 text-gray-600 border-gray-200"

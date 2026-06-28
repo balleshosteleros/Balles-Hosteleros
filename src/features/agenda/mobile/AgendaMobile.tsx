@@ -474,7 +474,7 @@ function FichaContacto({
           <div className="min-w-0 flex-1">
             <h2 className="flex items-center gap-2 text-lg font-semibold leading-tight">
               {c.nombre}
-              {!c.activo && (
+              {!c.activo && !c.categoria.endsWith("_inactivos") && (
                 <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">
                   {c.estado_origen ?? "Inactivo"}
                 </span>
@@ -622,7 +622,7 @@ function FilaContacto({
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-1.5 truncate text-sm font-medium text-foreground">
             {c.nombre}
-            {!c.activo && (
+            {!c.activo && !c.categoria.endsWith("_inactivos") && (
               <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-semibold text-gray-500">
                 {c.estado_origen ?? "Inactivo"}
               </span>
