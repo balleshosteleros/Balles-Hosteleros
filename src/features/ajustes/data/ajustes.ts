@@ -11,6 +11,11 @@ export interface DatosGenerales {
   correoAdmin: string;
   correoRrhh: string;
   correoContabilidad: string;
+  correoLogistica: string;
+  correoCalidad: string;
+  correoGestoria: string;
+  correoGerencia: string;
+  correoDireccion: string;
   correoMarketing: string;
   correoJuridico: string;
   correoReservas: string;
@@ -290,6 +295,11 @@ export function buildDefaultAjustes(empresaNombre: string): AjustesEmpresa {
       correoAdmin: "",
       correoRrhh: "",
       correoContabilidad: "",
+      correoLogistica: "",
+      correoCalidad: "",
+      correoGestoria: "",
+      correoGerencia: "",
+      correoDireccion: "",
       correoMarketing: "",
       correoJuridico: "",
       correoReservas: "",
