@@ -100,3 +100,8 @@ Bancktrack/
 *.webm
 *.mp4
 *.mov
+
+# Datos locales de carga de accesos (contraseñas en claro — NUNCA versionar)
+scripts/accesos-datos.local.json
+scripts/*-datos.local.json
+scripts/*.secret.json

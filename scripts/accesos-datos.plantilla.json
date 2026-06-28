@@ -1,0 +1,381 @@
+[
+  {
+    "empresa": "habana",
+    "apps": [
+      {
+        "nombre": "Revolut Business",
+        "categoria": "Banca y pagos",
+        "url": "https://business.revolut.com",
+        "credenciales": [
+          { "etiqueta": "Dirección", "usuario": "direccion.grupohabana@gmail.com", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "Verificación vía Gmail Dirección", "datos_extra": [] },
+          { "etiqueta": "Contabilidad", "usuario": "contabilidad.grupohabana@gmail.com", "password": "", "rol_responsable": "Contabilidad", "rol_visible": ["CONTABILIDAD"], "notas": "", "datos_extra": [{ "nombre": "PIN", "valor": "" }] }
+        ]
+      },
+      {
+        "nombre": "BBVA NetCash",
+        "categoria": "Banca y pagos",
+        "url": "https://www.bbva.es",
+        "credenciales": [
+          { "etiqueta": "NetCash", "usuario": "20628468", "password": "", "rol_responsable": "Dirección", "rol_visible": ["CONTABILIDAD"], "notas": "", "datos_extra": [{ "nombre": "Código empresa", "valor": "" }] }
+        ]
+      },
+      {
+        "nombre": "Adyen (Ágora Pay)",
+        "categoria": "Banca y pagos",
+        "url": "https://essentials-live.adyen.com/",
+        "credenciales": [
+          { "etiqueta": "Dirección", "usuario": "Direccion", "password": "", "rol_responsable": "Contabilidad", "rol_visible": ["CONTABILIDAD"], "notas": "Ambos locales", "datos_extra": [] }
+        ]
+      },
+      {
+        "nombre": "Stripe (Cover)",
+        "categoria": "Banca y pagos",
+        "url": "https://dashboard.stripe.com",
+        "credenciales": [
+          { "etiqueta": "Cover", "usuario": "direccion.grupohabana@gmail.com", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "", "datos_extra": [] }
+        ]
+      },
+      {
+        "nombre": "Cashlogy",
+        "categoria": "Banca y pagos",
+        "url": "",
+        "credenciales": [
+          { "etiqueta": "Acceso por app", "usuario": "direccion.grupohabana@gmail.com", "password": "", "rol_responsable": "Contabilidad", "rol_visible": ["CONTABILIDAD", "GERENCIA"], "notas": "", "datos_extra": [] }
+        ]
+      },
+      {
+        "nombre": "Certificado Electrónico",
+        "categoria": "Banca y pagos",
+        "url": "",
+        "credenciales": [
+          { "etiqueta": "Habana System S.L", "usuario": "Habana System S.L", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "", "datos_extra": [] }
+        ]
+      },
+
+      {
+        "nombre": "Correo / Drive (Google)",
+        "categoria": "Correo / Drive",
+        "url": "https://mail.google.com",
+        "credenciales": [
+          { "etiqueta": "Dirección", "usuario": "direccion.grupohabana@gmail.com", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "", "datos_extra": [] },
+          { "etiqueta": "Contabilidad", "usuario": "contabilidad.grupohabana@gmail.com", "password": "", "rol_responsable": "Contabilidad", "rol_visible": ["CONTABILIDAD"], "notas": "", "datos_extra": [] },
+          { "etiqueta": "Gerencia", "usuario": "gerencia.grupohabana@gmail.com", "password": "", "rol_responsable": "Gerencia", "rol_visible": ["GERENCIA"], "notas": "", "datos_extra": [] },
+          { "etiqueta": "Logística", "usuario": "logistica.grupohabana@gmail.com", "password": "", "rol_responsable": "Logística", "rol_visible": ["LOGÍSTICA"], "notas": "", "datos_extra": [] },
+          { "etiqueta": "RRHH", "usuario": "rrhh.grupohabana@gmail.com", "password": "", "rol_responsable": "RRHH", "rol_visible": ["RECURSOS HUMANOS"], "notas": "", "datos_extra": [] },
+          { "etiqueta": "Jurídico", "usuario": "juridico.grupohabana@gmail.com", "password": "", "rol_responsable": "Jurídico", "rol_visible": ["JURÍDICO"], "notas": "", "datos_extra": [] },
+          { "etiqueta": "Gestoría", "usuario": "gestoria.grupohabana@gmail.com", "password": "", "rol_responsable": "Gestoría", "rol_visible": ["GESTORÍA"], "notas": "", "datos_extra": [] },
+          { "etiqueta": "Marketing", "usuario": "marketing.grupohabana@gmail.com", "password": "", "rol_responsable": "Marketing", "rol_visible": ["MARKETING"], "notas": "", "datos_extra": [] },
+          { "etiqueta": "Calidad", "usuario": "calidad.grupohabana@gmail.com", "password": "", "rol_responsable": "Calidad", "rol_visible": ["CALIDAD"], "notas": "", "datos_extra": [] },
+          { "etiqueta": "Community", "usuario": "community.grupohabana@gmail.com", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "", "datos_extra": [] },
+          { "etiqueta": "Cuenta Microsoft", "usuario": "habanasystem@gmail.com", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "", "datos_extra": [] }
+        ]
+      },
+
+      {
+        "nombre": "Cover Manager",
+        "categoria": "Gestión restaurante",
+        "url": "https://www.covermanager.com",
+        "credenciales": [
+          { "etiqueta": "Dirección", "usuario": "direccion.grupohabana@gmail.com", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "", "datos_extra": [] },
+          { "etiqueta": "Gerencia", "usuario": "gerencia.grupohabana@gmail.com", "password": "", "rol_responsable": "Gerencia", "rol_visible": ["GERENCIA"], "notas": "", "datos_extra": [] },
+          { "etiqueta": "Soporte", "usuario": "soporte.grupohabana@gmail.com", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "", "datos_extra": [] },
+          { "etiqueta": "Calidad", "usuario": "calidad.grupohabana@gmail.com", "password": "", "rol_responsable": "Calidad", "rol_visible": ["CALIDAD"], "notas": "", "datos_extra": [] },
+          { "etiqueta": "Marketing", "usuario": "marketing.grupohabana@gmail.com", "password": "", "rol_responsable": "Marketing", "rol_visible": ["MARKETING"], "notas": "Compartido con Bacanal", "datos_extra": [] }
+        ]
+      },
+      {
+        "nombre": "Administrador My Ágora",
+        "categoria": "Gestión restaurante",
+        "url": "https://www.agora-pv.com",
+        "credenciales": [
+          { "etiqueta": "Admin", "usuario": "direccion.grupohabana@gmail.com", "password": "", "rol_responsable": "Contabilidad", "rol_visible": ["CONTABILIDAD"], "notas": "", "datos_extra": [] }
+        ]
+      },
+      {
+        "nombre": "Sesame",
+        "categoria": "Gestión restaurante",
+        "url": "https://app.sesamehr.es",
+        "credenciales": [
+          { "etiqueta": "Dirección", "usuario": "direccion.grupohabana@gmail.com", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "", "datos_extra": [] }
+        ]
+      },
+      {
+        "nombre": "PIN TPV Terraza",
+        "categoria": "Gestión restaurante",
+        "url": "",
+        "credenciales": [
+          { "etiqueta": "PIN TPV Terraza", "usuario": "", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "", "datos_extra": [{ "nombre": "PIN", "valor": "" }] }
+        ]
+      },
+      {
+        "nombre": "PIN Comanderas",
+        "categoria": "Gestión restaurante",
+        "url": "",
+        "credenciales": [
+          { "etiqueta": "PIN Comanderas", "usuario": "", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "", "datos_extra": [{ "nombre": "PIN", "valor": "" }] }
+        ]
+      },
+      {
+        "nombre": "PIN Reservas",
+        "categoria": "Gestión restaurante",
+        "url": "",
+        "credenciales": [
+          { "etiqueta": "PIN Reservas", "usuario": "", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "", "datos_extra": [{ "nombre": "PIN", "valor": "" }] }
+        ]
+      },
+      {
+        "nombre": "PIN Tarjeta Carta Digital",
+        "categoria": "Gestión restaurante",
+        "url": "",
+        "credenciales": [
+          { "etiqueta": "Carta Digital", "usuario": "", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "", "datos_extra": [{ "nombre": "PIN", "valor": "" }, { "nombre": "PUK", "valor": "" }] }
+        ]
+      },
+      {
+        "nombre": "IP TPV config comanderas",
+        "categoria": "Gestión restaurante",
+        "url": "http://192.168.1.230:8982/",
+        "credenciales": [
+          { "etiqueta": "Config comanderas", "usuario": "http://192.168.1.230:8982/", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "", "datos_extra": [] }
+        ]
+      },
+
+      {
+        "nombre": "Instagram",
+        "categoria": "Redes y marketing",
+        "url": "https://www.instagram.com",
+        "credenciales": [
+          { "etiqueta": "@Habana_fuenlabrada", "usuario": "@Habana_fuenlabrada", "password": "", "rol_responsable": "Marketing", "rol_visible": ["MARKETING"], "notas": "", "datos_extra": [] }
+        ]
+      },
+      {
+        "nombre": "Facebook",
+        "categoria": "Redes y marketing",
+        "url": "https://www.facebook.com",
+        "credenciales": [
+          { "etiqueta": "Página", "usuario": "ivan.ballesteros.lopez@hotmail.com", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "", "datos_extra": [] }
+        ]
+      },
+      {
+        "nombre": "TikTok",
+        "categoria": "Redes y marketing",
+        "url": "https://www.tiktok.com",
+        "credenciales": [
+          { "etiqueta": "Cuenta", "usuario": "direccion.grupohabana@gmail.com", "password": "", "rol_responsable": "Marketing", "rol_visible": ["MARKETING"], "notas": "", "datos_extra": [] }
+        ]
+      },
+      {
+        "nombre": "Go High Level",
+        "categoria": "Redes y marketing",
+        "url": "https://app.gohighlevel.com",
+        "credenciales": [
+          { "etiqueta": "Calidad", "usuario": "calidad.grupohabana@gmail.com", "password": "", "rol_responsable": "Calidad", "rol_visible": ["CALIDAD"], "notas": "", "datos_extra": [] },
+          { "etiqueta": "Contabilidad", "usuario": "contabilidad.grupohabana@gmail.com", "password": "", "rol_responsable": "Contabilidad", "rol_visible": ["CONTABILIDAD"], "notas": "", "datos_extra": [] }
+        ]
+      },
+      {
+        "nombre": "SiteGround",
+        "categoria": "Redes y marketing",
+        "url": "https://www.siteground.com",
+        "credenciales": [
+          { "etiqueta": "Web", "usuario": "direccion.grupohabana@gmail.com", "password": "", "rol_responsable": "Marketing", "rol_visible": ["MARKETING"], "notas": "", "datos_extra": [] }
+        ]
+      },
+      {
+        "nombre": "Spotify",
+        "categoria": "Redes y marketing",
+        "url": "https://www.spotify.com",
+        "credenciales": [
+          { "etiqueta": "Cuenta", "usuario": "gerencia.grupohabana@gmail.com", "password": "", "rol_responsable": "Contabilidad", "rol_visible": ["CONTABILIDAD"], "notas": "", "datos_extra": [] }
+        ]
+      },
+      {
+        "nombre": "Marketing Habana (códigos respaldo)",
+        "categoria": "Redes y marketing",
+        "url": "",
+        "credenciales": [
+          { "etiqueta": "Códigos de respaldo", "usuario": "marketing.grupohabana@gmail.com", "password": "", "rol_responsable": "Marketing", "rol_visible": ["MARKETING"], "notas": "10 códigos de respaldo de la cuenta", "datos_extra": [
+            { "nombre": "Código 1", "valor": "" }, { "nombre": "Código 2", "valor": "" }, { "nombre": "Código 3", "valor": "" }, { "nombre": "Código 4", "valor": "" }, { "nombre": "Código 5", "valor": "" },
+            { "nombre": "Código 6", "valor": "" }, { "nombre": "Código 7", "valor": "" }, { "nombre": "Código 8", "valor": "" }, { "nombre": "Código 9", "valor": "" }, { "nombre": "Código 10", "valor": "" }
+          ] }
+        ]
+      },
+
+      {
+        "nombre": "Amazon",
+        "categoria": "Proveedores y compras",
+        "url": "https://www.amazon.es",
+        "credenciales": [
+          { "etiqueta": "Cuenta", "usuario": "direccion.grupohabana@gmail.com", "password": "", "rol_responsable": "Logística", "rol_visible": ["LOGÍSTICA"], "notas": "", "datos_extra": [] }
+        ]
+      },
+      {
+        "nombre": "Mercadona",
+        "categoria": "Proveedores y compras",
+        "url": "https://www.mercadona.es",
+        "credenciales": [
+          { "etiqueta": "Cuenta", "usuario": "logistica.grupohabana@gmail.com", "password": "", "rol_responsable": "Logística", "rol_visible": ["LOGÍSTICA"], "notas": "", "datos_extra": [] }
+        ]
+      },
+      {
+        "nombre": "Coca-Cola",
+        "categoria": "Proveedores y compras",
+        "url": "",
+        "credenciales": [
+          { "etiqueta": "Cuenta", "usuario": "logistica.grupohabana@gmail.com", "password": "", "rol_responsable": "Logística", "rol_visible": ["LOGÍSTICA"], "notas": "", "datos_extra": [] }
+        ]
+      },
+      {
+        "nombre": "Makro",
+        "categoria": "Proveedores y compras",
+        "url": "https://www.makro.es",
+        "credenciales": [
+          { "etiqueta": "Fuenlabrada", "usuario": "fuenlabrada.grupohabana@gmail.com", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "", "datos_extra": [] }
+        ]
+      },
+      {
+        "nombre": "Madrid HiFi",
+        "categoria": "Proveedores y compras",
+        "url": "",
+        "credenciales": [
+          { "etiqueta": "Cuenta", "usuario": "logistica.grupohabana@gmail.com", "password": "", "rol_responsable": "Logística", "rol_visible": ["LOGÍSTICA"], "notas": "", "datos_extra": [] }
+        ]
+      },
+      {
+        "nombre": "POP Desechables",
+        "categoria": "Proveedores y compras",
+        "url": "",
+        "credenciales": [
+          { "etiqueta": "Cuenta", "usuario": "direccion.grupohabana@gmail.com", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "", "datos_extra": [] }
+        ]
+      },
+      {
+        "nombre": "Tarjetas Débito",
+        "categoria": "Proveedores y compras",
+        "url": "",
+        "credenciales": [
+          { "etiqueta": "habana / fuenlabrada", "usuario": "habana / fuenlabrada", "password": "", "rol_responsable": "Logística", "rol_visible": ["LOGÍSTICA"], "notas": "", "datos_extra": [] }
+        ]
+      },
+
+      {
+        "nombre": "Wifi Habana",
+        "categoria": "Internet / Wifi / TV",
+        "url": "",
+        "credenciales": [
+          { "etiqueta": "Privado", "usuario": "HABANA.PRIVADO", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "", "datos_extra": [] },
+          { "etiqueta": "Clientes", "usuario": "HABANA.CLIENTES", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "", "datos_extra": [] }
+        ]
+      },
+      {
+        "nombre": "Wifi Comanderas",
+        "categoria": "Internet / Wifi / TV",
+        "url": "",
+        "credenciales": [
+          { "etiqueta": "WIFI_COMANDERAS", "usuario": "WIFI_COMANDERAS", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "", "datos_extra": [] }
+        ]
+      },
+      {
+        "nombre": "Movistar TV",
+        "categoria": "Internet / Wifi / TV",
+        "url": "",
+        "credenciales": [
+          { "etiqueta": "Cuenta", "usuario": "direccion.grupohabana@gmail.com", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "", "datos_extra": [] }
+        ]
+      },
+      {
+        "nombre": "Premium Numbers",
+        "categoria": "Internet / Wifi / TV",
+        "url": "",
+        "credenciales": [
+          { "etiqueta": "habana", "usuario": "habana", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "", "datos_extra": [] }
+        ]
+      },
+
+      {
+        "nombre": "Prosegur",
+        "categoria": "Seguridad y accesos",
+        "url": "",
+        "credenciales": [
+          { "etiqueta": "Dirección", "usuario": "direccion.grupohabana@gmail.com", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "", "datos_extra": [] },
+          { "etiqueta": "Contabilidad", "usuario": "contabilidad.grupohabana@gmail.com", "password": "", "rol_responsable": "Contabilidad", "rol_visible": ["CONTABILIDAD"], "notas": "", "datos_extra": [] }
+        ]
+      },
+      {
+        "nombre": "App Cámaras Acceso",
+        "categoria": "Seguridad y accesos",
+        "url": "",
+        "credenciales": [
+          { "etiqueta": "admin", "usuario": "admin", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "Compartido con Bacanal", "datos_extra": [] }
+        ]
+      },
+      {
+        "nombre": "Cámaras (N. serie)",
+        "categoria": "Seguridad y accesos",
+        "url": "",
+        "credenciales": [
+          { "etiqueta": "Número de serie", "usuario": "", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "", "datos_extra": [{ "nombre": "Nº serie", "valor": "" }] }
+        ]
+      },
+      {
+        "nombre": "Caja Fuerte",
+        "categoria": "Seguridad y accesos",
+        "url": "",
+        "credenciales": [
+          { "etiqueta": "Código", "usuario": "", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "", "datos_extra": [{ "nombre": "Código", "valor": "" }] }
+        ]
+      },
+
+      {
+        "nombre": "Móviles / SIM",
+        "categoria": "Móviles / SIM",
+        "url": "",
+        "credenciales": [
+          { "etiqueta": "Móvil empresa Dirección", "usuario": "", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "", "datos_extra": [{ "nombre": "PIN", "valor": "" }, { "nombre": "PUK", "valor": "" }] },
+          { "etiqueta": "Móvil empresa Gerencia", "usuario": "", "password": "", "rol_responsable": "Dirección", "rol_visible": ["GERENCIA"], "notas": "", "datos_extra": [{ "nombre": "Código desbloqueo", "valor": "" }] },
+          { "etiqueta": "Móvil empresa Gerente", "usuario": "", "password": "", "rol_responsable": "Gerencia", "rol_visible": ["GERENCIA"], "notas": "", "datos_extra": [{ "nombre": "PIN", "valor": "" }, { "nombre": "PUK", "valor": "" }] },
+          { "etiqueta": "Móvil empresa Marketing", "usuario": "", "password": "", "rol_responsable": "Dirección", "rol_visible": ["MARKETING"], "notas": "", "datos_extra": [{ "nombre": "PIN", "valor": "" }, { "nombre": "PUK", "valor": "" }] },
+          { "etiqueta": "Móvil Calidad", "usuario": "", "password": "", "rol_responsable": "Calidad", "rol_visible": ["CALIDAD"], "notas": "", "datos_extra": [{ "nombre": "PIN", "valor": "" }, { "nombre": "PUK", "valor": "" }] },
+          { "etiqueta": "Móvil Gerencia", "usuario": "", "password": "", "rol_responsable": "Gerencia", "rol_visible": ["GERENCIA"], "notas": "", "datos_extra": [{ "nombre": "PIN", "valor": "" }, { "nombre": "PUK", "valor": "" }] },
+          { "etiqueta": "SIM Gerente Habana", "usuario": "", "password": "", "rol_responsable": "Gerencia", "rol_visible": ["GERENCIA"], "notas": "", "datos_extra": [{ "nombre": "PIN", "valor": "" }, { "nombre": "PUK", "valor": "" }] },
+          { "etiqueta": "SIM Calidad Habana/Bacanal", "usuario": "", "password": "", "rol_responsable": "Calidad", "rol_visible": ["CALIDAD"], "notas": "", "datos_extra": [{ "nombre": "PIN", "valor": "" }, { "nombre": "PUK", "valor": "" }] },
+          { "etiqueta": "Teléfono RRHH", "usuario": "", "password": "", "rol_responsable": "RRHH", "rol_visible": ["RECURSOS HUMANOS"], "notas": "", "datos_extra": [{ "nombre": "PIN", "valor": "" }, { "nombre": "PUK", "valor": "" }] },
+          { "etiqueta": "PC Gerente", "usuario": "gerencia.grupohabana@gmail.com", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "", "datos_extra": [{ "nombre": "PIN", "valor": "" }] }
+        ]
+      },
+
+      {
+        "nombre": "Canal de Isabel II",
+        "categoria": "Suministros / Admin",
+        "url": "",
+        "credenciales": [
+          { "etiqueta": "Agua", "usuario": "47309297E", "password": "", "rol_responsable": "Contabilidad", "rol_visible": ["CONTABILIDAD"], "notas": "", "datos_extra": [] }
+        ]
+      },
+      {
+        "nombre": "Canaluz",
+        "categoria": "Suministros / Admin",
+        "url": "",
+        "credenciales": [
+          { "etiqueta": "Luz", "usuario": "direccion.grupohabana@gmail.com", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "", "datos_extra": [] }
+        ]
+      },
+      {
+        "nombre": "InfoJobs",
+        "categoria": "Suministros / Admin",
+        "url": "https://www.infojobs.net",
+        "credenciales": [
+          { "etiqueta": "Cuenta", "usuario": "direccion.grupohabana@gmail.com", "password": "", "rol_responsable": "RRHH", "rol_visible": ["RECURSOS HUMANOS"], "notas": "", "datos_extra": [] }
+        ]
+      },
+      {
+        "nombre": "Nº Registro de Marca",
+        "categoria": "Suministros / Admin",
+        "url": "",
+        "credenciales": [
+          { "etiqueta": "Registro", "usuario": "7915110928112", "password": "", "rol_responsable": "Dirección", "rol_visible": ["DIRECCIÓN"], "notas": "", "datos_extra": [] }
+        ]
+      }
+    ]
+  }
+]

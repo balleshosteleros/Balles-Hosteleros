@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { revelarCredencial } from "../actions/revelar-action";
 import { deleteCredencial } from "../actions/credenciales-actions";
+import { useVerificacionAccesos } from "./useVerificacionAccesos";
 import type { Credencial } from "../data/tipos";
 
 export function CredencialRow({
@@ -21,38 +22,54 @@ export function CredencialRow({
   onEdit: () => void;
   onDeleted: () => void;
 }) {
-  const [revelado, setRevelado] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  // Valores revelados por campo: "password" o el nombre de un dato extra.
+  const [revelado, setRevelado] = useState<Record<string, string>>({});
+  const [loadingCampo, setLoadingCampo] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
+  const { ensureVerificado } = useVerificacionAccesos();
 
-  async function handleRevelar() {
-    if (revelado) {
-      setRevelado(null);
-      return;
-    }
-    setLoading(true);
-    const res = await revelarCredencial(credencial.id);
-    setLoading(false);
+  async function revelarCampo(campo: string): Promise<string | null> {
+    // Gate: cualquier visualización exige verificación vigente.
+    const ok = await ensureVerificado();
+    if (!ok) return null;
+    setLoadingCampo(campo);
+    const res = await revelarCredencial(credencial.id, campo);
+    setLoadingCampo(null);
     if (!res.ok) {
       toast.error(res.error);
-      return;
+      return null;
     }
-    setRevelado(res.password);
-    setTimeout(() => setRevelado(null), 10000);
+    return res.valor;
   }
 
-  async function handleCopy() {
-    setLoading(true);
-    const res = await revelarCredencial(credencial.id);
-    setLoading(false);
-    if (!res.ok) {
-      toast.error(res.error);
+  async function handleToggle(campo: string) {
+    if (revelado[campo] !== undefined) {
+      setRevelado((prev) => {
+        const next = { ...prev };
+        delete next[campo];
+        return next;
+      });
       return;
     }
+    const valor = await revelarCampo(campo);
+    if (valor === null) return;
+    setRevelado((prev) => ({ ...prev, [campo]: valor }));
+    setTimeout(() => {
+      setRevelado((prev) => {
+        const next = { ...prev };
+        delete next[campo];
+        return next;
+      });
+    }, 10000);
+  }
+
+  async function handleCopy(campo: string) {
+    const valor = await revelarCampo(campo);
+    if (valor === null) return;
     try {
-      await navigator.clipboard.writeText(res.password);
-      toast.success("Contraseña copiada");
+      await navigator.clipboard.writeText(valor);
+      toast.success("Copiado");
     } catch {
       toast.error("No se pudo copiar al portapapeles");
     }
@@ -76,6 +93,43 @@ export function CredencialRow({
     onDeleted();
   }
 
+  function SecretField({ label, campo }: { label: string; campo: string }) {
+    const loading = loadingCampo === campo;
+    const value = revelado[campo];
+    return (
+      <div className="flex items-center gap-1.5">
+        <span className="text-muted-foreground">{label}:</span>
+        <span className="font-mono flex-1 break-all">{value ?? "••••••••••"}</span>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 w-6 p-0"
+          onClick={() => handleToggle(campo)}
+          disabled={loading}
+          title={value !== undefined ? "Ocultar" : "Revelar"}
+        >
+          {loading ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : value !== undefined ? (
+            <EyeOff className="h-3.5 w-3.5" />
+          ) : (
+            <Eye className="h-3.5 w-3.5" />
+          )}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 w-6 p-0"
+          onClick={() => handleCopy(campo)}
+          disabled={loading}
+          title="Copiar"
+        >
+          <Copy className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-lg border bg-card p-3 space-y-2">
       {confirmDeleteDialog}
@@ -94,6 +148,11 @@ export function CredencialRow({
                 <ExternalLink className="h-3 w-3" />
               </a>
             )}
+            {credencial.rol_responsable && (
+              <span className="text-[10px] text-muted-foreground">
+                · usa: {credencial.rol_responsable}
+              </span>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-1 mt-1">
             <ShieldCheck className="h-3 w-3 text-muted-foreground" />
@@ -110,13 +169,7 @@ export function CredencialRow({
         </div>
         {canManage && (
           <div className="flex items-center gap-0.5 shrink-0">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0"
-              onClick={onEdit}
-              title="Editar"
-            >
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onEdit} title="Editar">
               <Pencil className="h-3.5 w-3.5" />
             </Button>
             <Button
@@ -138,46 +191,18 @@ export function CredencialRow({
       </div>
 
       <div className="space-y-1.5 text-xs">
-        <div>
-          <span className="text-muted-foreground">Usuario:</span>{" "}
-          <span className="font-mono">{credencial.usuario}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-muted-foreground">Contraseña:</span>
-          <span className="font-mono flex-1">
-            {revelado ?? "••••••••••"}
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 w-6 p-0"
-            onClick={handleRevelar}
-            disabled={loading}
-            title={revelado ? "Ocultar" : "Revelar"}
-          >
-            {loading ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : revelado ? (
-              <EyeOff className="h-3.5 w-3.5" />
-            ) : (
-              <Eye className="h-3.5 w-3.5" />
-            )}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 w-6 p-0"
-            onClick={handleCopy}
-            disabled={loading}
-            title="Copiar"
-          >
-            <Copy className="h-3.5 w-3.5" />
-          </Button>
-        </div>
+        {credencial.usuario && (
+          <div>
+            <span className="text-muted-foreground">Usuario:</span>{" "}
+            <span className="font-mono break-all">{credencial.usuario}</span>
+          </div>
+        )}
+        <SecretField label="Contraseña" campo="password" />
+        {credencial.datos_extra.map((d) => (
+          <SecretField key={d.nombre} label={d.nombre} campo={d.nombre} />
+        ))}
         {credencial.notas && (
-          <p className="text-muted-foreground text-[11px] italic pt-0.5">
-            {credencial.notas}
-          </p>
+          <p className="text-muted-foreground text-[11px] italic pt-0.5">{credencial.notas}</p>
         )}
       </div>
     </div>

@@ -9,6 +9,7 @@ import type { AppExterna, Credencial, RolOption } from "../data/tipos";
 import { AppCard } from "./AppCard";
 import { AppFormDialog } from "./AppFormDialog";
 import { CredencialesDrawer } from "./CredencialesDrawer";
+import { VerificacionAccesosProvider } from "./useVerificacionAccesos";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 
 const ROLES_MANAGE = ["DIRECCIÓN", "GERENCIA", "DIRECTOR"];
@@ -71,6 +72,7 @@ export function AccesosView() {
   }
 
   return (
+    <VerificacionAccesosProvider>
     <div className="p-4 sm:p-6 space-y-4">
       <SubmoduleToolbar
         busqueda={busqueda}
@@ -128,5 +130,6 @@ export function AccesosView() {
         onAppChanged={refresh}
       />
     </div>
+    </VerificacionAccesosProvider>
   );
 }

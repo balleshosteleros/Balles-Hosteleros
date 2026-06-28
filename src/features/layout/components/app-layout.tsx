@@ -11,10 +11,6 @@ import {
   UserCircle,
   CheckCircle2,
   Settings,
-  Eye,
-  EyeOff,
-  Copy,
-  Check,
   Building2,
 } from "lucide-react";
 import { getRouteMeta } from "@/features/layout/data/nav-routes";
@@ -52,9 +48,6 @@ import { CountdownOverlay } from "@/features/recorder/components/CountdownOverla
 import { WebcamPip } from "@/features/recorder/components/WebcamPip";
 import { RecorderProvider } from "@/features/recorder/contexts/recorder-context";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import type { AccesoApp } from "@/features/rrhh/data/accesos-apps";
-import { listAccesosApps } from "@/features/rrhh/actions/accesos-apps-actions";
-import { ExternalLink } from "lucide-react";
 import { useViewMode } from "@/features/layout/contexts/view-mode-context";
 import {
   HERRAMIENTA,
@@ -129,44 +122,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       ? (userEmail.split("@")[0] || "—")
       : "";
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [appsMenuOpen, setAppsMenuOpen] = useState(false);
-  const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
-  const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  function copyToClipboard(value: string, fieldKey: string) {
-    if (typeof navigator === "undefined" || !navigator.clipboard) return;
-    navigator.clipboard.writeText(value).then(() => {
-      setCopiedField(fieldKey);
-      setTimeout(() => setCopiedField((k) => (k === fieldKey ? null : k)), 1200);
-    }).catch((e) => console.error("[layout] copy:", e));
-  }
-
-  function maskPassword(pwd: string): string {
-    const len = Math.min(pwd.length, 12);
-    return "•".repeat(len || 8);
-  }
-
-  const { empresaActual, ajustes } = useEmpresa();
-  const [accesosAppsRaw, setAccesosAppsRaw] = useState<AccesoApp[]>([]);
-  useEffect(() => {
-    let alive = true;
-    listAccesosApps(empresaActual.id)
-      .then((rows) => { if (alive) setAccesosAppsRaw(rows); })
-      .catch((e) => console.error("[layout] accesos:", e));
-    return () => { alive = false; };
-  }, [empresaActual.id]);
-  // Visibilidad por rol: dirección/admin ven todo; el resto solo las apps cuyo
-  // rol_label esté en roles_autorizados. Apps sin roles = solo dirección.
-  const esDirectorGlobal = roles.includes("director") || roles.includes("admin");
-  const userRolLabel = (profile?.rol_label ?? "").trim().toLowerCase();
-  const accesosApps = accesosAppsRaw
-    .filter((a) => a.estado === "Activo")
-    .filter((a) => {
-      if (esDirectorGlobal) return true;
-      if (!a.rolesAutorizados || a.rolesAutorizados.length === 0) return false;
-      return a.rolesAutorizados.some((r) => r.trim().toLowerCase() === userRolLabel);
-    });
-  const appsCategories = Array.from(new Set(accesosApps.map((a) => a.categoria)));
+  const { ajustes } = useEmpresa();
   const { mode: viewMode, setMode: setViewMode } = useViewMode();
 
   function activarVista(modo: "paneles" | "departamentos") {
@@ -308,204 +265,17 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
                     {/* Accesos a apps externas — solo si el rol tiene HERR_APLICACIONES */}
                     {puedeVer("HERR_APLICACIONES") && (
-                    <DropdownMenu open={appsMenuOpen} onOpenChange={setAppsMenuOpen}>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost" size="icon"
-                          className="relative h-8 w-8"
-                          title="Accesos a aplicaciones"
-                          onMouseEnter={() => setAppsMenuOpen(true)}
-                        >
-                          <ToolIcon.aplicaciones className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.aplicaciones.colorKey)}`} />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent
-                        align="end"
-                        className="w-96 max-h-[520px] overflow-y-auto"
-                        onMouseLeave={() => setAppsMenuOpen(false)}
+                      // Las contraseñas ya NO se muestran en la barra (era texto plano,
+                      // segundo camino inseguro). El icono lleva al módulo seguro
+                      // /accesos, con cifrado + verificación de identidad por revelado.
+                      <Button
+                        variant="ghost" size="icon"
+                        className="relative h-8 w-8"
+                        title="Accesos a aplicaciones"
+                        onClick={() => router.push("/accesos")}
                       >
-                        <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 py-2">
-                          Aplicaciones — {empresaActual.nombre}
-                        </DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        {appsCategories.map((cat) => (
-                          <div key={cat}>
-                            <p className="px-3 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                              {cat}
-                            </p>
-                            {accesosApps
-                              .filter((a) => a.categoria === cat)
-                              .map((app) => {
-                                const accesosTodos = app.accesos?.length
-                                  ? app.accesos
-                                  : app.usuario || app.contrasena
-                                    ? [{ etiqueta: "", usuario: app.usuario, contrasena: app.contrasena, roles: [] as string[] }]
-                                    : [];
-                                // Visibilidad por acceso: dirección/admin ve todos;
-                                // el resto solo los accesos cuyo rol coincide con el suyo.
-                                const accesos = esDirectorGlobal
-                                  ? accesosTodos
-                                  : accesosTodos.filter((acc) =>
-                                      (acc.roles ?? []).some(
-                                        (r) => r.trim().toLowerCase() === userRolLabel,
-                                      ),
-                                    );
-                                // Si un no-director no puede ver ningún acceso, ocultar la app.
-                                if (!esDirectorGlobal && accesos.length === 0) return null;
-                                return (
-                                  <div
-                                    key={app.id}
-                                    className="px-2 py-1.5 mx-1 rounded-md hover:bg-accent/50"
-                                  >
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        window.open(app.url, "_blank", "noopener,noreferrer")
-                                      }
-                                      className="flex items-center gap-2 w-full text-left"
-                                      title={`Abrir ${app.nombre}`}
-                                    >
-                                      {app.logoUrl ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img
-                                          src={app.logoUrl}
-                                          alt=""
-                                          className="h-4 w-4 rounded object-contain shrink-0"
-                                          onError={(e) => {
-                                            const img = e.currentTarget;
-                                            img.style.display = "none";
-                                            const fallback = img.nextElementSibling as HTMLElement | null;
-                                            if (fallback) fallback.style.display = "inline";
-                                          }}
-                                        />
-                                      ) : null}
-                                      <span
-                                        className="text-sm leading-none shrink-0"
-                                        style={{ display: app.logoUrl ? "none" : "inline" }}
-                                      >
-                                        {app.icono}
-                                      </span>
-                                      <span className="flex-1 text-xs font-medium truncate">
-                                        {app.nombre}
-                                      </span>
-                                      <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
-                                    </button>
-
-                                    <div className="mt-1.5 ml-6 space-y-2">
-                                      {accesos.length === 0 ? (
-                                        <button
-                                          type="button"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setAppsMenuOpen(false);
-                                            router.push("/accesos");
-                                          }}
-                                          className="text-left text-[11px] italic text-muted-foreground/70 hover:text-primary hover:underline"
-                                          title="Configurar credenciales en Accesos"
-                                        >
-                                          sin definir — añadir
-                                        </button>
-                                      ) : (
-                                        accesos.map((acc, idx) => {
-                                          const pwdKey = `${app.id}:${idx}`;
-                                          const pwdVisible = !!visiblePasswords[pwdKey];
-                                          return (
-                                            <div key={idx} className="space-y-1">
-                                              {acc.etiqueta ? (
-                                                <p className="text-[10px] font-semibold text-muted-foreground/90">
-                                                  {acc.etiqueta}
-                                                </p>
-                                              ) : null}
-                                              {acc.usuario ? (
-                                                <div className="flex items-center gap-1.5 text-[11px]">
-                                                  <span className="text-muted-foreground w-16 shrink-0">
-                                                    Usuario
-                                                  </span>
-                                                  <span className="font-mono flex-1 truncate text-foreground/80 select-all">
-                                                    {acc.usuario}
-                                                  </span>
-                                                  <button
-                                                    type="button"
-                                                    onClick={(e) => {
-                                                      e.stopPropagation();
-                                                      copyToClipboard(acc.usuario, `${pwdKey}:user`);
-                                                    }}
-                                                    className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
-                                                    title="Copiar usuario"
-                                                    aria-label="Copiar usuario"
-                                                  >
-                                                    {copiedField === `${pwdKey}:user` ? (
-                                                      <Check className="h-3 w-3 text-emerald-600" />
-                                                    ) : (
-                                                      <Copy className="h-3 w-3" />
-                                                    )}
-                                                  </button>
-                                                </div>
-                                              ) : null}
-                                              {acc.contrasena ? (
-                                                <div className="flex items-center gap-1.5 text-[11px]">
-                                                  <span className="text-muted-foreground w-16 shrink-0">
-                                                    Contraseña
-                                                  </span>
-                                                  <span className="font-mono flex-1 truncate text-foreground/80 select-all">
-                                                    {pwdVisible ? acc.contrasena : maskPassword(acc.contrasena)}
-                                                  </span>
-                                                  <button
-                                                    type="button"
-                                                    onClick={(e) => {
-                                                      e.stopPropagation();
-                                                      setVisiblePasswords((prev) => ({
-                                                        ...prev,
-                                                        [pwdKey]: !prev[pwdKey],
-                                                      }));
-                                                    }}
-                                                    className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
-                                                    title={pwdVisible ? "Ocultar contraseña" : "Mostrar contraseña"}
-                                                    aria-label={pwdVisible ? "Ocultar contraseña" : "Mostrar contraseña"}
-                                                  >
-                                                    {pwdVisible ? (
-                                                      <EyeOff className="h-3 w-3" />
-                                                    ) : (
-                                                      <Eye className="h-3 w-3" />
-                                                    )}
-                                                  </button>
-                                                  <button
-                                                    type="button"
-                                                    onClick={(e) => {
-                                                      e.stopPropagation();
-                                                      copyToClipboard(acc.contrasena, `${pwdKey}:pwd`);
-                                                    }}
-                                                    className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
-                                                    title="Copiar contraseña"
-                                                    aria-label="Copiar contraseña"
-                                                  >
-                                                    {copiedField === `${pwdKey}:pwd` ? (
-                                                      <Check className="h-3 w-3 text-emerald-600" />
-                                                    ) : (
-                                                      <Copy className="h-3 w-3" />
-                                                    )}
-                                                  </button>
-                                                </div>
-                                              ) : null}
-                                            </div>
-                                          );
-                                        })
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            <DropdownMenuSeparator />
-                          </div>
-                        ))}
-                        <DropdownMenuItem
-                          className="cursor-pointer gap-2 px-3 py-2 text-xs text-muted-foreground"
-                          onSelect={() => router.push("/accesos")}
-                        >
-                          Ver todos los accesos →
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                        <ToolIcon.aplicaciones className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.aplicaciones.colorKey)}`} />
+                      </Button>
                     )}
                   </div>
 

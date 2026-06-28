@@ -13,13 +13,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, ShieldCheck } from "lucide-react";
+import { Loader2, ShieldCheck, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   credencialSchema,
-  credencialUpdateSchema,
   type Credencial,
   type CredencialInput,
+  type DatoExtraInput,
   type RolOption,
 } from "../data/tipos";
 import {
@@ -48,6 +48,8 @@ export function CredencialFormDialog({
   const [password, setPassword] = useState("");
   const [urlEspecifica, setUrlEspecifica] = useState("");
   const [notas, setNotas] = useState("");
+  const [rolResponsable, setRolResponsable] = useState("");
+  const [datosExtra, setDatosExtra] = useState<DatoExtraInput[]>([]);
   const [rolesIds, setRolesIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -58,6 +60,12 @@ export function CredencialFormDialog({
       setPassword("");
       setUrlEspecifica(credencial?.url_especifica ?? "");
       setNotas(credencial?.notas ?? "");
+      setRolResponsable(credencial?.rol_responsable ?? "");
+      // Al editar, los nombres de datos extra se muestran pero el valor entra vacío:
+      // si lo dejas vacío se elimina ese dato; si escribes uno nuevo, se re-cifra.
+      setDatosExtra(
+        (credencial?.datos_extra ?? []).map((d) => ({ nombre: d.nombre, valor: "" })),
+      );
       setRolesIds(credencial?.roles.map((r) => r.id) ?? []);
     }
   }, [open, credencial]);
@@ -68,60 +76,53 @@ export function CredencialFormDialog({
     );
   }
 
+  function addDatoExtra() {
+    setDatosExtra((prev) => [...prev, { nombre: "", valor: "" }]);
+  }
+  function updateDatoExtra(i: number, key: "nombre" | "valor", v: string) {
+    setDatosExtra((prev) => prev.map((d, idx) => (idx === i ? { ...d, [key]: v } : d)));
+  }
+  function removeDatoExtra(i: number) {
+    setDatosExtra((prev) => prev.filter((_, idx) => idx !== i));
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    if (editing) {
-      const input = {
-        app_id: appId,
-        etiqueta,
-        usuario,
-        password: password || undefined,
-        url_especifica: urlEspecifica.trim(),
-        notas,
-        roles_ids: rolesIds,
-      };
-      const parsed = credencialUpdateSchema.safeParse(input);
-      if (!parsed.success) {
-        toast.error(parsed.error.issues[0]?.message ?? "Datos inválidos");
-        return;
-      }
-      setSaving(true);
-      const res = await updateCredencial(credencial!.id, parsed.data);
-      setSaving(false);
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
-      }
-      toast.success("Credencial actualizada");
-      onOpenChange(false);
-      onSaved();
-    } else {
-      const input: CredencialInput = {
-        app_id: appId,
-        etiqueta,
-        usuario,
-        password,
-        url_especifica: urlEspecifica.trim(),
-        notas,
-        roles_ids: rolesIds,
-      };
-      const parsed = credencialSchema.safeParse(input);
-      if (!parsed.success) {
-        toast.error(parsed.error.issues[0]?.message ?? "Datos inválidos");
-        return;
-      }
-      setSaving(true);
-      const res = await createCredencial(parsed.data);
-      setSaving(false);
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
-      }
-      toast.success("Credencial creada");
-      onOpenChange(false);
-      onSaved();
+    // Solo se mandan datos extra con nombre Y valor (los demás se ignoran/eliminan).
+    const datosLimpios = datosExtra.filter((d) => d.nombre.trim() && d.valor.length > 0);
+
+    const input: CredencialInput = {
+      app_id: appId,
+      etiqueta,
+      usuario: usuario.trim(),
+      password: password || "",
+      url_especifica: urlEspecifica.trim(),
+      notas,
+      rol_responsable: rolResponsable.trim(),
+      datos_extra: datosLimpios,
+      roles_ids: rolesIds,
+    };
+
+    const parsed = credencialSchema.safeParse(input);
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0]?.message ?? "Datos inválidos");
+      return;
     }
+
+    setSaving(true);
+    const res = editing
+      ? await updateCredencial(credencial!.id, parsed.data)
+      : await createCredencial(parsed.data);
+    setSaving(false);
+
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    toast.success(editing ? "Credencial actualizada" : "Credencial creada");
+    onOpenChange(false);
+    onSaved();
   }
 
   return (
@@ -132,8 +133,8 @@ export function CredencialFormDialog({
             {editing ? "Editar credencial" : "Nueva credencial"}
           </DialogTitle>
           <DialogDescription>
-            La contraseña se cifra antes de guardarse. Solo los roles
-            seleccionados podrán ver esta credencial.
+            La contraseña y los datos extra se cifran antes de guardarse. Solo
+            los roles del campo &quot;rol visible&quot; podrán verla.
           </DialogDescription>
         </DialogHeader>
 
@@ -144,36 +145,98 @@ export function CredencialFormDialog({
               id="cred-etiqueta"
               value={etiqueta}
               onChange={(e) => setEtiqueta(e.target.value)}
-              placeholder="Ej: Admin, Cocina, Glovo Habana..."
+              placeholder="Ej: Dirección, Contabilidad, Terraza..."
               required
               autoFocus
             />
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              Distingue esta credencial de otras de la misma app.
-            </p>
           </div>
+
           <div>
-            <Label htmlFor="cred-usuario">Usuario *</Label>
+            <Label htmlFor="cred-usuario">Usuario</Label>
             <Input
               id="cred-usuario"
               value={usuario}
               onChange={(e) => setUsuario(e.target.value)}
-              required
+              placeholder="email, código o identificador"
             />
           </div>
+
           <div>
             <Label htmlFor="cred-pwd">
-              Contraseña {editing ? "(dejar vacío para no cambiar)" : "*"}
+              Contraseña {editing ? "(vacío = no cambiar)" : ""}
             </Label>
             <Input
               id="cred-pwd"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              required={!editing}
               autoComplete="new-password"
             />
           </div>
+
+          {/* DATO EXTRA — lista flexible (PIN, PUK, código empresa, etc.) */}
+          <div>
+            <Label className="flex items-center justify-between">
+              <span>Datos extra</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs"
+                onClick={addDatoExtra}
+              >
+                <Plus className="h-3 w-3 mr-1" /> Añadir
+              </Button>
+            </Label>
+            <p className="text-[11px] text-muted-foreground mb-1.5">
+              Para PIN, PUK, código de empresa, verificación, códigos de
+              respaldo... El valor se cifra.
+            </p>
+            <div className="space-y-1.5">
+              {datosExtra.map((d, i) => (
+                <div key={i} className="flex items-center gap-1.5">
+                  <Input
+                    value={d.nombre}
+                    onChange={(e) => updateDatoExtra(i, "nombre", e.target.value)}
+                    placeholder="Nombre (PIN, PUK...)"
+                    className="flex-1"
+                  />
+                  <Input
+                    type="password"
+                    value={d.valor}
+                    onChange={(e) => updateDatoExtra(i, "valor", e.target.value)}
+                    placeholder={editing ? "valor (vacío = quitar)" : "valor"}
+                    autoComplete="new-password"
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 text-muted-foreground shrink-0"
+                    onClick={() => removeDatoExtra(i)}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="cred-rol-resp">Rol responsable (informativo)</Label>
+            <Input
+              id="cred-rol-resp"
+              value={rolResponsable}
+              onChange={(e) => setRolResponsable(e.target.value)}
+              placeholder="Ej: Logística, Contabilidad..."
+            />
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Indica el departamento que usa esta cuenta. No controla la
+              visibilidad.
+            </p>
+          </div>
+
           <div>
             <Label htmlFor="cred-url">URL específica</Label>
             <Input
@@ -181,9 +244,9 @@ export function CredencialFormDialog({
               type="url"
               value={urlEspecifica}
               onChange={(e) => setUrlEspecifica(e.target.value)}
-              placeholder="Si la app tiene varios subdominios..."
             />
           </div>
+
           <div>
             <Label htmlFor="cred-notas">Notas</Label>
             <Textarea
@@ -197,10 +260,11 @@ export function CredencialFormDialog({
           <div>
             <Label className="flex items-center gap-1.5">
               <ShieldCheck className="h-3.5 w-3.5" />
-              Roles que pueden ver esta credencial *
+              Rol visible (quién puede verla) *
             </Label>
             <p className="text-[11px] text-muted-foreground mb-2">
-              Obligatorio: selecciona al menos un rol.
+              Obligatorio: al menos un rol. Puedes marcar varios. Dirección la
+              ve siempre.
             </p>
             <div className="border rounded-md max-h-44 overflow-y-auto p-1">
               {roles.length === 0 ? (

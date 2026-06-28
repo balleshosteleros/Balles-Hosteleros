@@ -38,3 +38,8 @@ export function decrypt(stored: string): string {
   const dec = Buffer.concat([decipher.update(enc), decipher.final()]);
   return dec.toString("utf8");
 }
+
+/** Cifra una cadena solo si tiene contenido; las vacías quedan vacías. */
+export function encryptOptional(plain: string): string {
+  return plain && plain.length > 0 ? encrypt(plain) : "";
+}

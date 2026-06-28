@@ -3,18 +3,30 @@
 import { revalidatePath } from "next/cache";
 import { getAppContext } from "@/lib/supabase/get-context";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { encrypt } from "../lib/crypto";
+import { encryptOptional } from "../lib/crypto";
 import {
   credencialSchema,
   credencialUpdateSchema,
   type Credencial,
   type CredencialInput,
   type CredencialUpdateInput,
+  type DatoExtraInput,
 } from "../data/tipos";
 
+type DatoExtraCifrado = { nombre: string; valor_cifrado: string };
+
+function cifrarDatosExtra(datos: DatoExtraInput[]): DatoExtraCifrado[] {
+  return datos
+    .filter((d) => d.nombre.trim() && d.valor.length > 0)
+    .map((d) => ({ nombre: d.nombre.trim(), valor_cifrado: encryptOptional(d.valor) }));
+}
+
 /**
- * Devuelve SOLO las credenciales visibles para el usuario (RLS filtra por intersección de roles).
- * NUNCA incluye password_cifrado ni password en plano.
+ * Devuelve SOLO las credenciales visibles para el usuario.
+ *
+ * SEGURIDAD: usa el cliente del USUARIO (no admin), de modo que la RLS
+ * `app_credenciales_tenant_role_read` filtra por ROL VISIBLE. PROGRAMADOR
+ * (Fernando) no recibe ninguna fila. NUNCA incluye contraseña ni valores extra.
  */
 export async function listCredencialesVisibles(appId?: string): Promise<Credencial[]> {
   const { supabase, empresaId } = await getAppContext();
@@ -23,7 +35,8 @@ export async function listCredencialesVisibles(appId?: string): Promise<Credenci
   let query = supabase
     .from("app_credenciales")
     .select(
-      `id, app_id, empresa_id, etiqueta, usuario, url_especifica, notas, created_at, updated_at,
+      `id, app_id, empresa_id, etiqueta, usuario, url_especifica, notas,
+       rol_responsable, datos_extra, created_at, updated_at,
        app_credencial_roles ( rol_id, empresa_roles ( id, nombre ) )`,
     )
     .eq("empresa_id", empresaId)
@@ -45,6 +58,8 @@ export async function listCredencialesVisibles(appId?: string): Promise<Credenci
     usuario: string;
     url_especifica: string | null;
     notas: string;
+    rol_responsable: string | null;
+    datos_extra: Array<{ nombre: string; valor_cifrado: string }> | null;
     created_at: string;
     updated_at: string;
     app_credencial_roles: Array<{
@@ -61,6 +76,9 @@ export async function listCredencialesVisibles(appId?: string): Promise<Credenci
     usuario: row.usuario,
     url_especifica: row.url_especifica,
     notas: row.notas,
+    rol_responsable: row.rol_responsable ?? "",
+    // Solo se exponen los NOMBRES de los datos extra; los valores se revelan aparte.
+    datos_extra: (row.datos_extra ?? []).map((d) => ({ nombre: d.nombre })),
     created_at: row.created_at,
     updated_at: row.updated_at,
     roles: (row.app_credencial_roles ?? [])
@@ -92,7 +110,7 @@ export async function createCredencial(
     return { ok: false, error: "App inválida" };
   }
 
-  // Verifica que TODOS los roles pertenecen a la empresa activa.
+  // Verifica que TODOS los roles visibles pertenecen a la empresa activa.
   const { data: roles, error: rolesErr } = await admin
     .from("empresa_roles")
     .select("id")
@@ -103,8 +121,10 @@ export async function createCredencial(
   }
 
   let passwordCifrado: string;
+  let datosExtra: DatoExtraCifrado[];
   try {
-    passwordCifrado = encrypt(parsed.data.password);
+    passwordCifrado = encryptOptional(parsed.data.password ?? "");
+    datosExtra = cifrarDatosExtra(parsed.data.datos_extra ?? []);
   } catch (e) {
     return { ok: false, error: `Error de cifrado: ${(e as Error).message}` };
   }
@@ -115,10 +135,12 @@ export async function createCredencial(
       app_id: parsed.data.app_id,
       empresa_id: empresaId,
       etiqueta: parsed.data.etiqueta,
-      usuario: parsed.data.usuario,
+      usuario: parsed.data.usuario ?? "",
       password_cifrado: passwordCifrado,
       url_especifica: parsed.data.url_especifica || null,
       notas: parsed.data.notas ?? "",
+      rol_responsable: parsed.data.rol_responsable ?? "",
+      datos_extra: datosExtra,
       created_by: userId,
     })
     .select("id")
@@ -176,16 +198,21 @@ export async function updateCredencial(
 
   const updatePayload: Record<string, unknown> = {
     etiqueta: parsed.data.etiqueta,
-    usuario: parsed.data.usuario,
+    usuario: parsed.data.usuario ?? "",
     url_especifica: parsed.data.url_especifica || null,
     notas: parsed.data.notas ?? "",
+    rol_responsable: parsed.data.rol_responsable ?? "",
   };
-  if (parsed.data.password && parsed.data.password.length > 0) {
-    try {
-      updatePayload.password_cifrado = encrypt(parsed.data.password);
-    } catch (e) {
-      return { ok: false, error: `Error de cifrado: ${(e as Error).message}` };
+
+  try {
+    // Contraseña: solo se re-cifra si se proporciona una nueva.
+    if (parsed.data.password && parsed.data.password.length > 0) {
+      updatePayload.password_cifrado = encryptOptional(parsed.data.password);
     }
+    // Datos extra: se re-cifran y reemplazan por completo en cada guardado.
+    updatePayload.datos_extra = cifrarDatosExtra(parsed.data.datos_extra ?? []);
+  } catch (e) {
+    return { ok: false, error: `Error de cifrado: ${(e as Error).message}` };
   }
 
   const { error: updErr } = await admin
