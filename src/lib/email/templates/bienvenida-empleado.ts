@@ -73,8 +73,9 @@ export function bienvenidaEmpleadoEmail(opts: {
             <tr>
               <td style="padding:16px 32px 24px 32px;border-top:1px solid #e2e8f0;">
                 <p style="margin:0;font-size:11px;color:#94a3b8;line-height:1.5;">
-                  Este enlace caduca en 1 hora. Si no esperabas este correo o ha pasado mucho tiempo,
-                  contacta con tu responsable de RRHH.
+                  Este enlace caduca en 1 hora y solo puede usarse una vez. Si no
+                  esperabas este correo, ya lo has usado o ha caducado, contacta
+                  con tu responsable de RRHH.
                 </p>
               </td>
             </tr>
@@ -87,7 +88,7 @@ export function bienvenidaEmpleadoEmail(opts: {
 
   const text = `¡Bienvenido/a, ${opts.recipientName}!
 
-Tu cuenta en ${opts.empresaNombre} ya está lista. Para empezar, elige tu contraseña con este enlace (caduca en 1 hora):
+Tu cuenta en ${opts.empresaNombre} ya está lista. Para empezar, elige tu contraseña con este enlace (caduca en 1 hora y solo puede usarse una vez):
 ${opts.actionUrl}
 
 IMPORTANTE: será un PIN de 6 dígitos que te permitirá moverte por todo el sistema de la empresa. Guárdalo bien, lo necesitarás siempre.
