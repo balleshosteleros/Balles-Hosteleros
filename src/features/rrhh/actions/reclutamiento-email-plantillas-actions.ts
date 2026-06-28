@@ -472,7 +472,7 @@ export async function enviarReclutamientoFaseEmail(
     if (ult?.id) {
       await supabase
         .from("candidato_historial")
-        .update({ email_enviado: true })
+        .update({ email_enviado: true, email_asunto: subject })
         .eq("id", ult.id as string);
     }
     return { sent: true };

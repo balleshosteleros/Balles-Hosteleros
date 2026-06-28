@@ -60,7 +60,7 @@ export async function getActividadCandidato(
   if (!empresaId) return [];
   const { data, error } = await supabase
     .from("candidato_historial")
-    .select("id, fase_anterior, estado_anterior, fase_nueva, estado_nuevo, usuario_nombre, email_enviado, created_at")
+    .select("id, fase_anterior, estado_anterior, fase_nueva, estado_nuevo, usuario_nombre, email_enviado, email_asunto, created_at")
     .eq("candidato_id", candidatoId)
     .order("created_at", { ascending: true });
   if (error) {
@@ -82,6 +82,7 @@ export async function getActividadCandidato(
       usuario: (r.usuario_nombre as string | null) ?? "Sistema",
       fecha: fmtFecha(r.created_at as string),
       emailEnviado: !!r.email_enviado,
+      emailAsunto: (r.email_asunto as string | null) ?? null,
     };
   });
 }

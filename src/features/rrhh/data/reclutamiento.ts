@@ -150,6 +150,8 @@ export interface HistorialCambioFase {
   usuario: string;
   fecha: string;
   emailEnviado: boolean;
+  /** Asunto del correo enviado en este cambio de fase (si lo hubo). */
+  emailAsunto?: string | null;
 }
 
 // ─── Reseñas / Notas / Criterios ───────────────────────────────
