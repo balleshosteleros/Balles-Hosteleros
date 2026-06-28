@@ -2,7 +2,6 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createAnonClient } from "@/lib/supabase/anon";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import { encryptOptional, decrypt } from "@/features/accesos/lib/crypto";
 import {
@@ -339,8 +338,12 @@ export async function subirLogoApp(formData: FormData): Promise<{ ok: true; url:
 
 /**
  * Verificación rápida de identidad antes de revelar cualquier contraseña.
- * Revalida la contraseña de acceso del usuario con un cliente anon efímero
- * (no toca la sesión). Válida `VERIFICACION_VALIDEZ_MIN` minutos en el cliente.
+ *
+ * Comprueba la contraseña llamando DIRECTAMENTE a la REST API de Supabase Auth
+ * con un fetch aislado (sin crear ningún cliente Supabase). Así NO toca ni la
+ * cookie ni los tokens de la sesión activa → el usuario NO se desloguea, pase
+ * la contraseña bien o mal. Solo devuelve ok/error.
+ * Válida `VERIFICACION_VALIDEZ_MIN` minutos en el cliente.
  */
 export async function verificarIdentidadAccesos(
   password: string,
@@ -353,11 +356,23 @@ export async function verificarIdentidadAccesos(
   const email = user.email;
   if (!email) return { ok: false, error: "No se pudo verificar tu identidad" };
 
-  const probe = createAnonClient();
-  const { error } = await probe.auth.signInWithPassword({ email, password });
-  await probe.auth.signOut();
-  if (error) return { ok: false, error: "Contraseña incorrecta" };
-  return { ok: true, validezMin: VERIFICACION_VALIDEZ_MIN };
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  if (!url || !anonKey) return { ok: false, error: "Configuración no disponible" };
+
+  try {
+    // Endpoint de login por contraseña. NO persiste sesión: es un fetch puro.
+    const res = await fetch(`${url}/auth/v1/token?grant_type=password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: anonKey },
+      body: JSON.stringify({ email, password }),
+      cache: "no-store",
+    });
+    if (!res.ok) return { ok: false, error: "Contraseña incorrecta" };
+    return { ok: true, validezMin: VERIFICACION_VALIDEZ_MIN };
+  } catch {
+    return { ok: false, error: "No se pudo verificar. Inténtalo de nuevo." };
+  }
 }
 
 /**
