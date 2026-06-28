@@ -96,6 +96,7 @@ export function GoogleSignInButton({
 }: GoogleSignInButtonProps) {
   const router = useRouter()
   const buttonRef = useRef<HTMLDivElement>(null)
+  const observerRef = useRef<ResizeObserver | null>(null)
   const nonceRawRef = useRef<string>('')
   const [fallback, setFallback] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -192,15 +193,37 @@ export function GoogleSignInButton({
         use_fedcm_for_prompt: true,
       })
 
-      gid.renderButton(parent, {
-        type: 'standard',
-        theme: 'outline',
-        size: 'large',
-        text: 'continue_with',
-        shape: 'rectangular',
-        logo_alignment: 'left',
-        width: 400,
+      // El botón GSI se renderiza con un ancho fijo (iframe). Si pasamos un
+      // ancho mayor que el contenedor (típico en móvil), se desborda y queda
+      // descentrado. Medimos el contenedor y re-renderizamos al cambiar de
+      // tamaño para mantenerlo centrado y a lo ancho real disponible.
+      const GSI_MAX_WIDTH = 400 // límite que acepta Google para type=standard
+      const renderAtWidth = () => {
+        if (cancelled || !parent) return
+        const available = Math.floor(parent.getBoundingClientRect().width)
+        if (available <= 0) return
+        const width = Math.min(available, GSI_MAX_WIDTH)
+        parent.innerHTML = ''
+        gid.renderButton(parent, {
+          type: 'standard',
+          theme: 'outline',
+          size: 'large',
+          text: 'continue_with',
+          shape: 'rectangular',
+          logo_alignment: 'left',
+          width,
+        })
+      }
+
+      renderAtWidth()
+
+      let resizeRaf: ReturnType<typeof requestAnimationFrame> | null = null
+      const observer = new ResizeObserver(() => {
+        if (resizeRaf) cancelAnimationFrame(resizeRaf)
+        resizeRaf = requestAnimationFrame(renderAtWidth)
       })
+      observer.observe(parent)
+      observerRef.current = observer
 
       fallbackTimer = setTimeout(() => {
         if (cancelled) return
@@ -213,6 +236,10 @@ export function GoogleSignInButton({
     return () => {
       cancelled = true
       if (fallbackTimer) clearTimeout(fallbackTimer)
+      if (observerRef.current) {
+        observerRef.current.disconnect()
+        observerRef.current = null
+      }
       try {
         window.google?.accounts?.id?.cancel()
       } catch {
@@ -244,7 +271,7 @@ export function GoogleSignInButton({
     <div className="space-y-2">
       <div
         ref={buttonRef}
-        className="flex w-full justify-center [&>div]:!w-full"
+        className="flex w-full justify-center overflow-hidden"
       />
       {error && (
         <p className="rounded-md border border-red-900/50 bg-red-950/40 px-3 py-2 text-sm text-red-300">
