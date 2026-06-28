@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Badge } from "@/components/ui/badge";
 import {
   Search, KeyRound, Pencil, UserCog,
-  PowerOff, UserPlus, Plus, UserCheck, Trash2, Mail, ListFilter,
+  Power, PowerOff, UserPlus, Plus, UserCheck, Trash2, Mail, ListFilter,
   ExternalLink, Building2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -36,6 +36,9 @@ import { EmpresaBadge } from "@/shared/components/EmpresaBadge";
 // Solo se contemplan dos estados de acceso visibles: Activo / Inactivo. El tipo
 // EstadoAcceso aún incluye "Pendiente" por datos legados, pero en esta pestaña
 // nunca se muestra (se normaliza a Activo/Inactivo en profileToAcceso).
+// Conjunto vacío estable para usar como "default neutro" en filtros sin default.
+const EMPTY_SET: Set<string> = new Set();
+
 const ESTADO_STYLES: Partial<Record<EstadoAcceso, string>> = {
   Activo: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
   Inactivo: "bg-muted text-muted-foreground border-muted-foreground/30",
@@ -138,7 +141,12 @@ export function UsuariosTab() {
   const [ownEmpresaByEmpleado, setOwnEmpresaByEmpleado] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
-  const [filtroEstados, setFiltroEstados] = useState<Set<string>>(new Set());
+  // Por defecto la tabla muestra SOLO los usuarios activos (mismo criterio que
+  // RRHH → Empleados). El indicador de "filtro aplicado" permanece oculto
+  // mientras la selección sea exactamente este default; solo se enciende si el
+  // usuario cambia el estado (p. ej. añade Inactivo). Ver ColumnFilter.
+  const ESTADOS_DEFAULT = useMemo(() => new Set(["Activo"]), []);
+  const [filtroEstados, setFiltroEstados] = useState<Set<string>>(() => new Set(["Activo"]));
   const [filtroRoles, setFiltroRoles] = useState<Set<string>>(new Set());
   const [filtroDepartamentos, setFiltroDepartamentos] = useState<Set<string>>(new Set());
   const [filtroEmpresas, setFiltroEmpresas] = useState<Set<string>>(new Set());
@@ -223,20 +231,6 @@ export function UsuariosTab() {
     return map;
   }, [rolesData]);
 
-  // Mapa rol → lista de departamentos a los que da acceso (módulos con `ver`).
-  // Misma fuente que la pestaña Roles (empresa_roles), por lo que coincide con
-  // el contador "X / 12 con acceso". Se excluye AJUSTES porque no es un
-  // departamento del índice lateral, sino la configuración global.
-  const departamentosPorRol = useMemo(() => {
-    const map = new Map<string, string[]>();
-    for (const r of rolesData) {
-      const deptos = r.permisos
-        .filter((p) => p.ver && p.modulo !== "AJUSTES")
-        .map((p) => p.modulo);
-      map.set(r.nombre.trim().toLowerCase(), deptos);
-    }
-    return map;
-  }, [rolesData]);
 
   // Lista de empresas con dbId (UUID real) para los checkboxes de acceso.
   // Reutilizada por el modal de Crear y de Editar usuario.
@@ -263,16 +257,16 @@ export function UsuariosTab() {
     [empresasDisponibles],
   );
 
-  // Opciones únicas de departamentos derivadas del rol de cada usuario
-  // (módulos con acceso), misma fuente que la columna DEPARTAMENTO.
+  // Opciones únicas para el filtro de la columna DEPARTAMENTO: el departamento
+  // REAL de cada usuario (usuarios.departamento), misma fuente que la celda.
   const departamentosOpciones = useMemo(() => {
     const set = new Set<string>();
     for (const a of accesos) {
-      const deptos = departamentosPorRol.get(a.rol.trim().toLowerCase()) ?? [];
-      for (const d of deptos) set.add(d);
+      const d = (a.departamento ?? "").trim();
+      if (d) set.add(d);
     }
     return Array.from(set).sort();
-  }, [accesos, departamentosPorRol]);
+  }, [accesos]);
 
   const filtrados = useMemo(() => {
     const activaId = empresaActual.dbId;
@@ -289,20 +283,20 @@ export function UsuariosTab() {
       const empresasNombres = empresasIds
         .map((id) => empresaNombrePorId.get(id))
         .filter((n): n is string => Boolean(n));
-      const deptosRol = departamentosPorRol.get(a.rol.trim().toLowerCase()) ?? [];
-      const texto = `${a.nombreEmpleado} ${a.emailUsuario} ${a.rol} ${deptosRol.join(" ")} ${empresasNombres.join(" ")}`.toLowerCase();
+      const depto = (a.departamento ?? "").trim();
+      const texto = `${a.nombreEmpleado} ${a.emailUsuario} ${a.rol} ${depto} ${empresasNombres.join(" ")}`.toLowerCase();
       if (busqueda && !texto.includes(busqueda.toLowerCase())) return false;
       if (filtroEstados.size > 0 && !filtroEstados.has(a.estadoAcceso)) return false;
       if (filtroRoles.size > 0 && !filtroRoles.has(a.rol)) return false;
       if (filtroDepartamentos.size > 0) {
-        if (!deptosRol.some((d) => filtroDepartamentos.has(d))) return false;
+        if (!depto || !filtroDepartamentos.has(depto)) return false;
       }
       if (filtroEmpresas.size > 0) {
         if (!empresasNombres.some((n) => filtroEmpresas.has(n))) return false;
       }
       return true;
     });
-  }, [accesos, busqueda, filtroEstados, filtroRoles, filtroDepartamentos, filtroEmpresas, userEmpresas, empresaNombrePorId, empresaActual.dbId, ownEmpresaByEmpleado, departamentosPorRol]);
+  }, [accesos, busqueda, filtroEstados, filtroRoles, filtroDepartamentos, filtroEmpresas, userEmpresas, empresaNombrePorId, empresaActual.dbId, ownEmpresaByEmpleado]);
 
   // El acceso solo se ACTIVA desde RRHH → Empleados (al marcar al empleado como
   // Activo). Aquí solo permitimos desactivarlo, para no duplicar el control de
@@ -315,6 +309,17 @@ export function UsuariosTab() {
       setAccesos((prev) => prev.map((a) => a.id === acc.id ? { ...a, estadoAcceso: acc.estadoAcceso } : a));
     } else {
       toast.success("Acceso desactivado");
+    }
+  };
+
+  const reactivar = async (acc: AccesoPortal) => {
+    setAccesos((prev) => prev.map((a) => a.id === acc.id ? { ...a, estadoAcceso: "Activo" as EstadoAcceso } : a));
+    const result = await updateEmployeeStatus(acc.empleadoId, "Activo");
+    if (result?.error) {
+      toast.error(result.error);
+      setAccesos((prev) => prev.map((a) => a.id === acc.id ? { ...a, estadoAcceso: acc.estadoAcceso } : a));
+    } else {
+      toast.success("Acceso reactivado");
     }
   };
 
@@ -478,6 +483,7 @@ export function UsuariosTab() {
                         options={["Activo", "Inactivo"]}
                         selected={filtroEstados}
                         onChange={setFiltroEstados}
+                        defaultSelected={ESTADOS_DEFAULT}
                       />
                     )}
                   </div>
@@ -504,9 +510,7 @@ export function UsuariosTab() {
                   <div className="text-[11px] text-muted-foreground">{acc.emailUsuario}</div>
                 </td>
                 <td className="px-3 py-2.5">
-                  <DepartamentosCell
-                    departamentos={departamentosPorRol.get(acc.rol.trim().toLowerCase()) ?? []}
-                  />
+                  <DepartamentosCell departamento={acc.departamento ?? ""} />
                 </td>
                 <td className="px-3 py-2.5">
                   <EmpresasCell
@@ -538,9 +542,13 @@ export function UsuariosTab() {
                 </td>
                 <td className="px-3 py-2.5">
                   <div className="flex gap-1">
-                    {acc.estadoAcceso === "Activo" && (
+                    {acc.estadoAcceso === "Activo" ? (
                       <Button variant="ghost" size="icon" className="h-7 w-7" title="Desactivar" onClick={() => desactivar(acc)}>
                         <PowerOff className="h-3.5 w-3.5" />
+                      </Button>
+                    ) : (
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" title="Reactivar" onClick={() => reactivar(acc)}>
+                        <Power className="h-3.5 w-3.5" />
                       </Button>
                     )}
                     <Button variant="ghost" size="icon" className="h-7 w-7" title="Resetear contraseña" onClick={() => setResetModal({ id: acc.empleadoId, nombre: acc.nombreEmpleado })}>
@@ -1055,13 +1063,23 @@ function ColumnFilter({
   options,
   selected,
   onChange,
+  defaultSelected,
 }: {
   label: string;
   options: string[];
   selected: Set<string>;
   onChange: (next: Set<string>) => void;
+  // Selección "neutra": cuando la selección actual coincide con este conjunto,
+  // el filtro NO se considera aplicado (icono apagado, sin botón Limpiar) aunque
+  // técnicamente haya valores seleccionados. Sirve para filtros con default
+  // (p. ej. Estado = solo Activo): el indicador solo aparece al desviarse de él.
+  // Si se omite, el default es vacío y cualquier selección enciende el icono.
+  defaultSelected?: Set<string>;
 }) {
-  const active = selected.size > 0;
+  const base = defaultSelected ?? EMPTY_SET;
+  const sameAsDefault =
+    selected.size === base.size && [...selected].every((v) => base.has(v));
+  const active = !sameAsDefault;
   const toggle = (value: string) => {
     const next = new Set(selected);
     if (next.has(value)) next.delete(value);
@@ -1089,7 +1107,7 @@ function ColumnFilter({
           {active && (
             <button
               type="button"
-              onClick={() => onChange(new Set())}
+              onClick={() => onChange(new Set(base))}
               className="text-[10px] font-semibold text-primary hover:underline"
             >
               Limpiar
@@ -1178,50 +1196,20 @@ function EmpresasCell({
   );
 }
 
-/* ─── DEPARTAMENTOS CELL ─── */
-// Muestra el primer departamento como badge; si hay más, un badge "+N" abre un
-// Popover con la lista completa. Los departamentos se derivan de los módulos
-// donde el rol tiene `ver: true` en la pestaña Roles.
-function DepartamentosCell({ departamentos }: { departamentos: string[] }) {
-  if (departamentos.length === 0) {
+/* ─── DEPARTAMENTO CELL ─── */
+// Muestra el departamento REAL al que pertenece el usuario (usuarios.departamento),
+// no el derivado de los permisos del rol. Un usuario puede pertenecer a un
+// departamento (p. ej. ARTISTAS, MANTENIMIENTO) sin tener acceso a ningún módulo;
+// en ese caso el rol no tiene permisos pero el departamento sí debe verse.
+// "Sin departamento" solo cuando el campo está realmente vacío.
+function DepartamentosCell({ departamento }: { departamento: string }) {
+  const dep = departamento.trim();
+  if (!dep) {
     return (
       <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-300">
         Sin departamento
       </Badge>
     );
   }
-
-  const [primero, ...resto] = departamentos;
-
-  return (
-    <div className="flex items-center gap-1">
-      <Badge variant="outline" className="text-[10px]">{primero}</Badge>
-      {resto.length > 0 && (
-        <Popover>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              className="inline-flex items-center rounded-md border border-border/60 bg-muted/40 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground"
-              title={`${departamentos.length} departamentos`}
-            >
-              +{resto.length}
-            </button>
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-56 p-0">
-            <div className="border-b px-3 py-2">
-              <p className="text-[10px] font-bold tracking-wider text-muted-foreground">DEPARTAMENTOS</p>
-              <p className="text-xs text-muted-foreground">{departamentos.length} con acceso</p>
-            </div>
-            <ul className="max-h-64 overflow-y-auto py-1">
-              {departamentos.map((d) => (
-                <li key={d} className="px-3 py-1.5 text-sm hover:bg-muted/50">
-                  {d}
-                </li>
-              ))}
-            </ul>
-          </PopoverContent>
-        </Popover>
-      )}
-    </div>
-  );
+  return <Badge variant="outline" className="text-[10px]">{dep}</Badge>;
 }
