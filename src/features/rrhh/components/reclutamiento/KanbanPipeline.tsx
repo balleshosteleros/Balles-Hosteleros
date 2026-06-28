@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   ArrowLeft, Mail, MailCheck, MapPin,
-  GripVertical, Send, X,
+  GripVertical, Send, X, UsersRound, CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -77,9 +77,22 @@ function CandidatoCard({
       <div className="flex items-start gap-2">
         <GripVertical className="h-3.5 w-3.5 text-muted-foreground/30 mt-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
         <div className="flex-1 min-w-0">
-          <span className="block font-semibold text-xs text-foreground truncate mb-1">
-            {candidato.nombre} {candidato.apellidos}
-          </span>
+          <div className="flex items-center gap-1 mb-1">
+            <span className="block font-semibold text-xs text-foreground truncate">
+              {candidato.nombre} {candidato.apellidos}
+            </span>
+            {/* Candidato ya contratado: distintivo de empleado (icono RRHH + tick, en verde). */}
+            {candidato.promovidoAt && (
+              <span
+                className="inline-flex items-center gap-0.5 shrink-0 text-emerald-600"
+                title="Contratado · empleado"
+                aria-label="Contratado · empleado"
+              >
+                <UsersRound className="h-3 w-3" />
+                <CheckCircle2 className="h-3 w-3" />
+              </span>
+            )}
+          </div>
           <div className="space-y-0.5 text-[11px] text-muted-foreground">
             <div className="flex items-center gap-1 min-w-0">
               <Mail className="h-3 w-3 shrink-0" />
@@ -102,6 +115,7 @@ function EstadoColumn({
   candidatos,
   tieneEmail,
   mostrarContador,
+  compact = false,
   onDragStart,
   onDrop,
   onCardClick,
@@ -110,6 +124,8 @@ function EstadoColumn({
   candidatos: Candidato[];
   tieneEmail: boolean;
   mostrarContador: boolean;
+  /** Banda inferior (Descartado): tira de baja altura para no robar espacio. */
+  compact?: boolean;
   onDragStart: (e: React.DragEvent, c: Candidato) => void;
   onDrop: (estado: EstadoReclutamiento) => void;
   onCardClick: (c: Candidato) => void;
@@ -146,8 +162,11 @@ function EstadoColumn({
       </div>
 
       {/* Cards */}
-      <ScrollArea className="flex-1 px-1 pb-1 [&>[data-radix-scroll-area-viewport]>div]:!block [&>[data-radix-scroll-area-viewport]>div]:!min-w-0" style={{ maxHeight: "calc(100vh - 280px)" }}>
-        <div className="space-y-1.5">
+      <ScrollArea
+        className="flex-1 px-1 pb-1 [&>[data-radix-scroll-area-viewport]>div]:!block [&>[data-radix-scroll-area-viewport]>div]:!min-w-0"
+        style={{ maxHeight: compact ? "180px" : "calc(100vh - 280px)" }}
+      >
+        <div className="space-y-1.5 min-h-[36px]">
           {candidatos.map((c) => (
             <CandidatoCard key={c.id} candidato={c} onDragStart={onDragStart} onClick={onCardClick} />
           ))}
@@ -163,6 +182,7 @@ function FaseGroup({
   candidatos,
   estadosConEmail,
   mostrarContador,
+  compact = false,
   onDragStart,
   onDrop,
   onCardClick,
@@ -171,6 +191,8 @@ function FaseGroup({
   candidatos: Candidato[];
   estadosConEmail: Set<string>;
   mostrarContador: boolean;
+  /** Banda inferior horizontal (Descartado) en vez de columna alta. */
+  compact?: boolean;
   onDragStart: (e: React.DragEvent, c: Candidato) => void;
   onDrop: (estado: EstadoReclutamiento) => void;
   onCardClick: (c: Candidato) => void;
@@ -185,7 +207,7 @@ function FaseGroup({
   }
 
   return (
-    <div className="flex flex-col min-w-0" style={{ flex: cfg.estados.length }}>
+    <div className="flex flex-col min-w-0" style={compact ? undefined : { flex: cfg.estados.length }}>
       {/* Phase header bar with gradient */}
       <div
         className="h-2 rounded-t-lg"
@@ -210,6 +232,7 @@ function FaseGroup({
             candidatos={candidatosPorEstado[est]}
             tieneEmail={estadosConEmail.has(est)}
             mostrarContador={mostrarContador}
+            compact={compact}
             onDragStart={onDragStart}
             onDrop={onDrop}
             onCardClick={onCardClick}
@@ -278,7 +301,7 @@ function EmailConfirmDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-base">Cambio de estado</DialogTitle>
           <DialogDescription asChild>
@@ -303,6 +326,7 @@ function EmailConfirmDialog({
           </DialogDescription>
         </DialogHeader>
 
+        <div className="flex-1 overflow-y-auto min-h-0 -mx-1 px-1">
         {cargando && (
           <p className="text-xs text-muted-foreground mt-2">Comprobando la plantilla asociada…</p>
         )}
@@ -343,8 +367,9 @@ function EmailConfirmDialog({
         <p className="text-sm text-foreground mt-2">
           ¿Quieres enviar un email automático al candidato informándole del cambio?
         </p>
+        </div>
 
-        <DialogFooter className="gap-2 sm:gap-2 mt-2">
+        <DialogFooter className="gap-2 sm:gap-2 mt-2 shrink-0">
           <Button variant="outline" onClick={() => onConfirm(false)} className="gap-1.5">
             <X className="h-4 w-4" /> No, no enviar email
           </Button>
@@ -501,9 +526,12 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
       </div>
 
       {/* Kanban Board */}
-      <div className="flex-1 overflow-x-auto p-4">
+      {/* Layout: Selección + Formación arriba a todo el ancho (sub-columnas
+          legibles); Descartado abajo como banda horizontal compacta. Arrastrar
+          una tarjeta a la banda inferior la mueve a un estado de Descartado. */}
+      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
         <div className="flex gap-2 w-full">
-          {FASES_PRINCIPALES_ORDER.map((fase) => (
+          {FASES_PRINCIPALES_ORDER.filter((f) => f !== "descartado").map((fase) => (
             <FaseGroup
               key={fase}
               fasePrincipal={fase}
@@ -515,6 +543,20 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
               onCardClick={setSelectedCandidato}
             />
           ))}
+        </div>
+
+        {/* Banda inferior: Descartado */}
+        <div className="w-full">
+          <FaseGroup
+            fasePrincipal="descartado"
+            candidatos={candidatosVisibles.filter((c) => getFasePrincipal(c.fase) === "descartado")}
+            estadosConEmail={estadosConEmail}
+            mostrarContador={mostrarContador}
+            compact
+            onDragStart={handleDragStart}
+            onDrop={handleDrop}
+            onCardClick={setSelectedCandidato}
+          />
         </div>
       </div>
 

@@ -31,6 +31,7 @@ import {
   CheckCircle2,
   XCircle,
   Trash2,
+  UsersRound,
 } from "lucide-react";
 
 function WhatsAppIcon({ className }: { className?: string }) {
@@ -248,7 +249,9 @@ export function CandidatoDetailModal({
               >
                 Ver todos los candidatos
               </button>
-              {onEliminar && (
+              {/* Un candidato ya contratado no puede borrarse: su candidatura
+                  perdura en la base de datos como historial. */}
+              {onEliminar && !candidato.promovidoAt && (
                 <button
                   onClick={() => onEliminar(candidato)}
                   className="ml-1 p-1.5 rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
@@ -502,9 +505,19 @@ function CandidatoSidebar({
     <div className="p-5 space-y-4">
       {/* Nombre del candidato (sin icono delante) */}
       <div className="min-w-0">
-        <h2 className="text-lg font-bold text-foreground leading-tight">
-          {candidato.nombre} {candidato.apellidos}
-        </h2>
+        <div className="flex items-center gap-2 flex-wrap">
+          <h2 className="text-lg font-bold text-foreground leading-tight">
+            {candidato.nombre} {candidato.apellidos}
+          </h2>
+          {/* Candidato ya contratado: distintivo de empleado (icono RRHH + tick, en verde). */}
+          {candidato.promovidoAt && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+              <UsersRound className="h-3.5 w-3.5" />
+              Empleado
+              <CheckCircle2 className="h-3.5 w-3.5" />
+            </span>
+          )}
+        </div>
         <p className="text-xs text-muted-foreground mt-0.5">
           Inscrito el {candidato.fechaInscripcion}
         </p>
@@ -926,6 +939,14 @@ function ActividadTab({
                   </span>
                 )}
               </div>
+              {h.emailEnviado && h.emailAsunto && (
+                <div className="mt-1 inline-flex max-w-full items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-primary">
+                  <Mail className="h-3 w-3 shrink-0" />
+                  <span className="truncate" title={h.emailAsunto}>
+                    {h.emailAsunto}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         ))}
