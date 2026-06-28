@@ -25,6 +25,9 @@ const CandidaturaSchema = z.object({
   apellidos: z.string().min(1).max(120),
   email: z.string().email().max(180),
   telefono: z.string().min(5).max(30),
+  genero: z.enum(["masculino", "femenino"]),
+  ubicacion: z.string().min(1).max(160),
+  disponibilidad: z.enum(["inmediato", "15_dias"]),
   carta_presentacion: z.string().max(5000).optional().default(""),
 });
 
@@ -130,6 +133,9 @@ export async function POST(req: Request) {
       apellidos: String(fd.get("apellidos") ?? "").trim(),
       email: String(fd.get("email") ?? "").trim().toLowerCase(),
       telefono: String(fd.get("telefono") ?? "").trim(),
+      genero: String(fd.get("genero") ?? "").trim(),
+      ubicacion: String(fd.get("ubicacion") ?? "").trim(),
+      disponibilidad: String(fd.get("disponibilidad") ?? "").trim(),
       carta_presentacion: String(fd.get("carta_presentacion") ?? "").trim(),
     });
     if (!parsed.success) {
@@ -140,7 +146,8 @@ export async function POST(req: Request) {
       );
     }
     const { empresa_id: empresaId, oferta_id: ofertaId,
-            nombre, apellidos, email, telefono, carta_presentacion: cartaPresentacion } = parsed.data;
+            nombre, apellidos, email, telefono, genero, ubicacion, disponibilidad,
+            carta_presentacion: cartaPresentacion } = parsed.data;
 
     if (!cv || cv.size === 0) {
       return NextResponse.json({ ok: false, error: "El currículum es obligatorio" }, { status: 400 });
@@ -171,7 +178,7 @@ export async function POST(req: Request) {
     // Verificar que la oferta existe y es pública
     const { data: vacante, error: vacErr } = await supabase
       .from("vacantes")
-      .select("id, empresa_id, titulo, puesto_id, departamento_id, estado_publicacion, visible_publicamente, cuestionario_plantilla_id")
+      .select("id, empresa_id, titulo, ubicacion, tipo_jornada, puesto_id, departamento_id, estado_publicacion, visible_publicamente, cuestionario_plantilla_id")
       .eq("id", ofertaId)
       .eq("empresa_id", empresaId)
       .maybeSingle();
@@ -309,6 +316,9 @@ export async function POST(req: Request) {
         apellidos: normalizarNombre(apellidos),
         email,
         telefono,
+        genero,
+        ubicacion,
+        disponibilidad,
         cv_url: cvUrl,
         carta_presentacion: cartaPresentacion || null,
         origen,
@@ -349,6 +359,28 @@ export async function POST(req: Request) {
           .update({ puntuacion: Math.round(cuestionarioCalc.nota) })
           .eq("id", candidato.id);
       }
+    }
+
+    // Correo de confirmación al candidato (plantilla «Nuevo» del estado inicial).
+    // Best-effort: nunca rompe el alta si el envío falla o no hay plantilla/SMTP.
+    try {
+      const { enviarEmailCandidaturaNueva } = await import(
+        "@/features/rrhh/lib/reclutamiento-email-publico"
+      );
+      const r = await enviarEmailCandidaturaNueva(supabase, {
+        empresaId,
+        candidato: { nombre: normalizarNombre(nombre), apellidos: normalizarNombre(apellidos), email, telefono },
+        vacante: {
+          id: vacante.id,
+          titulo: vacante.titulo ?? null,
+          ubicacion: vacante.ubicacion ?? null,
+          tipo_jornada: vacante.tipo_jornada ?? null,
+          departamento_id: vacante.departamento_id ?? null,
+        },
+      });
+      if (!r.sent) console.warn("[candidatura] email confirmación no enviado:", r.reason);
+    } catch (e) {
+      console.error("[candidatura] email confirmación:", e);
     }
 
     // Aviso al equipo de reclutamiento de que entró una nueva candidatura.

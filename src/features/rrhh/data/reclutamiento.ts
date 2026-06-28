@@ -28,13 +28,20 @@ export type EstadoReclutamiento =
 export type FaseReclutamiento = EstadoReclutamiento;
 
 // ─── Género ────────────────────────────────────────────────────
-export type Genero = "hombre" | "mujer" | "no_binario" | "prefiere_no_decir";
+// Solo dos valores: el formulario público de empleo captura masculino/femenino.
+export type Genero = "masculino" | "femenino";
 
 export const GENERO_LABELS: Record<Genero, string> = {
-  hombre: "Hombre",
-  mujer: "Mujer",
-  no_binario: "No binario",
-  prefiere_no_decir: "Prefiere no decirlo",
+  masculino: "Masculino",
+  femenino: "Femenino",
+};
+
+// ─── Disponibilidad de incorporación ───────────────────────────
+export type Disponibilidad = "inmediato" | "15_dias";
+
+export const DISPONIBILIDAD_LABELS: Record<Disponibilidad, string> = {
+  inmediato: "Inmediato",
+  "15_dias": "En 15 días",
 };
 
 // ─── Fase config ────────────────────────────────────────────────
@@ -203,8 +210,7 @@ export interface Candidato {
   // Extensiones del refactor 2026-05 (todos opcionales para no romper BD)
   ubicacion?: string;
   genero?: Genero;
-  expectativasSalariales?: string;
-  disponibleDesde?: string;
+  disponibilidad?: Disponibilidad;
   sobreTi?: string;
   resenas?: ResenaCandidato[];
   notas?: NotaCandidato[];

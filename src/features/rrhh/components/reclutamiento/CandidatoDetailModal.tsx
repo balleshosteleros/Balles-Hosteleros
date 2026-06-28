@@ -59,9 +59,11 @@ import {
   FASES_PRINCIPALES,
   FASES_PRINCIPALES_ORDER,
   GENERO_LABELS,
+  DISPONIBILIDAD_LABELS,
   ORIGEN_LABELS,
   getFasePrincipal,
   type Candidato,
+  type Disponibilidad,
   type EstadoReclutamiento,
   type Genero,
   type HistorialCambioFase,
@@ -668,26 +670,22 @@ function CandidatoSidebar({
         </Select>
       </Field>
 
-      <Field label="Expectativas salariales">
-        <Input
-          defaultValue={candidato.expectativasSalariales ?? ""}
-          onBlur={(e) =>
-            onUpdate({ ...candidato, expectativasSalariales: e.target.value || undefined })
-          }
-          placeholder="Añadir expectativas"
-          className="h-9 text-sm"
-        />
-      </Field>
-
-      <Field label="Disponible desde">
-        <Input
-          type="date"
-          defaultValue={candidato.disponibleDesde ?? ""}
-          onBlur={(e) =>
-            onUpdate({ ...candidato, disponibleDesde: e.target.value || undefined })
-          }
-          className="h-9 text-sm"
-        />
+      <Field label="¿Desde cuándo puede empezar?">
+        <Select
+          value={candidato.disponibilidad ?? ""}
+          onValueChange={(v) => onUpdate({ ...candidato, disponibilidad: v as Disponibilidad })}
+        >
+          <SelectTrigger className="h-9 text-sm">
+            <SelectValue placeholder="Seleccionar" />
+          </SelectTrigger>
+          <SelectContent>
+            {(Object.keys(DISPONIBILIDAD_LABELS) as Disponibilidad[]).map((d) => (
+              <SelectItem key={d} value={d} className="text-sm">
+                {DISPONIBILIDAD_LABELS[d]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </Field>
 
       <Field label="¿Cómo nos has conocido?">

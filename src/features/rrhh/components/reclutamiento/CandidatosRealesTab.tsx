@@ -26,6 +26,7 @@ import {
   listCandidatosReales,
   iniciarOffboarding,
   eliminarCandidato,
+  actualizarDatosCandidato,
 } from "@/features/rrhh/actions/candidatos-actions";
 import { ContratarDialog } from "@/features/rrhh/components/reclutamiento/ContratarDialog";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
@@ -44,6 +45,9 @@ interface CandidatoReal {
   telefono: string | null;
   cv_url: string | null;
   origen: string | null;
+  genero: string | null;
+  ubicacion: string | null;
+  disponibilidad: string | null;
   puntuacion: number | null;
   fase: Fase;
   estado: Estado;
@@ -85,6 +89,9 @@ function toCandidato(c: CandidatoReal): Candidato {
     vacanteId: c.vacante_id ?? "",
     reclutadorAsignado: "",
     historial: [],
+    ubicacion: c.ubicacion ?? undefined,
+    genero: (c.genero === "masculino" || c.genero === "femenino" ? c.genero : undefined) as Candidato["genero"],
+    disponibilidad: (c.disponibilidad === "inmediato" || c.disponibilidad === "15_dias" ? c.disponibilidad : undefined) as Candidato["disponibilidad"],
     activo: c.activo ?? true,
   };
 }
@@ -300,16 +307,20 @@ export function CandidatosRealesTab() {
                           Ver ficha
                         </Button>
                       )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                        onClick={() => handleEliminar(c)}
-                        disabled={pending}
-                        title="Borrar candidato"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {/* Un candidato ya contratado no puede borrarse: su
+                          candidatura perdura en la base de datos. */}
+                      {!yaPromovido && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => handleEliminar(c)}
+                          disabled={pending}
+                          title="Borrar candidato"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -328,11 +339,29 @@ export function CandidatosRealesTab() {
         vacante={vacanteParaModal(selected)}
         onSelectCandidato={(c) => setSelected(c ? items.find((x) => x.id === c.id) ?? null : null)}
         onUpdateCandidato={(updated) => {
-          // El toggle Activo/Inactivo de la ficha ya persiste en BD; aquí solo
+          // El toggle Activo/Inactivo de la ficha ya persiste en BD; aquí
           // reflejamos el cambio en la fila para que el badge se actualice al
-          // instante. El resto de ediciones de sidebar no persisten desde aquí.
-          setItems((prev) => prev.map((x) => (x.id === updated.id ? { ...x, activo: updated.activo ?? true } : x)));
+          // instante.
+          setItems((prev) =>
+            prev.map((x) =>
+              x.id === updated.id
+                ? {
+                    ...x,
+                    activo: updated.activo ?? true,
+                    genero: updated.genero ?? x.genero,
+                    ubicacion: updated.ubicacion ?? x.ubicacion,
+                    disponibilidad: updated.disponibilidad ?? x.disponibilidad,
+                  }
+                : x,
+            ),
+          );
           setSelected((prev) => (prev && prev.id === updated.id ? { ...prev, activo: updated.activo ?? true } : prev));
+          // Persiste género/ubicación/disponibilidad editados en la ficha.
+          void actualizarDatosCandidato(updated.id, {
+            genero: updated.genero ?? null,
+            ubicacion: updated.ubicacion ?? null,
+            disponibilidad: updated.disponibilidad ?? null,
+          });
         }}
         onEliminar={(c) => {
           const real = items.find((x) => x.id === c.id);

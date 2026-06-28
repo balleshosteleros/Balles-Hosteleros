@@ -55,6 +55,7 @@ export async function listCandidatosReales() {
       .select(`
         id, empresa_id, vacante_id, empleado_id, nombre, apellidos, email,
         telefono, dni_nie, cv_url, origen, fase, estado, puntuacion, notas,
+        genero, ubicacion, disponibilidad,
         promovido_at, activo, created_at,
         vacantes(id, titulo, departamento_id, puesto_id)
       `)
@@ -265,10 +266,58 @@ export async function setCandidatoActivo(id: string, activo: boolean) {
   }
 }
 
+/**
+ * Persiste los datos editables de la ficha del candidato (género, ubicación y
+ * disponibilidad de incorporación). Solo actualiza los campos presentes en
+ * `input`. Best-effort sobre la empresa activa.
+ */
+export async function actualizarDatosCandidato(
+  id: string,
+  input: {
+    genero?: "masculino" | "femenino" | null;
+    ubicacion?: string | null;
+    disponibilidad?: "inmediato" | "15_dias" | null;
+  },
+) {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if ("genero" in input) patch.genero = input.genero || null;
+    if ("ubicacion" in input) patch.ubicacion = input.ubicacion?.trim() || null;
+    if ("disponibilidad" in input) patch.disponibilidad = input.disponibilidad || null;
+
+    const { error } = await supabase
+      .from("candidatos")
+      .update(patch)
+      .eq("id", id)
+      .eq("empresa_id", empresaId);
+    if (error) throw error;
+    revalidatePath("/rrhh/reclutamiento");
+    return { ok: true };
+  } catch (err: unknown) {
+    return { ok: false, error: mensajeError(err) };
+  }
+}
+
 export async function eliminarCandidato(id: string) {
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    // Un candidato ya contratado (promovido a empleado) NO puede borrarse: su
+    // candidatura debe perdurar en la base de datos como historial.
+    const { data: cand } = await supabase
+      .from("candidatos")
+      .select("promovido_at")
+      .eq("id", id)
+      .eq("empresa_id", empresaId)
+      .single();
+    if (cand?.promovido_at) {
+      return { ok: false, error: "Este candidato ya es empleado; su candidatura no se puede borrar." };
+    }
+
     const { error } = await supabase
       .from("candidatos")
       .delete()

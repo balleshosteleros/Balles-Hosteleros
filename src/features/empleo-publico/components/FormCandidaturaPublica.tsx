@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Loader2, ArrowLeft, ArrowRight, Send, CheckCircle2, Paperclip } from "lucide-react";
@@ -26,6 +26,9 @@ interface FormState {
   apellidos: string;
   email: string;
   telefono: string;
+  genero: string;
+  ubicacion: string;
+  disponibilidad: string;
   cv: File | null;
   carta_presentacion: string;
 }
@@ -35,13 +38,110 @@ const VACIO: FormState = {
   apellidos: "",
   email: "",
   telefono: "",
+  genero: "",
+  ubicacion: "",
+  disponibilidad: "",
   cv: null,
   carta_presentacion: "",
 };
 
+/** Opciones del desplegable «¿Desde cuándo puedes empezar?». */
+const DISPONIBILIDAD_OPCIONES = [
+  { value: "inmediato", label: "Inmediato" },
+  { value: "15_dias", label: "En 15 días" },
+] as const;
+
 const MAX_CV_BYTES = 5 * 1024 * 1024;
 
 type Paso = "datos" | "cuestionario";
+
+const SELECT_CLASS =
+  "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring";
+
+/**
+ * Buscador de localidad con autocompletado mundial (pueblos / barrios) vía OSM.
+ * El candidato escribe y elige una sugerencia; también puede dejar el texto que
+ * escribió a mano. El valor guardado es siempre `value` (texto de la localidad).
+ */
+function BuscadorLocalidad({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [sugerencias, setSugerencias] = useState<string[]>([]);
+  const [abierto, setAbierto] = useState(false);
+  const [buscando, setBuscando] = useState(false);
+  // Evita pisar el valor con respuestas de peticiones antiguas (carrera).
+  const ultimaRef = useRef("");
+
+  useEffect(() => {
+    const q = value.trim();
+    ultimaRef.current = q;
+    if (q.length < 3) {
+      setSugerencias([]);
+      setBuscando(false);
+      return;
+    }
+    setBuscando(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/empleo/localidades?q=${encodeURIComponent(q)}`);
+        const data = (await res.json()) as { localidades?: string[] };
+        if (ultimaRef.current === q) {
+          setSugerencias(data.localidades ?? []);
+        }
+      } catch {
+        if (ultimaRef.current === q) setSugerencias([]);
+      } finally {
+        if (ultimaRef.current === q) setBuscando(false);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [value]);
+
+  return (
+    <div className="relative">
+      <Input
+        id="ubicacion"
+        required
+        value={value}
+        autoComplete="off"
+        placeholder="Escribe tu localidad o barrio…"
+        onChange={(e) => {
+          onChange(e.target.value);
+          setAbierto(true);
+        }}
+        onFocus={() => setAbierto(true)}
+        // Pequeño retardo para permitir el click en una sugerencia.
+        onBlur={() => setTimeout(() => setAbierto(false), 150)}
+      />
+      {abierto && value.trim().length >= 3 && (sugerencias.length > 0 || buscando) && (
+        <ul className="absolute z-20 mt-1 w-full max-h-56 overflow-auto rounded-md border border-input bg-popover shadow-md text-sm">
+          {buscando && sugerencias.length === 0 && (
+            <li className="px-3 py-2 text-muted-foreground">Buscando…</li>
+          )}
+          {sugerencias.map((s) => (
+            <li key={s}>
+              <button
+                type="button"
+                className="block w-full text-left px-3 py-2 hover:bg-accent"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onChange(s);
+                  setAbierto(false);
+                }}
+              >
+                {s}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 export function FormCandidaturaPublica({
   empresaSlug, empresaId, ofertaId, ofertaTitulo, canalCodigo = null, cuestionario = null,
@@ -65,6 +165,9 @@ export function FormCandidaturaPublica({
     if (!form.email.trim()) return "El email es obligatorio";
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return "Email no válido";
     if (!form.telefono.trim()) return "El teléfono es obligatorio";
+    if (!form.genero) return "El género es obligatorio";
+    if (!form.ubicacion.trim()) return "La ubicación es obligatoria";
+    if (!form.disponibilidad) return "La disponibilidad es obligatoria";
     if (!form.cv) return "El currículum es obligatorio";
     if (form.cv.size > MAX_CV_BYTES) return "El CV no puede superar 5MB";
     if (form.cv.type !== "application/pdf") return "El CV debe ser un PDF";
@@ -103,6 +206,9 @@ export function FormCandidaturaPublica({
         fd.set("apellidos", form.apellidos.trim());
         fd.set("email", form.email.trim().toLowerCase());
         fd.set("telefono", form.telefono.trim());
+        fd.set("genero", form.genero);
+        fd.set("ubicacion", form.ubicacion.trim());
+        fd.set("disponibilidad", form.disponibilidad);
         fd.set("carta_presentacion", form.carta_presentacion.trim());
         if (canalCodigo) fd.set("canal_codigo", canalCodigo);
         if (form.cv) fd.set("cv", form.cv);
@@ -268,6 +374,43 @@ export function FormCandidaturaPublica({
             autoComplete="tel"
           />
         </div>
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="genero">Género *</Label>
+          <select
+            id="genero"
+            required
+            value={form.genero}
+            onChange={(e) => update("genero", e.target.value)}
+            className={SELECT_CLASS}
+          >
+            <option value="">Selecciona…</option>
+            <option value="masculino">Masculino</option>
+            <option value="femenino">Femenino</option>
+          </select>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="disponibilidad">¿Desde cuándo puedes empezar? *</Label>
+          <select
+            id="disponibilidad"
+            required
+            value={form.disponibilidad}
+            onChange={(e) => update("disponibilidad", e.target.value)}
+            className={SELECT_CLASS}
+          >
+            <option value="">Selecciona…</option>
+            {DISPONIBILIDAD_OPCIONES.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="ubicacion">Ubicación *</Label>
+        <BuscadorLocalidad value={form.ubicacion} onChange={(v) => update("ubicacion", v)} />
       </div>
 
       <div className="space-y-1.5">
