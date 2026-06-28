@@ -1,8 +1,20 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { updatePassword } from '@/actions/auth'
 import { createClient } from '@/lib/supabase/client'
+
+type EstadoEnlace = 'recovery' | 'usado' | 'normal' | null
+
+/** Lee ?estado= de la URL en el primer render (síncrono, sin flash). */
+function estadoInicialDesdeUrl(): EstadoEnlace {
+  if (typeof window === 'undefined') return null
+  const estadoUrl = new URLSearchParams(window.location.search).get('estado')
+  if (estadoUrl === 'recovery') return 'recovery'
+  if (estadoUrl === 'usado' || estadoUrl === 'invalido') return 'usado'
+  return null
+}
 
 /**
  * Esta pantalla SOLO debe permitir cambiar la contraseña cuando se llega desde
@@ -15,32 +27,35 @@ export function UpdatePasswordForm() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  // null = comprobando; true = vino de enlace de correo; false = sesión normal.
-  const [esRecovery, setEsRecovery] = useState<boolean | null>(null)
+  // null = comprobando; 'recovery' = enlace válido (formulario activo);
+  // 'usado' = enlace ya usado o caducado; 'normal' = sesión normal/sin enlace.
+  // El enlace pasa por /auth/confirm (verifyOtp en servidor), que redirige aquí
+  // con ?estado=recovery | usado | invalido. Lo leemos de forma síncrona en el
+  // primer render: es la fuente de verdad principal, sin depender de un evento.
+  const [estado, setEstado] = useState<EstadoEnlace>(estadoInicialDesdeUrl)
 
   useEffect(() => {
+    // Si la URL ya resolvió el estado (vino de /auth/confirm), no hay nada más
+    // que comprobar.
+    if (estadoInicialDesdeUrl() !== null) return
+
+    // Sin parámetro de /auth/confirm: puede ser un enlace antiguo con hash
+    // (#access_token) que Supabase aún procesa en cliente, o una sesión normal.
+    // Si no hay cliente, el timeout caerá a 'normal' igualmente.
     const supabase = createClient()
-    if (!supabase) {
-      setEsRecovery(false)
-      return
-    }
 
-    // Si el enlace de correo es válido, Supabase dispara PASSWORD_RECOVERY al
-    // procesar el hash de la URL. Solo entonces habilitamos el formulario.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event) => {
-        if (event === 'PASSWORD_RECOVERY') setEsRecovery(true)
-      },
-    )
+    const subscription = supabase?.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') setEstado('recovery')
+    }).data.subscription
 
-    // Margen para que se procese el enlace; si no llegó el evento, es una
-    // sesión normal (o sin sesión) → bloqueamos.
+    // Margen para que se procese un posible hash en cliente; si no llega el
+    // evento, lo tratamos como sesión normal (o sin sesión) → bloqueamos.
     const t = setTimeout(() => {
-      setEsRecovery((prev) => (prev === null ? false : prev))
-    }, 2500)
+      setEstado((prev) => (prev === null ? 'normal' : prev))
+    }, supabase ? 2500 : 0)
 
     return () => {
-      subscription.unsubscribe()
+      subscription?.unsubscribe()
       clearTimeout(t)
     }
   }, [])
@@ -57,13 +72,37 @@ export function UpdatePasswordForm() {
     }
   }
 
-  if (esRecovery === null) {
+  if (estado === null) {
     return (
       <p className="text-sm text-slate-400">Validando el enlace…</p>
     )
   }
 
-  if (esRecovery === false) {
+  if (estado === 'usado') {
+    return (
+      <div className="space-y-4">
+        <p className="rounded-md border border-amber-900/50 bg-amber-950/40 px-3 py-3 text-sm text-amber-200">
+          Este enlace ya se ha usado y no se puede volver a utilizar. Si ya creaste
+          tu contraseña, entra con ella desde el inicio. Si la has olvidado,
+          solicita un correo nuevo desde <strong>«¿Has olvidado tu contraseña?»</strong>.
+        </p>
+        <a
+          href="/forgot-password"
+          className="block w-full rounded-lg bg-blue-600 px-4 py-3 text-center text-sm font-semibold text-white transition-all hover:bg-blue-500"
+        >
+          Solicitar enlace nuevo
+        </a>
+        <Link
+          href="/"
+          className="block w-full rounded-lg border border-slate-700 px-4 py-3 text-center text-sm font-semibold text-slate-300 transition-all hover:bg-slate-800"
+        >
+          Ir al inicio de sesión
+        </Link>
+      </div>
+    )
+  }
+
+  if (estado === 'normal') {
     return (
       <div className="space-y-4">
         <p className="rounded-md border border-amber-900/50 bg-amber-950/40 px-3 py-3 text-sm text-amber-200">

@@ -42,6 +42,14 @@ export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState('')
 
+  // El login con Google rechazado hace router.replace('/?error=...') SIN remontar
+  // este componente, así que el inicializador del useState de arriba no se vuelve
+  // a evaluar. Sin esto, el aviso (p.ej. "elige tu contraseña") nunca aparecería:
+  // la pantalla "se queda parada" sin mensaje. Reaccionamos al cambio del param.
+  useEffect(() => {
+    if (oauthError) setError(ERROR_MESSAGES[oauthError] ?? null)
+  }, [oauthError])
+
   useEffect(() => {
     const stored = window.localStorage.getItem(LAST_EMAIL_KEY)
     if (stored) setEmail(stored)
