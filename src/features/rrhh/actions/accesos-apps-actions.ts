@@ -307,6 +307,36 @@ export async function deleteAccesoApp(id: string): Promise<void> {
   }
 }
 
+const LOGOS_BUCKET = "app-logos";
+
+/**
+ * Sube una imagen de logo para una app a Supabase Storage y devuelve su URL
+ * pública. No persiste en accesos_apps (eso lo hace el guardado de la app con
+ * el logoUrl devuelto). Solo authenticated.
+ */
+export async function subirLogoApp(formData: FormData): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const user = await getUserOrNull(supabase);
+  if (!user) return { ok: false, error: "No autenticado" };
+
+  const file = formData.get("file") as File | null;
+  if (!file || file.size === 0) return { ok: false, error: "No se recibió ninguna imagen" };
+  if (!file.type.startsWith("image/")) return { ok: false, error: "El archivo debe ser una imagen" };
+  if (file.size > 2 * 1024 * 1024) return { ok: false, error: "La imagen no puede superar 2 MB" };
+
+  const admin = createAdminClient();
+  const ext = (file.name.split(".").pop() || "png").toLowerCase();
+  const path = `logos/${Date.now()}-${Math.floor(file.size)}.${ext}`;
+
+  const { error: upErr } = await admin.storage
+    .from(LOGOS_BUCKET)
+    .upload(path, file, { upsert: true, contentType: file.type });
+  if (upErr) return { ok: false, error: `Error al subir: ${upErr.message}` };
+
+  const { data: { publicUrl } } = admin.storage.from(LOGOS_BUCKET).getPublicUrl(path);
+  return { ok: true, url: publicUrl };
+}
+
 /**
  * Verificación rápida de identidad antes de revelar cualquier contraseña.
  * Revalida la contraseña de acceso del usuario con un cliente anon efímero

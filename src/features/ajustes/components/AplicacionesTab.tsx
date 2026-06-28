@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +22,8 @@ import {
   Search,
   ChevronDown,
   X,
+  Upload,
+  Loader2,
 } from "lucide-react";
 import {
   CATEGORIAS_APP,
@@ -37,6 +39,7 @@ import {
   updateAccesoApp,
   deleteAccesoApp,
   revelarAccesoApp,
+  subirLogoApp,
 } from "@/features/rrhh/actions/accesos-apps-actions";
 import {
   VerificacionAccesosProvider,
@@ -194,6 +197,26 @@ function AplicacionesTabInner() {
   const [rolesDisponibles, setRolesDisponibles] = useState<string[]>([]);
   // Popover de roles abierto por índice de acceso (-1 = ninguno).
   const [rolesPopoverIdx, setRolesPopoverIdx] = useState<number>(-1);
+  // Subida de logo manual.
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [subiendoLogo, setSubiendoLogo] = useState(false);
+
+  async function handleSubirLogo(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSubiendoLogo(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await subirLogoApp(fd);
+    setSubiendoLogo(false);
+    if (e.target) e.target.value = "";
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    setForm((p) => ({ ...p, logoUrl: res.url }));
+    toast.success("Logo subido");
+  }
 
   useEffect(() => {
     getRolesEmpresaNombres(empresaDbId)
@@ -307,11 +330,16 @@ function AplicacionesTabInner() {
       const rolesUnion = Array.from(
         new Set(form.accesos.flatMap((a) => a.roles ?? [])),
       );
-      // Icono automático: marca conocida por nombre, o favicon del dominio.
+      // Logo: si el usuario subió uno manual (vive en el bucket app-logos), se
+      // respeta. Si no, se genera automáticamente (marca conocida o favicon).
+      const esLogoManual = (form.logoUrl ?? "").includes("/app-logos/");
+      const logoFinal = esLogoManual
+        ? form.logoUrl
+        : faviconDesdeUrl(form.url, form.nombre) || undefined;
       const payload = {
         ...form,
         rolesAutorizados: rolesUnion,
-        logoUrl: faviconDesdeUrl(form.url, form.nombre) || undefined,
+        logoUrl: logoFinal,
       };
       if (editingId) {
         const updated = await updateAccesoApp(editingId, payload);
@@ -542,13 +570,53 @@ function AplicacionesTabInner() {
               </Select>
             </div>
 
-            {/* Icono automático (favicon del dominio) */}
+            {/* Logo: automático (favicon/marca) o subido a mano */}
             <div className="space-y-1 sm:col-span-2">
-              <Label className="text-xs font-semibold">Icono</Label>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <AppLogo nombre={form.nombre || "?"} logoUrl={faviconDesdeUrl(form.url, form.nombre) || undefined} />
-                <span>Se obtiene automáticamente del nombre o la URL.</span>
+              <Label className="text-xs font-semibold">Logo</Label>
+              <div className="flex items-center gap-3">
+                <AppLogo
+                  nombre={form.nombre || "?"}
+                  logoUrl={
+                    ((form.logoUrl ?? "").includes("/app-logos/")
+                      ? form.logoUrl
+                      : faviconDesdeUrl(form.url, form.nombre)) || undefined
+                  }
+                />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleSubirLogo}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={subiendoLogo}
+                >
+                  {subiendoLogo ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                  ) : (
+                    <Upload className="h-3.5 w-3.5 mr-1" />
+                  )}
+                  Subir imagen
+                </Button>
+                {(form.logoUrl ?? "").includes("/app-logos/") && (
+                  <button
+                    type="button"
+                    onClick={() => setForm((p) => ({ ...p, logoUrl: "" }))}
+                    className="text-xs text-muted-foreground hover:text-destructive"
+                  >
+                    Quitar
+                  </button>
+                )}
               </div>
+              <p className="text-[11px] text-muted-foreground">
+                Se obtiene automáticamente del nombre o la URL. Si falla, sube tu propia imagen (máx 2 MB).
+              </p>
             </div>
 
             {/* Accesos: varias parejas usuario/contraseña, cada una con sus roles */}
