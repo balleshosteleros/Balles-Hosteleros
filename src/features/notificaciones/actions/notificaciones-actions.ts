@@ -163,6 +163,33 @@ export async function accionarLiquidacion(
   }
 }
 
+// Cierre por entidad (sistema): marca como vistas/leídas todas las notificaciones
+// que apuntan a una entidad concreta (entidad_tipo + entidad_id). Pensado para
+// flujos sin sesión del empleado (p. ej. firma de documento por enlace público):
+// cuando el trabajador firma, su aviso de "documento para firmar" aparece ya leído
+// en el portal. Usa service role porque corre fuera de la sesión del empleado.
+export async function marcarNotificacionesVistasPorRef(
+  refTabla: string,
+  refId: string,
+): Promise<{ ok: boolean; cerradas: number }> {
+  try {
+    const admin = createAdminClient();
+    const nowIso = new Date().toISOString();
+    const { data, error } = await admin
+      .from("notificaciones")
+      .update({ vista_at: nowIso, leida: true, leida_at: nowIso })
+      .eq("entidad_tipo", refTabla)
+      .eq("entidad_id", refId)
+      .is("vista_at", null)
+      .select("id");
+    if (error) throw error;
+    return { ok: true, cerradas: (data ?? []).length };
+  } catch (err) {
+    console.error("[notificaciones] marcarNotificacionesVistasPorRef:", err);
+    return { ok: false, cerradas: 0 };
+  }
+}
+
 // Registro para Dirección (gestor): todas las de la empresa activa.
 export interface NotificacionRegistro extends NotificacionApp {
   destinatario: string;

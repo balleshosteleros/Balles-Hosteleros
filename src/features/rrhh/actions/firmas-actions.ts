@@ -8,6 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sha256, generarToken, hashToken } from "@/features/rrhh/services/firmas/crypto";
 import { registrarEvento, listarEventos, verificarCadena } from "@/features/rrhh/services/firmas/audit";
 import { enviarInvitacionFirma } from "@/features/rrhh/services/firmas/email";
+import { emitirNotificacion } from "@/features/notificaciones/actions/notificaciones-actions";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
 
 const BUCKET = "firmas";
@@ -65,6 +66,40 @@ async function requireAdmin(): Promise<{ userId: string; userName: string; empre
     "Administrador";
 
   return { userId: user.id, userName: fullName, empresaId };
+}
+
+// Aviso in-app al empleado de que tiene un documento para firmar. Acompaña al
+// email de invitación: el botón "Firmar" abre el mismo enlace de firma. El
+// `refTabla`/`refId` permiten que, al firmar, la notificación quede marcada como
+// leída automáticamente (ver firmarDocumento → marcarNotificacionesVistasPorRef).
+// El `dedupeKey` por documento evita duplicar el aviso si se reenvía el enlace.
+async function notificarFirmaPendiente(args: {
+  empresaId: string;
+  empleadoId: string;
+  documentoId: string;
+  tituloDocumento: string;
+  token: string;
+}): Promise<void> {
+  try {
+    const base = (process.env.NEXT_PUBLIC_APP_URL ?? "https://sistema.balleshosteleros.com").replace(/\/$/, "");
+    const url = `${base}/firmar/${encodeURIComponent(args.token)}`;
+    await emitirNotificacion({
+      empresaId: args.empresaId,
+      tipo: "info",
+      titulo: "Tienes un documento para firmar",
+      mensaje: `«${args.tituloDocumento}» está pendiente de tu firma.`,
+      segmento: { tipo: "empleados", empleadoIds: [args.empleadoId] },
+      accionLabel: "Firmar",
+      accionUrl: url || "/mi-panel/documentos",
+      refTabla: "firmas_documentos",
+      refId: args.documentoId,
+      dedupeKey: `firma-${args.documentoId}`,
+      system: true,
+    });
+  } catch (err) {
+    // El aviso es complementario: si falla, el documento ya se envió por email.
+    console.error("[firmas] notificarFirmaPendiente:", err);
+  }
 }
 
 export async function listFirmasPorEmpleado(
@@ -338,6 +373,14 @@ export async function crearFirma(formData: FormData): Promise<CrearFirmaResult> 
       },
     });
 
+    await notificarFirmaPendiente({
+      empresaId,
+      empleadoId,
+      documentoId,
+      tituloDocumento: titulo,
+      token,
+    });
+
     revalidatePath("/rrhh/firmas");
     return { ok: true, documentoId, emailEnviado: sendResult.ok };
   } catch (err) {
@@ -418,6 +461,23 @@ export async function reenviarFirma(
       ip: meta.ip,
       userAgent: meta.userAgent,
       metadata: { destino, emailOk: sendResult.ok },
+    });
+
+    // El token cambió: retira el aviso anterior (apunta a un enlace ya inválido)
+    // y emite uno nuevo con el enlace vigente. Sin esto, el `dedupeKey` impediría
+    // re-crear el aviso y el empleado tendría en la bandeja un enlace caducado.
+    await admin
+      .from("notificaciones")
+      .delete()
+      .eq("entidad_tipo", "firmas_documentos")
+      .eq("entidad_id", documentoId)
+      .is("vista_at", null);
+    await notificarFirmaPendiente({
+      empresaId,
+      empleadoId: doc.empleado_id as string,
+      documentoId,
+      tituloDocumento: doc.titulo as string,
+      token,
     });
 
     revalidatePath("/rrhh/firmas");

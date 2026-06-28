@@ -1,6 +1,6 @@
 import { sendEmail, type SendEmailResult } from "@/lib/email/send";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.balleshosteleros.com";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://sistema.balleshosteleros.com";
 
 function esc(s: string): string {
   return s
@@ -165,12 +165,13 @@ export async function enviarCopiaFirmada(input: CopiaFirmadaInput): Promise<Send
         Descargar copia firmada
       </a>
     </p>
-    <p style="font-size:13px;color:#64748b;">El enlace de descarga caduca en 7 días. Guarda una copia en tu equipo.</p>
+    <p style="font-size:13px;color:#64748b;">El enlace de descarga caduca en 7 días. También tendrás este documento siempre disponible en tu portal, en <strong>Mis documentos</strong>.</p>
   `;
   const text =
     `Hola ${input.empleadoNombre},\n\n` +
     `Has firmado correctamente "${input.tituloDocumento}" el ${firmadoStr}.\n` +
-    `Descarga tu copia: ${input.signedUrl}\n`;
+    `Descarga tu copia: ${input.signedUrl}\n` +
+    `También lo tienes disponible en tu portal, en Mis documentos.\n`;
 
   return sendEmail({
     to: input.to,

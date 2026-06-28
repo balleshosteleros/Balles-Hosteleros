@@ -13,6 +13,7 @@ import {
 import { registrarEvento, listarEventos } from "@/features/rrhh/services/firmas/audit";
 import { enviarCodigoOTP, enviarCopiaFirmada } from "@/features/rrhh/services/firmas/email";
 import { generarActa, aplicarFirmaYConcatenar, type DatosActa } from "@/features/rrhh/services/firmas/pdf";
+import { marcarNotificacionesVistasPorRef } from "@/features/notificaciones/actions/notificaciones-actions";
 
 const BUCKET = "firmas";
 const OTP_TTL_MIN = 10;
@@ -555,6 +556,15 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
         firmadoEn: new Date(firmadoEnIso),
         signedUrl: descargaUrl,
       });
+    }
+
+    // Documento firmado: el aviso in-app de "documento para firmar" queda leído.
+    // Corre con service role porque la firma ocurre por enlace público, sin sesión
+    // del empleado. Complementario: si falla, no debe tumbar la firma ya completada.
+    try {
+      await marcarNotificacionesVistasPorRef("firmas_documentos", documentoId);
+    } catch (e) {
+      console.error("[firmar/firmar] cerrar notificación:", e);
     }
 
     return { ok: true, descargaUrl };
