@@ -138,6 +138,23 @@ export async function updatePassword(formData: FormData) {
   const supabase = await createClient()
   const password = formData.get('password') as string
 
+  const { data: { user: userBefore } } = await supabase.auth.getUser()
+  if (!userBefore) {
+    return { error: 'Sesión no disponible.' }
+  }
+
+  // ¿Es el ALTA INICIAL (estrenar contraseña) o una RECUPERACIÓN normal?
+  // El alta parte de password_set=false; la recuperación, de true. El enlace
+  // del correo de bienvenida solo sirve para el alta: una vez asignada la
+  // contraseña, no se puede volver a cambiar por esa vía (sí por "olvidé
+  // contraseña", que genera un correo nuevo).
+  const { data: perfilPrevio } = await supabase
+    .from('usuarios')
+    .select('password_set')
+    .eq('user_id', userBefore.id)
+    .maybeSingle()
+  const esAltaInicial = perfilPrevio?.password_set === false
+
   const { error } = await supabase.auth.updateUser({ password })
 
   if (error) {
@@ -149,6 +166,24 @@ export async function updatePassword(formData: FormData) {
     return { error: 'Sesión no disponible.' }
   }
 
+  if (esAltaInicial) {
+    // El usuario acaba de estrenar SU contraseña → marca password_set.
+    // Esto desbloquea el login (incluido Google), vetado mientras sea false.
+    await supabase
+      .from('usuarios')
+      .update({ password_set: true })
+      .eq('user_id', user.id)
+
+    // Cierra la sesión de recovery del correo de bienvenida para que ese
+    // enlace no pueda reutilizarse: a partir de aquí entra como un usuario
+    // normal (Google o correo+contraseña). La contraseña queda asignada.
+    await supabase.auth.signOut()
+    revalidatePath('/', 'layout')
+    redirect('/?password_creada=1')
+  }
+
+  // Recuperación normal ("olvidé contraseña"): el usuario ya estaba dado de
+  // alta; lo dejamos pasar directo a su panel.
   const guard = await checkProfileGuard(supabase, user.id)
   if (!guard.ok) {
     await supabase.auth.signOut()

@@ -1,5 +1,9 @@
 /**
  * Email de bienvenida tras promover un candidato a empleado (PRP-034).
+ * Su objetivo es que el empleado ELIJA su propia contraseña: esa contraseña le
+ * permite moverse por todo el sistema y es la que necesitará para acciones de
+ * seguridad (ver contraseñas guardadas). Hasta que no la elija, no puede entrar
+ * — ni siquiera con Google.
  * Inline-styles porque la mayoría de clientes de email no soportan <style>.
  */
 
@@ -11,7 +15,7 @@ export function bienvenidaEmpleadoEmail(opts: {
 }): { subject: string; html: string; text: string } {
   const product = opts.productName ?? "Balles Hosteleros";
 
-  const subject = `Bienvenido/a a ${opts.empresaNombre}`;
+  const subject = `Crea tu contraseña de acceso · ${opts.empresaNombre}`;
 
   const html = `<!doctype html>
 <html lang="es">
@@ -29,23 +33,38 @@ export function bienvenidaEmpleadoEmail(opts: {
             <tr>
               <td style="padding:16px 32px 8px 32px;">
                 <p style="margin:0 0 12px 0;font-size:14px;line-height:1.6;color:#334155;">
-                  Te damos la bienvenida al equipo. Ya tenemos lista tu cuenta en el sistema de gestión.
-                </p>
-                <p style="margin:0 0 12px 0;font-size:14px;line-height:1.6;color:#334155;">
-                  Pulsa el botón para entrar por primera vez. Te pediremos que completes algunos datos personales (DNI, IBAN, dirección, etc.) antes de empezar.
+                  Tu cuenta ya está lista. Para empezar, <strong>elige tu contraseña</strong>:
                 </p>
               </td>
             </tr>
             <tr>
-              <td align="center" style="padding:16px 32px 24px 32px;">
+              <td align="center" style="padding:8px 32px 20px 32px;">
                 <a href="${opts.actionUrl}" target="_blank"
                   style="display:inline-block;padding:14px 28px;background:#0f172a;color:#ffffff;font-weight:600;font-size:15px;text-decoration:none;border-radius:9999px;">
-                  Entrar al sistema
+                  Crear mi contraseña
                 </a>
               </td>
             </tr>
             <tr>
-              <td style="padding:0 32px 24px 32px;">
+              <td style="padding:0 32px 8px 32px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
+                  <tr>
+                    <td style="padding:14px 16px;">
+                      <p style="margin:0 0 8px 0;font-size:13px;line-height:1.6;color:#334155;">
+                        🔑 <strong>Esta contraseña te permitirá moverte por todo el sistema de la empresa.</strong>
+                        Guárdala bien: la necesitarás siempre.
+                      </p>
+                      <p style="margin:0;font-size:13px;line-height:1.6;color:#334155;">
+                        Podrás entrar siempre haciendo <strong>login con Google</strong>, pero
+                        <strong>aun así necesitarás esta contraseña</strong> para acciones de seguridad.
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:8px 32px 24px 32px;">
                 <p style="margin:0 0 6px 0;font-size:12px;color:#94a3b8;">
                   Si el botón no funciona, copia y pega este enlace en tu navegador:
                 </p>
@@ -69,12 +88,12 @@ export function bienvenidaEmpleadoEmail(opts: {
 
   const text = `¡Bienvenido/a, ${opts.recipientName}!
 
-Te damos la bienvenida al equipo de ${opts.empresaNombre}. Ya tenemos lista tu cuenta en ${product}.
-
-Entra al sistema con este enlace (caduca en 1 hora):
+Tu cuenta en ${product} (${opts.empresaNombre}) ya está lista. Para empezar, elige tu contraseña con este enlace (caduca en 1 hora):
 ${opts.actionUrl}
 
-La primera vez te pediremos completar algunos datos personales (DNI, IBAN, dirección, etc.) antes de empezar.
+IMPORTANTE: esta contraseña te permitirá moverte por todo el sistema de la empresa. Guárdala bien, la necesitarás siempre.
+
+Podrás entrar siempre haciendo login con Google, pero aun así necesitarás esta contraseña para acciones de seguridad.
 
 Si tienes dudas, contacta con tu responsable de RRHH.`;
 

@@ -322,12 +322,13 @@ export async function promoverCandidato(input: PromoverInput): Promise<PromoverR
     process.env.NEXT_PUBLIC_SITE_URL ??
     (process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : null) ??
     "http://localhost:3000";
-  const redirectTo = `${siteUrl.replace(/\/$/, "")}/primer-acceso`;
+  // Recovery link → /update-password: el empleado ELIGE su propia contraseña.
+  const redirectTo = `${siteUrl.replace(/\/$/, "")}/update-password`;
 
   let magicLinkSent = false;
   try {
     const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
-      type: "magiclink",
+      type: "recovery",
       email: emailLower,
       options: { redirectTo },
     });

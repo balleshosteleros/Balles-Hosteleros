@@ -277,9 +277,11 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
       process.env.NEXT_PUBLIC_SITE_URL ??
       (process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : null) ??
       "http://localhost:3000";
-    const redirectTo = `${siteUrl.replace(/\/$/, "")}/primer-acceso`;
+    // Recovery link → /update-password: el empleado ELIGE su propia contraseña.
+    // (No magic link: queremos que ponga contraseña, no solo que entre.)
+    const redirectTo = `${siteUrl.replace(/\/$/, "")}/update-password`;
     const { data: linkData } = await admin.auth.admin.generateLink({
-      type: "magiclink", email: loginEmail, options: { redirectTo },
+      type: "recovery", email: loginEmail, options: { redirectTo },
     });
     if (linkData?.properties?.action_link) {
       const empresaNombre = await admin.from("empresas").select("nombre").eq("id", empresaId).single()

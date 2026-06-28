@@ -11,17 +11,24 @@ const LAST_EMAIL_KEY = 'bh:last-login-email'
 
 const GENERIC_ACCESS_MESSAGE = 'Usuario o contraseña incorrectos.'
 
+// Cuenta válida pero sin contraseña elegida: guiamos al empleado al correo
+// "Crea tu contraseña" en lugar de ocultarlo como credencial incorrecta.
+const SIN_PASSWORD_MESSAGE =
+  'Tienes una cuenta, pero primero debes elegir tu contraseña. Revisa el correo «Crea tu contraseña» que te enviamos.'
+
 const ERROR_MESSAGES: Record<string, string> = {
   auth_callback_failed: GENERIC_ACCESS_MESSAGE,
   cuenta_inactiva: GENERIC_ACCESS_MESSAGE,
   sin_perfil: GENERIC_ACCESS_MESSAGE,
   sin_empresa: GENERIC_ACCESS_MESSAGE,
   sin_rol: GENERIC_ACCESS_MESSAGE,
+  sin_password: SIN_PASSWORD_MESSAGE,
 }
 
 export function LoginForm() {
   const searchParams = useSearchParams()
   const oauthError = searchParams.get('error')
+  const passwordCreada = searchParams.get('password_creada') === '1'
   const [error, setError] = useState<string | null>(
     oauthError ? ERROR_MESSAGES[oauthError] ?? null : null,
   )
@@ -53,6 +60,12 @@ export function LoginForm() {
 
   return (
     <div className="space-y-5">
+      {passwordCreada && (
+        <p className="rounded-md border border-emerald-900/50 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-300">
+          Tu contraseña ya está creada. Inicia sesión con tu correo o con Google.
+        </p>
+      )}
+
       <GoogleSignInButton />
 
       <AuthDivider label="o inicia sesión con tu correo" />
