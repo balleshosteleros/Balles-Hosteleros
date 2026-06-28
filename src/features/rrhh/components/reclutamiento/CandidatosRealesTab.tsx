@@ -34,7 +34,7 @@ import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 type Fase = "nuevo" | "en_progreso" | "oferta" | "seleccionado" | "descartado";
 type Estado =
-  | "nuevo" | "elegido" | "papelera" | "entrevista" | "teorica"
+  | "nuevo" | "elegido" | "papelera" | "entrevista" | "documentacion" | "teorica"
   | "practica" | "prueba" | "empleado" | "no_se_presenta" | "suspenso_formacion";
 
 interface CandidatoReal {

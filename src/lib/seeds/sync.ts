@@ -394,13 +394,6 @@ export async function syncReclutamientoPlantillaEstadoAEmpresa(
   admin: Admin,
   empresaId: string,
 ): Promise<{ creadas: number }> {
-  const { data: existentes } = await admin
-    .from("reclutamiento_plantillas_estado")
-    .select("id")
-    .eq("empresa_id", empresaId)
-    .limit(1);
-  if ((existentes ?? []).length > 0) return { creadas: 0 };
-
   // Resuelve los emails por defecto (biblioteca suelta) a sus ids en esta empresa.
   // El sync de emails se ejecuta antes que el de estados (ver seedEmpresaDefaults).
   const { data: emails } = await admin
@@ -412,7 +405,7 @@ export async function syncReclutamientoPlantillaEstadoAEmpresa(
   );
 
   const seed = RECLUTAMIENTO_PLANTILLA_ESTADOS_SEED;
-  const estados = seed.estados.map((e) => {
+  const seedEstados = seed.estados.map((e) => {
     const { defaultEmailNombre, ...resto } = e;
     return {
       ...resto,
@@ -421,17 +414,58 @@ export async function syncReclutamientoPlantillaEstadoAEmpresa(
         : null,
     };
   });
-  const { error } = await admin
+
+  const { data: existentes } = await admin
     .from("reclutamiento_plantillas_estado")
-    .insert({
-      empresa_id: empresaId,
-      nombre: seed.nombre,
-      es_predeterminada: seed.esPredeterminada,
-      estados,
-      activa: true,
+    .select("id, estados")
+    .eq("empresa_id", empresaId);
+
+  // Caso 1 — empresa sin plantilla: sembrar la plantilla estándar completa.
+  if ((existentes ?? []).length === 0) {
+    const { error } = await admin
+      .from("reclutamiento_plantillas_estado")
+      .insert({
+        empresa_id: empresaId,
+        nombre: seed.nombre,
+        es_predeterminada: seed.esPredeterminada,
+        estados: seedEstados,
+        activa: true,
+      });
+    if (error) throw error;
+    return { creadas: 1 };
+  }
+
+  // Caso 2 — empresa con plantillas: ADITIVO. Inserta en cada plantilla los
+  // estados del seed que aún no existan (por `key`), respetando label/orden/email
+  // ya personalizados por el cliente. Hoy esto incorpora el estado nuevo
+  // `documentacion` sin tocar el resto. El email por defecto solo se asigna si la
+  // empresa tiene esa plantilla de email; si no, queda null (no rompe).
+  let actualizadas = 0;
+  for (const plantilla of existentes ?? []) {
+    const estadosActuales = Array.isArray(plantilla.estados)
+      ? (plantilla.estados as Array<Record<string, unknown>>)
+      : [];
+    const keysActuales = new Set(estadosActuales.map((e) => e.key as string));
+    const faltantes = seedEstados.filter((e) => !keysActuales.has(e.key));
+    if (faltantes.length === 0) continue;
+
+    // Mezcla y reordena por el `orden` canónico del seed para que los estados
+    // nuevos queden en su posición (p. ej. documentacion antes de teorica).
+    const ordenSeed = new Map(seedEstados.map((e) => [e.key, e.orden]));
+    const merged = [...estadosActuales, ...faltantes].sort((a, b) => {
+      const oa = (ordenSeed.get(a.key as string) ?? (a.orden as number) ?? 0) as number;
+      const ob = (ordenSeed.get(b.key as string) ?? (b.orden as number) ?? 0) as number;
+      return oa - ob;
     });
-  if (error) throw error;
-  return { creadas: 1 };
+
+    const { error } = await admin
+      .from("reclutamiento_plantillas_estado")
+      .update({ estados: merged })
+      .eq("id", plantilla.id as string);
+    if (error) throw error;
+    actualizadas++;
+  }
+  return { creadas: actualizadas };
 }
 
 /**

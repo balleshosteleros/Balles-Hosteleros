@@ -32,6 +32,8 @@ import {
   XCircle,
   Trash2,
   UsersRound,
+  IdCard,
+  ShieldCheck,
 } from "lucide-react";
 
 function WhatsAppIcon({ className }: { className?: string }) {
@@ -539,6 +541,60 @@ function CandidatoSidebar({
             <p className="text-xs text-muted-foreground">Abrir en una pestaña nueva</p>
           </div>
         </a>
+      )}
+
+      {/* Documentación aportada por el candidato (paso «Documentación»). */}
+      {candidato.documentacionCompletadaAt && (
+        <div className="rounded-lg border border-border p-3 space-y-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-semibold text-foreground inline-flex items-center gap-1.5">
+              <IdCard className="h-4 w-4 text-muted-foreground" /> Documentación
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+              <ShieldCheck className="h-3.5 w-3.5" /> Recibida
+            </span>
+          </div>
+          <dl className="grid gap-1.5 text-sm">
+            {candidato.dniNie && (
+              <div className="flex items-center justify-between gap-2">
+                <dt className="text-muted-foreground">DNI / NIE</dt>
+                <dd className="font-medium text-foreground">{candidato.dniNie}</dd>
+              </div>
+            )}
+            {candidato.iban && (
+              <div className="flex items-center justify-between gap-2">
+                <dt className="text-muted-foreground">IBAN</dt>
+                <dd className="font-medium text-foreground tabular-nums">{candidato.iban}</dd>
+              </div>
+            )}
+            {candidato.numSeguridadSocial && (
+              <div className="flex items-center justify-between gap-2">
+                <dt className="text-muted-foreground">Nº Seguridad Social</dt>
+                <dd className="font-medium text-foreground tabular-nums">{candidato.numSeguridadSocial}</dd>
+              </div>
+            )}
+          </dl>
+          <div className="flex flex-wrap gap-2 pt-0.5">
+            {[
+              { path: candidato.docDniAnversoPath, label: "DNI anverso" },
+              { path: candidato.docDniReversoPath, label: "DNI reverso" },
+              { path: candidato.docIbanPath, label: "IBAN" },
+              { path: candidato.docSsPath, label: "Seg. Social" },
+            ]
+              .filter((d) => d.path)
+              .map((d) => (
+                <a
+                  key={d.label}
+                  href={`/api/documentacion/doc?path=${encodeURIComponent(d.path as string)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs text-foreground hover:bg-muted/40 transition-colors"
+                >
+                  <FileText className="h-3.5 w-3.5 text-muted-foreground" /> {d.label}
+                </a>
+              ))}
+          </div>
+        </div>
       )}
 
       {/* Resumen: resultado del cuestionario y nota final de reviews. */}

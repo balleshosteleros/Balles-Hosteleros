@@ -27,6 +27,7 @@ export const VARIABLES_RECLUTAMIENTO: VariableReclutamiento[] = [
   { variable: "{{candidato_nombre_completo}}", descripcion: "Nombre y apellidos del candidato", grupo: "Candidato" },
   { variable: "{{candidato_email}}", descripcion: "Email del candidato", grupo: "Candidato" },
   { variable: "{{candidato_telefono}}", descripcion: "Teléfono del candidato", grupo: "Candidato" },
+  { variable: "{{enlace_documentacion}}", descripcion: "Enlace personal para que el candidato suba su documentación (solo plantilla Documentación)", grupo: "Candidato" },
   // ── Vacante / puesto ──
   { variable: "{{vacante_nombre}}", descripcion: "Nombre de la vacante", grupo: "Vacante" },
   { variable: "{{vacante_ubicacion}}", descripcion: "Ubicación de la vacante", grupo: "Vacante" },
@@ -57,6 +58,7 @@ export const VARIABLES_RECLUTAMIENTO_EJEMPLO: Record<string, string> = {
   candidato_nombre_completo: "María García López",
   candidato_email: "maria.garcia@email.com",
   candidato_telefono: "612 345 678",
+  enlace_documentacion: "https://app.balleshosteleros.com/documentacion/ejemplo",
   vacante_nombre: "Camarero/a",
   vacante_ubicacion: "Sala principal",
   departamento_nombre: "Sala",

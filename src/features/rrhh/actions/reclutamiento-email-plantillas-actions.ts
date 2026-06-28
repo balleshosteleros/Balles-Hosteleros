@@ -431,6 +431,17 @@ export async function enviarReclutamientoFaseEmail(
   if (!to) return { sent: false, reason: "El candidato no tiene email" };
 
   const vars = await buildReclutamientoEmailVars(candidatoId);
+
+  // Paso «Documentación»: genera (perezosamente) el token del candidato y resuelve
+  // el placeholder {{enlace_documentacion}} a su URL pública de subida.
+  if (estado === "documentacion") {
+    const { asegurarTokenDocumentacion, enlaceDocumentacion } = await import(
+      "@/features/rrhh/lib/documentacion-candidato"
+    );
+    const token = await asegurarTokenDocumentacion(supabase, candidatoId, empresaId);
+    if (token) vars.enlace_documentacion = enlaceDocumentacion(token);
+  }
+
   const subject = sustituirVariablesReclutamiento(tpl.asunto, vars);
   const bodyText = sustituirVariablesReclutamiento(tpl.cuerpo, vars);
 

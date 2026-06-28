@@ -101,6 +101,15 @@ interface CandidatoRowReal {
   empleado_id: string | null;
   activo: boolean | null;
   created_at: string;
+  // Paso «Documentación»
+  dni_nie: string | null;
+  iban: string | null;
+  num_seguridad_social: string | null;
+  doc_dni_anverso_path: string | null;
+  doc_dni_reverso_path: string | null;
+  doc_iban_path: string | null;
+  doc_ss_path: string | null;
+  documentacion_completada_at: string | null;
 }
 
 /**
@@ -135,7 +144,10 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
         .select(`
           id, empresa_id, vacante_id, nombre, apellidos, email, telefono,
           cv_url, notas, origen, canal_nombre, fase, estado, promovido_at, empleado_id,
-          activo, created_at
+          activo, created_at,
+          dni_nie, iban, num_seguridad_social,
+          doc_dni_anverso_path, doc_dni_reverso_path, doc_iban_path, doc_ss_path,
+          documentacion_completada_at
         `)
         .eq("empresa_id", empresaId)
         .order("created_at", { ascending: false }),
@@ -153,7 +165,7 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
     }
 
     const ESTADOS_VALIDOS = new Set([
-      "nuevo", "elegido", "papelera", "entrevista", "teorica",
+      "nuevo", "elegido", "papelera", "entrevista", "documentacion", "teorica",
       "practica", "prueba", "empleado", "no_se_presenta", "suspenso_formacion",
     ]);
     const ORIGENES_VALIDOS = new Set([
@@ -221,6 +233,15 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
           // Extras útiles para el botón "Crear en sistema" y avisos
           promovidoAt: c.promovido_at,
           empleadoId: c.empleado_id,
+          // Paso «Documentación»
+          dniNie: c.dni_nie ?? null,
+          iban: c.iban ?? null,
+          numSeguridadSocial: c.num_seguridad_social ?? null,
+          docDniAnversoPath: c.doc_dni_anverso_path ?? null,
+          docDniReversoPath: c.doc_dni_reverso_path ?? null,
+          docIbanPath: c.doc_iban_path ?? null,
+          docSsPath: c.doc_ss_path ?? null,
+          documentacionCompletadaAt: c.documentacion_completada_at ?? null,
         })),
       };
     });

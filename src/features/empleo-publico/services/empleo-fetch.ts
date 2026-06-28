@@ -267,3 +267,59 @@ export async function fetchOfertaPublica(
     return null;
   }
 }
+
+// ─── Paso «Documentación»: resolución del candidato por token ──────────────────
+
+export interface DocumentacionPublica {
+  empresa: EmpresaPublica;
+  candidatoNombre: string;
+  /** Token tal cual (lo reenvía el formulario al enviar). */
+  token: string;
+  /** true si el candidato ya completó su documentación (vista de "ya enviada"). */
+  yaCompletada: boolean;
+}
+
+/**
+ * Resuelve la página pública de documentación a partir del token personal del
+ * candidato (`candidatos.documentacion_token`). Devuelve la marca de la empresa
+ * propietaria para pintar el shell, el nombre del candidato (saludo) y si ya
+ * había completado la documentación. Null si el token no existe.
+ */
+export async function fetchDocumentacionPorToken(
+  token: string,
+): Promise<DocumentacionPublica | null> {
+  try {
+    const safe = token.trim();
+    if (!safe) return null;
+    const supabase = serviceClient();
+
+    const { data: cand } = await supabase
+      .from("candidatos")
+      .select("nombre, apellidos, empresa_id, documentacion_completada_at")
+      .eq("documentacion_token", safe)
+      .maybeSingle();
+    if (!cand) return null;
+
+    const { data: emp } = await supabase
+      .from("empresas")
+      .select(EMPRESA_COLS)
+      .eq("id", cand.empresa_id as string)
+      .maybeSingle<EmpresaRow>();
+    if (!emp) return null;
+
+    const nombre = [(cand.nombre as string | null) ?? "", (cand.apellidos as string | null) ?? ""]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+    return {
+      empresa: rowToEmpresa(emp),
+      candidatoNombre: nombre,
+      token: safe,
+      yaCompletada: !!cand.documentacion_completada_at,
+    };
+  } catch (err) {
+    console.error("[empleo-fetch] documentacion fatal:", err);
+    return null;
+  }
+}

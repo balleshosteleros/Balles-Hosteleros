@@ -17,6 +17,7 @@ export type EstadoReclutamiento =
   | "elegido"
   | "papelera"
   | "entrevista"
+  | "documentacion"
   | "teorica"
   | "practica"
   | "prueba"
@@ -75,7 +76,7 @@ const FORMACION_CONFIG: FasePrincipalConfig = {
   color: "hsl(145, 63%, 42%)",
   colorFrom: "hsl(145, 70%, 50%)",
   colorTo: "hsl(145, 55%, 35%)",
-  estados: ["teorica", "practica", "prueba", "empleado"],
+  estados: ["documentacion", "teorica", "practica", "prueba", "empleado"],
 };
 
 const DESCARTADO_CONFIG: FasePrincipalConfig = {
@@ -106,6 +107,7 @@ export const ESTADOS_CONFIG: Record<EstadoReclutamiento, { label: string; color:
   elegido: { label: "Elegido", color: "hsl(220, 70%, 55%)", icono: "✏️" },
   papelera: { label: "Papelera", color: "hsl(0, 72%, 51%)", icono: "🗑️" },
   entrevista: { label: "Entrevista", color: "hsl(220, 70%, 55%)", icono: "📋" },
+  documentacion: { label: "Documentación", color: "hsl(145, 63%, 42%)", icono: "📄" },
   teorica: { label: "Teórica", color: "hsl(145, 63%, 42%)", icono: "📋" },
   practica: { label: "Práctica", color: "hsl(145, 63%, 42%)", icono: "📋" },
   prueba: { label: "Prueba", color: "hsl(145, 63%, 42%)", icono: "📋" },
@@ -116,7 +118,7 @@ export const ESTADOS_CONFIG: Record<EstadoReclutamiento, { label: string; color:
 
 // Flat order of all estados (for legacy compat)
 export const FASES_ORDER: EstadoReclutamiento[] = [
-  "nuevo", "elegido", "entrevista", "teorica", "practica", "prueba", "empleado", "papelera", "no_se_presenta", "suspenso_formacion",
+  "nuevo", "elegido", "entrevista", "documentacion", "teorica", "practica", "prueba", "empleado", "papelera", "no_se_presenta", "suspenso_formacion",
 ];
 
 // Legacy alias
@@ -223,6 +225,16 @@ export interface Candidato {
   promovidoAt?: string | null;
   /** Empleado creado al contratar, si ya se promovió. */
   empleadoId?: string | null;
+  // ── Paso «Documentación» (datos aportados por el candidato) ──
+  dniNie?: string | null;
+  iban?: string | null;
+  numSeguridadSocial?: string | null;
+  docDniAnversoPath?: string | null;
+  docDniReversoPath?: string | null;
+  docIbanPath?: string | null;
+  docSsPath?: string | null;
+  /** No null = el candidato completó su documentación (fecha de recepción). */
+  documentacionCompletadaAt?: string | null;
 }
 
 // ─── Email plantillas por estado ────────────────────────────────
@@ -230,6 +242,7 @@ export const EMAIL_PLANTILLAS_FASE: Record<EstadoReclutamiento, { asunto: string
   nuevo: { asunto: "Hemos recibido tu candidatura", cuerpo: "Tu candidatura ha sido registrada correctamente. Nos pondremos en contacto contigo próximamente.", activo: true },
   elegido: { asunto: "Has sido preseleccionado/a", cuerpo: "Nos complace informarte de que has sido preseleccionado/a para avanzar en el proceso de selección.", activo: true },
   entrevista: { asunto: "Convocatoria a entrevista", cuerpo: "Queremos invitarte a una entrevista. En breve recibirás los detalles de fecha y hora.", activo: true },
+  documentacion: { asunto: "Documentación necesaria para tu incorporación", cuerpo: "Para continuar con tu incorporación necesitamos que nos aportes tu documentación. Te enviaremos un enlace para subirla.", activo: true },
   teorica: { asunto: "Prueba teórica programada", cuerpo: "Te informamos de que pasas a la fase de prueba teórica. Te enviaremos los detalles próximamente.", activo: true },
   practica: { asunto: "Prueba práctica programada", cuerpo: "Avanzas a la fase de prueba práctica. Recibirás instrucciones en breve.", activo: true },
   prueba: { asunto: "Periodo de prueba", cuerpo: "Has avanzado al periodo de prueba. ¡Enhorabuena!", activo: true },
@@ -355,6 +368,7 @@ const CADENA_PROGRESO: EstadoReclutamiento[] = [
   "nuevo",
   "elegido",
   "entrevista",
+  "documentacion",
   "teorica",
   "practica",
   "prueba",

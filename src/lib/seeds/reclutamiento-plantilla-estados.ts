@@ -47,14 +47,15 @@ export const RECLUTAMIENTO_PLANTILLA_ESTADOS_SEED: PlantillaEstadoSeed = {
     { key: "elegido", label: "Elegido", color: "hsl(220, 70%, 55%)", fase: "seleccion", orden: 2, defaultEmailNombre: "Elegido" },
     { key: "entrevista", label: "Entrevista", color: "hsl(220, 70%, 55%)", fase: "seleccion", orden: 3, defaultEmailNombre: "Entrevista" },
     // ── Fase Formación (todos heredan el color oficial de la fase) ──
-    { key: "teorica", label: "Teórica", color: "hsl(145, 63%, 42%)", fase: "formacion", orden: 4, defaultEmailNombre: "Teórica" },
-    { key: "practica", label: "Práctica", color: "hsl(145, 63%, 42%)", fase: "formacion", orden: 5, defaultEmailNombre: "Práctica" },
-    { key: "prueba", label: "Prueba", color: "hsl(145, 63%, 42%)", fase: "formacion", orden: 6, defaultEmailNombre: "Prueba" },
-    { key: "empleado", label: "Empleado", color: "hsl(145, 63%, 42%)", fase: "formacion", orden: 7, defaultEmailNombre: "Empleado" },
+    { key: "documentacion", label: "Documentación", color: "hsl(145, 63%, 42%)", fase: "formacion", orden: 4, defaultEmailNombre: "Documentación" },
+    { key: "teorica", label: "Teórica", color: "hsl(145, 63%, 42%)", fase: "formacion", orden: 5, defaultEmailNombre: "Teórica" },
+    { key: "practica", label: "Práctica", color: "hsl(145, 63%, 42%)", fase: "formacion", orden: 6, defaultEmailNombre: "Práctica" },
+    { key: "prueba", label: "Prueba", color: "hsl(145, 63%, 42%)", fase: "formacion", orden: 7, defaultEmailNombre: "Prueba" },
+    { key: "empleado", label: "Empleado", color: "hsl(145, 63%, 42%)", fase: "formacion", orden: 8, defaultEmailNombre: "Empleado" },
     // ── Fase Descartado (todos heredan el color oficial de la fase) ──
-    { key: "papelera", label: "Papelera", color: "hsl(0, 72%, 51%)", fase: "descartado", orden: 8, defaultEmailNombre: "Papelera" },
-    { key: "no_se_presenta", label: "No se presenta", color: "hsl(0, 72%, 51%)", fase: "descartado", orden: 9, defaultEmailNombre: "No se presenta" },
-    { key: "suspenso_formacion", label: "Suspenso Formación", color: "hsl(0, 72%, 51%)", fase: "descartado", orden: 10, defaultEmailNombre: "Suspenso Formación" },
+    { key: "papelera", label: "Papelera", color: "hsl(0, 72%, 51%)", fase: "descartado", orden: 9, defaultEmailNombre: "Papelera" },
+    { key: "no_se_presenta", label: "No se presenta", color: "hsl(0, 72%, 51%)", fase: "descartado", orden: 10, defaultEmailNombre: "No se presenta" },
+    { key: "suspenso_formacion", label: "Suspenso Formación", color: "hsl(0, 72%, 51%)", fase: "descartado", orden: 11, defaultEmailNombre: "Suspenso Formación" },
   ],
 };
 

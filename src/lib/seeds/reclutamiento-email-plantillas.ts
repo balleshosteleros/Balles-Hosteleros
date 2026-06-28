@@ -34,6 +34,12 @@
  *     {{empresa_telefono}}          → teléfono principal de la empresa
  *     {{empresa_web}}              → web de la empresa
  *     {{empresa_direccion}}         → dirección del local de la empresa
+ *
+ *   Documentación (solo plantilla «Documentación»):
+ *     {{enlace_documentacion}}      → URL personal del candidato para subir su
+ *                                     documentación (DNI/NIE, IBAN, nº SS). Se
+ *                                     genera al enviar el correo del estado
+ *                                     `documentacion` (ver reclutamiento-email.ts).
  */
 
 export interface ReclutamientoEmailPlantillaSeed {
@@ -93,7 +99,32 @@ Te escribo para agradecerte el interés depositado en nuestra empresa {{empresa_
     activa: true,
   },
 
-  // ───────────────────────────────────────────────────────── 4. Teórica ──
+  // ─────────────────────────────────────────────────── 4. Documentación ──
+  {
+    nombre: "Documentación",
+    asunto: "Documentación necesaria para tu incorporación — {{empresa_nombre}}",
+    cuerpo: `Hola {{candidato_nombre}},
+
+¡Enhorabuena! Pasas a la siguiente fase del proceso. Antes de empezar la formación, necesitamos que nos aportes tu documentación para poder gestionar tu alta.
+
+Tendrás que adjuntar (puedes hacer una foto con el móvil o subir un archivo):
+A. Tu DNI o NIE, por las dos caras (anverso y reverso). Si eres extranjero/a, vale el pasaporte.
+B. Un documento donde se vea tu número de cuenta bancaria (IBAN).
+C. Un documento donde se vea tu número de la Seguridad Social.
+
+👉 Entra en este enlace personal y sigue los pasos:
+{{enlace_documentacion}}
+
+Nuestro sistema leerá automáticamente los números de tus documentos y te los mostrará para que los revises y confirmes que son correctos. Es muy rápido.
+
+Si te surge cualquier duda, escríbenos a {{empresa_email}}.
+
+¡Gracias y nos vemos pronto, {{candidato_nombre}}!
+{{empresa_nombre}}`,
+    activa: true,
+  },
+
+  // ───────────────────────────────────────────────────────── 5. Teórica ──
   {
     nombre: "Teórica",
     asunto: "Teoría — {{empresa_nombre}}",
