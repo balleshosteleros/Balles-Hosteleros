@@ -18,8 +18,8 @@ export type UpdateSessionResult = {
   user: User | null
 }
 
-const AUTH_PATHS = ['/', '/callback', '/forgot-password', '/update-password', '/check-email', '/acceso-demo']
-const PUBLIC_PREFIXES = ['/carta', '/__site', '/api/google/connect', '/empleo', '/api/empleo', '/firmar', '/inspectores', '/inspecciones/verificar', '/v', '/r', '/api/visita']
+const AUTH_PATHS = ['/', '/callback', '/auth/confirm', '/forgot-password', '/update-password', '/check-email', '/acceso-demo']
+const PUBLIC_PREFIXES = ['/carta', '/__site', '/api/google/connect', '/empleo', '/api/empleo', '/documentacion', '/api/documentacion', '/firmar', '/inspectores', '/inspecciones/verificar', '/v', '/r', '/api/visita']
 
 function isAuthPath(pathname: string) {
   if (pathname === '/') return true
