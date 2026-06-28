@@ -28,7 +28,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { LabelConRegla } from "@/components/forms/LabelConRegla";
-import { BotonesGuardarBorrador } from "@/components/forms/BotonesGuardarBorrador";
 import { Mail, AlertTriangle, Settings, Pencil, Trash2, Plus, Sparkles, X, ArrowLeft } from "lucide-react";
 import {
   SubmoduleToolbar,
@@ -607,7 +606,7 @@ function ProveedorModal({ open, onClose, onSave, item, empresaId, categorias }: 
   }), [empresaId, opcionesCategoria]);
   const [form, setForm] = useState<Proveedor>(() => item || blankFactory());
   const [faltantes, setFaltantes] = useState<string[]>([]);
-  const { validar, admiteBorrador } = useReglasSubmodulo("logistica", "proveedores");
+  const { validar } = useReglasSubmodulo("logistica", "proveedores");
 
   useEffect(() => { setForm(item || blankFactory()); }, [item, open, blankFactory]);
 
@@ -636,21 +635,8 @@ function ProveedorModal({ open, onClose, onSave, item, empresaId, categorias }: 
       setFaltantes(labelsFaltantes);
       return;
     }
-    // Si veníamos de borrador y ahora está completo → pasar a Activo.
-    const estadoFinal: EstadoProveedor = form.estado === "Borrador" ? "Activo" : form.estado;
-    onSave({ ...form, estado: estadoFinal, ultimaActualizacion: new Date().toISOString().slice(0, 10) });
+    onSave({ ...form, ultimaActualizacion: new Date().toISOString().slice(0, 10) });
     toast.success(isEdit ? "Proveedor actualizado" : "Proveedor creado");
-    onClose();
-  };
-
-  const handleGuardarBorrador = () => {
-    // Borrador siempre se puede guardar — solo exigimos nombre comercial mínimo para identificarlo.
-    if (!form.nombreComercial.trim()) {
-      toast.error("Necesitas al menos el nombre comercial para guardar el borrador");
-      return;
-    }
-    onSave({ ...form, estado: "Borrador", ultimaActualizacion: new Date().toISOString().slice(0, 10) });
-    toast.info("Proveedor guardado como borrador");
     onClose();
   };
 
@@ -784,17 +770,9 @@ function ProveedorModal({ open, onClose, onSave, item, empresaId, categorias }: 
         </div>
         <DialogFooter className="flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-          {isEdit ? (
-            <Button onClick={handleSubmit}>Guardar cambios</Button>
-          ) : (
-            <BotonesGuardarBorrador
-              onGuardar={handleSubmit}
-              onGuardarBorrador={handleGuardarBorrador}
-              faltantes={labelsFaltantes}
-              labelGuardar="Crear proveedor"
-              admiteBorrador={admiteBorrador}
-            />
-          )}
+          <Button onClick={handleSubmit}>
+            {isEdit ? "Guardar cambios" : "Crear proveedor"}
+          </Button>
         </DialogFooter>
       </DialogContent>
 

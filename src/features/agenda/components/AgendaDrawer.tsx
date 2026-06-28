@@ -18,6 +18,7 @@ import {
   Tag,
   X,
   Users,
+  UserX,
   Check,
   MoreVertical,
 } from "lucide-react";
@@ -78,27 +79,33 @@ import {
 const CATEGORIA_ICON: Record<ContactoCategoria, React.ElementType> = {
   mantenimiento: Wrench,
   proveedores: Truck,
+  proveedores_inactivos: Truck,
   servicios: Sparkles,
   emergencias: Siren,
   empleados: Users,
+  empleados_inactivos: UserX,
   otros: Tag,
 };
 
 const CATEGORIA_TINT: Record<ContactoCategoria, string> = {
   mantenimiento: "text-amber-600 bg-amber-50",
   proveedores: "text-blue-600 bg-blue-50",
+  proveedores_inactivos: "text-gray-500 bg-gray-100",
   servicios: "text-violet-600 bg-violet-50",
   emergencias: "text-red-600 bg-red-50",
   empleados: "text-emerald-600 bg-emerald-50",
+  empleados_inactivos: "text-gray-500 bg-gray-100",
   otros: "text-gray-600 bg-gray-50",
 };
 
 const CATEGORIA_BORDER: Record<ContactoCategoria, string> = {
   mantenimiento: "bg-amber-100 text-amber-700 border-amber-200",
   proveedores: "bg-blue-100 text-blue-700 border-blue-200",
+  proveedores_inactivos: "bg-gray-100 text-gray-600 border-gray-200",
   servicios: "bg-violet-100 text-violet-700 border-violet-200",
   emergencias: "bg-red-100 text-red-700 border-red-200",
   empleados: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  empleados_inactivos: "bg-gray-100 text-gray-600 border-gray-200",
   otros: "bg-gray-100 text-gray-700 border-gray-200",
 };
 
@@ -171,9 +178,11 @@ export function AgendaDrawer({ children }: { children: ReactNode }) {
     const c: Record<ContactoCategoria, number> = {
       mantenimiento: 0,
       proveedores: 0,
+      proveedores_inactivos: 0,
       servicios: 0,
       emergencias: 0,
       empleados: 0,
+      empleados_inactivos: 0,
       otros: 0,
     };
     contactos.forEach((x) => (c[x.categoria] += 1));

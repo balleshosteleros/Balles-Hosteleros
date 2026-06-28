@@ -227,7 +227,7 @@ export function ProveedorDetail({ proveedor, onBack, onSave, onDelete }: Props) 
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {ESTADOS_PROVEEDOR.filter((e) => e !== "Borrador").map((e) => (
+                    {ESTADOS_PROVEEDOR.map((e) => (
                       <SelectItem key={e} value={e}>
                         {e}
                       </SelectItem>

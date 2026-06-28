@@ -195,7 +195,16 @@ export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNom
     if (!open) return;
     listProveedores().then((res) => {
       if (res.ok) {
+        // Solo proveedores activos para elegir en pedidos nuevos. Los inactivos
+        // no se pueden seleccionar, pero si se edita un pedido cuyo proveedor ya
+        // está inactivo se conserva en la lista para no romper el documento.
+        const proveedorActualId = item?.proveedorId ?? "";
         const opts = (res.data as unknown as Array<Record<string, unknown>>)
+          .filter(
+            (r) =>
+              (r.estado as string) === "Activo" ||
+              (r.id as string) === proveedorActualId,
+          )
           .map((r) => ({
             id: (r.id as string) ?? "",
             nombre: ((r.nombre_comercial as string) ?? (r.nombre as string) ?? ""),

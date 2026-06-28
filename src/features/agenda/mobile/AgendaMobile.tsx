@@ -11,6 +11,7 @@ import {
   Sparkles,
   Siren,
   Users,
+  UserX,
   Tag,
   Notebook,
   X,
@@ -41,18 +42,22 @@ import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 const CATEGORIA_ICON: Record<ContactoCategoria, React.ElementType> = {
   mantenimiento: Wrench,
   proveedores: Truck,
+  proveedores_inactivos: Truck,
   servicios: Sparkles,
   emergencias: Siren,
   empleados: Users,
+  empleados_inactivos: UserX,
   otros: Tag,
 };
 
 const CATEGORIA_TINT: Record<ContactoCategoria, string> = {
   mantenimiento: "text-amber-600 bg-amber-50",
   proveedores: "text-blue-600 bg-blue-50",
+  proveedores_inactivos: "text-gray-500 bg-gray-100",
   servicios: "text-violet-600 bg-violet-50",
   emergencias: "text-red-600 bg-red-50",
   empleados: "text-emerald-600 bg-emerald-50",
+  empleados_inactivos: "text-gray-500 bg-gray-100",
   otros: "text-gray-600 bg-gray-50",
 };
 
@@ -114,9 +119,11 @@ export function AgendaMobile() {
     const c: Record<ContactoCategoria, number> = {
       mantenimiento: 0,
       proveedores: 0,
+      proveedores_inactivos: 0,
       servicios: 0,
       emergencias: 0,
       empleados: 0,
+      empleados_inactivos: 0,
       otros: 0,
     };
     contactos.forEach((x) => (c[x.categoria] += 1));

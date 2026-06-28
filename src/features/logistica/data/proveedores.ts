@@ -1,7 +1,7 @@
 // ─── Proveedores data ─────────────────────────────────────
 
-export type EstadoProveedor = "Activo" | "Inactivo" | "Borrador";
-export const ESTADOS_PROVEEDOR: EstadoProveedor[] = ["Activo", "Inactivo", "Borrador"];
+export type EstadoProveedor = "Activo" | "Inactivo";
+export const ESTADOS_PROVEEDOR: EstadoProveedor[] = ["Activo", "Inactivo"];
 
 export const CATEGORIAS_PROVEEDOR = [
   "Cárnicos", "Pescados y mariscos", "Frutas y verduras", "Bebidas",

@@ -10,7 +10,7 @@
 
 export type ProductoTipo = "compra" | "venta" | "elaboracion";
 export type ProductoEstado = "Activo" | "Inactivo" | "Borrador";
-export type ProveedorEstado = "Activo" | "Inactivo" | "Borrador";
+export type ProveedorEstado = "Activo" | "Inactivo";
 export type AlbaranEstado = "Pendiente" | "Entregado" | "Confirmado";
 
 // ─── PRODUCTOS ────────────────────────────────────────────

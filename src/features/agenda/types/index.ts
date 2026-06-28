@@ -1,9 +1,11 @@
 export const CONTACTO_CATEGORIAS = [
   "mantenimiento",
   "proveedores",
+  "proveedores_inactivos",
   "servicios",
   "emergencias",
   "empleados",
+  "empleados_inactivos",
   "otros",
 ] as const;
 
@@ -12,9 +14,11 @@ export type ContactoCategoria = (typeof CONTACTO_CATEGORIAS)[number];
 export const CATEGORIA_LABELS: Record<ContactoCategoria, string> = {
   mantenimiento: "Mantenimiento",
   proveedores: "Proveedores",
+  proveedores_inactivos: "Proveedores inactivos",
   servicios: "Servicios",
   emergencias: "Emergencias",
   empleados: "Empleados",
+  empleados_inactivos: "Empleados inactivos",
   otros: "Otros",
 };
 
