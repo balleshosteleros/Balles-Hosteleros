@@ -17,7 +17,6 @@ import {
   Plus,
   Pencil,
   Eye,
-  EyeOff,
   Copy,
   ExternalLink,
   Search,
@@ -37,7 +36,12 @@ import {
   createAccesoApp,
   updateAccesoApp,
   deleteAccesoApp,
+  revelarAccesoApp,
 } from "@/features/rrhh/actions/accesos-apps-actions";
+import {
+  VerificacionAccesosProvider,
+  useVerificacionAccesos,
+} from "@/features/rrhh/components/useVerificacionAccesos";
 import { getRolesEmpresaNombres } from "@/features/ajustes/actions/roles-actions";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
@@ -85,24 +89,59 @@ function AppLogo({ nombre, logoUrl }: { nombre: string; logoUrl?: string }) {
   );
 }
 
-function PasswordAdmin({ value }: { value: string }) {
-  const [visible, setVisible] = useState(false);
-  if (!value) return <span className="text-muted-foreground text-xs">—</span>;
+function PasswordAdmin({ appId, indice, tiene }: { appId: string; indice: number; tiene: boolean }) {
+  const { ensureVerificado } = useVerificacionAccesos();
+  const [valor, setValor] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // Oculta la contraseña revelada tras 10s.
+  useEffect(() => {
+    if (valor === null) return;
+    const t = setTimeout(() => setValor(null), 10_000);
+    return () => clearTimeout(t);
+  }, [valor]);
+
+  if (!tiene) return <span className="text-muted-foreground text-xs">—</span>;
+
+  const revelar = async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      const ok = await ensureVerificado();
+      if (!ok) return;
+      const res = await revelarAccesoApp(appId, indice);
+      if (res.ok) {
+        setValor(res.contrasena);
+      } else {
+        toast.error(res.error);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <span className="inline-flex items-center gap-1 font-mono text-xs">
-      {visible ? value : "••••••••"}
-      <button onClick={() => setVisible((v) => !v)} className="text-muted-foreground hover:text-foreground">
-        {visible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-      </button>
-      {visible && (
+      {valor !== null ? valor : "••••••••"}
+      {valor !== null ? (
         <button
           onClick={() => {
-            navigator.clipboard.writeText(value);
+            navigator.clipboard.writeText(valor);
             toast.success("Contraseña copiada");
           }}
           className="text-muted-foreground hover:text-foreground"
+          title="Copiar"
         >
           <Copy className="h-3.5 w-3.5" />
+        </button>
+      ) : (
+        <button
+          onClick={revelar}
+          disabled={loading}
+          className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+          title="Ver contraseña"
+        >
+          <Eye className="h-3.5 w-3.5" />
         </button>
       )}
     </span>
@@ -110,6 +149,14 @@ function PasswordAdmin({ value }: { value: string }) {
 }
 
 export function AplicacionesTab() {
+  return (
+    <VerificacionAccesosProvider>
+      <AplicacionesTabInner />
+    </VerificacionAccesosProvider>
+  );
+}
+
+function AplicacionesTabInner() {
   const { empresas, empresaActual } = useEmpresa();
   const empresaDbId = empresaActual.dbId;
   const empresasOptions = empresas.map((e) => ({ id: e.id, nombre: e.nombre }));
@@ -379,7 +426,11 @@ export function AplicacionesTab() {
                 {app.usuario || <span className="text-muted-foreground">—</span>}
               </TableCell>
               <TableCell>
-                <PasswordAdmin value={app.contrasena} />
+                <PasswordAdmin
+                  appId={app.id}
+                  indice={0}
+                  tiene={app.accesos[0]?.tieneContrasena ?? false}
+                />
               </TableCell>
               <TableCell>
                 <Badge
@@ -518,7 +569,7 @@ export function AplicacionesTab() {
                         <Input
                           value={acc.contrasena}
                           onChange={(e) => updateAcceso(idx, { contrasena: e.target.value })}
-                          placeholder="Contraseña"
+                          placeholder={editingId ? "Dejar vacío = no cambiar" : "Contraseña"}
                           type="text"
                           autoComplete="new-password"
                           className="h-8 text-xs"

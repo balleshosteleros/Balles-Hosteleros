@@ -17,10 +17,16 @@ export interface AccesoCredencial {
    * otro para Marketing, cada uno visible solo a su rol.
    */
   roles?: string[];
+  /**
+   * Solo en datos que viajan al cliente: indica si el acceso TIENE contraseña
+   * guardada (para pintar ••••). La contraseña real no viaja; se obtiene con
+   * `revelarAccesoApp` tras verificación. No se persiste en BD.
+   */
+  tieneContrasena?: boolean;
 }
 
 /** Máximo de accesos (usuario/contraseña) por app. No se muestra en UI; se aplica en silencio. */
-export const MAX_ACCESOS_POR_APP = 10;
+export const MAX_ACCESOS_POR_APP = 50;
 
 export interface AccesoApp {
   id: string;

@@ -12,6 +12,10 @@ import {
   CheckCircle2,
   Settings,
   Building2,
+  Eye,
+  Copy,
+  ExternalLink,
+  Loader2,
 } from "lucide-react";
 import { getRouteMeta } from "@/features/layout/data/nav-routes";
 import { useEffect, useState, useContext } from "react";
@@ -55,6 +59,16 @@ import {
   toolBadgeBg,
   type ToolColorKey,
 } from "@/features/layout/data/herramientas";
+import {
+  listAccesosApps,
+  revelarAccesoApp,
+} from "@/features/rrhh/actions/accesos-apps-actions";
+import {
+  VerificacionAccesosProvider,
+  useVerificacionAccesos,
+} from "@/features/rrhh/components/useVerificacionAccesos";
+import type { AccesoApp } from "@/features/rrhh/data/accesos-apps";
+import { toast } from "sonner";
 
 // Iconos de las herramientas — leídos del catálogo único.
 const ToolIcon = {
@@ -78,6 +92,150 @@ function NavBadge({ count, color }: { count: number; color: ToolColorKey }) {
     >
       {count > 9 ? "9+" : count}
     </span>
+  );
+}
+
+/** Contraseña de un acceso dentro del desplegable: revela bajo demanda 10s. */
+function AccesoPasswordCell({ appId, indice, tiene }: { appId: string; indice: number; tiene: boolean }) {
+  const { ensureVerificado } = useVerificacionAccesos();
+  const [valor, setValor] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (valor === null) return;
+    const t = setTimeout(() => setValor(null), 10_000);
+    return () => clearTimeout(t);
+  }, [valor]);
+
+  if (!tiene) return <span className="text-muted-foreground text-[11px]">—</span>;
+
+  const revelar = async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      const ok = await ensureVerificado();
+      if (!ok) return;
+      const res = await revelarAccesoApp(appId, indice);
+      if (res.ok) setValor(res.contrasena);
+      else toast.error(res.error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <span className="inline-flex items-center gap-1 font-mono text-[11px]">
+      {valor !== null ? valor : "••••"}
+      {valor !== null ? (
+        <button
+          onClick={() => {
+            navigator.clipboard.writeText(valor);
+            toast.success("Contraseña copiada");
+          }}
+          className="text-muted-foreground hover:text-foreground"
+          title="Copiar"
+        >
+          <Copy className="h-3 w-3" />
+        </button>
+      ) : (
+        <button
+          onClick={revelar}
+          disabled={loading}
+          className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+          title="Ver contraseña"
+        >
+          {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />}
+        </button>
+      )}
+    </span>
+  );
+}
+
+/** Desplegable de accesos a apps de la empresa actual (lectura segura). */
+function AccesosAppsMenu({ empresaSlug }: { empresaSlug: string }) {
+  const [open, setOpen] = useState(false);
+  const [apps, setApps] = useState<AccesoApp[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open || !empresaSlug) return;
+    let alive = true;
+    setLoading(true);
+    listAccesosApps(empresaSlug)
+      .then((rows) => {
+        if (alive) setApps(rows.filter((a) => a.estado === "Activo"));
+      })
+      .catch((e) => console.error("[accesos] menu:", e))
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [open, empresaSlug]);
+
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost" size="icon"
+          className="relative h-8 w-8"
+          title="Accesos a aplicaciones"
+        >
+          <ToolIcon.aplicaciones className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.aplicaciones.colorKey)}`} />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-80 max-h-[70vh] overflow-y-auto">
+        <DropdownMenuLabel className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+          Accesos a aplicaciones
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <VerificacionAccesosProvider>
+          {loading && (
+            <div className="px-3 py-3 text-xs text-muted-foreground">Cargando…</div>
+          )}
+          {!loading && apps.length === 0 && (
+            <div className="px-3 py-3 text-xs text-muted-foreground">No hay accesos.</div>
+          )}
+          {!loading &&
+            apps.map((app) => (
+              <div key={app.id} className="px-3 py-2 border-b border-border/40 last:border-0">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold truncate">{app.nombre}</span>
+                  {app.url && (
+                    <a
+                      href={app.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-muted-foreground hover:text-foreground shrink-0"
+                      title="Abrir"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  )}
+                </div>
+                <div className="mt-1 space-y-1">
+                  {app.accesos
+                    .filter((acc) => acc.tieneContrasena || acc.usuario)
+                    .map((acc, idx) => (
+                      <div key={idx} className="flex items-center justify-between gap-2 text-[11px]">
+                        <span className="font-mono truncate text-muted-foreground">
+                          {acc.etiqueta ? `${acc.etiqueta}: ` : ""}
+                          {acc.usuario || "—"}
+                        </span>
+                        <AccesoPasswordCell
+                          appId={app.id}
+                          indice={idx}
+                          tiene={acc.tieneContrasena ?? false}
+                        />
+                      </div>
+                    ))}
+                </div>
+              </div>
+            ))}
+        </VerificacionAccesosProvider>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -123,7 +281,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       : "";
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
-  const { ajustes } = useEmpresa();
+  const { ajustes, empresaActual } = useEmpresa();
   const { mode: viewMode, setMode: setViewMode } = useViewMode();
 
   function activarVista(modo: "paneles" | "departamentos") {
@@ -263,19 +421,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     {/* Separador visual */}
                     <span className="w-px h-5 bg-border mx-0.5" />
 
-                    {/* Accesos a apps externas — solo si el rol tiene HERR_APLICACIONES */}
+                    {/* Accesos a apps externas — solo si el rol tiene HERR_APLICACIONES.
+                        Desplegable con usuario en claro y contraseña revelable bajo
+                        demanda (cifrado + verificación de identidad en server). */}
                     {puedeVer("HERR_APLICACIONES") && (
-                      // Las contraseñas ya NO se muestran en la barra (era texto plano,
-                      // segundo camino inseguro). El icono lleva al módulo seguro
-                      // /accesos, con cifrado + verificación de identidad por revelado.
-                      <Button
-                        variant="ghost" size="icon"
-                        className="relative h-8 w-8"
-                        title="Accesos a aplicaciones"
-                        onClick={() => router.push("/accesos")}
-                      >
-                        <ToolIcon.aplicaciones className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.aplicaciones.colorKey)}`} />
-                      </Button>
+                      <AccesosAppsMenu empresaSlug={empresaActual.id} />
                     )}
                   </div>
 

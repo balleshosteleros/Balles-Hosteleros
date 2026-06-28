@@ -13,15 +13,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, ShieldAlert } from "lucide-react";
-import { verificarIdentidad } from "../actions/revelar-action";
+import { verificarIdentidadAccesos } from "@/features/rrhh/actions/accesos-apps-actions";
 
 /**
- * Gate de verificación para visualizar contraseñas.
+ * Gate de verificación para visualizar contraseñas de accesos a apps.
  *
  * Aunque el rol del usuario tenga permiso para ver una credencial, ANTES de
  * revelar/copiar cualquier valor el sistema pide reconfirmar la contraseña de
  * acceso. Tras una verificación correcta, queda válida durante unos minutos
  * (devueltos por el server) para no repetirla en cada clic.
+ *
+ * Provider autónomo: usa `verificarIdentidadAccesos` de las server actions de
+ * rrhh (no depende del módulo `accesos`).
  */
 type Ctx = {
   /** Asegura verificación vigente; abre el diálogo si hace falta. true si OK. */
@@ -56,7 +59,7 @@ export function VerificacionAccesosProvider({ children }: { children: React.Reac
   async function handleConfirm() {
     setLoading(true);
     setError(null);
-    const res = await verificarIdentidad(password);
+    const res = await verificarIdentidadAccesos(password);
     setLoading(false);
     if (!res.ok) {
       setError(res.error);
@@ -97,9 +100,9 @@ export function VerificacionAccesosProvider({ children }: { children: React.Reac
             className="space-y-3"
           >
             <div>
-              <Label htmlFor="verif-pwd">Tu contraseña de acceso</Label>
+              <Label htmlFor="verif-pwd-rrhh">Tu contraseña de acceso</Label>
               <Input
-                id="verif-pwd"
+                id="verif-pwd-rrhh"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
