@@ -17,6 +17,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { sendEmail } from "@/lib/email/send";
 import { bienvenidaEmpleadoEmail } from "@/lib/email/templates/bienvenida-empleado";
+import { buildRecoveryActionUrl } from "@/lib/auth/recovery-link";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 import {
   requireAdminUser,
@@ -322,7 +323,8 @@ export async function promoverCandidato(input: PromoverInput): Promise<PromoverR
     process.env.NEXT_PUBLIC_SITE_URL ??
     (process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : null) ??
     "http://localhost:3000";
-  // Recovery link → /update-password: el empleado ELIGE su propia contraseña.
+  // Recovery link → /update-password (vía /auth/confirm para que el prefetch de
+  // los clientes de correo no consuma el token): el empleado ELIGE su contraseña.
   const redirectTo = `${siteUrl.replace(/\/$/, "")}/update-password`;
 
   let magicLinkSent = false;
@@ -332,7 +334,8 @@ export async function promoverCandidato(input: PromoverInput): Promise<PromoverR
       email: emailLower,
       options: { redirectTo },
     });
-    if (!linkErr && linkData?.properties?.action_link) {
+    const actionUrl = buildRecoveryActionUrl(siteUrl, linkData?.properties ?? undefined);
+    if (!linkErr && actionUrl) {
       const empresaNombre = await admin
         .from("empresas")
         .select("nombre")
@@ -342,7 +345,7 @@ export async function promoverCandidato(input: PromoverInput): Promise<PromoverR
 
       const { subject, html, text } = bienvenidaEmpleadoEmail({
         recipientName: cand.nombre,
-        actionUrl: linkData.properties.action_link,
+        actionUrl,
         empresaNombre,
       });
 

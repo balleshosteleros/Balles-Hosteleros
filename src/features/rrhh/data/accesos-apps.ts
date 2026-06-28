@@ -23,6 +23,21 @@ export interface AccesoCredencial {
    * `revelarAccesoApp` tras verificación. No se persiste en BD.
    */
   tieneContrasena?: boolean;
+  /**
+   * Datos extra del acceso (PIN, PUK, código empresa, etc.). El valor se cifra
+   * igual que la contraseña y se revela bajo verificación. En las listas que
+   * viajan al cliente, `valor` va vacío y se marca `tiene`.
+   */
+  datosExtra?: DatoExtra[];
+}
+
+/** Un dato extra (PIN, PUK, código...) dentro de un acceso. */
+export interface DatoExtra {
+  nombre: string;
+  /** Valor en claro al guardar; vacío en listas (se revela aparte). */
+  valor: string;
+  /** Solo en listas: indica si tiene valor guardado. */
+  tiene?: boolean;
 }
 
 /** Máximo de accesos (usuario/contraseña) por app. No se muestra en UI; se aplica en silencio. */

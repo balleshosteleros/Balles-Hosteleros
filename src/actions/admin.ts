@@ -6,6 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { capitalizeText } from '@/shared/lib/utils'
 import { sendEmail } from '@/lib/email/send'
 import { passwordResetEmail } from '@/lib/email/templates/password-reset'
+import { buildRecoveryActionUrl } from '@/lib/auth/recovery-link'
 import { friendlyError } from '@/shared/lib/friendly-errors'
 import { getRolContext } from '@/features/auth/actions/permisos-actions'
 
@@ -261,11 +262,10 @@ export async function sendPasswordResetEmail(profileId: string) {
     options: { redirectTo },
   })
 
-  if (linkErr || !linkData?.properties?.action_link) {
+  const actionUrl = buildRecoveryActionUrl(siteUrl, linkData?.properties ?? undefined)
+  if (linkErr || !actionUrl) {
     return { error: linkErr ? friendlyError(linkErr) : 'No se pudo generar el enlace de recuperación.' }
   }
-
-  const actionUrl = linkData.properties.action_link
   const recipientName =
     [profile.nombre, profile.apellidos].filter(Boolean).join(' ').trim() ||
     profile.full_name ||

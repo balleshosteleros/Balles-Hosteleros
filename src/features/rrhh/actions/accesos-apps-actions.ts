@@ -43,7 +43,35 @@ type Row = {
   updated_at: string;
 };
 
-/** Normaliza la lista de accesos: filtra vacíos y aplica el tope de 10. */
+/**
+ * Forma interna (en memoria) de un dato extra dentro de un acceso. En BD se
+ * persiste como `datos_extra: [{ nombre, valor_cifrado }]`; aquí lo manejamos
+ * con `nombre` + `valor` (que puede ser el valor cifrado o en claro según fase).
+ */
+type DatoExtraInterno = { nombre: string; valor: string };
+
+/**
+ * Normaliza los datos extra de un acceso. Acepta tanto la forma que viene del
+ * cliente (`datosExtra: [{nombre, valor}]`) como la de BD
+ * (`datos_extra: [{nombre, valor_cifrado}]`). Conserva `valor` tal cual venga
+ * (cifrado o claro); el cifrado/descifrado se hace en appToRow/revelar.
+ * Filtra datos sin nombre.
+ */
+function normalizarDatosExtra(acc: unknown): DatoExtraInterno[] {
+  const a = (acc ?? {}) as Record<string, unknown>;
+  const raw = (a.datosExtra ?? a.datos_extra ?? []) as unknown[];
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((d) => {
+      const o = (d ?? {}) as Record<string, unknown>;
+      const nombre = String(o.nombre ?? "").trim();
+      const valor = String(o.valor ?? o.valor_cifrado ?? "");
+      return { nombre, valor };
+    })
+    .filter((d) => d.nombre);
+}
+
+/** Normaliza la lista de accesos: filtra vacíos y aplica el tope. */
 function normalizarAccesos(accesos?: AccesoCredencial[] | null): AccesoCredencial[] {
   const list = (accesos ?? [])
     .map((a) => ({
@@ -53,8 +81,9 @@ function normalizarAccesos(accesos?: AccesoCredencial[] | null): AccesoCredencia
       roles: Array.isArray(a.roles)
         ? a.roles.map((r) => (r ?? "").trim()).filter(Boolean)
         : [],
+      datosExtra: normalizarDatosExtra(a),
     }))
-    .filter((a) => a.etiqueta || a.usuario || a.contrasena);
+    .filter((a) => a.etiqueta || a.usuario || a.contrasena || a.datosExtra.length > 0);
   return list.slice(0, MAX_ACCESOS_POR_APP);
 }
 
@@ -70,11 +99,17 @@ function rowToApp(r: Row): AccesoApp {
   if (accesos.length === 0 && (r.usuario || r.contrasena)) {
     accesos.push({ etiqueta: "", usuario: r.usuario, contrasena: r.contrasena });
   }
-  // Oculta toda contraseña antes de salir al cliente; marca si existía.
+  // Oculta toda contraseña / dato extra antes de salir al cliente; marca si existían.
   const accesosSeguros = accesos.map((a) => ({
     ...a,
     tieneContrasena: !!(a.contrasena && a.contrasena.length > 0),
     contrasena: PWD_OCULTA,
+    // Los datos extra viajan con nombre + tiene (NUNCA el valor cifrado/claro).
+    datosExtra: normalizarDatosExtra(a).map((d) => ({
+      nombre: d.nombre,
+      valor: "",
+      tiene: !!(d.valor && d.valor.length > 0),
+    })),
   }));
   return {
     id: r.id,
@@ -112,6 +147,12 @@ function appToRow(
   const prevList = prev ?? [];
 
   const accesosCifrados = accesos.map((acc, i) => {
+    // Empareja con el acceso previo (por etiqueta, si no por índice) para poder
+    // preservar contraseña y datos extra cifrados cuando el cliente los deja vacíos.
+    const previo =
+      prevList.find((p) => (p.etiqueta ?? "") === (acc.etiqueta ?? "") && p.etiqueta) ??
+      prevList[i];
+
     const entrante = acc.contrasena ?? "";
     let contrasena: string;
     if (entrante && !esCifrado(entrante)) {
@@ -121,17 +162,33 @@ function appToRow(
       // Ya viene cifrada (caso raro) → dejar igual.
       contrasena = entrante;
     } else {
-      // Vacía → preservar la previa cifrada (match por etiqueta, si no por índice).
-      const previo =
-        prevList.find((p) => (p.etiqueta ?? "") === (acc.etiqueta ?? "") && p.etiqueta) ??
-        prevList[i];
+      // Vacía → preservar la previa cifrada.
       contrasena = previo?.contrasena ?? "";
     }
+
+    // Datos extra previos de este acceso (forma BD: {nombre, valor_cifrado}).
+    const previosExtra = normalizarDatosExtra(previo);
+    const datosExtra = normalizarDatosExtra(acc).map((d) => {
+      const valor = d.valor ?? "";
+      let valorCifrado: string;
+      if (valor && !esCifrado(valor)) {
+        valorCifrado = encryptOptional(valor);
+      } else if (esCifrado(valor)) {
+        valorCifrado = valor;
+      } else {
+        // Vacío → preservar el cifrado previo del dato extra con el mismo nombre.
+        const prevDato = previosExtra.find((p) => p.nombre === d.nombre);
+        valorCifrado = prevDato?.valor ?? "";
+      }
+      return { nombre: d.nombre, valor_cifrado: valorCifrado };
+    });
+
     return {
       etiqueta: acc.etiqueta ?? "",
       usuario: acc.usuario ?? "",
       contrasena,
       roles: acc.roles ?? [],
+      datos_extra: datosExtra,
     };
   });
 
@@ -383,12 +440,15 @@ export async function verificarIdentidadAccesos(
  *    `roles` incluya su rol_label.
  * El frontend exige pasar antes por `verificarIdentidadAccesos`.
  *
- * @param appId    id de la app en accesos_apps
- * @param indice   posición del acceso dentro de accesos[]
+ * @param appId       id de la app en accesos_apps
+ * @param indice      posición del acceso dentro de accesos[]
+ * @param nombreExtra (opcional) si se pasa, revela el dato extra con ese nombre
+ *                    en vez de la contraseña.
  */
 export async function revelarAccesoApp(
   appId: string,
   indice: number,
+  nombreExtra?: string,
 ): Promise<{ ok: true; contrasena: string } | { ok: false; error: string }> {
   const supabase = await createClient();
   const user = await getUserOrNull(supabase);
@@ -415,6 +475,21 @@ export async function revelarAccesoApp(
     const mio = (rolNombre ?? "").trim().toLowerCase();
     if (roles.length === 0 || !roles.includes(mio)) {
       return { ok: false, error: "No autorizado" };
+    }
+  }
+
+  // Si se pide un dato extra concreto, devuelve ESE valor en vez de la contraseña.
+  if (nombreExtra) {
+    const extras = normalizarDatosExtra(acc);
+    const dato = extras.find((d) => d.nombre === nombreExtra);
+    if (!dato) return { ok: false, error: "Dato extra no encontrado" };
+    const guardadoExtra = dato.valor ?? "";
+    if (!guardadoExtra) return { ok: false, error: "Este dato extra no tiene valor" };
+    try {
+      const claro = esCifrado(guardadoExtra) ? decrypt(guardadoExtra) : guardadoExtra;
+      return { ok: true, contrasena: claro };
+    } catch (e) {
+      return { ok: false, error: `Error de descifrado: ${(e as Error).message}` };
     }
   }
 

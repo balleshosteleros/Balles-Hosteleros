@@ -30,6 +30,7 @@ import {
   MAX_ACCESOS_POR_APP,
   type AccesoApp,
   type AccesoCredencial,
+  type DatoExtra,
   type EstadoApp,
 } from "@/features/rrhh/data/accesos-apps";
 import {
@@ -57,7 +58,7 @@ const emptyApp: Omit<AccesoApp, "id" | "ultimaActualizacion"> = {
   categoria: "Otros",
   departamentos: [],
   rolesAutorizados: [],
-  accesos: [{ etiqueta: "", usuario: "", contrasena: "", roles: [] }],
+  accesos: [{ etiqueta: "", usuario: "", contrasena: "", roles: [], datosExtra: [] }],
   usuario: "",
   contrasena: "",
   estado: "Activo",
@@ -91,12 +92,22 @@ function AppLogo({ nombre, logoUrl }: { nombre: string; logoUrl?: string }) {
   );
 }
 
-function PasswordAdmin({ appId, indice, tiene }: { appId: string; indice: number; tiene: boolean }) {
+function PasswordAdmin({
+  appId,
+  indice,
+  tiene,
+  nombreExtra,
+}: {
+  appId: string;
+  indice: number;
+  tiene: boolean;
+  nombreExtra?: string;
+}) {
   const { ensureVerificado } = useVerificacionAccesos();
   const [valor, setValor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Oculta la contraseña revelada tras 10s.
+  // Oculta el valor revelado tras 10s.
   useEffect(() => {
     if (valor === null) return;
     const t = setTimeout(() => setValor(null), 10_000);
@@ -111,7 +122,7 @@ function PasswordAdmin({ appId, indice, tiene }: { appId: string; indice: number
     try {
       const ok = await ensureVerificado();
       if (!ok) return;
-      const res = await revelarAccesoApp(appId, indice);
+      const res = await revelarAccesoApp(appId, indice, nombreExtra);
       if (res.ok) {
         setValor(res.contrasena);
       } else {
@@ -129,7 +140,7 @@ function PasswordAdmin({ appId, indice, tiene }: { appId: string; indice: number
         <button
           onClick={() => {
             navigator.clipboard.writeText(valor);
-            toast.success("Contraseña copiada");
+            toast.success(nombreExtra ? `${nombreExtra} copiado` : "Contraseña copiada");
           }}
           className="text-muted-foreground hover:text-foreground"
           title="Copiar"
@@ -247,7 +258,7 @@ function AplicacionesTabInner() {
     setForm((p) =>
       p.accesos.length >= MAX_ACCESOS_POR_APP
         ? p
-        : { ...p, accesos: [...p.accesos, { etiqueta: "", usuario: "", contrasena: "", roles: [] }] },
+        : { ...p, accesos: [...p.accesos, { etiqueta: "", usuario: "", contrasena: "", roles: [], datosExtra: [] }] },
     );
   };
   const removeAcceso = (idx: number) => {
@@ -255,9 +266,46 @@ function AplicacionesTabInner() {
       const next = p.accesos.filter((_, i) => i !== idx);
       return {
         ...p,
-        accesos: next.length ? next : [{ etiqueta: "", usuario: "", contrasena: "", roles: [] }],
+        accesos: next.length ? next : [{ etiqueta: "", usuario: "", contrasena: "", roles: [], datosExtra: [] }],
       };
     });
+  };
+
+  // --- Datos extra de cada acceso (PIN, PUK, código empresa...) ---
+  const addDatoExtra = (idxAcceso: number) => {
+    setForm((p) => ({
+      ...p,
+      accesos: p.accesos.map((a, i) =>
+        i === idxAcceso
+          ? { ...a, datosExtra: [...(a.datosExtra ?? []), { nombre: "", valor: "" }] }
+          : a,
+      ),
+    }));
+  };
+  const updateDatoExtra = (idxAcceso: number, idxExtra: number, patch: Partial<DatoExtra>) => {
+    setForm((p) => ({
+      ...p,
+      accesos: p.accesos.map((a, i) =>
+        i === idxAcceso
+          ? {
+              ...a,
+              datosExtra: (a.datosExtra ?? []).map((d, j) =>
+                j === idxExtra ? { ...d, ...patch } : d,
+              ),
+            }
+          : a,
+      ),
+    }));
+  };
+  const removeDatoExtra = (idxAcceso: number, idxExtra: number) => {
+    setForm((p) => ({
+      ...p,
+      accesos: p.accesos.map((a, i) =>
+        i === idxAcceso
+          ? { ...a, datosExtra: (a.datosExtra ?? []).filter((_, j) => j !== idxExtra) }
+          : a,
+      ),
+    }));
   };
 
   const filteredApps = apps.filter((a) => {
@@ -290,13 +338,20 @@ function AplicacionesTabInner() {
     // roles propios, hereda los roles globales de la app para no perder permisos.
     const accesosBase = app.accesos.length
       ? app.accesos
-      : [{ etiqueta: "", usuario: "", contrasena: "", roles: [] }];
+      : [{ etiqueta: "", usuario: "", contrasena: "", roles: [], datosExtra: [] }];
     const accesos = accesosBase.map((a) => ({
       ...a,
       // La contraseña NUNCA viaja al cliente (viene oculta/cifrada). Al editar
       // se muestra vacía; si se deja vacía, la action preserva la cifrada previa.
       contrasena: "",
       roles: a.roles?.length ? a.roles : [...(app.rolesAutorizados ?? [])],
+      // Datos extra: no tenemos el valor (vacío = no cambiar); conservamos
+      // nombre y `tiene` para mostrar que ya hay valor guardado.
+      datosExtra: (a.datosExtra ?? []).map((d) => ({
+        nombre: d.nombre,
+        valor: "",
+        tiene: d.tiene,
+      })),
     }));
     setForm({
       nombre: app.nombre,
@@ -459,15 +514,42 @@ function AplicacionesTabInner() {
               </TableCell>
               <TableCell className="text-xs">{empresaNombre(app.empresaId)}</TableCell>
               <TableCell className="text-xs">{app.categoria}</TableCell>
-              <TableCell className="font-mono text-xs">
-                {app.usuario || <span className="text-muted-foreground">—</span>}
+              <TableCell className="font-mono text-xs align-top">
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground mr-1">
+                  Usuario:
+                </span>
+                {app.accesos[0]?.usuario || app.usuario || (
+                  <span className="text-muted-foreground">—</span>
+                )}
               </TableCell>
-              <TableCell>
-                <PasswordAdmin
-                  appId={app.id}
-                  indice={0}
-                  tiene={app.accesos[0]?.tieneContrasena ?? false}
-                />
+              <TableCell className="align-top">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Contraseña:
+                    </span>
+                    <PasswordAdmin
+                      appId={app.id}
+                      indice={0}
+                      tiene={app.accesos[0]?.tieneContrasena ?? false}
+                    />
+                  </div>
+                  {(app.accesos[0]?.datosExtra ?? [])
+                    .filter((d) => d.tiene)
+                    .map((d) => (
+                      <div key={d.nombre} className="flex items-center gap-1.5">
+                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                          {d.nombre}:
+                        </span>
+                        <PasswordAdmin
+                          appId={app.id}
+                          indice={0}
+                          tiene={!!d.tiene}
+                          nombreExtra={d.nombre}
+                        />
+                      </div>
+                    ))}
+                </div>
               </TableCell>
               <TableCell>
                 <Badge
@@ -721,6 +803,58 @@ function AplicacionesTabInner() {
                           </div>
                         </PopoverContent>
                       </Popover>
+
+                      {/* Datos extra del acceso (PIN, PUK, código empresa…) */}
+                      <div className="space-y-1.5 rounded-md bg-muted/30 p-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-semibold text-muted-foreground">
+                            Datos extra (PIN, PUK, código…)
+                          </span>
+                        </div>
+                        {(acc.datosExtra ?? []).map((dato, idxExtra) => (
+                          <div key={idxExtra} className="flex items-center gap-2">
+                            <Input
+                              value={dato.nombre}
+                              onChange={(e) =>
+                                updateDatoExtra(idx, idxExtra, { nombre: e.target.value })
+                              }
+                              placeholder="Nombre (ej: PIN)"
+                              className="h-8 text-xs flex-1"
+                            />
+                            <Input
+                              value={dato.valor}
+                              onChange={(e) =>
+                                updateDatoExtra(idx, idxExtra, { valor: e.target.value })
+                              }
+                              placeholder={
+                                editingId && dato.tiene ? "Vacío = no cambiar" : "Valor"
+                              }
+                              type="password"
+                              autoComplete="new-password"
+                              className="h-8 text-xs flex-1"
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                              onClick={() => removeDatoExtra(idx, idxExtra)}
+                              title="Quitar dato extra"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        ))}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 gap-1.5 text-xs"
+                          onClick={() => addDatoExtra(idx)}
+                        >
+                          <Plus className="h-3 w-3" />Dato extra
+                        </Button>
+                      </div>
                     </div>
                     <Button
                       type="button"

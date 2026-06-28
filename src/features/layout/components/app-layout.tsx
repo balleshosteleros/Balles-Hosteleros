@@ -97,8 +97,18 @@ function NavBadge({ count, color }: { count: number; color: ToolColorKey }) {
   );
 }
 
-/** Contraseña de un acceso dentro del desplegable: revela bajo demanda 10s. */
-function AccesoPasswordCell({ appId, indice, tiene }: { appId: string; indice: number; tiene: boolean }) {
+/** Contraseña o dato extra de un acceso dentro del desplegable: revela bajo demanda 10s. */
+function AccesoPasswordCell({
+  appId,
+  indice,
+  tiene,
+  nombreExtra,
+}: {
+  appId: string;
+  indice: number;
+  tiene: boolean;
+  nombreExtra?: string;
+}) {
   const { ensureVerificado } = useVerificacionAccesos();
   const [valor, setValor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -117,7 +127,7 @@ function AccesoPasswordCell({ appId, indice, tiene }: { appId: string; indice: n
     try {
       const ok = await ensureVerificado();
       if (!ok) return;
-      const res = await revelarAccesoApp(appId, indice);
+      const res = await revelarAccesoApp(appId, indice, nombreExtra);
       if (res.ok) setValor(res.contrasena);
       else toast.error(res.error);
     } finally {
@@ -132,7 +142,7 @@ function AccesoPasswordCell({ appId, indice, tiene }: { appId: string; indice: n
         <button
           onClick={() => {
             navigator.clipboard.writeText(valor);
-            toast.success("Contraseña copiada");
+            toast.success(nombreExtra ? `${nombreExtra} copiado` : "Contraseña copiada");
           }}
           className="text-muted-foreground hover:text-foreground"
           title="Copiar"
@@ -270,22 +280,53 @@ function AccesosAppsMenu({ empresaSlug }: { empresaSlug: string }) {
                     </a>
                   )}
                 </div>
-                <div className="mt-1 space-y-1 pl-7">
-                  {app.accesos
-                    .filter((acc) => acc.tieneContrasena || acc.usuario)
-                    .map((acc, idx) => (
-                      <div key={idx} className="flex items-center justify-between gap-2 text-[11px]">
-                        <span className="font-mono truncate text-muted-foreground">
-                          {acc.etiqueta ? `${acc.etiqueta}: ` : ""}
-                          {acc.usuario || "—"}
-                        </span>
-                        <AccesoPasswordCell
-                          appId={app.id}
-                          indice={idx}
-                          tiene={acc.tieneContrasena ?? false}
-                        />
+                <div className="mt-1 space-y-1.5 pl-7">
+                  {app.accesos.map((acc, idx) => {
+                    const datosExtra = (acc.datosExtra ?? []).filter((d) => d.tiene);
+                    if (!acc.tieneContrasena && !acc.usuario && datosExtra.length === 0) {
+                      return null;
+                    }
+                    return (
+                      <div
+                        key={idx}
+                        className="space-y-0.5 border-l border-border/40 pl-2 first:border-l-0 first:pl-0"
+                      >
+                        {acc.etiqueta && (
+                          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            {acc.etiqueta}
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between gap-2 text-[11px]">
+                          <span className="font-mono truncate text-muted-foreground">
+                            <span className="not-italic">Usuario: </span>
+                            {acc.usuario || "—"}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 text-[11px]">
+                          <span className="text-muted-foreground">Contraseña:</span>
+                          <AccesoPasswordCell
+                            appId={app.id}
+                            indice={idx}
+                            tiene={acc.tieneContrasena ?? false}
+                          />
+                        </div>
+                        {datosExtra.map((d) => (
+                          <div
+                            key={d.nombre}
+                            className="flex items-center justify-between gap-2 text-[11px]"
+                          >
+                            <span className="text-muted-foreground truncate">{d.nombre}:</span>
+                            <AccesoPasswordCell
+                              appId={app.id}
+                              indice={idx}
+                              tiene={!!d.tiene}
+                              nombreExtra={d.nombre}
+                            />
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    );
+                  })}
                 </div>
               </div>
             ))}

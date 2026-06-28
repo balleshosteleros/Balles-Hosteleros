@@ -18,6 +18,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { sendEmail } from "@/lib/email/send";
 import { bienvenidaEmpleadoEmail } from "@/lib/email/templates/bienvenida-empleado";
+import { buildRecoveryActionUrl } from "@/lib/auth/recovery-link";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 import { requireAdminUser, altaUsuarioEmpleado } from "@/features/rrhh/services/empleados-core";
 import { revalidatePath } from "next/cache";
@@ -162,11 +163,13 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
   // 2. Puesto + área del departamento + condiciones del nivel
   const { data: puesto } = await admin
     .from("puestos")
-    .select("id, nombre, departamento_id, tipo_contrato_defecto, departamentos(area)")
+    .select("id, nombre, departamento_id, tipo_contrato_defecto, departamentos(nombre, area)")
     .eq("id", input.puestoId)
     .maybeSingle();
   if (!puesto) return { ok: false, error: "Puesto no encontrado." };
-  const area = ((puesto.departamentos as { area?: string } | null)?.area ?? "OPERATIVA").toUpperCase();
+  const depto = puesto.departamentos as { nombre?: string; area?: string } | null;
+  const deptoNombre = (depto?.nombre ?? "").trim();
+  const area = (depto?.area ?? "OPERATIVA").toUpperCase();
   const esAdministrativo = area === "ADMINISTRATIVA";
 
   // Regla de email de acceso por área
@@ -227,6 +230,14 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
     if (empleadoExistente.user_id) {
       await admin.from("usuario_empresas")
         .upsert({ user_id: empleadoExistente.user_id, empresa_id: empresaId }, { onConflict: "user_id,empresa_id" });
+      // Re-sincronizar el ROL del usuario con el nuevo DEPARTAMENTO: el rol es
+      // el departamento (SALA, COCINA…). Si la recontratación cambia de depto,
+      // el rol debe seguirlo. El trigger sync_usuario_rol_id fija rol_id.
+      if (deptoNombre) {
+        await admin.from("usuarios")
+          .update({ rol_label: deptoNombre, departamento: deptoNombre })
+          .eq("user_id", empleadoExistente.user_id);
+      }
     }
     await vincularPuestoPrincipal(admin, empleadoExistente.id, input.puestoId, puesto.nombre as string, input.primerDia);
     await guardarSnapshotCondiciones(admin, empresaId, empleadoExistente.id, input.puestoId, puesto.nombre as string, input.nivel, input.primerDia, tipoContrato, cond);
@@ -279,15 +290,18 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
       "http://localhost:3000";
     // Recovery link → /update-password: el empleado ELIGE su propia contraseña.
     // (No magic link: queremos que ponga contraseña, no solo que entre.)
+    // El enlace pasa por /auth/confirm (verifyOtp server-side) para que el
+    // prefetch de los clientes de correo no lo consuma antes de tiempo.
     const redirectTo = `${siteUrl.replace(/\/$/, "")}/update-password`;
     const { data: linkData } = await admin.auth.admin.generateLink({
       type: "recovery", email: loginEmail, options: { redirectTo },
     });
-    if (linkData?.properties?.action_link) {
+    const actionUrl = buildRecoveryActionUrl(siteUrl, linkData?.properties ?? undefined);
+    if (actionUrl) {
       const empresaNombre = await admin.from("empresas").select("nombre").eq("id", empresaId).single()
         .then((r) => r.data?.nombre ?? "tu empresa");
       const { subject, html, text } = bienvenidaEmpleadoEmail({
-        recipientName: cand.nombre, actionUrl: linkData.properties.action_link, empresaNombre,
+        recipientName: cand.nombre, actionUrl, empresaNombre,
       });
       const sendRes = await sendEmail({ to: loginEmail, subject, html, text, empresaId });
       accesoEmailEnviado = sendRes.ok;
