@@ -154,10 +154,6 @@ export function AppSidebar() {
   // 'director' tiene bypass total → mostramos todos los módulos sin esperar a permisos.
   // Para el resto, esperamos a permisosLoaded para evitar parpadeo "todo abierto" → "filtrado".
   const isDirector = hasRole("director");
-  // El acceso a la vista "Mis Departamentos" (DASHBOARD) es exclusivo del rol
-  // dirección (director/admin). Para el resto el enlace ni se muestra: su landing
-  // es Mi Panel y MisDepartamentosView los rebotaría allí de todos modos.
-  const esDireccion = isDirector || hasRole("admin");
   const sections = isDirector
     ? allSections
     : permisosLoaded
@@ -408,22 +404,6 @@ export function AppSidebar() {
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {esDireccion && (
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
-                      <NavLink
-                        href="/mis-departamentos"
-                        end
-                        className="hover:bg-sidebar-accent/50"
-                        activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold"
-                      >
-                        <LayoutDashboard className="mr-2 h-4 w-4 shrink-0" />
-                        {!collapsed && <span className="text-sm flex-1">DASHBOARD</span>}
-                        {!collapsed && <NavPill text="2ª fase" tone="yellow" />}
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                )}
                 {sections.map((s) => (
                   <CollapsibleSection
                     key={s.key}
