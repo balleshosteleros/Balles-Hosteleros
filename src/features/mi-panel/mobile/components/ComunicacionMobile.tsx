@@ -335,7 +335,7 @@ export function ComunicacionMobile() {
       <button
         type="button"
         onClick={() => { setNombreNuevo(""); setDeptosNuevo(new Set()); setMiembrosNuevo(new Set()); setBuscaEmp(""); setDlgNuevo(true); }}
-        className="fixed bottom-24 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg active:scale-95"
+        className="fixed bottom-24 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-green-600 text-white shadow-lg active:scale-95"
         aria-label="Crear asunto"
       >
         <Plus className="h-6 w-6" />
@@ -578,7 +578,7 @@ export function ComunicacionMobile() {
 
             <div className="mt-5 flex gap-2">
               <button onClick={() => setDlgNuevo(false)} className="flex-1 rounded-xl border py-3 text-sm font-semibold active:bg-muted">Cancelar</button>
-              <button onClick={crearAsunto} disabled={!nombreNuevo.trim() || (deptosNuevo.size === 0 && miembrosNuevo.size === 0)} className="flex-1 rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground disabled:opacity-50">Crear asunto</button>
+              <button onClick={crearAsunto} disabled={!nombreNuevo.trim() || (deptosNuevo.size === 0 && miembrosNuevo.size === 0)} className="flex-1 rounded-xl bg-green-600 py-3 text-sm font-semibold text-white disabled:opacity-50">Crear asunto</button>
             </div>
           </div>
         </div>

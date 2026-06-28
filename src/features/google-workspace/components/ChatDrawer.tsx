@@ -895,7 +895,7 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
             <div className="p-3 border-t shrink-0">
               <Button
                 onClick={() => { setNombreNuevo(""); setMiembrosNuevo(new Set()); setDeptosNuevo(new Set()); setBusquedaEmpleados(""); setDlgNuevo(true); }}
-                className="w-full gap-2 rounded-full h-12 text-sm font-semibold shadow-sm"
+                className="w-full gap-2 rounded-full h-12 text-sm font-semibold shadow-sm bg-green-600 hover:bg-green-700 text-white"
                 size="lg"
               >
                 <Plus className="h-5 w-5" /> Crear asunto
