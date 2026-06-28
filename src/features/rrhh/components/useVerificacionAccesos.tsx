@@ -13,7 +13,34 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, ShieldAlert } from "lucide-react";
-import { verificarIdentidadAccesos } from "@/features/rrhh/actions/accesos-apps-actions";
+import { useAuth } from "@/features/auth/contexts/auth-context";
+
+/** Minutos que dura una verificación antes de volver a pedirla. */
+const VERIFICACION_VALIDEZ_MIN = 5;
+
+/**
+ * Verifica la contraseña del usuario SIN tocar su sesión.
+ * Hace un fetch directo al endpoint de login de Supabase desde el navegador.
+ * La respuesta NO se guarda en ningún sitio (no persiste sesión, no escribe
+ * cookies de @supabase/ssr), así que la sesión activa queda intacta pase lo
+ * que pase. Solo nos interesa si responde 200 (correcta) o no.
+ */
+async function verificarPassword(email: string, password: string): Promise<boolean> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  if (!url || !anonKey) return false;
+  try {
+    const res = await fetch(`${url}/auth/v1/token?grant_type=password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: anonKey },
+      body: JSON.stringify({ email, password }),
+      cache: "no-store",
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Gate de verificación para visualizar contraseñas de accesos a apps.
@@ -23,8 +50,8 @@ import { verificarIdentidadAccesos } from "@/features/rrhh/actions/accesos-apps-
  * acceso. Tras una verificación correcta, queda válida durante unos minutos
  * (devueltos por el server) para no repetirla en cada clic.
  *
- * Provider autónomo: usa `verificarIdentidadAccesos` de las server actions de
- * rrhh (no depende del módulo `accesos`).
+ * Provider autónomo: verifica la contraseña en el CLIENTE con un fetch directo
+ * al endpoint de Supabase Auth, sin server action y sin tocar la sesión.
  */
 type Ctx = {
   /** Asegura verificación vigente; abre el diálogo si hace falta. true si OK. */
@@ -34,6 +61,8 @@ type Ctx = {
 const VerificacionContext = createContext<Ctx | null>(null);
 
 export function VerificacionAccesosProvider({ children }: { children: React.ReactNode }) {
+  const { user, profile } = useAuth();
+  const email = profile?.email ?? user?.email ?? "";
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -57,15 +86,19 @@ export function VerificacionAccesosProvider({ children }: { children: React.Reac
   }
 
   async function handleConfirm() {
-    setLoading(true);
-    setError(null);
-    const res = await verificarIdentidadAccesos(password);
-    setLoading(false);
-    if (!res.ok) {
-      setError(res.error);
+    if (!email) {
+      setError("No se pudo determinar tu cuenta");
       return;
     }
-    validoHasta.current = performance.now() + res.validezMin * 60_000;
+    setLoading(true);
+    setError(null);
+    const ok = await verificarPassword(email, password);
+    setLoading(false);
+    if (!ok) {
+      setError("Contraseña incorrecta");
+      return;
+    }
+    validoHasta.current = performance.now() + VERIFICACION_VALIDEZ_MIN * 60_000;
     setOpen(false);
     setPassword("");
     resolvePending(true);
