@@ -303,6 +303,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const user = auth?.user;
   const profile = auth?.profile;
   const roles = auth?.roles ?? [];
+  // La vista "Mis Departamentos" es exclusiva del rol dirección (director/admin).
+  // El resto solo dispone de "Mis Paneles" como vista.
+  const esDireccion = roles.includes("director") || roles.includes("admin");
   const puedeVer = auth?.puedeVer ?? (() => false);
   const signOut = auth?.signOut ?? (() => {});
 
@@ -530,34 +533,38 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         className="w-60"
                         onMouseLeave={() => setUserMenuOpen(false)}
                       >
-                        <DropdownMenuLabel className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-3 py-1.5">
-                          Cambiar vista
-                        </DropdownMenuLabel>
-                        <DropdownMenuItem
-                          className={`cursor-pointer gap-2 px-3 py-2 ${viewMode === "paneles" ? "bg-accent/60" : ""}`}
-                          onSelect={() => activarVista("paneles")}
-                        >
-                          <UserCircle className={`h-4 w-4 ${viewMode === "paneles" ? "text-primary" : "text-muted-foreground"}`} />
-                          <span className={`text-xs tracking-widest uppercase ${viewMode === "paneles" ? "text-primary font-bold" : "font-semibold"}`}>
-                            MIS PANELES
-                          </span>
-                          {viewMode === "paneles" && (
-                            <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-primary" />
-                          )}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className={`cursor-pointer gap-2 px-3 py-2 ${viewMode === "departamentos" ? "bg-accent/60" : ""}`}
-                          onSelect={() => activarVista("departamentos")}
-                        >
-                          <Building2 className={`h-4 w-4 ${viewMode === "departamentos" ? "text-primary" : "text-muted-foreground"}`} />
-                          <span className={`text-xs tracking-widest uppercase ${viewMode === "departamentos" ? "text-primary font-bold" : "font-semibold"}`}>
-                            MIS DEPARTAMENTOS
-                          </span>
-                          {viewMode === "departamentos" && (
-                            <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-primary" />
-                          )}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
+                        {esDireccion && (
+                          <>
+                            <DropdownMenuLabel className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-3 py-1.5">
+                              Cambiar vista
+                            </DropdownMenuLabel>
+                            <DropdownMenuItem
+                              className={`cursor-pointer gap-2 px-3 py-2 ${viewMode === "paneles" ? "bg-accent/60" : ""}`}
+                              onSelect={() => activarVista("paneles")}
+                            >
+                              <UserCircle className={`h-4 w-4 ${viewMode === "paneles" ? "text-primary" : "text-muted-foreground"}`} />
+                              <span className={`text-xs tracking-widest uppercase ${viewMode === "paneles" ? "text-primary font-bold" : "font-semibold"}`}>
+                                MIS PANELES
+                              </span>
+                              {viewMode === "paneles" && (
+                                <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-primary" />
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className={`cursor-pointer gap-2 px-3 py-2 ${viewMode === "departamentos" ? "bg-accent/60" : ""}`}
+                              onSelect={() => activarVista("departamentos")}
+                            >
+                              <Building2 className={`h-4 w-4 ${viewMode === "departamentos" ? "text-primary" : "text-muted-foreground"}`} />
+                              <span className={`text-xs tracking-widest uppercase ${viewMode === "departamentos" ? "text-primary font-bold" : "font-semibold"}`}>
+                                MIS DEPARTAMENTOS
+                              </span>
+                              {viewMode === "departamentos" && (
+                                <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-primary" />
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                          </>
+                        )}
                         {roles.includes("director") && (
                           <DropdownMenuItem
                             onSelect={() => router.push("/ajustes")}
