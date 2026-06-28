@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Badge } from "@/components/ui/badge";
 import {
   Search, KeyRound, Pencil, UserCog,
-  Power, PowerOff, UserPlus, Plus, UserCheck, Trash2, Mail, ListFilter,
+  PowerOff, UserPlus, Plus, UserCheck, Trash2, Mail, ListFilter,
   ExternalLink, Building2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -33,14 +33,17 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { EmpresaBadge } from "@/shared/components/EmpresaBadge";
 
-const ESTADO_STYLES: Record<EstadoAcceso, string> = {
+// Solo se contemplan dos estados de acceso visibles: Activo / Inactivo. El tipo
+// EstadoAcceso aún incluye "Pendiente" por datos legados, pero en esta pestaña
+// nunca se muestra (se normaliza a Activo/Inactivo en profileToAcceso).
+const ESTADO_STYLES: Partial<Record<EstadoAcceso, string>> = {
   Activo: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
   Inactivo: "bg-muted text-muted-foreground border-muted-foreground/30",
-  Pendiente: "bg-amber-500/10 text-amber-600 border-amber-500/30",
 };
 
 function EstadoBadge({ estado }: { estado: EstadoAcceso }) {
-  return <Badge variant="outline" className={`text-[10px] ${ESTADO_STYLES[estado]}`}>{estado}</Badge>;
+  const style = ESTADO_STYLES[estado] ?? ESTADO_STYLES.Inactivo;
+  return <Badge variant="outline" className={`text-[10px] ${style}`}>{estado}</Badge>;
 }
 
 type EmpleadoSinAcceso = {
@@ -98,10 +101,10 @@ function profileToAcceso(p: SupabaseProfile, empresa: { id: string; nombre: stri
   // existan en empresa_roles, para que el dropdown sea coherente con la BD.
   const rolUI = (p.rol_label && p.rol_label.trim()) ? p.rol_label.trim() : "";
   const fullName = [p.nombre, p.apellidos].filter(Boolean).join(" ").trim() || p.full_name || p.email;
-  const validEstados: EstadoAcceso[] = ["Activo", "Inactivo", "Pendiente"];
-  const estadoAcceso: EstadoAcceso = validEstados.includes(p.estado_acceso as EstadoAcceso)
-    ? (p.estado_acceso as EstadoAcceso)
-    : "Activo";
+  // El estado de acceso solo puede ser Activo/Inactivo. Cualquier valor legado
+  // distinto de "Inactivo" (incluido "Pendiente") se normaliza a "Activo": el
+  // acceso se gobierna desde RRHH → Empleados, donde por defecto está activo.
+  const estadoAcceso: EstadoAcceso = p.estado_acceso === "Inactivo" ? "Inactivo" : "Activo";
   return {
     id: `sup-${p.id}`,
     empleadoId: p.id,
@@ -197,6 +200,13 @@ export function UsuariosTab() {
     loadRoles();
   }, [loadRoles]);
 
+  // Refrescamos los roles al abrir el modal de Editar usuario: si en la pestaña
+  // Roles se creó o borró un rol sin recargar la página, el selector del modal
+  // debe reflejarlo (salen todos los vigentes, los eliminados desaparecen).
+  useEffect(() => {
+    if (editModal) loadRoles();
+  }, [editModal, loadRoles]);
+
   const rolesEmpresa = useMemo(() => rolesData.map((r) => r.nombre), [rolesData]);
 
   // Mapa rol → nº de módulos con acceso. La pestaña Roles tiene UN único toggle
@@ -209,6 +219,21 @@ export function UsuariosTab() {
     for (const r of rolesData) {
       const accesos = r.permisos.filter((p) => p.ver).length;
       map.set(r.nombre.trim().toLowerCase(), accesos);
+    }
+    return map;
+  }, [rolesData]);
+
+  // Mapa rol → lista de departamentos a los que da acceso (módulos con `ver`).
+  // Misma fuente que la pestaña Roles (empresa_roles), por lo que coincide con
+  // el contador "X / 12 con acceso". Se excluye AJUSTES porque no es un
+  // departamento del índice lateral, sino la configuración global.
+  const departamentosPorRol = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const r of rolesData) {
+      const deptos = r.permisos
+        .filter((p) => p.ver && p.modulo !== "AJUSTES")
+        .map((p) => p.modulo);
+      map.set(r.nombre.trim().toLowerCase(), deptos);
     }
     return map;
   }, [rolesData]);
@@ -238,15 +263,16 @@ export function UsuariosTab() {
     [empresasDisponibles],
   );
 
-  // Opciones únicas de departamentos a partir de profiles.departamento
-  // de cada usuario listado en la pestaña.
+  // Opciones únicas de departamentos derivadas del rol de cada usuario
+  // (módulos con acceso), misma fuente que la columna DEPARTAMENTO.
   const departamentosOpciones = useMemo(() => {
     const set = new Set<string>();
     for (const a of accesos) {
-      if (a.departamento) set.add(a.departamento);
+      const deptos = departamentosPorRol.get(a.rol.trim().toLowerCase()) ?? [];
+      for (const d of deptos) set.add(d);
     }
     return Array.from(set).sort();
-  }, [accesos]);
+  }, [accesos, departamentosPorRol]);
 
   const filtrados = useMemo(() => {
     const activaId = empresaActual.dbId;
@@ -263,30 +289,24 @@ export function UsuariosTab() {
       const empresasNombres = empresasIds
         .map((id) => empresaNombrePorId.get(id))
         .filter((n): n is string => Boolean(n));
-      const texto = `${a.nombreEmpleado} ${a.emailUsuario} ${a.rol} ${a.departamento} ${empresasNombres.join(" ")}`.toLowerCase();
+      const deptosRol = departamentosPorRol.get(a.rol.trim().toLowerCase()) ?? [];
+      const texto = `${a.nombreEmpleado} ${a.emailUsuario} ${a.rol} ${deptosRol.join(" ")} ${empresasNombres.join(" ")}`.toLowerCase();
       if (busqueda && !texto.includes(busqueda.toLowerCase())) return false;
       if (filtroEstados.size > 0 && !filtroEstados.has(a.estadoAcceso)) return false;
       if (filtroRoles.size > 0 && !filtroRoles.has(a.rol)) return false;
       if (filtroDepartamentos.size > 0) {
-        if (!a.departamento || !filtroDepartamentos.has(a.departamento)) return false;
+        if (!deptosRol.some((d) => filtroDepartamentos.has(d))) return false;
       }
       if (filtroEmpresas.size > 0) {
         if (!empresasNombres.some((n) => filtroEmpresas.has(n))) return false;
       }
       return true;
     });
-  }, [accesos, busqueda, filtroEstados, filtroRoles, filtroDepartamentos, filtroEmpresas, userEmpresas, empresaNombrePorId, empresaActual.dbId, ownEmpresaByEmpleado]);
+  }, [accesos, busqueda, filtroEstados, filtroRoles, filtroDepartamentos, filtroEmpresas, userEmpresas, empresaNombrePorId, empresaActual.dbId, ownEmpresaByEmpleado, departamentosPorRol]);
 
-  const activar = async (acc: AccesoPortal) => {
-    setAccesos((prev) => prev.map((a) => a.id === acc.id ? { ...a, estadoAcceso: "Activo" as EstadoAcceso } : a));
-    const result = await updateEmployeeStatus(acc.empleadoId, "Activo");
-    if (result?.error) {
-      toast.error(result.error);
-      setAccesos((prev) => prev.map((a) => a.id === acc.id ? { ...a, estadoAcceso: acc.estadoAcceso } : a));
-    } else {
-      toast.success("Acceso activado");
-    }
-  };
+  // El acceso solo se ACTIVA desde RRHH → Empleados (al marcar al empleado como
+  // Activo). Aquí solo permitimos desactivarlo, para no duplicar el control de
+  // activación en dos sitios.
   const desactivar = async (acc: AccesoPortal) => {
     setAccesos((prev) => prev.map((a) => a.id === acc.id ? { ...a, estadoAcceso: "Inactivo" as EstadoAcceso } : a));
     const result = await updateEmployeeStatus(acc.empleadoId, "Inactivo");
@@ -455,7 +475,7 @@ export function UsuariosTab() {
                     {col.filter === "estado" && (
                       <ColumnFilter
                         label="Estados"
-                        options={["Activo", "Inactivo", "Pendiente"]}
+                        options={["Activo", "Inactivo"]}
                         selected={filtroEstados}
                         onChange={setFiltroEstados}
                       />
@@ -485,7 +505,7 @@ export function UsuariosTab() {
                 </td>
                 <td className="px-3 py-2.5">
                   <DepartamentosCell
-                    departamentos={acc.departamento ? [acc.departamento] : []}
+                    departamentos={departamentosPorRol.get(acc.rol.trim().toLowerCase()) ?? []}
                   />
                 </td>
                 <td className="px-3 py-2.5">
@@ -518,11 +538,6 @@ export function UsuariosTab() {
                 </td>
                 <td className="px-3 py-2.5">
                   <div className="flex gap-1">
-                    {acc.estadoAcceso !== "Activo" && (
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-600" title="Activar" onClick={() => activar(acc)}>
-                        <Power className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
                     {acc.estadoAcceso === "Activo" && (
                       <Button variant="ghost" size="icon" className="h-7 w-7" title="Desactivar" onClick={() => desactivar(acc)}>
                         <PowerOff className="h-3.5 w-3.5" />
@@ -708,6 +723,10 @@ export function UsuariosTab() {
           if (o) {
             // Por defecto, marcamos la empresa actual del invocador.
             setCreateEmpresaIds(empresaActual.dbId ? [empresaActual.dbId] : []);
+            // Refrescamos los roles al abrir: si en la pestaña Roles se creó o
+            // borró un rol (sin recargar la página), el selector debe reflejarlo
+            // — salen todos los vigentes y los eliminados desaparecen.
+            loadRoles();
           } else {
             setCreatePrefill(null);
             setCreateEsEmpleado(true);

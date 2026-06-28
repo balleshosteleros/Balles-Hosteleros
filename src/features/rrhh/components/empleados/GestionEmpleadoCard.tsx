@@ -586,14 +586,16 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
                   Esta acción es importante y afecta de inmediato al empleado.{" "}
                   {estado === "Activo" ? (
                     <>
-                      Al guardar, <strong className="text-foreground">recuperará el acceso</strong> al
-                      sistema (Mi Panel y Mis Departamentos) con sus credenciales actuales.
+                      Al guardar, <strong className="text-foreground">se le reactivará el acceso</strong> al
+                      sistema con sus credenciales actuales y podrá volver a iniciar sesión y{" "}
+                      <strong className="text-foreground">visualizar todo aquello que su rol le permita</strong>{" "}
+                      (Mi Panel, Mis Departamentos y los módulos de su rol).
                     </>
                   ) : (
                     <>
-                      Al guardar, <strong className="text-foreground">perderá el acceso</strong> al
-                      sistema (Mi Panel y Mis Departamentos) y se registrará su fecha de baja. No podrá
-                      iniciar sesión hasta que se le reactive.
+                      Al guardar, <strong className="text-foreground">se le retirará el acceso</strong> al
+                      sistema y se registrará su fecha de baja. Dejará de poder iniciar sesión y de{" "}
+                      visualizar cualquier módulo hasta que se le reactive.
                     </>
                   )}{" "}
                   ¿Seguro que quieres continuar?
