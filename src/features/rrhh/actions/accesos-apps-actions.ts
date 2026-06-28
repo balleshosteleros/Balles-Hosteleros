@@ -38,6 +38,9 @@ function normalizarAccesos(accesos?: AccesoCredencial[] | null): AccesoCredencia
       etiqueta: (a.etiqueta ?? "").trim(),
       usuario: (a.usuario ?? "").trim(),
       contrasena: a.contrasena ?? "",
+      roles: Array.isArray(a.roles)
+        ? a.roles.map((r) => (r ?? "").trim()).filter(Boolean)
+        : [],
     }))
     .filter((a) => a.etiqueta || a.usuario || a.contrasena);
   return list.slice(0, MAX_ACCESOS_POR_APP);

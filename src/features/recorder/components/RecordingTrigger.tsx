@@ -1,11 +1,11 @@
 "use client";
 
-import { Monitor } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRecordingStore } from "../store/recording-store";
 import { useRecorder } from "../contexts/recorder-context";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { cn } from "@/lib/utils";
+import { HERRAMIENTA, toolTextColor } from "@/features/layout/data/herramientas";
 
 export function RecordingTrigger() {
   const { setDrawerOpen, state } = useRecordingStore();
@@ -14,6 +14,7 @@ export function RecordingTrigger() {
   const badgeActivo = ajustes.notificaciones.grabacion.badgeActivo;
   const isRecording = state === "recording";
   const badgeCount = pendingCount > 9 ? "9+" : pendingCount;
+  const { Icon: GrabacionIcon, colorKey } = HERRAMIENTA.grabacion;
 
   return (
     <Button
@@ -23,7 +24,7 @@ export function RecordingTrigger() {
       onClick={() => setDrawerOpen(true)}
       title="Grabar pantalla"
     >
-      <Monitor className={cn("!h-[18px] !w-[18px]", isRecording ? "text-red-600" : "text-slate-700")} />
+      <GrabacionIcon className={cn("!h-[18px] !w-[18px]", isRecording ? "text-red-600" : toolTextColor(colorKey))} />
 
       {isRecording ? (
         <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">

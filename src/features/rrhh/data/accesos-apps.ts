@@ -11,6 +11,12 @@ export interface AccesoCredencial {
   etiqueta: string;
   usuario: string;
   contrasena: string;
+  /**
+   * Roles que pueden VER este acceso concreto. Vacío = solo dirección.
+   * Permite que una misma app tenga, p. ej., un acceso para Contabilidad y
+   * otro para Marketing, cada uno visible solo a su rol.
+   */
+  roles?: string[];
 }
 
 /** Máximo de accesos (usuario/contraseña) por app. No se muestra en UI; se aplica en silencio. */

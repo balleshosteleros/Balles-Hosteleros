@@ -9,22 +9,13 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   LogOut,
   UserCircle,
-  Mail,
-  Calendar as CalendarIcon,
   CheckCircle2,
   Settings,
-  Video,
-  CheckSquare2,
-  Phone,
-  Notebook,
-  MessageCircle,
   Eye,
   EyeOff,
   Copy,
   Check,
-  Cctv,
   Building2,
-  Rocket,
 } from "lucide-react";
 import { getRouteMeta } from "@/features/layout/data/nav-routes";
 import { useEffect, useState, useContext } from "react";
@@ -65,24 +56,29 @@ import type { AccesoApp } from "@/features/rrhh/data/accesos-apps";
 import { listAccesosApps } from "@/features/rrhh/actions/accesos-apps-actions";
 import { ExternalLink } from "lucide-react";
 import { useViewMode } from "@/features/layout/contexts/view-mode-context";
+import {
+  HERRAMIENTA,
+  toolTextColor,
+  toolBadgeBg,
+  type ToolColorKey,
+} from "@/features/layout/data/herramientas";
 
-
-const NAV_BADGE_BG: Record<string, string> = {
-  red: "bg-red-500",
-  orange: "bg-orange-500",
-  blue: "bg-blue-600",
-  emerald: "bg-emerald-600",
-  violet: "bg-violet-600",
-  green: "bg-green-500",
-  sky: "bg-sky-600",
-  yellow: "bg-yellow-500",
-  slate: "bg-slate-700",
-  amber: "bg-amber-500",
+// Iconos de las herramientas — leídos del catálogo único.
+const ToolIcon = {
+  email: HERRAMIENTA.email.Icon,
+  calendario: HERRAMIENTA.calendario.Icon,
+  reuniones: HERRAMIENTA.reuniones.Icon,
+  tareas: HERRAMIENTA.tareas.Icon,
+  chat: HERRAMIENTA.chat.Icon,
+  telefono: HERRAMIENTA.telefono.Icon,
+  agenda: HERRAMIENTA.agenda.Icon,
+  videovigilancia: HERRAMIENTA.videovigilancia.Icon,
+  aplicaciones: HERRAMIENTA.aplicaciones.Icon,
 };
 
-function NavBadge({ count, color = "blue" }: { count: number; color?: string }) {
+function NavBadge({ count, color }: { count: number; color: ToolColorKey }) {
   if (count === 0) return null;
-  const bg = NAV_BADGE_BG[color] ?? NAV_BADGE_BG.blue;
+  const bg = toolBadgeBg(color);
   return (
     <span
       className={`absolute -top-0.5 -right-0.5 flex items-center justify-center h-3.5 min-w-3.5 px-0.5 rounded-full text-white text-[8px] font-bold leading-none ${bg}`}
@@ -214,8 +210,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         className="relative h-8 w-8"
                         title="Correo"
                       >
-                        <Mail className="!h-[18px] !w-[18px] text-orange-500" />
-                        <NavBadge count={ajustes.notificaciones.email.badgeActivo ? counts.emails : 0} color="orange" />
+                        <ToolIcon.email className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.email.colorKey)}`} />
+                        <NavBadge count={ajustes.notificaciones.email.badgeActivo ? counts.emails : 0} color={HERRAMIENTA.email.colorKey} />
                       </Button>
                     </GmailDrawer>
 
@@ -226,8 +222,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         className="relative h-8 w-8"
                         title="Calendario"
                       >
-                        <CalendarIcon className="!h-[18px] !w-[18px] text-blue-600" />
-                        <NavBadge count={ajustes.notificaciones.calendario.badgeActivo ? counts.events : 0} color="blue" />
+                        <ToolIcon.calendario className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.calendario.colorKey)}`} />
+                        <NavBadge count={ajustes.notificaciones.calendario.badgeActivo ? counts.events : 0} color={HERRAMIENTA.calendario.colorKey} />
                       </Button>
                     </CalendarDrawer>
 
@@ -238,8 +234,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         className="relative h-8 w-8"
                         title="Reuniones Meet"
                       >
-                        <Video className="!h-[18px] !w-[18px] text-emerald-600" />
-                        <NavBadge count={ajustes.notificaciones.reuniones.badgeActivo ? counts.meetings : 0} color="emerald" />
+                        <ToolIcon.reuniones className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.reuniones.colorKey)}`} />
+                        <NavBadge count={ajustes.notificaciones.reuniones.badgeActivo ? counts.meetings : 0} color={HERRAMIENTA.reuniones.colorKey} />
                       </Button>
                     </MeetDrawer>
 
@@ -256,8 +252,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         className="relative h-8 w-8"
                         title="Mis tareas"
                       >
-                        <CheckSquare2 className="!h-[18px] !w-[18px] text-violet-600" />
-                        <NavBadge count={ajustes.notificaciones.tareas.badgeActivo ? counts.tasks : 0} color="violet" />
+                        <ToolIcon.tareas className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.tareas.colorKey)}`} />
+                        <NavBadge count={ajustes.notificaciones.tareas.badgeActivo ? counts.tasks : 0} color={HERRAMIENTA.tareas.colorKey} />
                       </Button>
                     </TareasDrawer>
 
@@ -268,8 +264,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         className="relative h-8 w-8"
                         title="Comunicación interna"
                       >
-                        <MessageCircle className="!h-[18px] !w-[18px] text-green-500" />
-                        <NavBadge count={ajustes.notificaciones.chat.badgeActivo ? counts.chatGroups : 0} color="green" />
+                        <ToolIcon.chat className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.chat.colorKey)}`} />
+                        <NavBadge count={ajustes.notificaciones.chat.badgeActivo ? counts.chatGroups : 0} color={HERRAMIENTA.chat.colorKey} />
                       </Button>
                     </ChatDrawer>
 
@@ -280,8 +276,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         className="relative h-8 w-8"
                         title="Teléfono"
                       >
-                        <Phone className="!h-[18px] !w-[18px] text-sky-600" />
-                        <NavBadge count={ajustes.notificaciones.telefono.badgeActivo ? counts.missedCalls : 0} color="sky" />
+                        <ToolIcon.telefono className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.telefono.colorKey)}`} />
+                        <NavBadge count={ajustes.notificaciones.telefono.badgeActivo ? counts.missedCalls : 0} color={HERRAMIENTA.telefono.colorKey} />
                       </Button>
                     </TelefonoDrawer>
 
@@ -292,8 +288,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         className="relative h-8 w-8"
                         title="Agenda de contactos"
                       >
-                        <Notebook className="!h-[18px] !w-[18px] text-yellow-500" />
-                        <NavBadge count={ajustes.notificaciones.agenda.badgeActivo ? counts.newContacts : 0} color="yellow" />
+                        <ToolIcon.agenda className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.agenda.colorKey)}`} />
+                        <NavBadge count={ajustes.notificaciones.agenda.badgeActivo ? counts.newContacts : 0} color={HERRAMIENTA.agenda.colorKey} />
                       </Button>
                     </AgendaDrawer>
 
@@ -304,7 +300,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         className="relative h-8 w-8"
                         title="Videovigilancia"
                       >
-                        <Cctv className="!h-[18px] !w-[18px] text-slate-700" />
+                        <ToolIcon.videovigilancia className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.videovigilancia.colorKey)}`} />
                       </Button>
                     </CamarasDrawer>
                     {/* Separador visual */}
@@ -320,7 +316,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                           title="Accesos a aplicaciones"
                           onMouseEnter={() => setAppsMenuOpen(true)}
                         >
-                          <Rocket className="!h-[18px] !w-[18px] text-amber-600" />
+                          <ToolIcon.aplicaciones className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.aplicaciones.colorKey)}`} />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent
@@ -340,11 +336,22 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                             {accesosApps
                               .filter((a) => a.categoria === cat)
                               .map((app) => {
-                                const accesos = app.accesos?.length
+                                const accesosTodos = app.accesos?.length
                                   ? app.accesos
                                   : app.usuario || app.contrasena
-                                    ? [{ etiqueta: "", usuario: app.usuario, contrasena: app.contrasena }]
+                                    ? [{ etiqueta: "", usuario: app.usuario, contrasena: app.contrasena, roles: [] as string[] }]
                                     : [];
+                                // Visibilidad por acceso: dirección/admin ve todos;
+                                // el resto solo los accesos cuyo rol coincide con el suyo.
+                                const accesos = esDirectorGlobal
+                                  ? accesosTodos
+                                  : accesosTodos.filter((acc) =>
+                                      (acc.roles ?? []).some(
+                                        (r) => r.trim().toLowerCase() === userRolLabel,
+                                      ),
+                                    );
+                                // Si un no-director no puede ver ningún acceso, ocultar la app.
+                                if (!esDirectorGlobal && accesos.length === 0) return null;
                                 return (
                                   <div
                                     key={app.id}

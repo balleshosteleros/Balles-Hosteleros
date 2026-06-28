@@ -1,19 +1,6 @@
 "use client";
 
 import {
-  Mail,
-  Calendar as CalendarIcon,
-  Video,
-  Monitor,
-  CheckSquare2,
-  MessageCircle,
-  Phone,
-  Notebook,
-  Cctv,
-  Rocket,
-  type LucideIcon,
-} from "lucide-react";
-import {
   Accordion,
   AccordionContent,
   AccordionItem,
@@ -24,90 +11,10 @@ import { HoraSecundariaPanel } from "@/features/ajustes/components/HoraSecundari
 import { ToolNotifPanel } from "@/features/ajustes/components/ToolNotifPanel";
 import { AplicacionesTab } from "@/features/ajustes/components/AplicacionesTab";
 import type { ToolNotifKey } from "@/features/ajustes/data/ajustes";
+import { HERRAMIENTAS, toolTextColor } from "@/features/layout/data/herramientas";
 
 // Iconos sin contador real → se oculta el toggle del círculo de aviso.
 const SIN_BADGE = new Set<ToolNotifKey>(["videovigilancia", "aplicaciones"]);
-
-type Herramienta = {
-  id: ToolNotifKey;
-  nombre: string;
-  descripcion: string;
-  Icon: LucideIcon;
-  iconClassName: string;
-};
-
-const HERRAMIENTAS: Herramienta[] = [
-  {
-    id: "email",
-    nombre: "Correo",
-    descripcion: "Bandeja de entrada Gmail integrada en el portal.",
-    Icon: Mail,
-    iconClassName: "text-red-500",
-  },
-  {
-    id: "calendario",
-    nombre: "Calendario",
-    descripcion: "Calendario de Google sincronizado.",
-    Icon: CalendarIcon,
-    iconClassName: "text-blue-600",
-  },
-  {
-    id: "reuniones",
-    nombre: "Reuniones Meet",
-    descripcion: "Videollamadas y reuniones de Google Meet.",
-    Icon: Video,
-    iconClassName: "text-emerald-600",
-  },
-  {
-    id: "grabacion",
-    nombre: "Grabación de pantalla",
-    descripcion: "Captura y comparte grabaciones de pantalla.",
-    Icon: Monitor,
-    iconClassName: "text-red-500",
-  },
-  {
-    id: "tareas",
-    nombre: "Tareas",
-    descripcion: "Gestor de tareas personales y de equipo.",
-    Icon: CheckSquare2,
-    iconClassName: "text-violet-600",
-  },
-  {
-    id: "chat",
-    nombre: "Comunicación interna",
-    descripcion: "Chat interno entre miembros de la empresa.",
-    Icon: MessageCircle,
-    iconClassName: "text-green-500",
-  },
-  {
-    id: "telefono",
-    nombre: "Teléfono",
-    descripcion: "Llamadas VoIP integradas.",
-    Icon: Phone,
-    iconClassName: "text-sky-600",
-  },
-  {
-    id: "agenda",
-    nombre: "Agenda de contactos",
-    descripcion: "Directorio de contactos compartido.",
-    Icon: Notebook,
-    iconClassName: "text-yellow-500",
-  },
-  {
-    id: "videovigilancia",
-    nombre: "Videovigilancia",
-    descripcion: "Acceso a las cámaras del local.",
-    Icon: Cctv,
-    iconClassName: "text-slate-700",
-  },
-  {
-    id: "aplicaciones",
-    nombre: "Aplicaciones",
-    descripcion: "Accesos directos a aplicaciones externas.",
-    Icon: Rocket,
-    iconClassName: "text-amber-600",
-  },
-];
 
 export function HerramientasTab() {
   return (
@@ -122,7 +29,7 @@ export function HerramientasTab() {
       </div>
 
       <Accordion type="multiple" className="rounded-lg border bg-card">
-        {HERRAMIENTAS.map(({ id, nombre, descripcion, Icon, iconClassName }) => (
+        {HERRAMIENTAS.map(({ id, nombre, descripcion, Icon, colorKey }) => (
           <AccordionItem
             key={id}
             value={id}
@@ -130,7 +37,7 @@ export function HerramientasTab() {
           >
             <AccordionTrigger className="hover:no-underline">
               <div className="flex items-center gap-3 text-left">
-                <Icon className={`h-5 w-5 shrink-0 ${iconClassName}`} />
+                <Icon className={`h-5 w-5 shrink-0 ${toolTextColor(colorKey)}`} />
                 <div>
                   <div className="text-sm font-medium text-foreground">{nombre}</div>
                   <div className="text-xs font-normal text-muted-foreground">
@@ -140,7 +47,13 @@ export function HerramientasTab() {
               </div>
             </AccordionTrigger>
             <AccordionContent>
-              {id === "telefono" ? (
+              {id === "notificaciones" ? (
+                <p className="py-4 text-sm text-muted-foreground">
+                  Los avisos del sistema dirigidos al empleado se gestionan
+                  automáticamente. Próximamente podrás configurar aquí sus
+                  preferencias (silenciar tipos, frecuencia de recordatorio…).
+                </p>
+              ) : id === "telefono" ? (
                 <div className="space-y-6">
                   <TelefonoConfigPanel />
                   <div className="border-t pt-4">

@@ -51,7 +51,7 @@ const emptyApp: Omit<AccesoApp, "id" | "ultimaActualizacion"> = {
   categoria: "Otros",
   departamentos: [],
   rolesAutorizados: [],
-  accesos: [{ etiqueta: "", usuario: "", contrasena: "" }],
+  accesos: [{ etiqueta: "", usuario: "", contrasena: "", roles: [] }],
   usuario: "",
   contrasena: "",
   estado: "Activo",
@@ -145,7 +145,8 @@ export function AplicacionesTab() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Omit<AccesoApp, "id" | "ultimaActualizacion">>(emptyApp);
   const [rolesDisponibles, setRolesDisponibles] = useState<string[]>([]);
-  const [rolesPopoverOpen, setRolesPopoverOpen] = useState(false);
+  // Popover de roles abierto por índice de acceso (-1 = ninguno).
+  const [rolesPopoverIdx, setRolesPopoverIdx] = useState<number>(-1);
 
   useEffect(() => {
     getRolesEmpresaNombres(empresaDbId)
@@ -153,13 +154,18 @@ export function AplicacionesTab() {
       .catch((e) => console.error("No se pudieron cargar roles:", e));
   }, [empresaDbId]);
 
-  const toggleRol = (rol: string) => {
-    setForm((p) => {
-      const set = new Set(p.rolesAutorizados);
-      if (set.has(rol)) set.delete(rol);
-      else set.add(rol);
-      return { ...p, rolesAutorizados: Array.from(set) };
-    });
+  // Activa/desactiva un rol para UN acceso concreto (visibilidad por acceso).
+  const toggleRolAcceso = (idx: number, rol: string) => {
+    setForm((p) => ({
+      ...p,
+      accesos: p.accesos.map((a, i) => {
+        if (i !== idx) return a;
+        const set = new Set(a.roles ?? []);
+        if (set.has(rol)) set.delete(rol);
+        else set.add(rol);
+        return { ...a, roles: Array.from(set) };
+      }),
+    }));
   };
 
   const updateAcceso = (idx: number, patch: Partial<AccesoCredencial>) => {
@@ -172,13 +178,16 @@ export function AplicacionesTab() {
     setForm((p) =>
       p.accesos.length >= MAX_ACCESOS_POR_APP
         ? p
-        : { ...p, accesos: [...p.accesos, { etiqueta: "", usuario: "", contrasena: "" }] },
+        : { ...p, accesos: [...p.accesos, { etiqueta: "", usuario: "", contrasena: "", roles: [] }] },
     );
   };
   const removeAcceso = (idx: number) => {
     setForm((p) => {
       const next = p.accesos.filter((_, i) => i !== idx);
-      return { ...p, accesos: next.length ? next : [{ etiqueta: "", usuario: "", contrasena: "" }] };
+      return {
+        ...p,
+        accesos: next.length ? next : [{ etiqueta: "", usuario: "", contrasena: "", roles: [] }],
+      };
     });
   };
 
@@ -197,6 +206,15 @@ export function AplicacionesTab() {
   };
   const openEdit = (app: AccesoApp) => {
     setEditingId(app.id);
+    // Compat: apps antiguas tenían roles a nivel de app. Si un acceso no tiene
+    // roles propios, hereda los roles globales de la app para no perder permisos.
+    const accesosBase = app.accesos.length
+      ? app.accesos
+      : [{ etiqueta: "", usuario: "", contrasena: "", roles: [] }];
+    const accesos = accesosBase.map((a) => ({
+      ...a,
+      roles: a.roles?.length ? a.roles : [...(app.rolesAutorizados ?? [])],
+    }));
     setForm({
       nombre: app.nombre,
       descripcion: app.descripcion,
@@ -206,7 +224,7 @@ export function AplicacionesTab() {
       categoria: app.categoria,
       departamentos: app.departamentos,
       rolesAutorizados: app.rolesAutorizados,
-      accesos: app.accesos.length ? app.accesos : [{ etiqueta: "", usuario: "", contrasena: "" }],
+      accesos,
       usuario: app.usuario,
       contrasena: app.contrasena,
       estado: app.estado,
@@ -225,8 +243,18 @@ export function AplicacionesTab() {
     }
     setSavingApp(true);
     try {
+      // rolesAutorizados (nivel app) = unión de los roles de cada acceso.
+      // Se usa como pre-filtro de visibilidad de la app; el filtrado fino de
+      // qué acceso ve cada quien se hace por acceso.
+      const rolesUnion = Array.from(
+        new Set(form.accesos.flatMap((a) => a.roles ?? [])),
+      );
       // Icono automático: favicon del dominio de la URL.
-      const payload = { ...form, logoUrl: faviconDesdeUrl(form.url) || undefined };
+      const payload = {
+        ...form,
+        rolesAutorizados: rolesUnion,
+        logoUrl: faviconDesdeUrl(form.url) || undefined,
+      };
       if (editingId) {
         const updated = await updateAccesoApp(editingId, payload);
         setApps((prev) => prev.map((a) => (a.id === editingId ? updated : a)));
@@ -461,34 +489,114 @@ export function AplicacionesTab() {
               </div>
             </div>
 
-            {/* Accesos: varias parejas usuario/contraseña */}
+            {/* Accesos: varias parejas usuario/contraseña, cada una con sus roles */}
             <div className="space-y-2 sm:col-span-2">
-              <Label className="text-xs font-semibold">Accesos (usuario y contraseña)</Label>
+              <Label className="text-xs font-semibold">
+                Accesos (usuario, contraseña y quién lo ve)
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Cada acceso es visible solo para los roles que elijas. Sin roles, solo lo ven los directores.
+              </p>
               <div className="space-y-2">
                 {form.accesos.map((acc, idx) => (
                   <div key={idx} className="flex items-start gap-2 rounded-md border border-border/60 p-2">
-                    <div className="grid flex-1 grid-cols-1 sm:grid-cols-3 gap-2">
-                      <Input
-                        value={acc.etiqueta}
-                        onChange={(e) => updateAcceso(idx, { etiqueta: e.target.value })}
-                        placeholder="Etiqueta (ej: Gerencia)"
-                        className="h-8 text-xs"
-                      />
-                      <Input
-                        value={acc.usuario}
-                        onChange={(e) => updateAcceso(idx, { usuario: e.target.value })}
-                        placeholder="usuario@empresa.es"
-                        autoComplete="off"
-                        className="h-8 text-xs"
-                      />
-                      <Input
-                        value={acc.contrasena}
-                        onChange={(e) => updateAcceso(idx, { contrasena: e.target.value })}
-                        placeholder="Contraseña"
-                        type="text"
-                        autoComplete="new-password"
-                        className="h-8 text-xs"
-                      />
+                    <div className="grid flex-1 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <Input
+                          value={acc.etiqueta}
+                          onChange={(e) => updateAcceso(idx, { etiqueta: e.target.value })}
+                          placeholder="Etiqueta (ej: Contabilidad)"
+                          className="h-8 text-xs"
+                        />
+                        <Input
+                          value={acc.usuario}
+                          onChange={(e) => updateAcceso(idx, { usuario: e.target.value })}
+                          placeholder="usuario@empresa.es"
+                          autoComplete="off"
+                          className="h-8 text-xs"
+                        />
+                        <Input
+                          value={acc.contrasena}
+                          onChange={(e) => updateAcceso(idx, { contrasena: e.target.value })}
+                          placeholder="Contraseña"
+                          type="text"
+                          autoComplete="new-password"
+                          className="h-8 text-xs"
+                        />
+                      </div>
+                      {/* Roles que pueden ver este acceso */}
+                      <Popover
+                        open={rolesPopoverIdx === idx}
+                        onOpenChange={(o) => setRolesPopoverIdx(o ? idx : -1)}
+                      >
+                        <PopoverTrigger asChild>
+                          <button
+                            type="button"
+                            className="w-full min-h-8 flex items-center justify-between gap-2 rounded-md border border-input bg-background px-2.5 py-1 text-xs text-left hover:bg-accent/30"
+                          >
+                            <div className="flex flex-wrap gap-1 flex-1">
+                              {(acc.roles ?? []).length === 0 ? (
+                                <span className="text-muted-foreground">Quién lo ve — selecciona roles…</span>
+                              ) : (
+                                (acc.roles ?? []).map((rol) => (
+                                  <Badge key={rol} variant="secondary" className="gap-1 text-[10px]">
+                                    {rol}
+                                    <span
+                                      role="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleRolAcceso(idx, rol);
+                                      }}
+                                      className="hover:text-destructive cursor-pointer"
+                                    >
+                                      <X className="h-2.5 w-2.5" />
+                                    </span>
+                                  </Badge>
+                                ))
+                              )}
+                            </div>
+                            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                          <div className="max-h-64 overflow-y-auto py-1">
+                            {rolesDisponibles.length === 0 ? (
+                              <div className="px-3 py-2 text-xs text-muted-foreground">No hay roles definidos</div>
+                            ) : (
+                              <>
+                                <div className="flex items-center justify-between px-3 py-1.5 border-b">
+                                  <button
+                                    type="button"
+                                    onClick={() => updateAcceso(idx, { roles: [...rolesDisponibles] })}
+                                    className="text-xs text-primary hover:underline"
+                                  >
+                                    Seleccionar todos
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateAcceso(idx, { roles: [] })}
+                                    className="text-xs text-muted-foreground hover:text-foreground"
+                                  >
+                                    Limpiar
+                                  </button>
+                                </div>
+                                {rolesDisponibles.map((rol) => {
+                                  const checked = (acc.roles ?? []).includes(rol);
+                                  return (
+                                    <label
+                                      key={rol}
+                                      className="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-accent/40"
+                                    >
+                                      <Checkbox checked={checked} onCheckedChange={() => toggleRolAcceso(idx, rol)} />
+                                      <span>{rol}</span>
+                                    </label>
+                                  );
+                                })}
+                              </>
+                            )}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
                     </div>
                     <Button
                       type="button"
@@ -508,84 +616,6 @@ export function AplicacionesTab() {
                   <Plus className="h-3.5 w-3.5" />Añadir acceso
                 </Button>
               )}
-            </div>
-
-            <div className="space-y-1 sm:col-span-2">
-              <Label className="text-xs font-semibold">
-                Roles autorizados{" "}
-                <span className="font-normal text-muted-foreground">
-                  (deja vacío para que solo lo vean los directores)
-                </span>
-              </Label>
-              <Popover open={rolesPopoverOpen} onOpenChange={setRolesPopoverOpen}>
-                <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    className="w-full min-h-9 flex items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-1.5 text-sm text-left hover:bg-accent/30"
-                  >
-                    <div className="flex flex-wrap gap-1 flex-1">
-                      {form.rolesAutorizados.length === 0 ? (
-                        <span className="text-muted-foreground">Selecciona roles…</span>
-                      ) : (
-                        form.rolesAutorizados.map((rol) => (
-                          <Badge key={rol} variant="secondary" className="gap-1 text-xs">
-                            {rol}
-                            <span
-                              role="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleRol(rol);
-                              }}
-                              className="hover:text-destructive cursor-pointer"
-                            >
-                              <X className="h-3 w-3" />
-                            </span>
-                          </Badge>
-                        ))
-                      )}
-                    </div>
-                    <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                  <div className="max-h-64 overflow-y-auto py-1">
-                    {rolesDisponibles.length === 0 ? (
-                      <div className="px-3 py-2 text-xs text-muted-foreground">No hay roles definidos</div>
-                    ) : (
-                      <>
-                        <div className="flex items-center justify-between px-3 py-1.5 border-b">
-                          <button
-                            type="button"
-                            onClick={() => setForm((p) => ({ ...p, rolesAutorizados: [...rolesDisponibles] }))}
-                            className="text-xs text-primary hover:underline"
-                          >
-                            Seleccionar todos
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setForm((p) => ({ ...p, rolesAutorizados: [] }))}
-                            className="text-xs text-muted-foreground hover:text-foreground"
-                          >
-                            Limpiar
-                          </button>
-                        </div>
-                        {rolesDisponibles.map((rol) => {
-                          const checked = form.rolesAutorizados.includes(rol);
-                          return (
-                            <label
-                              key={rol}
-                              className="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-accent/40"
-                            >
-                              <Checkbox checked={checked} onCheckedChange={() => toggleRol(rol)} />
-                              <span>{rol}</span>
-                            </label>
-                          );
-                        })}
-                      </>
-                    )}
-                  </div>
-                </PopoverContent>
-              </Popover>
             </div>
           </div>
           <DialogFooter>

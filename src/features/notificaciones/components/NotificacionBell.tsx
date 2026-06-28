@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Bell, CheckCircle2, Loader2 } from "lucide-react";
+import { HERRAMIENTA, toolTextColor } from "@/features/layout/data/herramientas";
 import {
   listMisNotificaciones,
   marcarNotificacionVista,
@@ -95,7 +96,7 @@ export function NotificacionBell({
               aria-label="Notificaciones"
               title="Notificaciones"
             >
-              <Bell className="!h-[18px] !w-[18px] text-red-600" />
+              <Bell className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.notificaciones.colorKey)}`} />
               {sinVer > 0 && (
                 <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-card">
                   {sinVer > 9 ? "9+" : sinVer}

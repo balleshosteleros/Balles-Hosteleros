@@ -12,32 +12,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import {
-  Mail,
-  Calendar as CalendarIcon,
-  Video,
-  Monitor,
-  CheckSquare2,
-  MessageCircle,
-  Phone,
-  Notebook,
-  Cctv,
-  Rocket,
-  type LucideIcon,
-} from "lucide-react";
-
-const TOOL_META: Record<ToolNotifKey, { label: string; Icon: LucideIcon; color: string }> = {
-  email: { label: "Correo", Icon: Mail, color: "text-red-500" },
-  calendario: { label: "Calendario", Icon: CalendarIcon, color: "text-blue-600" },
-  reuniones: { label: "Reuniones Meet", Icon: Video, color: "text-emerald-600" },
-  grabacion: { label: "Grabación de pantalla", Icon: Monitor, color: "text-red-500" },
-  tareas: { label: "Tareas", Icon: CheckSquare2, color: "text-violet-600" },
-  chat: { label: "Comunicación interna", Icon: MessageCircle, color: "text-green-500" },
-  telefono: { label: "Teléfono", Icon: Phone, color: "text-sky-600" },
-  agenda: { label: "Agenda de contactos", Icon: Notebook, color: "text-yellow-500" },
-  videovigilancia: { label: "Videovigilancia", Icon: Cctv, color: "text-slate-700" },
-  aplicaciones: { label: "Aplicaciones", Icon: Rocket, color: "text-amber-600" },
-};
+import { HERRAMIENTA, toolTextColor } from "@/features/layout/data/herramientas";
 
 const SEEN_KEY = (key: ToolNotifKey, empresaId: string) =>
   `bh_aviso_seen_${key}_${empresaId}`;
@@ -77,7 +52,7 @@ export function ToolsAvisoPopups() {
 
   if (!openKey) return null;
   const cfg = notif[openKey];
-  const meta = TOOL_META[openKey];
+  const meta = HERRAMIENTA[openKey];
   const { Icon } = meta;
 
   const cerrar = () => {
@@ -95,8 +70,8 @@ export function ToolsAvisoPopups() {
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Icon className={`h-5 w-5 ${meta.color}`} />
-            {cfg.popupTitulo.trim() || meta.label}
+            <Icon className={`h-5 w-5 ${toolTextColor(meta.colorKey)}`} />
+            {cfg.popupTitulo.trim() || meta.nombre}
           </DialogTitle>
           {cfg.popupMensaje.trim() && (
             <DialogDescription className="whitespace-pre-line pt-1">
