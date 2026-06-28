@@ -58,6 +58,7 @@ import { GoogleReauthBanner } from "./GoogleReauthBanner";
 import { GoogleAccountButton } from "./GoogleAccountButton";
 import { useGoogleConnection } from "./useGoogleConnection";
 import { sanitizeEmailHtml } from "@/shared/lib/sanitize-email-html";
+import { refreshDailyCounts } from "./useDailyCounts";
 
 type MensajeHilo = {
   id: string;
@@ -369,6 +370,8 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
           ? prev.map((m) => (m.id === seleccionado.id ? { ...m, leido: true } : m))
           : prev,
       );
+      // Actualiza el badge de "sin leer" de la barra al instante.
+      refreshDailyCounts();
     }
   }, [connected, seleccionado]);
 
@@ -408,6 +411,9 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
       } else {
         recargar();
       }
+      // Refresca el badge de "sin leer" (leer / no leer / archivar / borrar
+      // pueden cambiar el número de correos pendientes).
+      refreshDailyCounts();
     } else {
       toast.error("No se pudo aplicar");
     }

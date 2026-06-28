@@ -220,8 +220,9 @@ export function MeetCalendarGrid({
 
   return (
     <div className="flex flex-1 min-h-0 flex-col">
-      {/* Cabecera de días (solo semana) */}
-      {!single && (
+      {/* Cabecera: en semana muestra los 7 días; en día solo aparece para
+          rotular los nombres de los dos husos sobre la columna de horas. */}
+      {(!single || tzSecundaria) && (
         <div className="flex shrink-0 border-b bg-card">
           <div
             className="shrink-0 border-r flex items-end justify-around pb-1 text-[9px] uppercase text-muted-foreground"
@@ -234,7 +235,10 @@ export function MeetCalendarGrid({
               </>
             ) : null}
           </div>
-          {dias.map((d, i) => {
+          {single ? (
+            <div className="flex-1" />
+          ) : (
+          dias.map((d, i) => {
             const esHoy = isoDate(d) === nowIso;
             return (
               <div key={i} className="flex-1 border-r px-1 py-1 text-center">
@@ -256,7 +260,8 @@ export function MeetCalendarGrid({
                 </p>
               </div>
             );
-          })}
+          })
+          )}
         </div>
       )}
 

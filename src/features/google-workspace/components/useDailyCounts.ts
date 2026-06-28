@@ -29,6 +29,15 @@ export interface DailyCounts {
 
 const REFRESH_MS = 60 * 1000; // 1 minuto
 
+// Evento global para forzar un refresco inmediato de los contadores (p. ej. al
+// leer un correo o archivarlo, sin esperar al siguiente tick de 1 minuto).
+export const DAILY_COUNTS_REFRESH_EVENT = "daily-counts:refresh";
+export function refreshDailyCounts(): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(DAILY_COUNTS_REFRESH_EVENT));
+  }
+}
+
 export function useDailyCounts(): DailyCounts {
   const { connected } = useGoogleConnection();
   const { empresaActual, ajustes } = useEmpresa();
@@ -130,10 +139,16 @@ export function useDailyCounts(): DailyCounts {
       let events = 0;
       let meetings = 0;
       if (calRes.status === "fulfilled") {
-        const eventos: Array<{ meetLink?: string | null }> =
+        const eventos: Array<{ meetLink?: string | null; fin?: string }> =
           calRes.value?.eventos ?? [];
-        events = eventos.length;
-        meetings = eventos.filter((e) => !!e.meetLink).length;
+        // Solo cuentan los eventos del día que aún NO han terminado: según pasa
+        // el tiempo, los que ya cumplieron su hora dejan de sumar al badge.
+        const ahora = Date.now();
+        const vigentes = eventos.filter(
+          (e) => !e.fin || new Date(e.fin).getTime() > ahora,
+        );
+        events = vigentes.length;
+        meetings = vigentes.filter((e) => !!e.meetLink).length;
       }
 
       setCounts({ emails, events, meetings, tasks, chatGroups, missedCalls, newContacts });
@@ -145,7 +160,12 @@ export function useDailyCounts(): DailyCounts {
   useEffect(() => {
     fetchCounts();
     const id = setInterval(fetchCounts, REFRESH_MS);
-    return () => clearInterval(id);
+    const onRefresh = () => fetchCounts();
+    window.addEventListener(DAILY_COUNTS_REFRESH_EVENT, onRefresh);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener(DAILY_COUNTS_REFRESH_EVENT, onRefresh);
+    };
   }, [fetchCounts]);
 
   return counts;

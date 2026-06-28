@@ -20,6 +20,10 @@ import { SelectorTZ } from "./SelectorTZ";
 import { CalendarSidebar, type SidebarCalendar } from "./CalendarSidebar";
 import { loadUserPref, saveUserPref } from "@/shared/io/user-preferences";
 import {
+  loadCalendariosSeleccionados,
+  saveCalendariosSeleccionados,
+} from "../lib/calendar-prefs";
+import {
   TZ_HORA_SECUNDARIA_KEY,
   horaFechaEnTZ,
   shortTZLabel,
@@ -177,9 +181,13 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
       setSeleccionados(new Set());
       return;
     }
-    fetch("/api/google/calendar/list")
-      .then((r) => r.json())
-      .then((data) => {
+    let cancelado = false;
+    Promise.all([
+      fetch("/api/google/calendar/list").then((r) => r.json()),
+      loadCalendariosSeleccionados(),
+    ])
+      .then(([data, guardados]) => {
+        if (cancelado) return;
         if (data.connected && Array.isArray(data.calendarios)) {
           const cals: SidebarCalendar[] = data.calendarios.map(
             (c: {
@@ -195,16 +203,27 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
             }),
           );
           setCalendarios(cals);
-          const init = new Set<string>(
-            data.calendarios
-              .filter((c: { seleccionado?: boolean }) => c.seleccionado)
-              .map((c: { id: string }) => c.id),
-          );
-          if (init.size === 0) cals.forEach((c) => init.add(c.id));
+          const idsDisponibles = new Set(cals.map((c) => c.id));
+          // Respetamos la selección guardada del usuario (compartida con el
+          // Calendario). Solo en la primera vez caemos a los marcados / todos.
+          let init: Set<string>;
+          if (guardados) {
+            init = new Set(guardados.filter((id) => idsDisponibles.has(id)));
+          } else {
+            init = new Set<string>(
+              data.calendarios
+                .filter((c: { seleccionado?: boolean }) => c.seleccionado)
+                .map((c: { id: string }) => c.id),
+            );
+            if (init.size === 0) cals.forEach((c) => init.add(c.id));
+          }
           setSeleccionados(init);
         }
       })
       .catch(() => {});
+    return () => {
+      cancelado = true;
+    };
   }, [connected]);
 
   const toggleCal = useCallback((id: string) => {
@@ -212,6 +231,8 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
       const n = new Set(prev);
       if (n.has(id)) n.delete(id);
       else n.add(id);
+      // Persistimos para que la selección se conserve en la próxima sesión.
+      saveCalendariosSeleccionados(n);
       return n;
     });
   }, []);

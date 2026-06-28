@@ -39,6 +39,10 @@ import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { CalendarSidebar } from "./CalendarSidebar";
 import { loadUserPref, saveUserPref } from "@/shared/io/user-preferences";
 import {
+  loadCalendariosSeleccionados,
+  saveCalendariosSeleccionados,
+} from "../lib/calendar-prefs";
+import {
   TZ_HORA_SECUNDARIA_KEY,
   horaEnTZ,
   labelTZLocal,
@@ -375,9 +379,13 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
       setNeedsReauth(false);
       return;
     }
-    fetch("/api/google/calendar/list")
-      .then((r) => r.json())
-      .then((data) => {
+    let cancelado = false;
+    Promise.all([
+      fetch("/api/google/calendar/list").then((r) => r.json()),
+      loadCalendariosSeleccionados(),
+    ])
+      .then(([data, guardados]) => {
+        if (cancelado) return;
         if (data.needsReauth || data.connected === false) {
           setNeedsReauth(true);
           setCalendarios([]);
@@ -386,18 +394,34 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
         if (data.connected && Array.isArray(data.calendarios)) {
           setNeedsReauth(false);
           setCalendarios(data.calendarios);
-          const initial = new Set<string>(
-            data.calendarios
-              .filter((c: GoogleCalendar) => c.seleccionado || c.primary)
-              .map((c: GoogleCalendar) => c.id),
+          const idsDisponibles = new Set<string>(
+            data.calendarios.map((c: GoogleCalendar) => c.id),
           );
-          if (initial.size === 0 && data.calendarios.length > 0) {
-            initial.add(data.calendarios[0].id);
+          // Si el usuario ya dejó una selección guardada, la respetamos
+          // (filtrando calendarios que ya no existan). Solo en la primera vez
+          // caemos a los que Google trae marcados / el principal.
+          let initial: Set<string>;
+          if (guardados) {
+            initial = new Set(guardados.filter((id) => idsDisponibles.has(id)));
+          } else {
+            initial = new Set<string>(
+              data.calendarios
+                .filter((c: GoogleCalendar) => c.seleccionado || c.primary)
+                .map((c: GoogleCalendar) => c.id),
+            );
+            if (initial.size === 0 && data.calendarios.length > 0) {
+              initial.add(data.calendarios[0].id);
+            }
           }
           setSeleccionados(initial);
         }
       })
-      .catch(() => setCalendarios([]));
+      .catch(() => {
+        if (!cancelado) setCalendarios([]);
+      });
+    return () => {
+      cancelado = true;
+    };
   }, [connected]);
 
   // 2) Cargar eventos cuando cambian calendarios / vista / fecha
@@ -641,6 +665,8 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      // Persistimos para que la selección se conserve en la próxima sesión.
+      saveCalendariosSeleccionados(next);
       return next;
     });
   }
@@ -1165,6 +1191,19 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
             const esHoy = dayIso === nowIso;
             return (
             <div className="flex flex-1 min-h-0 flex-col">
+              {/* Rótulo de los dos husos sobre la columna de horas (vista día) */}
+              {tzSecundaria && (
+                <div className="flex shrink-0 border-b bg-card">
+                  <div
+                    className="shrink-0 border-r flex items-end justify-around pb-1 text-[9px] uppercase text-muted-foreground"
+                    style={{ width: 104 }}
+                  >
+                    <span className="font-semibold">{labelTZLocal()}</span>
+                    <span className="font-semibold">{shortTZLabel(tzSecundaria)}</span>
+                  </div>
+                  <div className="flex-1" />
+                </div>
+              )}
               {/* All-day del día */}
               {allDayDelDia.length > 0 && (
                 <div className="shrink-0 border-b bg-muted/20 px-4 py-2">
