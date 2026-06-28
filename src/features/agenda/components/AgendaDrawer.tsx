@@ -98,17 +98,6 @@ const CATEGORIA_TINT: Record<ContactoCategoria, string> = {
   otros: "text-gray-600 bg-gray-50",
 };
 
-const CATEGORIA_BORDER: Record<ContactoCategoria, string> = {
-  mantenimiento: "bg-amber-100 text-amber-700 border-amber-200",
-  proveedores: "bg-blue-100 text-blue-700 border-blue-200",
-  proveedores_inactivos: "bg-gray-100 text-gray-600 border-gray-200",
-  servicios: "bg-violet-100 text-violet-700 border-violet-200",
-  emergencias: "bg-red-100 text-red-700 border-red-200",
-  empleados: "bg-emerald-100 text-emerald-700 border-emerald-200",
-  empleados_inactivos: "bg-gray-100 text-gray-600 border-gray-200",
-  otros: "bg-gray-100 text-gray-700 border-gray-200",
-};
-
 const COLOR_CHIP: Record<EtiquetaColor, { dot: string; chip: string; chipActivo: string }> = {
   slate: { dot: "bg-slate-400", chip: "border-slate-200 text-slate-700 bg-slate-50", chipActivo: "border-slate-500 bg-slate-100 text-slate-800" },
   amber: { dot: "bg-amber-400", chip: "border-amber-200 text-amber-700 bg-amber-50", chipActivo: "border-amber-500 bg-amber-100 text-amber-800" },
@@ -509,14 +498,6 @@ export function AgendaDrawer({ children }: { children: ReactNode }) {
                           )}
                         </div>
                         <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
-                          {!c.activo && !c.categoria.endsWith("_inactivos") && (
-                            <Badge
-                              variant="outline"
-                              className="text-[10px] bg-gray-100 text-gray-600 border-gray-200"
-                            >
-                              {c.estado_origen ?? "Inactivo"}
-                            </Badge>
-                          )}
                           {et && etColors && (
                             <Badge
                               variant="outline"
@@ -526,12 +507,6 @@ export function AgendaDrawer({ children }: { children: ReactNode }) {
                               {et.nombre}
                             </Badge>
                           )}
-                          <Badge
-                            variant="outline"
-                            className={`text-[10px] ${CATEGORIA_BORDER[c.categoria]}`}
-                          >
-                            {CATEGORIA_LABELS[c.categoria]}
-                          </Badge>
                           <Badge
                             variant="outline"
                             className={`text-[10px] ${

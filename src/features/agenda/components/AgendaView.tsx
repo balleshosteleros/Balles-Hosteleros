@@ -66,17 +66,6 @@ const CATEGORIA_ICON: Record<ContactoCategoria, React.ElementType> = {
   otros: Tag,
 };
 
-const CATEGORIA_COLOR: Record<ContactoCategoria, string> = {
-  mantenimiento: "bg-amber-100 text-amber-700 border-amber-200",
-  proveedores: "bg-blue-100 text-blue-700 border-blue-200",
-  proveedores_inactivos: "bg-gray-100 text-gray-600 border-gray-200",
-  servicios: "bg-violet-100 text-violet-700 border-violet-200",
-  emergencias: "bg-red-100 text-red-700 border-red-200",
-  empleados: "bg-emerald-100 text-emerald-700 border-emerald-200",
-  empleados_inactivos: "bg-gray-100 text-gray-600 border-gray-200",
-  otros: "bg-gray-100 text-gray-700 border-gray-200",
-};
-
 const EMPTY_FORM: ContactoInput = {
   nombre: "",
   empresa_contacto: "",
@@ -285,12 +274,6 @@ export function AgendaView() {
                   <div className="flex flex-col items-end gap-1">
                     <Badge
                       variant="outline"
-                      className={`text-[10px] ${CATEGORIA_COLOR[c.categoria]}`}
-                    >
-                      {CATEGORIA_LABELS[c.categoria]}
-                    </Badge>
-                    <Badge
-                      variant="outline"
                       className={`text-[10px] ${
                         c.origen === "manual"
                           ? "bg-yellow-50 text-yellow-700 border-yellow-200"
@@ -299,14 +282,6 @@ export function AgendaView() {
                     >
                       {c.origen === "manual" ? "Manual" : "Automático"}
                     </Badge>
-                    {!c.activo && !c.categoria.endsWith("_inactivos") && (
-                      <Badge
-                        variant="outline"
-                        className="text-[10px] bg-gray-100 text-gray-600 border-gray-200"
-                      >
-                        {c.estado_origen ?? "Inactivo"}
-                      </Badge>
-                    )}
                   </div>
                 </div>
 
