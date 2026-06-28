@@ -5,6 +5,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/features/layout/components/app-sidebar";
 import { AuthContext } from "@/features/auth/contexts/auth-context";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   LogOut,
@@ -16,6 +17,7 @@ import {
   Copy,
   ExternalLink,
   Loader2,
+  Search,
 } from "lucide-react";
 import { getRouteMeta } from "@/features/layout/data/nav-routes";
 import { useEffect, useState, useContext } from "react";
@@ -151,16 +153,39 @@ function AccesoPasswordCell({ appId, indice, tiene }: { appId: string; indice: n
   );
 }
 
-/** Desplegable de accesos a apps de la empresa actual (lectura segura). */
+/** Logo de la app en el desplegable (favicon/simpleicons con fallback a inicial). */
+function AccesoAppLogo({ nombre, logoUrl }: { nombre: string; logoUrl?: string | null }) {
+  const [err, setErr] = useState(false);
+  if (logoUrl && !err) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return (
+      <img
+        src={logoUrl}
+        alt=""
+        onError={() => setErr(true)}
+        className="h-5 w-5 rounded object-contain shrink-0"
+      />
+    );
+  }
+  return (
+    <div className="h-5 w-5 rounded bg-muted flex items-center justify-center text-[10px] font-bold shrink-0">
+      {nombre[0]?.toUpperCase() || "?"}
+    </div>
+  );
+}
+
+/** Desplegable de accesos a apps de la empresa actual (lectura segura + búsqueda). */
 function AccesosAppsMenu({ empresaSlug }: { empresaSlug: string }) {
   const [open, setOpen] = useState(false);
   const [apps, setApps] = useState<AccesoApp[]>([]);
   const [loading, setLoading] = useState(false);
+  const [busqueda, setBusqueda] = useState("");
 
   useEffect(() => {
     if (!open || !empresaSlug) return;
     let alive = true;
     setLoading(true);
+    setBusqueda("");
     listAccesosApps(empresaSlug)
       .then((rows) => {
         if (alive) setApps(rows.filter((a) => a.estado === "Activo"));
@@ -174,34 +199,65 @@ function AccesosAppsMenu({ empresaSlug }: { empresaSlug: string }) {
     };
   }, [open, empresaSlug]);
 
+  // Filtra por nombre de app O por usuario/etiqueta de cualquiera de sus accesos.
+  const q = busqueda.trim().toLowerCase();
+  const appsFiltradas = !q
+    ? apps
+    : apps.filter((app) => {
+        if (app.nombre.toLowerCase().includes(q)) return true;
+        return app.accesos.some(
+          (acc) =>
+            (acc.usuario ?? "").toLowerCase().includes(q) ||
+            (acc.etiqueta ?? "").toLowerCase().includes(q),
+        );
+      });
+
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost" size="icon"
-          className="relative h-8 w-8"
-          title="Accesos a aplicaciones"
-        >
-          <ToolIcon.aplicaciones className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.aplicaciones.colorKey)}`} />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80 max-h-[70vh] overflow-y-auto">
-        <DropdownMenuLabel className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-          Accesos a aplicaciones
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <VerificacionAccesosProvider>
+    // Provider FUERA del DropdownMenu: el diálogo de verificación no se ve
+    // afectado por el cierre del desplegable.
+    <VerificacionAccesosProvider>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost" size="icon"
+            className="relative h-8 w-8"
+            title="Accesos a aplicaciones"
+          >
+            <ToolIcon.aplicaciones className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.aplicaciones.colorKey)}`} />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-80 max-h-[70vh] overflow-y-auto">
+          <DropdownMenuLabel className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+            Accesos a aplicaciones
+          </DropdownMenuLabel>
+          {/* Buscador: por app o por usuario */}
+          <div className="px-2 pb-2" onKeyDown={(e) => e.stopPropagation()}>
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                placeholder="Buscar app o usuario…"
+                className="h-8 pl-7 text-xs"
+                autoFocus
+              />
+            </div>
+          </div>
+          <DropdownMenuSeparator />
           {loading && (
             <div className="px-3 py-3 text-xs text-muted-foreground">Cargando…</div>
           )}
-          {!loading && apps.length === 0 && (
-            <div className="px-3 py-3 text-xs text-muted-foreground">No hay accesos.</div>
+          {!loading && appsFiltradas.length === 0 && (
+            <div className="px-3 py-3 text-xs text-muted-foreground">
+              {q ? "Sin coincidencias." : "No hay accesos."}
+            </div>
           )}
           {!loading &&
-            apps.map((app) => (
+            appsFiltradas.map((app) => (
               <div key={app.id} className="px-3 py-2 border-b border-border/40 last:border-0">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-semibold truncate">{app.nombre}</span>
+                <div className="flex items-center gap-2">
+                  <AccesoAppLogo nombre={app.nombre} logoUrl={app.logoUrl} />
+                  <span className="text-xs font-semibold truncate flex-1">{app.nombre}</span>
                   {app.url && (
                     <a
                       href={app.url}
@@ -214,7 +270,7 @@ function AccesosAppsMenu({ empresaSlug }: { empresaSlug: string }) {
                     </a>
                   )}
                 </div>
-                <div className="mt-1 space-y-1">
+                <div className="mt-1 space-y-1 pl-7">
                   {app.accesos
                     .filter((acc) => acc.tieneContrasena || acc.usuario)
                     .map((acc, idx) => (
@@ -233,9 +289,9 @@ function AccesosAppsMenu({ empresaSlug }: { empresaSlug: string }) {
                 </div>
               </div>
             ))}
-        </VerificacionAccesosProvider>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </VerificacionAccesosProvider>
   );
 }
 

@@ -241,7 +241,18 @@ function AplicacionesTabInner() {
   const filteredApps = apps.filter((a) => {
     if (filtroEmpresa !== "todas" && a.empresaId !== filtroEmpresa) return false;
     if (filtroCategoria !== "todas" && a.categoria !== filtroCategoria) return false;
-    if (buscar && !a.nombre.toLowerCase().includes(buscar.toLowerCase())) return false;
+    if (buscar) {
+      const q = buscar.toLowerCase();
+      // Coincide por nombre de app, categoría, o usuario/etiqueta de cualquier acceso.
+      const enNombre = a.nombre.toLowerCase().includes(q);
+      const enCategoria = (a.categoria ?? "").toLowerCase().includes(q);
+      const enAccesos = a.accesos.some(
+        (acc) =>
+          (acc.usuario ?? "").toLowerCase().includes(q) ||
+          (acc.etiqueta ?? "").toLowerCase().includes(q),
+      );
+      if (!enNombre && !enCategoria && !enAccesos) return false;
+    }
     return true;
   });
   const categoriasUsadas = [...new Set(apps.map((a) => a.categoria))];
@@ -296,11 +307,11 @@ function AplicacionesTabInner() {
       const rolesUnion = Array.from(
         new Set(form.accesos.flatMap((a) => a.roles ?? [])),
       );
-      // Icono automático: favicon del dominio de la URL.
+      // Icono automático: marca conocida por nombre, o favicon del dominio.
       const payload = {
         ...form,
         rolesAutorizados: rolesUnion,
-        logoUrl: faviconDesdeUrl(form.url) || undefined,
+        logoUrl: faviconDesdeUrl(form.url, form.nombre) || undefined,
       };
       if (editingId) {
         const updated = await updateAccesoApp(editingId, payload);
@@ -350,7 +361,7 @@ function AplicacionesTabInner() {
         <div className="relative flex-1 min-w-[220px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar aplicación, empresa o categoría..."
+            placeholder="Buscar aplicación, usuario o categoría..."
             value={buscar}
             onChange={(e) => setBuscar(e.target.value)}
             className="pl-9"
@@ -535,8 +546,8 @@ function AplicacionesTabInner() {
             <div className="space-y-1 sm:col-span-2">
               <Label className="text-xs font-semibold">Icono</Label>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <AppLogo nombre={form.nombre || "?"} logoUrl={faviconDesdeUrl(form.url) || undefined} />
-                <span>Se obtiene automáticamente de la URL.</span>
+                <AppLogo nombre={form.nombre || "?"} logoUrl={faviconDesdeUrl(form.url, form.nombre) || undefined} />
+                <span>Se obtiene automáticamente del nombre o la URL.</span>
               </div>
             </div>
 

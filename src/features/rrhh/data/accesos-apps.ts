@@ -64,12 +64,55 @@ export const CATEGORIAS_APP = [
   "Otros",
 ];
 
-/** Devuelve la URL del favicon del dominio de una URL (icono automático de la app). */
-export function faviconDesdeUrl(url: string): string {
+/**
+ * Marcas conocidas → logo nítido (simpleicons). Permite resolver el logo por
+ * NOMBRE cuando la app no tiene URL (ej. "Revolut", "Caja Fuerte" no, pero
+ * "Stripe" sí). Clave = substring en minúsculas que debe contener el nombre.
+ */
+const LOGOS_POR_NOMBRE: Array<[string, string]> = [
+  ["revolut", "https://cdn.simpleicons.org/revolut/0666EB"],
+  ["stripe", "https://cdn.simpleicons.org/stripe/635BFF"],
+  ["instagram", "https://cdn.simpleicons.org/instagram/E4405F"],
+  ["facebook", "https://cdn.simpleicons.org/facebook/1877F2"],
+  ["tiktok", "https://cdn.simpleicons.org/tiktok/000000"],
+  ["spotify", "https://cdn.simpleicons.org/spotify/1DB954"],
+  ["amazon", "https://cdn.simpleicons.org/amazon/FF9900"],
+  ["youtube", "https://cdn.simpleicons.org/youtube/FF0000"],
+  ["whatsapp", "https://cdn.simpleicons.org/whatsapp/25D366"],
+  ["adyen", "https://cdn.simpleicons.org/adyen/0ABF53"],
+  ["mercadona", "https://cdn.simpleicons.org/mercadona/008E5A"],
+  ["makro", "https://cdn.simpleicons.org/makro/E2001A"],
+  ["google", "https://cdn.simpleicons.org/google/4285F4"],
+  ["gmail", "https://cdn.simpleicons.org/gmail/EA4335"],
+  ["drive", "https://cdn.simpleicons.org/googledrive/4285F4"],
+  ["microsoft", "https://cdn.simpleicons.org/microsoft/5E5E5E"],
+  ["sesame", "https://icon.horse/icon/sesamehr.com"],
+];
+
+/** Logo por nombre de marca conocida (sin necesidad de URL). "" si no hay match. */
+export function logoDesdeNombre(nombre: string): string {
+  const n = (nombre ?? "").toLowerCase();
+  for (const [clave, url] of LOGOS_POR_NOMBRE) {
+    if (n.includes(clave)) return url;
+  }
+  return "";
+}
+
+/**
+ * Logo automático de una app: prioriza marca conocida por nombre; si no, saca
+ * el favicon nítido del dominio de la URL. "" si no hay nada utilizable.
+ */
+export function faviconDesdeUrl(url: string, nombre?: string): string {
+  // 1) Marca conocida por nombre (logo de máxima calidad).
+  if (nombre) {
+    const porNombre = logoDesdeNombre(nombre);
+    if (porNombre) return porNombre;
+  }
+  // 2) Favicon del dominio de la URL.
   try {
     const host = new URL(url.startsWith("http") ? url : `https://${url}`).hostname;
     if (!host) return "";
-    return `https://www.google.com/s2/favicons?domain=${host}&sz=64`;
+    return `https://www.google.com/s2/favicons?domain=${host}&sz=128`;
   } catch {
     return "";
   }
