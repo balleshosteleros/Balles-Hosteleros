@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { ModuleIO, RowSchema } from "@/shared/io";
-import { type PuestoSalarial } from "@/features/rrhh/data/salarios";
-import { listSalariosEmpresa } from "@/features/rrhh/actions/salarios-actions";
+import { type PuestoSalarial } from "@/features/rrhh/data/puestos";
+import { listPuestosEmpresa } from "@/features/rrhh/actions/puestos-actions";
 
 const salarioSchema = z.object({
   id: z.string(),
@@ -23,11 +23,11 @@ const salarioSchema = z.object({
 
 const schema = salarioSchema as unknown as RowSchema<PuestoSalarial>;
 
-export const salariosIO: ModuleIO<PuestoSalarial> = {
+export const puestosIO: ModuleIO<PuestoSalarial> = {
   module: "rrhh",
-  submodule: "salarios",
-  label: "Salarios",
-  description: "Tabla salarial por puesto y departamento.",
+  submodule: "puestos",
+  label: "Puestos",
+  description: "Puestos con sus condiciones (salario, jornada y horario) por departamento.",
   schema,
   uniqueBy: "puesto",
   columns: [
@@ -48,6 +48,6 @@ export const salariosIO: ModuleIO<PuestoSalarial> = {
     { key: "horarioSemanal", label: "Horario semanal", hideInExport: true, hideInImport: true },
   ],
   fetchAll: async () => {
-    return (await listSalariosEmpresa()).puestos;
+    return (await listPuestosEmpresa()).puestos;
   },
 };

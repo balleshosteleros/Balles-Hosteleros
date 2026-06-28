@@ -11,9 +11,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { createPuesto, updatePuesto, deletePuesto, listDepartamentosCatalogo } from "@/features/rrhh/actions/vacantes-actions";
-import { upsertPuestoSalario, listNivelesDePuesto } from "@/features/rrhh/actions/salarios-actions";
+import { upsertPuestoSalario, listNivelesDePuesto } from "@/features/rrhh/actions/puestos-actions";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
-import type { PuestoSalarial, NivelSalarial } from "@/features/rrhh/data/salarios";
+import type { PuestoSalarial, NivelSalarial } from "@/features/rrhh/data/puestos";
 
 interface Props {
   open: boolean;

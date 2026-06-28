@@ -9,7 +9,7 @@
  * departamento; el rol es el perfil de accesos al software.
  *
  * NO añadir aquí puestos específicos de un cliente — esos los crea el cliente
- * desde RRHH → Salarios / Ajustes y NO se replican a otras empresas.
+ * desde RRHH → Puestos / Ajustes y NO se replican a otras empresas.
  */
 
 export interface PuestoSeed {

@@ -42,6 +42,8 @@ export interface PuestoSalarial {
   objetivos: string[];
   estado: "activo" | "borrador" | "inactivo";
   updatedAt: string;
+  /** El puesto ya tiene un cronograma operativo vinculado (uno por puesto). */
+  tieneCronograma: boolean;
   // Datos de gestoría (compartidos por el puesto, comunes a todos los niveles)
   convenioColectivo: string;
   tipoContratoDefecto: string;
@@ -63,7 +65,7 @@ export interface SalariosEmpresa {
 // ─── Normas comunes ───────────────────────────────────────────
 // Texto legal genérico (no es dato de cliente). Los salarios reales viven en
 // la tabla `puesto_salarios` (ligada a puesto→departamento), vía
-// `listSalariosEmpresa()` en rrhh/actions/salarios-actions.ts.
+// `listPuestosEmpresa()` en rrhh/actions/puestos-actions.ts.
 
 export const NORMAS_BASE: NormaSalarial[] = [
   {

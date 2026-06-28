@@ -19,12 +19,12 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   },
   {
     key: "puestos",
-    titulo: "Puestos y salarios",
+    titulo: "Puestos",
     descripcion: "Las plantillas de puesto con sus niveles y condiciones. De aquí copia cada empleado.",
     obligatorio: true,
     dependencias: [],
     icono: "Briefcase",
-    rutaGestion: "/rrhh/salarios",
+    rutaGestion: "/rrhh/puestos",
     entidad: "puestos",
   },
   {

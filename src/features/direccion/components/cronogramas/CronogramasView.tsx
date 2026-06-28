@@ -1316,7 +1316,7 @@ function NuevoPuestoDialog({
               <SelectContent>
                 {puestos.length === 0 && !loading ? (
                   <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                    No hay puestos. Créalos en RRHH → Salarios.
+                    No hay puestos. Créalos en RRHH → Puestos.
                   </div>
                 ) : (
                   puestos.map((p) => (
@@ -1336,7 +1336,7 @@ function NuevoPuestoDialog({
           </div>
 
           <p className="text-xs text-muted-foreground">
-            El cronograma queda ligado al puesto (uno por puesto). Los puestos se dan de alta en RRHH → Salarios.
+            El cronograma queda ligado al puesto (uno por puesto). Los puestos se dan de alta en RRHH → Puestos.
           </p>
         </div>
         <DialogFooter>

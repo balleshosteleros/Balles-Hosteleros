@@ -306,7 +306,7 @@ export async function createPuesto(input: { nombre: string; departamento_id?: st
     // Cronograma 1:1 con el puesto: se crea AL MOMENTO (idempotente).
     await crearCronogramaParaPuesto(data.id);
 
-    revalidatePath("/rrhh/salarios");
+    revalidatePath("/rrhh/puestos");
     return { ok: true, data };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
@@ -362,7 +362,7 @@ export async function updatePuesto(input: {
       .single();
     if (error) throw error;
 
-    revalidatePath("/rrhh/salarios");
+    revalidatePath("/rrhh/puestos");
     revalidatePath("/direccion/cronogramas");
     return { ok: true, data };
   } catch (err: unknown) {
@@ -436,7 +436,7 @@ export async function deletePuesto(id: string) {
       return { ok: false, error: "No se encontró el puesto o sin permisos" };
     }
 
-    revalidatePath("/rrhh/salarios");
+    revalidatePath("/rrhh/puestos");
     revalidatePath("/rrhh/reclutamiento");
     revalidatePath("/direccion/cronogramas");
     return { ok: true };

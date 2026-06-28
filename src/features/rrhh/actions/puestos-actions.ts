@@ -10,7 +10,7 @@ import {
   type NivelSalarial,
   type NormaSalarial,
   type HorarioDia,
-} from "@/features/rrhh/data/salarios";
+} from "@/features/rrhh/data/puestos";
 
 async function getContext() {
   const supabase = await createClient();
@@ -71,7 +71,7 @@ function embedToNivel(sal: SalarioEmbed): NivelSalarial {
   };
 }
 
-function rowToPuesto(r: PuestoRow): PuestoSalarial {
+function rowToPuesto(r: PuestoRow, conCronograma: Set<string>): PuestoSalarial {
   const niveles = (Array.isArray(r.puesto_salarios)
     ? r.puesto_salarios
     : r.puesto_salarios ? [r.puesto_salarios] : []
@@ -97,6 +97,7 @@ function rowToPuesto(r: PuestoRow): PuestoSalarial {
     objetivos: cab?.objetivos ?? [],
     estado: cab?.estado ?? "borrador",
     updatedAt: cab?.updated_at?.slice(0, 10) ?? "",
+    tieneCronograma: conCronograma.has(r.id),
     convenioColectivo: r.convenio_colectivo ?? "",
     tipoContratoDefecto: r.tipo_contrato_defecto ?? "",
     grupoCategoriaProf: r.grupo_categoria_prof ?? "",
@@ -105,29 +106,39 @@ function rowToPuesto(r: PuestoRow): PuestoSalarial {
 }
 
 /** Puestos (hijos de departamento) con su salario, de la empresa activa. */
-export async function listSalariosEmpresa(): Promise<{
+export async function listPuestosEmpresa(): Promise<{
   puestos: PuestoSalarial[];
   normas: NormaSalarial[];
 }> {
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { puestos: [], normas: NORMAS_BASE };
-    const { data, error } = await supabase
-      .from("puestos")
-      .select(
-        "id, nombre, convenio_colectivo, tipo_contrato_defecto, grupo_categoria_prof, epigrafe_cotizacion, departamentos(id, nombre), puesto_salarios(nivel, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal, observaciones, objetivos, estado, updated_at)",
-      )
-      .eq("empresa_id", empresaId);
+    const [{ data, error }, cronosRes] = await Promise.all([
+      supabase
+        .from("puestos")
+        .select(
+          "id, nombre, convenio_colectivo, tipo_contrato_defecto, grupo_categoria_prof, epigrafe_cotizacion, departamentos(id, nombre), puesto_salarios(nivel, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal, observaciones, objetivos, estado, updated_at)",
+        )
+        .eq("empresa_id", empresaId),
+      supabase
+        .from("cronogramas_operativos")
+        .select("puesto_id")
+        .eq("empresa_id", empresaId)
+        .not("puesto_id", "is", null),
+    ]);
     if (error) throw error;
+    const conCronograma = new Set(
+      ((cronosRes.data ?? []) as Array<{ puesto_id: string }>).map((c) => c.puesto_id),
+    );
     const puestos = ((data ?? []) as unknown as PuestoRow[])
-      .map(rowToPuesto)
+      .map((r) => rowToPuesto(r, conCronograma))
       .sort((a, b) =>
         a.departamento.localeCompare(b.departamento) ||
         a.puesto.localeCompare(b.puesto),
       );
     return { puestos, normas: NORMAS_BASE };
   } catch (err) {
-    console.error("[rrhh] listSalariosEmpresa:", err);
+    console.error("[rrhh] listPuestosEmpresa:", err);
     return { puestos: [], normas: NORMAS_BASE };
   }
 }
@@ -177,7 +188,7 @@ export async function upsertPuestoSalario(input: UpsertSalarioInput) {
       .select("id")
       .single();
     if (error) throw error;
-    revalidatePath("/rrhh/salarios");
+    revalidatePath("/rrhh/puestos");
     return { ok: true, id: data?.id as string };
   } catch (err) {
     console.error("[rrhh] upsertPuestoSalario:", err);
@@ -219,7 +230,7 @@ export async function deletePuestoSalario(id: string) {
       .eq("id", id)
       .eq("empresa_id", empresaId);
     if (error) throw error;
-    revalidatePath("/rrhh/salarios");
+    revalidatePath("/rrhh/puestos");
     return { ok: true };
   } catch (err) {
     console.error("[rrhh] deletePuestoSalario:", err);

@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getPlantillaPuesto, guardarPlantillaPuesto, crearVersionPlantillaPuesto, type PatronAplicable } from "@/features/rrhh/actions/puesto-horario-actions";
 import type { Turno } from "@/features/rrhh/data/horarios";
-import type { PuestoSalarial } from "@/features/rrhh/data/salarios";
+import type { PuestoSalarial } from "@/features/rrhh/data/puestos";
 
 interface Props {
   open: boolean;

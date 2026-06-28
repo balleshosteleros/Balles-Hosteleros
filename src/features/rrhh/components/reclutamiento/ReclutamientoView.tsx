@@ -143,7 +143,7 @@ function VacanteCard({
                 <Users className="h-4 w-4 mr-2" /> Ver candidatos
               </DropdownMenuItem>
               {/* Las vacantes NO se borran aquí: son espejo del puesto activo
-                  (se regenerarían). Se gestionan desde Salarios → Puestos. */}
+                  (se regenerarían). Se gestionan desde Puestos. */}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

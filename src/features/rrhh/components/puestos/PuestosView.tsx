@@ -1,10 +1,13 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
+import { useState, useMemo, useEffect, useCallback, useTransition, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useTabQuery } from "@/shared/hooks/use-tab-query";
-import { type PuestoSalarial, type NormaSalarial, NORMAS_BASE, DEPARTAMENTOS_DISPONIBLES } from "@/features/rrhh/data/salarios";
-import { listSalariosEmpresa } from "@/features/rrhh/actions/salarios-actions";
+import { type PuestoSalarial, type NormaSalarial, NORMAS_BASE, DEPARTAMENTOS_DISPONIBLES } from "@/features/rrhh/data/puestos";
+import { listPuestosEmpresa } from "@/features/rrhh/actions/puestos-actions";
+import { crearCronogramaParaPuesto } from "@/features/rrhh/actions/vacantes-actions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +15,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   ArrowLeft, Plus, Eye, Settings, Settings2, DollarSign, Clock, Calendar,
-  Briefcase, ChevronDown, ChevronRight, Target, FileText, Pencil,
+  Briefcase, ChevronDown, ChevronRight, Target, FileText, Pencil, ListChecks,
 } from "lucide-react";
 import {
   SubmoduleToolbar,
@@ -26,7 +29,7 @@ import {
   type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
 import { IOActions } from "@/shared/io";
-import { salariosIO } from "@/features/rrhh/io/salarios.io";
+import { puestosIO } from "@/features/rrhh/io/puestos.io";
 import { PuestoSalarioDialog } from "./PuestoSalarioDialog";
 import { PuestoHorarioDialog } from "./PuestoHorarioDialog";
 
@@ -40,17 +43,17 @@ const estadoBadge = (e: string) => {
 
 const eur = (n: number) => n.toLocaleString("es-ES", { style: "currency", currency: "EUR", minimumFractionDigits: 0 });
 
-export function SalariosView() {
+export function PuestosView() {
   const { empresaActual } = useEmpresa();
   const [data, setData] = useState<{ puestos: PuestoSalarial[]; normas: NormaSalarial[] }>(
     { puestos: [], normas: NORMAS_BASE },
   );
   const reload = useCallback(() => {
-    listSalariosEmpresa().then(setData);
+    listPuestosEmpresa().then(setData);
   }, []);
   useEffect(() => {
     let activo = true;
-    listSalariosEmpresa().then((res) => { if (activo) setData(res); });
+    listPuestosEmpresa().then((res) => { if (activo) setData(res); });
     return () => { activo = false; };
   }, [empresaActual.id]);
 
@@ -87,10 +90,34 @@ function ListView({
   onChanged: () => void;
   empresaId: string;
 }) {
+  const router = useRouter();
+  const [pendingCronoId, setPendingCronoId] = useState<string | null>(null);
+  const [, startCronoTransition] = useTransition();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPuesto, setEditingPuesto] = useState<PuestoSalarial | null>(null);
   const [horarioOpen, setHorarioOpen] = useState(false);
   const [horarioPuesto, setHorarioPuesto] = useState<PuestoSalarial | null>(null);
+
+  // Cronograma del puesto (uno por puesto): si no existe lo crea y luego abre la
+  // pantalla de cronogramas, donde se editan las tareas. Idempotente.
+  const irAlCronograma = (p: PuestoSalarial) => {
+    if (p.tieneCronograma) {
+      router.push("/direccion/cronogramas");
+      return;
+    }
+    setPendingCronoId(p.id);
+    startCronoTransition(async () => {
+      const res = await crearCronogramaParaPuesto(p.id);
+      setPendingCronoId(null);
+      if (res.ok) {
+        toast.success(res.yaExistia ? "Ese puesto ya tenía cronograma" : `Cronograma creado para ${p.puesto}`);
+        onChanged();
+        router.push("/direccion/cronogramas");
+      } else {
+        toast.error(res.error ?? "No se pudo crear el cronograma");
+      }
+    });
+  };
   const [busqueda, setBusqueda] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
@@ -206,7 +233,7 @@ function ListView({
         extraDerecha={
           <>
             <IOActions
-              config={salariosIO}
+              config={puestosIO}
               context={{ empresaId }}
               onSuccess={() => window.location.reload()}
             />
@@ -261,6 +288,16 @@ function ListView({
                           </Button>
                           <Button variant="ghost" size="sm" onClick={() => { setHorarioPuesto(p); setHorarioOpen(true); }}>
                             <Calendar className="h-4 w-4 mr-1" /> Horario
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => irAlCronograma(p)}
+                            disabled={pendingCronoId === p.id}
+                            title={p.tieneCronograma ? "Ver el cronograma del puesto" : "Crear el cronograma del puesto"}
+                          >
+                            <ListChecks className={`h-4 w-4 mr-1 ${p.tieneCronograma ? "text-emerald-600" : "text-muted-foreground"}`} />
+                            Cronograma
                           </Button>
                           <Button variant="ghost" size="sm" onClick={() => onDetail(p.id)}>
                             <Eye className="h-4 w-4 mr-1" /> Ver detalle
@@ -432,7 +469,7 @@ function ConfigView({ puestos, normas, onBack }: { puestos: PuestoSalarial[]; no
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="h-4 w-4" /></Button>
         <div>
-          <h2 className="text-base font-semibold text-foreground">Configuración de salarios</h2>
+          <h2 className="text-base font-semibold text-foreground">Configuración de puestos</h2>
           <p className="text-muted-foreground text-sm">Gestión de departamentos, puestos y condiciones</p>
         </div>
       </div>

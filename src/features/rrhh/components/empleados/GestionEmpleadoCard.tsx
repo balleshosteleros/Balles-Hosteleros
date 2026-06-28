@@ -361,7 +361,7 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
             <span className="text-muted-foreground/70 font-normal"> (uno o varios; marca el principal)</span>
           </Label>
           {puestosCatalogo.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No hay puestos — créalos en RRHH → Salarios.</p>
+            <p className="text-xs text-muted-foreground">No hay puestos — créalos en RRHH → Puestos.</p>
           ) : (
             <div className="grid gap-1.5 sm:grid-cols-2">
               {puestosCatalogo.map((p) => {

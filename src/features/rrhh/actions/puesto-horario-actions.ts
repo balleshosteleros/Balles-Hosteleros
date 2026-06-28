@@ -174,7 +174,7 @@ export async function guardarPlantillaPuesto(
       .insert({ patron_id: patronId, orden: 0, dias: semana });
     if (semErr) throw semErr;
 
-    revalidatePath("/rrhh/salarios");
+    revalidatePath("/rrhh/puestos");
     return { ok: true, patronId };
   } catch (err) {
     console.error("[rrhh] guardarPlantillaPuesto:", err);
@@ -262,7 +262,7 @@ export async function crearVersionPlantillaPuesto(
       .update({ patron_id: nuevo.id as string })
       .eq("patron_id", actual.id);
 
-    revalidatePath("/rrhh/salarios");
+    revalidatePath("/rrhh/puestos");
     return { ok: true, plantillaId: nuevo.id as string, version: nuevaVersion };
   } catch (err) {
     console.error("[rrhh] crearVersionPlantillaPuesto:", err);

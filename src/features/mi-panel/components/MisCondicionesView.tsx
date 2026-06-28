@@ -7,8 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { type PuestoSalarial } from "@/features/rrhh/data/salarios";
-import { listSalariosEmpresa } from "@/features/rrhh/actions/salarios-actions";
+import { type PuestoSalarial } from "@/features/rrhh/data/puestos";
+import { listPuestosEmpresa } from "@/features/rrhh/actions/puestos-actions";
 import { getBonusPorEmpresa, PERIODICIDAD_LABEL, type Bonus } from "@/features/rrhh/data/bonus";
 import {
   Calendar,
@@ -110,7 +110,7 @@ export function MisCondicionesView() {
   const [puestos, setPuestos] = useState<PuestoSalarial[]>([]);
   useEffect(() => {
     let activo = true;
-    listSalariosEmpresa().then((res) => { if (activo) setPuestos(res.puestos); });
+    listPuestosEmpresa().then((res) => { if (activo) setPuestos(res.puestos); });
     return () => { activo = false; };
   }, [empresaActual.id]);
 
