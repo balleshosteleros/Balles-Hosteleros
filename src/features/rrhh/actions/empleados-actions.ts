@@ -104,6 +104,13 @@ export async function listEmpleados() {
         },
         {}
       );
+      // Orden alfabético estable: sin esto, Postgres devuelve las filas en orden
+      // físico (por inserción), que varía por usuario → el chip empezaría por
+      // HABANA en unos empleados y por BACANAL en otros. Ordenar garantiza que
+      // todas las filas muestren las empresas en el mismo orden.
+      for (const uid of Object.keys(empresasPorUser)) {
+        empresasPorUser[uid].sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+      }
     }
 
     // Dedup por user_id: si el mismo usuario tiene ficha en varias empresas
