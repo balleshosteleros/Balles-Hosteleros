@@ -326,19 +326,21 @@ function EmailConfirmDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto min-h-0 -mx-1 px-1">
+        <div className="mt-2 space-y-2">
         {cargando && (
-          <p className="text-xs text-muted-foreground mt-2">Comprobando la plantilla asociada…</p>
+          <p className="text-xs text-muted-foreground">Comprobando la plantilla asociada…</p>
         )}
 
         {!cargando && tieneEmail && emailActiva && tpl && (
-          <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2 mt-2">
+          <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
             <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
               <Mail className="h-3.5 w-3.5" /> Previsualización del email
             </p>
             <p className="text-xs text-muted-foreground"><span className="font-medium">Para:</span> {candidato.email}</p>
             <p className="text-xs text-muted-foreground"><span className="font-medium">Asunto:</span> {reemplazarVariablesEmail(tpl.asunto, candidato, vacante)}</p>
-            <p className="text-xs text-muted-foreground leading-relaxed mt-1 whitespace-pre-wrap">
+            {/* El cuerpo hace scroll por dentro si es largo: así la caja siempre
+                mide lo mismo y el diálogo queda uniforme. */}
+            <p className="text-xs text-muted-foreground leading-relaxed mt-1 whitespace-pre-wrap max-h-[40vh] overflow-y-auto pr-1">
               {parsearEnlacesCuerpo(reemplazarVariablesEmail(tpl.cuerpo, candidato, vacante)).map((seg, i) =>
                 seg.type === "link" ? (
                   <a key={i} href={seg.href} target="_blank" rel="noreferrer" className="text-blue-600 underline">
@@ -353,18 +355,18 @@ function EmailConfirmDialog({
         )}
 
         {!cargando && tieneEmail && !emailActiva && (
-          <div className="rounded-lg border border-border bg-amber-50 p-3 mt-2">
+          <div className="rounded-lg border border-border bg-amber-50 p-3">
             <p className="text-xs text-amber-700">La plantilla asociada a este estado está desactivada. No se enviará email automático.</p>
           </div>
         )}
 
         {!cargando && !tieneEmail && (
-          <div className="rounded-lg border border-border bg-amber-50 p-3 mt-2">
+          <div className="rounded-lg border border-border bg-amber-50 p-3">
             <p className="text-xs text-amber-700">No hay ninguna plantilla de email asociada a este estado. Se moverá sin enviar correo.</p>
           </div>
         )}
 
-        <p className="text-sm text-foreground mt-2">
+        <p className="text-sm text-foreground">
           ¿Quieres enviar un email automático al candidato informándole del cambio?
         </p>
         </div>
