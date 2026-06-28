@@ -90,9 +90,17 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone }: Props
         emailEmpresa: esAdministrativo ? emailEmpresa.trim() : null,
       });
       if (res.ok && res.empleadoId) {
-        toast.success(res.reactivado ? "Empleado reactivado (re-contratación)" : "Empleado contratado");
-        // Cierra el diálogo y vuelve a la vacante: la contratación queda hecha.
-        // El alta a la gestoría se gestiona después desde la ficha del empleado.
+        // Cierra el diálogo y vuelve a la vacante: la contratación queda hecha y
+        // el alta a la gestoría se envía automáticamente en el mismo paso.
+        const base = res.reactivado ? "Empleado reactivado (re-contratación)" : "Empleado contratado";
+        if (res.gestoriaEnviada) {
+          toast.success(base, { description: "Alta enviada a la gestoría" });
+        } else {
+          toast.success(base);
+          toast.warning("No se envió el alta a la gestoría", {
+            description: "Revisa el correo de la gestoría en Ajustes → RRHH → Reclutamiento.",
+          });
+        }
         onDone();
         onOpenChange(false);
       } else {

@@ -21,6 +21,7 @@ import { bienvenidaEmpleadoEmail } from "@/lib/email/templates/bienvenida-emplea
 import { buildRecoveryActionUrl } from "@/lib/auth/recovery-link";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 import { requireAdminUser, altaUsuarioEmpleado } from "@/features/rrhh/services/empleados-core";
+import { enviarAltaGestoria } from "@/features/rrhh/actions/gestoria-actions";
 import { revalidatePath } from "next/cache";
 
 export interface ContratarInput {
@@ -40,6 +41,8 @@ export interface ContratarResult {
   reactivado?: boolean;
   accesoEmailEnviado?: boolean;
   tempPassword?: string;
+  /** El alta de contrato se envió automáticamente a la gestoría. */
+  gestoriaEnviada?: boolean;
 }
 
 interface CandidatoRow {
@@ -180,12 +183,28 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
   }
   const loginEmail = esAdministrativo ? (emailEmpresa as string) : emailPersonal;
 
-  const { data: cond } = await admin
+  // Plantilla del puesto: como el diálogo ya no elige nivel, heredamos el nivel
+  // más bajo definido en la plantilla (normalmente el 1) en lugar de exigir un
+  // nivel exacto. Así el empleado hereda las condiciones existan con la
+  // numeración que existan; si la plantilla está vacía, `cond` queda null.
+  const { data: condRows } = await admin
     .from("puesto_salarios")
-    .select("nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal")
+    .select("nivel, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal")
     .eq("puesto_id", input.puestoId)
-    .eq("nivel", input.nivel)
-    .maybeSingle();
+    .order("nivel", { ascending: true })
+    .limit(1);
+  const condRow = condRows?.[0] ?? null;
+  // El nivel que se graba en el snapshot es el de la plantilla heredada (o el
+  // que pidió el caller —hoy siempre 1— si la plantilla está vacía).
+  const nivelHeredado = (condRow?.nivel as number | undefined) ?? input.nivel;
+  const cond = condRow
+    ? {
+        nomina_neta: condRow.nomina_neta, efectivo_extra: condRow.efectivo_extra,
+        salario_neto: condRow.salario_neto, jornada_contrato: condRow.jornada_contrato,
+        horas_semanales: condRow.horas_semanales, dias_libres: condRow.dias_libres,
+        vacaciones: condRow.vacaciones, horario_semanal: condRow.horario_semanal,
+      }
+    : null;
 
   // 3. Lock optimista
   const nowIso = new Date().toISOString();
@@ -240,14 +259,17 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
       }
     }
     await vincularPuestoPrincipal(admin, empleadoExistente.id, input.puestoId, puesto.nombre as string, input.primerDia);
-    await guardarSnapshotCondiciones(admin, empresaId, empleadoExistente.id, input.puestoId, puesto.nombre as string, input.nivel, input.primerDia, tipoContrato, cond);
+    await guardarSnapshotCondiciones(admin, empresaId, empleadoExistente.id, input.puestoId, puesto.nombre as string, nivelHeredado, input.primerDia, tipoContrato, cond);
 
     await admin.from("candidatos")
       .update({ empleado_id: empleadoExistente.id, fase: "seleccionado", estado: "empleado" }).eq("id", cand.id);
 
+    // Alta automática a la gestoría (tolerante a fallo: no bloquea la contratación).
+    const gestoriaEnviada = await enviarAltaGestoriaSeguro(empleadoExistente.id);
+
     revalidatePath("/rrhh/reclutamiento");
     revalidatePath("/rrhh/empleados");
-    return { ok: true, empleadoId: empleadoExistente.id, reactivado: true };
+    return { ok: true, empleadoId: empleadoExistente.id, reactivado: true, gestoriaEnviada };
   }
 
   // 5. Alta nueva vía núcleo canónico
@@ -275,7 +297,7 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
   // Primer día de trabajo + vínculo de puesto + snapshot de condiciones
   await admin.from("empleados").update({ fecha_alta: input.primerDia }).eq("id", alta.empleadoId);
   await vincularPuestoPrincipal(admin, alta.empleadoId, input.puestoId, puesto.nombre as string, input.primerDia);
-  await guardarSnapshotCondiciones(admin, empresaId, alta.empleadoId, input.puestoId, puesto.nombre as string, input.nivel, input.primerDia, tipoContrato, cond);
+  await guardarSnapshotCondiciones(admin, empresaId, alta.empleadoId, input.puestoId, puesto.nombre as string, nivelHeredado, input.primerDia, tipoContrato, cond);
 
   await admin.from("candidatos")
     .update({ empleado_id: alta.empleadoId, fase: "seleccionado", estado: "empleado" }).eq("id", cand.id);
@@ -310,7 +332,21 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
     console.error("[contratacion] email de acceso:", err);
   }
 
+  // 7. Alta automática a la gestoría (tolerante a fallo: no bloquea la contratación).
+  const gestoriaEnviada = await enviarAltaGestoriaSeguro(alta.empleadoId);
+
   revalidatePath("/rrhh/reclutamiento");
   revalidatePath("/rrhh/empleados");
-  return { ok: true, empleadoId: alta.empleadoId, reactivado: false, accesoEmailEnviado, tempPassword: alta.tempPassword };
+  return { ok: true, empleadoId: alta.empleadoId, reactivado: false, accesoEmailEnviado, tempPassword: alta.tempPassword, gestoriaEnviada };
+}
+
+/** Envía el alta a la gestoría sin propagar errores: la contratación ya está hecha. */
+async function enviarAltaGestoriaSeguro(empleadoId: string): Promise<boolean> {
+  try {
+    const res = await enviarAltaGestoria(empleadoId);
+    return res.ok;
+  } catch (err) {
+    console.error("[contratacion] alta gestoría automática:", err);
+    return false;
+  }
 }
