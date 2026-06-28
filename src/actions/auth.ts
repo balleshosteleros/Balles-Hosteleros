@@ -134,9 +134,19 @@ export async function resetPassword(formData: FormData) {
   return { success: true }
 }
 
+// Política de contraseña del sistema: exactamente 6 dígitos numéricos.
+// Tipo PIN: rápida de teclear y de recordar, también para reautenticar en la
+// bóveda de contraseñas. Fuente única de verdad (el HTML solo es ayuda visual).
+const PIN_REGEX = /^\d{6}$/
+const PIN_ERROR = 'La contraseña debe tener exactamente 6 dígitos numéricos (ej. 042815).'
+
 export async function updatePassword(formData: FormData) {
   const supabase = await createClient()
   const password = formData.get('password') as string
+
+  if (!PIN_REGEX.test(password ?? '')) {
+    return { error: PIN_ERROR }
+  }
 
   const { data: { user: userBefore } } = await supabase.auth.getUser()
   if (!userBefore) {
