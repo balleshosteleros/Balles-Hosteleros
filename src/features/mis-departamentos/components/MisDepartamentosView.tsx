@@ -80,6 +80,20 @@ export function MisDepartamentosView() {
     setMounted(true);
   }, []);
 
+  // El auth-context puede marcar `permisosLoaded=true` un instante ANTES de que
+  // `roles` llegue poblado (carrera de cookies post-login + reintentos de
+  // loadFreshAuth). En ese hueco un director aparece sin roles → se pinta en
+  // falso "No tienes departamentos". Para evitarlo, durante unos segundos tras
+  // montar tratamos "permisos cargados pero sin ningún rol" como todavía
+  // cargando, dando tiempo a que el rol real resuelva.
+  const [graceElapsed, setGraceElapsed] = useState(false);
+  useEffect(() => {
+    if (!mounted) return;
+    const t = setTimeout(() => setGraceElapsed(true), 4000);
+    return () => clearTimeout(t);
+  }, [mounted]);
+  const rolesPendientes = roles.length === 0 && !graceElapsed;
+
   const tiles = useMemo(() => {
     // 'director' / 'admin' tienen bypass total — ven todos los departamentos.
     if (hasRole("director") || hasRole("admin")) return ALL_DEPARTAMENTOS;
@@ -91,8 +105,13 @@ export function MisDepartamentosView() {
 
   // Loading hasta que (a) el componente esté montado y (b) los permisos hayan
   // resuelto. admin/director cortocircuitan en `tiles` sin esperar permisos.
+  // `rolesPendientes` extiende el skeleton durante el periodo de gracia cuando
+  // aún no ha llegado ningún rol, para no pintar "No tienes departamentos" en
+  // falso mientras el rol (p.ej. director) termina de resolver.
   const isLoading =
-    !mounted || (!permisosLoaded && !hasRole("director") && !hasRole("admin"));
+    !mounted ||
+    (!permisosLoaded && !hasRole("director") && !hasRole("admin")) ||
+    rolesPendientes;
 
   const userName = profile?.nombre
     ? profile.apellidos
