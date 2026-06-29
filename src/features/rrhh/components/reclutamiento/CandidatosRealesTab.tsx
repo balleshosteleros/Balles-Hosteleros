@@ -93,8 +93,8 @@ function toCandidato(c: CandidatoReal): Candidato {
     ubicacion: c.ubicacion ?? undefined,
     genero: (c.genero === "masculino" || c.genero === "femenino" ? c.genero : undefined) as Candidato["genero"],
     disponibilidad: (c.disponibilidad === "inmediato" || c.disponibilidad === "15_dias" ? c.disponibilidad : undefined) as Candidato["disponibilidad"],
-    // "Sobre ti" en la ficha es la carta de presentación que el candidato
-    // escribió (opcional) en el formulario público; mismo dato, una columna.
+    // "Carta de presentación" en la ficha = lo que el candidato escribió
+    // (opcional) en el formulario público; mismo dato, una sola columna.
     sobreTi: c.carta_presentacion ?? undefined,
     activo: c.activo ?? true,
   };

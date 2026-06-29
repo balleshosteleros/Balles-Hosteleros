@@ -856,7 +856,7 @@ function CandidatoSidebar({
         </Select>
       </Field>
 
-      <Field label="Sobre ti (carta de presentación del candidato)">
+      <Field label="Carta de presentación">
         <Textarea
           defaultValue={candidato.sobreTi ?? ""}
           onBlur={(e) => onUpdate({ ...candidato, sobreTi: e.target.value || undefined })}

@@ -440,7 +440,7 @@ export function FormCandidaturaPublica({
           rows={4}
           value={form.carta_presentacion}
           onChange={(e) => update("carta_presentacion", e.target.value)}
-          placeholder="Cuéntanos por qué te interesa esta oferta…"
+          placeholder="Cuéntanos algo sobre ti y por qué te interesa esta oferta…"
         />
       </div>
 
