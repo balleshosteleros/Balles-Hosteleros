@@ -55,7 +55,7 @@ export async function listCandidatosReales() {
       .select(`
         id, empresa_id, vacante_id, empleado_id, nombre, apellidos, email,
         telefono, dni_nie, cv_url, origen, fase, estado, puntuacion, notas,
-        genero, ubicacion, disponibilidad,
+        genero, ubicacion, disponibilidad, carta_presentacion,
         promovido_at, activo, created_at,
         vacantes(id, titulo, departamento_id, puesto_id)
       `)
@@ -136,9 +136,17 @@ export async function moverCandidatoFase(
       } as const;
     }
 
+    // Cada cambio de fase/estado reinicia el contador de «días en la fase actual».
+    const faseCambia = !!cand && (cand.fase !== fase || cand.estado !== estado);
+    const ahora = new Date().toISOString();
     const { error } = await supabase
       .from("candidatos")
-      .update({ fase, estado, updated_at: new Date().toISOString() })
+      .update({
+        fase,
+        estado,
+        updated_at: ahora,
+        ...(faseCambia ? { fase_actualizada_at: ahora } : {}),
+      })
       .eq("id", id)
       .eq("empresa_id", empresaId);
 
@@ -208,20 +216,42 @@ export async function moverCandidatoAVacante(
     // Verifica que la vacante destino pertenece a la empresa.
     const { data: vac } = await supabase
       .from("vacantes")
-      .select("id")
+      .select("id, titulo")
       .eq("id", vacanteId)
       .eq("empresa_id", empresaId)
       .maybeSingle();
     if (!vac) return { ok: false, error: "La vacante de destino no existe" };
 
+    // Título de la vacante de origen (para mostrar el movimiento en la actividad).
+    let vacanteAnteriorNombre: string | null = null;
+    if (cand?.vacante_id) {
+      const { data: vacOrigen } = await supabase
+        .from("vacantes")
+        .select("titulo")
+        .eq("id", cand.vacante_id)
+        .maybeSingle();
+      vacanteAnteriorNombre = (vacOrigen?.titulo as string | null) ?? null;
+    }
+
+    // Mover de vacante reinicia siempre el contador de «días en la fase actual».
+    const ahora = new Date().toISOString();
     const { error } = await supabase
       .from("candidatos")
-      .update({ vacante_id: vacanteId, fase, estado, updated_at: new Date().toISOString() })
+      .update({
+        vacante_id: vacanteId,
+        fase,
+        estado,
+        updated_at: ahora,
+        fase_actualizada_at: ahora,
+      })
       .eq("id", id)
       .eq("empresa_id", empresaId);
     if (error) throw error;
 
-    // Registra el movimiento de vacante en la actividad del candidato.
+    // Registra el MOVIMIENTO DE VACANTE como evento propio de la actividad: se
+    // guardan los títulos de origen y destino. La fase/estado se conservan como
+    // contexto, pero la presencia de vacante_nueva_nombre marca la fila como un
+    // movimiento de vacante (no un cambio de fase) al renderizar la pestaña.
     if (user && cand) {
       const usuarioNombre = await nombreUsuarioActual(supabase, user.id);
       const { error: histErr } = await supabase.from("candidato_historial").insert({
@@ -231,6 +261,8 @@ export async function moverCandidatoAVacante(
         estado_anterior: cand.estado ?? null,
         fase_nueva: fase,
         estado_nuevo: estado,
+        vacante_anterior_nombre: vacanteAnteriorNombre,
+        vacante_nueva_nombre: (vac.titulo as string | null) ?? null,
         usuario_id: user.id,
         usuario_nombre: usuarioNombre,
         email_enviado: false,
@@ -267,6 +299,49 @@ export async function setCandidatoActivo(id: string, activo: boolean) {
 }
 
 /**
+ * Marca/desmarca al candidato como «visto» (revisado). visto = true sella la
+ * fecha de revisión (`visto_at`); visto = false la borra (vuelve a pendiente).
+ * Se llama automáticamente al abrir la ficha y, manualmente, desde el botón
+ * «Candidato visto» del pie del modal. Idempotente: si ya estaba visto, no
+ * reescribe la fecha (conserva la primera revisión).
+ */
+export async function setCandidatoVisto(id: string, visto: boolean) {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    if (visto) {
+      // Solo sella la fecha si aún no estaba visto (no pisar la primera revisión).
+      const { data: cand } = await supabase
+        .from("candidatos")
+        .select("visto_at")
+        .eq("id", id)
+        .eq("empresa_id", empresaId)
+        .maybeSingle();
+      if (cand?.visto_at) return { ok: true, vistoAt: cand.visto_at as string };
+      const ahora = new Date().toISOString();
+      const { error } = await supabase
+        .from("candidatos")
+        .update({ visto_at: ahora, updated_at: ahora })
+        .eq("id", id)
+        .eq("empresa_id", empresaId);
+      if (error) throw error;
+      return { ok: true, vistoAt: ahora };
+    }
+
+    const { error } = await supabase
+      .from("candidatos")
+      .update({ visto_at: null, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("empresa_id", empresaId);
+    if (error) throw error;
+    return { ok: true, vistoAt: null };
+  } catch (err: unknown) {
+    return { ok: false, error: mensajeError(err) };
+  }
+}
+
+/**
  * Persiste los datos editables de la ficha del candidato (género, ubicación y
  * disponibilidad de incorporación). Solo actualiza los campos presentes en
  * `input`. Best-effort sobre la empresa activa.
@@ -277,6 +352,7 @@ export async function actualizarDatosCandidato(
     genero?: "masculino" | "femenino" | null;
     ubicacion?: string | null;
     disponibilidad?: "inmediato" | "15_dias" | null;
+    carta_presentacion?: string | null;
   },
 ) {
   try {
@@ -287,6 +363,7 @@ export async function actualizarDatosCandidato(
     if ("genero" in input) patch.genero = input.genero || null;
     if ("ubicacion" in input) patch.ubicacion = input.ubicacion?.trim() || null;
     if ("disponibilidad" in input) patch.disponibilidad = input.disponibilidad || null;
+    if ("carta_presentacion" in input) patch.carta_presentacion = input.carta_presentacion?.trim() || null;
 
     const { error } = await supabase
       .from("candidatos")

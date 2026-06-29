@@ -34,6 +34,8 @@ import {
   IdCard,
   ShieldCheck,
   ArrowRightLeft,
+  Circle,
+  CalendarDays,
 } from "lucide-react";
 
 function WhatsAppIcon({ className }: { className?: string }) {
@@ -47,6 +49,20 @@ function WhatsAppIcon({ className }: { className?: string }) {
       <path d="M19.077 4.928A9.94 9.94 0 0 0 12.05 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.748.46 3.45 1.33 4.95L2 22l5.25-1.38a9.91 9.91 0 0 0 4.8 1.22h.004c5.46 0 9.91-4.45 9.91-9.91a9.86 9.86 0 0 0-2.887-6.99zM12.05 20.15h-.003a8.23 8.23 0 0 1-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.23 8.23 0 1 1 15.3-4.38c0 4.54-3.7 8.24-8.31 8.24zm4.52-6.16c-.25-.12-1.47-.72-1.7-.8-.23-.08-.4-.13-.56.13-.17.25-.65.8-.8.97-.15.17-.3.19-.55.06-.25-.12-1.05-.39-2-1.24-.74-.66-1.24-1.47-1.39-1.72-.15-.25-.02-.39.11-.51.11-.11.25-.3.37-.45.13-.15.17-.25.25-.42.08-.17.04-.32-.02-.45-.06-.13-.55-1.34-.76-1.83-.2-.48-.4-.41-.55-.42l-.47-.01a.9.9 0 0 0-.66.31c-.23.25-.86.85-.86 2.06s.88 2.39 1 2.55c.13.17 1.74 2.65 4.21 3.71.59.25 1.05.4 1.41.51.59.19 1.13.16 1.55.1.47-.07 1.47-.6 1.67-1.18.21-.58.21-1.08.15-1.18-.06-.1-.23-.16-.48-.28z" />
     </svg>
   );
+}
+
+/**
+ * Días completos transcurridos desde `desde` (ISO) hasta hoy. Se usa para el
+ * contador de antigüedad en la fase actual, que se reinicia a 0 en cada cambio
+ * de fase (porque `fase_actualizada_at` se actualiza en el movimiento).
+ * Devuelve null si no hay fecha válida.
+ */
+function diasDesde(desde: string | null | undefined): number | null {
+  if (!desde) return null;
+  const t = new Date(desde).getTime();
+  if (Number.isNaN(t)) return null;
+  const ms = Date.now() - t;
+  return Math.max(0, Math.floor(ms / 86_400_000));
 }
 
 function getWhatsAppLink(telefono: string): string {
@@ -65,6 +81,7 @@ import {
   DISPONIBILIDAD_LABELS,
   ORIGEN_LABELS,
   getFasePrincipal,
+  estadoRequiereResenas,
   type Candidato,
   type Disponibilidad,
   type EstadoReclutamiento,
@@ -94,7 +111,7 @@ import {
   type OrigenCandidatoConfig,
 } from "@/features/rrhh/actions/reclutamiento-origenes-actions";
 import { llamarDesdeApp } from "@/features/google-workspace/components/TelefonoDrawer";
-import { setCandidatoActivo } from "@/features/rrhh/actions/candidatos-actions";
+import { setCandidatoActivo, setCandidatoVisto } from "@/features/rrhh/actions/candidatos-actions";
 import { toast } from "sonner";
 
 interface CandidatoDetailModalProps {
@@ -149,6 +166,22 @@ export function CandidatoDetailModal({
 
   const candidatoId = candidato?.id ?? null;
   const candidatoFase = candidato?.fase ?? null;
+  const candidatoVistoAt = candidato?.vistoAt ?? null;
+
+  // Marca al candidato como «visto» (revisado) automáticamente al abrir su ficha,
+  // si todavía no lo estaba. El tick aparece luego en la tarjeta del pipeline.
+  useEffect(() => {
+    if (!open || !candidatoId || candidatoVistoAt) return;
+    let cancel = false;
+    void setCandidatoVisto(candidatoId, true).then((res) => {
+      if (cancel || !res.ok || !res.vistoAt || !candidato) return;
+      onUpdateCandidato({ ...candidato, vistoAt: res.vistoAt });
+    });
+    return () => { cancel = true; };
+    // candidato/onUpdateCandidato se omiten a propósito: solo dispara al cambiar
+    // de candidato o de su estado de visto, no en cada render del padre.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, candidatoId, candidatoVistoAt]);
 
   useEffect(() => {
     if (!candidatoId) { setRespuestaCuest(null); return; }
@@ -190,6 +223,7 @@ export function CandidatoDetailModal({
   if (!candidato) return null;
 
   const cfgEstado = ESTADOS_CONFIG[candidato.fase];
+  const diasEnFase = diasDesde(candidato.faseActualizadaAt);
 
   const total = candidatos.length;
   const goPrev = () => index > 0 && onSelectCandidato(candidatos[index - 1]);
@@ -225,6 +259,21 @@ export function CandidatoDetailModal({
                   {cfgEstado.label}
                 </span>
               </div>
+              {/* Días que el candidato lleva en la fase actual (se reinicia a 0
+                  en cada cambio de fase). */}
+              {diasEnFase !== null && (
+                <div
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-muted/40 text-xs"
+                  title="Días en la fase actual (se reinicia al cambiar de fase)"
+                >
+                  <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="font-semibold text-foreground tabular-nums">
+                    {diasEnFase === 0
+                      ? "Hoy"
+                      : `${diasEnFase} ${diasEnFase === 1 ? "día" : "días"} en fase`}
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -356,15 +405,49 @@ export function CandidatoDetailModal({
           {/* ─── Footer ─── */}
           <div className="flex items-center justify-between px-5 py-3 border-t border-border bg-card shrink-0">
             <div className="flex items-center gap-4">
-              <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
-                <Switch
-                  checked={candidato.marcadoComoNoVisto ?? false}
-                  onCheckedChange={(v) =>
-                    onUpdateCandidato({ ...candidato, marcadoComoNoVisto: v })
-                  }
-                />
-                Marcar como no visto
-              </label>
+              {/* Visto: se marca solo al abrir la ficha. El botón permite volver a
+                  marcarlo como pendiente (sin revisar) si hiciera falta. El tick
+                  aparece en la tarjeta del pipeline. Persiste en BD. */}
+              {candidato.vistoAt ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1.5 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                  onClick={async () => {
+                    onUpdateCandidato({ ...candidato, vistoAt: null });
+                    const res = await setCandidatoVisto(candidato.id, false);
+                    if (!res.ok) {
+                      onUpdateCandidato({ ...candidato, vistoAt: candidato.vistoAt });
+                      toast.error(("error" in res && res.error) || "No se pudo actualizar");
+                    } else {
+                      toast.success("Marcado como pendiente de revisar");
+                    }
+                  }}
+                  title="Quitar el visto (volver a pendiente)"
+                >
+                  <CheckCircle2 className="h-4 w-4" /> Candidato visto
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1.5 text-xs text-muted-foreground"
+                  onClick={async () => {
+                    const res = await setCandidatoVisto(candidato.id, true);
+                    if (!res.ok) {
+                      toast.error(("error" in res && res.error) || "No se pudo actualizar");
+                      return;
+                    }
+                    onUpdateCandidato({ ...candidato, vistoAt: res.vistoAt ?? new Date().toISOString() });
+                    toast.success("Candidato marcado como visto");
+                  }}
+                  title="Marcar como visto"
+                >
+                  <Circle className="h-4 w-4" /> Marcar como visto
+                </Button>
+              )}
               {/* Activo/Inactivo: persiste en BD. Inactivo = sigue en el listado
                   pero desaparece del pipeline de la vacante (no genera ruido). */}
               <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
@@ -460,6 +543,17 @@ export function CandidatoDetailModal({
                 disabled={!destVacanteId || !destEstado || !onMoverVacante}
                 onClick={() => {
                   if (!destVacanteId || !destEstado || !onMoverVacante) return;
+                  // Mismo requisito que en el pipeline: para «Documentación» o
+                  // más adelante (y para descartar, salvo «Papelera») el
+                  // candidato debe tener la entrevista valorada (≥1 reseña, que
+                  // por construcción puntúa todos los criterios).
+                  if (estadoRequiereResenas(destEstado as EstadoReclutamiento) && resenas.length === 0) {
+                    toast.error("Falta valorar la entrevista", {
+                      description:
+                        "Completa las reseñas de la entrevista antes de mover al candidato a esta fase. Solo «Papelera» no lo requiere.",
+                    });
+                    return;
+                  }
                   onMoverVacante(candidato, destVacanteId, destEstado as EstadoReclutamiento);
                 }}
               >
@@ -762,11 +856,11 @@ function CandidatoSidebar({
         </Select>
       </Field>
 
-      <Field label="Sobre ti">
+      <Field label="Sobre ti (carta de presentación del candidato)">
         <Textarea
           defaultValue={candidato.sobreTi ?? ""}
           onBlur={(e) => onUpdate({ ...candidato, sobreTi: e.target.value || undefined })}
-          placeholder="Añadir descripción"
+          placeholder="El candidato no rellenó este campo (es opcional)"
           rows={5}
           className="text-sm resize-none"
         />
@@ -978,6 +1072,16 @@ function ActividadTab({
                       <span className="text-muted-foreground mx-1">a</span>
                     )}
                     <span className="font-medium">{h.vacanteNueva}</span>
+                  </div>
+                  {/* Fase/estado de origen → destino dentro del movimiento. */}
+                  <div className="text-foreground/80 mt-0.5">
+                    <span className="font-medium">{FASES_PRINCIPALES[h.faseAnterior].label}</span>
+                    <span className="text-muted-foreground mx-0.5">/</span>
+                    <span>{ESTADOS_CONFIG[h.estadoAnterior].label}</span>
+                    <span className="text-muted-foreground mx-1">→</span>
+                    <span className="font-medium">{FASES_PRINCIPALES[h.faseNueva].label}</span>
+                    <span className="text-muted-foreground mx-0.5">/</span>
+                    <span>{ESTADOS_CONFIG[h.estadoNuevo].label}</span>
                   </div>
                   <div className="text-muted-foreground mt-0.5">
                     {h.usuario} · {h.fecha}
