@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { FASES_INSPECTOR_CONFIG } from "../data";
 import type { InspectorListItem } from "../types";
 import { llamarDesdeApp } from "@/features/google-workspace/components/TelefonoDrawer";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 
 function telefonoParaWhatsapp(input: string | null | undefined): string {
   if (!input) return "";
@@ -19,6 +21,7 @@ interface Props {
 }
 
 export function InspectoresListado({ inspectores, onSelect }: Props) {
+  const { empresaActual } = useEmpresa();
   if (inspectores.length === 0) {
     return (
       <div className="rounded-lg border bg-muted/20 p-8 text-center text-sm text-muted-foreground">
@@ -101,7 +104,7 @@ export function InspectoresListado({ inspectores, onSelect }: Props) {
                 </td>
                 <td className="px-3 py-2 text-xs text-muted-foreground">
                   {i.ultima_inspeccion_at
-                    ? new Date(i.ultima_inspeccion_at).toLocaleDateString()
+                    ? formatFechaEnZona(i.ultima_inspeccion_at, empresaActual.zonaHoraria)
                     : "—"}
                 </td>
               </tr>

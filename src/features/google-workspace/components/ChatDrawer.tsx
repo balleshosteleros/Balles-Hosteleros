@@ -48,6 +48,7 @@ import {
 } from "@/features/comunicacion/actions/comunicacion-actions";
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaEnZona, formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { getOrganigrama } from "@/features/direccion/actions/organigrama-actions";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { orgChartsPorEmpresa } from "@/features/direccion/data/direccion";
@@ -166,8 +167,9 @@ function limpiarNombre(raw: unknown): string {
   return s;
 }
 
-function mapDbMensaje(r: Record<string, unknown>): Mensaje {
-  const createdAt = r.created_at ? new Date(r.created_at as string) : new Date();
+function mapDbMensaje(r: Record<string, unknown>, tz: string): Mensaje {
+  const createdAtIso = r.created_at ? (r.created_at as string) : new Date().toISOString();
+  const createdAt = new Date(createdAtIso);
   const hoy = new Date();
   const esHoy = createdAt.toDateString() === hoy.toDateString();
   const nombre = limpiarNombre(r.autor_nombre);
@@ -185,8 +187,8 @@ function mapDbMensaje(r: Record<string, unknown>): Mensaje {
     autor: nombre,
     avatar: iniciales,
     texto: (r.texto as string) ?? "",
-    fecha: esHoy ? "Hoy" : createdAt.toLocaleDateString("es-ES"),
-    hora: createdAt.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }),
+    fecha: esHoy ? "Hoy" : formatFechaEnZona(createdAtIso, tz),
+    hora: formatHoraEnZona(createdAtIso, tz),
     fijado: (r.fijado as boolean) ?? false,
     adjuntoPath: (r.adjunto_url as string) ?? null,
     adjuntoTipo: (r.adjunto_tipo as Mensaje["adjuntoTipo"]) ?? null,
@@ -410,7 +412,7 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
       if (res.ok) {
         setMensajes((prev) => {
           const otros = prev.filter((m) => m.canalId !== cId);
-          const nuevos = (res.data as Record<string, unknown>[]).map(mapDbMensaje);
+          const nuevos = (res.data as Record<string, unknown>[]).map((r) => mapDbMensaje(r, empresaActual.zonaHoraria));
           return [...otros, ...nuevos];
         });
       }
@@ -467,7 +469,7 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
       avatar: "TU",
       texto,
       fecha: "Hoy",
-      hora: new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }),
+      hora: formatHoraEnZona(new Date().toISOString(), empresaActual.zonaHoraria),
       fijado: false,
     };
     setMensajes((prev) => [...prev, optimistic]);
@@ -479,7 +481,7 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
         return;
       }
       if (res.data) {
-        const real = mapDbMensaje(res.data as Record<string, unknown>);
+        const real = mapDbMensaje(res.data as Record<string, unknown>, empresaActual.zonaHoraria);
         setMensajes((prev) => prev.map((m) => (m.id === optimistic.id ? real : m)));
       }
     } catch {
@@ -690,7 +692,7 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
         return;
       }
       if (res.data) {
-        const real = mapDbMensaje(res.data as Record<string, unknown>);
+        const real = mapDbMensaje(res.data as Record<string, unknown>, empresaActual.zonaHoraria);
         setMensajes((prev) => [...prev, real]);
       }
     } catch (err) {

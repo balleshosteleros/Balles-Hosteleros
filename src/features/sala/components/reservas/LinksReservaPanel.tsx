@@ -30,6 +30,8 @@ import {
 import { listTicketProductos } from "@/features/sala/actions/ticket-productos-actions";
 import type { ReservaTicketProducto } from "@/features/sala/data/ticket-productos";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 
 const COLUMNAS: ToolbarColumna[] = [
   { campo: "palabraClave", label: "Palabra clave", bloqueada: true },
@@ -38,12 +40,13 @@ const COLUMNAS: ToolbarColumna[] = [
   { campo: "createdAt", label: "Creado" },
 ];
 
-function formatFecha(iso: string) {
-  return new Date(iso).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
+function formatFecha(iso: string, tz: string) {
+  return formatFechaEnZona(iso, tz, { month: "short" });
 }
 
 export function LinksReservaPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
+  const { empresaActual } = useEmpresa();
   const [links, setLinks] = useState<ReservaLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
@@ -287,7 +290,7 @@ export function LinksReservaPanel({ embedded = false }: { embedded?: boolean } =
                     </td>
                   )}
                   {ordenVisible.includes("createdAt") && (
-                    <td className="px-3 py-2 text-muted-foreground">{formatFecha(l.createdAt)}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{formatFecha(l.createdAt, empresaActual.zonaHoraria)}</td>
                   )}
                   <td className="px-3 py-2 text-right">
                     <div className="inline-flex items-center gap-1">

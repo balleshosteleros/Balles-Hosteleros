@@ -7,6 +7,8 @@ import type { ComandaAgrupada, ColumnaKDS, TicketLineaConCocina } from "../types
 import { LineaItem } from "./LineaItem";
 import { useTranscurrido } from "../hooks/useCronometroGlobal";
 import { bordeDeAlerta, useNivelAlerta } from "./AlertaRetraso";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
 interface Props {
   comanda: ComandaAgrupada;
@@ -23,17 +25,6 @@ const LABEL_ACCION: Record<ColumnaKDS, string> = {
   SERVIDO: "—",
 };
 
-function formatHora(iso: string): string {
-  try {
-    return new Date(iso).toLocaleTimeString("es-ES", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return "--:--";
-  }
-}
-
 export function ComandaCard({
   comanda,
   columna,
@@ -41,6 +32,7 @@ export function ComandaCard({
   onRetroceder,
   onLineaClick,
 }: Props) {
+  const { empresaActual } = useEmpresa();
   // Filtramos las líneas que pertenecen a esta columna
   const lineasColumna = comanda.lineas.filter((l) => l.estadoCocina === columna);
 
@@ -80,7 +72,7 @@ export function ComandaCard({
             {transcurrido}
           </div>
           <div className="text-xs text-muted-foreground">
-            {formatHora(comanda.enviadoAt)} · {comanda.listos}/{comanda.total}
+            {formatHoraEnZona(comanda.enviadoAt, empresaActual.zonaHoraria)} · {comanda.listos}/{comanda.total}
           </div>
         </div>
       </div>

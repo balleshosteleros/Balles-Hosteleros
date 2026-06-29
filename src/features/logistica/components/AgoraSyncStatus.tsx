@@ -37,6 +37,8 @@ import {
   type AgoraSyncLog,
 } from "@/features/logistica/actions/agora-actions";
 import type { AgoraSyncStatus } from "@/features/logistica/types/agora";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
 // ─── HELPERS VISUALES ─────────────────────────────────────────────────────────
 
@@ -66,19 +68,10 @@ const STATUS_CONFIG: Record<
   },
 };
 
-function formatFecha(iso: string): string {
-  return new Date(iso).toLocaleString("es-ES", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 // ─── COMPONENTE PRINCIPAL ─────────────────────────────────────────────────────
 
 export function AgoraSyncStatus() {
+  const { empresaActual } = useEmpresa();
   const [lastLog, setLastLog] = useState<AgoraSyncLog | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [errorDialogOpen, setErrorDialogOpen] = useState(false);
@@ -193,7 +186,7 @@ export function AgoraSyncStatus() {
             <div className="space-y-2 text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Último sync:</span>
-                <span className="text-xs">{formatFecha(lastLog.sync_at)}</span>
+                <span className="text-xs">{formatFechaHoraEnZona(lastLog.sync_at, empresaActual.zonaHoraria, { month: "short" })}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Estado:</span>

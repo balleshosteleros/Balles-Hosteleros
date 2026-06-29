@@ -35,6 +35,7 @@ import { DialogCompartirInspectores } from "@/features/calidad/inspecciones/insp
 import { PlantillasNavButton } from "./PlantillasListView";
 import type { InspeccionesTab } from "@/features/calidad/components/CalidadInspeccionesView";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
 const columnasDef: ToolbarColumna[] = [
   { campo: "numero_secuencial", label: "Nº", bloqueada: true },
@@ -57,10 +58,11 @@ const MESES_ES = [
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ];
 
-function partesMadrid(iso: string | null): { year: number; month: number } | null {
+// Partes año/mes de un INSTANTE en la zona de la empresa, para agrupar por mes/año.
+function partesEnZona(iso: string | null, tz: string): { year: number; month: number } | null {
   if (!iso) return null;
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Madrid",
+    timeZone: tz,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -71,33 +73,25 @@ function partesMadrid(iso: string | null): { year: number; month: number } | nul
   return { year, month };
 }
 
-function mesReserva(iso: string | null): string {
-  const p = partesMadrid(iso);
+function mesReserva(iso: string | null, tz: string): string {
+  const p = partesEnZona(iso, tz);
   return p ? MESES_ES[p.month - 1] : "—";
 }
 
-function anoReserva(iso: string | null): string {
-  const p = partesMadrid(iso);
+function anoReserva(iso: string | null, tz: string): string {
+  const p = partesEnZona(iso, tz);
   return p ? String(p.year) : "—";
 }
 
-function formatFechaHora(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString("es-ES", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Europe/Madrid",
-  });
+function formatFechaHora(iso: string | null, tz: string): string {
+  return formatFechaHoraEnZona(iso, tz) || "—";
 }
 
-// Día YYYY-MM-DD en zona Madrid, para comparar publicación vs reserva.
-function diaMadrid(iso: string | null): string | null {
+// Día YYYY-MM-DD en la zona de la empresa, para comparar publicación vs reserva.
+function diaEnZona(iso: string | null, tz: string): string | null {
   if (!iso) return null;
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Madrid",
+    timeZone: tz,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -108,13 +102,15 @@ function diaMadrid(iso: string | null): string | null {
 function CumplimientoBadge({
   createdAt,
   fechaInspeccion,
+  tz,
 }: {
   createdAt: string;
   fechaInspeccion: string | null;
+  tz: string;
 }) {
   if (!fechaInspeccion) return <span className="text-muted-foreground">—</span>;
-  const diaPub = diaMadrid(createdAt);
-  const diaRes = diaMadrid(fechaInspeccion);
+  const diaPub = diaEnZona(createdAt, tz);
+  const diaRes = diaEnZona(fechaInspeccion, tz);
   if (!diaPub || !diaRes) return <span className="text-muted-foreground">—</span>;
   if (diaRes > diaPub) {
     return <Badge className="text-[10px] bg-slate-100 text-slate-600 hover:bg-slate-100">Pendiente</Badge>;
@@ -216,13 +212,13 @@ function EstadoBadge({ estado }: { estado: EnvioResumen["estado"] }) {
   return <Badge className={`text-[10px] ${cn} hover:${cn}`}>{label}</Badge>;
 }
 
-function FirmadoIcon({ envio }: { envio: EnvioResumen }) {
+function FirmadoIcon({ envio, tz }: { envio: EnvioResumen; tz: string }) {
   if (envio.verificado_at) {
     const por = envio.verificado_por_nombre ?? envio.nombre_jefe_sala ?? "Jefe de sala";
     return (
       <span
         className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200"
-        title={`Firmada por ${por} el ${new Date(envio.verificado_at).toLocaleString()}`}
+        title={`Firmada por ${por} el ${formatFechaHoraEnZona(envio.verificado_at, tz)}`}
       >
         <Check className="h-3 w-3" strokeWidth={2.5} />
       </span>
@@ -244,18 +240,18 @@ const ESTADO_LABEL: Record<EnvioResumen["estado"], string> = {
   archivado: "Archivado",
 };
 
-function cumplimientoTexto(e: EnvioResumen): string {
+function cumplimientoTexto(e: EnvioResumen, tz: string): string {
   if (!e.fecha_inspeccion) return "—";
-  const diaPub = diaMadrid(e.created_at);
-  const diaRes = diaMadrid(e.fecha_inspeccion);
+  const diaPub = diaEnZona(e.created_at, tz);
+  const diaRes = diaEnZona(e.fecha_inspeccion, tz);
   if (!diaPub || !diaRes) return "—";
   if (diaRes > diaPub) return "Pendiente";
   if (diaPub === diaRes) return "En fecha";
   return "Pasado de fecha";
 }
 
-function fechaIsoDia(iso: string | null): string {
-  return diaMadrid(iso) ?? "";
+function fechaIsoDia(iso: string | null, tz: string): string {
+  return diaEnZona(iso, tz) ?? "";
 }
 
 interface RealizadasViewProps {
@@ -276,6 +272,7 @@ export function RealizadasView({ onTabChange }: RealizadasViewProps) {
   const [compartirOpen, setCompartirOpen] = useState(false);
   const [selectedEnvioId, setSelectedEnvioId] = useState<string | null>(null);
   const { empresaActual } = useEmpresa();
+  const tz = empresaActual.zonaHoraria;
 
   const reload = useCallback(() => {
     setLoading(true);
@@ -288,13 +285,13 @@ export function RealizadasView({ onTabChange }: RealizadasViewProps) {
   useEffect(() => { reload(); }, [reload, empresaActual.id]);
 
   const mesesUsados = useMemo(
-    () => [...new Set(envios.map((e) => mesReserva(e.fecha_inspeccion)).filter((m) => m !== "—"))]
+    () => [...new Set(envios.map((e) => mesReserva(e.fecha_inspeccion, tz)).filter((m) => m !== "—"))]
       .sort((a, b) => MESES_ES.indexOf(a) - MESES_ES.indexOf(b)),
-    [envios],
+    [envios, tz],
   );
   const anosUsados = useMemo(
-    () => [...new Set(envios.map((e) => anoReserva(e.fecha_inspeccion)).filter((a) => a !== "—"))].sort(),
-    [envios],
+    () => [...new Set(envios.map((e) => anoReserva(e.fecha_inspeccion, tz)).filter((a) => a !== "—"))].sort(),
+    [envios, tz],
   );
   const inspectoresUsados = useMemo(
     () => [...new Set(envios.map((e) => e.nombre_inspector).filter(Boolean))].sort(),
@@ -316,9 +313,9 @@ export function RealizadasView({ onTabChange }: RealizadasViewProps) {
   const acceso = useCallback((e: EnvioResumen, campo: string): unknown => {
     switch (campo) {
       case "numero_secuencial": return e.numero_secuencial;
-      case "mes_reserva": return mesReserva(e.fecha_inspeccion);
-      case "ano_reserva": return anoReserva(e.fecha_inspeccion);
-      case "cumplimiento": return cumplimientoTexto(e);
+      case "mes_reserva": return mesReserva(e.fecha_inspeccion, tz);
+      case "ano_reserva": return anoReserva(e.fecha_inspeccion, tz);
+      case "cumplimiento": return cumplimientoTexto(e, tz);
       case "nombre_inspector": return e.nombre_inspector;
       case "nombre_jefe_sala": return e.nombre_jefe_sala ?? "";
       case "local_nombre": return e.local_nombre ?? "";
@@ -326,11 +323,11 @@ export function RealizadasView({ onTabChange }: RealizadasViewProps) {
       case "nota_final": return e.nota_final;
       case "estado": return ESTADO_LABEL[e.estado];
       case "firmado": return e.verificado_at ? "Firmado" : "Sin firmar";
-      case "created_at": return fechaIsoDia(e.created_at);
-      case "fecha_inspeccion": return fechaIsoDia(e.fecha_inspeccion);
+      case "created_at": return fechaIsoDia(e.created_at, tz);
+      case "fecha_inspeccion": return fechaIsoDia(e.fecha_inspeccion, tz);
       default: return undefined;
     }
-  }, []);
+  }, [tz]);
 
   const filtrados = useMemo(() => {
     let lista = envios.filter((e) => coincideBusquedaUniversal(e, busqueda));
@@ -378,7 +375,7 @@ export function RealizadasView({ onTabChange }: RealizadasViewProps) {
       ),
       td: (e) => (
         <td key="mes_reserva" className="px-3 py-1.5 font-medium">
-          {mesReserva(e.fecha_inspeccion)}
+          {mesReserva(e.fecha_inspeccion, tz)}
         </td>
       ),
     },
@@ -399,7 +396,7 @@ export function RealizadasView({ onTabChange }: RealizadasViewProps) {
       ),
       td: (e) => (
         <td key="ano_reserva" className="px-3 py-1.5 tabular-nums text-xs text-muted-foreground">
-          {anoReserva(e.fecha_inspeccion)}
+          {anoReserva(e.fecha_inspeccion, tz)}
         </td>
       ),
     },
@@ -417,7 +414,7 @@ export function RealizadasView({ onTabChange }: RealizadasViewProps) {
       ),
       td: (e) => (
         <td key="cumplimiento" className="px-3 py-1.5">
-          <CumplimientoBadge createdAt={e.created_at} fechaInspeccion={e.fecha_inspeccion} />
+          <CumplimientoBadge createdAt={e.created_at} fechaInspeccion={e.fecha_inspeccion} tz={tz} />
         </td>
       ),
     },
@@ -557,7 +554,7 @@ export function RealizadasView({ onTabChange }: RealizadasViewProps) {
       ),
       td: (e) => (
         <td key="firmado" className="px-3 py-1.5">
-          <FirmadoIcon envio={e} />
+          <FirmadoIcon envio={e} tz={tz} />
         </td>
       ),
     },
@@ -577,7 +574,7 @@ export function RealizadasView({ onTabChange }: RealizadasViewProps) {
       ),
       td: (e) => (
         <td key="created_at" className="px-3 py-1.5 text-xs text-muted-foreground tabular-nums">
-          {formatFechaHora(e.created_at)}
+          {formatFechaHora(e.created_at, tz)}
         </td>
       ),
     },
@@ -597,7 +594,7 @@ export function RealizadasView({ onTabChange }: RealizadasViewProps) {
       ),
       td: (e) => (
         <td key="fecha_inspeccion" className="px-3 py-1.5 text-xs tabular-nums">
-          {formatFechaHora(e.fecha_inspeccion)}
+          {formatFechaHora(e.fecha_inspeccion, tz)}
         </td>
       ),
     },
@@ -722,6 +719,7 @@ export function RealizadasView({ onTabChange }: RealizadasViewProps) {
 
       <EnvioDetailDialog
         envioId={selectedEnvioId}
+        tz={tz}
         onClose={() => setSelectedEnvioId(null)}
         onSaved={() => { setSelectedEnvioId(null); reload(); }}
       />
@@ -731,10 +729,12 @@ export function RealizadasView({ onTabChange }: RealizadasViewProps) {
 
 function EnvioDetailDialog({
   envioId,
+  tz,
   onClose,
   onSaved,
 }: {
   envioId: string | null;
+  tz: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -799,10 +799,10 @@ function EnvioDetailDialog({
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div><span className="text-muted-foreground text-xs">Inspector:</span> <span className="font-medium">{envio.nombre_inspector}</span></div>
               <div><span className="text-muted-foreground text-xs">Teléfono:</span> {envio.telefono_inspector ?? "—"}</div>
-              <div><span className="text-muted-foreground text-xs">Fecha reserva:</span> {formatFechaHora(envio.fecha_inspeccion)}</div>
-              <div><span className="text-muted-foreground text-xs">Publicada:</span> {formatFechaHora(envio.created_at)}</div>
+              <div><span className="text-muted-foreground text-xs">Fecha reserva:</span> {formatFechaHora(envio.fecha_inspeccion, tz)}</div>
+              <div><span className="text-muted-foreground text-xs">Publicada:</span> {formatFechaHora(envio.created_at, tz)}</div>
               <div><span className="text-muted-foreground text-xs">Local:</span> {envio.local_nombre ?? "—"}</div>
-              <div><span className="text-muted-foreground text-xs">Cumplimiento:</span> <CumplimientoBadge createdAt={envio.created_at} fechaInspeccion={envio.fecha_inspeccion} /></div>
+              <div><span className="text-muted-foreground text-xs">Cumplimiento:</span> <CumplimientoBadge createdAt={envio.created_at} fechaInspeccion={envio.fecha_inspeccion} tz={tz} /></div>
               <div className="col-span-2"><span className="text-muted-foreground text-xs">Plantilla:</span> <PlantillaBadge nombre={envio.plantilla_nombre} version={envio.plantilla_version} /></div>
               <div className="col-span-2"><span className="text-muted-foreground text-xs">Jefe de sala:</span> {envio.nombre_jefe_sala ?? "—"}</div>
               {envio.notas_por_seccion && Object.keys(envio.notas_por_seccion).length > 0 && (
@@ -815,7 +815,7 @@ function EnvioDetailDialog({
                 <span className="text-muted-foreground text-xs">Firma in-situ:</span>{" "}
                 {envio.verificado_at ? (
                   <span className="text-emerald-700">
-                    ✓ Firmada el {formatFechaHora(envio.verificado_at)}
+                    ✓ Firmada el {formatFechaHora(envio.verificado_at, tz)}
                     {envio.verificado_por_nombre
                       ? ` por ${envio.verificado_por_nombre}`
                       : ""}

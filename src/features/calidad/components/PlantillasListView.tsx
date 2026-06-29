@@ -35,6 +35,8 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 
 const columnasDef: ToolbarColumna[] = [
   { campo: "numero_secuencial", label: "Nº", bloqueada: true },
@@ -47,10 +49,8 @@ const columnasDef: ToolbarColumna[] = [
   { campo: "acciones", label: "", bloqueada: true },
 ];
 
-function formatFecha(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return d.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" });
+function formatFecha(iso: string | null, tz: string): string {
+  return formatFechaEnZona(iso, tz) || "—";
 }
 
 interface PlantillasListViewProps {
@@ -60,6 +60,7 @@ interface PlantillasListViewProps {
 
 export function PlantillasListView({ onTabChange }: PlantillasListViewProps) {
   const router = useRouter();
+  const { empresaActual } = useEmpresa();
   const [plantillas, setPlantillas] = useState<PlantillaResumen[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
@@ -154,6 +155,7 @@ export function PlantillasListView({ onTabChange }: PlantillasListViewProps) {
                   <FilaPlantilla
                     key={p.id}
                     p={p}
+                    tz={empresaActual.zonaHoraria}
                     columnas={columnasRender}
                     onOpen={() => router.push(`/calidad/auditorias/plantillas/${p.id}`)}
                     onClonar={async () => {
@@ -199,12 +201,14 @@ export function PlantillasListView({ onTabChange }: PlantillasListViewProps) {
 
 function FilaPlantilla({
   p,
+  tz,
   columnas,
   onOpen,
   onClonar,
   onArchivar,
 }: {
   p: PlantillaResumen;
+  tz: string;
   columnas: ToolbarColumna[];
   onOpen: () => void;
   onClonar: () => void;
@@ -228,7 +232,7 @@ function FilaPlantilla({
     ) : (
       <span className="text-muted-foreground">—</span>
     ),
-    created_at: <span className="text-xs text-muted-foreground">{formatFecha(p.created_at)}</span>,
+    created_at: <span className="text-xs text-muted-foreground">{formatFecha(p.created_at, tz)}</span>,
     acciones: (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

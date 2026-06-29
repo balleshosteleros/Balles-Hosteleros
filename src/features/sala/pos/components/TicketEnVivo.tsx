@@ -4,22 +4,26 @@ import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePOSTicket } from "../hooks/usePOSTicket";
 import { formatEur } from "../services/calculo-ticket";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaEnZona, formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
 export function TicketEnVivo() {
   const { state, dispatch, totales } = usePOSTicket();
+  const { empresaActual } = useEmpresa();
+  const ahoraIso = new Date().toISOString();
 
   return (
     <div className="flex h-full flex-col bg-background border rounded-md overflow-hidden">
       {/* Cabecera */}
       <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-2 text-xs">
         <div>
-          <div className="font-semibold">{new Date().toLocaleDateString("es-ES")}</div>
+          <div className="font-semibold">{formatFechaEnZona(ahoraIso, empresaActual.zonaHoraria)}</div>
           <div className="text-muted-foreground">
             {state.mesaId ? "Mesa seleccionada" : "Barra / mostrador"}
           </div>
         </div>
         <div className="text-right">
-          <div className="font-semibold">{new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</div>
+          <div className="font-semibold">{formatHoraEnZona(ahoraIso, empresaActual.zonaHoraria)}</div>
           <div className="text-muted-foreground">{state.comensales} comensal{state.comensales !== 1 ? "es" : ""}</div>
         </div>
       </div>

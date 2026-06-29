@@ -26,6 +26,8 @@ import type { InspectorDetalle } from "../types";
 import { eliminarInspector, getInspectorDetalle } from "../actions";
 import { llamarDesdeApp } from "@/features/google-workspace/components/TelefonoDrawer";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 
 function telefonoParaWhatsapp(input: string | null | undefined): string {
   if (!input) return "";
@@ -47,6 +49,7 @@ export function InspectorDetailDialog({
   onOpenChange,
   onChanged,
 }: Props) {
+  const { empresaActual } = useEmpresa();
   const [data, setData] = useState<InspectorDetalle | null>(null);
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -242,7 +245,7 @@ export function InspectorDetailDialog({
                             </td>
                             <td className="px-2 py-1.5 text-muted-foreground">
                               {h.fecha_inspeccion
-                                ? new Date(h.fecha_inspeccion).toLocaleDateString()
+                                ? formatFechaEnZona(h.fecha_inspeccion, empresaActual.zonaHoraria)
                                 : "—"}
                             </td>
                             <td className="px-2 py-1.5 font-semibold">

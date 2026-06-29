@@ -420,6 +420,7 @@ export function PedidosView() {
         <DetallePedido
           pedido={detallePedido}
           albaran={albaranes.find((a) => a.id === detallePedido.albaranId) || null}
+          zonaHoraria={empresaActual.zonaHoraria}
           onBack={() => setDetallePedido(null)}
           onConfirmar={handleConfirmarPedido}
           onOpenAlbaran={openAlbaran}
@@ -436,6 +437,7 @@ export function PedidosView() {
         <DetalleAlbaran
           albaran={detalleAlbaran}
           pedidoOrigen={pedidos.find((p) => p.id === detalleAlbaran.pedidoId) || null}
+          zonaHoraria={empresaActual.zonaHoraria}
           onBack={() => setDetalleAlbaran(null)}
           onEntregar={handleEntregarAlbaran}
           onDelete={handleDeleteAlbaran}

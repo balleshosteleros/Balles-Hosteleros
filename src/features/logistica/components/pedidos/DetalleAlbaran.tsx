@@ -9,6 +9,7 @@ import { EstadoAlbaranBadge } from "./BadgesPedido";
 import { AlbaranUploadModal } from "./AlbaranUploadModal";
 import { ComparativaAlbaran } from "./ComparativaAlbaran";
 import { calcularTotalesLineas, diaSemanaDeFechaISO, formatoHoraReparto, type Albaran, type Pedido, type AnalisisAlbaran, type DocumentoAdjunto } from "@/features/logistica/data/pedidos";
+import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { updateAlbaranNumeroProveedor, subirDocumentoAlbaran } from "@/features/logistica/actions/albaranes-actions";
 import { ArrowLeft, FileText, Send, Paperclip, CheckCircle2, Loader2, AlertTriangle, FileWarning, Eye, Receipt, Trash2 } from "lucide-react";
 import {
@@ -22,13 +23,14 @@ const supabase = createClient();
 interface Props {
   albaran: Albaran;
   pedidoOrigen: Pedido | null;
+  zonaHoraria: string;
   onBack: () => void;
   onEntregar: (albaran: Albaran) => void;
   onDelete?: (albaran: Albaran) => void;
   onGenerarFactura?: (albaran: Albaran) => void;
 }
 
-export function DetalleAlbaran({ albaran, pedidoOrigen, onBack, onEntregar, onDelete, onGenerarFactura }: Props) {
+export function DetalleAlbaran({ albaran, pedidoOrigen, zonaHoraria, onBack, onEntregar, onDelete, onGenerarFactura }: Props) {
   const totales = calcularTotalesLineas(albaran.lineas);
   const diaReparto = pedidoOrigen?.fechaEntrega
     ? `${pedidoOrigen.fechaEntrega}${diaSemanaDeFechaISO(pedidoOrigen.fechaEntrega) ? ` · ${diaSemanaDeFechaISO(pedidoOrigen.fechaEntrega)}` : ""}`
@@ -192,7 +194,7 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, onBack, onEntregar, onDe
                   <Paperclip className="h-4 w-4 text-muted-foreground shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-foreground truncate">{doc.fileName}</p>
-                    <p className="text-xs text-muted-foreground">{new Date(doc.uploadedAt).toLocaleString("es-ES")} — {doc.uploadedBy}</p>
+                    <p className="text-xs text-muted-foreground">{formatFechaHoraEnZona(doc.uploadedAt, zonaHoraria)} — {doc.uploadedBy}</p>
                   </div>
                   {doc.hayAlerta ? (
                     <Badge className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-0 text-[10px] gap-1 shrink-0">

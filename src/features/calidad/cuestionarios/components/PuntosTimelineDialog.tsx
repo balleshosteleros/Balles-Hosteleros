@@ -17,6 +17,8 @@ import type {
   PuntoTimeline,
   EstadoPunto,
 } from "@/features/calidad/cuestionarios/types";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 
 interface Props {
   campanaId?: string;
@@ -31,6 +33,7 @@ export function PuntosTimelineDialog({
   onOpenChange,
   onAbrirEmpleado,
 }: Props) {
+  const { empresaActual } = useEmpresa();
   const [puntos, setPuntos] = useState<PuntoTimeline[]>([]);
   const [loading, setLoading] = useState(false);
   const [filtroEmpleado, setFiltroEmpleado] = useState("");
@@ -113,7 +116,7 @@ export function PuntosTimelineDialog({
                     <div className="text-sm">{p.texto}</div>
                     <div className="text-xs text-muted-foreground mt-1">
                       {p.empleadoNombre} · {labelPeriodoCorto(p.campanaPeriodo)} ·{" "}
-                      {new Date(p.createdAt).toLocaleDateString("es-ES")}
+                      {formatFechaEnZona(p.createdAt, empresaActual.zonaHoraria)}
                     </div>
                   </div>
                   <EstadoPuntoBadge estado={p.estado} />

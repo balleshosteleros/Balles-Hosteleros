@@ -6,12 +6,15 @@ import { Badge } from "@/components/ui/badge";
 import { listHistorial } from "../actions/recetas-actions";
 import type { HistorialEntry } from "../types";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
 interface Props {
   recetaId: string;
 }
 
 export function HistorialTab({ recetaId }: Props) {
+  const { empresaActual } = useEmpresa();
   const [entries, setEntries] = useState<HistorialEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -58,7 +61,7 @@ export function HistorialTab({ recetaId }: Props) {
                 <User className="h-3 w-3" />
                 {e.usuario_nombre ?? "Sistema"}
               </span>
-              <span>{new Date(e.created_at).toLocaleString("es-ES")}</span>
+              <span>{formatFechaHoraEnZona(e.created_at, empresaActual.zonaHoraria)}</span>
             </div>
             {e.nota && (
               <p className="text-xs text-foreground mt-1.5 flex items-start gap-1">

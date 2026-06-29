@@ -28,6 +28,7 @@ import { DirectorioEmpleados } from "@/features/llamadas-internas/components/Dir
 import { listHistorialLlamadas } from "@/features/llamadas-internas/actions/llamadas-actions";
 import type { LlamadaHistorialItem } from "@/features/llamadas-internas/types";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaEnZona, formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
 /** localStorage: última vez que el usuario vio la pestaña Recientes (limpia el badge). */
 export const LLAMADAS_VISTAS_KEY = "bh_llamadas_vistas_at";
@@ -49,20 +50,21 @@ function formatDuration(seconds: number): string {
   return `${m}:${s}`;
 }
 
-/** "Hoy 10:15" / "Ayer 18:45" / "12/06 09:03" a partir de un ISO. */
-function formatHora(iso: string): string {
-  const d = new Date(iso);
+/** "Hoy 10:15" / "Ayer 18:45" / "12/06 09:03" a partir de un ISO, en la zona de la empresa. */
+function formatHora(iso: string, tz: string): string {
   const now = new Date();
   const ayer = new Date(now);
   ayer.setDate(now.getDate() - 1);
-  const hhmm = d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
-  if (d.toDateString() === now.toDateString()) return `Hoy ${hhmm}`;
-  if (d.toDateString() === ayer.toDateString()) return `Ayer ${hhmm}`;
-  return `${d.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" })} ${hhmm}`;
+  const hhmm = formatHoraEnZona(iso, tz);
+  // Comparación de día en la zona de la empresa (no la del servidor).
+  const diaInstante = formatFechaEnZona(iso, tz);
+  if (diaInstante === formatFechaEnZona(now.toISOString(), tz)) return `Hoy ${hhmm}`;
+  if (diaInstante === formatFechaEnZona(ayer.toISOString(), tz)) return `Ayer ${hhmm}`;
+  return `${formatFechaEnZona(iso, tz, { year: undefined })} ${hhmm}`;
 }
 
 /** Mapea una llamada interna del historial al item visual de Recientes. */
-function mapHistorialToRecent(h: LlamadaHistorialItem): RecentCall {
+function mapHistorialToRecent(h: LlamadaHistorialItem, tz: string): RecentCall {
   const entrante = h.direccion === "entrante";
   const perdida =
     entrante && (h.estado === "perdida" || (h.estado === "cancelada" && !h.conectadaAt));
@@ -72,7 +74,7 @@ function mapHistorialToRecent(h: LlamadaHistorialItem): RecentCall {
     nombre: h.contraparteNombre,
     tipo: perdida ? "perdida" : entrante ? "entrante" : "saliente",
     duracion: h.duracionSeg > 0 ? formatDuration(h.duracionSeg) : undefined,
-    hora: formatHora(h.iniciadaAt),
+    hora: formatHora(h.iniciadaAt, tz),
   };
 }
 
@@ -104,7 +106,7 @@ export function TelefonoDrawer({ children }: { children: ReactNode }) {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // La configuración del teléfono vive en Ajustes → Herramientas → Teléfono.
-  const { ajustes } = useEmpresa();
+  const { ajustes, empresaActual } = useEmpresa();
   const isConnected = ajustes.telefonia.proveedor !== "none";
 
   // Carga el historial real de llamadas internas al abrir el teléfono.
@@ -114,7 +116,7 @@ export function TelefonoDrawer({ children }: { children: ReactNode }) {
     setCargandoRec(true);
     listHistorialLlamadas(50)
       .then((r) => {
-        if (alive) setRecientes(r.data.map(mapHistorialToRecent));
+        if (alive) setRecientes(r.data.map((h) => mapHistorialToRecent(h, empresaActual.zonaHoraria)));
       })
       .finally(() => {
         if (alive) setCargandoRec(false);

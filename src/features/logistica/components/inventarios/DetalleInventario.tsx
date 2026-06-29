@@ -7,18 +7,20 @@ import { ArrowLeft, CheckCircle2, Undo2, FileDown, Calendar, MapPin, FileText, U
 import ConteoSection from "./ConteoSection";
 import ResultadoInventario from "./ResultadoInventario";
 import { toast } from "sonner";
+import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
 interface Props {
   inventario: Inventario;
   productos: ProductoStock[];
   plantilla?: PlantillaInventario;
+  zonaHoraria: string;
   onBack: () => void;
   onUpdate: (inv: Inventario) => void;
   onConfirmar: (inv: Inventario) => void;
   onDeshacerConfirmacion: (inv: Inventario) => void;
 }
 
-export default function DetalleInventario({ inventario, productos, plantilla, onBack, onUpdate, onConfirmar, onDeshacerConfirmacion }: Props) {
+export default function DetalleInventario({ inventario, productos, plantilla, zonaHoraria, onBack, onUpdate, onConfirmar, onDeshacerConfirmacion }: Props) {
   const isConfirmed = inventario.estado === "Confirmado";
   const resultados = calcularResultados(inventario, productos);
   const validacion = validarPlantillaCompleta(inventario, plantilla);
@@ -104,7 +106,7 @@ export default function DetalleInventario({ inventario, productos, plantilla, on
 
       {isConfirmed && inventario.confirmadoAt && (
         <div className="rounded-lg border bg-emerald-50 dark:bg-emerald-900/20 p-3 text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
-          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> Confirmado el {new Date(inventario.confirmadoAt).toLocaleString("es-ES")} por {inventario.confirmadoPor}
+          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> Confirmado el {formatFechaHoraEnZona(inventario.confirmadoAt, zonaHoraria)} por {inventario.confirmadoPor}
         </div>
       )}
 

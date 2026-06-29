@@ -317,6 +317,7 @@ export function InventariosView() {
           inventario={detalleInv}
           productos={stock}
           plantilla={plantilla}
+          zonaHoraria={empresaActual.zonaHoraria}
           onBack={() => setDetalleId(null)}
           onUpdate={handleUpdateInventario}
           onConfirmar={handleConfirmar}

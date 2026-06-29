@@ -5,10 +5,12 @@ import { formatEur } from "@/shared/lib/numero";
 import { EstadoPedidoBadge } from "./BadgesPedido";
 import { calcularTotalesLineas, evaluarReparto, describirReparto, formatoHoraReparto, type Pedido, type Albaran } from "@/features/logistica/data/pedidos";
 import { ArrowLeft, FileText, MessageCircle, AlertTriangle, PackageCheck, Mail } from "lucide-react";
+import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
 interface Props {
   pedido: Pedido;
   albaran: Albaran | null;
+  zonaHoraria: string;
   onBack: () => void;
   onConfirmar: (pedido: Pedido) => void;
   onOpenAlbaran: (albaranId: string) => void;
@@ -16,7 +18,7 @@ interface Props {
   onEnviarWhatsapp: (pedido: Pedido) => void;
 }
 
-export function DetallePedido({ pedido, albaran, onBack, onConfirmar, onOpenAlbaran, onEnviarProveedor, onEnviarWhatsapp }: Props) {
+export function DetallePedido({ pedido, albaran, zonaHoraria, onBack, onConfirmar, onOpenAlbaran, onEnviarProveedor, onEnviarWhatsapp }: Props) {
   const totales = calcularTotalesLineas(pedido.lineas);
   const bloqueado = pedido.estado === "Confirmado"; // tiene albarán → solo lectura
   const canConfirm = !bloqueado && !pedido.albaranId;   // "Crear albarán"
@@ -88,7 +90,7 @@ export function DetallePedido({ pedido, albaran, onBack, onConfirmar, onOpenAlba
             </div>
             {pedido.enviadoAt && (
               <>
-                <div><span className="text-muted-foreground text-xs block">Enviado el</span><span className="font-medium text-emerald-700 dark:text-emerald-400">{new Date(pedido.enviadoAt).toLocaleString("es-ES")}</span></div>
+                <div><span className="text-muted-foreground text-xs block">Enviado el</span><span className="font-medium text-emerald-700 dark:text-emerald-400">{formatFechaHoraEnZona(pedido.enviadoAt, zonaHoraria)}</span></div>
                 <div><span className="text-muted-foreground text-xs block">Enviado a</span><span className="font-medium text-emerald-700 dark:text-emerald-400">{pedido.enviadoEmail}</span></div>
               </>
             )}

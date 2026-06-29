@@ -17,11 +17,12 @@ import { ReglaModal } from "@/features/sala/reglas/components/ReglaModal";
 import { VigenciaBadge } from "@/features/sala/reglas/components/VigenciaBadge";
 import { resolverValorEfectivo } from "@/features/sala/reglas/lib/resolver";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 
-function hoyEnMadridISO(): string {
-  // Sin librerías: usamos toLocaleDateString con la TZ Europe/Madrid.
+function hoyEnZonaISO(tz: string): string {
+  // Sin librerías: usamos Intl con la zona de la empresa.
   const fmt = new Intl.DateTimeFormat("sv-SE", {
-    timeZone: "Europe/Madrid",
+    timeZone: tz,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -93,8 +94,9 @@ function SeccionMetrica({
   const [modalOpen, setModalOpen] = useState(false);
   const [editando, setEditando] = useState<EmpresaReservasRegla | null>(null);
   const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
+  const { empresaActual } = useEmpresa();
 
-  const hoy = useMemo(() => hoyEnMadridISO(), []);
+  const hoy = useMemo(() => hoyEnZonaISO(empresaActual.zonaHoraria), [empresaActual.zonaHoraria]);
   const valorHoyComida = resolverValorEfectivo(reglas, hoy, "COMIDA", metrica);
   const valorHoyCena = resolverValorEfectivo(reglas, hoy, "CENA", metrica);
 

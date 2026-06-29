@@ -10,6 +10,8 @@ import { formatEur, calcularTotales } from "../services/calculo-ticket";
 import { htmlTicketVenta, imprimirHTML } from "../services/impresion";
 import type { Ticket } from "../types";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
 interface Props {
   open: boolean;
@@ -17,6 +19,7 @@ interface Props {
 }
 
 export function HistorialTickets({ open, onOpenChange }: Props) {
+  const { empresaActual } = useEmpresa();
   const [tickets, setTickets] = React.useState<Ticket[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [trabajando, setTrabajando] = React.useState<string | null>(null);
@@ -128,10 +131,7 @@ export function HistorialTickets({ open, onOpenChange }: Props) {
                   <tr key={t.id} className="border-t">
                     <td className="px-3 py-2 font-mono font-semibold">{t.numero}</td>
                     <td className="px-3 py-2 text-muted-foreground">
-                      {new Date(t.abiertoAt).toLocaleTimeString("es-ES", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                      {formatHoraEnZona(t.abiertoAt, empresaActual.zonaHoraria)}
                     </td>
                     <td className="px-3 py-2">
                       <span className={`rounded px-2 py-0.5 text-xs font-semibold ${colorEstado(t.estado)}`}>
