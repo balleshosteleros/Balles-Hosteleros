@@ -37,7 +37,6 @@ import {
   Store,
 } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/shared/lib/utils";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { MapPicker } from "@/features/ajustes/components/locales/MapPicker";
 import { AsignacionEmpleadosLocalDialog } from "@/features/ajustes/components/locales/AsignacionEmpleadosLocalDialog";
@@ -57,15 +56,6 @@ interface Local {
   activo: boolean;
   empleados_count: number;
 }
-
-const COLOR_DOTS: Record<string, string> = {
-  "bg-violet-500": "bg-violet-500",
-  "bg-emerald-500": "bg-emerald-500",
-  "bg-rose-500": "bg-rose-500",
-  "bg-sky-500": "bg-sky-500",
-  "bg-amber-500": "bg-amber-500",
-  "bg-teal-500": "bg-teal-500",
-};
 
 const DRAFT_INICIAL: LocalInput = {
   nombre: "",
@@ -238,7 +228,6 @@ export function LocalesEmpresaTab({ empresaId }: LocalesEmpresaTabProps = {}) {
                 className="grid grid-cols-[1fr_2fr_auto_auto] gap-3 px-4 py-3 border-t items-center hover:bg-muted/30 transition-colors"
               >
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", COLOR_DOTS[c.color] ?? "bg-violet-500")} />
                   <button
                     onClick={() => abrirEditar(c)}
                     className="font-medium text-left hover:text-primary truncate"

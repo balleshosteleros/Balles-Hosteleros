@@ -2,11 +2,11 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import { getEmpresaActivaForUser, getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
+import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import {
   getHorarioDia,
   semanaDeFecha,
-  ahoraEnMadrid,
   type HorarioDia,
 } from "@/features/rrhh/utils/horario-empleado";
 
@@ -58,7 +58,11 @@ export async function getMobileHorarioSemana(
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { fecha: hoy } = ahoraEnMadrid();
+  const admin = createAdminClient();
+  // "Hoy" en la zona horaria de la empresa activa del usuario (PRP-069).
+  const empresaActivaId = user ? await getEmpresaActivaForUser(admin, user.id) : null;
+  const tz = await getZonaHorariaEmpresa(admin, empresaActivaId);
+  const { fecha: hoy } = ahoraEnZona(tz);
   const fechaBase = sumarDias(hoy, offsetSemanas * 7);
   const { lunes, domingo } = semanaDeFecha(fechaBase);
 
@@ -80,9 +84,6 @@ export async function getMobileHorarioSemana(
     dias: diasVacios,
   };
   if (!user) return noDisponible;
-
-  const admin = createAdminClient();
-  const empresaActivaId = await getEmpresaActivaForUser(admin, user.id);
 
   const { data: empleado } = await admin
     .from("empleados")
