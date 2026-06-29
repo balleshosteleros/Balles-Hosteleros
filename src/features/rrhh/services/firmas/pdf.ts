@@ -15,19 +15,33 @@ const TIPO_LABEL: Record<TipoEventoFirma, string> = {
   expirado: "Plazo expirado",
 };
 
-function fmtFecha(iso: string): string {
+/**
+ * Fecha/hora del acta en la zona horaria de la empresa donde se firma (PRP-069),
+ * con la etiqueta de zona (p. ej. "29/06/2026 14:32:05 (CEST)") para que sea
+ * legible y a la vez trazable. Antes se sellaba en UTC fijo. La BD sigue en UTC.
+ */
+function fmtFecha(iso: string, tz: string): string {
   const d = new Date(iso);
-  return (
-    d.toLocaleString("es-ES", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      timeZone: "UTC",
-    }) + " UTC"
-  );
+  const partes = d.toLocaleString("es-ES", {
+    timeZone: tz,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  // Etiqueta de zona corta (CEST, WEST, GMT+1…) para constancia en el acta.
+  let zona = "";
+  try {
+    const tzName = new Intl.DateTimeFormat("es-ES", { timeZone: tz, timeZoneName: "short" })
+      .formatToParts(d)
+      .find((p) => p.type === "timeZoneName")?.value;
+    if (tzName) zona = ` (${tzName})`;
+  } catch {
+    zona = "";
+  }
+  return partes + zona;
 }
 
 export type DatosActa = {
@@ -37,6 +51,8 @@ export type DatosActa = {
   modalidad: string;
   validez: string;
   empresaNombre: string;
+  /** Zona horaria (IANA) de la empresa, para sellar el acta en hora local (PRP-069). */
+  zonaHoraria: string;
   empleadoNombre: string;
   empleadoDni: string | null;
   empleadoEmail: string | null;
@@ -133,8 +149,8 @@ export async function generarActa(
     "Firmante",
     `${datos.empleadoNombre}${datos.empleadoDni ? ` · DNI/NIE ${datos.empleadoDni}` : ""}${datos.empleadoEmail ? ` · ${datos.empleadoEmail}` : ""}`,
   );
-  drawField("Enviado por", `${datos.enviadoPor} · ${fmtFecha(datos.enviadoEn)}`);
-  drawField("Firmado el", fmtFecha(datos.firmadoEn));
+  drawField("Enviado por", `${datos.enviadoPor} · ${fmtFecha(datos.enviadoEn, datos.zonaHoraria)}`);
+  drawField("Firmado el", fmtFecha(datos.firmadoEn, datos.zonaHoraria));
   drawField("Modalidad de firma", datos.modalidad);
   drawField(
     "Datos del firmante en el momento de la firma",
@@ -198,7 +214,7 @@ export async function generarActa(
       page = pdf.addPage([pageWidth, pageHeight]);
       y = pageHeight - margin;
     }
-    const cabecera = `${fmtFecha(ev.ocurridoEn)}  ·  ${TIPO_LABEL[ev.tipo] ?? ev.tipo}`;
+    const cabecera = `${fmtFecha(ev.ocurridoEn, datos.zonaHoraria)}  ·  ${TIPO_LABEL[ev.tipo] ?? ev.tipo}`;
     page.drawText(cabecera, { x: margin, y, size: 9, font: fontBold, color: colorTexto });
     y -= 11;
     const detalle: string[] = [];

@@ -495,6 +495,9 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
       modalidad: doc.modalidad as string,
       validez: doc.validez as string,
       empresaNombre: (empresa?.nombre as string) ?? "—",
+      zonaHoraria:
+        ((empresa?.config_operativa as Record<string, unknown> | null)?.zonaHoraria as string | undefined)?.trim() ||
+        "Europe/Madrid",
       empleadoNombre: `${emp?.nombre ?? ""} ${emp?.apellidos ?? ""}`.trim() || "—",
       empleadoDni: (emp?.dni_nie as string | null) ?? null,
       empleadoEmail,
