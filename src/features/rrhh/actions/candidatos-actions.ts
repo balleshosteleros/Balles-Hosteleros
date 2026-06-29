@@ -7,6 +7,7 @@ import {
   normalizarNombre,
   normalizarNombreOrNull,
 } from "@/shared/lib/normalizar-nombre";
+import type { FasePrincipal } from "@/features/rrhh/data/reclutamiento";
 
 async function getContext() {
   const supabase = await createClient();
@@ -145,15 +146,7 @@ export async function createCandidato(input: {
 
 export async function moverCandidatoFase(
   id: string,
-  fase:
-    | "seleccion"
-    | "formacion"
-    | "descartado"
-    // Aliases legacy aceptados por compat con datos antiguos de BD.
-    | "nuevo"
-    | "en_progreso"
-    | "oferta"
-    | "seleccionado",
+  fase: FasePrincipal,
   estado: string,
 ) {
   try {
@@ -227,14 +220,7 @@ export async function moverCandidatoFase(
 export async function moverCandidatoAVacante(
   id: string,
   vacanteId: string,
-  fase:
-    | "seleccion"
-    | "formacion"
-    | "descartado"
-    | "nuevo"
-    | "en_progreso"
-    | "oferta"
-    | "seleccionado",
+  fase: FasePrincipal,
   estado: string,
 ) {
   try {

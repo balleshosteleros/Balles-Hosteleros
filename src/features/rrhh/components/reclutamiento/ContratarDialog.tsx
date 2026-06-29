@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { listPuestosCatalogo, listDepartamentosCatalogo } from "@/features/rrhh/actions/vacantes-actions";
 import { listLocales } from "@/features/ajustes/actions/locales-actions";
 import { contratarCandidato } from "@/features/rrhh/actions/contratacion-actions";
+import { iniciarContratacion } from "@/features/rrhh/actions/contratacion-fase-actions";
 
 interface PuestoRef { id: string; nombre: string; departamento_id?: string | null }
 interface DeptoRef { id: string; nombre: string; area?: string | null }
@@ -30,11 +31,18 @@ interface Props {
   onOpenChange: (o: boolean) => void;
   candidato: ContratarCandidatoLite | null;
   onDone: () => void;
+  /**
+   * "final": contratación definitiva (comportamiento por defecto).
+   * "iniciar": entrada en la fase Contratación (PRP-070): crea el empleado,
+   *   envía el alta a la gestoría y el contrato interno a firmar.
+   */
+  variante?: "final" | "iniciar";
 }
 
 const hoy = () => new Date().toISOString().slice(0, 10);
 
-export function ContratarDialog({ open, onOpenChange, candidato, onDone }: Props) {
+export function ContratarDialog({ open, onOpenChange, candidato, onDone, variante = "final" }: Props) {
+  const esIniciar = variante === "iniciar";
   const [puestos, setPuestos] = useState<PuestoRef[]>([]);
   const [departamentos, setDepartamentos] = useState<DeptoRef[]>([]);
   const [locales, setLocales] = useState<LocalRef[]>([]);
@@ -81,6 +89,29 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone }: Props
     if (!localId) { toast.error("Selecciona el local"); return; }
     if (esAdministrativo && !emailEmpresa.trim()) { toast.error("Los puestos administrativos requieren email de empresa"); return; }
     startTransition(async () => {
+      if (esIniciar) {
+        const res = await iniciarContratacion({
+          candidatoId: candidato.id,
+          puestoId,
+          primerDia,
+          localId,
+          emailEmpresa: esAdministrativo ? emailEmpresa.trim() : null,
+        });
+        if (res.ok && res.empleadoId) {
+          const partes: string[] = [];
+          if (res.gestoriaEnviada) partes.push("alta a gestoría");
+          if (res.contratoInternoEnviado) partes.push("contrato interno");
+          const description = partes.length
+            ? `${partes.join(" y ").charAt(0).toUpperCase()}${partes.join(" y ").slice(1)} enviados`
+            : "Empleado creado";
+          toast.success("Contratación iniciada", { description });
+          onDone();
+          onOpenChange(false);
+        } else {
+          toast.error(res.error ?? "No se pudo iniciar la contratación");
+        }
+        return;
+      }
       const res = await contratarCandidato({
         candidatoId: candidato.id,
         puestoId,
@@ -117,10 +148,13 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone }: Props
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <UserCheck className="h-5 w-5" /> Contratar a {nombreCand}
+            <UserCheck className="h-5 w-5" />{" "}
+            {esIniciar ? `Iniciar contratación de ${nombreCand}` : `Contratar a ${nombreCand}`}
           </DialogTitle>
           <DialogDescription>
-            Confirma el puesto. Se creará el empleado y su usuario heredando las condiciones.
+            {esIniciar
+              ? "Se creará el empleado, se enviará el alta a la gestoría y el contrato interno a firmar."
+              : "Confirma el puesto. Se creará el empleado y su usuario heredando las condiciones."}
           </DialogDescription>
         </DialogHeader>
 
@@ -183,7 +217,9 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone }: Props
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>Cancelar</Button>
           <Button onClick={contratar} disabled={pending}>
-            {pending ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Contratando…</> : "Contratar"}
+            {pending
+              ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> {esIniciar ? "Iniciando…" : "Contratando…"}</>
+              : (esIniciar ? "Iniciar contratación" : "Contratar")}
           </Button>
         </DialogFooter>
       </DialogContent>

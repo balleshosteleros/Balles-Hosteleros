@@ -28,7 +28,7 @@ export interface PlantillaEstadoItem {
   key: string;
   label: string;
   color: string;
-  fase: "seleccion" | "formacion" | "descartado";
+  fase: "seleccion" | "formacion" | "contratacion" | "prueba" | "empleado" | "descartado";
   orden: number;
   /** Email (biblioteca suelta) que se envía por defecto al pasar a este estado. */
   email_plantilla_id?: string | null;

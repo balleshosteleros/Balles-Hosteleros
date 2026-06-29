@@ -467,6 +467,9 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
   const [candidatos, setCandidatos] = useState<Candidato[]>(vacante.candidatos);
   const [selectedCandidato, setSelectedCandidato] = useState<Candidato | null>(null);
   const [contratarCand, setContratarCand] = useState<Candidato | null>(null);
+  // Candidato arrastrado a la fase «Contratación»: abre el diálogo en modo
+  // «iniciar» (PRP-070) en vez de mover directamente.
+  const [iniciarContratacionCand, setIniciarContratacionCand] = useState<Candidato | null>(null);
   const draggedCandidato = useRef<Candidato | null>(null);
 
   const handleMoverVacante = useCallback(
@@ -593,6 +596,17 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
       );
       return;
     }
+    // Entrada en la fase «Contratación» (PRP-070): no es un simple move. Abre el
+    // diálogo en modo «iniciar» para recoger puesto/primer día/local y disparar
+    // el orquestador (crea empleado + alta gestoría + contrato interno). Solo si
+    // el candidato no estaba ya en la fase contratación.
+    if (
+      getFasePrincipal(estadoDestino) === "contratacion" &&
+      getFasePrincipal(c.fase) !== "contratacion"
+    ) {
+      setIniciarContratacionCand(c);
+      return;
+    }
     // Movimiento libre: cualquier estado/fase, hacia delante o hacia atrás.
     // Emails automáticos al cambiar de fase: si están desactivados, se mueve sin
     // correo y sin preguntar. Si están activos, se pide confirmación o se envía
@@ -702,6 +716,22 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
           // hasta que el usuario lo cierre.
           onMoved?.();
         }}
+      />
+
+      {/* Diálogo de ENTRADA en la fase Contratación (PRP-070): se abre al
+          arrastrar un candidato a esa fase. */}
+      <ContratarDialog
+        variante="iniciar"
+        open={!!iniciarContratacionCand}
+        onOpenChange={(o) => !o && setIniciarContratacionCand(null)}
+        candidato={iniciarContratacionCand ? {
+          id: iniciarContratacionCand.id,
+          nombre: iniciarContratacionCand.nombre,
+          apellidos: iniciarContratacionCand.apellidos,
+          email: iniciarContratacionCand.email,
+          vacantePuestoId: vacante.puestoId ?? null,
+        } : null}
+        onDone={() => onMoved?.()}
       />
 
       <EmailConfirmDialog

@@ -331,6 +331,17 @@ export async function previewReclutamientoFaseEmail(
     }
   }
 
+  // Fase «Formación»: resuelve {{enlace_formacion}} con la URL configurada.
+  if (estado === "formacion") {
+    const { data: cfgRow } = await supabase
+      .from("reclutamiento_config")
+      .select("formacion_url")
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    vars.enlace_formacion =
+      (cfgRow?.formacion_url as string | null) || "(configura la URL de formación en Ajustes → RRHH → Reclutamiento)";
+  }
+
   return {
     asunto: sustituirVariablesReclutamiento(tpl.asunto, vars),
     cuerpo: sustituirVariablesReclutamiento(tpl.cuerpo, vars),
@@ -473,6 +484,17 @@ export async function enviarReclutamientoFaseEmail(
     );
     const token = await asegurarTokenDocumentacion(supabase, candidatoId, empresaId);
     if (token) vars.enlace_documentacion = enlaceDocumentacion(token);
+  }
+
+  // Fase «Formación»: resuelve {{enlace_formacion}} con la URL configurada en
+  // Ajustes → RRHH → Reclutamiento. Si no hay URL, queda vacío.
+  if (estado === "formacion") {
+    const { data: cfgRow } = await supabase
+      .from("reclutamiento_config")
+      .select("formacion_url")
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    vars.enlace_formacion = (cfgRow?.formacion_url as string | null) ?? "";
   }
 
   const subject = sustituirVariablesReclutamiento(tpl.asunto, vars);

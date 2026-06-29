@@ -32,6 +32,19 @@ export interface ContratarInput {
   localId: string;
   /** Solo para puestos de área ADMINISTRATIVA: email corporativo de acceso. */
   emailEmpresa?: string | null;
+  /**
+   * Si false, NO se envía el email de acceso (elige contraseña) al trabajador.
+   * Se usa al ENTRAR en la fase Contratación: el empleado se crea para poder
+   * gestionar alta + firmas, pero el acceso se difiere a la fase Prueba.
+   * Default true (comportamiento clásico desde el diálogo de contratación).
+   */
+  enviarAcceso?: boolean;
+  /**
+   * Fase/estado en que queda el candidato tras crear el empleado. Por defecto
+   * (compat) pasa a `seleccionado`/`empleado`. Al entrar en Contratación se pasa
+   * `{ fase: "contratacion", estado: "alta_enviada" }`.
+   */
+  destino?: { fase: string; estado: string };
 }
 
 export interface ContratarResult {
@@ -152,9 +165,17 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
   if (candErr) return { ok: false, error: friendlyError(candErr) };
   if (!cand) return { ok: false, error: "Candidato no encontrado" };
 
-  // CONTRATAR disponible en las columnas Prueba y Empleado.
-  if (cand.estado !== "prueba" && cand.estado !== "empleado") {
-    return { ok: false, error: "Solo se puede contratar a candidatos en las fases Prueba o Empleado." };
+  // CONTRATAR disponible al ENTRAR en Contratación (PRP-070) y, por compat, en
+  // las columnas Prueba y Empleado. La entrada en Contratación es ahora el punto
+  // canónico donde se materializa el empleado (firmas + alta requieren empleado).
+  const ESTADOS_CONTRATACION = new Set([
+    "alta_pendiente_revision", "alta_enviada", "contrato_interno_firmado",
+    "contrato_oficial_subido", "contrato_oficial_firmado", "alta_completada",
+  ]);
+  const estadoOk =
+    cand.estado === "prueba" || cand.estado === "empleado" || ESTADOS_CONTRATACION.has(cand.estado);
+  if (!estadoOk) {
+    return { ok: false, error: "Solo se puede contratar a candidatos en las fases Contratación, Prueba o Empleado." };
   }
   if (cand.promovido_at) {
     return { ok: false, error: "Este candidato ya fue contratado anteriormente." };
@@ -221,6 +242,10 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
 
   const dniNorm = normalizarDni(cand.dni_nie);
   const tipoContrato = (puesto.tipo_contrato_defecto as string | null) ?? null;
+  // Fase/estado destino del candidato (compat = seleccionado/empleado).
+  const destinoFase = input.destino?.fase ?? "seleccionado";
+  const destinoEstado = input.destino?.estado ?? "empleado";
+  const enviarAcceso = input.enviarAcceso !== false;
 
   // 4. Detección de duplicados (email/DNI) → reactivar
   let empleadoExistente: { id: string; user_id: string | null } | null = null;
@@ -262,7 +287,7 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
     await guardarSnapshotCondiciones(admin, empresaId, empleadoExistente.id, input.puestoId, puesto.nombre as string, nivelHeredado, input.primerDia, tipoContrato, cond);
 
     await admin.from("candidatos")
-      .update({ empleado_id: empleadoExistente.id, fase: "seleccionado", estado: "empleado" }).eq("id", cand.id);
+      .update({ empleado_id: empleadoExistente.id, fase: destinoFase, estado: destinoEstado }).eq("id", cand.id);
 
     // Alta automática a la gestoría (tolerante a fallo: no bloquea la contratación).
     const gestoriaEnviada = await enviarAltaGestoriaSeguro(empleadoExistente.id);
@@ -300,11 +325,13 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
   await guardarSnapshotCondiciones(admin, empresaId, alta.empleadoId, input.puestoId, puesto.nombre as string, nivelHeredado, input.primerDia, tipoContrato, cond);
 
   await admin.from("candidatos")
-    .update({ empleado_id: alta.empleadoId, fase: "seleccionado", estado: "empleado" }).eq("id", cand.id);
+    .update({ empleado_id: alta.empleadoId, fase: destinoFase, estado: destinoEstado }).eq("id", cand.id);
 
-  // 6. Email de acceso al trabajador (al email de login = personal u empresa según área)
+  // 6. Email de acceso al trabajador (al email de login = personal u empresa según área).
+  //    Se OMITE al entrar en Contratación (enviarAcceso=false): el acceso se
+  //    difiere a la fase Prueba, cuando el alta y los contratos están firmados.
   let accesoEmailEnviado = false;
-  try {
+  if (enviarAcceso) try {
     const siteUrl =
       process.env.NEXT_PUBLIC_APP_URL ??
       process.env.NEXT_PUBLIC_SITE_URL ??

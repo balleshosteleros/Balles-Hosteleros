@@ -270,7 +270,12 @@ export async function notificarRrhhGestoria(params: {
     | "gestoria_alta_enviada"
     | "gestoria_recordatorio"
     | "gestoria_contrato_subido"
-    | "gestoria_contrato_firmado";
+    | "gestoria_contrato_firmado"
+    // PRP-070 — hitos del flujo de Contratación
+    | "contratacion_iniciada"
+    | "contrato_interno_enviado"
+    | "contrato_interno_firmado"
+    | "alta_completada";
   titulo: string;
   mensaje: string;
   empleadoId: string;

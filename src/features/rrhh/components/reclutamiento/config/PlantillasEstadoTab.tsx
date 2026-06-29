@@ -34,7 +34,7 @@ import {
   type FasePlantillaEstado,
 } from "@/lib/seeds/reclutamiento-plantilla-estados";
 
-const FASES_ORDER: FasePlantillaEstado[] = ["seleccion", "formacion", "descartado"];
+const FASES_ORDER: FasePlantillaEstado[] = ["seleccion", "formacion", "contratacion", "prueba", "empleado", "descartado"];
 const SIN_EMAIL = "__no_email__";
 
 function slugify(label: string): string {

@@ -5,7 +5,11 @@
 export type FasePrincipal =
   | "seleccion"
   | "formacion"
+  | "contratacion"
+  | "prueba"
+  | "empleado"
   | "descartado"
+  // Aliases legacy (historial antiguo en BD)
   | "nuevo"
   | "en_progreso"
   | "oferta"
@@ -18,12 +22,21 @@ export type EstadoReclutamiento =
   | "papelera"
   | "entrevista"
   | "documentacion"
-  | "teorica"
-  | "practica"
+  | "formacion"
+  // ── Fase Contratación (alta + firma de contratos) ──
+  | "alta_pendiente_revision"
+  | "alta_enviada"
+  | "contrato_interno_firmado"
+  | "contrato_oficial_subido"
+  | "contrato_oficial_firmado"
+  | "alta_completada"
   | "prueba"
   | "empleado"
   | "no_se_presenta"
-  | "suspenso_formacion";
+  | "suspenso_formacion"
+  // ── Estados legacy (historial antiguo; mapean a Formación) ──
+  | "teorica"
+  | "practica";
 
 // Keep old alias for backward compat in places that just need the estado
 export type FaseReclutamiento = EstadoReclutamiento;
@@ -76,6 +89,9 @@ export interface FasePrincipalConfig {
 export const FASES_PRINCIPALES_ORDER: FasePrincipal[] = [
   "seleccion",
   "formacion",
+  "contratacion",
+  "prueba",
+  "empleado",
   "descartado",
 ];
 
@@ -92,7 +108,39 @@ const FORMACION_CONFIG: FasePrincipalConfig = {
   color: "hsl(145, 63%, 42%)",
   colorFrom: "hsl(145, 70%, 50%)",
   colorTo: "hsl(145, 55%, 35%)",
-  estados: ["teorica", "practica", "prueba", "empleado"],
+  // `teorica`/`practica` son legacy: se renderizan bajo Formación.
+  estados: ["formacion", "teorica", "practica"],
+};
+
+const CONTRATACION_CONFIG: FasePrincipalConfig = {
+  label: "Contratación",
+  color: "hsl(38, 92%, 50%)",
+  colorFrom: "hsl(38, 95%, 56%)",
+  colorTo: "hsl(28, 85%, 46%)",
+  estados: [
+    "alta_pendiente_revision",
+    "alta_enviada",
+    "contrato_interno_firmado",
+    "contrato_oficial_subido",
+    "contrato_oficial_firmado",
+    "alta_completada",
+  ],
+};
+
+const PRUEBA_CONFIG: FasePrincipalConfig = {
+  label: "Prueba",
+  color: "hsl(265, 60%, 55%)",
+  colorFrom: "hsl(265, 65%, 60%)",
+  colorTo: "hsl(265, 55%, 45%)",
+  estados: ["prueba"],
+};
+
+const EMPLEADO_CONFIG: FasePrincipalConfig = {
+  label: "Empleado",
+  color: "hsl(145, 63%, 42%)",
+  colorFrom: "hsl(145, 70%, 50%)",
+  colorTo: "hsl(145, 55%, 35%)",
+  estados: ["empleado"],
 };
 
 const DESCARTADO_CONFIG: FasePrincipalConfig = {
@@ -106,6 +154,9 @@ const DESCARTADO_CONFIG: FasePrincipalConfig = {
 export const FASES_PRINCIPALES: Record<FasePrincipal, FasePrincipalConfig> = {
   seleccion: SELECCION_CONFIG,
   formacion: FORMACION_CONFIG,
+  contratacion: CONTRATACION_CONFIG,
+  prueba: PRUEBA_CONFIG,
+  empleado: EMPLEADO_CONFIG,
   descartado: DESCARTADO_CONFIG,
   // Aliases legacy — apuntan a la fase nueva equivalente para que
   // FASES_PRINCIPALES[historialAntiguo.faseAnterior] siga devolviendo
@@ -118,23 +169,43 @@ export const FASES_PRINCIPALES: Record<FasePrincipal, FasePrincipalConfig> = {
 
 // ─── Estado config ──────────────────────────────────────────────
 export const ESTADOS_CONFIG: Record<EstadoReclutamiento, { label: string; color: string; icono: string }> = {
-  // Todos los estados heredan el color oficial de su fase (Selección · Formación · Descartado).
+  // Cada estado hereda el color oficial de su fase.
   nuevo: { label: "Nuevo", color: "hsl(220, 70%, 55%)", icono: "📥" },
   elegido: { label: "Elegido", color: "hsl(220, 70%, 55%)", icono: "✏️" },
   papelera: { label: "Papelera", color: "hsl(0, 72%, 51%)", icono: "🗑️" },
   entrevista: { label: "Entrevista", color: "hsl(220, 70%, 55%)", icono: "📋" },
   documentacion: { label: "Documentación", color: "hsl(220, 70%, 55%)", icono: "📄" },
-  teorica: { label: "Teórica", color: "hsl(145, 63%, 42%)", icono: "📋" },
-  practica: { label: "Práctica", color: "hsl(145, 63%, 42%)", icono: "📋" },
-  prueba: { label: "Prueba", color: "hsl(145, 63%, 42%)", icono: "📋" },
-  empleado: { label: "Empleado", color: "hsl(145, 63%, 42%)", icono: "📋" },
+  // ── Formación (unifica teórica + práctica) ──
+  formacion: { label: "Formación", color: "hsl(145, 63%, 42%)", icono: "🎓" },
+  // ── Contratación (ámbar) ──
+  alta_pendiente_revision: { label: "Pendiente de revisión", color: "hsl(38, 92%, 50%)", icono: "🔎" },
+  alta_enviada: { label: "Alta enviada", color: "hsl(38, 92%, 50%)", icono: "📨" },
+  contrato_interno_firmado: { label: "Contrato interno firmado", color: "hsl(38, 92%, 50%)", icono: "✍️" },
+  contrato_oficial_subido: { label: "Contrato oficial subido", color: "hsl(38, 92%, 50%)", icono: "📎" },
+  contrato_oficial_firmado: { label: "Contrato oficial firmado", color: "hsl(38, 92%, 50%)", icono: "✅" },
+  alta_completada: { label: "Alta completada", color: "hsl(38, 92%, 50%)", icono: "🏁" },
+  // ── Prueba (morado) ──
+  prueba: { label: "Prueba", color: "hsl(265, 60%, 55%)", icono: "⏳" },
+  // ── Empleado (verde) ──
+  empleado: { label: "Empleado", color: "hsl(145, 63%, 42%)", icono: "👤" },
+  // ── Descartado ──
   no_se_presenta: { label: "No se presenta", color: "hsl(0, 72%, 51%)", icono: "📋" },
   suspenso_formacion: { label: "Suspenso Formación", color: "hsl(0, 72%, 51%)", icono: "📋" },
+  // ── Legacy (mapean visualmente a Formación) ──
+  teorica: { label: "Teórica", color: "hsl(145, 63%, 42%)", icono: "📋" },
+  practica: { label: "Práctica", color: "hsl(145, 63%, 42%)", icono: "📋" },
 };
 
 // Flat order of all estados (for legacy compat)
 export const FASES_ORDER: EstadoReclutamiento[] = [
-  "nuevo", "elegido", "entrevista", "documentacion", "teorica", "practica", "prueba", "empleado", "papelera", "no_se_presenta", "suspenso_formacion",
+  "nuevo", "elegido", "entrevista", "documentacion",
+  "formacion",
+  "alta_pendiente_revision", "alta_enviada", "contrato_interno_firmado",
+  "contrato_oficial_subido", "contrato_oficial_firmado", "alta_completada",
+  "prueba", "empleado",
+  "papelera", "no_se_presenta", "suspenso_formacion",
+  // legacy
+  "teorica", "practica",
 ];
 
 // Legacy alias
@@ -144,6 +215,9 @@ export const FASES_CONFIG = ESTADOS_CONFIG;
 export function getFasePrincipal(estado: EstadoReclutamiento): FasePrincipal {
   if (SELECCION_CONFIG.estados.includes(estado)) return "seleccion";
   if (FORMACION_CONFIG.estados.includes(estado)) return "formacion";
+  if (CONTRATACION_CONFIG.estados.includes(estado)) return "contratacion";
+  if (PRUEBA_CONFIG.estados.includes(estado)) return "prueba";
+  if (EMPLEADO_CONFIG.estados.includes(estado)) return "empleado";
   if (DESCARTADO_CONFIG.estados.includes(estado)) return "descartado";
   return "seleccion";
 }
@@ -173,10 +247,18 @@ export function estadoRequiereResenas(estado: EstadoReclutamiento): boolean {
 // «Documentación». Los estados de Selección y Descartado NO lo exigen (aún no
 // ha llegado el momento, o se le está descartando).
 const ESTADOS_REQUIEREN_DOCUMENTACION = new Set<EstadoReclutamiento>([
-  "teorica",
-  "practica",
+  "formacion",
+  "alta_pendiente_revision",
+  "alta_enviada",
+  "contrato_interno_firmado",
+  "contrato_oficial_subido",
+  "contrato_oficial_firmado",
+  "alta_completada",
   "prueba",
   "empleado",
+  // legacy
+  "teorica",
+  "practica",
 ]);
 
 /** ¿Mover a este estado exige tener la documentación del candidato completa? */
@@ -348,13 +430,23 @@ export const EMAIL_PLANTILLAS_FASE: Record<EstadoReclutamiento, { asunto: string
   elegido: { asunto: "Has sido preseleccionado/a", cuerpo: "Nos complace informarte de que has sido preseleccionado/a para avanzar en el proceso de selección.", activo: true },
   entrevista: { asunto: "Convocatoria a entrevista", cuerpo: "Queremos invitarte a una entrevista. En breve recibirás los detalles de fecha y hora.", activo: true },
   documentacion: { asunto: "Documentación necesaria para tu incorporación", cuerpo: "Para continuar con tu incorporación necesitamos que nos aportes tu documentación. Te enviaremos un enlace para subirla.", activo: true },
-  teorica: { asunto: "Prueba teórica programada", cuerpo: "Te informamos de que pasas a la fase de prueba teórica. Te enviaremos los detalles próximamente.", activo: true },
-  practica: { asunto: "Prueba práctica programada", cuerpo: "Avanzas a la fase de prueba práctica. Recibirás instrucciones en breve.", activo: true },
-  prueba: { asunto: "Periodo de prueba", cuerpo: "Has avanzado al periodo de prueba. ¡Enhorabuena!", activo: true },
+  formacion: { asunto: "Accede a tu formación", cuerpo: "Has pasado a la fase de formación. Antes de continuar con el proceso debes completar toda la formación: conocerás la empresa, las normas internas, la forma de trabajar y lo que esperamos del puesto. Es obligatoria. Cuando la termines, revisaremos tu avance para continuar.", activo: true },
+  // Estados internos de Contratación: no envían email automático al candidato
+  // (el flujo lo gestionan los disparadores de la fase). Inactivos por defecto.
+  alta_pendiente_revision: { asunto: "Revisión de tu alta", cuerpo: "Estamos revisando tus datos para tramitar tu alta.", activo: false },
+  alta_enviada: { asunto: "Tu alta está en marcha", cuerpo: "Hemos iniciado el proceso de tu alta.", activo: false },
+  contrato_interno_firmado: { asunto: "Contrato interno firmado", cuerpo: "Hemos recibido tu contrato interno firmado.", activo: false },
+  contrato_oficial_subido: { asunto: "Contrato oficial disponible", cuerpo: "Tu contrato oficial ya está disponible.", activo: false },
+  contrato_oficial_firmado: { asunto: "Contrato oficial firmado", cuerpo: "Hemos recibido tu contrato oficial firmado.", activo: false },
+  alta_completada: { asunto: "Alta completada", cuerpo: "Tu alta y contratos están completados.", activo: false },
+  prueba: { asunto: "Comienza tu periodo de prueba", cuerpo: "Ya has sido dado/a de alta y has firmado la documentación correspondiente. Comienza tu periodo de prueba. Durante este tiempo evaluaremos tu adaptación, actitud, desempeño y cumplimiento de las normas internas.", activo: true },
   empleado: { asunto: "¡Bienvenido/a al equipo!", cuerpo: "Nos complace comunicarte que has sido seleccionado/a para incorporarte al equipo. ¡Enhorabuena!", activo: true },
   no_se_presenta: { asunto: "Estado de tu candidatura", cuerpo: "Lamentamos informarte de que tu candidatura ha sido marcada como no presentada.", activo: true },
   suspenso_formacion: { asunto: "Resultado de la formación", cuerpo: "Te informamos del resultado de tu fase de formación.", activo: true },
   papelera: { asunto: "Actualización de tu candidatura", cuerpo: "Te informamos de que tu candidatura no continúa en el proceso de selección actual.", activo: true },
+  // ── Legacy (mapean a Formación; ya no se usan en el pipeline activo) ──
+  teorica: { asunto: "Prueba teórica programada", cuerpo: "Te informamos de que pasas a la fase de prueba teórica.", activo: true },
+  practica: { asunto: "Prueba práctica programada", cuerpo: "Avanzas a la fase de prueba práctica.", activo: true },
 };
 
 // ─── Vacante ────────────────────────────────────────────────────
@@ -406,7 +498,14 @@ export function calcularMetricasEmbudo(candidatos: Candidato[]): MetricasEmbudo 
     estados.reduce((acc, e) => acc + (counts[e] || 0), 0);
 
   const seleccionCount = sumEstados(SELECCION_CONFIG.estados);
-  const formacionCount = sumEstados(FORMACION_CONFIG.estados);
+  // «En proceso» agrupa todo el tramo de avance posterior a Selección:
+  // Formación + Contratación + Prueba + Empleado.
+  const formacionCount = sumEstados([
+    ...FORMACION_CONFIG.estados,
+    ...CONTRATACION_CONFIG.estados,
+    ...PRUEBA_CONFIG.estados,
+    ...EMPLEADO_CONFIG.estados,
+  ]);
   const descartadoCount = sumEstados(DESCARTADO_CONFIG.estados);
 
   const pct = (n: number) =>
@@ -427,7 +526,10 @@ export function calcularMetricasEmbudo(candidatos: Candidato[]): MetricasEmbudo 
     grupoDescartado: { count: descartadoCount, porcentaje: pct(descartadoCount) },
     progreso: [
       ...SELECCION_CONFIG.estados.map(filaEstado),
-      ...FORMACION_CONFIG.estados.map(filaEstado),
+      ...FORMACION_CONFIG.estados.filter((e) => e === "formacion").map(filaEstado),
+      ...CONTRATACION_CONFIG.estados.map(filaEstado),
+      ...PRUEBA_CONFIG.estados.map(filaEstado),
+      ...EMPLEADO_CONFIG.estados.map(filaEstado),
     ],
     descartado: DESCARTADO_CONFIG.estados.map(filaEstado),
   };
@@ -474,8 +576,13 @@ const CADENA_PROGRESO: EstadoReclutamiento[] = [
   "elegido",
   "entrevista",
   "documentacion",
-  "teorica",
-  "practica",
+  "formacion",
+  "alta_pendiente_revision",
+  "alta_enviada",
+  "contrato_interno_firmado",
+  "contrato_oficial_subido",
+  "contrato_oficial_firmado",
+  "alta_completada",
   "prueba",
   "empleado",
 ];

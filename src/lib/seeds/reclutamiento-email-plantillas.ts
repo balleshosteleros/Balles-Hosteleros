@@ -126,53 +126,27 @@ Si te surge cualquier duda, escríbenos a {{empresa_email}}.
     activa: true,
   },
 
-  // ───────────────────────────────────────────────────────── 5. Teórica ──
+  // ──────────────────────────────────────────────────────── 5. Formación ──
+  // Unifica Teórica + Práctica (PRP-070): una sola formación obligatoria antes
+  // de continuar. El botón enlaza a la URL configurable {{enlace_formacion}}.
   {
-    nombre: "Teórica",
-    asunto: "Teoría — {{empresa_nombre}}",
+    nombre: "Formación",
+    asunto: "Accede a tu formación — {{empresa_nombre}}",
     cuerpo: `Hola {{candidato_nombre}},
 
-¡Enhorabuena! Superaste la entrevista con éxito y estamos muy contentos de avanzar contigo. Ahora empezamos con la Teórica, el primer paso clave antes de pasar a la etapa práctica.
+¡Enhorabuena! Superaste la entrevista y avanzamos contigo. Antes de continuar con el proceso, debes completar la formación. Es obligatoria.
 
-Tendrás que completar dos fases:
-A. Leer el Manual Operativo.
-B. Hacer la Evaluación del Manual Operativo.
+En la formación conocerás la empresa, las normas internas, nuestra forma de trabajar, los procedimientos básicos y lo que esperamos del puesto.
 
 👉 Es imprescindible usar un ordenador con pantalla grande (no funciona bien en móvil).
-👉 Lee todo con atención y sigue los pasos tal como se indican.
+👉 Revisa todo el contenido con atención antes de continuar.
 
-Una vez hayas terminado de leer y ver todos los documentos que contempla el Manual Operativo, realiza el test de preguntas. Debes leerlo entero y sin prisa y después completar el test. Esta etapa es muy importante para que tengas claro cómo trabajamos.
+Accede a la formación aquí:
+[Acceder a la formación]({{enlace_formacion}})
 
-Si te surge alguna duda, escríbenos sin problema a {{empresa_email}}.
+Cuando termines, Recursos Humanos revisará tu avance para continuar con el proceso. Si te surge cualquier duda, escríbenos a {{empresa_email}}.
 
 ¡Nos vemos pronto, {{candidato_nombre}}!
-{{empresa_nombre}}`,
-    activa: true,
-  },
-
-  // ──────────────────────────────────────────────────────── 5. Práctica ──
-  {
-    nombre: "Práctica",
-    asunto: "Práctica — {{empresa_nombre}}",
-    cuerpo: `Hola {{candidato_nombre}},
-
-¡Seguimos avanzando! Entras ahora en la Práctica, un paso clave antes de incorporarte al equipo.
-
-Tendrás que completar dos fases:
-A. Vídeos Prácticos.
-B. Evaluación de la Práctica.
-
-👉 Es imprescindible usar un ordenador con pantalla grande (no funciona bien en móvil).
-👉 Lee todo con atención y sigue los pasos tal como se indican.
-👉 Selecciona solo la carpeta del puesto al que optas y revisa todos los archivos, incluidos los vídeos.
-
-Una vez hayas terminado de ver los vídeos y leer todos los documentos que contempla dicha parte, solo te quedará hacer la Evaluación de la Práctica.
-
-Cuando termines, ponte en contacto con la persona de Recursos Humanos que te ha hecho la entrevista para concretar día y horario de comienzo y proceder con tu alta de contrato.
-
-📌 Si tienes dudas, apúntalas y coméntalas directamente con la persona de Recursos Humanos, que te ayudará en todo. Puedes escribirnos a {{empresa_email}}.
-
-Un saludo,
 {{empresa_nombre}}`,
     activa: true,
   },

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getOrganigrama } from "@/features/direccion/actions/organigrama-actions";
 import { orgChartsPorEmpresa, type AreaType, type OrgNode } from "@/features/direccion/data/direccion";
 import { getEmpresaActivaForUser, getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
+import { FASES_ORDER } from "@/features/rrhh/data/reclutamiento";
 
 /**
  * Fecha+hora de un instante UTC en la zona horaria de la empresa (Ajustes →
@@ -242,10 +243,8 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
       candidatosByVacante.get(k)!.push(c);
     }
 
-    const ESTADOS_VALIDOS = new Set([
-      "nuevo", "elegido", "papelera", "entrevista", "documentacion", "teorica",
-      "practica", "prueba", "empleado", "no_se_presenta", "suspenso_formacion",
-    ]);
+    // Fuente única: todos los estados canónicos + legacy (FASES_ORDER).
+    const ESTADOS_VALIDOS = new Set<string>(FASES_ORDER);
     const ORIGENES_VALIDOS = new Set([
       "web", "formulario", "redes_sociales", "recomendacion",
       "base_datos", "portal_empleo", "otros",
