@@ -375,7 +375,7 @@ export function ImagenMarcaTab() {
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <PreviewIdentidad
                 nombre={empresaActual.nombre}
-                logoUrl={estado.logoUrl}
+                isotipoUrl={estado.isotipoUrl ?? estado.logoUrl}
                 primario={estado.primario}
                 secundario={estado.secundario}
                 texto={estado.texto}
@@ -387,7 +387,7 @@ export function ImagenMarcaTab() {
           <div className="flex justify-end">
             <Button onClick={guardarColores} disabled={guardando}>
               {guardando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Guardar paleta
+              Guardar
             </Button>
           </div>
         </CardContent>
@@ -506,13 +506,13 @@ function ColorField({ label, value, onChange }: { label: string; value: string; 
 
 function PreviewIdentidad({
   nombre,
-  logoUrl,
+  isotipoUrl,
   primario,
   secundario,
   texto,
 }: {
   nombre: string;
-  logoUrl: string | null;
+  isotipoUrl: string | null;
   primario: string;
   secundario: string;
   texto: string;
@@ -520,9 +520,9 @@ function PreviewIdentidad({
   return (
     <div className="overflow-hidden rounded-md border">
       <div className="px-4 py-5 text-center" style={{ backgroundColor: primario, color: texto }}>
-        {logoUrl ? (
+        {isotipoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={logoUrl} alt="logo" className="mx-auto mb-2 h-10 w-10 rounded-full bg-white/90 object-contain p-1" />
+          <img src={isotipoUrl} alt="isotipo" className="mx-auto mb-2 h-10 w-10 rounded-full bg-white/90 object-contain p-1" />
         ) : null}
         <p className="text-lg font-semibold tracking-wide">{nombre}</p>
         <p className="mt-1 text-[10px] uppercase tracking-[0.3em] opacity-80">Identidad de marca</p>
