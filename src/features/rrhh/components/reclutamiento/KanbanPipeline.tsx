@@ -26,7 +26,7 @@ import {
 import {
   ArrowLeft, Mail, MailCheck, MapPin,
   GripVertical, Send, X, UsersRound, CheckCircle2,
-  MinusCircle, XCircle, Star, CalendarDays,
+  MinusCircle, XCircle, Star, CalendarDays, Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -125,22 +125,25 @@ function CandidatoCard({
       <div className="flex items-start gap-2">
         <GripVertical className="h-3.5 w-3.5 text-muted-foreground/30 mt-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1 mb-1 pr-10">
-            {/* Tick «visto»: la ficha ya se revisó (se abrió). */}
-            {candidato.vistoAt && (
-              <span className="shrink-0 text-emerald-600" title="Candidato visto" aria-label="Candidato visto">
-                <CheckCircle2 className="h-3 w-3" />
-              </span>
-            )}
-            <span className="block font-semibold text-xs text-foreground truncate">
+          <div className="flex items-start gap-1 mb-1 pr-10">
+            {/* Nombre y apellidos SIEMPRE visibles (sin truncar: hace wrap). */}
+            <span className="font-semibold text-xs text-foreground break-words leading-snug">
               {candidato.nombre} {candidato.apellidos}
             </span>
             {/* Resultado del cuestionario de la vacante (verde/naranja/rojo). */}
             {candidato.cuestionarioTotal != null && candidato.cuestionarioTotal > 0 && (
-              <CuestionarioBadge
-                aciertos={candidato.cuestionarioAciertos ?? 0}
-                total={candidato.cuestionarioTotal}
-              />
+              <span className="mt-px">
+                <CuestionarioBadge
+                  aciertos={candidato.cuestionarioAciertos ?? 0}
+                  total={candidato.cuestionarioTotal}
+                />
+              </span>
+            )}
+            {/* «Visto»: ojo verde cuando la ficha ya se revisó (se abrió). */}
+            {candidato.vistoAt && (
+              <span className="shrink-0 text-emerald-600 mt-px" title="Candidato visto" aria-label="Candidato visto">
+                <Eye className="h-3 w-3" />
+              </span>
             )}
             {/* Candidato ya contratado: distintivo de empleado (icono RRHH + tick, en verde). */}
             {candidato.promovidoAt && (

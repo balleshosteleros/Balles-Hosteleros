@@ -34,7 +34,8 @@ import {
   IdCard,
   ShieldCheck,
   ArrowRightLeft,
-  Circle,
+  Eye,
+  EyeOff,
   CalendarDays,
 } from "lucide-react";
 
@@ -428,7 +429,7 @@ export function CandidatoDetailModal({
                   }}
                   title="Quitar el visto (volver a pendiente)"
                 >
-                  <CheckCircle2 className="h-4 w-4" /> Candidato visto
+                  <Eye className="h-4 w-4" /> Candidato visto
                 </Button>
               ) : (
                 <Button
@@ -447,7 +448,7 @@ export function CandidatoDetailModal({
                   }}
                   title="Marcar como visto"
                 >
-                  <Circle className="h-4 w-4" /> Marcar como visto
+                  <EyeOff className="h-4 w-4" /> Marcar como visto
                 </Button>
               )}
               {/* Activo/Inactivo: persiste en BD. Inactivo = sigue en el listado
