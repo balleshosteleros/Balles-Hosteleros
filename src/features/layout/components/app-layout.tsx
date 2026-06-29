@@ -136,15 +136,15 @@ function AccesoPasswordCell({
   };
 
   return (
-    <span className="inline-flex items-center gap-1 font-mono text-[11px]">
-      {valor !== null ? valor : "••••"}
+    <span className="inline-flex min-w-0 items-start justify-end gap-1 font-mono text-[11px]">
+      <span className="min-w-0 break-all text-right">{valor !== null ? valor : "••••"}</span>
       {valor !== null ? (
         <button
           onClick={() => {
             navigator.clipboard.writeText(valor);
             toast.success(nombreExtra ? `${nombreExtra} copiado` : "Contraseña copiada");
           }}
-          className="text-muted-foreground hover:text-foreground"
+          className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground"
           title="Copiar"
         >
           <Copy className="h-3 w-3" />
@@ -153,7 +153,7 @@ function AccesoPasswordCell({
         <button
           onClick={revelar}
           disabled={loading}
-          className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+          className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground disabled:opacity-50"
           title="Ver contraseña"
         >
           {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />}
@@ -302,20 +302,22 @@ function AccesosAppsMenu({ empresaSlug }: { empresaSlug: string }) {
                             {acc.usuario || "—"}
                           </span>
                         </div>
-                        <div className="flex items-center justify-between gap-2 text-[11px]">
-                          <span className="text-muted-foreground">Contraseña:</span>
-                          <AccesoPasswordCell
-                            appId={app.id}
-                            indice={idx}
-                            tiene={acc.tieneContrasena ?? false}
-                          />
-                        </div>
+                        {(acc.tieneContrasena ?? false) && (
+                          <div className="flex items-start justify-between gap-2 text-[11px]">
+                            <span className="shrink-0 text-muted-foreground">Contraseña:</span>
+                            <AccesoPasswordCell
+                              appId={app.id}
+                              indice={idx}
+                              tiene={acc.tieneContrasena ?? false}
+                            />
+                          </div>
+                        )}
                         {datosExtra.map((d) => (
                           <div
                             key={d.nombre}
-                            className="flex items-center justify-between gap-2 text-[11px]"
+                            className="flex items-start justify-between gap-2 text-[11px]"
                           >
-                            <span className="text-muted-foreground truncate">{d.nombre}:</span>
+                            <span className="shrink-0 max-w-[45%] truncate text-muted-foreground">{d.nombre}:</span>
                             <AccesoPasswordCell
                               appId={app.id}
                               indice={idx}
@@ -630,7 +632,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               )}
             </div>
           </header>
-          <main className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 overscroll-contain">
+          <main className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 overscroll-contain pb-28">
             <AvatarRequiredGuard>
               <OnboardingGuard>{children}</OnboardingGuard>
             </AvatarRequiredGuard>

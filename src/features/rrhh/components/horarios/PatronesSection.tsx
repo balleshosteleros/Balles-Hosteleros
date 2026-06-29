@@ -814,7 +814,7 @@ function PatronEditor({
           className="text-xl font-semibold bg-transparent border-none focus:outline-none focus:ring-0 px-0 flex-1 min-w-0"
         />
         <Button onClick={guardar} disabled={guardando || rangoInvalido}>
-          {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : "Guardar patrón"}
+          {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : "Guardar"}
         </Button>
       </div>
 

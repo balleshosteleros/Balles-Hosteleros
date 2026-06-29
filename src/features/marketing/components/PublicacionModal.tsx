@@ -304,7 +304,7 @@ export function PublicacionModal({ open, onClose, onSave, editItem, empresaId }:
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={guardar}>{isEdit ? "Guardar cambios" : "Crear"}</Button>
+          <Button onClick={guardar}>{isEdit ? "Guardar" : "Crear"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

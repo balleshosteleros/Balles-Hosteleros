@@ -243,7 +243,7 @@ function DetalleEncuesta({
             {enc.fechaCierre && <span className="text-xs text-muted-foreground flex items-center gap-1"><AlertCircle className="h-3 w-3" />Cierre: {enc.fechaCierre}</span>}
           </div>
         </div>
-        <Button variant="outline" disabled={guardando} onClick={() => persist("borrador")}>Guardar borrador</Button>
+        <Button variant="outline" disabled={guardando} onClick={() => persist("borrador")}>Guardar</Button>
         <Button disabled={guardando} onClick={() => persist("activa")}>Publicar</Button>
       </div>
 

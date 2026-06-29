@@ -319,7 +319,7 @@ export function CuponDrawer({ open, onClose, cupon, onSaved }: Props) {
           <div className="flex gap-2">
             <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
             <Button type="button" onClick={handleSave} disabled={saving}>
-              {saving ? "Guardando…" : isEdit ? "Guardar cambios" : "Crear cupón"}
+              {saving ? "Guardando…" : isEdit ? "Guardar" : "Crear cupón"}
             </Button>
           </div>
         </DialogFooter>

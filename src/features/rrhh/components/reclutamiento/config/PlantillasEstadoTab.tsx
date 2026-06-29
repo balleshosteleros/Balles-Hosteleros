@@ -278,7 +278,7 @@ function EstadoEditorDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>Cancelar</Button>
           <Button onClick={handleSave} disabled={pending} className="gap-1.5">
             {pending && <Loader2 className="h-4 w-4 animate-spin" />}
-            {plantilla ? "Guardar cambios" : "Crear plantilla"}
+            {plantilla ? "Guardar" : "Crear plantilla"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -308,7 +308,7 @@ export function CalendarioVacacionesDialog({
           </Button>
           <Button onClick={guardar} disabled={guardando} className="gap-2">
             {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
-            {calendario ? "Guardar cambios" : "Crear calendario"}
+            {calendario ? "Guardar" : "Crear calendario"}
           </Button>
         </DialogFooter>
       </DialogContent>

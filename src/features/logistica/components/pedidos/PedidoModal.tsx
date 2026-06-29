@@ -482,7 +482,7 @@ export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNom
           )}
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>Cancelar</Button>
-            <Button onClick={handleSave}>{isEdit ? "Guardar cambios" : "Crear pedido"}</Button>
+            <Button onClick={handleSave}>{isEdit ? "Guardar" : "Crear pedido"}</Button>
           </div>
         </DialogFooter>
       </DialogContent>

@@ -1216,7 +1216,7 @@ function EscandalloDetalle({
                 disabled={!camposBasicosOk}
                 title={camposBasicosOk ? undefined : "Indica nombre y categoría para guardar"}
               >
-                Guardar escandallo
+                Guardar
               </Button>
             </DialogFooter>
           </div>

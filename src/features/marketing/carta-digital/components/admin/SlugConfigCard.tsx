@@ -104,7 +104,7 @@ export function SlugConfigCard({
             placeholder="Cocina mediterránea de mercado..."
           />
           <Button onClick={handleDescripcion} disabled={pending} variant="primary" size="lg">
-            Guardar descripción
+            Guardar
           </Button>
         </div>
 

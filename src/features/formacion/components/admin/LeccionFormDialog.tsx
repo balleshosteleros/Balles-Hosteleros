@@ -209,7 +209,7 @@ export function LeccionFormDialog({ cursoId, mode, onClose }: Props) {
               Cancelar
             </Button>
             <Button type="submit" variant="primary" size="lg">
-              {editing ? "Guardar cambios" : "Crear lección"}
+              {editing ? "Guardar" : "Crear lección"}
             </Button>
           </DialogFooter>
         </form>

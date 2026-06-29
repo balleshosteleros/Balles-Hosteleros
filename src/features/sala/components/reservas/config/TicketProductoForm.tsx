@@ -262,7 +262,7 @@ export function TicketProductoForm({ producto, onSaved, onCancel }: Props) {
           Cancelar
         </Button>
         <Button size="sm" onClick={handleSubmit} disabled={!valido || saving}>
-          {saving ? "Guardando…" : producto ? "Guardar cambios" : "Crear producto"}
+          {saving ? "Guardando…" : producto ? "Guardar" : "Crear producto"}
         </Button>
       </div>
     </div>

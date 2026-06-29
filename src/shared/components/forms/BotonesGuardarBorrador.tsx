@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { FileText, Save } from "lucide-react";
+import { Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -28,21 +28,19 @@ interface BotonesGuardarBorradorProps {
 }
 
 /**
- * Par de botones estándar para formularios con la regla de "datos completos":
+ * Botón estándar de guardado para formularios con la regla de "datos completos":
  *
- *   [Guardar borrador]  [Guardar]   ← este último deshabilitado mientras falten campos.
+ *   [Guardar]   ← deshabilitado mientras falten campos.
  *
  * El botón "Guardar" muestra tooltip con la lista de campos faltantes.
- * El botón "Guardar borrador" se omite en entidades NO migrables —
- * el resto del software solo permite registros completos.
+ * (Las props `onGuardarBorrador`/`admiteBorrador` se mantienen por
+ * compatibilidad con las llamadas existentes pero ya no pintan botón.)
  */
 export function BotonesGuardarBorrador({
-  onGuardarBorrador,
   onGuardar,
   faltantes,
   loading = false,
   labelGuardar = "Guardar",
-  admiteBorrador = true,
   variantGuardar = "default",
 }: BotonesGuardarBorradorProps) {
   const hayFaltantes = faltantes.length > 0;
@@ -50,18 +48,6 @@ export function BotonesGuardarBorrador({
 
   return (
     <div className="flex items-center justify-end gap-2">
-      {admiteBorrador && onGuardarBorrador && (
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onGuardarBorrador}
-          disabled={loading}
-        >
-          <FileText className="h-4 w-4 mr-1.5" />
-          Guardar borrador
-        </Button>
-      )}
-
       <TooltipProvider delayDuration={200}>
         <Tooltip>
           <TooltipTrigger asChild>

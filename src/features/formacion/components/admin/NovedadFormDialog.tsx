@@ -266,7 +266,7 @@ export function NovedadFormDialog({
               Cancelar
             </Button>
             <Button type="submit" variant="primary" size="lg">
-              {novedad ? "Guardar cambios" : "Publicar novedad"}
+              {novedad ? "Guardar" : "Publicar novedad"}
             </Button>
           </DialogFooter>
         </form>

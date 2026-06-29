@@ -359,7 +359,7 @@ export function CartaTemaCard({ empresaSlug, nombreEmpresa }: { empresaSlug: str
         <div className="flex justify-end pt-2">
           <Button onClick={guardar} disabled={guardando} size="lg">
             {guardando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Guardar estilo de la carta
+            Guardar
           </Button>
         </div>
       </CardContent>

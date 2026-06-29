@@ -179,7 +179,7 @@ export function PortalEmpleoConfig() {
                 </div>
                 {hayCambios && (
                   <p className="text-[11px] text-amber-600 mt-1.5">
-                    Tienes cambios sin guardar. Pulsa «Guardar URL» para activarlos.
+                    Tienes cambios sin guardar. Pulsa «Guardar» para activarlos.
                   </p>
                 )}
               </div>
@@ -187,7 +187,7 @@ export function PortalEmpleoConfig() {
               <div className="flex justify-end">
                 <Button className="gap-1.5" onClick={guardar} disabled={guardando || !hayCambios}>
                   {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  Guardar URL
+                  Guardar
                 </Button>
               </div>
             </>

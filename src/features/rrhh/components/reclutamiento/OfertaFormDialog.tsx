@@ -453,7 +453,7 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
           </Button>
           <Button onClick={guardar} disabled={pending || loadingExisting}>
             {pending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            {vacanteId ? "Guardar cambios" : "Crear oferta"}
+            {vacanteId ? "Guardar" : "Crear oferta"}
           </Button>
         </DialogFooter>
       </DialogContent>

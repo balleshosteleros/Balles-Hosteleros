@@ -280,7 +280,7 @@ export function CuestionarioBuilderDialog({ open, onOpenChange, cuestionarioId, 
           {!readOnly && (
             <Button onClick={guardar} disabled={pending || loading}>
               {pending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {cuestionarioId ? "Guardar cambios" : "Crear cuestionario"}
+              {cuestionarioId ? "Guardar" : "Crear cuestionario"}
             </Button>
           )}
         </DialogFooter>

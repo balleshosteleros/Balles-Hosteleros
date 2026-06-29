@@ -324,7 +324,7 @@ export function BolsaPublicaConfig() {
         </Button>
         <Button onClick={handleSave} disabled={!dirty || saving}>
           {saving ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : null}
-          {saving ? "Guardando..." : "Guardar cambios"}
+          {saving ? "Guardando..." : "Guardar"}
         </Button>
       </div>
     </div>

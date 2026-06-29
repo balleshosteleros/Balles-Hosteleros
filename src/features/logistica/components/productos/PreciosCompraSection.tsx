@@ -537,7 +537,7 @@ export function PreciosCompraSection({ productoId, unidad, onCurrentChange, onIt
                 className="gap-1"
               >
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                {editingId ? "Guardar cambios" : "Guardar precio"}
+                {editingId ? "Guardar" : "Guardar precio"}
               </Button>
             </div>
           </div>

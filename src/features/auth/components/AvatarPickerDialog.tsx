@@ -35,7 +35,7 @@ export function AvatarPickerDialog({ open, onOpenChange }: AvatarPickerDialogPro
         <AvatarPicker
           key={pickerKey}
           variant="dialog"
-          confirmLabel="Guardar foto"
+          confirmLabel="Guardar"
         />
       </DialogContent>
     </Dialog>

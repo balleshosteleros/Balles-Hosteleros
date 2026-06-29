@@ -910,7 +910,7 @@ function ColumnasPopover({
             ) : (
               <Save className="h-3.5 w-3.5" />
             )}
-            Guardar configuración
+            Guardar
           </Button>
           <p className="mt-1 text-[10px] text-muted-foreground text-center leading-tight">
             Se guarda solo para tu usuario en esta empresa.

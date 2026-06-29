@@ -134,15 +134,15 @@ function PasswordAdmin({
   };
 
   return (
-    <span className="inline-flex items-center gap-1 font-mono text-xs">
-      {valor !== null ? valor : "••••••••"}
+    <span className="inline-flex min-w-0 max-w-full items-start gap-1 font-mono text-xs">
+      <span className="min-w-0 break-all">{valor !== null ? valor : "••••••••"}</span>
       {valor !== null ? (
         <button
           onClick={() => {
             navigator.clipboard.writeText(valor);
             toast.success(nombreExtra ? `${nombreExtra} copiado` : "Contraseña copiada");
           }}
-          className="text-muted-foreground hover:text-foreground"
+          className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground"
           title="Copiar"
         >
           <Copy className="h-3.5 w-3.5" />
@@ -151,7 +151,7 @@ function PasswordAdmin({
         <button
           onClick={revelar}
           disabled={loading}
-          className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+          className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground disabled:opacity-50"
           title="Ver contraseña"
         >
           <Eye className="h-3.5 w-3.5" />
@@ -881,7 +881,7 @@ function AplicacionesTabInner() {
               Cancelar
             </Button>
             <Button onClick={handleSaveApp} disabled={savingApp || !form.nombre.trim() || !form.url.trim()}>
-              {savingApp ? "Guardando…" : editingId ? "Guardar cambios" : "Crear acceso"}
+              {savingApp ? "Guardando…" : editingId ? "Guardar" : "Crear acceso"}
             </Button>
           </DialogFooter>
         </DialogContent>

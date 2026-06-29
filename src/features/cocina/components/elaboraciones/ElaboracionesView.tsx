@@ -201,7 +201,7 @@ function ElaboracionModal({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={saving}>{existing ? "Guardar cambios" : "Registrar"}</Button>
+          <Button onClick={handleSave} disabled={saving}>{existing ? "Guardar" : "Registrar"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

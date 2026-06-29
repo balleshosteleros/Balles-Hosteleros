@@ -282,7 +282,7 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
         <SheetFooter className="gap-2 sm:gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button variant="outline" onClick={onGuardar} disabled={guardando || !draft.nombre.trim()}>
-            {guardando ? "Guardando..." : "Guardar borrador"}
+            {guardando ? "Guardando..." : "Guardar"}
           </Button>
           <Button
             onClick={onEnviarDemo}

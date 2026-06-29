@@ -121,7 +121,7 @@ function AddComplementarioDialog() {
               <p className="text-sm text-muted-foreground">Arrastra o haz clic para subir</p>
             </div>
           </div>
-          <Button className="w-full">Guardar documento</Button>
+          <Button className="w-full">Guardar</Button>
         </div>
       </DialogContent>
     </Dialog>

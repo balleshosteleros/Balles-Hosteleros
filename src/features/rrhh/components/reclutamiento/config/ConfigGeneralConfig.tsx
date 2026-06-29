@@ -136,7 +136,7 @@ export function ConfigGeneralConfig({ embedded = false }: { embedded?: boolean }
 
       <div className="flex justify-end">
         <Button onClick={guardar} disabled={saving}>
-          {saving ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Guardando…</> : "Guardar cambios"}
+          {saving ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Guardando…</> : "Guardar"}
         </Button>
       </div>
     </div>

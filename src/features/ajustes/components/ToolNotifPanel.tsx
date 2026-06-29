@@ -177,7 +177,7 @@ export function ToolNotifPanel({ toolKey, hasBadge = true, withDiasAnuncio = fal
 
       <div className="flex justify-end">
         <Button onClick={() => toast.success("Configuración guardada")}>
-          Guardar configuración
+          Guardar
         </Button>
       </div>
     </div>

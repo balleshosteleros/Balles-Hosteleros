@@ -162,7 +162,7 @@ export function ValidadoresEmpleadoCard({
               {guardando ? (
                 <><Loader2 className="h-4 w-4 animate-spin" />Guardando…</>
               ) : (
-                <><Save className="h-4 w-4" />Guardar validadores</>
+                <><Save className="h-4 w-4" />Guardar</>
               )}
             </Button>
           </div>

@@ -207,7 +207,7 @@ function ReunionTab({
 
       <Button onClick={guardar} disabled={saving} size="sm">
         {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        Guardar reunión
+        Guardar
       </Button>
 
       <div className="pt-4 border-t space-y-3">

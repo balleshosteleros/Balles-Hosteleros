@@ -593,7 +593,6 @@ function DetalleBonus({ bonus: initial, config, empresaId, onBack, initialTab = 
         </div>
         {tab === "config" && (
           <div className="flex gap-2">
-            <Button variant="outline">Guardar borrador</Button>
             <Button>Guardar</Button>
           </div>
         )}

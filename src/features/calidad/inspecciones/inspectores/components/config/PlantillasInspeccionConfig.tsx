@@ -73,7 +73,7 @@ export function PlantillasInspeccionConfig() {
       </Card>
 
       <div className="flex justify-end">
-        <Button>Guardar cambios</Button>
+        <Button>Guardar</Button>
       </div>
     </div>
   );

@@ -1279,7 +1279,7 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
             <DialogFooter>
               <Button variant="outline" onClick={() => setDlgMiembros(false)}>Cancelar</Button>
               <Button onClick={guardarMiembros} disabled={miembrosEdit.size === 0}>
-                Guardar miembros
+                Guardar
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -1313,7 +1313,7 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
             <DialogFooter>
               <Button variant="outline" onClick={() => setDlgDeptos(false)}>Cancelar</Button>
               <Button onClick={guardarDeptos} disabled={deptosEdit.size === 0}>
-                Guardar departamentos
+                Guardar
               </Button>
             </DialogFooter>
           </DialogContent>

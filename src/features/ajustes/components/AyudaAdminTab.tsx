@@ -228,7 +228,7 @@ export function AyudaAdminTab() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
-            <Button onClick={guardar}>{editando ? "Guardar cambios" : "Crear artículo"}</Button>
+            <Button onClick={guardar}>{editando ? "Guardar" : "Crear artículo"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

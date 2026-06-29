@@ -350,7 +350,7 @@ export function DescuentosView() {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
-              <Button onClick={guardar}>{editando ? "Guardar cambios" : "Crear descuento"}</Button>
+              <Button onClick={guardar}>{editando ? "Guardar" : "Crear descuento"}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

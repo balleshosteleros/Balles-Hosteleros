@@ -271,7 +271,7 @@ export function CataTab({ recetaId, numero, escandallo, onChanged }: Props) {
 
       <div className="flex justify-end pt-2 border-t">
         <Button onClick={guardar}>
-          <Save className="h-4 w-4 mr-1.5" /> Guardar cata {numero}
+          <Save className="h-4 w-4 mr-1.5" /> Guardar
         </Button>
       </div>
 

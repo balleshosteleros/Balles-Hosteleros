@@ -466,7 +466,7 @@ function NuevoRegistroForm({ equipos, onSave, onClose }: { equipos: EquipoFrio[]
             fecha: now.toISOString().split("T")[0],
             hora: `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`,
           });
-        }}>Guardar registro</Button>
+        }}>Guardar</Button>
       </div>
     </div>
   );

@@ -308,7 +308,7 @@ export function EditContactoDialog({
               onGuardarBorrador={() => void guardar(true)}
               faltantes={labelsFaltantes}
               loading={loading}
-              labelGuardar="Guardar cambios"
+              labelGuardar="Guardar"
               admiteBorrador={admiteBorrador}
             />
           </DialogFooter>

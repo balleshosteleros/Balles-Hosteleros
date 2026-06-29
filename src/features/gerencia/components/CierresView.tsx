@@ -852,7 +852,7 @@ export function CierresView() {
 
           <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
-            <Button onClick={handleGuardar} disabled={!form.fecha}>Guardar cierre</Button>
+            <Button onClick={handleGuardar} disabled={!form.fecha}>Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

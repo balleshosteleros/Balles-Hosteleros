@@ -771,7 +771,7 @@ function ProveedorModal({ open, onClose, onSave, item, empresaId, categorias }: 
         <DialogFooter className="flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
           <Button onClick={handleSubmit}>
-            {isEdit ? "Guardar cambios" : "Crear proveedor"}
+            {isEdit ? "Guardar" : "Crear proveedor"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -491,7 +491,7 @@ export function CampanasMetaView() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
-            <Button onClick={onGuardar}>Guardar borrador</Button>
+            <Button onClick={onGuardar}>Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

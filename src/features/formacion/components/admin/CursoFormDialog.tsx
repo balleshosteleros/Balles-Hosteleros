@@ -291,7 +291,7 @@ export function CursoFormDialog({ empresaId, curso, onClose, onSaved }: Props) {
               Cancelar
             </Button>
             <Button type="submit" variant="primary" size="lg">
-              {curso ? "Guardar cambios" : "Crear curso"}
+              {curso ? "Guardar" : "Crear curso"}
             </Button>
           </DialogFooter>
         </form>

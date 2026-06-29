@@ -545,7 +545,7 @@ function AgenteDialog({
           </Button>
           <Button onClick={onSubmit} disabled={saving}>
             {saving && <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />}
-            {agente ? "Guardar cambios" : "Crear agente"}
+            {agente ? "Guardar" : "Crear agente"}
           </Button>
         </DialogFooter>
       </DialogContent>

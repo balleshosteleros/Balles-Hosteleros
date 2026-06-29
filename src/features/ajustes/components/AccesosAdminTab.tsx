@@ -461,7 +461,7 @@ export function AccesosAdminTab() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
             <Button onClick={handleSave} disabled={saving || !form.nombre.trim() || !form.url.trim()}>
-              {saving ? "Guardando…" : editingId ? "Guardar cambios" : "Crear acceso"}
+              {saving ? "Guardando…" : editingId ? "Guardar" : "Crear acceso"}
             </Button>
           </DialogFooter>
         </DialogContent>
