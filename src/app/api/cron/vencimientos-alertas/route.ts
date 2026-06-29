@@ -12,7 +12,7 @@
  */
 import { NextResponse } from "next/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
-import { ahoraEnMadrid } from "@/features/rrhh/utils/horario-empleado";
+import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { emitirNotificacion } from "@/features/notificaciones/actions/notificaciones-actions";
 
 export const dynamic = "force-dynamic";
@@ -43,7 +43,10 @@ export async function GET(request: Request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
 
-  const { fecha: hoy } = ahoraEnMadrid();
+  // Alerta diaria de vencimientos (días de calendario): un único "hoy" de
+  // referencia basta. La diferencia entre husos solo afectaría en la franja de
+  // medianoche, irrelevante para un aviso de vencimiento. Ref. Europe/Madrid.
+  const { fecha: hoy } = ahoraEnZona("Europe/Madrid");
   const limite = new Date(hoy + "T12:00:00Z");
   limite.setUTCDate(limite.getUTCDate() + DIAS_AVISO);
   const hasta = limite.toISOString().slice(0, 10);

@@ -11,7 +11,7 @@ import {
   paralizarFichajePersonal,
 } from "@/features/mi-panel/actions/mi-panel-actions";
 import type { MiFichajeHoy } from "@/features/mi-panel/types";
-import { formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
+import { formatHoraEnZona, minutosDiaEnZona } from "@/features/empresa/lib/zona-horaria";
 import { BigClockButton } from "./BigClockButton";
 import { reproducirAvisoFichaje } from "../lib/aviso-fichaje";
 
@@ -28,6 +28,8 @@ interface Ventana {
   popupMargenDespuesMin: number;
   avisoSonido: boolean;
   avisoVibracion: boolean;
+  /** Zona horaria en la que están entradaMin/salidaMin (PRP-069). */
+  zonaHoraria: string;
 }
 
 /**
@@ -77,17 +79,13 @@ function formatoTiempo(ms: number): string {
   return `${hh}:${mm}:${ss}`;
 }
 
-/** Minutos del día (0–1439) ahora mismo en zona Madrid. */
-function minutosAhoraMadrid(): number {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/Madrid",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(new Date());
-  const h = Number(parts.find((p) => p.type === "hour")?.value ?? "0") % 24;
-  const m = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
-  return h * 60 + m;
+/**
+ * Minutos del día (0–1439) ahora mismo en la zona horaria de la empresa cuyo
+ * turno marca la ventana (PRP-069), para comparar contra entradaMin/salidaMin
+ * que vienen en esa misma referencia. Fallback Europe/Madrid.
+ */
+function minutosAhoraEnZona(tz: string = "Europe/Madrid"): number {
+  return minutosDiaEnZona(new Date(), tz);
 }
 
 /**
@@ -112,7 +110,7 @@ export function MobileFichajeProvider() {
   const [motivo, setMotivo] = useState("");
   const [paralizando, setParalizando] = useState(false);
   const [pospuestoHasta, setPospuestoHasta] = useState<number | null>(null);
-  const [nowMin, setNowMin] = useState<number>(() => minutosAhoraMadrid());
+  const [nowMin, setNowMin] = useState<number>(() => minutosAhoraEnZona());
   const [, setTick] = useState(0);
 
   const estado = deriveEstado(fichaje);
@@ -140,7 +138,11 @@ export function MobileFichajeProvider() {
           popupMargenDespuesMin: v.popupMargenDespuesMin,
           avisoSonido: v.avisoSonido,
           avisoVibracion: v.avisoVibracion,
+          zonaHoraria: v.zonaHoraria,
         });
+        // Recalcula "ahora" en la zona de la empresa (entradaMin/salidaMin van
+        // en esa referencia), por si difiere de la del dispositivo.
+        setNowMin(minutosAhoraEnZona(v.zonaHoraria));
       }
       setCargado(true);
     })();
@@ -159,19 +161,20 @@ export function MobileFichajeProvider() {
   // Tick lento (20 s) siempre activo: refresca la hora actual para reevaluar la
   // ventana de fichaje y el tiempo de posposición del pop-up.
   useEffect(() => {
-    const i = setInterval(() => setNowMin(minutosAhoraMadrid()), 20_000);
+    const tz = ventana?.zonaHoraria;
+    const i = setInterval(() => setNowMin(minutosAhoraEnZona(tz)), 20_000);
     return () => clearInterval(i);
-  }, []);
+  }, [ventana?.zonaHoraria]);
 
   // Al volver a la app, refrescar estado y la hora actual.
   useEffect(() => {
     const onFocus = () => {
       void refetch();
-      setNowMin(minutosAhoraMadrid());
+      setNowMin(minutosAhoraEnZona(ventana?.zonaHoraria));
     };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-  }, [refetch]);
+  }, [refetch, ventana?.zonaHoraria]);
 
   // Sonido/vibración cuando aparece el aviso (solo en la transición a visible).
   const avisoEmitido = useRef(false);

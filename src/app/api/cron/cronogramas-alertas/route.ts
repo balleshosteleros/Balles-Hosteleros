@@ -14,7 +14,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { ahoraEnMadrid } from "@/features/rrhh/utils/horario-empleado";
+import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { emitirNotificacion } from "@/features/notificaciones/actions/notificaciones-actions";
 
 export const dynamic = "force-dynamic";
@@ -51,7 +51,9 @@ export async function GET(request: Request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   ) as unknown as SupabaseClient;
 
-  const { fecha: hoy } = ahoraEnMadrid();
+  // Alerta diaria de tareas de cronograma (día de calendario): un único "hoy"
+  // de referencia basta (Europe/Madrid). Ver nota en vencimientos-alertas.
+  const { fecha: hoy } = ahoraEnZona("Europe/Madrid");
   const [y, m, d] = hoy.split("-").map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d, 12));
   const jsDow = dt.getUTCDay(); // 0=domingo … 6=sábado

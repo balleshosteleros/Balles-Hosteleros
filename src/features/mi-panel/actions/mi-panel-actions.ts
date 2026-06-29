@@ -24,10 +24,10 @@ import {
 } from "@/features/toques/services/toques.service";
 import { getEmpresaActivaId } from "@/features/empresa/actions/empresa-activa-actions";
 import { getZonaHorariaEmpresa, ZONA_HORARIA_DEFAULT } from "@/features/empresa/lib/empresa-server";
+import { minutosDiaEnZona, ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import { bloqueoSolapaRango } from "@/features/rrhh/data/calendarios-vacaciones";
 import {
-  ahoraEnMadrid,
   getHorarioDia,
   semanaDeFecha,
   hhmmAMinutos,
@@ -350,6 +350,11 @@ export interface VentanaFichajeHoy {
   avisoVibracion: boolean;
   reavisoActivo: boolean;
   reavisoIntervaloMin: number;
+  /**
+   * Zona horaria de la empresa cuyo turno marca la ventana, para que el móvil
+   * calcule el "ahora" en la misma zona que entradaMin/salidaMin (PRP-069).
+   */
+  zonaHoraria: string;
   error?: string;
 }
 
@@ -403,6 +408,7 @@ export async function getMiVentanaFichajeHoy(): Promise<VentanaFichajeHoy> {
     avisoVibracion: false,
     reavisoActivo: false,
     reavisoIntervaloMin: 5,
+    zonaHoraria: ZONA_HORARIA_DEFAULT,
   };
   try {
     const { supabase, user, empresaId: cookieEmpresaId } = await getContext();
@@ -431,9 +437,10 @@ export async function getMiVentanaFichajeHoy(): Promise<VentanaFichajeHoy> {
         ? fijos.reduce((a, b) => (b.entradaMin < a.entradaMin ? b : a)).empresaId
         : cookieEmpresaId ?? horarios[0]?.empresaId ?? null;
     const popup = await leerPopupConfig(supabase, empresaPopup);
+    const zonaHoraria = await getZonaHorariaEmpresa(supabase, empresaPopup);
 
     if (fijos.length === 0) {
-      return { ok: true, ...base, ...popup };
+      return { ok: true, ...base, ...popup, zonaHoraria };
     }
 
     // Entrada prevista = el primer tramo del día; salida = el último.
@@ -447,6 +454,7 @@ export async function getMiVentanaFichajeHoy(): Promise<VentanaFichajeHoy> {
       salidaMin,
       cruzaMedianoche: salidaMin <= entradaMin,
       ...popup,
+      zonaHoraria,
     };
   } catch (err: unknown) {
     const msg = extractErrorMessage(err);
@@ -511,7 +519,9 @@ export async function getTiposFichajeDisponibles(): Promise<{
     const necesitaSolicitud = tipos.some((t) => t.requiere_solicitud);
     let tieneSolicitudHoy = false;
     if (necesitaSolicitud) {
-      const { fecha: hoyMadrid } = ahoraEnMadrid();
+      // "Hoy" en la zona de la empresa (PRP-069).
+      const tzEmp = await getZonaHorariaEmpresa(supabase, empresaId);
+      const { fecha: hoyLocal } = ahoraEnZona(tzEmp);
       const { data: sol } = await supabase
         .from("solicitudes_personal")
         .select("id")
@@ -519,8 +529,8 @@ export async function getTiposFichajeDisponibles(): Promise<{
         .eq("user_id", user.id)
         .eq("tipo", "trabajo")
         .eq("estado", "aprobada")
-        .lte("fecha_inicio", hoyMadrid)
-        .or(`fecha_fin.is.null,fecha_fin.gte.${hoyMadrid}`)
+        .lte("fecha_inicio", hoyLocal)
+        .or(`fecha_fin.is.null,fecha_fin.gte.${hoyLocal}`)
         .limit(1);
       tieneSolicitudHoy = Boolean(sol && sol.length > 0);
     }
@@ -551,12 +561,14 @@ async function evaluarEntradaFichaje(
     empresaId: string;
     empleadoId: string;
     userId: string;
-    hoyMadrid: string;
-    ahoraMin: number;
     tipoCodigo?: string;
   },
 ): Promise<EvalEntradaResultado> {
-  const { empresaId, empleadoId, userId, hoyMadrid, ahoraMin, tipoCodigo } = args;
+  const { empresaId, empleadoId, userId, tipoCodigo } = args;
+  // "Hoy" y "ahora" en la zona horaria de ESTA empresa candidata (PRP-069): la
+  // ventana de fichaje se valida contra el horario local de la empresa.
+  const tz = await getZonaHorariaEmpresa(supabase, empresaId);
+  const { fecha: hoyMadrid, minutos: ahoraMin } = ahoraEnZona(tz);
   let horaEntradaOverrideISO: string | null = null;
 
   const { data: tiposData } = await supabase
@@ -693,7 +705,6 @@ export async function ficharEntradaPersonal(
     const { supabase, user, empresaId: cookieEmpresaId, nombre } = await getContext();
     if (!user) return { ok: false, error: "No autenticado" };
 
-    const { fecha: hoyMadrid, minutos: ahoraMin } = ahoraEnMadrid();
     // ─── Resolver empresa + empleado + local ───────────────────────────────
     // PRESENCIAL: la geo solo CONFIRMA que estás en alguno de tus locales; la
     // EMPRESA la decide tu TURNO (se prueba cada local cercano y se ficha en
@@ -746,8 +757,6 @@ export async function ficharEntradaPersonal(
         empresaId,
         empleadoId,
         userId: user.id,
-        hoyMadrid,
-        ahoraMin,
         tipoCodigo,
       });
       if (!ev.ok) {
@@ -783,8 +792,6 @@ export async function ficharEntradaPersonal(
           empresaId: c.empresaId,
           empleadoId: c.empleadoId,
           userId: user.id,
-          hoyMadrid,
-          ahoraMin,
           tipoCodigo,
         });
         if (ev.ok) {
@@ -844,19 +851,6 @@ export async function ficharEntradaPersonal(
     console.error("[mi-panel] ficharEntradaPersonal:", msg);
     return { ok: false, error: msg };
   }
-}
-
-/** Minutos del día (0–1439) de una fecha concreta, en zona Europe/Madrid. */
-function minutosMadridDe(d: Date): number {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/Madrid",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(d);
-  const h = Number(parts.find((p) => p.type === "hour")?.value ?? "0") % 24;
-  const m = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
-  return h * 60 + m;
 }
 
 function redondearHoras(ms: number): number {
@@ -926,7 +920,9 @@ export async function ficharSalidaPersonal(fichajeId: string, geo?: GeoInput) {
     // se reparte: el corte sigue el horario; lo no cubierto se marca para
     // revisión. La empresa NO la elige el empleado (sale del horario), y no
     // tiene que desfichar/refichar a mitad de jornada.
-    const entradaMin = minutosMadridDe(entrada);
+    // Minutos del día en la zona horaria de la empresa del fichaje (PRP-069).
+    const tzFichaje = await getZonaHorariaEmpresa(supabase, (fichaje.empresa_id as string | null) ?? null);
+    const entradaMin = minutosDiaEnZona(entrada, tzFichaje);
     const salidaMin = entradaMin + (ahora.getTime() - entradaMs) / 60000;
     const horarios = await getHorariosDiaUnificado(
       supabase,

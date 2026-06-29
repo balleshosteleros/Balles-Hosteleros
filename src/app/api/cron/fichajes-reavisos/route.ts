@@ -12,7 +12,9 @@
 
 import { NextResponse } from "next/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
-import { ahoraEnMadrid, getHorarioDia, hhmmAMinutos } from "@/features/rrhh/utils/horario-empleado";
+import { getHorarioDia, hhmmAMinutos } from "@/features/rrhh/utils/horario-empleado";
+import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
+import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { sendPushWithClient } from "@/features/mi-panel/mobile/lib/push-server";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +41,8 @@ export async function GET(request: Request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
 
-  const { fecha: hoy, minutos: ahoraMin } = ahoraEnMadrid();
+  // El "ahora" se resuelve POR EMPRESA dentro del bucle, en su zona horaria
+  // (PRP-069): empresas en husos distintos avisan a su propia hora local.
 
   // Empresas con reaviso activo (o aviso de cambio de empresa).
   const { data: configs, error: cfgErr } = await supabase
@@ -57,6 +60,9 @@ export async function GET(request: Request) {
 
   for (const cfg of configs ?? []) {
     const empresaId = cfg.empresa_id as string;
+    // "Ahora" en la zona horaria de ESTA empresa.
+    const tz = await getZonaHorariaEmpresa(supabase, empresaId);
+    const { fecha: hoy, minutos: ahoraMin } = ahoraEnZona(tz);
     const margenAntes = (cfg.popup_margen_antes_min as number | null) ?? 15;
     const margenDespues = (cfg.popup_margen_despues_min as number | null) ?? 15;
     const intervalo = Math.max(1, (cfg.reaviso_intervalo_min as number | null) ?? 5);

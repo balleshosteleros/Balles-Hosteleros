@@ -13,6 +13,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { distanciaMetros } from "@/features/rrhh/utils/geo";
 import { getHorarioDia, hhmmAMinutos, type HorarioDia } from "@/features/rrhh/utils/horario-empleado";
+import { minutosDiaEnZona } from "@/features/empresa/lib/zona-horaria";
+import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 
 /** Una fila de empleado del usuario en una empresa concreta. */
 export interface FilaEmpleadoEmpresa {
@@ -430,17 +432,14 @@ export function planificarReparto(
   return segs.length <= 1 ? [] : segs;
 }
 
-/** Minutos del día (0–1439) de una fecha concreta, en zona Europe/Madrid. */
-export function minutosMadridDe(d: Date): number {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/Madrid",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(d);
-  const h = Number(parts.find((p) => p.type === "hour")?.value ?? "0") % 24;
-  const m = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
-  return h * 60 + m;
+/**
+ * Minutos del día (0–1439) de una fecha concreta, en la zona horaria `tz` de la
+ * empresa del fichaje (PRP-069). Para el reparto multi-empresa, entrada y salida
+ * son del mismo día físico, así que se usa la zona de la empresa del cierre como
+ * referencia. Fallback Europe/Madrid si no se pasa zona.
+ */
+function minutosLocalesDe(d: Date, tz: string = "Europe/Madrid"): number {
+  return minutosDiaEnZona(d, tz);
 }
 
 /**
@@ -478,8 +477,12 @@ export async function calcularSalidaPrevista(
     const entradaMin = Math.min(...starts);
     const salidaMin = Math.max(...ends);
     if (salidaMin <= entradaMin) return null; // cruza medianoche → cron de huérfanos
-    // Coloca la salida en la misma fecha local de la entrada.
-    return new Date(entrada.getTime() + (salidaMin - minutosMadridDe(entrada)) * 60000);
+    // Coloca la salida en la misma fecha local de la entrada, usando la zona de
+    // la empresa del horario (PRP-069; los locales del reparto comparten zona).
+    const tz = horarios[0]?.empresaId
+      ? await getZonaHorariaEmpresa(client, horarios[0].empresaId)
+      : "Europe/Madrid";
+    return new Date(entrada.getTime() + (salidaMin - minutosLocalesDe(entrada, tz)) * 60000);
   }
   if (objetivoFlexHoras > 0) {
     return new Date(entrada.getTime() + objetivoFlexHoras * 3600000);
@@ -535,7 +538,9 @@ export async function cerrarConReparto(
   const auto = opts?.autoCierre ?? false;
   const horaSalidaReal = auto ? null : salida.toISOString();
 
-  const entradaMin = minutosMadridDe(new Date(ctx.horaEntrada));
+  // Minutos del día en la zona horaria de la empresa del fichaje (PRP-069).
+  const tz = await getZonaHorariaEmpresa(client, ctx.empresaId);
+  const entradaMin = minutosLocalesDe(new Date(ctx.horaEntrada), tz);
   const salidaMin = entradaMin + (salidaMs - entradaMs) / 60000;
 
   const horarios = await getHorariosDiaUnificado(client, ctx.userId, ctx.fecha);

@@ -13,7 +13,8 @@
 
 import { NextResponse } from "next/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
-import { ahoraEnMadrid } from "@/features/rrhh/utils/horario-empleado";
+import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
+import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { calcularSalidaPrevista, cerrarConReparto } from "@/features/mi-panel/utils/fichaje-multiempresa";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +34,7 @@ export async function GET(request: Request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
 
-  const { fecha: hoy } = ahoraEnMadrid();
+  // "Hoy" se resuelve POR EMPRESA dentro del bucle, en su zona horaria (PRP-069).
 
   const { data: configs, error: cfgErr } = await supabase
     .from("empresa_fichajes_config")
@@ -47,6 +48,8 @@ export async function GET(request: Request) {
 
   for (const cfg of configs ?? []) {
     const empresaId = cfg.empresa_id as string;
+    const tz = await getZonaHorariaEmpresa(supabase, empresaId);
+    const { fecha: hoy } = ahoraEnZona(tz);
     const margen = (cfg.auto_salida_margen_min as number | null) ?? 15;
 
     // Jornadas abiertas de hoy cuyo fichaje pertenece a esta empresa (la de la
