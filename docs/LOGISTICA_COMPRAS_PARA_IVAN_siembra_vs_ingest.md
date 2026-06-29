@@ -12,6 +12,7 @@
 - El ingest **aún no se ha corrido** contra esta BD. Si se corre tal cual, **borra/orfana mi siembra**.
 - **Necesito que decidáis A/B/C** (sección 3) antes de que nadie toque datos. Mi recomendación: **C (híbrido)**.
 - Además dejo **4 hallazgos secundarios** que probablemente os interesen (sección 4).
+- **(Añadido 2026-06-29)** **Sección 7: almacenamiento de archivos pesados** (vídeos de formación, facturas/OCR) — respuesta a la consulta de Iván sobre Cloudflare R2. Resumen: **vídeo → R2 (ya integrado en el código, falta contratar la cuenta + env en Vercel); facturas/OCR → Supabase Storage (no R2)**.
 
 ## 1. Qué hay sembrado AHORA en prod (verificado en BD hoy)
 
@@ -58,6 +59,29 @@ A la espera de A/B/C, **no toco datos**. Si os parece, avanzo con la **recepció
 - Siembra viva: `GET /rest/v1/ingredientes_proveedor?select=*` (70 filas, `es_preferido`) y `productos?tipo=eq.compra&stock_maximo=eq.10`.
 - Ingest: `src/features/logistica/services/ingest-from-pdfs/run-ingest.ts` y `link-proveedores-default.ts`.
 - Inconsistencia de tablas: comparar `producto_composicion` (escribe el ingest) vs `escandallo_ingredientes` (lee `control-compras-actions.ts`).
+
+## 7. Almacenamiento de archivos pesados (vídeos de formación, facturas/OCR, materiales)
+
+> **Contexto:** Iván preguntó dónde guardar el contenido pesado —los vídeos de onboarding/formación de RRHH que hoy tiene en Google Drive, y las facturas/OCR que vendrán— y si contratar Cloudflare R2. Revisado en el código (solo lectura) el 2026-06-29.
+
+**Hallazgo: ya está medio construido y bien planteado.** La app tiene almacenamiento **híbrido**:
+
+- **Vídeo → Cloudflare R2 YA INTEGRADO.** `src/app/api/onboarding-videos/route.ts` sube a R2 con el S3 SDK (`@aws-sdk/client-s3`), usando las vars `R2_BUCKET_NAME` / `R2_PUBLIC_URL` / `R2_ENDPOINT` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`; los metadatos van a la tabla `recordings` (`r2_key`, `url`, `file_size`, `type='onboarding'`, `empresa_id`), con límite global de 100 GB. `src/app/api/recordings/route.ts` comparte el patrón.
+- **Documentos e imágenes → Supabase Storage** (≈12 buckets en uso: `empresa-logos`, `app-logos`, `formacion-docs`, `chat-archivos`, `carta-fotos`, fotos de inspección/recetas, PDFs de firmas, docs jurídicos con signed URLs, albaranes-documentos…).
+- **Metadatos / relacional → Supabase DB**; cuota de almacenamiento por empresa en la migración `20260629140000_storage_cuota_por_empresa.sql`.
+
+**Recomendación (coincide con lo que ya hay construido):**
+
+1. **Vídeo (formación/onboarding, recordings, marketing) → R2.** Correcto: R2 **no cobra egress** (un vídeo se ve muchas veces; el ancho de banda es el coste real que sí te cobran Google Drive / Supabase). ~$0,015/GB/mes de almacenamiento, primeros 10 GB gratis, 0 € por reproducción. **El "pendiente" NO es código, es infra:** contratar la cuenta R2 + crear el bucket + poner las **5 vars `R2_*` en Vercel (prod)**. Hasta entonces la subida de vídeos **falla** con "Faltan variables R2_* para configurar Cloudflare R2" (ver `getR2()` en `onboarding-videos/route.ts`).
+2. **Facturas / OCR → Supabase Storage, NO R2.** Son muchas pero **ligeras y de poco egress** (se escriben una vez y se consultan de vez en cuando) y **sensibles por empresa** → su sitio es Supabase Storage, que da **RLS por empresa** (mismo patrón que `albaranes_documentos_storage`, ya montado). El ahorro de egress de R2 aquí es ≈0 y perderíais la integración de permisos. **Regla simple: streaming/vídeo → R2; documentos/imágenes/facturas → Supabase Storage.**
+3. **(Menor) Unificar vídeo:** `src/features/direccion/actions/cronograma-video-actions.ts` aún sube vídeo a Supabase Storage; se puede mover a R2 más adelante por consistencia, sin prisa.
+
+**Para que RRHH empiece a subir la formación HOY, lo que falta es:**
+- Contratar R2 + meter las 5 env `R2_*` en Vercel.
+- Confirmar/terminar la **UI de subida** de vídeos de onboarding (la API ya existe; faltaría la pantalla).
+- Facturas: reusar Supabase Storage (patrón albaranes), no R2.
+
+**Coste, en cristiano:** vídeos de formación (p.ej. 50 puestos × 2 vídeos ≈ unos pocos GB) en R2 = **céntimos/mes** aunque se vean mucho; facturas (muchas pero pequeñas) en Supabase a ~$0,021/GB/mes = **calderilla**. Empezar en R2 **no cuesta nada** (10 GB gratis) → bajo riesgo contratarlo.
 
 ---
 
