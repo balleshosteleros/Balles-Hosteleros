@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { ConfiguracionTab, type ConfiguracionTabHandle } from "@/features/ajustes/components/ConfiguracionTab";
 import { LocalesEmpresaTab } from "@/features/ajustes/components/locales/LocalesEmpresaTab";
+import { AlmacenamientoEmpresa } from "@/features/ajustes/components/AlmacenamientoTab";
 import { CrearEmpresaModal } from "@/features/ajustes/components/CrearEmpresaModal";
 import { Button } from "@/components/ui/button";
 import {
@@ -107,9 +108,7 @@ export function EmpresaTab() {
     : null;
 
   return (
-    // pb-24: deja hueco para que el botón flotante de soporte (fixed, abajo a la
-    // derecha) no tape el botón Guardar al llegar al final.
-    <div className="space-y-4 pb-24">
+    <div className="space-y-4 pb-0">
       {/* Aviso de eliminación programada (solo aparece si está marcada) */}
       {programadaEn && (
         <div className="flex flex-col gap-2 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-sm sm:flex-row sm:items-center sm:justify-between">
@@ -128,12 +127,16 @@ export function EmpresaTab() {
 
       <ConfiguracionTab ref={configRef} hideSaveButton />
       <LocalesEmpresaTab empresaId={dbId} />
+      <AlmacenamientoEmpresa />
 
       {/* Botonera inferior: gestión a la izquierda, Guardar a la derecha */}
       <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" className="gap-1.5" onClick={() => setAvisoCrear(true)}>
-            <Plus className="h-4 w-4" /> Crear nueva empresa
+          <Button
+            className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700"
+            onClick={() => setAvisoCrear(true)}
+          >
+            <Plus className="h-4 w-4" /> Nueva empresa
           </Button>
           <Button
             variant="destructive"

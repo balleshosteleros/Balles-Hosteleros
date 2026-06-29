@@ -202,7 +202,7 @@ export function LocalesEmpresaTab({ empresaId }: LocalesEmpresaTabProps = {}) {
           </div>
           <Button size="sm" onClick={abrirNuevo}>
             <Plus className="h-4 w-4 mr-1.5" />
-            Añadir local
+            Nuevo
           </Button>
         </div>
       </CardHeader>
