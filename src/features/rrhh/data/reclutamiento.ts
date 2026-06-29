@@ -193,6 +193,12 @@ export interface HistorialCambioFase {
    */
   vacanteAnterior?: string | null;
   vacanteNueva?: string | null;
+  /**
+   * Días que el candidato pasó en la fase ANTERIOR antes de este cambio.
+   * Redondeo: ≥12 h cuenta como 1 día; <12 h cuenta como 0. null si no se puede
+   * calcular (primer evento sin referencia previa).
+   */
+  diasEnFaseAnterior?: number | null;
 }
 
 // ─── Reseñas / Notas / Criterios ───────────────────────────────
@@ -296,6 +302,9 @@ export interface Candidato {
   docDniReversoPath?: string | null;
   docIbanPath?: string | null;
   docSsPath?: string | null;
+  fotoPerfilPath?: string | null;
+  direccion?: string | null;
+  fechaNacimiento?: string | null;
   /** No null = el candidato completó su documentación (fecha de recepción). */
   documentacionCompletadaAt?: string | null;
 }

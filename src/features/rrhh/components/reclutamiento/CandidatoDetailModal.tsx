@@ -650,11 +650,40 @@ function CandidatoSidebar({
               <ShieldCheck className="h-3.5 w-3.5" /> Recibida
             </span>
           </div>
+          {candidato.fotoPerfilPath && (
+            <a
+              href={`/api/documentacion/doc?path=${encodeURIComponent(candidato.fotoPerfilPath)}`}
+              target="_blank"
+              rel="noreferrer"
+              className="block"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={`/api/documentacion/doc?path=${encodeURIComponent(candidato.fotoPerfilPath)}`}
+                alt="Foto de perfil"
+                className="h-20 w-20 rounded-full object-cover border border-border"
+              />
+            </a>
+          )}
           <dl className="grid gap-1.5 text-sm">
             {candidato.dniNie && (
               <div className="flex items-center justify-between gap-2">
                 <dt className="text-muted-foreground">DNI / NIE</dt>
                 <dd className="font-medium text-foreground">{candidato.dniNie}</dd>
+              </div>
+            )}
+            {candidato.fechaNacimiento && (
+              <div className="flex items-center justify-between gap-2">
+                <dt className="text-muted-foreground">Fecha de nacimiento</dt>
+                <dd className="font-medium text-foreground tabular-nums">
+                  {new Date(`${candidato.fechaNacimiento}T00:00:00`).toLocaleDateString("es-ES")}
+                </dd>
+              </div>
+            )}
+            {candidato.direccion && (
+              <div className="flex items-start justify-between gap-2">
+                <dt className="text-muted-foreground shrink-0">Dirección</dt>
+                <dd className="font-medium text-foreground text-right">{candidato.direccion}</dd>
               </div>
             )}
             {candidato.iban && (
@@ -1104,6 +1133,14 @@ function ActividadTab({
                     <span className="font-medium">{FASES_PRINCIPALES[h.faseNueva].label}</span>
                     <span className="text-muted-foreground mx-0.5">/</span>
                     <span>{ESTADOS_CONFIG[h.estadoNuevo].label}</span>
+                    {h.diasEnFaseAnterior != null && (
+                      <span className="ml-2 inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 tabular-nums">
+                        <Clock className="h-2.5 w-2.5" />
+                        {h.diasEnFaseAnterior === 0
+                          ? "menos de 1 día en la fase anterior"
+                          : `${h.diasEnFaseAnterior} ${h.diasEnFaseAnterior === 1 ? "día" : "días"} en la fase anterior`}
+                      </span>
+                    )}
                   </div>
                   <div className="text-muted-foreground mt-0.5">
                     {h.usuario} · {h.fecha}
@@ -1134,6 +1171,15 @@ function ActividadTab({
                     <span className="font-medium">{FASES_PRINCIPALES[h.faseNueva].label}</span>
                     <span className="text-muted-foreground mx-0.5">/</span>
                     <span>{ESTADOS_CONFIG[h.estadoNuevo].label}</span>
+                    {/* Tiempo que pasó en la fase anterior antes de este cambio. */}
+                    {h.diasEnFaseAnterior != null && (
+                      <span className="ml-2 inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 tabular-nums">
+                        <Clock className="h-2.5 w-2.5" />
+                        {h.diasEnFaseAnterior === 0
+                          ? "menos de 1 día en la fase anterior"
+                          : `${h.diasEnFaseAnterior} ${h.diasEnFaseAnterior === 1 ? "día" : "días"} en la fase anterior`}
+                      </span>
+                    )}
                   </>
                 )}
               </div>

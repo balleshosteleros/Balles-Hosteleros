@@ -111,6 +111,8 @@ Tendrás que adjuntar (puedes hacer una foto con el móvil o subir un archivo):
 A. Tu DNI o NIE, por las dos caras (anverso y reverso). Si eres extranjero/a, vale el pasaporte.
 B. Un documento donde se vea tu número de cuenta bancaria (IBAN).
 C. Un documento donde se vea tu número de la Seguridad Social.
+D. Una foto de perfil reciente (tipo carné).
+E. Tu dirección postal y tu fecha de nacimiento.
 
 👉 Entra en este enlace personal y sigue los pasos:
 {{enlace_documentacion}}

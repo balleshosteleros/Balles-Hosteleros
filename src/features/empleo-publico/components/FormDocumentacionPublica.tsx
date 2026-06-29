@@ -226,6 +226,9 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
         if (dniReverso.file) fd.set("dni_reverso", dniReverso.file);
         if (docIban.file) fd.set("doc_iban", docIban.file);
         if (docSs.file) fd.set("doc_ss", docSs.file);
+        if (fotoPerfil.file) fd.set("foto_perfil", fotoPerfil.file);
+        fd.set("direccion", direccion.trim());
+        fd.set("fecha_nacimiento", fechaNacimiento);
 
         const res = await fetch("/api/documentacion", { method: "POST", body: fd });
         const data = await res.json();
@@ -341,6 +344,40 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
             placeholder="Lo detectamos de tu foto; revísalo"
             inputMode="numeric"
             autoComplete="off"
+          />
+        </div>
+      </section>
+
+      <hr className="border-border" />
+
+      {/* 4. Tus datos personales */}
+      <section className="space-y-4">
+        <h2 className="text-base font-semibold">4. Tus datos</h2>
+        <SubidaDoc
+          id="foto-perfil"
+          label="Foto de perfil"
+          ayuda="Una foto reciente tipo carné, con la cara bien visible."
+          doc={fotoPerfil}
+          onFile={(f) => onDocFile(setFotoPerfil, null, f)}
+        />
+        <div className="space-y-1.5">
+          <Label htmlFor="direccion">Dirección postal *</Label>
+          <Input
+            id="direccion"
+            value={direccion}
+            onChange={(e) => setDireccion(e.target.value)}
+            placeholder="Calle, número, piso, código postal y localidad"
+            autoComplete="street-address"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="fecha-nac">Fecha de nacimiento *</Label>
+          <Input
+            id="fecha-nac"
+            type="date"
+            value={fechaNacimiento}
+            onChange={(e) => setFechaNacimiento(e.target.value)}
+            max={new Date().toISOString().slice(0, 10)}
           />
         </div>
       </section>

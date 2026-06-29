@@ -115,6 +115,9 @@ interface CandidatoRowReal {
   doc_dni_reverso_path: string | null;
   doc_iban_path: string | null;
   doc_ss_path: string | null;
+  foto_perfil_path: string | null;
+  direccion: string | null;
+  fecha_nacimiento: string | null;
   documentacion_completada_at: string | null;
 }
 
@@ -154,6 +157,7 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
           genero, ubicacion, disponibilidad,
           dni_nie, iban, num_seguridad_social,
           doc_dni_anverso_path, doc_dni_reverso_path, doc_iban_path, doc_ss_path,
+          foto_perfil_path, direccion, fecha_nacimiento,
           documentacion_completada_at
         `)
         .eq("empresa_id", empresaId)
@@ -303,6 +307,9 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
           docDniReversoPath: c.doc_dni_reverso_path ?? null,
           docIbanPath: c.doc_iban_path ?? null,
           docSsPath: c.doc_ss_path ?? null,
+          fotoPerfilPath: c.foto_perfil_path ?? null,
+          direccion: c.direccion ?? null,
+          fechaNacimiento: c.fecha_nacimiento ?? null,
           documentacionCompletadaAt: c.documentacion_completada_at ?? null,
           // Cuestionario de la vacante (null si no lo ha respondido)
           cuestionarioAciertos: cuest ? cuest.aciertos : null,

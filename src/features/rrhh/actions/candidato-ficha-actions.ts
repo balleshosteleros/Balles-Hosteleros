@@ -52,27 +52,57 @@ function fmtFecha(iso: string): string {
   });
 }
 
+/**
+ * Días entre dos instantes ISO con redondeo a medio día: ≥12 h del día en curso
+ * cuenta como 1 día; <12 h cuenta como 0. Es decir, se redondea al día más
+ * cercano (round, no floor ni ceil). Devuelve null si alguna fecha no es válida.
+ */
+function diasRedondeados(desdeIso: string | null, hastaIso: string | null): number | null {
+  if (!desdeIso || !hastaIso) return null;
+  const desde = new Date(desdeIso).getTime();
+  const hasta = new Date(hastaIso).getTime();
+  if (Number.isNaN(desde) || Number.isNaN(hasta)) return null;
+  return Math.max(0, Math.round((hasta - desde) / 86_400_000));
+}
+
 // ─── Actividad (historial de cambios de estado) ──────────────────────────────
 export async function getActividadCandidato(
   candidatoId: string,
 ): Promise<HistorialCambioFase[]> {
   const { supabase, empresaId } = await ctx();
   if (!empresaId) return [];
-  const { data, error } = await supabase
-    .from("candidato_historial")
-    .select("id, fase_anterior, estado_anterior, fase_nueva, estado_nuevo, usuario_nombre, email_enviado, email_asunto, vacante_anterior_nombre, vacante_nueva_nombre, created_at")
-    .eq("candidato_id", candidatoId)
-    .order("created_at", { ascending: true });
+  // La inscripción (candidatos.created_at) es el inicio de la PRIMERA fase, para
+  // poder medir cuánto duró antes del primer cambio.
+  const [{ data, error }, { data: cand }] = await Promise.all([
+    supabase
+      .from("candidato_historial")
+      .select("id, fase_anterior, estado_anterior, fase_nueva, estado_nuevo, usuario_nombre, email_enviado, email_asunto, vacante_anterior_nombre, vacante_nueva_nombre, created_at")
+      .eq("candidato_id", candidatoId)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("candidatos")
+      .select("created_at")
+      .eq("id", candidatoId)
+      .maybeSingle(),
+  ]);
   if (error) {
     console.error("[candidato-ficha] getActividad:", error.message);
     return [];
   }
+  const inscripcionIso = (cand?.created_at as string | null) ?? null;
+  // Inicio de la fase anterior a cada cambio: para el primer evento es la
+  // inscripción; para los siguientes, la fecha del cambio inmediatamente previo.
+  let inicioFaseAnterior: string | null = inscripcionIso;
   return (data ?? []).map((r) => {
     const estadoNuevo = (r.estado_nuevo as EstadoReclutamiento) ?? "nuevo";
     const estadoAnterior = (r.estado_anterior as EstadoReclutamiento) ?? estadoNuevo;
     const faseNueva = (r.fase_nueva as FasePrincipal) ?? getFasePrincipal(estadoNuevo);
     const faseAnterior =
       (r.fase_anterior as FasePrincipal) ?? getFasePrincipal(estadoAnterior);
+    const cambioIso = r.created_at as string;
+    const diasEnFaseAnterior = diasRedondeados(inicioFaseAnterior, cambioIso);
+    // El siguiente cambio mide desde este.
+    inicioFaseAnterior = cambioIso;
     return {
       id: r.id as string,
       faseAnterior,
@@ -80,11 +110,12 @@ export async function getActividadCandidato(
       faseNueva,
       estadoNuevo,
       usuario: (r.usuario_nombre as string | null) ?? "Sistema",
-      fecha: fmtFecha(r.created_at as string),
+      fecha: fmtFecha(cambioIso),
       emailEnviado: !!r.email_enviado,
       emailAsunto: (r.email_asunto as string | null) ?? null,
       vacanteAnterior: (r.vacante_anterior_nombre as string | null) ?? null,
       vacanteNueva: (r.vacante_nueva_nombre as string | null) ?? null,
+      diasEnFaseAnterior,
     };
   });
 }
