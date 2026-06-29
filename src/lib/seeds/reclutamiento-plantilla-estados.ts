@@ -46,8 +46,8 @@ export const RECLUTAMIENTO_PLANTILLA_ESTADOS_SEED: PlantillaEstadoSeed = {
     { key: "nuevo", label: "Nuevo", color: "hsl(220, 70%, 55%)", fase: "seleccion", orden: 1, defaultEmailNombre: "Nuevo" },
     { key: "elegido", label: "Elegido", color: "hsl(220, 70%, 55%)", fase: "seleccion", orden: 2, defaultEmailNombre: "Elegido" },
     { key: "entrevista", label: "Entrevista", color: "hsl(220, 70%, 55%)", fase: "seleccion", orden: 3, defaultEmailNombre: "Entrevista" },
+    { key: "documentacion", label: "Documentación", color: "hsl(220, 70%, 55%)", fase: "seleccion", orden: 4, defaultEmailNombre: "Documentación" },
     // ── Fase Formación (todos heredan el color oficial de la fase) ──
-    { key: "documentacion", label: "Documentación", color: "hsl(145, 63%, 42%)", fase: "formacion", orden: 4, defaultEmailNombre: "Documentación" },
     { key: "teorica", label: "Teórica", color: "hsl(145, 63%, 42%)", fase: "formacion", orden: 5, defaultEmailNombre: "Teórica" },
     { key: "practica", label: "Práctica", color: "hsl(145, 63%, 42%)", fase: "formacion", orden: 6, defaultEmailNombre: "Práctica" },
     { key: "prueba", label: "Prueba", color: "hsl(145, 63%, 42%)", fase: "formacion", orden: 7, defaultEmailNombre: "Prueba" },

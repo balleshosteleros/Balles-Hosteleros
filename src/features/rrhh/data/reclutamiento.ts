@@ -68,7 +68,7 @@ const SELECCION_CONFIG: FasePrincipalConfig = {
   color: "hsl(220, 70%, 55%)",
   colorFrom: "hsl(220, 80%, 60%)",
   colorTo: "hsl(200, 70%, 50%)",
-  estados: ["nuevo", "elegido", "entrevista"],
+  estados: ["nuevo", "elegido", "entrevista", "documentacion"],
 };
 
 const FORMACION_CONFIG: FasePrincipalConfig = {
@@ -76,7 +76,7 @@ const FORMACION_CONFIG: FasePrincipalConfig = {
   color: "hsl(145, 63%, 42%)",
   colorFrom: "hsl(145, 70%, 50%)",
   colorTo: "hsl(145, 55%, 35%)",
-  estados: ["documentacion", "teorica", "practica", "prueba", "empleado"],
+  estados: ["teorica", "practica", "prueba", "empleado"],
 };
 
 const DESCARTADO_CONFIG: FasePrincipalConfig = {
@@ -107,7 +107,7 @@ export const ESTADOS_CONFIG: Record<EstadoReclutamiento, { label: string; color:
   elegido: { label: "Elegido", color: "hsl(220, 70%, 55%)", icono: "✏️" },
   papelera: { label: "Papelera", color: "hsl(0, 72%, 51%)", icono: "🗑️" },
   entrevista: { label: "Entrevista", color: "hsl(220, 70%, 55%)", icono: "📋" },
-  documentacion: { label: "Documentación", color: "hsl(145, 63%, 42%)", icono: "📄" },
+  documentacion: { label: "Documentación", color: "hsl(220, 70%, 55%)", icono: "📄" },
   teorica: { label: "Teórica", color: "hsl(145, 63%, 42%)", icono: "📋" },
   practica: { label: "Práctica", color: "hsl(145, 63%, 42%)", icono: "📋" },
   prueba: { label: "Prueba", color: "hsl(145, 63%, 42%)", icono: "📋" },
@@ -132,6 +132,23 @@ export function getFasePrincipal(estado: EstadoReclutamiento): FasePrincipal {
   return "seleccion";
 }
 
+// ─── Requisito de reseñas para avanzar ─────────────────────────
+// Un candidato no puede entrar en «Documentación» ni en ninguna fase por
+// delante (Formación al completo) sin tener la entrevista valorada por
+// completo. También se exige al descartarlo (ya ha tenido la entrevista),
+// SALVO «Papelera», que es la única salida sin reseñas.
+const ESTADOS_EXENTOS_RESENA = new Set<EstadoReclutamiento>([
+  "nuevo",
+  "elegido",
+  "entrevista",
+  "papelera",
+]);
+
+/** ¿Mover a este estado exige tener las reseñas completas? */
+export function estadoRequiereResenas(estado: EstadoReclutamiento): boolean {
+  return !ESTADOS_EXENTOS_RESENA.has(estado);
+}
+
 // ─── Origen ─────────────────────────────────────────────────────
 export type OrigenCandidatura =
   | "web"
@@ -154,6 +171,12 @@ export interface HistorialCambioFase {
   emailEnviado: boolean;
   /** Asunto del correo enviado en este cambio de fase (si lo hubo). */
   emailAsunto?: string | null;
+  /**
+   * Si la fila es un movimiento de vacante, títulos de origen y destino.
+   * `vacanteNueva` no-null marca la fila como movimiento (no cambio de fase).
+   */
+  vacanteAnterior?: string | null;
+  vacanteNueva?: string | null;
 }
 
 // ─── Reseñas / Notas / Criterios ───────────────────────────────
@@ -218,7 +241,30 @@ export interface Candidato {
   sobreTi?: string;
   resenas?: ResenaCandidato[];
   notas?: NotaCandidato[];
-  marcadoComoNoVisto?: boolean;
+  // ── Cuestionario de la vacante (resultado del candidato, si lo respondió) ──
+  /** Nº de preguntas acertadas. null = no ha respondido el cuestionario. */
+  cuestionarioAciertos?: number | null;
+  /** Nº total de preguntas del cuestionario. null = no ha respondido. */
+  cuestionarioTotal?: number | null;
+  // ── Reseñas (entrevista) ──
+  /** Media de estrellas de todas las reseñas (1–5). null = sin reseñas. */
+  resenaMedia?: number | null;
+  /**
+   * true = el candidato tiene la entrevista valorada por completo: existe al
+   * menos una reseña y TODAS las reseñas puntúan TODOS los criterios (sin
+   * dejar ninguno a 0). Requisito para pasar a «Documentación» o más adelante.
+   */
+  resenasCompletas?: boolean;
+  /**
+   * Fecha en que se revisó por primera vez al candidato (se abrió su ficha).
+   * null/undefined = aún sin revisar. Pinta el tick «visto» en la tarjeta.
+   */
+  vistoAt?: string | null;
+  /**
+   * Fecha del último cambio de fase. Base del contador de «días en la fase
+   * actual», que se reinicia a cero en cada cambio de fase.
+   */
+  faseActualizadaAt?: string | null;
   /** Inactivo = se conserva en BD y en el listado, pero no se ve en el pipeline. Default true. */
   activo?: boolean;
   /** Fecha en que se promovió a empleado (no null = ya contratado). */
