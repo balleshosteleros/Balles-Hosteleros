@@ -7,12 +7,25 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { sendEmail } from "@/lib/email/send";
+import {
+  crearTokenContratoGestoria,
+  botonSubidaContratoHtml,
+  urlSubidaContrato,
+  notificarRrhhGestoria,
+} from "@/features/rrhh/services/gestoria/gestoria-contrato";
 import {
   normalizarCamposFormulario,
   type CamposFormularioConfig,
 } from "@/features/rrhh/data/campos-candidatura";
+import {
+  GESTORIA_CAMPOS,
+  normalizarGestoriaCampos,
+  type GestoriaCampoKey,
+  type GestoriaCamposConfig,
+} from "@/features/rrhh/data/campos-gestoria";
 
 async function getCtx() {
   const supabase = await createClient();
@@ -25,28 +38,73 @@ async function getCtx() {
 export interface ReclutamientoConfig {
   gestoria_email: string;
   gestoria_email_cc: string;
+  gestoria_envio_auto: boolean;
+  gestoria_campos: GestoriaCamposConfig;
+  // Recordatorio automático a la gestoría si no sube el contrato.
+  gestoria_recordatorio_activo: boolean;
+  gestoria_recordatorio_dias: number;
+  // Notificaciones al departamento de RRHH (un tick por evento del flujo).
+  notif_alta_gestoria: boolean;
+  notif_recordatorio_gestoria: boolean;
+  notif_contrato_subido: boolean;
+  notif_contrato_firmado: boolean;
 }
 
+const RECLUTAMIENTO_CONFIG_DEFAULT: ReclutamientoConfig = {
+  gestoria_email: "",
+  gestoria_email_cc: "",
+  gestoria_envio_auto: true,
+  gestoria_campos: normalizarGestoriaCampos(null),
+  gestoria_recordatorio_activo: true,
+  gestoria_recordatorio_dias: 3,
+  notif_alta_gestoria: true,
+  notif_recordatorio_gestoria: true,
+  notif_contrato_subido: true,
+  notif_contrato_firmado: true,
+};
+
 export async function getReclutamientoConfig(): Promise<{ ok: boolean; data: ReclutamientoConfig }> {
-  const vacio = { gestoria_email: "", gestoria_email_cc: "" };
   try {
     const { supabase, empresaId } = await getCtx();
-    if (!empresaId) return { ok: false, data: vacio };
+    if (!empresaId) return { ok: false, data: RECLUTAMIENTO_CONFIG_DEFAULT };
     const { data } = await supabase
       .from("reclutamiento_config")
-      .select("gestoria_email, gestoria_email_cc")
+      .select(
+        "gestoria_email, gestoria_email_cc, gestoria_envio_auto, gestoria_campos, " +
+          "gestoria_recordatorio_activo, gestoria_recordatorio_dias, " +
+          "notif_alta_gestoria, notif_recordatorio_gestoria, notif_contrato_subido, notif_contrato_firmado",
+      )
       .eq("empresa_id", empresaId)
-      .maybeSingle();
+      .maybeSingle<{
+        gestoria_email: string | null;
+        gestoria_email_cc: string | null;
+        gestoria_envio_auto: boolean | null;
+        gestoria_campos: unknown;
+        gestoria_recordatorio_activo: boolean | null;
+        gestoria_recordatorio_dias: number | null;
+        notif_alta_gestoria: boolean | null;
+        notif_recordatorio_gestoria: boolean | null;
+        notif_contrato_subido: boolean | null;
+        notif_contrato_firmado: boolean | null;
+      }>();
     return {
       ok: true,
       data: {
         gestoria_email: data?.gestoria_email ?? "",
         gestoria_email_cc: data?.gestoria_email_cc ?? "",
+        gestoria_envio_auto: data?.gestoria_envio_auto ?? true,
+        gestoria_campos: normalizarGestoriaCampos(data?.gestoria_campos),
+        gestoria_recordatorio_activo: data?.gestoria_recordatorio_activo ?? true,
+        gestoria_recordatorio_dias: data?.gestoria_recordatorio_dias ?? 3,
+        notif_alta_gestoria: data?.notif_alta_gestoria ?? true,
+        notif_recordatorio_gestoria: data?.notif_recordatorio_gestoria ?? true,
+        notif_contrato_subido: data?.notif_contrato_subido ?? true,
+        notif_contrato_firmado: data?.notif_contrato_firmado ?? true,
       },
     };
   } catch (err) {
     console.error("[rrhh] getReclutamientoConfig:", err);
-    return { ok: false, data: vacio };
+    return { ok: false, data: RECLUTAMIENTO_CONFIG_DEFAULT };
   }
 }
 
@@ -54,12 +112,21 @@ export async function saveReclutamientoConfig(input: ReclutamientoConfig) {
   try {
     const { supabase, empresaId } = await getCtx();
     if (!empresaId) return { ok: false, error: "No autenticado" };
+    const dias = Math.max(1, Math.min(60, Math.round(Number(input.gestoria_recordatorio_dias) || 3)));
     const { error } = await supabase
       .from("reclutamiento_config")
       .upsert({
         empresa_id: empresaId,
         gestoria_email: input.gestoria_email.trim() || null,
         gestoria_email_cc: input.gestoria_email_cc.trim() || null,
+        gestoria_envio_auto: input.gestoria_envio_auto,
+        gestoria_campos: normalizarGestoriaCampos(input.gestoria_campos),
+        gestoria_recordatorio_activo: input.gestoria_recordatorio_activo,
+        gestoria_recordatorio_dias: dias,
+        notif_alta_gestoria: input.notif_alta_gestoria,
+        notif_recordatorio_gestoria: input.notif_recordatorio_gestoria,
+        notif_contrato_subido: input.notif_contrato_subido,
+        notif_contrato_firmado: input.notif_contrato_firmado,
         updated_at: new Date().toISOString(),
       }, { onConflict: "empresa_id" });
     if (error) throw error;
@@ -182,17 +249,24 @@ export async function saveCamposFormularioCandidatura(input: CamposFormularioCon
 
 const eur = (n: number) => (Number(n) || 0).toLocaleString("es-ES", { style: "currency", currency: "EUR", minimumFractionDigits: 0 });
 
-export async function enviarAltaGestoria(empleadoId: string) {
+export async function enviarAltaGestoria(empleadoId: string, opts?: { forzar?: boolean }) {
   try {
     const { supabase, empresaId } = await getCtx();
     if (!empresaId) return { ok: false, error: "No autenticado" };
 
     const cfg = await getReclutamientoConfig();
+
+    // Toggle de envío automático: si está desactivado y no se fuerza, no se envía.
+    if (!cfg.data.gestoria_envio_auto && !opts?.forzar) {
+      return { ok: true, skipped: true as const };
+    }
+
     const destino = cfg.data.gestoria_email.trim();
     if (!destino) {
       return { ok: false, error: "Configura el correo de la gestoría en Ajustes → RRHH → Reclutamiento." };
     }
     const to = [destino, cfg.data.gestoria_email_cc.trim()].filter(Boolean).join(", ");
+    const campos = cfg.data.gestoria_campos;
 
     const { data: emp } = await supabase
       .from("empleados")
@@ -224,32 +298,69 @@ export async function enviarAltaGestoria(empleadoId: string) {
       .then((r) => r.data?.nombre ?? "la empresa");
 
     const nombre = `${emp.nombre} ${emp.apellidos ?? ""}`.trim();
+
+    // Valor de cada campo configurable. Solo se incluyen en el correo los que
+    // estén activados en `campos` (config por empresa; por defecto todos).
+    const valores: Record<GestoriaCampoKey, { label: string; value: string | null | undefined }> = {
+      nombre: { label: "Nombre", value: nombre },
+      dni_nie: { label: "DNI/NIE", value: emp.dni_nie },
+      telefono: { label: "Teléfono", value: emp.telefono },
+      email: { label: "Email", value: emp.email_empresa || emp.email_personal },
+      puesto: { label: "Puesto", value: `${emp.puesto ?? "—"}${cond?.nivel ? ` · Nivel ${cond.nivel}` : ""}` },
+      primer_dia: { label: "Primer día", value: cond?.primer_dia ?? emp.fecha_alta },
+      tipo_contrato: { label: "Tipo de contrato", value: cond?.tipo_contrato },
+      jornada: { label: "Jornada", value: cond?.jornada_contrato },
+      horas_semanales: { label: "Horas/semana", value: cond?.horas_semanales ? `${cond.horas_semanales}h` : "—" },
+      salario_neto: { label: "Salario neto", value: cond?.salario_neto != null ? eur(Number(cond.salario_neto)) : "—" },
+      convenio: { label: "Convenio", value: convenio },
+      grupo: { label: "Grupo/categoría", value: grupo },
+      epigrafe: { label: "Epígrafe/cotización", value: epigrafe },
+    };
+
     const fila = (k: string, v: string | null | undefined) =>
       `<tr><td style="padding:4px 12px 4px 0;color:#666">${k}</td><td style="padding:4px 0;font-weight:600">${v || "—"}</td></tr>`;
+
+    const filasHtml = GESTORIA_CAMPOS
+      .filter(({ key }) => campos[key])
+      .map(({ key }) => fila(valores[key].label, valores[key].value))
+      .join("");
+    const filasText = GESTORIA_CAMPOS
+      .filter(({ key }) => campos[key])
+      .map(({ key }) => `${valores[key].label}: ${valores[key].value || "—"}`)
+      .join("\n");
+
+    // Token único por empleado para que la gestoría suba el contrato firmado.
+    // Se inserta con service role (la tabla solo permite SELECT a usuarios).
+    const admin = createAdminClient();
+    const tk = await crearTokenContratoGestoria(admin, { empresaId, empleadoId });
+    const botonHtml = tk.ok ? botonSubidaContratoHtml(tk.token) : "";
+    const enlaceText = tk.ok ? `\n\nSubir el contrato firmado: ${urlSubidaContrato(tk.token)}` : "";
 
     const subject = `Alta de contrato · ${nombre} · ${empresaNombre}`;
     const html = `
       <p>Solicitud de alta de contrato para el siguiente trabajador:</p>
       <table style="border-collapse:collapse;font-size:14px">
-        ${fila("Nombre", nombre)}
-        ${fila("DNI/NIE", emp.dni_nie)}
-        ${fila("Teléfono", emp.telefono)}
-        ${fila("Email", emp.email_empresa || emp.email_personal)}
-        ${fila("Puesto", `${emp.puesto ?? "—"}${cond?.nivel ? ` · Nivel ${cond.nivel}` : ""}`)}
-        ${fila("Primer día", cond?.primer_dia ?? emp.fecha_alta)}
-        ${fila("Tipo de contrato", cond?.tipo_contrato)}
-        ${fila("Jornada", cond?.jornada_contrato)}
-        ${fila("Horas/semana", cond?.horas_semanales ? `${cond.horas_semanales}h` : "—")}
-        ${fila("Salario neto", cond?.salario_neto != null ? eur(Number(cond.salario_neto)) : "—")}
-        ${fila("Convenio", convenio)}
-        ${fila("Grupo/categoría", grupo)}
-        ${fila("Epígrafe/cotización", epigrafe)}
+        ${filasHtml}
       </table>
+      ${botonHtml}
       <p style="color:#888;font-size:12px">Enviado automáticamente desde el sistema de ${empresaNombre}.</p>`;
-    const text = `Alta de contrato\nNombre: ${nombre}\nDNI: ${emp.dni_nie ?? "—"}\nPuesto: ${emp.puesto ?? "—"}${cond?.nivel ? ` (Nivel ${cond.nivel})` : ""}\nPrimer día: ${cond?.primer_dia ?? emp.fecha_alta ?? "—"}\nTipo contrato: ${cond?.tipo_contrato ?? "—"}\nSalario neto: ${cond?.salario_neto != null ? eur(Number(cond.salario_neto)) : "—"}\nConvenio: ${convenio || "—"}`;
+    const text = `Alta de contrato\n${filasText}${enlaceText}`;
 
     const res = await sendEmail({ to, subject, html, text, empresaId });
     if (!res.ok) return { ok: false, error: "No se pudo enviar el email (revisa el SMTP)." };
+
+    // Tick 1: aviso al departamento de RRHH (si está activado).
+    if (cfg.data.notif_alta_gestoria) {
+      await notificarRrhhGestoria({
+        empresaId,
+        tipo: "gestoria_alta_enviada",
+        titulo: `Alta enviada a la gestoría: ${nombre}`,
+        mensaje: `Se ha enviado el alta de contrato de ${nombre} a la gestoría (${destino}).`,
+        empleadoId,
+        dedupeKey: tk.ok ? `gestoria_alta:${tk.tokenId}` : `gestoria_alta:${empleadoId}`,
+      });
+    }
+
     return { ok: true };
   } catch (err) {
     console.error("[rrhh] enviarAltaGestoria:", err);

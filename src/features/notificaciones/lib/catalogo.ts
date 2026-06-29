@@ -24,7 +24,12 @@ export type TipoNotificacion =
   | "vencimiento"
   | "cronograma"
   | "comunicado"
-  | "encuesta";
+  | "encuesta"
+  // Flujo alta a gestoría → contrato → firma (PRP-068)
+  | "gestoria_alta_enviada"
+  | "gestoria_recordatorio"
+  | "gestoria_contrato_subido"
+  | "gestoria_contrato_firmado";
 
 export interface TipoMeta {
   /** Etiqueta legible (sentence case). */
@@ -135,6 +140,38 @@ export const TIPOS_NOTIFICACION: Record<TipoNotificacion, TipoMeta> = {
     icono: "encuesta",
     color: "text-fuchsia-600",
     badge: "bg-fuchsia-100 text-fuchsia-700",
+    accionLabel: "Visto",
+    requiereAccion: false,
+  },
+  gestoria_alta_enviada: {
+    label: "Gestoría",
+    icono: "info",
+    color: "text-sky-600",
+    badge: "bg-sky-100 text-sky-700",
+    accionLabel: "Visto",
+    requiereAccion: false,
+  },
+  gestoria_recordatorio: {
+    label: "Gestoría",
+    icono: "alerta",
+    color: "text-amber-600",
+    badge: "bg-amber-100 text-amber-700",
+    accionLabel: "Visto",
+    requiereAccion: false,
+  },
+  gestoria_contrato_subido: {
+    label: "Contrato",
+    icono: "info",
+    color: "text-emerald-600",
+    badge: "bg-emerald-100 text-emerald-700",
+    accionLabel: "Visto",
+    requiereAccion: false,
+  },
+  gestoria_contrato_firmado: {
+    label: "Contrato firmado",
+    icono: "exito",
+    color: "text-emerald-600",
+    badge: "bg-emerald-100 text-emerald-700",
     accionLabel: "Visto",
     requiereAccion: false,
   },

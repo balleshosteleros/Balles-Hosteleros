@@ -575,6 +575,41 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
       console.error("[firmar/firmar] cerrar notificación:", e);
     }
 
+    // Tick 4 (PRP-068): si este documento es un contrato subido por la gestoría,
+    // avisa al departamento de RRHH de que el trabajador lo ha firmado y queda
+    // archivado en su carpeta de documentos. Best-effort.
+    try {
+      const { data: ctok } = await admin
+        .from("gestoria_contrato_tokens")
+        .select("id, empresa_id, empleado_id")
+        .eq("firma_documento_id", documentoId)
+        .maybeSingle();
+      if (ctok) {
+        const { getReclutamientoConfigPorEmpresa } = await import(
+          "@/features/rrhh/actions/gestoria-config-server"
+        );
+        const { notificarRrhhGestoria } = await import(
+          "@/features/rrhh/services/gestoria/gestoria-contrato"
+        );
+        const cfg = await getReclutamientoConfigPorEmpresa(
+          admin as unknown as Parameters<typeof getReclutamientoConfigPorEmpresa>[0],
+          ctok.empresa_id as string,
+        );
+        if (cfg.notif_contrato_firmado) {
+          await notificarRrhhGestoria({
+            empresaId: ctok.empresa_id as string,
+            tipo: "gestoria_contrato_firmado",
+            titulo: `Contrato firmado: ${datos.empleadoNombre}`,
+            mensaje: `${datos.empleadoNombre} ha firmado su contrato. Queda guardado en su carpeta de documentos.`,
+            empleadoId: ctok.empleado_id as string,
+            dedupeKey: `gestoria_firmado:${ctok.id}`,
+          });
+        }
+      }
+    } catch (e) {
+      console.error("[firmar/firmar] aviso gestoría firmado:", e);
+    }
+
     return { ok: true, descargaUrl };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error firmando documento";
