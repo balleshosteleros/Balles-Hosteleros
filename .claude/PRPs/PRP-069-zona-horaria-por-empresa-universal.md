@@ -1,6 +1,6 @@
 # PRP-069 — Zona horaria por empresa en TODO el sistema
 
-> **Estado:** Propuesto (pendiente de aprobación)
+> **Estado:** ✅ Implementado (2026-06-29). Fases 1–5 completas. Excepción consciente: acta de firma PDF usa sello UTC legal; feed RWG forward usa zona peninsular de referencia (multi-empresa).
 > **Fecha:** 2026-06-29
 > **Tipo:** Saneamiento transversal + corrección de bug
 > **Riesgo:** Medio (toca lógica de fichaje en vivo, además de presentación)
