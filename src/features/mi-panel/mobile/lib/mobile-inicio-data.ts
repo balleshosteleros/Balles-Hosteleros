@@ -2,7 +2,7 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import { getEmpresaActivaForUser, getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { getHorarioDia, type Tramo } from "@/features/rrhh/utils/horario-empleado";
 
 /** Empresa mostrable en el selector del Inicio móvil. */
@@ -42,10 +42,10 @@ function aSentenceCase(s: string | null): string | null {
   return limpio.charAt(0).toUpperCase() + limpio.slice(1).toLowerCase();
 }
 
-function todayISO(): string {
-  // Fecha en zona Madrid (coherente con el resto del fichaje).
+function todayISO(tz: string): string {
+  // Fecha en la zona horaria de la empresa (PRP-069), coherente con el fichaje.
   const fmt = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Madrid",
+    timeZone: tz,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -127,11 +127,12 @@ export async function getMobileInicioData(): Promise<MobileInicioData> {
       .maybeSingle();
     if (empleado?.id) {
       try {
+        const tz = await getZonaHorariaEmpresa(admin, empresaParaHorario);
         const horario = await getHorarioDia(
           admin,
           empresaParaHorario,
           empleado.id as string,
-          todayISO(),
+          todayISO(tz),
         );
         if (horario.tipo === "ninguno") jornadaHoy = { tipo: "libra" };
         else if (horario.tipo === "fijo") jornadaHoy = { tipo: "trabaja", tramos: horario.tramos };
