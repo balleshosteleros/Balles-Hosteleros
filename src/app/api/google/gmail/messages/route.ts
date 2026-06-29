@@ -39,26 +39,35 @@ function quitarPrefijoRe(asunto: string): string {
   return asunto.replace(/^\s*(re|fwd|rv|ref)\s*:\s*/i, "").trim();
 }
 
+// El servidor corre en UTC; comparar el día con getDate()/getMonth() daría el
+// día UTC. Anclamos a la zona peninsular (Madrid) para que "hoy/ayer" y la hora
+// del correo coincidan con la hora real en España (PRP-069). La bandeja es del
+// usuario, no de una empresa concreta; el desfase entre husos aquí es cosmético.
+const TZ_CORREO = "Europe/Madrid";
+function diaEnTZ(d: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: TZ_CORREO, year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(d);
+}
 function fechaCorta(internalDate: string): string {
   const d = new Date(parseInt(internalDate, 10));
   const now = new Date();
-  const sameDay =
-    d.getDate() === now.getDate() &&
-    d.getMonth() === now.getMonth() &&
-    d.getFullYear() === now.getFullYear();
-  if (sameDay) {
+  const diaD = diaEnTZ(d);
+  if (diaD === diaEnTZ(now)) {
     return d.toLocaleTimeString("es-ES", {
+      timeZone: TZ_CORREO,
       hour: "2-digit",
       minute: "2-digit",
     });
   }
+  const ayer = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  if (diaD === diaEnTZ(ayer)) return "Ayer";
   const diffDays = Math.floor(
     (now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24),
   );
-  if (diffDays === 1) return "Ayer";
   if (diffDays < 7)
-    return d.toLocaleDateString("es-ES", { weekday: "short" });
-  return d.toLocaleDateString("es-ES", { day: "2-digit", month: "short" });
+    return d.toLocaleDateString("es-ES", { timeZone: TZ_CORREO, weekday: "short" });
+  return d.toLocaleDateString("es-ES", { timeZone: TZ_CORREO, day: "2-digit", month: "short" });
 }
 
 export async function GET(request: Request) {

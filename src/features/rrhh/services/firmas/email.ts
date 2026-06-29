@@ -1,6 +1,18 @@
 import { sendEmail, type SendEmailResult } from "@/lib/email/send";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
+import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://sistema.balleshosteleros.com";
+
+/** Zona horaria de la empresa para fechar correos de firma (PRP-069). */
+async function zonaDeEmpresa(empresaId: string): Promise<string> {
+  try {
+    return await getZonaHorariaEmpresa(createAdminClient(), empresaId);
+  } catch {
+    return "Europe/Madrid";
+  }
+}
 
 function esc(s: string): string {
   return s
@@ -54,13 +66,8 @@ export type InvitacionFirmaInput = {
 
 export async function enviarInvitacionFirma(input: InvitacionFirmaInput): Promise<SendEmailResult> {
   const url = `${APP_URL}/firmar/${encodeURIComponent(input.token)}`;
-  const expira = input.expiraEn.toLocaleString("es-ES", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const tz = await zonaDeEmpresa(input.empresaId);
+  const expira = formatFechaHoraEnZona(input.expiraEn.toISOString(), tz);
   const cuerpoHtml = `
     <p>Hola ${esc(input.empleadoNombre)},</p>
     <p>La dirección de ${esc(input.empresaNombre)} te ha enviado un documento para firma electrónica:</p>
@@ -149,13 +156,8 @@ export type CopiaFirmadaInput = {
 };
 
 export async function enviarCopiaFirmada(input: CopiaFirmadaInput): Promise<SendEmailResult> {
-  const firmadoStr = input.firmadoEn.toLocaleString("es-ES", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const tz = await zonaDeEmpresa(input.empresaId);
+  const firmadoStr = formatFechaHoraEnZona(input.firmadoEn.toISOString(), tz);
   const cuerpoHtml = `
     <p>Hola ${esc(input.empleadoNombre)},</p>
     <p>Has firmado correctamente el documento <strong>${esc(input.tituloDocumento)}</strong> el ${esc(firmadoStr)}.</p>

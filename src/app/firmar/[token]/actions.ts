@@ -64,6 +64,8 @@ export type AbrirDocumentoResult =
         observaciones: string | null;
         empleado: { nombre: string; emailEnmascarado: string | null };
         empresa: { nombre: string };
+        /** Zona horaria de la empresa, para mostrar fechas al firmante (PRP-069). */
+        zonaHoraria: string;
         enviadoPor: string;
         enviadoEn: string;
         pdfUrl: string;
@@ -118,7 +120,7 @@ export async function abrirDocumento(token: string): Promise<AbrirDocumentoResul
       .maybeSingle();
     const { data: empresa } = await admin
       .from("empresas")
-      .select("nombre, logo_url")
+      .select("nombre, logo_url, config_operativa")
       .eq("id", doc.empresa_id)
       .maybeSingle();
     const { data: enviadoPorUser } = await admin
@@ -159,6 +161,9 @@ export async function abrirDocumento(token: string): Promise<AbrirDocumentoResul
         observaciones: (doc.observaciones as string | null) ?? null,
         empleado: { nombre: empleadoNombre, emailEnmascarado: enmascararEmail(emailEmp) },
         empresa: { nombre: (empresa?.nombre as string) ?? "Empresa" },
+        zonaHoraria:
+          ((empresa?.config_operativa as Record<string, unknown> | null)?.zonaHoraria as string | undefined)?.trim() ||
+          "Europe/Madrid",
         enviadoPor: (enviadoPorUser?.full_name as string) || (enviadoPorUser?.email as string) || "Administrador",
         enviadoEn: doc.enviado_en as string,
         pdfUrl: signed.data.signedUrl,
@@ -198,7 +203,7 @@ export async function solicitarOTP(token: string): Promise<SolicitarOtpResult> {
       .maybeSingle();
     const { data: empresa } = await admin
       .from("empresas")
-      .select("nombre, logo_url")
+      .select("nombre, logo_url, config_operativa")
       .eq("id", doc.empresa_id)
       .maybeSingle();
 
@@ -439,7 +444,7 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
       .maybeSingle();
     const { data: empresa } = await admin
       .from("empresas")
-      .select("nombre, logo_url")
+      .select("nombre, logo_url, config_operativa")
       .eq("id", doc.empresa_id)
       .maybeSingle();
     const { data: enviadoPorUser } = await admin

@@ -76,7 +76,9 @@ function parseFrom(value: string): { name: string; email: string } {
 function fechaLarga(internalDate?: string): string {
   if (!internalDate) return "";
   const d = new Date(parseInt(internalDate, 10));
+  // Hora real en España; sin timeZone saldría en UTC del servidor (PRP-069).
   return d.toLocaleString("es-ES", {
+    timeZone: "Europe/Madrid",
     day: "2-digit",
     month: "short",
     year: "numeric",

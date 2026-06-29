@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
 const VisorPdfInteractivo = dynamic(
   () => import("./VisorPdfInteractivo").then((m) => m.VisorPdfInteractivo),
@@ -54,14 +55,9 @@ const MODALIDAD_LABEL: Record<Documento["modalidad"], string> = {
   manuscrita_digital: "Firma manuscrita",
 };
 
-function formatFecha(iso: string): string {
-  return new Date(iso).toLocaleString("es-ES", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+// Fecha en la zona horaria de la empresa que envía el documento (PRP-069).
+function formatFecha(iso: string, tz: string): string {
+  return formatFechaHoraEnZona(iso, tz);
 }
 
 export function FirmaPublicaView({
@@ -297,8 +293,8 @@ export function FirmaPublicaView({
               <Info label="Para" value={documento.empleado.nombre} />
               <Info label="Modalidad" value={MODALIDAD_LABEL[documento.modalidad]} />
               <Info label="Enviado por" value={documento.enviadoPor} />
-              <Info label="Enviado el" value={formatFecha(documento.enviadoEn)} />
-              <Info label="Caduca el" value={formatFecha(documento.expiraEn)} />
+              <Info label="Enviado el" value={formatFecha(documento.enviadoEn, documento.zonaHoraria)} />
+              <Info label="Caduca el" value={formatFecha(documento.expiraEn, documento.zonaHoraria)} />
             </dl>
           </Card>
 
