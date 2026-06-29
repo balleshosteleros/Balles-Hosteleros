@@ -6,6 +6,25 @@ import { getOrganigrama } from "@/features/direccion/actions/organigrama-actions
 import { orgChartsPorEmpresa, type AreaType, type OrgNode } from "@/features/direccion/data/direccion";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 
+/**
+ * Fecha+hora de inscripción en horario español (Europe/Madrid). El servidor
+ * corre en UTC; sin timeZone explícita la hora saldría desfasada (p. ej. 10:00
+ * en vez de 12:00). Devuelve "" si la fecha no es válida.
+ */
+function fmtFechaHoraMadrid(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("es-ES", {
+    timeZone: "Europe/Madrid",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 async function getContext() {
   const supabase = await createClient();
   const {
@@ -107,6 +126,7 @@ interface CandidatoRowReal {
   genero: string | null;
   ubicacion: string | null;
   disponibilidad: string | null;
+  experiencia_previa: string | null;
   carta_presentacion: string | null;
   // Paso «Documentación»
   dni_nie: string | null;
@@ -155,7 +175,7 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
           id, empresa_id, vacante_id, nombre, apellidos, email, telefono,
           cv_url, notas, origen, canal_nombre, fase, estado, promovido_at, empleado_id,
           activo, created_at, visto_at, fase_actualizada_at,
-          genero, ubicacion, disponibilidad, carta_presentacion,
+          genero, ubicacion, disponibilidad, experiencia_previa, carta_presentacion,
           dni_nie, iban, num_seguridad_social,
           doc_dni_anverso_path, doc_dni_reverso_path, doc_iban_path, doc_ss_path,
           foto_perfil_path, direccion, fecha_nacimiento,
@@ -279,6 +299,7 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
           email: c.email,
           cvAdjunto: c.cv_url ?? undefined,
           fechaInscripcion: c.created_at?.slice(0, 10) ?? "",
+          fechaInscripcionFull: fmtFechaHoraMadrid(c.created_at ?? null),
           origen: ORIGENES_VALIDOS.has(c.origen) ? c.origen : "otros",
           canal: c.canal_nombre ?? null,
           notasInternas: c.notas ?? "",
@@ -288,6 +309,13 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
           disponibilidad:
             c.disponibilidad === "inmediato" || c.disponibilidad === "15_dias"
               ? c.disponibilidad
+              : undefined,
+          experienciaPrevia:
+            c.experiencia_previa === "sin_experiencia" ||
+            c.experiencia_previa === "menos_1" ||
+            c.experiencia_previa === "de_1_a_5" ||
+            c.experiencia_previa === "mas_5"
+              ? c.experiencia_previa
               : undefined,
           // Carta de presentación escrita por el candidato (campo opcional).
           sobreTi: c.carta_presentacion ?? undefined,
