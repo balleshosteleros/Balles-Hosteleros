@@ -5,6 +5,7 @@ import { Loader2, Inbox, AlertTriangle, LogIn, LogOut, CheckCircle2 } from "luci
 import { listarMisFichajes } from "@/features/mi-panel/actions/mi-panel-actions";
 import type { MiFichajeHoy } from "@/features/mi-panel/types";
 import { formatHorasDecimal } from "@/shared/lib/timeUtils";
+import { formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { cn } from "@/shared/lib/utils";
 
 const ESTADO_LABEL: Record<string, string> = {
@@ -48,14 +49,10 @@ function formatFechaLarga(s: string): string {
   });
 }
 
-function formatHora(s: string | null): string {
+// Hora en la zona horaria de la empresa del fichaje (PRP-069).
+function formatHora(s: string | null, tz: string): string {
   if (!s) return "—";
-  if (s.includes("T")) {
-    return new Date(s).toLocaleTimeString("es-ES", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }
+  if (s.includes("T")) return formatHoraEnZona(s, tz);
   return s.slice(0, 5);
 }
 
@@ -208,7 +205,7 @@ export function MisFichajesMobile() {
                                     Entrada
                                   </p>
                                   <p className="text-sm font-semibold tabular-nums">
-                                    {formatHora(t.horaEntrada)}
+                                    {formatHora(t.horaEntrada, t.zonaHoraria)}
                                   </p>
                                 </div>
                               </div>
@@ -219,7 +216,7 @@ export function MisFichajesMobile() {
                                     Salida
                                   </p>
                                   <p className="text-sm font-semibold tabular-nums">
-                                    {formatHora(t.horaSalida)}
+                                    {formatHora(t.horaSalida, t.zonaHoraria)}
                                   </p>
                                 </div>
                               </div>

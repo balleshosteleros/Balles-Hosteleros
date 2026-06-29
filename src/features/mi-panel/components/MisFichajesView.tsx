@@ -8,6 +8,7 @@ import { listarMisFichajes } from "@/features/mi-panel/actions/mi-panel-actions"
 import type { MiFichajeHoy } from "@/features/mi-panel/types";
 import { FichajeBar } from "./FichajeBar";
 import { formatHorasDecimal } from "@/shared/lib/timeUtils";
+import { formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
 const ESTADO_COLOR: Record<string, string> = {
   trabajando: "bg-emerald-100 text-emerald-700 border-emerald-200",
@@ -42,14 +43,11 @@ function formatFecha(s: string): string {
   }
 }
 
-function formatHora(s: string | null): string {
+// La hora se muestra en la zona horaria de la empresa del fichaje (PRP-069). Si
+// el valor no es un instante ISO sino ya "HH:MM" (datos antiguos), se usa tal cual.
+function formatHora(s: string | null, tz: string): string {
   if (!s) return "—";
-  if (s.includes("T")) {
-    return new Date(s).toLocaleTimeString("es-ES", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }
+  if (s.includes("T")) return formatHoraEnZona(s, tz);
   return s.slice(0, 5);
 }
 
@@ -110,13 +108,13 @@ export function MisFichajesView() {
                   <tr key={f.id} className="border-b last:border-0">
                     <td className="py-2 pr-3 font-medium">{formatFecha(f.fecha)}</td>
                     <td className="py-2 px-3 text-muted-foreground">
-                      {formatHora(f.horaEntrada)}
+                      {formatHora(f.horaEntrada, f.zonaHoraria)}
                     </td>
                     <td className="py-2 px-3 text-muted-foreground">
-                      {f.pausaInicio ? `${formatHora(f.pausaInicio)} – ${formatHora(f.pausaFin)}` : "—"}
+                      {f.pausaInicio ? `${formatHora(f.pausaInicio, f.zonaHoraria)} – ${formatHora(f.pausaFin, f.zonaHoraria)}` : "—"}
                     </td>
                     <td className="py-2 px-3 text-muted-foreground">
-                      {formatHora(f.horaSalida)}
+                      {formatHora(f.horaSalida, f.zonaHoraria)}
                     </td>
                     <td className="py-2 px-3 text-right tabular-nums">
                       {f.horaSalida ? formatHorasDecimal(f.horasTotales) : "—"}

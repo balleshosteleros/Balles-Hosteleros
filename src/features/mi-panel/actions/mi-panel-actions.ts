@@ -23,6 +23,7 @@ import {
   getNiveles,
 } from "@/features/toques/services/toques.service";
 import { getEmpresaActivaId } from "@/features/empresa/actions/empresa-activa-actions";
+import { getZonaHorariaEmpresa, ZONA_HORARIA_DEFAULT } from "@/features/empresa/lib/empresa-server";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import { bloqueoSolapaRango } from "@/features/rrhh/data/calendarios-vacaciones";
 import {
@@ -315,6 +316,7 @@ export async function getMiFichajeHoy(): Promise<{
         flexModo,
         flexObjetivoHoras,
         flexRestanteHoras,
+        zonaHoraria: await getZonaHorariaEmpresa(supabase, empresaId),
       },
     };
   } catch (err: unknown) {
@@ -1190,9 +1192,19 @@ export async function listarMisFichajes(limite = 60): Promise<{
       .order("created_at", { ascending: false })
       .limit(limite);
     if (error) throw error;
-    return {
-      ok: true,
-      data: (data ?? []).map((f: Record<string, unknown>) => ({
+    // Historial multi-empresa: cada fichaje se muestra en la zona horaria de SU
+    // empresa (PRP-069). Resolvemos la zona por empresa una sola vez (caché).
+    const tzPorEmpresa = new Map<string, string>();
+    const zonaDe = async (empresaId: string | null): Promise<string> => {
+      if (!empresaId) return ZONA_HORARIA_DEFAULT;
+      const cacheada = tzPorEmpresa.get(empresaId);
+      if (cacheada) return cacheada;
+      const tz = await getZonaHorariaEmpresa(supabase, empresaId);
+      tzPorEmpresa.set(empresaId, tz);
+      return tz;
+    };
+    const filas = await Promise.all(
+      (data ?? []).map(async (f: Record<string, unknown>) => ({
         id: f.id as string,
         fecha: f.fecha as string,
         horaEntrada: (f.hora_entrada as string | null) ?? null,
@@ -1208,8 +1220,10 @@ export async function listarMisFichajes(limite = 60): Promise<{
         flexModo: null,
         flexObjetivoHoras: null,
         flexRestanteHoras: null,
+        zonaHoraria: await zonaDe((f.empresa_id as string | null) ?? null),
       })),
-    };
+    );
+    return { ok: true, data: filas };
   } catch (err: unknown) {
     const msg = extractErrorMessage(err);
     console.error("[mi-panel] listarMisFichajes:", msg);

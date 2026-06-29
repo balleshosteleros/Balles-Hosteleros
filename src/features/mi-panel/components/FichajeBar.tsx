@@ -24,18 +24,13 @@ import { obtenerPosicionActual } from "@/features/rrhh/utils/geo";
 import { fichajeColorDot } from "@/features/rrhh/data/fichajes";
 import type { MiFichajeHoy } from "@/features/mi-panel/types";
 import { formatHorasDecimal } from "@/shared/lib/timeUtils";
+import { formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
-function formatHora(iso: string | null): string {
+// Hora en la zona horaria de la empresa del fichaje (PRP-069).
+function formatHora(iso: string | null, tz: string): string {
   if (!iso) return "—";
   if (iso.length <= 8) return iso.slice(0, 5);
-  try {
-    return new Date(iso).toLocaleTimeString("es-ES", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return "—";
-  }
+  return formatHoraEnZona(iso, tz) || "—";
 }
 
 function calcHorasVivas(fichaje: MiFichajeHoy | null): string {
@@ -245,8 +240,8 @@ export function FichajeBar({
               </Badge>
               {fichaje && (
                 <span className="text-xs text-muted-foreground">
-                  Entrada {formatHora(fichaje.horaEntrada)}
-                  {fichaje.horaSalida && ` · Salida ${formatHora(fichaje.horaSalida)}`}
+                  Entrada {formatHora(fichaje.horaEntrada, fichaje.zonaHoraria)}
+                  {fichaje.horaSalida && ` · Salida ${formatHora(fichaje.horaSalida, fichaje.zonaHoraria)}`}
                 </span>
               )}
             </div>

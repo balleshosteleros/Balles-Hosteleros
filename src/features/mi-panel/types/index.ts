@@ -46,6 +46,12 @@ export interface MiFichajeHoy {
   flexObjetivoHoras: number | null;
   /** Horas que aún puede acumular este fichaje antes del autocierre. */
   flexRestanteHoras: number | null;
+  /**
+   * Zona horaria (IANA) de la empresa del fichaje, para formatear sus horas en
+   * la hora real del local. El historial es multi-empresa: cada fila lleva la
+   * suya. Fallback "Europe/Madrid". Ver PRP-069.
+   */
+  zonaHoraria: string;
 }
 
 export interface DiaCalendario {

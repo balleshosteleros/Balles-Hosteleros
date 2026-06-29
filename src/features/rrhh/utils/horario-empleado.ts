@@ -11,6 +11,7 @@
 // tramos, no aquí.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
 export type Tramo = { inicio: string; fin: string };
 
@@ -40,21 +41,15 @@ function indexLunes(fechaISO: string): number {
   return (d.getDay() + 6) % 7;
 }
 
-/** "Ahora" en Europe/Madrid: fecha YYYY-MM-DD y minutos del día (0–1439). */
+/**
+ * "Ahora" en Europe/Madrid: fecha YYYY-MM-DD y minutos del día (0–1439).
+ *
+ * @deprecated Usa `ahoraEnZona(tz)` de `@/features/empresa/lib/zona-horaria` con
+ * la zona horaria de la empresa (`getZonaHorariaEmpresa`). Esto queda como atajo
+ * para España mientras se completa la migración (PRP-069).
+ */
 export function ahoraEnMadrid(): { fecha: string; minutos: number } {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/Madrid",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(new Date());
-  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "00";
-  const fecha = `${get("year")}-${get("month")}-${get("day")}`;
-  const minutos = Number(get("hour")) * 60 + Number(get("minute"));
-  return { fecha, minutos };
+  return ahoraEnZona("Europe/Madrid");
 }
 
 /** Letras de día con lunes = 0 … domingo = 6 (igual que DIAS_SEMANA). */

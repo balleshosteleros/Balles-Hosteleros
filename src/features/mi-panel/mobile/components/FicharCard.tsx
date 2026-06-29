@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CalendarOff, Clock, Loader2 } from "lucide-react";
 import { getMiFichajeHoy } from "@/features/mi-panel/actions/mi-panel-actions";
 import type { MiFichajeHoy } from "@/features/mi-panel/types";
+import { formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { BigClockButton } from "./BigClockButton";
 import type { JornadaHoy } from "../lib/mobile-inicio-data";
 
@@ -137,11 +138,7 @@ export function FicharCard({ jornadaHoy }: Props) {
 
       {fichaje?.horaEntrada && trabajando && (
         <p className="px-4 pb-1 text-xs text-muted-foreground">
-          Entrada:{" "}
-          {new Date(fichaje.horaEntrada).toLocaleTimeString("es-ES", {
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
+          Entrada: {formatHoraEnZona(fichaje.horaEntrada, fichaje.zonaHoraria)}
         </p>
       )}
 
