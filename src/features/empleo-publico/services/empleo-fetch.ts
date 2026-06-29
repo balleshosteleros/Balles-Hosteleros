@@ -5,6 +5,10 @@
  */
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import type { PreguntaCuestionario } from "@/features/rrhh/data/cuestionario-vacante";
+import {
+  normalizarCamposFormulario,
+  type CamposFormularioConfig,
+} from "@/features/rrhh/data/campos-candidatura";
 
 export interface CuestionarioPublico {
   id: string;
@@ -289,6 +293,28 @@ export async function fetchOrigenesPublicos(empresaId: string): Promise<string[]
   } catch (err) {
     console.error("[empleo-fetch] fetchOrigenesPublicos:", err);
     return [];
+  }
+}
+
+/**
+ * Lee la config de campos del formulario de candidatura de la empresa
+ * (`reclutamiento_config.campos_formulario`). Service client (portal público).
+ * Devuelve siempre las 7 claves normalizadas (defaults si no hay fila).
+ */
+export async function fetchCamposFormularioPublico(
+  empresaId: string,
+): Promise<CamposFormularioConfig> {
+  try {
+    const supabase = serviceClient();
+    const { data } = await supabase
+      .from("reclutamiento_config")
+      .select("campos_formulario")
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    return normalizarCamposFormulario(data?.campos_formulario);
+  } catch (err) {
+    console.error("[empleo-fetch] fetchCamposFormularioPublico:", err);
+    return normalizarCamposFormulario(null);
   }
 }
 

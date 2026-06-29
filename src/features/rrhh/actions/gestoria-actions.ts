@@ -9,6 +9,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { sendEmail } from "@/lib/email/send";
+import {
+  normalizarCamposFormulario,
+  type CamposFormularioConfig,
+} from "@/features/rrhh/data/campos-candidatura";
 
 async function getCtx() {
   const supabase = await createClient();
@@ -131,6 +135,48 @@ export async function saveReclutamientoConfigGeneral(input: ReclutamientoConfigG
   } catch (err) {
     console.error("[rrhh] saveReclutamientoConfigGeneral:", err);
     return { ok: false, error: "No se pudo guardar la configuración" };
+  }
+}
+
+// ============================================================
+// Campos del formulario de candidatura (activo / obligatorio por campo).
+// Vive en `reclutamiento_config.campos_formulario` (jsonb), 1 fila por empresa.
+// ============================================================
+
+export async function getCamposFormularioCandidatura(): Promise<{ ok: boolean; data: CamposFormularioConfig }> {
+  try {
+    const { supabase, empresaId } = await getCtx();
+    if (!empresaId) return { ok: false, data: normalizarCamposFormulario(null) };
+    const { data } = await supabase
+      .from("reclutamiento_config")
+      .select("campos_formulario")
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    return { ok: true, data: normalizarCamposFormulario(data?.campos_formulario) };
+  } catch (err) {
+    console.error("[rrhh] getCamposFormularioCandidatura:", err);
+    return { ok: false, data: normalizarCamposFormulario(null) };
+  }
+}
+
+export async function saveCamposFormularioCandidatura(input: CamposFormularioConfig) {
+  try {
+    const { supabase, empresaId } = await getCtx();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+    // Re-normaliza por seguridad (las 7 claves, booleanos válidos).
+    const campos = normalizarCamposFormulario(input);
+    const { error } = await supabase
+      .from("reclutamiento_config")
+      .upsert({
+        empresa_id: empresaId,
+        campos_formulario: campos,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "empresa_id" });
+    if (error) throw error;
+    return { ok: true as const };
+  } catch (err) {
+    console.error("[rrhh] saveCamposFormularioCandidatura:", err);
+    return { ok: false as const, error: "No se pudo guardar la configuración" };
   }
 }
 

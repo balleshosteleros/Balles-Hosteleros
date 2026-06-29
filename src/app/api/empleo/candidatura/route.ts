@@ -9,6 +9,10 @@ import {
   type PreguntaCuestionario,
   type RespuestasCuestionario,
 } from "@/features/rrhh/data/cuestionario-vacante";
+import {
+  normalizarCamposFormulario,
+  type CampoCandidaturaClave,
+} from "@/features/rrhh/data/campos-candidatura";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -21,17 +25,19 @@ const CandidaturaSchema = z.object({
   empresa_slug: z.string().min(1).max(80),
   empresa_id: z.string().guid(),
   oferta_id: z.string().guid(),
+  // Campos FIJOS (siempre obligatorios): nombre, apellidos, email, teléfono.
   nombre: z.string().min(1).max(80),
   apellidos: z.string().min(1).max(120),
   email: z.string().email().max(180),
   telefono: z.string().min(5).max(30),
-  genero: z.enum(["masculino", "femenino"]),
-  ubicacion: z.string().min(1).max(160),
-  disponibilidad: z.enum(["inmediato", "15_dias"]),
-  experiencia_previa: z.enum(["sin_experiencia", "menos_1", "de_1_a_5", "mas_5"]),
-  // «¿Por dónde nos has conocido?» — nombre del catálogo reclutamiento_origenes
-  // que el candidato declaró. Opcional a nivel de esquema (la empresa puede no
-  // tener orígenes configurados); se valida contra el catálogo más abajo.
+  // Campos CONFIGURABLES — opcionales a nivel de esquema (aceptan ""); su
+  // obligatoriedad real se decide contra `campos_formulario` más abajo. Los que
+  // tienen dominio cerrado aceptan "" o uno de sus valores.
+  genero: z.enum(["masculino", "femenino"]).or(z.literal("")).optional().default(""),
+  ubicacion: z.string().max(160).optional().default(""),
+  disponibilidad: z.enum(["inmediato", "15_dias"]).or(z.literal("")).optional().default(""),
+  experiencia_previa: z.enum(["sin_experiencia", "menos_1", "de_1_a_5", "mas_5"]).or(z.literal("")).optional().default(""),
+  // «¿Por dónde nos has conocido?» — nombre del catálogo reclutamiento_origenes.
   como_nos_conocio: z.string().max(160).optional().default(""),
   carta_presentacion: z.string().max(5000).optional().default(""),
 });
@@ -158,13 +164,13 @@ export async function POST(req: Request) {
             como_nos_conocio: comoNosConocioRaw,
             carta_presentacion: cartaPresentacion } = parsed.data;
 
-    if (!cv || cv.size === 0) {
-      return NextResponse.json({ ok: false, error: "El currículum es obligatorio" }, { status: 400 });
-    }
-    if (cv.size > MAX_CV_BYTES) {
+    // Validación de FORMATO del CV (si se adjunta). La obligatoriedad se decide
+    // más abajo según la config de campos de la empresa.
+    const tieneCv = !!cv && cv.size > 0;
+    if (tieneCv && cv!.size > MAX_CV_BYTES) {
       return NextResponse.json({ ok: false, error: "El CV supera el tamaño máximo de 5MB" }, { status: 400 });
     }
-    if (cv.type !== "application/pdf") {
+    if (tieneCv && cv!.type !== "application/pdf") {
       return NextResponse.json({ ok: false, error: "El CV debe ser un PDF" }, { status: 400 });
     }
 
@@ -204,10 +210,33 @@ export async function POST(req: Request) {
     // (email/teléfono) se rechazan SIEMPRE más abajo, no dependen de la config.
     const { data: cfgRow } = await supabase
       .from("reclutamiento_config")
-      .select("notificar_reclutador_nueva_candidatura")
+      .select("notificar_reclutador_nueva_candidatura, campos_formulario")
       .eq("empresa_id", empresaId)
       .maybeSingle();
     const notificarNuevaCandidatura = cfgRow?.notificar_reclutador_nueva_candidatura ?? true;
+
+    // Config de campos del formulario (activo/obligatorio). El servidor NO se fía
+    // del navegador: revalida que los campos marcados como obligatorios vengan
+    // rellenos, e ignora los que están desactivados (se descartan al guardar).
+    const campos = normalizarCamposFormulario(cfgRow?.campos_formulario);
+    const activo = (k: CampoCandidaturaClave) => campos[k].activo;
+    const exigido = (k: CampoCandidaturaClave) => campos[k].activo && campos[k].obligatorio;
+    {
+      const faltaCampo =
+        (exigido("genero") && !genero) ? "el género" :
+        (exigido("ubicacion") && !ubicacion.trim()) ? "la ubicación" :
+        (exigido("disponibilidad") && !disponibilidad) ? "la disponibilidad" :
+        (exigido("experiencia_previa") && !experienciaPrevia) ? "la experiencia previa" :
+        (exigido("carta_presentacion") && !cartaPresentacion.trim()) ? "la carta de presentación" :
+        (exigido("cv") && !tieneCv) ? "el currículum" :
+        null;
+      if (faltaCampo) {
+        return NextResponse.json(
+          { ok: false, error: `Falta un campo obligatorio: ${faltaCampo}` },
+          { status: 400 },
+        );
+      }
+    }
 
     // One-candidate-per-company: el mismo email o teléfono no puede tener dos
     // candidaturas en la empresa (en NINGUNA vacante). Se rechaza siempre —no
@@ -304,12 +333,12 @@ export async function POST(req: Request) {
     }
 
     // «¿Por dónde nos has conocido?» — lo DECLARA el candidato (distinto del canal
-    // automático de arriba). Validamos contra el catálogo activo de la empresa
-    // (no nos fiamos del navegador). Si la empresa tiene orígenes configurados,
-    // es obligatorio; si no, se acepta vacío. Guardamos el nombre tal cual
+    // automático de arriba). Solo aplica si el campo está activo en la config Y
+    // la empresa tiene orígenes en el catálogo. Validamos contra el catálogo
+    // activo (no nos fiamos del navegador) y guardamos el nombre tal cual
     // (snapshot) para que sobreviva aunque luego se borre del catálogo.
     let comoNosConocio: string | null = null;
-    {
+    if (activo("como_nos_conocio")) {
       const { data: origenesRows } = await supabase
         .from("reclutamiento_origenes")
         .select("nombre")
@@ -320,19 +349,19 @@ export async function POST(req: Request) {
         const match = catalogo.find(
           (n) => n.toLowerCase() === comoNosConocioRaw.toLowerCase(),
         );
-        if (!match) {
+        if (!match && campos.como_nos_conocio.obligatorio) {
           return NextResponse.json(
             { ok: false, error: "Indícanos por dónde nos has conocido" },
             { status: 400 },
           );
         }
-        comoNosConocio = match;
+        comoNosConocio = match ?? null;
       }
     }
 
-    // Subida del CV (si existe)
+    // Subida del CV (solo si el campo está activo y se adjuntó).
     let cvUrl: string | null = null;
-    if (cv) {
+    if (activo("cv") && tieneCv && cv) {
       const candidatoTempId = crypto.randomUUID();
       const path = `${empresaId}/${candidatoTempId}.pdf`;
       const buffer = Buffer.from(await cv.arrayBuffer());
@@ -359,12 +388,14 @@ export async function POST(req: Request) {
         apellidos: normalizarNombre(apellidos),
         email,
         telefono,
-        genero,
-        ubicacion,
-        disponibilidad,
-        experiencia_previa: experienciaPrevia,
+        // Campos configurables: se guarda null si el campo está desactivado
+        // (el candidato no lo vio, no debemos persistir un valor fantasma).
+        genero: activo("genero") ? (genero || null) : null,
+        ubicacion: activo("ubicacion") ? (ubicacion.trim() || null) : null,
+        disponibilidad: activo("disponibilidad") ? (disponibilidad || null) : null,
+        experiencia_previa: activo("experiencia_previa") ? (experienciaPrevia || null) : null,
         cv_url: cvUrl,
-        carta_presentacion: cartaPresentacion || null,
+        carta_presentacion: activo("carta_presentacion") ? (cartaPresentacion.trim() || null) : null,
         origen,
         canal_link_id: canalLinkId,
         canal_nombre: canalNombre,

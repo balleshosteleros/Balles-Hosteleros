@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import {
@@ -21,6 +21,8 @@ export function OrigenesCandidatoConfig() {
   const [loading, setLoading] = useState(true);
   const [nuevo, setNuevo] = useState("");
   const [creando, setCreando] = useState(false);
+  // El input de alta solo se muestra al pulsar «+ Nuevo» (igual que el panel de campos).
+  const [anadiendo, setAnadiendo] = useState(false);
   const { confirm, dialog } = useConfirmDelete();
 
   useEffect(() => {
@@ -43,7 +45,13 @@ export function OrigenesCandidatoConfig() {
     if (!res.ok) { toast.error(res.error); return; }
     setOrigenes((prev) => [...prev, res.origen]);
     setNuevo("");
+    setAnadiendo(false);
     toast.success("Origen añadido");
+  };
+
+  const cancelarAlta = () => {
+    setNuevo("");
+    setAnadiendo(false);
   };
 
   const alternar = async (o: OrigenCandidatoConfig) => {
@@ -75,21 +83,54 @@ export function OrigenesCandidatoConfig() {
         <div>
           <h3 className="font-semibold text-foreground text-sm">¿Por dónde nos has conocido?</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Opciones que el candidato elige al postular (obligatorio). El nombre no
-            se puede modificar: para cambiarlo, borra y crea uno nuevo.
+            Opciones que el candidato elige al postular. El nombre no se puede
+            modificar: para cambiarlo, borra y crea uno nuevo.
           </p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 text-xs h-8"
+          onClick={() => setAnadiendo(true)}
+          disabled={anadiendo}
+        >
+          <Plus className="h-3.5 w-3.5" /> Nuevo
+        </Button>
       </div>
       <CardContent className="p-0">
         {loading ? (
           <p className="px-5 py-6 text-sm text-muted-foreground">Cargando…</p>
         ) : (
           <>
-            {origenes.length === 0 && (
+            {origenes.length === 0 && !anadiendo && (
               <p className="px-5 py-6 text-sm text-muted-foreground">
-                Aún no hay orígenes. Añade el primero abajo.
+                Aún no hay orígenes. Pulsa «Nuevo» para añadir el primero.
               </p>
             )}
+
+            {/* Fila de alta (se revela al pulsar «+ Nuevo») */}
+            {anadiendo && (
+              <div className="flex items-center gap-2 px-5 py-3 bg-muted/20 border-b border-border">
+                <Input
+                  value={nuevo}
+                  autoFocus
+                  onChange={(e) => setNuevo(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") crear();
+                    if (e.key === "Escape") cancelarAlta();
+                  }}
+                  placeholder="Nuevo origen (ej. TikTok, feria de empleo…)"
+                  className="h-8 text-sm max-w-xs"
+                />
+                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={crear} disabled={!nuevo.trim() || creando}>
+                  <Check className="h-4 w-4 text-emerald-600" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={cancelarAlta}>
+                  <X className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              </div>
+            )}
+
             {origenes.map((o) => (
               <div
                 key={o.id}
@@ -113,20 +154,6 @@ export function OrigenesCandidatoConfig() {
                 </div>
               </div>
             ))}
-
-            {/* Añadir nuevo */}
-            <div className="flex items-center gap-2 px-5 py-3 bg-muted/20">
-              <Input
-                value={nuevo}
-                onChange={(e) => setNuevo(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") crear(); }}
-                placeholder="Nuevo origen (ej. TikTok, feria de empleo…)"
-                className="h-8 text-sm max-w-xs"
-              />
-              <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={crear} disabled={!nuevo.trim() || creando}>
-                <Plus className="h-3.5 w-3.5" /> Añadir
-              </Button>
-            </div>
           </>
         )}
       </CardContent>

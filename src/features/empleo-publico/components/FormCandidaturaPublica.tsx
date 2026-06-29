@@ -11,6 +11,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { normalizarNombre } from "@/shared/lib/normalizar-nombre";
 import type { CuestionarioPublico } from "@/features/empleo-publico/services/empleo-fetch";
 import type { RespuestasCuestionario } from "@/features/rrhh/data/cuestionario-vacante";
+import {
+  normalizarCamposFormulario,
+  type CamposFormularioConfig,
+} from "@/features/rrhh/data/campos-candidatura";
 
 interface Props {
   empresaSlug: string;
@@ -21,6 +25,8 @@ interface Props {
   cuestionario?: CuestionarioPublico | null;
   /** Opciones del catálogo «¿Por dónde nos has conocido?» (nombres activos). */
   origenes?: string[];
+  /** Config de campos (activo/obligatorio) por empresa. */
+  campos?: CamposFormularioConfig;
 }
 
 interface FormState {
@@ -159,8 +165,15 @@ function BuscadorLocalidad({
 
 export function FormCandidaturaPublica({
   empresaSlug, empresaId, ofertaId, ofertaTitulo, canalCodigo = null, cuestionario = null,
-  origenes = [],
+  origenes = [], campos,
 }: Props) {
+  // Config de campos normalizada (defaults si la página no la pasó).
+  const cfg = normalizarCamposFormulario(campos ?? null);
+  // Un campo se pide solo si está activo; obligatorio solo si activo && obligatorio.
+  const visible = (k: keyof CamposFormularioConfig) => cfg[k].activo;
+  const requerido = (k: keyof CamposFormularioConfig) => cfg[k].activo && cfg[k].obligatorio;
+  // El select de origen solo aplica si el campo está activo Y hay opciones.
+  const pedirOrigen = visible("como_nos_conocio") && origenes.length > 0;
   const [form, setForm] = useState<FormState>(VACIO);
   const [respuestas, setRespuestas] = useState<RespuestasCuestionario>({});
   const [paso, setPaso] = useState<Paso>("datos");
@@ -213,6 +226,7 @@ export function FormCandidaturaPublica({
   }, [form.email, form.telefono, emailValido, telDigitos, empresaId]);
 
   function validarDatos(): string | null {
+    // Campos fijos (siempre obligatorios): nombre, apellidos, email, teléfono.
     if (!form.nombre.trim()) return "El nombre es obligatorio";
     if (!form.apellidos.trim()) return "Los apellidos son obligatorios";
     if (!form.email.trim()) return "El email es obligatorio";
@@ -220,14 +234,17 @@ export function FormCandidaturaPublica({
     if (emailDup) return "Este correo ya está registrado en una candidatura.";
     if (!form.telefono.trim()) return "El teléfono es obligatorio";
     if (telDup) return "Este teléfono ya está registrado en una candidatura.";
-    if (!form.genero) return "El género es obligatorio";
-    if (!form.ubicacion.trim()) return "La ubicación es obligatoria";
-    if (!form.disponibilidad) return "La disponibilidad es obligatoria";
-    if (!form.experiencia_previa) return "La experiencia previa es obligatoria";
-    if (origenes.length > 0 && !form.como_nos_conocio) return "Indícanos por dónde nos has conocido";
-    if (!form.cv) return "El currículum es obligatorio";
-    if (form.cv.size > MAX_CV_BYTES) return "El CV no puede superar 5MB";
-    if (form.cv.type !== "application/pdf") return "El CV debe ser un PDF";
+    // Campos configurables: solo se exigen si están marcados como obligatorios.
+    if (requerido("genero") && !form.genero) return "El género es obligatorio";
+    if (requerido("ubicacion") && !form.ubicacion.trim()) return "La ubicación es obligatoria";
+    if (requerido("disponibilidad") && !form.disponibilidad) return "La disponibilidad es obligatoria";
+    if (requerido("experiencia_previa") && !form.experiencia_previa) return "La experiencia previa es obligatoria";
+    if (pedirOrigen && cfg.como_nos_conocio.obligatorio && !form.como_nos_conocio)
+      return "Indícanos por dónde nos has conocido";
+    if (requerido("cv") && !form.cv) return "El currículum es obligatorio";
+    // Si se adjunta CV (obligatorio u opcional), debe ser un PDF válido ≤5MB.
+    if (form.cv && form.cv.size > MAX_CV_BYTES) return "El CV no puede superar 5MB";
+    if (form.cv && form.cv.type !== "application/pdf") return "El CV debe ser un PDF";
     return null;
   }
 
@@ -263,14 +280,15 @@ export function FormCandidaturaPublica({
         fd.set("apellidos", form.apellidos.trim());
         fd.set("email", form.email.trim().toLowerCase());
         fd.set("telefono", form.telefono.trim());
-        fd.set("genero", form.genero);
-        fd.set("ubicacion", form.ubicacion.trim());
-        fd.set("disponibilidad", form.disponibilidad);
-        fd.set("experiencia_previa", form.experiencia_previa);
-        fd.set("como_nos_conocio", form.como_nos_conocio);
-        fd.set("carta_presentacion", form.carta_presentacion.trim());
+        // Campos configurables: solo se envían si están activos (visibles).
+        if (visible("genero")) fd.set("genero", form.genero);
+        if (visible("ubicacion")) fd.set("ubicacion", form.ubicacion.trim());
+        if (visible("disponibilidad")) fd.set("disponibilidad", form.disponibilidad);
+        if (visible("experiencia_previa")) fd.set("experiencia_previa", form.experiencia_previa);
+        if (pedirOrigen) fd.set("como_nos_conocio", form.como_nos_conocio);
+        if (visible("carta_presentacion")) fd.set("carta_presentacion", form.carta_presentacion.trim());
         if (canalCodigo) fd.set("canal_codigo", canalCodigo);
-        if (form.cv) fd.set("cv", form.cv);
+        if (visible("cv") && form.cv) fd.set("cv", form.cv);
         if (tieneCuestionario) fd.set("respuestas", JSON.stringify(respuestas));
 
         const res = await fetch("/api/empleo/candidatura", { method: "POST", body: fd });
@@ -449,65 +467,75 @@ export function FormCandidaturaPublica({
         </div>
       </div>
 
-      <div className="grid sm:grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="genero">Género *</Label>
-          <select
-            id="genero"
-            required
-            value={form.genero}
-            onChange={(e) => update("genero", e.target.value)}
-            className={SELECT_CLASS}
-          >
-            <option value="">Selecciona…</option>
-            <option value="masculino">Masculino</option>
-            <option value="femenino">Femenino</option>
-          </select>
+      {(visible("genero") || visible("disponibilidad")) && (
+        <div className="grid sm:grid-cols-2 gap-3">
+          {visible("genero") && (
+            <div className="space-y-1.5">
+              <Label htmlFor="genero">Género{requerido("genero") && " *"}</Label>
+              <select
+                id="genero"
+                required={requerido("genero")}
+                value={form.genero}
+                onChange={(e) => update("genero", e.target.value)}
+                className={SELECT_CLASS}
+              >
+                <option value="">Selecciona…</option>
+                <option value="masculino">Masculino</option>
+                <option value="femenino">Femenino</option>
+              </select>
+            </div>
+          )}
+          {visible("disponibilidad") && (
+            <div className="space-y-1.5">
+              <Label htmlFor="disponibilidad">¿Desde cuándo puedes empezar?{requerido("disponibilidad") && " *"}</Label>
+              <select
+                id="disponibilidad"
+                required={requerido("disponibilidad")}
+                value={form.disponibilidad}
+                onChange={(e) => update("disponibilidad", e.target.value)}
+                className={SELECT_CLASS}
+              >
+                <option value="">Selecciona…</option>
+                {DISPONIBILIDAD_OPCIONES.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
+      )}
+
+      {visible("experiencia_previa") && (
         <div className="space-y-1.5">
-          <Label htmlFor="disponibilidad">¿Desde cuándo puedes empezar? *</Label>
+          <Label htmlFor="experiencia_previa">Experiencia previa{requerido("experiencia_previa") && " *"}</Label>
           <select
-            id="disponibilidad"
-            required
-            value={form.disponibilidad}
-            onChange={(e) => update("disponibilidad", e.target.value)}
+            id="experiencia_previa"
+            required={requerido("experiencia_previa")}
+            value={form.experiencia_previa}
+            onChange={(e) => update("experiencia_previa", e.target.value)}
             className={SELECT_CLASS}
           >
             <option value="">Selecciona…</option>
-            {DISPONIBILIDAD_OPCIONES.map((o) => (
+            {EXPERIENCIA_OPCIONES.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
         </div>
-      </div>
+      )}
 
-      <div className="space-y-1.5">
-        <Label htmlFor="experiencia_previa">Experiencia previa *</Label>
-        <select
-          id="experiencia_previa"
-          required
-          value={form.experiencia_previa}
-          onChange={(e) => update("experiencia_previa", e.target.value)}
-          className={SELECT_CLASS}
-        >
-          <option value="">Selecciona…</option>
-          {EXPERIENCIA_OPCIONES.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
-      </div>
-
-      <div className="space-y-1.5">
-        <Label htmlFor="ubicacion">Ubicación *</Label>
-        <BuscadorLocalidad value={form.ubicacion} onChange={(v) => update("ubicacion", v)} />
-      </div>
-
-      {origenes.length > 0 && (
+      {visible("ubicacion") && (
         <div className="space-y-1.5">
-          <Label htmlFor="como_nos_conocio">¿Por dónde nos has conocido? *</Label>
+          <Label htmlFor="ubicacion">Ubicación{requerido("ubicacion") && " *"}</Label>
+          <BuscadorLocalidad value={form.ubicacion} onChange={(v) => update("ubicacion", v)} />
+        </div>
+      )}
+
+      {pedirOrigen && (
+        <div className="space-y-1.5">
+          <Label htmlFor="como_nos_conocio">¿Por dónde nos has conocido?{cfg.como_nos_conocio.obligatorio && " *"}</Label>
           <select
             id="como_nos_conocio"
-            required
+            required={cfg.como_nos_conocio.obligatorio}
             value={form.como_nos_conocio}
             onChange={(e) => update("como_nos_conocio", e.target.value)}
             className={SELECT_CLASS}
@@ -520,36 +548,42 @@ export function FormCandidaturaPublica({
         </div>
       )}
 
-      <div className="space-y-1.5">
-        <Label htmlFor="cv">Currículum *</Label>
-        <label
-          htmlFor="cv"
-          className="flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm cursor-pointer transition-colors hover:bg-accent"
-        >
-          <Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <span className={form.cv ? "truncate text-foreground" : "text-muted-foreground"}>
-            {form.cv ? form.cv.name : "Adjuntar PDF"}
-          </span>
-        </label>
-        <input
-          id="cv"
-          type="file"
-          accept="application/pdf"
-          className="sr-only"
-          onChange={(e) => update("cv", e.target.files?.[0] ?? null)}
-        />
-      </div>
+      {visible("cv") && (
+        <div className="space-y-1.5">
+          <Label htmlFor="cv">Currículum{requerido("cv") && " *"}</Label>
+          <label
+            htmlFor="cv"
+            className="flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm cursor-pointer transition-colors hover:bg-accent"
+          >
+            <Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className={form.cv ? "truncate text-foreground" : "text-muted-foreground"}>
+              {form.cv ? form.cv.name : "Adjuntar PDF"}
+            </span>
+          </label>
+          <input
+            id="cv"
+            type="file"
+            accept="application/pdf"
+            className="sr-only"
+            onChange={(e) => update("cv", e.target.files?.[0] ?? null)}
+          />
+        </div>
+      )}
 
-      <div className="space-y-1.5">
-        <Label htmlFor="carta">Carta de presentación (opcional)</Label>
-        <Textarea
-          id="carta"
-          rows={4}
-          value={form.carta_presentacion}
-          onChange={(e) => update("carta_presentacion", e.target.value)}
-          placeholder="Cuéntanos algo sobre ti y por qué te interesa esta oferta…"
-        />
-      </div>
+      {visible("carta_presentacion") && (
+        <div className="space-y-1.5">
+          <Label htmlFor="carta">
+            Carta de presentación{requerido("carta_presentacion") ? " *" : " (opcional)"}
+          </Label>
+          <Textarea
+            id="carta"
+            rows={4}
+            value={form.carta_presentacion}
+            onChange={(e) => update("carta_presentacion", e.target.value)}
+            placeholder="Cuéntanos algo sobre ti y por qué te interesa esta oferta…"
+          />
+        </div>
+      )}
 
       {error && (
         <div className="rounded-md bg-destructive/10 text-destructive text-sm px-3 py-2 border border-destructive/20">
