@@ -145,28 +145,50 @@ function CandidatoCard({
       <div className="flex items-start gap-2">
         <GripVertical className="h-3.5 w-3.5 text-muted-foreground/30 mt-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
         <div className="flex-1 min-w-0">
-          <div className="flex items-start gap-1 mb-1 pr-10">
-            {/* Nombre y apellidos SIEMPRE visibles (sin truncar: hace wrap). */}
+          <div className="mb-1 pr-10">
+            {/* Nombre y apellidos SIEMPRE visibles (sin truncar: hace wrap).
+                Ningún icono comparte línea con el nombre: todos van abajo. */}
             <span className="font-semibold text-xs text-foreground break-words leading-snug">
               {candidato.nombre} {candidato.apellidos}
             </span>
-            {/* Resultado del cuestionario de la vacante (verde/naranja/rojo). */}
-            {candidato.cuestionarioTotal != null && candidato.cuestionarioTotal > 0 && (
-              <span className="mt-px">
-                <CuestionarioBadge
-                  aciertos={candidato.cuestionarioAciertos ?? 0}
-                  total={candidato.cuestionarioTotal}
-                />
+          </div>
+          <div className="space-y-0.5 text-[11px] text-muted-foreground">
+            <div className="flex items-center gap-1 min-w-0">
+              <Mail className="h-3 w-3 shrink-0" />
+              <span className="truncate">{candidato.email}</span>
+            </div>
+            <div className="flex items-center gap-1 min-w-0">
+              <MapPin className="h-3 w-3 shrink-0" />
+              <span className="truncate">{candidato.canal ? `${ORIGEN_LABELS[candidato.origen]} · ${candidato.canal}` : ORIGEN_LABELS[candidato.origen]}</span>
+            </div>
+          </div>
+          {/* Fila inferior de indicadores: todos los iconos/badges juntos,
+              en horizontal, como la estrella de reseñas. */}
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            {/* Nota media de las reseñas de la entrevista (1–5 estrellas). */}
+            {candidato.resenaMedia != null && (
+              <span
+                className="inline-flex items-center gap-0.5"
+                title={`Reseñas · ${candidato.resenaMedia.toFixed(1)} / 5`}
+              >
+                <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400" />
+                <span className="font-medium text-foreground/80 text-[11px]">
+                  {candidato.resenaMedia.toFixed(1).replace(".", ",")}
+                </span>
               </span>
             )}
-            {/* Documentación: documento rojo (pendiente) / verde (recibida).
-                Zona fija junto al cuestionario, visible durante todo el proceso. */}
-            <span className="mt-px">
-              <DocumentacionBadge completa={!!candidato.documentacionCompletadaAt} />
-            </span>
+            {/* Resultado del cuestionario de la vacante (verde/naranja/rojo). */}
+            {candidato.cuestionarioTotal != null && candidato.cuestionarioTotal > 0 && (
+              <CuestionarioBadge
+                aciertos={candidato.cuestionarioAciertos ?? 0}
+                total={candidato.cuestionarioTotal}
+              />
+            )}
+            {/* Documentación: documento rojo (pendiente) / verde (recibida). */}
+            <DocumentacionBadge completa={!!candidato.documentacionCompletadaAt} />
             {/* «Visto»: ojo verde cuando la ficha ya se revisó (se abrió). */}
             {candidato.vistoAt && (
-              <span className="shrink-0 text-emerald-600 mt-px" title="Candidato visto" aria-label="Candidato visto">
+              <span className="shrink-0 text-emerald-600" title="Candidato visto" aria-label="Candidato visto">
                 <Eye className="h-3 w-3" />
               </span>
             )}
@@ -180,28 +202,6 @@ function CandidatoCard({
                 <UsersRound className="h-3 w-3" />
                 <CheckCircle2 className="h-3 w-3" />
               </span>
-            )}
-          </div>
-          <div className="space-y-0.5 text-[11px] text-muted-foreground">
-            <div className="flex items-center gap-1 min-w-0">
-              <Mail className="h-3 w-3 shrink-0" />
-              <span className="truncate">{candidato.email}</span>
-            </div>
-            <div className="flex items-center gap-1 min-w-0">
-              <MapPin className="h-3 w-3 shrink-0" />
-              <span className="truncate">{candidato.canal ? `${ORIGEN_LABELS[candidato.origen]} · ${candidato.canal}` : ORIGEN_LABELS[candidato.origen]}</span>
-            </div>
-            {/* Nota media de las reseñas de la entrevista (1–5 estrellas). */}
-            {candidato.resenaMedia != null && (
-              <div
-                className="flex items-center gap-1 min-w-0"
-                title={`Reseñas · ${candidato.resenaMedia.toFixed(1)} / 5`}
-              >
-                <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400" />
-                <span className="truncate font-medium text-foreground/80">
-                  {candidato.resenaMedia.toFixed(1).replace(".", ",")}
-                </span>
-              </div>
             )}
           </div>
         </div>
