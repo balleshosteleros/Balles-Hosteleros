@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import type {
   BatchAvailabilityLookupRequest,
   SlotTimeAvailability,
@@ -8,13 +9,12 @@ const TZ_DEFAULT = "Europe/Madrid";
 
 /**
  * Convierte un instante UTC (unix seconds) a fecha YYYY-MM-DD y hora HH:mm:ss
- * en la zona del restaurante (por ahora fija Europe/Madrid; futuro: empresas.timezone).
+ * en la zona horaria del restaurante (PRP-069). `tz` la marca la empresa.
  */
-function startSecToFechaHora(startSec: number): { fecha: string; hora: string } {
+function startSecToFechaHora(startSec: number, tz: string = TZ_DEFAULT): { fecha: string; hora: string } {
   const d = new Date(startSec * 1000);
-  // Intl.DateTimeFormat con zona horaria fija
   const fmt = new Intl.DateTimeFormat("en-CA", {
-    timeZone: TZ_DEFAULT,
+    timeZone: tz,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -61,9 +61,12 @@ export async function lookupAvailability(
 ): Promise<SlotTimeAvailability[]> {
   if (slots.length === 0) return [];
 
+  // Zona horaria del restaurante (PRP-069) para situar cada slot en su día/turno.
+  const tz = await getZonaHorariaEmpresa(admin, empresaId);
+
   // 1. Materializar (fecha, turno, partySize) por cada slot pedido.
   const enriched: AvailabilitySlot[] = slots.map((s) => {
-    const { fecha, hora } = startSecToFechaHora(s.start_sec);
+    const { fecha, hora } = startSecToFechaHora(s.start_sec, tz);
     return {
       fecha,
       turno: deducirTurno(hora),

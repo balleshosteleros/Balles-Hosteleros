@@ -130,6 +130,10 @@ export interface BuildAvailabilityOpts {
   resolveCupo: (empresaId: string, fecha: string, turno: "COMIDA" | "CENA") => Promise<number | null>;
 }
 
+// PRP-069: el feed de disponibilidad genera fechas forward comunes a TODAS las
+// empresas del feed; al ser multi-empresa por slot, se usa la zona de referencia
+// peninsular (TZ_DEFAULT). La hora REAL de cada reserva sí se guarda en la zona de
+// su empresa (ver CreateBooking/availability-resolver). Pendiente: feed por empresa.
 function ymdEnTZ(d: Date): string {
   const fmt = new Intl.DateTimeFormat("en-CA", {
     timeZone: TZ_DEFAULT, year: "numeric", month: "2-digit", day: "2-digit", hourCycle: "h23",

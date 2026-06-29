@@ -1,5 +1,20 @@
 import { NextResponse } from "next/server";
 import { getGoogleTokens } from "@/lib/google/api";
+import { createClient } from "@/lib/supabase/server";
+import { getEmpresaActivaForUser, getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
+
+/** Zona horaria de la empresa activa del usuario, para los eventos de Calendar (PRP-069). */
+async function zonaEmpresaActiva(): Promise<string> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return "Europe/Madrid";
+    const empresaId = await getEmpresaActivaForUser(supabase, user.id);
+    return await getZonaHorariaEmpresa(supabase, empresaId);
+  } catch {
+    return "Europe/Madrid";
+  }
+}
 
 /**
  * Crea un evento en Google Calendar (calendario primary).
@@ -30,13 +45,14 @@ export async function POST(request: Request) {
     );
   }
   const calId = body.calendarId || "primary";
+  const tz = await zonaEmpresaActiva();
 
   const payload: Record<string, unknown> = {
     summary: body.titulo,
     description: body.descripcion ?? "",
     location: body.lugar ?? "",
-    start: { dateTime: body.inicio, timeZone: "Europe/Madrid" },
-    end: { dateTime: body.fin, timeZone: "Europe/Madrid" },
+    start: { dateTime: body.inicio, timeZone: tz },
+    end: { dateTime: body.fin, timeZone: tz },
     attendees: body.invitados?.map((email) => ({ email })) ?? [],
   };
 

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withMetricas } from "@/features/canales-google-rwg/lib/instrumentacion";
 import { resolveEmpresaByPlaceId } from "@/features/canales-google-rwg/lib/booking-server-resolver";
+import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { findOrLinkClienteSala, registrarVisitaCliente } from "@/features/sala/lib/cliente-link";
 import type {
   Booking,
@@ -14,6 +15,8 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const TZ_DEFAULT = "Europe/Madrid";
+// La reserva se guarda en la HORA LOCAL del restaurante: la zona la marca la
+// empresa del merchant (PRP-069), no una constante. TZ_DEFAULT es el fallback.
 
 const requestSchema = z.object({
   idempotency_token: z.string().min(1).max(120),
@@ -39,10 +42,10 @@ const requestSchema = z.object({
   party_size: z.number().int().min(1).max(50).optional(),
 });
 
-function startSecToFechaHora(startSec: number): { fecha: string; hora: string } {
+function startSecToFechaHora(startSec: number, tz: string = TZ_DEFAULT): { fecha: string; hora: string } {
   const d = new Date(startSec * 1000);
   const fmt = new Intl.DateTimeFormat("en-CA", {
-    timeZone: TZ_DEFAULT,
+    timeZone: tz,
     year: "numeric", month: "2-digit", day: "2-digit",
     hour: "2-digit", minute: "2-digit", second: "2-digit",
     hourCycle: "h23",
@@ -130,8 +133,9 @@ export const POST = withMetricas("CreateBooking", async (request) => {
     };
   }
 
-  // 3. Derivar fecha/turno
-  const { fecha, hora } = startSecToFechaHora(data.slot.start_sec);
+  // 3. Derivar fecha/turno en la zona horaria del restaurante (PRP-069)
+  const tzMerchant = await getZonaHorariaEmpresa(admin, merchant.empresaId);
+  const { fecha, hora } = startSecToFechaHora(data.slot.start_sec, tzMerchant);
   const turno = deducirTurno(hora);
   const personas = data.party_size ?? data.slot.resources?.party_size ?? 2;
 

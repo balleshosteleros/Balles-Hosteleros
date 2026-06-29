@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withMetricas } from "@/features/canales-google-rwg/lib/instrumentacion";
+import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import type {
   Booking,
   BookingStatus,
@@ -37,10 +38,10 @@ const GOOGLE_TO_BALLES_ESTADO: Record<BookingStatus, string | null> = {
   PENDING_CLIENT_CONFIRMATION: "NO_RECONFIRMADA",
 };
 
-function startSecToFechaHora(startSec: number): { fecha: string; hora: string } {
+function startSecToFechaHora(startSec: number, tz: string = TZ_DEFAULT): { fecha: string; hora: string } {
   const d = new Date(startSec * 1000);
   const fmt = new Intl.DateTimeFormat("en-CA", {
-    timeZone: TZ_DEFAULT,
+    timeZone: tz,
     year: "numeric", month: "2-digit", day: "2-digit",
     hour: "2-digit", minute: "2-digit", second: "2-digit",
     hourCycle: "h23",
@@ -69,7 +70,19 @@ export const POST = withMetricas("UpdateBooking", async (request) => {
   const admin = createAdminClient();
 
   const estadoBalles = data.booking.status ? GOOGLE_TO_BALLES_ESTADO[data.booking.status] : null;
-  const fechaHora = data.booking.start_sec ? startSecToFechaHora(data.booking.start_sec) : null;
+
+  // Si cambia la hora, la reserva se reescribe en la HORA LOCAL del restaurante:
+  // resolvemos la zona desde la empresa de la reserva (PRP-069).
+  let tzReserva = TZ_DEFAULT;
+  if (data.booking.start_sec) {
+    const { data: rsv } = await admin
+      .from("reservas")
+      .select("empresa_id")
+      .eq("id", data.booking.booking_id)
+      .maybeSingle();
+    tzReserva = await getZonaHorariaEmpresa(admin, (rsv?.empresa_id as string | null) ?? null);
+  }
+  const fechaHora = data.booking.start_sec ? startSecToFechaHora(data.booking.start_sec, tzReserva) : null;
 
   const { data: res, error } = await admin.rpc("update_reserva_externa_rwg", {
     p_reserva_id: data.booking.booking_id,
