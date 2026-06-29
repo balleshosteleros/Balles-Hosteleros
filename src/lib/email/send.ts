@@ -73,7 +73,9 @@ function addressOf(from: string): string {
 }
 
 export type SendEmailResult =
-  | { ok: true; transport: "smtp"; id?: string }
+  // `html` es el HTML EXACTO enviado (con cabecera de marca ya inyectada). Los
+  // llamadores que necesiten archivar el correo recibido lo persisten verbatim.
+  | { ok: true; transport: "smtp"; id?: string; html: string }
   | { ok: false; configured: false }
   | { ok: false; configured: true; error: string };
 
@@ -150,7 +152,9 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     // Cuenta el envío y avisa si nos acercamos al límite diario (best-effort:
     // nunca rompe ni ralentiza de forma crítica el flujo de negocio).
     await registrarEnvioYAvisar();
-    return { ok: true, transport: "smtp", id: info.messageId };
+    // Devuelve el HTML final (post cabecera de marca): el correo tal cual lo
+    // recibe el destinatario, para que el llamador pueda archivarlo.
+    return { ok: true, transport: "smtp", id: info.messageId, html };
   } catch (e) {
     return {
       ok: false,

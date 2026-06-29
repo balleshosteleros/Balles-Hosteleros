@@ -516,7 +516,9 @@ export async function enviarReclutamientoFaseEmail(
     if (ult?.id) {
       await supabase
         .from("candidato_historial")
-        .update({ email_enviado: true, email_asunto: subject })
+        // Archiva el HTML exacto enviado (res.html ya incluye la cabecera de
+        // marca): así el correo recibido queda inmutable aunque cambie la plantilla.
+        .update({ email_enviado: true, email_asunto: subject, email_html: res.html })
         .eq("id", ult.id as string);
     }
     return { sent: true };

@@ -399,6 +399,7 @@ export async function POST(req: Request) {
           usuario_nombre: "Sistema",
           email_enviado: true,
           email_asunto: r.asunto ?? null,
+          email_html: r.html ?? null,
         });
         if (histErr) console.error("[candidatura] historial email nuevo:", histErr.message);
       }
