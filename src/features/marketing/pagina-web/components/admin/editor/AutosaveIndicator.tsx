@@ -1,15 +1,18 @@
 "use client";
 
 import { Check, Cloud, Loader2 } from "lucide-react";
+import { formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
 export type EstadoAutosave = "idle" | "dirty" | "saving" | "saved" | "error";
 
 interface Props {
   estado: EstadoAutosave;
   ultimoGuardado: Date | null;
+  /** Zona horaria (IANA) de la empresa activa para mostrar la hora de guardado. */
+  zonaHoraria: string;
 }
 
-export function AutosaveIndicator({ estado, ultimoGuardado }: Props) {
+export function AutosaveIndicator({ estado, ultimoGuardado, zonaHoraria }: Props) {
   if (estado === "saving") {
     return (
       <span className="text-xs text-muted-foreground flex items-center gap-1.5">
@@ -35,9 +38,7 @@ export function AutosaveIndicator({ estado, ultimoGuardado }: Props) {
     return (
       <span className="text-xs text-emerald-600 flex items-center gap-1.5">
         <Check className="h-3 w-3" /> Guardado{" "}
-        {new Intl.DateTimeFormat("es-ES", { hour: "2-digit", minute: "2-digit" }).format(
-          ultimoGuardado,
-        )}
+        {formatHoraEnZona(ultimoGuardado.toISOString(), zonaHoraria)}
       </span>
     );
   }

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { deleteEmployee } from '@/actions/admin'
 import type { Profile } from '@/types/database'
 import { useConfirmDelete } from '@/shared/components/ConfirmDeleteDialog'
+import { formatFechaEnZona } from '@/features/empresa/lib/zona-horaria'
 
 export function EmployeeList({ employees: initial }: { employees: Profile[] }) {
   const [employees, setEmployees] = useState(initial)
@@ -59,7 +60,8 @@ export function EmployeeList({ employees: initial }: { employees: Profile[] }) {
                 </span>
               </td>
               <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
-                {new Date(emp.created_at).toLocaleDateString('es-ES')}
+                {/* Admin global (sin empresa activa): zona "Europe/Madrid" explícita. */}
+                {formatFechaEnZona(emp.created_at, 'Europe/Madrid')}
               </td>
               <td className="whitespace-nowrap px-6 py-4 text-right text-sm">
                 <button

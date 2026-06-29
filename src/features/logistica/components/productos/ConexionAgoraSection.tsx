@@ -11,10 +11,14 @@ import {
   type ConexionAgora,
 } from "@/features/logistica/actions/conexion-agora-actions";
 import { toast } from "sonner";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 
 /** Conexión con Ágora del producto: ID de Ágora (editable), nombre con que lo vende Ágora
  *  y si se ha vendido. "Configurable desde Balles" (PRP-057). */
 export function ConexionAgoraSection({ productoId }: { productoId: string }) {
+  const { empresaActual } = useEmpresa();
+  const tz = empresaActual?.zonaHoraria ?? "";
   const [info, setInfo] = useState<ConexionAgora | null>(null);
   const [agoraId, setAgoraId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -109,7 +113,7 @@ export function ConexionAgoraSection({ productoId }: { productoId: string }) {
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground">Última venta:</span>
                   <span className="font-medium">
-                    {new Date(info.ultimaVenta).toLocaleDateString("es-ES", {
+                    {formatFechaEnZona(info.ultimaVenta, tz, {
                       day: "2-digit",
                       month: "short",
                       year: "numeric",

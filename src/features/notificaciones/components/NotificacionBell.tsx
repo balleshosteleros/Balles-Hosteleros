@@ -29,13 +29,11 @@ import {
 } from "@/features/notificaciones/actions/notificaciones-actions";
 import { getTipoMeta } from "@/features/notificaciones/lib/catalogo";
 import { getIconoTipo } from "@/features/notificaciones/lib/catalogo-iconos";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 
-function fmtFecha(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString("es-ES", { day: "2-digit", month: "short" });
-  } catch {
-    return "";
-  }
+function fmtFecha(iso: string, tz: string): string {
+  return formatFechaEnZona(iso, tz, { day: "2-digit", month: "short", year: undefined });
 }
 
 // Campana + círculo de no vistas + bandeja (Sheet) con acuse por notificación.
@@ -48,6 +46,7 @@ export function NotificacionBell({
   className?: string;
   variant?: "panel" | "toolbar";
 }) {
+  const { empresaActual } = useEmpresa();
   const [items, setItems] = useState<NotificacionApp[]>([]);
   const [open, setOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -139,7 +138,7 @@ export function NotificacionBell({
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <p className="truncate text-sm font-medium">{n.titulo}</p>
-                          <span className="shrink-0 text-[11px] text-muted-foreground">{fmtFecha(n.createdAt)}</span>
+                          <span className="shrink-0 text-[11px] text-muted-foreground">{fmtFecha(n.createdAt, empresaActual.zonaHoraria)}</span>
                         </div>
                         {n.mensaje && <p className="mt-0.5 text-xs text-muted-foreground">{n.mensaje}</p>}
                         <div className="mt-2">

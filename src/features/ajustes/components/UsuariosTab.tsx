@@ -1,5 +1,8 @@
+"use client";
+
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaEnZona, formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import {
   AccesoPortal, EstadoAcceso,
   permisosDesdeRol,
@@ -83,22 +86,23 @@ type SupabaseProfile = {
 // El proxy actualiza ultima_actividad cada vez que el usuario navega por una
 // ruta protegida (auto-throttled a 30s en BD), así que refleja la última vez
 // que estuvo "vivo" en la app — no el último login fresco con credenciales.
-function formatUltimaConexion(iso: string | null | undefined): string {
+function formatUltimaConexion(iso: string | null | undefined, tz: string): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
   const ahora = new Date();
   const mismoAnio = d.getFullYear() === ahora.getFullYear();
-  const fecha = d.toLocaleDateString("es-ES", {
+  // Instante mostrado en la zona de la empresa (PRP-069).
+  const fecha = formatFechaEnZona(iso, tz, {
     day: "numeric",
     month: "short",
-    ...(mismoAnio ? {} : { year: "numeric" }),
+    year: mismoAnio ? undefined : "numeric",
   });
-  const hora = d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+  const hora = formatHoraEnZona(iso, tz);
   return `${fecha} · ${hora}`;
 }
 
-function profileToAcceso(p: SupabaseProfile, empresa: { id: string; nombre: string }): AccesoPortal {
+function profileToAcceso(p: SupabaseProfile, empresa: { id: string; nombre: string; zonaHoraria?: string }): AccesoPortal {
   // El rol UI viene SIEMPRE del nombre custom guardado en empresa_roles (rol_label).
   // Si un perfil legado no lo tiene, mostramos vacío — no inventamos roles que no
   // existan en empresa_roles, para que el dropdown sea coherente con la BD.
@@ -122,7 +126,7 @@ function profileToAcceso(p: SupabaseProfile, empresa: { id: string; nombre: stri
     rol: rolUI,
     departamento: p.departamento ?? "",
     estadoAcceso,
-    ultimaConexion: formatUltimaConexion(p.ultima_actividad),
+    ultimaConexion: formatUltimaConexion(p.ultima_actividad, empresa.zonaHoraria ?? ""),
     fechaCreacion: p.created_at?.slice(0, 10) ?? "",
     permisos: permisosDesdeRol(rolUI),
   };

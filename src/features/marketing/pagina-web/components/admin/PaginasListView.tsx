@@ -55,6 +55,8 @@ import {
 import { NuevaPaginaModal } from "./NuevaPaginaModal";
 import type { PaginaWeb, PaginaWebEstado } from "../../types";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 
 const ESTADO_LABEL: Record<PaginaWebEstado, string> = {
   BORRADOR: "Borrador",
@@ -68,6 +70,7 @@ const ESTADO_COLOR: Record<PaginaWebEstado, string> = {
 };
 
 export function PaginasListView() {
+  const { empresaActual } = useEmpresa();
   const [items, setItems] = useState<PaginaWeb[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -203,7 +206,7 @@ export function PaginasListView() {
       th: <TableHead key="actualizada">Actualizada</TableHead>,
       td: (p) => (
         <TableCell key="actualizada" className="text-sm text-muted-foreground whitespace-nowrap">
-          {new Date(p.updated_at).toLocaleDateString("es-ES", {
+          {formatFechaEnZona(p.updated_at, empresaActual.zonaHoraria, {
             day: "2-digit",
             month: "short",
             year: "numeric",

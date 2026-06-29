@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { FileText, AlertTriangle, CheckCircle2, Lock } from "lucide-react";
 import { PLAZOS_PRESENTACION, periodoALabel } from "../types/modelos";
 import type { ModeloAeat } from "../types/modelos";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
 const HOY = new Date();
 
@@ -26,6 +28,7 @@ function estadoColor(estado: string): string {
 }
 
 export function ModeloCard({ modelo }: { modelo: ModeloAeat }) {
+  const { empresaActual } = useEmpresa();
   const dias = diasHastaPlazo(modelo);
   const urgente = dias !== null && dias <= 7 && dias >= 0 && modelo.estado !== "PRESENTADO";
   const vencido = dias !== null && dias < 0 && modelo.estado !== "PRESENTADO";
@@ -100,7 +103,7 @@ export function ModeloCard({ modelo }: { modelo: ModeloAeat }) {
 
           {modelo.ia_corrida_en ? (
             <p className="text-xs text-muted-foreground">
-              IA ejecutada: {new Date(modelo.ia_corrida_en).toLocaleString("es-ES")}
+              IA ejecutada: {formatFechaHoraEnZona(modelo.ia_corrida_en, empresaActual?.zonaHoraria ?? "")}
             </p>
           ) : null}
         </CardContent>

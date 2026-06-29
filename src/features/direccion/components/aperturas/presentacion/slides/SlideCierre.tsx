@@ -1,8 +1,11 @@
 "use client";
 
 import type { EstudioApertura } from "@/features/direccion/data/aperturas";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 
 export function SlideCierre({ estudio }: { estudio: EstudioApertura }) {
+  const { empresaActual } = useEmpresa();
   return (
     <div
       className="flex h-full w-full flex-col items-center justify-center gap-8 p-16 text-center"
@@ -27,7 +30,7 @@ export function SlideCierre({ estudio }: { estudio: EstudioApertura }) {
         </p>
       </div>
       <p className="absolute bottom-8 text-xs opacity-60 uppercase tracking-widest">
-        Dossier generado · {new Date().toLocaleDateString("es-ES")}
+        Dossier generado · {formatFechaEnZona(new Date().toISOString(), empresaActual.zonaHoraria)}
       </p>
     </div>
   );

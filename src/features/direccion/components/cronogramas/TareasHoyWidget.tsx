@@ -14,12 +14,8 @@ import {
 } from "../../hooks/useCronogramaEjecuciones";
 import { toast } from "sonner";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
-
-function formatFechaLarga(d: Date) {
-  return d.toLocaleDateString("es-ES", {
-    weekday: "long", day: "numeric", month: "long",
-  });
-}
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 
 function daysAgo(iso: string): number {
   const [y, m, d] = iso.split("-").map(Number);
@@ -29,10 +25,17 @@ function daysAgo(iso: string): number {
 }
 
 export function TareasHoyWidget() {
+  const { empresaActual } = useEmpresa();
   const { hoy, pendientes, isLoading, error, confirmar, refresh } = useCronogramaEjecuciones();
   const [detalle, setDetalle] = useState<EjecucionConTarea | null>(null);
 
-  const hoyStr = useMemo(() => formatFechaLarga(new Date()), []);
+  const hoyStr = useMemo(
+    () =>
+      formatFechaEnZona(new Date().toISOString(), empresaActual.zonaHoraria, {
+        weekday: "long", day: "numeric", month: "long", year: undefined,
+      }),
+    [empresaActual.zonaHoraria],
+  );
   const hechasHoy = hoy.filter((e) => e.estado === "hecha").length;
   const totalHoy = hoy.length;
   const pctHoy = totalHoy > 0 ? Math.round((hechasHoy / totalHoy) * 100) : 0;

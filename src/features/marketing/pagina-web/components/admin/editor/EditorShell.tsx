@@ -16,12 +16,14 @@ import { PropiedadesPanel } from "./PropiedadesPanel";
 import { AutosaveIndicator } from "./AutosaveIndicator";
 import { PreviewPane } from "./PreviewPane";
 import { ImportarDeUrlDialog } from "./ImportarDeUrlDialog";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 
 interface Props {
   paginaId: string;
 }
 
 export function EditorShell({ paginaId }: Props) {
+  const { empresaActual } = useEmpresa();
   const hydrate = useEditorStore((s) => s.hydrate);
   const reset = useEditorStore((s) => s.reset);
   const nombre = useEditorStore((s) => s.nombre);
@@ -76,7 +78,7 @@ export function EditorShell({ paginaId }: Props) {
         </Link>
         <Globe className="h-4 w-4 text-muted-foreground" />
         <span className="font-medium text-sm truncate">{nombre}</span>
-        <AutosaveIndicator estado={estadoAutosave} ultimoGuardado={ultimoGuardado} />
+        <AutosaveIndicator estado={estadoAutosave} ultimoGuardado={ultimoGuardado} zonaHoraria={empresaActual.zonaHoraria} />
         <div className="ml-auto flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={() => setShowImportar(true)}>
             <Download className="h-4 w-4 mr-1" /> Importar URL

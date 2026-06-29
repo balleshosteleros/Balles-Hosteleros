@@ -29,6 +29,10 @@ import {
 } from "@/features/contabilidad/actions/psd2-actions";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import {
+  formatFechaEnZona,
+  formatHoraEnZona,
+} from "@/features/empresa/lib/zona-horaria";
 
 interface BankAccount {
   id: string;
@@ -56,10 +60,9 @@ interface Connection {
   bank_accounts: BankAccount[];
 }
 
-function formatDateTime(iso: string | null | undefined): string {
+function formatDateTime(iso: string | null | undefined, tz: string): string {
   if (!iso) return "—";
-  const d = new Date(iso);
-  return `${d.toLocaleDateString("es-ES")} a las ${d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}`;
+  return `${formatFechaEnZona(iso, tz)} a las ${formatHoraEnZona(iso, tz)}`;
 }
 
 export function BancosView() {
@@ -318,7 +321,7 @@ export function BancosView() {
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                     {isManual ? "Última modificación" : "Última sincronización"}
                   </p>
-                  <p className="text-xs">{formatDateTime(ultimaIso)}</p>
+                  <p className="text-xs">{formatDateTime(ultimaIso, empresaActual?.zonaHoraria ?? "")}</p>
                 </div>
 
                 <div className="flex items-center gap-1 shrink-0">

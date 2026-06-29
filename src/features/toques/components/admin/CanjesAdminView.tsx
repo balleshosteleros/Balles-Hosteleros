@@ -35,6 +35,7 @@ import type { Canje } from "@/features/toques/types/toques.types";
 import { CANJE_ESTADO_COLOR, CANJE_ESTADO_LABEL } from "@/features/toques/types/toques.types";
 import { OtorgarToqueDialog } from "./OtorgarToqueDialog";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
 type Row = Record<string, unknown>;
 function s(r: Row, k: string): string {
@@ -79,19 +80,15 @@ function formatFecha(s: string | null): string {
   }
 }
 
-function formatFechaHora(s: string | null): string {
+function formatFechaHora(s: string | null, tz: string): string {
   if (!s) return "—";
-  try {
-    const d = new Date(s);
-    return d.toLocaleString("es-ES", {
+  return (
+    formatFechaHoraEnZona(s, tz, {
       day: "2-digit",
       month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return s;
-  }
+      year: undefined,
+    }) || s
+  );
 }
 
 export function CanjesAdminView() {
@@ -259,7 +256,7 @@ export function CanjesAdminView() {
                         <div className="text-xs text-muted-foreground mt-0.5">
                           <span className="font-medium text-slate-700">{c.recompensaNombre}</span>
                           {" · "}
-                          Solicitado {formatFechaHora(c.solicitadoAt)}
+                          Solicitado {formatFechaHora(c.solicitadoAt, empresaActual.zonaHoraria)}
                           {c.fechaDisfrute ? ` · Disfrute ${formatFecha(c.fechaDisfrute)}` : ""}
                         </div>
                         {c.notasSolicitud && (

@@ -235,8 +235,8 @@ export function ToquesView() {
         </div>
 
         <div className="space-y-5">
-          <MisLogrosTimeline items={timeline} />
-          <MisCanjesList canjes={misCanjes} />
+          <MisLogrosTimeline items={timeline} zonaHoraria={empresaActual.zonaHoraria} />
+          <MisCanjesList canjes={misCanjes} zonaHoraria={empresaActual.zonaHoraria} />
         </div>
       </div>
 

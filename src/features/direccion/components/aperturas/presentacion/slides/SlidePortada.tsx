@@ -1,6 +1,8 @@
 "use client";
 
 import type { EstudioApertura } from "@/features/direccion/data/aperturas";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 
 /**
  * Slide 1 — Portada del dossier.
@@ -9,6 +11,7 @@ import type { EstudioApertura } from "@/features/direccion/data/aperturas";
  * Si no hay logo en empresas.*, oculta el espacio del logo.
  */
 export function SlidePortada({ estudio }: { estudio: EstudioApertura }) {
+  const { empresaActual } = useEmpresa();
   return (
     <div
       className="flex h-full w-full flex-col items-center justify-center gap-8 p-12"
@@ -38,7 +41,7 @@ export function SlidePortada({ estudio }: { estudio: EstudioApertura }) {
         )}
       </div>
       <p className="absolute bottom-8 text-xs opacity-60 uppercase tracking-widest">
-        Estudio de viabilidad · {new Date(estudio.creado).toLocaleDateString("es-ES")}
+        Estudio de viabilidad · {formatFechaEnZona(estudio.creado, empresaActual.zonaHoraria)}
       </p>
     </div>
   );

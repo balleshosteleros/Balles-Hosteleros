@@ -33,6 +33,8 @@ import { MOTIVOS_BAJA, TIPOS_MODIFICACION } from "@/features/gestoria/contrataci
 import { ContratacionModal } from "@/features/gestoria/contrataciones/components/ContratacionModal";
 import { AjustesContratacionesModal } from "@/features/gestoria/contrataciones/components/AjustesContratacionesModal";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 
 const COLS_ALTA = [
   { campo: "nombre", label: "Nombre", bloqueada: true as const },
@@ -55,6 +57,11 @@ function fmtFechaES(iso: string | null | undefined): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+// `created_at` es un INSTANTE: la fecha mostrada se calcula en la zona de la empresa.
+function fmtInstanteES(iso: string | null | undefined, tz: string): string {
+  return formatFechaEnZona(iso, tz) || "—";
 }
 
 function nombreCompleto(r: ContratacionRow): string {
@@ -88,13 +95,13 @@ function csvEscape(v: string | number | null | undefined): string {
   return s;
 }
 
-function downloadCSV(rows: ContratacionRow[], tipoActivo: TipoContratacion) {
+function downloadCSV(rows: ContratacionRow[], tipoActivo: TipoContratacion, tz: string) {
   const header = ["Fecha registro", "Tipo", "Nombre", "Apellidos", "Puesto/Motivo/Cambio", "Fecha contrato", "Email gestoría", "Email departamento", "Estado email"];
   const lines = [header.map(csvEscape).join(",")];
   for (const r of rows) {
     lines.push(
       [
-        fmtFechaES(r.created_at),
+        fmtInstanteES(r.created_at, tz),
         r.tipo,
         r.nombre ?? "",
         r.apellidos ?? "",
@@ -149,6 +156,8 @@ const TABS: Array<{ tipo: TipoContratacion; label: string; Icon: typeof UserPlus
 ];
 
 export function ContratacionesView() {
+  const { empresaActual } = useEmpresa();
+  const tz = empresaActual?.zonaHoraria ?? "";
   const [rows, setRows] = useState<ContratacionRow[]>([]);
   const [loading, setLoading] = useState(true);
   useGlobalLoadingSync(loading);
@@ -256,7 +265,7 @@ export function ContratacionesView() {
             />
           ),
           td: (r) => (
-            <td key="fecha" className="px-3 py-2.5 whitespace-nowrap text-xs">{fmtFechaES(r.created_at)}</td>
+            <td key="fecha" className="px-3 py-2.5 whitespace-nowrap text-xs">{fmtInstanteES(r.created_at, tz)}</td>
           ),
         },
         puesto_motivo: {
@@ -332,7 +341,7 @@ export function ContratacionesView() {
             />
           ),
           td: (r) => (
-            <td key="fecha" className="px-3 py-2.5 whitespace-nowrap text-xs">{fmtFechaES(r.created_at)}</td>
+            <td key="fecha" className="px-3 py-2.5 whitespace-nowrap text-xs">{fmtInstanteES(r.created_at, tz)}</td>
           ),
         },
         nombre: {
@@ -447,7 +456,7 @@ export function ContratacionesView() {
               size="icon"
               variant="outline"
               className="h-9 w-9"
-              onClick={() => downloadCSV(filtered, tipoActivo)}
+              onClick={() => downloadCSV(filtered, tipoActivo, tz)}
               title="Descargar CSV"
               aria-label="Descargar"
             >

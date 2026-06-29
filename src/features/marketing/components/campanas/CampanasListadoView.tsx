@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { ESTADOS_CAMPANA, type CanalCampana, type EstadoCampana, type Campana } from "@/features/marketing/data/campanas";
 import { crearCampanaEmailVacia, crearCampanaWhatsAppVacia, crearCampanaSmsVacia } from "@/features/marketing/data/campanas";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 import { listarCampanasConAtribucionAction, type CampanaAtribucionRow } from "@/features/marketing/actions/atribucion-actions";
 import { CampanaEditorSheet } from "./CampanaEditorSheet";
 
@@ -34,7 +35,7 @@ const COLUMNAS: ToolbarColumna[] = [
   { campo: "ultimaEjecucion", label: "Última ejecución" },
 ];
 
-function tiempoRelativo(iso: string | null): string {
+function tiempoRelativo(iso: string | null, tz: string): string {
   if (!iso) return "—";
   const d = new Date(iso);
   const ahora = new Date();
@@ -46,7 +47,7 @@ function tiempoRelativo(iso: string | null): string {
   if (h < 24) return `hace ${h} h`;
   const dias = Math.floor(h / 24);
   if (dias < 30) return `hace ${dias} d`;
-  return d.toLocaleDateString("es-ES", { day: "2-digit", month: "short" });
+  return formatFechaEnZona(iso, tz, { day: "2-digit", month: "short", year: undefined });
 }
 
 function badgeEstado(estado: EstadoCampana) {
@@ -212,7 +213,7 @@ export function CampanasListadoView({ canal }: Props) {
                       <td className="px-3 py-2 text-muted-foreground">
                         <span className="inline-flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
-                          {tiempoRelativo(r.ultimaEjecucion)}
+                          {tiempoRelativo(r.ultimaEjecucion, empresaActual.zonaHoraria)}
                         </span>
                       </td>
                     )}

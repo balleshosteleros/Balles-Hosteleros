@@ -35,6 +35,8 @@ import { GeneradorInteligenteModal } from "./GeneradorInteligenteModal";
 import { BrandingDialog } from "./BrandingDialog";
 import type { Presentacion, Estado } from "../types/presentaciones";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 
 const ESTADO_LABEL: Record<Estado, string> = {
   borrador: "Borrador",
@@ -52,6 +54,7 @@ const ESTADO_COLOR: Record<Estado, string> = {
 };
 
 export function BibliotecaView() {
+  const { empresaActual } = useEmpresa();
   const [items, setItems] = useState<Presentacion[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -177,7 +180,7 @@ export function BibliotecaView() {
       th: <TableHead key="fecha">Fecha</TableHead>,
       td: (p) => (
         <TableCell key="fecha" className="text-sm text-muted-foreground whitespace-nowrap">
-          {new Date(p.created_at).toLocaleDateString("es-ES", {
+          {formatFechaEnZona(p.created_at, empresaActual.zonaHoraria, {
             day: "2-digit",
             month: "short",
             year: "numeric",

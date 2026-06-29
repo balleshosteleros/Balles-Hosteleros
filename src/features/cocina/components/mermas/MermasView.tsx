@@ -33,9 +33,11 @@ import {
 import { listProductos } from "@/features/logistica/actions/producto-actions";
 import type { Producto, TipoProducto } from "@/features/logistica/data/productos";
 import { listMermas, createMerma, type MermaRow } from "@/features/cocina/actions/mermas-actions";
+import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 
-function fmtFecha(iso: string): string {
-  return new Date(iso).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
+// `created_at` es un INSTANTE: la fecha mostrada se calcula en la zona de la empresa (PRP-069).
+function fmtFecha(iso: string, tz: string): string {
+  return formatFechaEnZona(iso, tz, { day: "2-digit", month: "short", year: "numeric" });
 }
 
 export function MermasView() {
@@ -123,7 +125,7 @@ export function MermasView() {
   const columnDefs: Record<string, { th: ReactNode; td: (m: MermaRow) => ReactNode }> = {
     fecha: {
       th: <TableHead key="fecha" className="text-xs">Fecha</TableHead>,
-      td: (m) => <TableCell key="fecha" className="whitespace-nowrap text-sm">{fmtFecha(m.created_at)}</TableCell>,
+      td: (m) => <TableCell key="fecha" className="whitespace-nowrap text-sm">{fmtFecha(m.created_at, empresaActual?.zonaHoraria ?? "")}</TableCell>,
     },
     producto: {
       th: <TableHead key="producto" className="text-xs min-w-[180px]">Producto</TableHead>,

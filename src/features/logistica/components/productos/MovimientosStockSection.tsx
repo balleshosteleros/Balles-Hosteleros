@@ -34,9 +34,12 @@ import {
 } from "@/features/logistica/data/kardex";
 import { FacturaAgoraInline } from "./FacturaAgoraInline";
 import { formatNumero } from "@/shared/lib/numero";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 
-function fmtFecha(iso: string): string {
-  return new Date(iso).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
+// `fecha` es TIMESTAMPTZ (instante): se muestra en la zona de la empresa (PRP-069).
+function fmtFecha(iso: string, tz: string): string {
+  return formatFechaEnZona(iso, tz, { day: "2-digit", month: "short", year: "numeric" });
 }
 function fmtNum(n: number): string {
   return formatNumero(Number(n), { max: 2 });
@@ -60,6 +63,8 @@ export function MovimientosStockSection({
   productoId: string;
   unidad?: string;
 }) {
+  const { empresaActual } = useEmpresa();
+  const tz = empresaActual?.zonaHoraria ?? "";
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
   const [movimientos, setMovimientos] = useState<StockMovimiento[]>([]);
@@ -202,7 +207,7 @@ export function MovimientosStockSection({
                         )}
                         onClick={() => desplegable && setAbierta(abiertaEsta ? null : m.id)}
                       >
-                        <td className="py-2 whitespace-nowrap">{fmtFecha(m.fecha)}</td>
+                        <td className="py-2 whitespace-nowrap">{fmtFecha(m.fecha, tz)}</td>
                         <td className="py-2">
                           {(() => {
                             const meta = ICONO_TIPO[m.documento_tipo] ?? ICONO_TIPO.ajuste;

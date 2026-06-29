@@ -26,6 +26,7 @@ import {
 } from "@/features/notificaciones/actions/notificaciones-actions";
 import { getTipoMeta } from "@/features/notificaciones/lib/catalogo";
 import { NuevoAvisoDialog } from "@/features/notificaciones/components/NuevoAvisoDialog";
+import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
 const columnasDef: ToolbarColumna[] = [
   { campo: "tipo", label: "Tipo" },
@@ -35,18 +36,8 @@ const columnasDef: ToolbarColumna[] = [
   { campo: "fecha", label: "Fecha" },
 ];
 
-function fechaHora(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString("es-ES", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return "";
-  }
+function fechaHora(iso: string, tz: string): string {
+  return formatFechaHoraEnZona(iso, tz);
 }
 
 export function NotificacionesRegistroView() {
@@ -119,7 +110,7 @@ export function NotificacionesRegistroView() {
       case "fecha":
         return (
           <TableCell key="fecha" className="text-xs text-muted-foreground">
-            {fechaHora(n.createdAt)}
+            {fechaHora(n.createdAt, empresaActual.zonaHoraria)}
           </TableCell>
         );
       default:

@@ -45,6 +45,11 @@ import { cn } from "@/lib/utils";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { useRecordingStore } from "../store/recording-store";
 import { useRecorder, formatDuration } from "../contexts/recorder-context";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import {
+  formatFechaEnZona,
+  formatFechaHoraEnZona,
+} from "@/features/empresa/lib/zona-horaria";
 
 function formatBytes(bytes: number): string {
   if (!bytes || bytes < 0) return "0 B";
@@ -129,6 +134,8 @@ export function RecordingDrawer() {
 
 function RecordingContent() {
   const { state } = useRecordingStore();
+  const { empresaActual } = useEmpresa();
+  const tz = empresaActual?.zonaHoraria ?? "";
   const [title, setTitle] = useState("");
   const [copied, setCopied] = useState(false);
   const videoPreviewRef = useRef<HTMLVideoElement>(null);
@@ -165,7 +172,7 @@ function RecordingContent() {
   }
 
   function handleStart() {
-    const recordTitle = title.trim() || `Grabación ${new Date().toLocaleString("es-ES")}`;
+    const recordTitle = title.trim() || `Grabación ${formatFechaHoraEnZona(new Date().toISOString(), tz)}`;
     startRecording(recordTitle);
   }
 
@@ -176,7 +183,7 @@ function RecordingContent() {
           <Label htmlFor="rec-title">Nombre de la grabación</Label>
           <Input
             id="rec-title"
-            placeholder={`Grabación ${new Date().toLocaleDateString("es-ES")}`}
+            placeholder={`Grabación ${formatFechaEnZona(new Date().toISOString(), tz)}`}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
@@ -470,6 +477,8 @@ interface SavedRecording {
 }
 
 function RecordingsList() {
+  const { empresaActual } = useEmpresa();
+  const tz = empresaActual?.zonaHoraria ?? "";
   const [recordings, setRecordings] = useState<SavedRecording[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -684,7 +693,7 @@ function RecordingsList() {
                           {rec.title}
                         </p>
                         <p className="text-[10px] text-muted-foreground">
-                          {new Date(rec.created_at).toLocaleDateString("es-ES")} ·{" "}
+                          {formatFechaEnZona(rec.created_at, tz)} ·{" "}
                           {formatDuration(rec.duration)} · {formatBytes(rec.file_size)}
                         </p>
                       </a>

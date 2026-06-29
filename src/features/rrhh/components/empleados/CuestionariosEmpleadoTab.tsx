@@ -17,7 +17,10 @@ import {
   type CuestionarioEmpleadoDetalle,
 } from "@/features/rrhh/actions/cuestionarios-empleado-actions";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 
+// Día de calendario (reunion_fecha es DATE): se muestra tal cual, sin zona.
 function fmtFecha(s: string | null): string {
   if (!s) return "—";
   try {
@@ -25,6 +28,11 @@ function fmtFecha(s: string | null): string {
       day: "2-digit", month: "2-digit", year: "numeric",
     });
   } catch { return s; }
+}
+
+// `respondido_at` es un INSTANTE: se muestra en la zona de la empresa (PRP-069).
+function fmtInstante(s: string | null, tz: string): string {
+  return formatFechaEnZona(s, tz, { day: "2-digit", month: "2-digit", year: "numeric" }) || "—";
 }
 
 function NotaCell({ item }: { item: CuestionarioEmpleadoItem }) {
@@ -50,6 +58,8 @@ function EstadoBadge({ item }: { item: CuestionarioEmpleadoItem }) {
 }
 
 export function CuestionariosEmpleadoTab({ empleadoId }: { empleadoId: string }) {
+  const { empresaActual } = useEmpresa();
+  const tz = empresaActual?.zonaHoraria ?? "";
   const [items, setItems] = useState<CuestionarioEmpleadoItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [detalle, setDetalle] = useState<CuestionarioEmpleadoDetalle | null>(null);
@@ -142,7 +152,7 @@ export function CuestionariosEmpleadoTab({ empleadoId }: { empleadoId: string })
                   <TableCell className="font-medium">{i.plantillaNombre}</TableCell>
                   <TableCell className="text-sm">{i.periodo}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">
-                    {fmtFecha(i.respondidoAt)}
+                    {fmtInstante(i.respondidoAt, tz)}
                   </TableCell>
                   <TableCell><NotaCell item={i} /></TableCell>
                   <TableCell><EstadoBadge item={i} /></TableCell>
@@ -201,7 +211,7 @@ export function CuestionariosEmpleadoTab({ empleadoId }: { empleadoId: string })
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <Campo label="Periodo" value={detalle.periodo} />
-                <Campo label="Respondido" value={fmtFecha(detalle.respondidoAt)} />
+                <Campo label="Respondido" value={fmtInstante(detalle.respondidoAt, tz)} />
                 <Campo
                   label="Nota"
                   value={

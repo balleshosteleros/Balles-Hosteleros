@@ -5,9 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { Trophy, Award, Hand, ShoppingBag, Wrench, Inbox } from "lucide-react";
 import type { Movimiento } from "@/features/toques/types/toques.types";
 import { ORIGEN_LABEL } from "@/features/toques/types/toques.types";
+import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 
 interface Props {
   items: Movimiento[];
+  /** Zona horaria (IANA) de la empresa activa para formatear las fechas. */
+  zonaHoraria: string;
 }
 
 const ORIGEN_ICON = {
@@ -18,17 +21,13 @@ const ORIGEN_ICON = {
   ajuste: Wrench,
 } as const;
 
-function formatFecha(s: string): string {
+function formatFecha(s: string, tz: string): string {
   if (!s) return "—";
-  try {
-    const d = new Date(s.includes("T") ? s : `${s}T12:00:00Z`);
-    return d.toLocaleDateString("es-ES", { day: "2-digit", month: "short" });
-  } catch {
-    return s;
-  }
+  const iso = s.includes("T") ? s : `${s}T12:00:00Z`;
+  return formatFechaEnZona(iso, tz, { day: "2-digit", month: "short", year: undefined }) || s;
 }
 
-export function MisLogrosTimeline({ items }: Props) {
+export function MisLogrosTimeline({ items, zonaHoraria }: Props) {
   return (
     <Card className="p-4 md:p-5">
       <h2 className="text-base font-semibold mb-3 flex items-center gap-2">
@@ -69,7 +68,7 @@ export function MisLogrosTimeline({ items }: Props) {
                     <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
                       {ORIGEN_LABEL[m.origen]}
                     </Badge>
-                    <span>{formatFecha(m.fecha || m.createdAt)}</span>
+                    <span>{formatFecha(m.fecha || m.createdAt, zonaHoraria)}</span>
                   </div>
                 </div>
               </li>

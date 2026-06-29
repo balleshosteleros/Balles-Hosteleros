@@ -5,22 +5,34 @@ import { Badge } from "@/components/ui/badge";
 import { ShoppingBag, Inbox } from "lucide-react";
 import type { Canje } from "@/features/toques/types/toques.types";
 import { CANJE_ESTADO_COLOR, CANJE_ESTADO_LABEL } from "@/features/toques/types/toques.types";
+import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 
 interface Props {
   canjes: Canje[];
+  /** Zona horaria (IANA) de la empresa activa para formatear las fechas. */
+  zonaHoraria: string;
 }
 
-function formatFecha(s: string | null): string {
+const FMT_OPTS: Intl.DateTimeFormatOptions = { day: "2-digit", month: "short", year: "numeric" };
+
+/** Instante (timestamp con hora): se muestra en la zona de la empresa. */
+function formatInstante(s: string | null, tz: string): string {
+  if (!s) return "—";
+  return formatFechaEnZona(s, tz, FMT_OPTS) || s;
+}
+
+/** Día de calendario (fecha de disfrute elegida): se muestra tal cual, sin desplazar por zona. */
+function formatDia(s: string | null): string {
   if (!s) return "—";
   try {
     const d = new Date(s.includes("T") ? s : `${s}T12:00:00Z`);
-    return d.toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
+    return d.toLocaleDateString("es-ES", FMT_OPTS);
   } catch {
     return s;
   }
 }
 
-export function MisCanjesList({ canjes }: Props) {
+export function MisCanjesList({ canjes, zonaHoraria }: Props) {
   return (
     <Card className="p-4 md:p-5">
       <h2 className="text-base font-semibold mb-3 flex items-center gap-2">
@@ -39,8 +51,8 @@ export function MisCanjesList({ canjes }: Props) {
               <div className="flex-1 min-w-0">
                 <div className="font-medium truncate">{c.recompensaNombre || c.recompensaId}</div>
                 <div className="text-xs text-muted-foreground">
-                  Solicitado {formatFecha(c.solicitadoAt)}
-                  {c.fechaDisfrute ? ` · Disfrute ${formatFecha(c.fechaDisfrute)}` : ""}
+                  Solicitado {formatInstante(c.solicitadoAt, zonaHoraria)}
+                  {c.fechaDisfrute ? ` · Disfrute ${formatDia(c.fechaDisfrute)}` : ""}
                 </div>
               </div>
               <div className="text-right shrink-0">

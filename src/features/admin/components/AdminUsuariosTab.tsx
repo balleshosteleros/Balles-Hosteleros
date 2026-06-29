@@ -13,6 +13,7 @@ import { createEmployee, getEmployees, deleteEmployee } from '@/actions/admin'
 import type { Profile } from '@/types/database'
 import { LoadingSpinner } from '@/shared/components/LoadingSpinner'
 import { useConfirmDelete } from '@/shared/components/ConfirmDeleteDialog'
+import { formatFechaEnZona } from '@/features/empresa/lib/zona-horaria'
 
 const ROLES = ['empleado', 'cocinero', 'camarero', 'gerente', 'admin']
 
@@ -116,7 +117,8 @@ export function AdminUsuariosTab() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {new Date(emp.created_at).toLocaleDateString('es-ES')}
+                      {/* Admin global (sin empresa activa): zona "Europe/Madrid" explícita. */}
+                      {formatFechaEnZona(emp.created_at, 'Europe/Madrid')}
                     </TableCell>
                     <TableCell className="text-right">
                       <Button
