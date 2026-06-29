@@ -191,7 +191,7 @@ export const ConfiguracionTab = forwardRef<ConfiguracionTabHandle, { hideSaveBut
       {!hideSaveButton && (
         <div className="flex justify-end">
           <Button onClick={handleSave} disabled={savingConfig}>
-            {savingConfig ? "Guardando…" : "Guardar configuración"}
+            {savingConfig ? "Guardando…" : "Guardar"}
           </Button>
         </div>
       )}

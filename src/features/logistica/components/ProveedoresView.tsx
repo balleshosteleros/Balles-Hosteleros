@@ -511,7 +511,7 @@ export function ProveedoresView() {
 
             <div className="flex justify-end">
               <Button size="sm" onClick={handleGuardarOperativa} disabled={savingOperativa}>
-                {savingOperativa ? "Guardando…" : "Guardar configuración"}
+                {savingOperativa ? "Guardando…" : "Guardar"}
               </Button>
             </div>
           </div>

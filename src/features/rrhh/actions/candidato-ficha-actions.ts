@@ -76,7 +76,7 @@ export async function getActividadCandidato(
   const [{ data, error }, { data: cand }] = await Promise.all([
     supabase
       .from("candidato_historial")
-      .select("id, fase_anterior, estado_anterior, fase_nueva, estado_nuevo, usuario_nombre, email_enviado, email_asunto, vacante_anterior_nombre, vacante_nueva_nombre, created_at")
+      .select("id, fase_anterior, estado_anterior, fase_nueva, estado_nuevo, usuario_nombre, email_enviado, email_asunto, email_html, vacante_anterior_nombre, vacante_nueva_nombre, created_at")
       .eq("candidato_id", candidatoId)
       .order("created_at", { ascending: true }),
     supabase
@@ -113,6 +113,7 @@ export async function getActividadCandidato(
       fecha: fmtFecha(cambioIso),
       emailEnviado: !!r.email_enviado,
       emailAsunto: (r.email_asunto as string | null) ?? null,
+      emailHtml: (r.email_html as string | null) ?? null,
       vacanteAnterior: (r.vacante_anterior_nombre as string | null) ?? null,
       vacanteNueva: (r.vacante_nueva_nombre as string | null) ?? null,
       diasEnFaseAnterior,
@@ -173,6 +174,20 @@ export async function addNotaCandidato(
       texto: trimmed,
     },
   };
+}
+
+export async function deleteNotaCandidato(
+  notaId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { supabase, empresaId } = await ctx();
+  if (!empresaId) return { ok: false, error: "Sin empresa activa" };
+  const { error } = await supabase
+    .from("candidato_notas")
+    .delete()
+    .eq("id", notaId)
+    .eq("empresa_id", empresaId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }
 
 // ─── Reseñas ─────────────────────────────────────────────────────────────────

@@ -230,7 +230,7 @@ export function EscandalloTab({ receta, onChanged, definirEtiquetasFinales }: Pr
       <div className="flex justify-end pt-2 border-t">
         <Button onClick={guardar} disabled={saving}>
           <Save className="h-4 w-4 mr-1.5" />
-          {saving ? "Guardando..." : "Guardar escandallo"}
+          {saving ? "Guardando..." : "Guardar"}
         </Button>
       </div>
     </div>

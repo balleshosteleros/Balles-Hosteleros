@@ -84,6 +84,7 @@ import {
   ORIGEN_LABELS,
   getFasePrincipal,
   estadoRequiereResenas,
+  estadoRequiereDocumentacion,
   type Candidato,
   type Disponibilidad,
   type ExperienciaPrevia,
@@ -104,6 +105,7 @@ import {
   getActividadCandidato,
   listNotasCandidato,
   addNotaCandidato,
+  deleteNotaCandidato,
   listResenasCandidato,
   addResenaCandidato,
   deleteResenaCandidato,
@@ -397,6 +399,9 @@ export function CandidatoDetailModal({
                         candidatoId={candidato.id}
                         notas={notas}
                         onSaved={(n) => setNotas((prev) => [...prev, n])}
+                        onDeleted={(id) =>
+                          setNotas((prev) => prev.filter((x) => x.id !== id))
+                        }
                       />
                     </TabsContent>
                   </div>
@@ -554,6 +559,17 @@ export function CandidatoDetailModal({
                     toast.error("Falta valorar la entrevista", {
                       description:
                         "Completa las reseñas de la entrevista antes de mover al candidato a esta fase. Solo «Papelera» no lo requiere.",
+                    });
+                    return;
+                  }
+                  // Documentación obligatoria para entrar en Formación.
+                  if (
+                    estadoRequiereDocumentacion(destEstado as EstadoReclutamiento) &&
+                    !candidato.documentacionCompletadaAt
+                  ) {
+                    toast.error("Falta la documentación del candidato", {
+                      description:
+                        "Para pasar a Formación el candidato debe completar su documentación desde el enlace que recibe en la fase «Documentación». No se puede avanzar hasta que esté todo.",
                     });
                     return;
                   }
@@ -1088,6 +1104,9 @@ function ActividadTab({
   const faseEntrada =
     historial.length > 0 ? historial[0].faseAnterior : getFasePrincipal(candidato.fase);
 
+  // Correo abierto en el visor (HTML archivado tal cual lo recibió el candidato).
+  const [emailVisor, setEmailVisor] = useState<{ asunto: string; html: string } | null>(null);
+
   return (
     <Section title="Historial de actividad" icon={<History className="h-4 w-4" />}>
       <div className="space-y-2">
@@ -1373,7 +1392,7 @@ function ResenasTab({
         />
         <div className="flex justify-end mt-2">
           <Button size="sm" onClick={guardar} disabled={guardando} className="h-8 text-xs">
-            {guardando ? "Guardando…" : "Guardar reseña"}
+            {guardando ? "Guardando…" : "Guardar"}
           </Button>
         </div>
       </Section>
@@ -1501,13 +1520,16 @@ function NotasTab({
   candidatoId,
   notas,
   onSaved,
+  onDeleted,
 }: {
   candidatoId: string;
   notas: NotaCandidato[];
   onSaved: (n: NotaCandidato) => void;
+  onDeleted: (id: string) => void;
 }) {
   const [texto, setTexto] = useState("");
   const [enviando, setEnviando] = useState(false);
+  const { confirm, dialog } = useConfirmDelete();
 
   const enviar = async () => {
     const trimmed = texto.trim();
@@ -1523,8 +1545,24 @@ function NotasTab({
     setTexto("");
   };
 
+  const borrar = async (id: string) => {
+    const ok = await confirm({
+      title: "Borrar nota",
+      description: "Se eliminará este comentario del candidato. Esta acción no se puede deshacer.",
+    });
+    if (!ok) return;
+    const res = await deleteNotaCandidato(id);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    onDeleted(id);
+    toast.success("Nota borrada");
+  };
+
   return (
     <div className="space-y-4">
+      {dialog}
       {notas.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-6 text-center">
           <p className="text-sm text-muted-foreground">
@@ -1537,7 +1575,17 @@ function NotasTab({
             <div key={n.id} className="rounded-lg border border-border p-3 text-sm">
               <div className="flex items-center justify-between mb-1">
                 <span className="font-medium text-foreground text-xs">{n.autor}</span>
-                <span className="text-muted-foreground text-xs">{n.fecha}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground text-xs">{n.fecha}</span>
+                  <button
+                    type="button"
+                    onClick={() => borrar(n.id)}
+                    className="inline-flex items-center justify-center h-6 w-6 rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                    title="Borrar nota"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
               <p className="text-foreground whitespace-pre-wrap">{n.texto}</p>
             </div>
@@ -1555,7 +1603,7 @@ function NotasTab({
         />
         <div className="flex justify-end">
           <Button size="sm" onClick={enviar} disabled={!texto.trim() || enviando} className="h-8 text-xs">
-            {enviando ? "Enviando…" : "Enviar"}
+            {enviando ? "Guardando…" : "Guardar"}
           </Button>
         </div>
       </div>

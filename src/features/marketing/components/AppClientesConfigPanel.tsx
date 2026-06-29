@@ -455,7 +455,7 @@ export function AppClientesConfigPanel() {
       {/* Acciones */}
       <div className="flex items-center justify-end">
         <Button onClick={onGuardar} disabled={guardando}>
-          {guardando ? "Guardando…" : "Guardar configuración"}
+          {guardando ? "Guardando…" : "Guardar"}
         </Button>
       </div>
     </div>

@@ -410,7 +410,7 @@ export function AgendaMobile() {
               disabled={guardando}
               className="mt-5 h-12 w-full rounded-2xl bg-yellow-400 text-sm font-semibold text-yellow-950 active:bg-yellow-500 disabled:opacity-60"
             >
-              {guardando ? "Guardando…" : "Guardar contacto"}
+              {guardando ? "Guardando…" : "Guardar"}
             </button>
           </div>
         </div>

@@ -236,7 +236,7 @@ export function PuestoHorarioDialog({ open, onOpenChange, puesto, onSaved }: Pro
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
           <Button onClick={handleSave} disabled={saving || loading}>
-            {saving ? "Guardando…" : tienePlantilla ? "Guardar (versión actual)" : "Guardar plantilla"}
+            {saving ? "Guardando…" : "Guardar"}
           </Button>
         </DialogFooter>
       </DialogContent>
