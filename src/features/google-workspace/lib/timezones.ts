@@ -26,17 +26,37 @@ export const TZ_OPCIONES: { value: string; label: string }[] = [
 // zonas cuya ciudad IANA no coincide con lo que la gente escribe
 // (p. ej. Bali = Asia/Makassar, España = Europe/Madrid).
 export const TZ_DESTACADAS: { value: string; nombre: string; buscar?: string[] }[] = [
-  { value: "Europe/Madrid", nombre: "España (Madrid)", buscar: ["espana", "spain", "madrid", "peninsula"] },
-  { value: "Atlantic/Canary", nombre: "Canarias", buscar: ["canary", "tenerife", "las palmas", "gran canaria"] },
-  { value: "Asia/Makassar", nombre: "Bali", buscar: ["bali", "indonesia"] },
-  { value: "Asia/Jakarta", nombre: "Yakarta", buscar: ["jakarta", "indonesia"] },
-  { value: "America/New_York", nombre: "Nueva York", buscar: ["new york", "ny"] },
-  { value: "America/Los_Angeles", nombre: "Los Ángeles", buscar: ["los angeles", "la"] },
-  { value: "America/Mexico_City", nombre: "Ciudad de México", buscar: ["mexico", "cdmx"] },
-  { value: "Europe/London", nombre: "Londres", buscar: ["london", "reino unido", "uk"] },
-  { value: "Asia/Tokyo", nombre: "Tokio", buscar: ["tokyo", "japon"] },
-  { value: "Asia/Dubai", nombre: "Dubái", buscar: ["dubai", "emiratos"] },
-  { value: "Australia/Sydney", nombre: "Sídney", buscar: ["sydney", "australia"] },
+  // Las del usuario primero (España + Bali), luego resto por husos.
+  { value: "Europe/Madrid", nombre: "España (Madrid)", buscar: ["espana", "spain", "madrid", "peninsula", "baleares", "barcelona", "valencia", "sevilla"] },
+  { value: "Atlantic/Canary", nombre: "Canarias", buscar: ["canary", "canarias", "tenerife", "las palmas", "gran canaria", "lanzarote", "fuerteventura"] },
+  { value: "Asia/Makassar", nombre: "Bali (Indonesia)", buscar: ["bali", "indonesia", "denpasar", "makassar", "wita"] },
+  { value: "Asia/Jakarta", nombre: "Yakarta (Indonesia)", buscar: ["jakarta", "yakarta", "indonesia", "java", "wib"] },
+  // Europa
+  { value: "Europe/London", nombre: "Londres", buscar: ["london", "londres", "reino unido", "uk", "inglaterra"] },
+  { value: "Europe/Lisbon", nombre: "Lisboa", buscar: ["lisboa", "lisbon", "portugal"] },
+  { value: "Europe/Paris", nombre: "París", buscar: ["paris", "francia", "france"] },
+  { value: "Europe/Berlin", nombre: "Berlín", buscar: ["berlin", "alemania", "germany"] },
+  { value: "Europe/Rome", nombre: "Roma", buscar: ["roma", "rome", "italia", "italy"] },
+  { value: "Europe/Moscow", nombre: "Moscú", buscar: ["moscu", "moscow", "rusia", "russia"] },
+  // América
+  { value: "America/New_York", nombre: "Nueva York", buscar: ["new york", "nueva york", "ny", "eeuu", "usa"] },
+  { value: "America/Chicago", nombre: "Chicago", buscar: ["chicago", "central", "eeuu"] },
+  { value: "America/Los_Angeles", nombre: "Los Ángeles", buscar: ["los angeles", "la", "california", "pacifico"] },
+  { value: "America/Mexico_City", nombre: "Ciudad de México", buscar: ["mexico", "cdmx", "mexico city"] },
+  { value: "America/Bogota", nombre: "Bogotá", buscar: ["bogota", "colombia"] },
+  { value: "America/Argentina/Buenos_Aires", nombre: "Buenos Aires", buscar: ["buenos aires", "argentina"] },
+  { value: "America/Sao_Paulo", nombre: "São Paulo", buscar: ["sao paulo", "brasil", "brazil"] },
+  // Asia / Oriente Medio / Oceanía
+  { value: "Asia/Dubai", nombre: "Dubái", buscar: ["dubai", "emiratos", "uae"] },
+  { value: "Asia/Kolkata", nombre: "India (Bombay)", buscar: ["india", "bombay", "mumbai", "delhi", "kolkata"] },
+  { value: "Asia/Bangkok", nombre: "Bangkok", buscar: ["bangkok", "tailandia", "thailand"] },
+  { value: "Asia/Singapore", nombre: "Singapur", buscar: ["singapur", "singapore"] },
+  { value: "Asia/Hong_Kong", nombre: "Hong Kong", buscar: ["hong kong", "china"] },
+  { value: "Asia/Shanghai", nombre: "China (Shanghái)", buscar: ["shanghai", "china", "pekin", "beijing"] },
+  { value: "Asia/Tokyo", nombre: "Tokio", buscar: ["tokyo", "tokio", "japon", "japan"] },
+  { value: "Australia/Sydney", nombre: "Sídney", buscar: ["sydney", "sidney", "australia"] },
+  { value: "Pacific/Auckland", nombre: "Auckland", buscar: ["auckland", "nueva zelanda", "new zealand"] },
+  { value: "UTC", nombre: "UTC (hora universal)", buscar: ["utc", "gmt", "universal"] },
 ];
 
 const TZ_DEST_MAP = new Map(TZ_DESTACADAS.map((d) => [d.value, d]));
