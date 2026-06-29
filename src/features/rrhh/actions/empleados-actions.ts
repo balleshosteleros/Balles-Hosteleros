@@ -17,7 +17,9 @@ import {
   getDependientesValidador,
   reasignarValidadorYDesactivar,
 } from "@/features/rrhh/actions/validadores-actions";
-import { resolverHorarioResumen, ahoraEnMadrid } from "@/features/rrhh/utils/horario-empleado";
+import { resolverHorarioResumen } from "@/features/rrhh/utils/horario-empleado";
+import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
+import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import type { DatosPersonalesInput, DatosPersonalesCompletos } from "@/features/mi-panel/actions/datos-personales-actions";
 import type { SolicitudPersonal, SolicitudSubtipo, SolicitudTipo, SolicitudEstado } from "@/features/mi-panel/types";
 
@@ -160,7 +162,9 @@ export async function listEmpleados() {
     const empleadoIds = Array.from(
       new Set((data ?? []).map((e) => e.id as string).filter(Boolean)),
     );
-    const { fecha: hoyISO } = ahoraEnMadrid();
+    // "Hoy" en la zona horaria de la empresa (PRP-069).
+    const tzEmp = await getZonaHorariaEmpresa(admin, empresaId);
+    const { fecha: hoyISO } = ahoraEnZona(tzEmp);
     const horarioPorEmpleado = await resolverHorarioResumen(
       admin,
       empresaId,
