@@ -6,6 +6,7 @@ import {
   ORIGEN_LABELS,
   getFasePrincipal,
   estadoRequiereResenas,
+  estadoRequiereDocumentacion,
   type Candidato,
   type EstadoReclutamiento,
   type FasePrincipal,
@@ -26,7 +27,7 @@ import {
 import {
   ArrowLeft, Mail, MailCheck, MapPin,
   GripVertical, Send, X, UsersRound, CheckCircle2,
-  MinusCircle, XCircle, Star, CalendarDays, Eye,
+  MinusCircle, XCircle, Star, CalendarDays, Eye, FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -85,6 +86,25 @@ function CuestionarioBadge({ aciertos, total }: { aciertos: number; total: numbe
   );
 }
 
+// ─── Distintivo de documentación ────────────────────────────────
+// Documento ROJO = el candidato aún no ha completado su documentación (paso
+// obligatorio antes de Formación); documento VERDE = ya la entregó. Ocupa una
+// posición fija en la zona de distintivos de la tarjeta (junto al cuestionario).
+function DocumentacionBadge({ completa }: { completa: boolean }) {
+  const titulo = completa
+    ? "Documentación · recibida"
+    : "Documentación · pendiente";
+  return (
+    <span
+      className={`shrink-0 ${completa ? "text-emerald-600" : "text-red-600"}`}
+      title={titulo}
+      aria-label={titulo}
+    >
+      <FileText className="h-3.5 w-3.5" />
+    </span>
+  );
+}
+
 /** Días completos en la fase actual (se reinicia a 0 al cambiar de fase). */
 function diasEnFaseDe(candidato: Candidato): number | null {
   const desde = candidato.faseActualizadaAt;
@@ -139,6 +159,11 @@ function CandidatoCard({
                 />
               </span>
             )}
+            {/* Documentación: documento rojo (pendiente) / verde (recibida).
+                Zona fija junto al cuestionario, visible durante todo el proceso. */}
+            <span className="mt-px">
+              <DocumentacionBadge completa={!!candidato.documentacionCompletadaAt} />
+            </span>
             {/* «Visto»: ojo verde cuando la ficha ya se revisó (se abrió). */}
             {candidato.vistoAt && (
               <span className="shrink-0 text-emerald-600 mt-px" title="Candidato visto" aria-label="Candidato visto">
@@ -551,6 +576,19 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
         {
           description:
             "Antes de avanzar a esta fase debes completar TODAS las reseñas de la entrevista (todos los criterios). Solo «Papelera» no lo requiere.",
+        },
+      );
+      return;
+    }
+    // Requisito de documentación: para entrar en Formación (Teórica en adelante)
+    // el candidato debe haber COMPLETADO su documentación. No se puede avanzar
+    // hasta que esté todo; el documento de la tarjeta está en rojo hasta entonces.
+    if (estadoRequiereDocumentacion(estadoDestino) && !c.documentacionCompletadaAt) {
+      toast.error(
+        `${c.nombre} ${c.apellidos} no ha entregado la documentación`,
+        {
+          description:
+            "Para pasar a Formación el candidato debe completar su documentación desde el enlace que recibe en la fase «Documentación». No se puede avanzar hasta que esté todo.",
         },
       );
       return;

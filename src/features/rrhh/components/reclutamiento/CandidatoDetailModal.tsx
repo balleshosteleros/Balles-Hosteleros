@@ -116,7 +116,12 @@ import {
   type OrigenCandidatoConfig,
 } from "@/features/rrhh/actions/reclutamiento-origenes-actions";
 import { llamarDesdeApp } from "@/features/google-workspace/components/TelefonoDrawer";
-import { setCandidatoActivo, setCandidatoVisto } from "@/features/rrhh/actions/candidatos-actions";
+import {
+  setCandidatoActivo,
+  setCandidatoVisto,
+  getEnlaceDocumentacionCandidato,
+} from "@/features/rrhh/actions/candidatos-actions";
+import { enviarReclutamientoFaseEmail } from "@/features/rrhh/actions/reclutamiento-email-plantillas-actions";
 import { toast } from "sonner";
 
 interface CandidatoDetailModalProps {
@@ -136,7 +141,7 @@ interface CandidatoDetailModalProps {
   onContratar?: (c: Candidato) => void;
 }
 
-type TabKey = "cuestionarios" | "actividad" | "resenas" | "notas";
+type TabKey = "cuestionarios" | "documentacion" | "actividad" | "resenas" | "notas";
 
 export function CandidatoDetailModal({
   open,
@@ -358,6 +363,9 @@ export function CandidatoDetailModal({
                           : "auto"
                       }
                     />
+                    <DocumentacionTabTrigger
+                      completa={!!candidato.documentacionCompletadaAt}
+                    />
                     <TabTriggerWithCount
                       label="Actividad"
                       value="actividad"
@@ -380,6 +388,9 @@ export function CandidatoDetailModal({
                   <div className="p-5">
                     <TabsContent value="cuestionarios" className="m-0 outline-none">
                       <CuestionariosTab vacante={vacante} respuesta={respuestaCuest} />
+                    </TabsContent>
+                    <TabsContent value="documentacion" className="m-0 outline-none">
+                      <DocumentacionTab candidato={candidato} />
                     </TabsContent>
                     <TabsContent value="actividad" className="m-0 outline-none">
                       <ActividadTab historial={historial} candidato={candidato} vacante={vacante} />
@@ -988,6 +999,189 @@ function TabTriggerWithCount({
   );
 }
 
+// ─── Disparador de la pestaña «Documentación» ─────────────────
+// Icono de documento ROJO mientras está pendiente, VERDE cuando ya se entregó.
+// Ocupa una posición fija en la barra de pestañas (junto a Cuestionarios).
+function DocumentacionTabTrigger({ completa }: { completa: boolean }) {
+  return (
+    <TabsTrigger
+      value="documentacion"
+      className="rounded-none border-b-2 border-transparent bg-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none px-1 pb-2 text-sm font-medium"
+      title={completa ? "Documentación recibida" : "Documentación pendiente"}
+    >
+      <span>Documentación</span>
+      <FileText
+        className={`ml-1.5 h-4 w-4 ${completa ? "text-emerald-600" : "text-red-600"}`}
+      />
+    </TabsTrigger>
+  );
+}
+
+// ─── Documentación Tab ────────────────────────────────────────
+// Estado del paso obligatorio «Documentación»:
+//  · Pendiente → enlace personal del candidato (copiar) + reenviar el correo.
+//  · Recibida  → datos aportados + documentos descargables.
+function DocumentacionTab({ candidato }: { candidato: Candidato }) {
+  const completa = !!candidato.documentacionCompletadaAt;
+  const [enlace, setEnlace] = useState<string | null>(null);
+  const [cargandoEnlace, setCargandoEnlace] = useState(false);
+  const [reenviando, setReenviando] = useState(false);
+
+  // Mientras está pendiente, obtenemos (o generamos) el enlace personal para
+  // poder copiarlo. No se pide cuando ya está completa (el enlace ya no aplica).
+  useEffect(() => {
+    if (completa) { setEnlace(null); return; }
+    let cancel = false;
+    setCargandoEnlace(true);
+    void getEnlaceDocumentacionCandidato(candidato.id).then((res) => {
+      if (cancel) return;
+      setCargandoEnlace(false);
+      if (res.ok) setEnlace(res.enlace);
+    });
+    return () => { cancel = true; };
+  }, [candidato.id, completa]);
+
+  const copiarEnlace = () => {
+    if (!enlace) return;
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(enlace).catch(() => {});
+      toast.success("Enlace copiado al portapapeles");
+    }
+  };
+
+  const reenviarCorreo = async () => {
+    setReenviando(true);
+    const res = await enviarReclutamientoFaseEmail(candidato.id, "documentacion");
+    setReenviando(false);
+    if (res.sent) {
+      toast.success(`Correo de documentación enviado a ${candidato.nombre}`);
+    } else {
+      toast.error("No se pudo enviar el correo", {
+        description: res.reason ?? "Motivo desconocido",
+      });
+    }
+  };
+
+  // ── Recibida: datos + documentos ──
+  if (completa) {
+    const docs = [
+      { path: candidato.docDniAnversoPath, label: "DNI anverso" },
+      { path: candidato.docDniReversoPath, label: "DNI reverso" },
+      { path: candidato.docIbanPath, label: "IBAN" },
+      { path: candidato.docSsPath, label: "Seg. Social" },
+    ].filter((d) => d.path);
+    return (
+      <div className="space-y-5">
+        <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+          <ShieldCheck className="h-6 w-6 text-emerald-600 shrink-0" />
+          <div>
+            <h4 className="text-sm font-semibold text-emerald-800">Documentación recibida</h4>
+            <p className="text-xs text-emerald-700/80 mt-0.5">
+              El candidato completó su documentación el{" "}
+              {new Date(candidato.documentacionCompletadaAt as string).toLocaleString("es-ES")}.
+            </p>
+          </div>
+        </div>
+
+        <Section title="Datos aportados" icon={<IdCard className="h-4 w-4" />}>
+          <dl className="grid gap-2 text-sm">
+            {[
+              { label: "DNI / NIE", value: candidato.dniNie },
+              {
+                label: "Fecha de nacimiento",
+                value: candidato.fechaNacimiento
+                  ? new Date(`${candidato.fechaNacimiento}T00:00:00`).toLocaleDateString("es-ES")
+                  : null,
+              },
+              { label: "Dirección", value: candidato.direccion },
+              { label: "IBAN", value: candidato.iban },
+              { label: "Nº Seguridad Social", value: candidato.numSeguridadSocial },
+            ]
+              .filter((f) => f.value)
+              .map((f) => (
+                <div key={f.label} className="flex items-start justify-between gap-3 border-b border-border/60 pb-1.5 last:border-0">
+                  <dt className="text-muted-foreground shrink-0">{f.label}</dt>
+                  <dd className="font-medium text-foreground text-right tabular-nums">{f.value}</dd>
+                </div>
+              ))}
+          </dl>
+        </Section>
+
+        {docs.length > 0 && (
+          <Section title="Documentos adjuntos" icon={<FileText className="h-4 w-4" />}>
+            <div className="flex flex-wrap gap-2">
+              {docs.map((d) => (
+                <a
+                  key={d.label}
+                  href={`/api/documentacion/doc?path=${encodeURIComponent(d.path as string)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs text-foreground hover:bg-muted/40 transition-colors"
+                >
+                  <FileText className="h-3.5 w-3.5 text-muted-foreground" /> {d.label}
+                </a>
+              ))}
+            </div>
+          </Section>
+        )}
+      </div>
+    );
+  }
+
+  // ── Pendiente: enlace + reenviar ──
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
+        <FileText className="h-6 w-6 text-red-600 shrink-0" />
+        <div>
+          <h4 className="text-sm font-semibold text-red-800">Documentación pendiente</h4>
+          <p className="text-xs text-red-700/80 mt-0.5">
+            El candidato todavía no ha entregado su documentación. No se puede avanzar a
+            Formación hasta que esté completa.
+          </p>
+        </div>
+      </div>
+
+      <Section title="Enlace para el candidato" icon={<Mail className="h-4 w-4" />}>
+        <p className="text-xs text-muted-foreground mb-2">
+          El candidato recibe este enlace personal por correo al llegar a la fase
+          «Documentación». Desde ahí sube su DNI/NIE, IBAN, nº de Seguridad Social y foto.
+        </p>
+        <div className="flex items-center gap-2">
+          <Input
+            readOnly
+            value={cargandoEnlace ? "Generando enlace…" : (enlace ?? "")}
+            placeholder="Enlace no disponible"
+            className="h-9 text-xs font-mono"
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-9 gap-1.5 text-xs shrink-0"
+            onClick={copiarEnlace}
+            disabled={!enlace}
+          >
+            <Copy className="h-3.5 w-3.5" /> Copiar
+          </Button>
+        </div>
+        <div className="flex justify-end mt-3">
+          <Button
+            type="button"
+            size="sm"
+            className="h-9 gap-1.5 text-xs"
+            onClick={reenviarCorreo}
+            disabled={reenviando}
+          >
+            <Send className="h-3.5 w-3.5" />
+            {reenviando ? "Enviando…" : "Reenviar correo con el enlace"}
+          </Button>
+        </div>
+      </Section>
+    </div>
+  );
+}
+
 // ─── Cuestionarios Tab ────────────────────────────────────────
 /** Color según el ratio de aciertos (0–1): verde ≥80%, ámbar ≥50%, rojo resto. */
 function notaColor(ratio: number): string {
@@ -1212,12 +1406,29 @@ function ActividadTab({
                 )}
               </div>
               {h.emailEnviado && h.emailAsunto && (
-                <div className="mt-1 inline-flex max-w-full items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-primary">
-                  <Mail className="h-3 w-3 shrink-0" />
-                  <span className="truncate" title={h.emailAsunto}>
-                    {h.emailAsunto}
-                  </span>
-                </div>
+                h.emailHtml ? (
+                  // Con HTML archivado: el asunto abre el visor con el correo
+                  // EXACTO que recibió el candidato (inmutable aunque cambie la
+                  // plantilla).
+                  <button
+                    type="button"
+                    onClick={() => setEmailVisor({ asunto: h.emailAsunto!, html: h.emailHtml! })}
+                    className="mt-1 inline-flex max-w-full items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-primary transition-colors hover:bg-primary/20"
+                    title="Ver el correo que recibió el candidato"
+                  >
+                    <Mail className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{h.emailAsunto}</span>
+                    <Eye className="h-3 w-3 shrink-0 opacity-70" />
+                  </button>
+                ) : (
+                  // Sin HTML archivado (correos previos a esta función): solo asunto.
+                  <div className="mt-1 inline-flex max-w-full items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-primary">
+                    <Mail className="h-3 w-3 shrink-0" />
+                    <span className="truncate" title={h.emailAsunto}>
+                      {h.emailAsunto}
+                    </span>
+                  </div>
+                )
               )}
             </div>
           </div>
@@ -1250,7 +1461,54 @@ function ActividadTab({
           </div>
         </div>
       </div>
+
+      {/* Visor del correo archivado: muestra el HTML EXACTO que recibió el
+          candidato, aislado en un iframe (sin heredar estilos de la app). */}
+      <EmailPreviewDialog email={emailVisor} onClose={() => setEmailVisor(null)} />
     </Section>
+  );
+}
+
+// ─── Visor de correo archivado ────────────────────────────────
+function EmailPreviewDialog({
+  email,
+  onClose,
+}: {
+  email: { asunto: string; html: string } | null;
+  onClose: () => void;
+}) {
+  return (
+    <Dialog open={!!email} onOpenChange={(o) => !o && onClose()}>
+      <DialogPortal>
+        <DialogOverlay />
+        <DialogPrimitive.Content
+          className="fixed left-1/2 top-1/2 z-50 flex max-h-[85vh] w-[92vw] max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border bg-background shadow-lg focus:outline-none"
+          aria-describedby={undefined}
+        >
+          <div className="flex items-start gap-3 border-b px-4 py-3">
+            <Mail className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            <div className="min-w-0 flex-1">
+              <DialogPrimitive.Title className="truncate text-sm font-semibold">
+                {email?.asunto}
+              </DialogPrimitive.Title>
+              <p className="text-[11px] text-muted-foreground">
+                Correo enviado al candidato (copia exacta archivada)
+              </p>
+            </div>
+            <DialogPrimitive.Close className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+              <X className="h-4 w-4" />
+            </DialogPrimitive.Close>
+          </div>
+          {/* sandbox vacío: HTML estático sin scripts ni navegación. */}
+          <iframe
+            title="Correo recibido por el candidato"
+            sandbox=""
+            srcDoc={email?.html ?? ""}
+            className="h-[65vh] w-full border-0 bg-white"
+          />
+        </DialogPrimitive.Content>
+      </DialogPortal>
+    </Dialog>
   );
 }
 

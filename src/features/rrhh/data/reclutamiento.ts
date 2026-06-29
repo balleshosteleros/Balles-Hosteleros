@@ -165,6 +165,25 @@ export function estadoRequiereResenas(estado: EstadoReclutamiento): boolean {
   return !ESTADOS_EXENTOS_RESENA.has(estado);
 }
 
+// ─── Requisito de documentación para avanzar ───────────────────
+// «Documentación» es un paso obligatorio: un candidato no puede entrar en
+// Formación (Teórica/Práctica/Prueba/Empleado) sin haber completado su
+// documentación (DNI/NIE, IBAN, Nº SS, foto, etc.). El propio candidato la
+// rellena desde el enlace personal que recibe por correo al llegar a la fase
+// «Documentación». Los estados de Selección y Descartado NO lo exigen (aún no
+// ha llegado el momento, o se le está descartando).
+const ESTADOS_REQUIEREN_DOCUMENTACION = new Set<EstadoReclutamiento>([
+  "teorica",
+  "practica",
+  "prueba",
+  "empleado",
+]);
+
+/** ¿Mover a este estado exige tener la documentación del candidato completa? */
+export function estadoRequiereDocumentacion(estado: EstadoReclutamiento): boolean {
+  return ESTADOS_REQUIEREN_DOCUMENTACION.has(estado);
+}
+
 // ─── Origen ─────────────────────────────────────────────────────
 export type OrigenCandidatura =
   | "web"
@@ -187,6 +206,12 @@ export interface HistorialCambioFase {
   emailEnviado: boolean;
   /** Asunto del correo enviado en este cambio de fase (si lo hubo). */
   emailAsunto?: string | null;
+  /**
+   * HTML exacto del correo enviado (snapshot inmutable, cabecera de marca
+   * incluida). Permite ver en la ficha el correo tal cual lo recibió el
+   * candidato aunque la plantilla cambie después. null si no se archivó.
+   */
+  emailHtml?: string | null;
   /**
    * Si la fila es un movimiento de vacante, títulos de origen y destino.
    * `vacanteNueva` no-null marca la fila como movimiento (no cambio de fase).

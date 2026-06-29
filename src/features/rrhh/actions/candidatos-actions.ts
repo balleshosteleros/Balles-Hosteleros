@@ -46,6 +46,28 @@ async function nombreUsuarioActual(
   return completo || (data.full_name as string | null) || (data.email as string | null) || "Usuario";
 }
 
+/**
+ * Devuelve el enlace personal de documentación del candidato (lo genera de
+ * forma perezosa si aún no existe). Lo usa la pestaña «Documentación» de la
+ * ficha para mostrar/copiar el enlace y reenviarlo, sin tener que mover de fase.
+ */
+export async function getEnlaceDocumentacionCandidato(
+  candidatoId: string,
+): Promise<{ ok: true; enlace: string } | { ok: false; error: string }> {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+    const { asegurarTokenDocumentacion, enlaceDocumentacion } = await import(
+      "@/features/rrhh/lib/documentacion-candidato"
+    );
+    const token = await asegurarTokenDocumentacion(supabase, candidatoId, empresaId);
+    if (!token) return { ok: false, error: "No se pudo generar el enlace" };
+    return { ok: true, enlace: enlaceDocumentacion(token) };
+  } catch (err: unknown) {
+    return { ok: false, error: mensajeError(err) };
+  }
+}
+
 export async function listCandidatosReales() {
   try {
     const { supabase, empresaId } = await getContext();
