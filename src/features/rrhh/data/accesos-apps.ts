@@ -133,15 +133,24 @@ export function faviconDesdeUrl(url: string, nombre?: string): string {
   }
 }
 
+// Departamentos a los que se pueden asignar apps/credenciales (Title Case; el
+// filtro compara tolerante a mayúsculas/acentos). NO hay departamentos "prohibidos":
+// la visibilidad es 100% data-driven — cada app y cada credencial elige sus
+// departamentos. Si mañana asignas una app a Sala, Sala la verá.
+// "Todos" es un comodín = visible para toda la empresa.
 export const DEPARTAMENTOS = [
   "Dirección",
   "Gerencia",
-  "RRHH",
+  "Recursos humanos",
   "Marketing",
   "Contabilidad",
   "Gestoría",
   "Jurídico",
   "Logística",
   "Mantenimiento",
+  "Calidad",
+  "Cocina",
+  "Sala",
+  "Artistas",
   "Todos",
 ];

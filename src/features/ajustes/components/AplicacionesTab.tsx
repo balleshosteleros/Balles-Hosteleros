@@ -27,7 +27,9 @@ import {
 } from "lucide-react";
 import {
   CATEGORIAS_APP,
+  DEPARTAMENTOS,
   MAX_ACCESOS_POR_APP,
+  faviconDesdeUrl,
   type AccesoApp,
   type AccesoCredencial,
   type DatoExtra,
@@ -207,6 +209,8 @@ function AplicacionesTabInner() {
   const [rolesDisponibles, setRolesDisponibles] = useState<string[]>([]);
   // Popover de roles abierto por índice de acceso (-1 = ninguno).
   const [rolesPopoverIdx, setRolesPopoverIdx] = useState<number>(-1);
+  // Popover de departamentos (quién ve la app en el panel).
+  const [deptosPopoverOpen, setDeptosPopoverOpen] = useState(false);
   // Subida de logo manual.
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [subiendoLogo, setSubiendoLogo] = useState(false);
@@ -246,6 +250,21 @@ function AplicacionesTabInner() {
         return { ...a, roles: Array.from(set) };
       }),
     }));
+  };
+
+  // Activa/desactiva un departamento que puede VER la app en el panel.
+  // "Todos" es excluyente: al marcarlo, se limpia el resto (y viceversa).
+  const toggleDepartamento = (depto: string) => {
+    setForm((p) => {
+      const set = new Set(p.departamentos ?? []);
+      if (depto === "Todos") {
+        return { ...p, departamentos: set.has("Todos") ? [] : ["Todos"] };
+      }
+      set.delete("Todos");
+      if (set.has(depto)) set.delete(depto);
+      else set.add(depto);
+      return { ...p, departamentos: Array.from(set) };
+    });
   };
 
   const updateAcceso = (idx: number, patch: Partial<AccesoCredencial>) => {
@@ -387,12 +406,13 @@ function AplicacionesTabInner() {
       const rolesUnion = Array.from(
         new Set(form.accesos.flatMap((a) => a.roles ?? [])),
       );
-      // Logo SOLO manual: se conserva el que el usuario haya subido (bucket
-      // app-logos). Si no hay, queda vacío y la UI muestra la inicial en color.
+      // Logo: prioriza el que el usuario subió a mano (bucket app-logos). Si no
+      // hay, se deriva automáticamente del nombre/URL (marca conocida o favicon).
+      const logoAuto = faviconDesdeUrl(form.url, form.nombre);
       const payload = {
         ...form,
         rolesAutorizados: rolesUnion,
-        logoUrl: form.logoUrl || undefined,
+        logoUrl: form.logoUrl || logoAuto || undefined,
       };
       if (editingId) {
         const updated = await updateAccesoApp(editingId, payload);
@@ -656,7 +676,7 @@ function AplicacionesTabInner() {
               <div className="flex items-center gap-3">
                 <AppLogo
                   nombre={form.nombre || "?"}
-                  logoUrl={form.logoUrl || undefined}
+                  logoUrl={form.logoUrl || faviconDesdeUrl(form.url, form.nombre) || undefined}
                 />
                 <input
                   ref={fileInputRef}
@@ -691,17 +711,74 @@ function AplicacionesTabInner() {
                 )}
               </div>
               <p className="text-[11px] text-muted-foreground">
-                Sube la imagen del logo (máx 2 MB). Si no, se muestra la inicial de la app.
+                Al poner la URL se coge el logo automáticamente. Puedes subir una imagen propia (JPG/PNG, máx 2 MB) si prefieres otra.
+              </p>
+            </div>
+
+            {/* Departamentos que VEN la app en el panel de aplicaciones */}
+            <div className="space-y-1 sm:col-span-2">
+              <Label className="text-xs font-semibold">Quién ve esta app</Label>
+              <Popover open={deptosPopoverOpen} onOpenChange={setDeptosPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="w-full min-h-9 flex items-center justify-between gap-2 rounded-md border border-input bg-background px-2.5 py-1.5 text-sm text-left hover:bg-accent/30"
+                  >
+                    <div className="flex flex-wrap gap-1 flex-1">
+                      {(form.departamentos ?? []).length === 0 ? (
+                        <span className="text-muted-foreground text-xs">
+                          Selecciona departamentos (o «Todos»)…
+                        </span>
+                      ) : (
+                        (form.departamentos ?? []).map((dep) => (
+                          <Badge key={dep} variant="secondary" className="gap-1 text-[10px]">
+                            {dep}
+                            <span
+                              role="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleDepartamento(dep);
+                              }}
+                              className="hover:text-destructive cursor-pointer"
+                            >
+                              <X className="h-2.5 w-2.5" />
+                            </span>
+                          </Badge>
+                        ))
+                      )}
+                    </div>
+                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <div className="max-h-64 overflow-y-auto py-1">
+                    {DEPARTAMENTOS.map((dep) => {
+                      const checked = (form.departamentos ?? []).includes(dep);
+                      return (
+                        <label
+                          key={dep}
+                          className="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-accent/40"
+                        >
+                          <Checkbox checked={checked} onCheckedChange={() => toggleDepartamento(dep)} />
+                          <span className={dep === "Todos" ? "font-semibold" : ""}>{dep}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </PopoverContent>
+              </Popover>
+              <p className="text-[11px] text-muted-foreground">
+                Solo los empleados de estos departamentos verán la app en el panel. «Todos» = visible para toda la empresa.
               </p>
             </div>
 
             {/* Accesos: varias parejas usuario/contraseña, cada una con sus roles */}
             <div className="space-y-2 sm:col-span-2">
               <Label className="text-xs font-semibold">
-                Accesos (usuario, contraseña y quién lo ve)
+                Accesos (usuario, contraseña y quién puede verla)
               </Label>
               <p className="text-xs text-muted-foreground">
-                Cada acceso es visible solo para los roles que elijas. Sin roles, solo lo ven los directores.
+                Marca con un tick qué roles pueden ver cada contraseña. Solo esos usuarios la verán y podrán revelarla. Sin ningún tick, solo la ve dirección.
               </p>
               <div className="space-y-2">
                 {form.accesos.map((acc, idx) => (
@@ -742,7 +819,7 @@ function AplicacionesTabInner() {
                           >
                             <div className="flex flex-wrap gap-1 flex-1">
                               {(acc.roles ?? []).length === 0 ? (
-                                <span className="text-muted-foreground">Quién lo ve — selecciona roles…</span>
+                                <span className="text-muted-foreground">¿Quién puede ver esta contraseña? — marca roles…</span>
                               ) : (
                                 (acc.roles ?? []).map((rol) => (
                                   <Badge key={rol} variant="secondary" className="gap-1 text-[10px]">
