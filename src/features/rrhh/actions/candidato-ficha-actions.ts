@@ -1,7 +1,11 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import {
+  getEmpresaActivaForUser,
+  getZonaHorariaEmpresa,
+  ZONA_HORARIA_DEFAULT,
+} from "@/features/empresa/lib/empresa-server";
 import {
   getFasePrincipal,
   type EstadoReclutamiento,
@@ -42,8 +46,17 @@ async function nombreUsuario(
   );
 }
 
-function fmtFecha(iso: string): string {
+/**
+ * Formatea un instante UTC en la zona horaria de la empresa (Ajustes →
+ * Configuración regional). El servidor corre en UTC; sin `timeZone` la hora
+ * saldría desfasada. Usar el NOMBRE de zona (no un desfase fijo) hace que el
+ * horario de verano/invierno se aplique solo según la fecha del propio instante,
+ * de modo que cada registro conserva siempre la hora real que tuvo. La BD no se
+ * toca: guarda UTC; esto solo cambia cómo se muestra.
+ */
+function fmtFecha(iso: string, tz: string = ZONA_HORARIA_DEFAULT): string {
   return new Date(iso).toLocaleString("es-ES", {
+    timeZone: tz,
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -71,6 +84,7 @@ export async function getActividadCandidato(
 ): Promise<HistorialCambioFase[]> {
   const { supabase, empresaId } = await ctx();
   if (!empresaId) return [];
+  const tz = await getZonaHorariaEmpresa(supabase, empresaId);
   // La inscripción (candidatos.created_at) es el inicio de la PRIMERA fase, para
   // poder medir cuánto duró antes del primer cambio.
   const [{ data, error }, { data: cand }] = await Promise.all([
@@ -110,7 +124,7 @@ export async function getActividadCandidato(
       faseNueva,
       estadoNuevo,
       usuario: (r.usuario_nombre as string | null) ?? "Sistema",
-      fecha: fmtFecha(cambioIso),
+      fecha: fmtFecha(cambioIso, tz),
       emailEnviado: !!r.email_enviado,
       emailAsunto: (r.email_asunto as string | null) ?? null,
       emailHtml: (r.email_html as string | null) ?? null,
@@ -125,6 +139,7 @@ export async function getActividadCandidato(
 export async function listNotasCandidato(candidatoId: string): Promise<NotaCandidato[]> {
   const { supabase, empresaId } = await ctx();
   if (!empresaId) return [];
+  const tz = await getZonaHorariaEmpresa(supabase, empresaId);
   const { data, error } = await supabase
     .from("candidato_notas")
     .select("id, autor_nombre, texto, created_at")
@@ -137,7 +152,7 @@ export async function listNotasCandidato(candidatoId: string): Promise<NotaCandi
   return (data ?? []).map((r) => ({
     id: r.id as string,
     autor: (r.autor_nombre as string | null) ?? "Usuario",
-    fecha: fmtFecha(r.created_at as string),
+    fecha: fmtFecha(r.created_at as string, tz),
     texto: r.texto as string,
   }));
 }
@@ -152,6 +167,7 @@ export async function addNotaCandidato(
   if (!empresaId || !user) return { ok: false, error: "Sin empresa activa" };
 
   const autor = await nombreUsuario(supabase, user.id);
+  const tz = await getZonaHorariaEmpresa(supabase, empresaId);
   const { data, error } = await supabase
     .from("candidato_notas")
     .insert({
@@ -170,7 +186,7 @@ export async function addNotaCandidato(
     nota: {
       id: data.id as string,
       autor,
-      fecha: fmtFecha(data.created_at as string),
+      fecha: fmtFecha(data.created_at as string, tz),
       texto: trimmed,
     },
   };
@@ -196,6 +212,7 @@ export async function listResenasCandidato(
 ): Promise<ResenaCandidato[]> {
   const { supabase, empresaId } = await ctx();
   if (!empresaId) return [];
+  const tz = await getZonaHorariaEmpresa(supabase, empresaId);
   const { data, error } = await supabase
     .from("candidato_resenas")
     .select("id, autor_nombre, puntuaciones, comentario, created_at")
@@ -208,7 +225,7 @@ export async function listResenasCandidato(
   return (data ?? []).map((r) => ({
     id: r.id as string,
     autor: (r.autor_nombre as string | null) ?? "Usuario",
-    fecha: fmtFecha(r.created_at as string),
+    fecha: fmtFecha(r.created_at as string, tz),
     puntuaciones: ((r.puntuaciones ?? []) as ResenaCriterio[]).filter(
       (p) => typeof p?.criterioId === "string" && typeof p?.estrellas === "number",
     ),
@@ -231,6 +248,7 @@ export async function addResenaCandidato(
   if (!empresaId || !user) return { ok: false, error: "Sin empresa activa" };
 
   const autor = await nombreUsuario(supabase, user.id);
+  const tz = await getZonaHorariaEmpresa(supabase, empresaId);
   const { data, error } = await supabase
     .from("candidato_resenas")
     .insert({
@@ -250,7 +268,7 @@ export async function addResenaCandidato(
     resena: {
       id: data.id as string,
       autor,
-      fecha: fmtFecha(data.created_at as string),
+      fecha: fmtFecha(data.created_at as string, tz),
       puntuaciones,
       comentario,
     },

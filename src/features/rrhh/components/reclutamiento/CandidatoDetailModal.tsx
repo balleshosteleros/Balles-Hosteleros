@@ -645,7 +645,7 @@ function CandidatoSidebar({
           )}
         </div>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Inscrito el {candidato.fechaInscripcion}
+          Inscrito el {candidato.fechaInscripcionFull || candidato.fechaInscripcion}
         </p>
       </div>
 
@@ -1450,7 +1450,7 @@ function ActividadTab({
                 {FASES_PRINCIPALES[faseEntrada].label} / {ESTADOS_CONFIG[estadoEntrada].label}
               </span>
               <span className="mx-1">·</span>
-              {candidato.fechaInscripcion}
+              {candidato.fechaInscripcionFull || candidato.fechaInscripcion}
               {candidato.canal && (
                 <>
                   <span className="mx-1">·</span>

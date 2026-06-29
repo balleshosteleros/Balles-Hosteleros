@@ -273,6 +273,8 @@ export interface Candidato {
   cvAdjunto?: string;
   cvTamanoKb?: number;
   fechaInscripcion: string;
+  /** Fecha+hora de inscripción ya formateada en horario español (para el historial). */
+  fechaInscripcionFull?: string;
   origen: OrigenCandidatura;
   /** Canal concreto por el que entró el CV (nombre del enlace de empleo), si aplica. */
   canal?: string | null;

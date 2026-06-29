@@ -4,19 +4,22 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getOrganigrama } from "@/features/direccion/actions/organigrama-actions";
 import { orgChartsPorEmpresa, type AreaType, type OrgNode } from "@/features/direccion/data/direccion";
-import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import { getEmpresaActivaForUser, getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 
 /**
- * Fecha+hora de inscripción en horario español (Europe/Madrid). El servidor
- * corre en UTC; sin timeZone explícita la hora saldría desfasada (p. ej. 10:00
- * en vez de 12:00). Devuelve "" si la fecha no es válida.
+ * Fecha+hora de un instante UTC en la zona horaria de la empresa (Ajustes →
+ * Configuración regional). El servidor corre en UTC; sin `timeZone` la hora
+ * saldría desfasada. Se usa el NOMBRE de zona (no un desfase fijo), así el
+ * horario de verano/invierno se aplica solo según la fecha del propio instante
+ * y cada registro conserva siempre la hora real que tuvo. Devuelve "" si la
+ * fecha no es válida.
  */
-function fmtFechaHoraMadrid(iso: string | null): string {
+function fmtFechaHora(iso: string | null, tz: string): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleString("es-ES", {
-    timeZone: "Europe/Madrid",
+    timeZone: tz,
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -251,6 +254,7 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
     // DEPARTAMENTO (`departamentos.area`), que es la fuente canónica del
     // proyecto. El organigrama solo se usa como respaldo para vacantes sin
     // departamento asignado, cruzando su `titulo` con el label del nodo.
+    const tz = await getZonaHorariaEmpresa(supabase, empresaId);
     const slugResuelto = empresaSlug ?? (await getEmpresaSlug(supabase, empresaId));
     const organigrama = slugResuelto
       ? ((await getOrganigrama(slugResuelto)) ?? orgChartsPorEmpresa[slugResuelto] ?? null)
@@ -299,7 +303,7 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
           email: c.email,
           cvAdjunto: c.cv_url ?? undefined,
           fechaInscripcion: c.created_at?.slice(0, 10) ?? "",
-          fechaInscripcionFull: fmtFechaHoraMadrid(c.created_at ?? null),
+          fechaInscripcionFull: fmtFechaHora(c.created_at ?? null, tz),
           origen: ORIGENES_VALIDOS.has(c.origen) ? c.origen : "otros",
           canal: c.canal_nombre ?? null,
           notasInternas: c.notas ?? "",
