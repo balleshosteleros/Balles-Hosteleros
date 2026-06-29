@@ -81,7 +81,6 @@ import {
   GENERO_LABELS,
   DISPONIBILIDAD_LABELS,
   EXPERIENCIA_PREVIA_LABELS,
-  ORIGEN_LABELS,
   getFasePrincipal,
   estadoRequiereResenas,
   estadoRequiereDocumentacion,
@@ -905,15 +904,15 @@ function CandidatoSidebar({
         </Select>
       </Field>
 
-      <Field label="¿Cómo nos has conocido?">
+      <Field label="¿Por dónde nos has conocido?">
         <Select
-          value={candidato.origen ?? ""}
+          value={candidato.comoNosConocio ?? ""}
           onValueChange={(v) =>
-            onUpdate({ ...candidato, origen: v as Candidato["origen"] })
+            onUpdate({ ...candidato, comoNosConocio: v || null })
           }
         >
           <SelectTrigger className="h-9 text-sm">
-            <SelectValue placeholder="Seleccionar" />
+            <SelectValue placeholder="Sin responder" />
           </SelectTrigger>
           <SelectContent>
             {origenes
@@ -923,12 +922,12 @@ function CandidatoSidebar({
                   {o.nombre}
                 </SelectItem>
               ))}
-            {/* Valor histórico que ya no está en el catálogo: se muestra igualmente. */}
-            {candidato.origen &&
-              !origenes.some((o) => o.activo && o.nombre === candidato.origen) && (
-                <SelectItem value={candidato.origen} className="text-sm">
-                  {ORIGEN_LABELS[candidato.origen as keyof typeof ORIGEN_LABELS] ??
-                    candidato.origen}
+            {/* Valor declarado que ya no está en el catálogo (se borró): se
+                muestra igualmente para no perder el dato histórico. */}
+            {candidato.comoNosConocio &&
+              !origenes.some((o) => o.activo && o.nombre === candidato.comoNosConocio) && (
+                <SelectItem value={candidato.comoNosConocio} className="text-sm">
+                  {candidato.comoNosConocio}
                 </SelectItem>
               )}
           </SelectContent>

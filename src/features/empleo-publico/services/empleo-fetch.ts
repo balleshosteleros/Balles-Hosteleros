@@ -268,6 +268,30 @@ export async function fetchOfertaPublica(
   }
 }
 
+/**
+ * Lista los orígenes activos del catálogo «¿Por dónde nos has conocido?» de la
+ * empresa (`reclutamiento_origenes`), para el desplegable obligatorio del
+ * formulario público. Service client porque el portal es público (sin sesión).
+ * Devuelve solo los NOMBRES, en su orden de configuración.
+ */
+export async function fetchOrigenesPublicos(empresaId: string): Promise<string[]> {
+  try {
+    const supabase = serviceClient();
+    const { data, error } = await supabase
+      .from("reclutamiento_origenes")
+      .select("nombre, orden")
+      .eq("empresa_id", empresaId)
+      .eq("activo", true)
+      .order("orden", { ascending: true })
+      .order("nombre", { ascending: true });
+    if (error || !data) return [];
+    return data.map((r) => r.nombre as string);
+  } catch (err) {
+    console.error("[empleo-fetch] fetchOrigenesPublicos:", err);
+    return [];
+  }
+}
+
 // ─── Paso «Documentación»: resolución del candidato por token ──────────────────
 
 export interface DocumentacionPublica {

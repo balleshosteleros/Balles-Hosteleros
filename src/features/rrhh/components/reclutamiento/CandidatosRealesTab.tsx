@@ -61,6 +61,7 @@ interface CandidatoReal {
   disponibilidad: string | null;
   experiencia_previa: string | null;
   carta_presentacion: string | null;
+  como_nos_conocio: string | null;
   puntuacion: number | null;
   /** Nota final de las reseñas (media 0–5 de todas las estrellas), o null si no hay. */
   nota_resenas: number | null;
@@ -111,6 +112,7 @@ function toCandidato(c: CandidatoReal): Candidato {
     // "Carta de presentación" en la ficha = lo que el candidato escribió
     // (opcional) en el formulario público; mismo dato, una sola columna.
     sobreTi: c.carta_presentacion ?? undefined,
+    comoNosConocio: c.como_nos_conocio ?? null,
     activo: c.activo ?? true,
   };
 }
@@ -580,6 +582,7 @@ export function CandidatosRealesTab() {
                     ubicacion: updated.ubicacion ?? x.ubicacion,
                     disponibilidad: updated.disponibilidad ?? x.disponibilidad,
                     experiencia_previa: updated.experienciaPrevia ?? x.experiencia_previa,
+                    como_nos_conocio: updated.comoNosConocio ?? x.como_nos_conocio,
                     carta_presentacion: updated.sobreTi ?? null,
                   }
                 : x,
@@ -592,6 +595,7 @@ export function CandidatosRealesTab() {
             ubicacion: updated.ubicacion ?? null,
             disponibilidad: updated.disponibilidad ?? null,
             experiencia_previa: updated.experienciaPrevia ?? null,
+            como_nos_conocio: updated.comoNosConocio ?? null,
             carta_presentacion: updated.sobreTi ?? null,
           });
         }}

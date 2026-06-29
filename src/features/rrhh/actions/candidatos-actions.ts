@@ -78,6 +78,7 @@ export async function listCandidatosReales() {
         id, empresa_id, vacante_id, empleado_id, nombre, apellidos, email,
         telefono, dni_nie, cv_url, origen, fase, estado, puntuacion, notas,
         genero, ubicacion, disponibilidad, experiencia_previa, carta_presentacion,
+        como_nos_conocio,
         promovido_at, activo, created_at,
         vacantes(id, titulo, departamento_id, puesto_id),
         candidato_resenas(puntuaciones)
@@ -391,6 +392,7 @@ export async function actualizarDatosCandidato(
     ubicacion?: string | null;
     disponibilidad?: "inmediato" | "15_dias" | null;
     experiencia_previa?: "sin_experiencia" | "menos_1" | "de_1_a_5" | "mas_5" | null;
+    como_nos_conocio?: string | null;
     carta_presentacion?: string | null;
   },
 ) {
@@ -403,6 +405,7 @@ export async function actualizarDatosCandidato(
     if ("ubicacion" in input) patch.ubicacion = input.ubicacion?.trim() || null;
     if ("disponibilidad" in input) patch.disponibilidad = input.disponibilidad || null;
     if ("experiencia_previa" in input) patch.experiencia_previa = input.experiencia_previa || null;
+    if ("como_nos_conocio" in input) patch.como_nos_conocio = input.como_nos_conocio?.trim() || null;
     if ("carta_presentacion" in input) patch.carta_presentacion = input.carta_presentacion?.trim() || null;
 
     const { error } = await supabase

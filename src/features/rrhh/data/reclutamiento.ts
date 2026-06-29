@@ -278,6 +278,12 @@ export interface Candidato {
   origen: OrigenCandidatura;
   /** Canal concreto por el que entró el CV (nombre del enlace de empleo), si aplica. */
   canal?: string | null;
+  /**
+   * «¿Por dónde nos has conocido?» — origen DECLARADO por el candidato en el
+   * formulario público (nombre del catálogo `reclutamiento_origenes`). Distinto
+   * de `canal` (atribución automática por enlace). Editable en la ficha.
+   */
+  comoNosConocio?: string | null;
   notasInternas: string;
   fase: EstadoReclutamiento;
   vacanteId: string;

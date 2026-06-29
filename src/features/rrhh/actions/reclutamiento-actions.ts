@@ -117,6 +117,7 @@ interface CandidatoRowReal {
   notas: string | null;
   origen: string;
   canal_nombre: string | null;
+  como_nos_conocio: string | null;
   fase: string;
   estado: string;
   promovido_at: string | null;
@@ -176,7 +177,7 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
         .from("candidatos")
         .select(`
           id, empresa_id, vacante_id, nombre, apellidos, email, telefono,
-          cv_url, notas, origen, canal_nombre, fase, estado, promovido_at, empleado_id,
+          cv_url, notas, origen, canal_nombre, como_nos_conocio, fase, estado, promovido_at, empleado_id,
           activo, created_at, visto_at, fase_actualizada_at,
           genero, ubicacion, disponibilidad, experiencia_previa, carta_presentacion,
           dni_nie, iban, num_seguridad_social,
@@ -306,6 +307,7 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
           fechaInscripcionFull: fmtFechaHora(c.created_at ?? null, tz),
           origen: ORIGENES_VALIDOS.has(c.origen) ? c.origen : "otros",
           canal: c.canal_nombre ?? null,
+          comoNosConocio: c.como_nos_conocio ?? null,
           notasInternas: c.notas ?? "",
           // Datos aportados en la candidatura pública (género, ubicación, disponibilidad)
           ubicacion: c.ubicacion ?? undefined,

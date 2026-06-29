@@ -29,6 +29,10 @@ const CandidaturaSchema = z.object({
   ubicacion: z.string().min(1).max(160),
   disponibilidad: z.enum(["inmediato", "15_dias"]),
   experiencia_previa: z.enum(["sin_experiencia", "menos_1", "de_1_a_5", "mas_5"]),
+  // «¿Por dónde nos has conocido?» — nombre del catálogo reclutamiento_origenes
+  // que el candidato declaró. Opcional a nivel de esquema (la empresa puede no
+  // tener orígenes configurados); se valida contra el catálogo más abajo.
+  como_nos_conocio: z.string().max(160).optional().default(""),
   carta_presentacion: z.string().max(5000).optional().default(""),
 });
 
@@ -138,6 +142,7 @@ export async function POST(req: Request) {
       ubicacion: String(fd.get("ubicacion") ?? "").trim(),
       disponibilidad: String(fd.get("disponibilidad") ?? "").trim(),
       experiencia_previa: String(fd.get("experiencia_previa") ?? "").trim(),
+      como_nos_conocio: String(fd.get("como_nos_conocio") ?? "").trim(),
       carta_presentacion: String(fd.get("carta_presentacion") ?? "").trim(),
     });
     if (!parsed.success) {
@@ -150,6 +155,7 @@ export async function POST(req: Request) {
     const { empresa_id: empresaId, oferta_id: ofertaId,
             nombre, apellidos, email, telefono, genero, ubicacion, disponibilidad,
             experiencia_previa: experienciaPrevia,
+            como_nos_conocio: comoNosConocioRaw,
             carta_presentacion: cartaPresentacion } = parsed.data;
 
     if (!cv || cv.size === 0) {
@@ -297,6 +303,33 @@ export async function POST(req: Request) {
       }
     }
 
+    // «¿Por dónde nos has conocido?» — lo DECLARA el candidato (distinto del canal
+    // automático de arriba). Validamos contra el catálogo activo de la empresa
+    // (no nos fiamos del navegador). Si la empresa tiene orígenes configurados,
+    // es obligatorio; si no, se acepta vacío. Guardamos el nombre tal cual
+    // (snapshot) para que sobreviva aunque luego se borre del catálogo.
+    let comoNosConocio: string | null = null;
+    {
+      const { data: origenesRows } = await supabase
+        .from("reclutamiento_origenes")
+        .select("nombre")
+        .eq("empresa_id", empresaId)
+        .eq("activo", true);
+      const catalogo = (origenesRows ?? []).map((r) => r.nombre as string);
+      if (catalogo.length > 0) {
+        const match = catalogo.find(
+          (n) => n.toLowerCase() === comoNosConocioRaw.toLowerCase(),
+        );
+        if (!match) {
+          return NextResponse.json(
+            { ok: false, error: "Indícanos por dónde nos has conocido" },
+            { status: 400 },
+          );
+        }
+        comoNosConocio = match;
+      }
+    }
+
     // Subida del CV (si existe)
     let cvUrl: string | null = null;
     if (cv) {
@@ -335,6 +368,7 @@ export async function POST(req: Request) {
         origen,
         canal_link_id: canalLinkId,
         canal_nombre: canalNombre,
+        como_nos_conocio: comoNosConocio,
         fase: "nuevo",
         estado: "nuevo",
       })

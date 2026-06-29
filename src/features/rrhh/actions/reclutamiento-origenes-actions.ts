@@ -88,24 +88,9 @@ export async function createOrigenCandidato(nombre: string) {
   }
 }
 
-export async function renameOrigenCandidato(id: string, nombre: string) {
-  try {
-    const { supabase, empresaId } = await getContext();
-    if (!empresaId) return { ok: false as const, error: "No autenticado" };
-    const trimmed = nombre.trim();
-    if (!trimmed) return { ok: false as const, error: "El nombre es obligatorio" };
-    const { error } = await supabase
-      .from("reclutamiento_origenes")
-      .update({ nombre: trimmed, updated_at: new Date().toISOString() })
-      .eq("id", id)
-      .eq("empresa_id", empresaId);
-    if (error) throw error;
-    revalidatePath("/rrhh/reclutamiento");
-    return { ok: true as const };
-  } catch (err) {
-    return { ok: false as const, error: mensajeError(err) };
-  }
-}
+// Por diseño el NOMBRE de un origen es inmutable: para cambiarlo se borra y se
+// crea uno nuevo (así no se reescribe el snapshot histórico de candidatos que
+// ya lo eligieron). Por eso no existe renameOrigenCandidato.
 
 export async function toggleOrigenCandidato(id: string, activo: boolean) {
   try {

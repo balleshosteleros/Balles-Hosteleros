@@ -19,6 +19,8 @@ interface Props {
   ofertaTitulo: string;
   canalCodigo?: string | null;
   cuestionario?: CuestionarioPublico | null;
+  /** Opciones del catálogo «¿Por dónde nos has conocido?» (nombres activos). */
+  origenes?: string[];
 }
 
 interface FormState {
@@ -30,6 +32,7 @@ interface FormState {
   ubicacion: string;
   disponibilidad: string;
   experiencia_previa: string;
+  como_nos_conocio: string;
   cv: File | null;
   carta_presentacion: string;
 }
@@ -43,6 +46,7 @@ const VACIO: FormState = {
   ubicacion: "",
   disponibilidad: "",
   experiencia_previa: "",
+  como_nos_conocio: "",
   cv: null,
   carta_presentacion: "",
 };
@@ -155,6 +159,7 @@ function BuscadorLocalidad({
 
 export function FormCandidaturaPublica({
   empresaSlug, empresaId, ofertaId, ofertaTitulo, canalCodigo = null, cuestionario = null,
+  origenes = [],
 }: Props) {
   const [form, setForm] = useState<FormState>(VACIO);
   const [respuestas, setRespuestas] = useState<RespuestasCuestionario>({});
@@ -219,6 +224,7 @@ export function FormCandidaturaPublica({
     if (!form.ubicacion.trim()) return "La ubicación es obligatoria";
     if (!form.disponibilidad) return "La disponibilidad es obligatoria";
     if (!form.experiencia_previa) return "La experiencia previa es obligatoria";
+    if (origenes.length > 0 && !form.como_nos_conocio) return "Indícanos por dónde nos has conocido";
     if (!form.cv) return "El currículum es obligatorio";
     if (form.cv.size > MAX_CV_BYTES) return "El CV no puede superar 5MB";
     if (form.cv.type !== "application/pdf") return "El CV debe ser un PDF";
@@ -261,6 +267,7 @@ export function FormCandidaturaPublica({
         fd.set("ubicacion", form.ubicacion.trim());
         fd.set("disponibilidad", form.disponibilidad);
         fd.set("experiencia_previa", form.experiencia_previa);
+        fd.set("como_nos_conocio", form.como_nos_conocio);
         fd.set("carta_presentacion", form.carta_presentacion.trim());
         if (canalCodigo) fd.set("canal_codigo", canalCodigo);
         if (form.cv) fd.set("cv", form.cv);
@@ -494,6 +501,24 @@ export function FormCandidaturaPublica({
         <Label htmlFor="ubicacion">Ubicación *</Label>
         <BuscadorLocalidad value={form.ubicacion} onChange={(v) => update("ubicacion", v)} />
       </div>
+
+      {origenes.length > 0 && (
+        <div className="space-y-1.5">
+          <Label htmlFor="como_nos_conocio">¿Por dónde nos has conocido? *</Label>
+          <select
+            id="como_nos_conocio"
+            required
+            value={form.como_nos_conocio}
+            onChange={(e) => update("como_nos_conocio", e.target.value)}
+            className={SELECT_CLASS}
+          >
+            <option value="">Selecciona…</option>
+            {origenes.map((o) => (
+              <option key={o} value={o}>{o}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div className="space-y-1.5">
         <Label htmlFor="cv">Currículum *</Label>

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, MapPin, Clock, Briefcase, FileText } from "lucide-react";
-import { fetchOfertaPublica } from "@/features/empleo-publico/services/empleo-fetch";
+import { fetchOfertaPublica, fetchOrigenesPublicos } from "@/features/empleo-publico/services/empleo-fetch";
 import { EmpleoBrandingShell } from "@/features/empleo-publico/components/EmpleoBrandingShell";
 import { FormCandidaturaPublica } from "@/features/empleo-publico/components/FormCandidaturaPublica";
 
@@ -28,6 +28,7 @@ export default async function OfertaPublicaPage({
   const detalle = await fetchOfertaPublica(slug, ofertaId);
   if (!detalle) notFound();
   const { empresa, oferta } = detalle;
+  const origenes = await fetchOrigenesPublicos(empresa.id);
 
   return (
     <EmpleoBrandingShell empresa={empresa}>
@@ -92,6 +93,7 @@ export default async function OfertaPublicaPage({
           ofertaTitulo={oferta.titulo}
           canalCodigo={canalCodigo ?? null}
           cuestionario={oferta.cuestionarioPlantilla ?? null}
+          origenes={origenes}
         />
       </div>
     </EmpleoBrandingShell>
