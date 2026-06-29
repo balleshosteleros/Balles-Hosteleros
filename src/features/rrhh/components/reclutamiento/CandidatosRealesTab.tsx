@@ -48,6 +48,7 @@ interface CandidatoReal {
   genero: string | null;
   ubicacion: string | null;
   disponibilidad: string | null;
+  carta_presentacion: string | null;
   puntuacion: number | null;
   fase: Fase;
   estado: Estado;
@@ -92,6 +93,9 @@ function toCandidato(c: CandidatoReal): Candidato {
     ubicacion: c.ubicacion ?? undefined,
     genero: (c.genero === "masculino" || c.genero === "femenino" ? c.genero : undefined) as Candidato["genero"],
     disponibilidad: (c.disponibilidad === "inmediato" || c.disponibilidad === "15_dias" ? c.disponibilidad : undefined) as Candidato["disponibilidad"],
+    // "Sobre ti" en la ficha es la carta de presentación que el candidato
+    // escribió (opcional) en el formulario público; mismo dato, una columna.
+    sobreTi: c.carta_presentacion ?? undefined,
     activo: c.activo ?? true,
   };
 }
@@ -208,9 +212,6 @@ export function CandidatosRealesTab() {
     <div className="space-y-4">
       <div>
         <h2 className="text-lg font-semibold">Candidatos</h2>
-        <p className="text-sm text-muted-foreground">
-          Pulsa un candidato para abrir su ficha (actividad, notas, reseñas, cuestionario y CV). Al llegar a <b>Prueba</b> aparece el botón para crearlo en el sistema.
-        </p>
       </div>
 
       <Card>
@@ -351,6 +352,7 @@ export function CandidatosRealesTab() {
                     genero: updated.genero ?? x.genero,
                     ubicacion: updated.ubicacion ?? x.ubicacion,
                     disponibilidad: updated.disponibilidad ?? x.disponibilidad,
+                    carta_presentacion: updated.sobreTi ?? null,
                   }
                 : x,
             ),
@@ -361,6 +363,7 @@ export function CandidatosRealesTab() {
             genero: updated.genero ?? null,
             ubicacion: updated.ubicacion ?? null,
             disponibilidad: updated.disponibilidad ?? null,
+            carta_presentacion: updated.sobreTi ?? null,
           });
         }}
         onEliminar={(c) => {
