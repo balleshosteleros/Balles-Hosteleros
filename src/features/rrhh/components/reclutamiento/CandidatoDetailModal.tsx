@@ -25,7 +25,6 @@ import {
   Mail,
   History,
   UserPlus,
-  Tag,
   Clock,
   Send,
   CheckCircle2,
@@ -34,6 +33,7 @@ import {
   UsersRound,
   IdCard,
   ShieldCheck,
+  ArrowRightLeft,
 } from "lucide-react";
 
 function WhatsAppIcon({ className }: { className?: string }) {
@@ -666,23 +666,6 @@ function CandidatoSidebar({
         <div className="flex items-center gap-2 text-sm">
           <span className="text-muted-foreground">+34</span>
           <span className="text-foreground font-medium">{candidato.telefono}</span>
-          <button
-            type="button"
-            onClick={() => candidato.telefono && llamarDesdeApp(candidato.telefono)}
-            className="ml-auto inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-muted/60 text-muted-foreground"
-            title="Llamar desde el software"
-          >
-            <Phone className="h-3.5 w-3.5" />
-          </button>
-          <a
-            href={whatsappLink}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-emerald-50 text-[#25D366]"
-            title="Abrir conversación en WhatsApp"
-          >
-            <WhatsAppIcon className="h-4 w-4" />
-          </a>
         </div>
 
         {/* Email */}
@@ -702,14 +685,6 @@ function CandidatoSidebar({
             <Copy className="h-3.5 w-3.5" />
           </button>
         </div>
-
-        {/* Tag */}
-        <button
-          className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-violet-100 text-violet-700 text-xs hover:bg-violet-200 transition-colors"
-          title="Añadir etiqueta"
-        >
-          <Tag className="h-3 w-3" />
-        </button>
       </div>
 
       <Field label="Ubicación">
@@ -971,7 +946,47 @@ function ActividadTab({
     <Section title="Historial de actividad" icon={<History className="h-4 w-4" />}>
       <div className="space-y-2">
         {/* Cambios de fase y envíos de email (más reciente arriba). */}
-        {[...historial].reverse().map((h) => (
+        {[...historial].reverse().map((h) => {
+          // Movimiento de vacante: tiene prioridad sobre cualquier otra lectura
+          // (incluso si fase/estado coinciden) para que no se confunda con un
+          // cambio de fase ni con el alta inicial.
+          const esMovimientoVacante = !!h.vacanteNueva;
+          // Evento de solo-correo: misma fase y estado (p. ej. el correo «Nuevo»
+          // del alta). Se muestra como envío de correo, sin flecha de transición.
+          const soloCorreo =
+            !esMovimientoVacante &&
+            h.faseAnterior === h.faseNueva &&
+            h.estadoAnterior === h.estadoNuevo;
+          if (esMovimientoVacante) {
+            return (
+              <div
+                key={h.id}
+                className="flex items-start gap-3 p-2.5 rounded-lg bg-amber-50 text-xs"
+              >
+                <ArrowRightLeft className="h-3.5 w-3.5 text-amber-600 mt-0.5 shrink-0" />
+                <div className="flex-1">
+                  <div className="text-foreground">
+                    <span className="font-medium">Movido de vacante</span>
+                    {h.vacanteAnterior && (
+                      <>
+                        <span className="text-muted-foreground mx-1">·</span>
+                        <span>{h.vacanteAnterior}</span>
+                        <span className="text-muted-foreground mx-1">→</span>
+                      </>
+                    )}
+                    {!h.vacanteAnterior && (
+                      <span className="text-muted-foreground mx-1">a</span>
+                    )}
+                    <span className="font-medium">{h.vacanteNueva}</span>
+                  </div>
+                  <div className="text-muted-foreground mt-0.5">
+                    {h.usuario} · {h.fecha}
+                  </div>
+                </div>
+              </div>
+            );
+          }
+          return (
           <div
             key={h.id}
             className="flex items-start gap-3 p-2.5 rounded-lg bg-muted/40 text-xs"
@@ -979,13 +994,22 @@ function ActividadTab({
             <Clock className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
             <div className="flex-1">
               <div className="text-foreground">
-                <span className="font-medium">{FASES_PRINCIPALES[h.faseAnterior].label}</span>
-                <span className="text-muted-foreground mx-0.5">/</span>
-                <span>{ESTADOS_CONFIG[h.estadoAnterior].label}</span>
-                <span className="text-muted-foreground mx-1">→</span>
-                <span className="font-medium">{FASES_PRINCIPALES[h.faseNueva].label}</span>
-                <span className="text-muted-foreground mx-0.5">/</span>
-                <span>{ESTADOS_CONFIG[h.estadoNuevo].label}</span>
+                {soloCorreo ? (
+                  <span className="font-medium">
+                    Correo enviado · {FASES_PRINCIPALES[h.faseNueva].label} /{" "}
+                    {ESTADOS_CONFIG[h.estadoNuevo].label}
+                  </span>
+                ) : (
+                  <>
+                    <span className="font-medium">{FASES_PRINCIPALES[h.faseAnterior].label}</span>
+                    <span className="text-muted-foreground mx-0.5">/</span>
+                    <span>{ESTADOS_CONFIG[h.estadoAnterior].label}</span>
+                    <span className="text-muted-foreground mx-1">→</span>
+                    <span className="font-medium">{FASES_PRINCIPALES[h.faseNueva].label}</span>
+                    <span className="text-muted-foreground mx-0.5">/</span>
+                    <span>{ESTADOS_CONFIG[h.estadoNuevo].label}</span>
+                  </>
+                )}
               </div>
               <div className="text-muted-foreground mt-0.5">
                 {h.usuario} · {h.fecha}
@@ -1005,7 +1029,8 @@ function ActividadTab({
               )}
             </div>
           </div>
-        ))}
+          );
+        })}
 
         {/* Evento de inscripción en el portal (siempre el más antiguo, al final). */}
         <div className="flex items-start gap-3 p-2.5 rounded-lg bg-emerald-50 text-xs">

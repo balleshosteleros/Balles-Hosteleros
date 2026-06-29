@@ -378,7 +378,26 @@ export async function POST(req: Request) {
           departamento_id: vacante.departamento_id ?? null,
         },
       });
-      if (!r.sent) console.warn("[candidatura] email confirmación no enviado:", r.reason);
+      if (!r.sent) {
+        console.warn("[candidatura] email confirmación no enviado:", r.reason);
+      } else {
+        // Registra el envío del correo «Nuevo» en la Actividad del candidato,
+        // igual que cualquier correo de fase posterior. Sin sesión (portal
+        // público): el autor es el «Sistema». Best-effort.
+        const { error: histErr } = await supabase.from("candidato_historial").insert({
+          empresa_id: empresaId,
+          candidato_id: candidato.id,
+          fase_anterior: "nuevo",
+          estado_anterior: "nuevo",
+          fase_nueva: "nuevo",
+          estado_nuevo: "nuevo",
+          usuario_id: null,
+          usuario_nombre: "Sistema",
+          email_enviado: true,
+          email_asunto: r.asunto ?? null,
+        });
+        if (histErr) console.error("[candidatura] historial email nuevo:", histErr.message);
+      }
     } catch (e) {
       console.error("[candidatura] email confirmación:", e);
     }

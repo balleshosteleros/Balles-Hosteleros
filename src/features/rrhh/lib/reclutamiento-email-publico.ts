@@ -159,7 +159,7 @@ export async function enviarEmailCandidaturaNueva(
     candidato: { nombre: string; apellidos: string; email: string; telefono: string };
     vacante: { id: string; titulo: string | null; ubicacion: string | null; tipo_jornada: string | null; departamento_id: string | null };
   },
-): Promise<{ sent: boolean; reason?: string }> {
+): Promise<{ sent: boolean; reason?: string; asunto?: string }> {
   const { empresaId, candidato, vacante } = params;
   if (!candidato.email) return { sent: false, reason: "El candidato no tiene email" };
 
@@ -196,7 +196,7 @@ export async function enviarEmailCandidaturaNueva(
     empresaId,
     brandHeader: firma,
   });
-  if (res.ok) return { sent: true };
+  if (res.ok) return { sent: true, asunto: subject };
   if (!res.configured) return { sent: false, reason: "Sin transporte de email configurado" };
   return { sent: false, reason: res.error };
 }
