@@ -10,6 +10,8 @@ export type Puesto = string;
 export interface PuestoRef {
   id: string;
   nombre: string;
+  /** Nombre del departamento del puesto (para clasificar por área Operativa/Administrativa). */
+  departamento?: string;
 }
 
 export type Ambito = "general" | "puesto";
@@ -75,9 +77,13 @@ export interface Leccion {
   duracionMin: number;
   orden: number;
   fechaSubida: string;
+  /** Texto libre adicional que se muestra bajo el vídeo. */
+  contenido?: string;
   /** Documento adjunto (uno por tarea) en el bucket privado `formacion-docs`. */
   documentoPath?: string;
   documentoNombre?: string;
+  /** "pdf" | "imagen" — para incrustarlo en la visual. */
+  documentoTipo?: string;
   recursos: RecursoLeccion[];
 }
 

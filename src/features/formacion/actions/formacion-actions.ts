@@ -51,7 +51,8 @@ function toSeccion(r: SeccionRow): Seccion {
 type LeccionRow = {
   id: string; curso_id: string; seccion_id: string; titulo: string;
   descripcion: string | null; video_url: string | null; documento_path: string | null;
-  documento_nombre: string | null; duracion_min: number; orden: number; created_at: string;
+  documento_nombre: string | null; documento_tipo: string | null; contenido: string | null;
+  duracion_min: number; orden: number; created_at: string;
 };
 function toLeccion(r: LeccionRow): Leccion {
   return {
@@ -64,8 +65,10 @@ function toLeccion(r: LeccionRow): Leccion {
     duracionMin: r.duracion_min ?? 0,
     orden: r.orden ?? 0,
     fechaSubida: (r.created_at ?? "").slice(0, 10),
+    contenido: r.contenido ?? undefined,
     documentoPath: r.documento_path ?? undefined,
     documentoNombre: r.documento_nombre ?? undefined,
+    documentoTipo: r.documento_tipo ?? undefined,
     recursos: [],
   };
 }
@@ -97,13 +100,21 @@ export async function listPuestosFormacion(): Promise<{ ok: boolean; data: Puest
     if (!empresaId) return { ok: true, data: [] };
     const { data, error } = await supabase
       .from("puestos")
-      .select("id, nombre, estado")
+      .select("id, nombre, estado, departamento:departamentos(nombre)")
       .eq("empresa_id", empresaId)
       .order("nombre");
     if (error) throw error;
     const data2 = (data ?? [])
       .filter((p) => (p as { estado?: string }).estado !== "inactivo")
-      .map((p) => ({ id: p.id as string, nombre: (p.nombre as string) ?? "" }));
+      .map((p) => {
+        const dep = (p as { departamento?: unknown }).departamento;
+        const depObj = (Array.isArray(dep) ? dep[0] : dep) as { nombre?: string } | null;
+        return {
+          id: p.id as string,
+          nombre: (p.nombre as string) ?? "",
+          departamento: depObj?.nombre ?? undefined,
+        };
+      });
     return { ok: true, data: data2 };
   } catch (err) {
     console.error("[formacion] listPuestosFormacion:", err);
@@ -307,7 +318,9 @@ export async function dbCreateLeccion(l: Leccion): Promise<{ ok: boolean; error?
     const { error } = await supabase.from("formacion_lecciones").insert({
       id: l.id, empresa_id: empresaId, curso_id: l.cursoId, seccion_id: l.seccionId,
       titulo: l.titulo, descripcion: l.descripcion, video_url: l.url,
+      contenido: l.contenido ?? null,
       documento_path: l.documentoPath ?? null, documento_nombre: l.documentoNombre ?? null,
+      documento_tipo: l.documentoTipo ?? null,
       duracion_min: l.duracionMin, orden: l.orden,
     });
     if (error) throw error;
@@ -321,8 +334,10 @@ export async function dbUpdateLeccion(id: string, patch: Partial<Leccion>) {
     if (patch.titulo !== undefined) upd.titulo = patch.titulo;
     if (patch.descripcion !== undefined) upd.descripcion = patch.descripcion;
     if (patch.url !== undefined) upd.video_url = patch.url;
+    if (patch.contenido !== undefined) upd.contenido = patch.contenido ?? null;
     if (patch.documentoPath !== undefined) upd.documento_path = patch.documentoPath ?? null;
     if (patch.documentoNombre !== undefined) upd.documento_nombre = patch.documentoNombre ?? null;
+    if (patch.documentoTipo !== undefined) upd.documento_tipo = patch.documentoTipo ?? null;
     if (patch.duracionMin !== undefined) upd.duracion_min = patch.duracionMin;
     if (patch.orden !== undefined) upd.orden = patch.orden;
     const { error } = await supabase.from("formacion_lecciones").update(upd).eq("id", id);

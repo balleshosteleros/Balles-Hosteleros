@@ -35,19 +35,16 @@ import {
   leccionesDeCurso,
   leccionesOrdenadas,
 } from "../store/use-formacion-store";
-import { getDocumentoLeccionUrl } from "../actions/formacion-actions";
+import { LeccionInteraccion } from "./LeccionInteraccion";
+import { CursoEditorSidebar } from "./admin/CursoEditorSidebar";
 
 interface Props {
   cursoId: string;
+  /** Vista de administración (RRHH). Reservado para acciones de edición. */
+  admin?: boolean;
 }
 
-async function abrirDocumento(path: string) {
-  const res = await getDocumentoLeccionUrl(path);
-  if (res.ok && res.url) window.open(res.url, "_blank", "noopener,noreferrer");
-  else toast.error(res.error ?? "No se pudo abrir el documento");
-}
-
-export function CursoVista({ cursoId }: Props) {
+export function CursoVista({ cursoId, admin = false }: Props) {
   const router = useRouter();
   const search = useSearchParams();
   const { profile } = useAuth();
@@ -210,22 +207,6 @@ export function CursoVista({ cursoId }: Props) {
                   </p>
                 )}
 
-                {activa.documentoPath && (
-                  <button
-                    type="button"
-                    onClick={() => abrirDocumento(activa.documentoPath!)}
-                    className="flex w-full items-center gap-2 rounded-md border bg-card px-3 py-2 text-left text-sm hover:border-primary"
-                  >
-                    <FileDown className="h-4 w-4 text-primary" />
-                    <span className="flex-1 truncate">
-                      {activa.documentoNombre ?? "Documento adjunto"}
-                    </span>
-                    <Badge variant="outline" className="text-[10px]">
-                      Descargar
-                    </Badge>
-                  </button>
-                )}
-
                 {activa.recursos.length > 0 && (
                   <div className="space-y-2">
                     <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -305,6 +286,19 @@ export function CursoVista({ cursoId }: Props) {
             )}
           </Card>
 
+          {/* Panel de la lección: texto libre, documento incrustado, me gusta,
+              preguntas a RRHH y cuestionario tipo test. */}
+          {activa && (
+            <LeccionInteraccion
+              cursoId={cursoId}
+              leccionId={activa.id}
+              contenido={activa.contenido}
+              documentoPath={activa.documentoPath}
+              documentoTipo={activa.documentoTipo}
+              documentoNombre={activa.documentoNombre}
+            />
+          )}
+
           {/* Bloque de info del curso */}
           <Card>
             <CardContent className="p-5 space-y-3">
@@ -326,7 +320,14 @@ export function CursoVista({ cursoId }: Props) {
           </Card>
         </div>
 
-        {/* ─── Columna der: sidebar de lecciones ────────────── */}
+        {/* ─── Columna der: sidebar (editable si es admin) ──── */}
+        {admin ? (
+          <CursoEditorSidebar
+            cursoId={cursoId}
+            activaId={activa?.id ?? null}
+            onSelect={activarLeccion}
+          />
+        ) : (
         <Card className="lg:sticky lg:top-4 lg:self-start">
           <CardContent className="p-3">
             <div className="flex items-center justify-between gap-2 px-2 py-2">
@@ -401,6 +402,7 @@ export function CursoVista({ cursoId }: Props) {
             </ScrollArea>
           </CardContent>
         </Card>
+        )}
       </div>
     </div>
   );
