@@ -27,6 +27,7 @@ import {
 } from "@/features/rrhh/actions/fichajes-actions";
 import { obtenerPosicionActual } from "@/features/rrhh/utils/geo";
 import { formatHorasDecimal } from "@/shared/lib/timeUtils";
+import { formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { FichajeUbicacionMiniMap } from "@/features/rrhh/components/fichajes/FichajeUbicacionMiniMap";
 
 async function intentarGeo() {
@@ -37,21 +38,12 @@ async function intentarGeo() {
   }
 }
 
-function formatHora(s: string | null): string {
-  if (!s) return "—";
-  if (s.includes("T")) {
-    return new Date(s).toLocaleTimeString("es-ES", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }
-  return s.slice(0, 5);
-}
-
 interface Props {
   fichaje: Fichaje | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Zona horaria (IANA) de la empresa activa, para mostrar las horas reales (PRP-069). */
+  zonaHoraria: string;
   /** Callback tras guardar observaciones, resolver incidencia o fichar salida. */
   onUpdated: () => void;
   /**
@@ -76,7 +68,13 @@ function legacyTipoBadge(codigo?: string | null): { className: string; label: st
  * la tab Mapa que también necesita abrir este detalle al hacer click en un
  * pin. Maneja su propio estado interno de observaciones y loading.
  */
-export function FichajeDetalleDialog({ fichaje, open, onOpenChange, onUpdated, tipoBadge }: Props) {
+export function FichajeDetalleDialog({ fichaje, open, onOpenChange, onUpdated, tipoBadge, zonaHoraria }: Props) {
+  // Hora en la zona horaria de la empresa activa (PRP-069).
+  const formatHora = (s: string | null): string => {
+    if (!s) return "—";
+    if (s.includes("T")) return formatHoraEnZona(s, zonaHoraria);
+    return s.slice(0, 5);
+  };
   const resolveTipo = tipoBadge ?? legacyTipoBadge;
   const [detalleNotas, setDetalleNotas] = useState("");
   const [saving, setSaving] = useState(false);
@@ -179,7 +177,7 @@ export function FichajeDetalleDialog({ fichaje, open, onOpenChange, onUpdated, t
             )}
             <div className="space-y-1.5">
               <Label className="text-xs">Ubicación</Label>
-              <FichajeUbicacionMiniMap fichaje={fichaje} />
+              <FichajeUbicacionMiniMap fichaje={fichaje} zonaHoraria={zonaHoraria} />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Observaciones RRHH</Label>

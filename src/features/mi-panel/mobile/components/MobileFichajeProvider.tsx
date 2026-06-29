@@ -11,6 +11,7 @@ import {
   paralizarFichajePersonal,
 } from "@/features/mi-panel/actions/mi-panel-actions";
 import type { MiFichajeHoy } from "@/features/mi-panel/types";
+import { formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { BigClockButton } from "./BigClockButton";
 import { reproducirAvisoFichaje } from "../lib/aviso-fichaje";
 
@@ -319,10 +320,7 @@ export function MobileFichajeProvider() {
               {fichaje?.horaEntrada && (
                 <span className="mt-1 text-xs text-muted-foreground">
                   Entrada:{" "}
-                  {new Date(fichaje.horaEntrada).toLocaleTimeString("es-ES", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
+                  {formatHoraEnZona(fichaje.horaEntrada, fichaje.zonaHoraria)}
                 </span>
               )}
             </div>

@@ -1,5 +1,9 @@
+"use client";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Clock, CalendarDays, BarChart3, FileSignature, FolderOpen, Star, Plus } from "lucide-react";
 import type { FichaEmpleado } from "@/features/rrhh/data/empleados-ficha";
@@ -19,18 +23,11 @@ function EmptyState({ icon: Icon, texto }: { icon: React.ElementType; texto: str
 }
 
 /* ─── FICHAJES ─── */
-function formatearFechaHora(value: string | null): string {
+function formatearFechaHora(value: string | null, tz: string): string {
   if (!value) return "—";
-  try {
-    return new Date(value).toLocaleString("es-ES", {
-      day: "2-digit",
-      month: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return value;
-  }
+  return (
+    formatFechaHoraEnZona(value, tz, { year: undefined }) || value
+  );
 }
 
 export function FichajesTab({
@@ -38,6 +35,8 @@ export function FichajesTab({
 }: {
   fichajes?: FichajeEmpleadoResumen[];
 }) {
+  const { empresaActual } = useEmpresa();
+  const tz = empresaActual.zonaHoraria;
   return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -60,8 +59,8 @@ export function FichajesTab({
                 {fichajes.map((f) => (
                   <TableRow key={f.id}>
                     <TableCell className="font-medium">{formatearFecha(f.fecha)}</TableCell>
-                    <TableCell>{formatearFechaHora(f.horaEntrada)}</TableCell>
-                    <TableCell>{formatearFechaHora(f.horaSalida)}</TableCell>
+                    <TableCell>{formatearFechaHora(f.horaEntrada, tz)}</TableCell>
+                    <TableCell>{formatearFechaHora(f.horaSalida, tz)}</TableCell>
                     <TableCell>{f.horasTotales.toFixed(2)}h</TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1">
@@ -250,6 +249,8 @@ export function HorariosTab({
 }: {
   horario?: EmpleadoHorarioActual | null;
 }) {
+  const { empresaActual } = useEmpresa();
+  const tz = empresaActual.zonaHoraria;
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold text-foreground">Horarios del empleado</h3>
@@ -258,7 +259,7 @@ export function HorariosTab({
           <>
             <p className="text-sm text-muted-foreground">Patrón activo: <span className="font-semibold text-foreground">{horario.nombre}</span></p>
             <p className="text-sm text-muted-foreground mt-1">Tipo: <span className="font-semibold text-foreground">{horario.tipo}</span></p>
-            <p className="text-sm text-muted-foreground mt-1">Asignado: <span className="font-semibold text-foreground">{formatearFechaHora(horario.asignadoAt)}</span></p>
+            <p className="text-sm text-muted-foreground mt-1">Asignado: <span className="font-semibold text-foreground">{formatearFechaHora(horario.asignadoAt, tz)}</span></p>
           </>
         ) : (
           <>

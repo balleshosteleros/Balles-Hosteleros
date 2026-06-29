@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { ESTADO_FICHAJE_LABEL, TIPO_FICHAJE_LABEL, TIPO_FICHAJE_BADGE, fichajeColorBadge } from "@/features/rrhh/data/fichajes";
 import type { EstadoFichaje, Fichaje, LocalGeo, ConfigFichajes, TipoFichajeCodigo } from "@/features/rrhh/data/fichajes";
 import { listFichajes, crearFichajeManual } from "@/features/rrhh/actions/fichajes-actions";
@@ -334,9 +335,8 @@ export function FichajesView() {
 
   function formatHora(s: string | null): string {
     if (!s) return "—";
-    if (s.includes("T")) {
-      return new Date(s).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
-    }
+    // Hora en la zona horaria de la empresa activa (PRP-069).
+    if (s.includes("T")) return formatHoraEnZona(s, empresaActual.zonaHoraria);
     return s.slice(0, 5);
   }
 
@@ -551,6 +551,7 @@ export function FichajesView() {
         }}
         onUpdated={loadFichajes}
         tipoBadge={tipoBadge}
+        zonaHoraria={empresaActual.zonaHoraria}
       />
 
 

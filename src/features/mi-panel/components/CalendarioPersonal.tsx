@@ -6,7 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Download, Loader2, AlertCircle, Info } from "lucide-react";
-import { getMiCalendarioMes } from "@/features/mi-panel/actions/mi-panel-actions";
+import {
+  getMiCalendarioMes,
+  getZonaHorariaActiva,
+} from "@/features/mi-panel/actions/mi-panel-actions";
+import {
+  formatFechaEnZona,
+  formatHoraEnZona,
+  ZONA_HORARIA_FALLBACK,
+} from "@/features/empresa/lib/zona-horaria";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { getFestivoEnFecha } from "@/features/rrhh/data/calendarios";
@@ -141,6 +149,13 @@ export function CalendarioPersonal({ refreshKey = 0 }: CalendarioPersonalProps) 
   const rango = useCalendarRange("MENSUAL");
   const [dias, setDias] = useState<DiaCalendario[]>([]);
   const [loading, setLoading] = useState(true);
+  // Zona horaria de la empresa (PRP-069): formatea el sello "Descargado el" del
+  // PDF, que es un instante (el momento de la descarga). Resuelta en servidor.
+  const [zonaHoraria, setZonaHoraria] = useState<string>(ZONA_HORARIA_FALLBACK);
+
+  useEffect(() => {
+    getZonaHorariaActiva().then(setZonaHoraria);
+  }, []);
 
   const mesesKey = useMemo(() => {
     return mesesARequerir(rango.mode, rango.anchor).map((k) => `${k.y}-${k.m}`).join("|");
@@ -265,8 +280,9 @@ export function CalendarioPersonal({ refreshKey = 0 }: CalendarioPersonalProps) 
     const mes = rango.anchor.getMonth() + 1;
     const win = window.open("", "_blank", "width=900,height=1100");
     if (!win) return;
-    const fechaDesc = today.toLocaleDateString("es-ES", { day: "2-digit", month: "long", year: "numeric" });
-    const horaDesc = today.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+    const ahoraIso = today.toISOString();
+    const fechaDesc = formatFechaEnZona(ahoraIso, zonaHoraria, { month: "long" });
+    const horaDesc = formatHoraEnZona(ahoraIso, zonaHoraria);
     const nombre = profile?.nombre ?? "";
     const apellidos = profile?.apellidos ?? "";
     const dni = "—";

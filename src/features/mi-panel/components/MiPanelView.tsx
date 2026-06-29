@@ -15,6 +15,7 @@ import {
   getMiPanelResumen,
   type MiPanelResumen,
 } from "@/features/mi-panel/actions/mi-panel-actions";
+import { ZONA_HORARIA_FALLBACK } from "@/features/empresa/lib/zona-horaria";
 
 const MESES_LARGOS = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
@@ -40,6 +41,7 @@ const EMPTY_RESUMEN: MiPanelResumen = {
   comunicados: { total: 0, ultimoTitulo: null, ultimaFecha: null },
   cuestionarios: { pendientes: 0 },
   formacion: { cursosAsignados: 0, cursosCompletados: 0 },
+  zonaHoraria: ZONA_HORARIA_FALLBACK,
 };
 
 function saludoSegunHora(): string {

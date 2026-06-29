@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTabQuery } from "@/shared/hooks/use-tab-query";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -58,25 +60,14 @@ function formatFecha(s: string | null): string {
   }
 }
 
-function formatFechaHora(s: string): string {
-  try {
-    return new Date(s).toLocaleString("es-ES", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return s;
-  }
-}
-
 type Modo = "aprobar" | "rechazar";
 
 type SolicitudConFlag = SolicitudPersonal & { puedoValidar?: boolean };
 
 export function SolicitudesView() {
+  const { empresaActual } = useEmpresa();
+  const formatFechaHora = (s: string): string =>
+    formatFechaHoraEnZona(s, empresaActual.zonaHoraria) || s;
   const [tab, setTab] = useTabQuery(["pendientes", "todas"] as const, "pendientes");
   const [items, setItems] = useState<SolicitudConFlag[]>([]);
   const [loading, setLoading] = useState(true);

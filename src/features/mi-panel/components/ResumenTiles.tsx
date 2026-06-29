@@ -19,6 +19,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { MiPanelResumen } from "@/features/mi-panel/actions/mi-panel-actions";
+import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 
 interface Tile {
   href: string;
@@ -36,16 +37,15 @@ interface Props {
   loading?: boolean;
 }
 
-function formatFechaCorta(s: string | null): string {
+function formatFechaCorta(s: string | null, tz: string): string {
   if (!s) return "—";
-  try {
-    return new Date(s).toLocaleDateString("es-ES", {
+  return (
+    formatFechaEnZona(s, tz, {
       day: "2-digit",
       month: "short",
-    });
-  } catch {
-    return "—";
-  }
+      year: undefined,
+    }) || "—"
+  );
 }
 
 export function ResumenTiles({ resumen, loading = false }: Props) {
@@ -185,7 +185,7 @@ export function ResumenTiles({ resumen, loading = false }: Props) {
         </div>
         {resumen.comunicados.ultimaFecha && (
           <span className="text-[11px] text-muted-foreground">
-            Último comunicado · {formatFechaCorta(resumen.comunicados.ultimaFecha)}
+            Último comunicado · {formatFechaCorta(resumen.comunicados.ultimaFecha, resumen.zonaHoraria)}
           </span>
         )}
       </div>

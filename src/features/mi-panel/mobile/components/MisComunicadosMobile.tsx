@@ -6,6 +6,10 @@ import {
   listarComunicadosVisibles,
   type ComunicadoVisible,
 } from "@/features/mi-panel/actions/mi-panel-actions";
+import {
+  formatFechaEnZona,
+  formatFechaHoraEnZona,
+} from "@/features/empresa/lib/zona-horaria";
 import { cn } from "@/shared/lib/utils";
 
 const PRIORIDAD_STYLE: Record<string, { label: string; dot: string; tint: string }> = {
@@ -14,7 +18,7 @@ const PRIORIDAD_STYLE: Record<string, { label: string; dot: string; tint: string
   baja: { label: "Informativo", dot: "bg-slate-400", tint: "border-border/60 bg-card" },
 };
 
-function formatRel(s: string): string {
+function formatRel(s: string, tz: string): string {
   const d = new Date(s);
   const diff = Date.now() - d.getTime();
   const min = Math.floor(diff / 60_000);
@@ -24,16 +28,19 @@ function formatRel(s: string): string {
   if (hrs < 24) return `hace ${hrs} h`;
   const dias = Math.floor(hrs / 24);
   if (dias < 7) return `hace ${dias} d`;
-  return d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+  return formatFechaEnZona(s, tz, {
+    day: "numeric",
+    month: "short",
+    year: undefined,
+  });
 }
 
-function formatFull(s: string): string {
-  return new Date(s).toLocaleString("es-ES", {
+function formatFull(s: string, tz: string): string {
+  return formatFechaHoraEnZona(s, tz, {
     weekday: "long",
     day: "numeric",
     month: "long",
-    hour: "2-digit",
-    minute: "2-digit",
+    year: undefined,
   });
 }
 
@@ -95,7 +102,7 @@ export function MisComunicadosMobile() {
                   <div className="flex items-baseline justify-between gap-2">
                     <h3 className="truncate text-sm font-semibold">{c.titulo}</h3>
                     <span className="shrink-0 text-[10px] uppercase tracking-wider text-muted-foreground">
-                      {formatRel(c.createdAt)}
+                      {formatRel(c.createdAt, c.zonaHoraria)}
                     </span>
                   </div>
                   {c.contenido && (
@@ -161,7 +168,7 @@ function ComunicadoDetalle({
       <div className="flex-1 overflow-y-auto px-5 py-5">
         <h1 className="text-2xl font-semibold leading-tight">{comunicado.titulo}</h1>
         <p className="mt-1 text-xs capitalize text-muted-foreground">
-          {formatFull(comunicado.createdAt)}
+          {formatFull(comunicado.createdAt, comunicado.zonaHoraria)}
         </p>
         {comunicado.contenido && (
           <article className="mt-5 whitespace-pre-line text-base leading-relaxed text-foreground">

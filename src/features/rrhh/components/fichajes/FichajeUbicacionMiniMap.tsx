@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MapPinOff } from "lucide-react";
 import type { Fichaje } from "@/features/rrhh/data/fichajes";
+import { formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
 // CDN URLs idénticas a las que usa MapPicker para mantener una sola versión
 // de Leaflet en cache del navegador.
@@ -107,20 +108,14 @@ function formatPrecision(m: number | null | undefined): string {
   return `±${Math.round(m)} m`;
 }
 
-function formatHora(iso: string | null): string {
+function formatHora(iso: string | null, tz: string): string {
   if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleTimeString("es-ES", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso.slice(0, 5);
-  }
+  return formatHoraEnZona(iso, tz) || iso.slice(0, 5);
 }
 
 interface Props {
   fichaje: Fichaje;
+  zonaHoraria: string;
 }
 
 /**
@@ -137,7 +132,7 @@ interface Props {
  * desmontar el modal, evitando memory leaks al abrir/cerrar fichajes
  * sucesivamente.
  */
-export function FichajeUbicacionMiniMap({ fichaje }: Props) {
+export function FichajeUbicacionMiniMap({ fichaje, zonaHoraria }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const layersRef = useRef<LeafletLayer[]>([]);
@@ -195,7 +190,7 @@ export function FichajeUbicacionMiniMap({ fichaje }: Props) {
         })
           .addTo(map)
           .bindPopup(
-            `<strong>Entrada</strong><br>${formatHora(fichaje.horaEntrada)} ${formatPrecision(
+            `<strong>Entrada</strong><br>${formatHora(fichaje.horaEntrada, zonaHoraria)} ${formatPrecision(
               fichaje.precisionEntradaMetros,
             )}`,
           );
@@ -211,7 +206,7 @@ export function FichajeUbicacionMiniMap({ fichaje }: Props) {
           })
             .addTo(map)
             .bindPopup(
-              `<strong>Salida</strong><br>${formatHora(fichaje.horaSalida)} ${formatPrecision(
+              `<strong>Salida</strong><br>${formatHora(fichaje.horaSalida, zonaHoraria)} ${formatPrecision(
                 fichaje.precisionSalidaMetros,
               )}`,
             );
@@ -278,6 +273,7 @@ export function FichajeUbicacionMiniMap({ fichaje }: Props) {
     local,
     puedeRenderizarMapa,
     tieneCoordsSalida,
+    zonaHoraria,
   ]);
 
   // ─── Estados fallback ─────────────────────────────────────────────────

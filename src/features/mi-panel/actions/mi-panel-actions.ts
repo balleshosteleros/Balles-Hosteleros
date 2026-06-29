@@ -1231,12 +1231,28 @@ export async function listarMisFichajes(limite = 60): Promise<{
   }
 }
 
+/**
+ * Zona horaria (IANA) de la empresa activa, resuelta en servidor (PRP-069).
+ * La usan vistas cliente que muestran instantes (p. ej. la hora de los mensajes
+ * de chat) sin consultar la BD desde el cliente. Fallback: Europe/Madrid.
+ */
+export async function getZonaHorariaActiva(): Promise<string> {
+  try {
+    const { supabase, empresaId } = await getContext();
+    return await getZonaHorariaEmpresa(supabase, empresaId);
+  } catch {
+    return ZONA_HORARIA_DEFAULT;
+  }
+}
+
 export interface ComunicadoVisible {
   id: string;
   titulo: string;
   contenido: string;
   prioridad: string;
   createdAt: string;
+  /** Zona horaria de la empresa para formatear `createdAt` (instante). */
+  zonaHoraria: string;
 }
 
 export async function listarComunicadosVisibles(): Promise<{
@@ -1248,6 +1264,7 @@ export async function listarComunicadosVisibles(): Promise<{
     const { supabase, user, empresaId, departamento, rolLabel } =
       await getContext();
     if (!user || !empresaId) return { ok: false, data: [], error: "No autenticado" };
+    const zonaHoraria = await getZonaHorariaEmpresa(supabase, empresaId);
 
     const { data, error } = await supabase
       .from("comunicados")
@@ -1298,6 +1315,7 @@ export async function listarComunicadosVisibles(): Promise<{
         contenido: (c.cuerpo as string | null | undefined) ?? "",
         prioridad: (c.prioridad as string) ?? "normal",
         createdAt: c.created_at as string,
+        zonaHoraria,
       })),
     };
   } catch (err: unknown) {
@@ -2480,6 +2498,8 @@ export interface MiPanelResumen {
     cursosAsignados: number;
     cursosCompletados: number;
   };
+  /** Zona horaria de la empresa para formatear instantes (p.ej. `ultimaFecha`). */
+  zonaHoraria: string;
 }
 
 const EMPTY_RESUMEN: MiPanelResumen = {
@@ -2498,6 +2518,7 @@ const EMPTY_RESUMEN: MiPanelResumen = {
   comunicados: { total: 0, ultimoTitulo: null, ultimaFecha: null },
   cuestionarios: { pendientes: 0 },
   formacion: { cursosAsignados: 0, cursosCompletados: 0 },
+  zonaHoraria: ZONA_HORARIA_DEFAULT,
 };
 
 export async function getMiPanelResumen(): Promise<{
@@ -2563,6 +2584,7 @@ export async function getMiPanelResumen(): Promise<{
 
     const comunicados = comunicadosVisibles.ok ? comunicadosVisibles.data : [];
     const ultimo = comunicados[0] ?? null;
+    const zonaHoraria = await getZonaHorariaEmpresa(supabase, empresaId);
 
     return {
       ok: true,
@@ -2590,6 +2612,7 @@ export async function getMiPanelResumen(): Promise<{
         },
         cuestionarios: { pendientes: 0 },
         formacion: { cursosAsignados: 0, cursosCompletados: 0 },
+        zonaHoraria,
       },
     };
   } catch (err: unknown) {

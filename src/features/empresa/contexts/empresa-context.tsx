@@ -16,11 +16,17 @@ export interface Empresa {
   nombre: string;
   iniciales: string;
   color: string;
+  /**
+   * Zona horaria (IANA) configurada en Ajustes → Configuración regional. Fuente
+   * única para formatear horas en las vistas cliente de esta empresa (PRP-069).
+   * Fallback "Europe/Madrid" en empresas semilla o sin configurar.
+   */
+  zonaHoraria: string;
 }
 
 export const EMPRESAS: Empresa[] = [
-  { id: "habana", nombre: "HABANA", iniciales: "HA", color: "hsl(340 70% 50%)" },
-  { id: "bacanal", nombre: "BACANAL", iniciales: "BA", color: "hsl(210 70% 50%)" },
+  { id: "habana", nombre: "HABANA", iniciales: "HA", color: "hsl(340 70% 50%)", zonaHoraria: "Europe/Madrid" },
+  { id: "bacanal", nombre: "BACANAL", iniciales: "BA", color: "hsl(210 70% 50%)", zonaHoraria: "Europe/Madrid" },
 ];
 
 function buildInitialData(): Record<string, Incidencia[]> {
@@ -190,6 +196,10 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
           nombre: r.nombre,
           iniciales: r.iniciales ?? r.nombre.slice(0, 2).toUpperCase(),
           color: r.color ?? "hsl(210 70% 50%)",
+          zonaHoraria:
+            (typeof r.configOperativa?.zonaHoraria === "string"
+              ? r.configOperativa.zonaHoraria.trim()
+              : "") || "Europe/Madrid",
         }));
 
         setEmpresasList(list);

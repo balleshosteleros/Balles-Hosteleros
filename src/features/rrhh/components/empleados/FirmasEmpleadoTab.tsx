@@ -22,6 +22,8 @@ import {
   type EstadoFirma,
 } from "@/features/rrhh/data/firmas";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
 type Firma = {
   id: string;
@@ -36,17 +38,12 @@ type Firma = {
   sha256Acta: string | null;
 };
 
-function fmt(s: string | null): string {
-  if (!s) return "—";
-  try {
-    return new Date(s).toLocaleString("es-ES", {
-      day: "2-digit", month: "2-digit", year: "numeric",
-      hour: "2-digit", minute: "2-digit",
-    });
-  } catch { return s; }
-}
-
 export function FirmasEmpleadoTab({ empleadoId }: { empleadoId: string }) {
+  const { empresaActual } = useEmpresa();
+  const fmt = (s: string | null): string => {
+    if (!s) return "—";
+    return formatFechaHoraEnZona(s, empresaActual.zonaHoraria) || s;
+  };
   const [items, setItems] = useState<Firma[]>([]);
   const [loading, setLoading] = useState(true);
   const [descargando, setDescargando] = useState<string | null>(null);

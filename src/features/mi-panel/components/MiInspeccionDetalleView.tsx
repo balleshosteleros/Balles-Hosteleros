@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft, CheckCircle2 } from "lucide-react";
 import type { MiPanelInspeccionDetalle } from "../actions/inspecciones-actions";
+import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
 interface Props {
   envio: MiPanelInspeccionDetalle;
@@ -57,7 +58,7 @@ export function MiInspeccionDetalleView({ envio }: Props) {
             label="Fecha inspección"
             value={
               envio.fecha_inspeccion
-                ? new Date(envio.fecha_inspeccion).toLocaleString()
+                ? formatFechaHoraEnZona(envio.fecha_inspeccion, envio.zona_horaria)
                 : "—"
             }
           />
@@ -66,7 +67,7 @@ export function MiInspeccionDetalleView({ envio }: Props) {
             value={
               <span className="inline-flex items-center gap-1 text-emerald-700">
                 <CheckCircle2 className="h-3.5 w-3.5" />
-                {new Date(envio.verificado_at).toLocaleString()}
+                {formatFechaHoraEnZona(envio.verificado_at, envio.zona_horaria)}
               </span>
             }
           />

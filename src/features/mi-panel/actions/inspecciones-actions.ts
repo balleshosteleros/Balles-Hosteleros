@@ -1,6 +1,10 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import {
+  getZonaHorariaEmpresa,
+  ZONA_HORARIA_DEFAULT,
+} from "@/features/empresa/lib/empresa-server";
 
 export interface MiPanelInspeccionItem {
   id: string;
@@ -12,6 +16,8 @@ export interface MiPanelInspeccionItem {
   nota_final: number | null;
   estado: "pendiente_revision" | "revisado" | "archivado";
   verificado_at: string;
+  /** Zona horaria de la empresa de la inspección para formatear instantes. */
+  zona_horaria: string;
 }
 
 export interface MiPanelInspeccionDetalle extends MiPanelInspeccionItem {
@@ -62,30 +68,45 @@ export async function listMisInspeccionesVerificadas(): Promise<
   const { data, error } = await supabase
     .from("inspeccion_envios")
     .select(
-      "id, numero_secuencial, fecha_inspeccion, nombre_inspector, nota_final, estado, verificado_at, local:locales(nombre), empresa:empresas(nombre)",
+      "id, numero_secuencial, fecha_inspeccion, nombre_inspector, nota_final, estado, verificado_at, empresa_id, local:locales(nombre), empresa:empresas(nombre)",
     )
     .in("verificado_por_empleado_id", empleadoIds)
     .not("verificado_at", "is", null)
     .order("verificado_at", { ascending: false });
   if (error || !data) return [];
 
-  return data.map((e): MiPanelInspeccionItem => ({
-    id: e.id,
-    numero_secuencial: e.numero_secuencial,
-    fecha_inspeccion: e.fecha_inspeccion,
-    local_nombre:
-      (Array.isArray(e.local)
-        ? e.local[0]?.nombre
-        : (e.local as { nombre: string } | null)?.nombre) ?? null,
-    empresa_nombre:
-      (Array.isArray(e.empresa)
-        ? e.empresa[0]?.nombre
-        : (e.empresa as { nombre: string } | null)?.nombre) ?? null,
-    nombre_inspector: e.nombre_inspector,
-    nota_final: e.nota_final != null ? Number(e.nota_final) : null,
-    estado: e.estado,
-    verificado_at: e.verificado_at as string,
-  }));
+  // Cada inspección puede ser de una empresa distinta (PRP-069): los instantes
+  // se muestran en la zona horaria de SU empresa. Cacheamos la zona por empresa.
+  const tzPorEmpresa = new Map<string, string>();
+  const zonaDe = async (empresaId: string | null): Promise<string> => {
+    if (!empresaId) return ZONA_HORARIA_DEFAULT;
+    const cacheada = tzPorEmpresa.get(empresaId);
+    if (cacheada) return cacheada;
+    const tz = await getZonaHorariaEmpresa(supabase, empresaId);
+    tzPorEmpresa.set(empresaId, tz);
+    return tz;
+  };
+
+  return Promise.all(
+    data.map(async (e): Promise<MiPanelInspeccionItem> => ({
+      id: e.id,
+      numero_secuencial: e.numero_secuencial,
+      fecha_inspeccion: e.fecha_inspeccion,
+      local_nombre:
+        (Array.isArray(e.local)
+          ? e.local[0]?.nombre
+          : (e.local as { nombre: string } | null)?.nombre) ?? null,
+      empresa_nombre:
+        (Array.isArray(e.empresa)
+          ? e.empresa[0]?.nombre
+          : (e.empresa as { nombre: string } | null)?.nombre) ?? null,
+      nombre_inspector: e.nombre_inspector,
+      nota_final: e.nota_final != null ? Number(e.nota_final) : null,
+      estado: e.estado,
+      verificado_at: e.verificado_at as string,
+      zona_horaria: await zonaDe((e.empresa_id as string | null) ?? null),
+    })),
+  );
 }
 
 export async function getMiInspeccionDetalle(
@@ -100,7 +121,7 @@ export async function getMiInspeccionDetalle(
   const { data: envio, error } = await supabase
     .from("inspeccion_envios")
     .select(
-      "id, numero_secuencial, fecha_inspeccion, nombre_inspector, nombre_jefe_sala, nota_final, estado, verificado_at, notas_calidad, local:locales(nombre), empresa:empresas(nombre), plantilla:inspeccion_plantillas(nombre)",
+      "id, numero_secuencial, fecha_inspeccion, nombre_inspector, nombre_jefe_sala, nota_final, estado, verificado_at, notas_calidad, empresa_id, local:locales(nombre), empresa:empresas(nombre), plantilla:inspeccion_plantillas(nombre)",
     )
     .eq("id", envioId)
     .in("verificado_por_empleado_id", empleadoIds)
@@ -155,6 +176,10 @@ export async function getMiInspeccionDetalle(
     nota_final: envio.nota_final != null ? Number(envio.nota_final) : null,
     estado: envio.estado,
     verificado_at: envio.verificado_at as string,
+    zona_horaria: await getZonaHorariaEmpresa(
+      supabase,
+      (envio.empresa_id as string | null) ?? null,
+    ),
     plantilla_nombre:
       (Array.isArray(envio.plantilla)
         ? envio.plantilla[0]?.nombre

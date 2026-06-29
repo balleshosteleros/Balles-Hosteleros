@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { listEmpleados } from "@/features/rrhh/actions/empleados-actions";
 import {
   listFirmas,
@@ -124,22 +126,12 @@ function deduplicarEventos(eventos: EventoUI[]): { evento: EventoUI; count: numb
   return out;
 }
 
-function formatFechaHora(s: string | null): string {
-  if (!s) return "—";
-  try {
-    return new Date(s).toLocaleString("es-ES", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return s;
-  }
-}
-
 export function FirmasView() {
+  const { empresaActual } = useEmpresa();
+  const formatFechaHora = (s: string | null): string => {
+    if (!s) return "—";
+    return formatFechaHoraEnZona(s, empresaActual.zonaHoraria) || s;
+  };
   const [items, setItems] = useState<DocumentoFirma[]>([]);
   const [cargandoItems, setCargandoItems] = useState(true);
   const [empleadosOpts, setEmpleadosOpts] = useState<EmpleadoOpcion[]>([]);

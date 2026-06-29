@@ -14,6 +14,11 @@ import {
   sendMensajeAdjunto, getAdjuntoSignedUrl, listEmpleadosEmpresa,
   type EmpleadoCanal,
 } from "@/features/comunicacion/actions/comunicacion-actions";
+import { getZonaHorariaActiva } from "@/features/mi-panel/actions/mi-panel-actions";
+import {
+  formatHoraEnZona,
+  ZONA_HORARIA_FALLBACK,
+} from "@/features/empresa/lib/zona-horaria";
 
 type Canal = {
   id: string;
@@ -51,8 +56,8 @@ function mapCanal(r: Record<string, unknown>): Canal {
   };
 }
 
-function mapMensaje(r: Record<string, unknown>, miUserId: string | null): Mensaje {
-  const createdAt = r.created_at ? new Date(r.created_at as string) : new Date();
+function mapMensaje(r: Record<string, unknown>, miUserId: string | null, tz: string): Mensaje {
+  const createdIso = r.created_at ? (r.created_at as string) : new Date().toISOString();
   const nombre = ((r.autor_nombre as string) ?? "").trim() || "Anónimo";
   const iniciales = nombre.split(" ").map((w) => w[0]).filter(Boolean).join("").toUpperCase().slice(0, 2) || "?";
   return {
@@ -61,7 +66,7 @@ function mapMensaje(r: Record<string, unknown>, miUserId: string | null): Mensaj
     autor: nombre,
     avatar: iniciales,
     texto: (r.texto as string) ?? "",
-    hora: createdAt.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }),
+    hora: formatHoraEnZona(createdIso, tz),
     propio: !!miUserId && r.autor_id === miUserId,
     adjuntoPath: (r.adjunto_url as string) ?? null,
     adjuntoTipo: (r.adjunto_tipo as Mensaje["adjuntoTipo"]) ?? null,
@@ -89,6 +94,9 @@ export function ComunicacionMobile() {
   const { empresaActual, getIsotipoUrl } = useEmpresa();
   const logoUrl = getIsotipoUrl(empresaActual.id);
   const [miUserId, setMiUserId] = useState<string | null>(null);
+  // Zona horaria de la empresa, resuelta en servidor (PRP-069): formatea la hora
+  // de cada mensaje. Hasta que llega, se usa el fallback.
+  const [zonaHoraria, setZonaHoraria] = useState<string>(ZONA_HORARIA_FALLBACK);
 
   const [canales, setCanales] = useState<Canal[]>([]);
   const [canalActivo, setCanalActivo] = useState<string | null>(null);
@@ -148,6 +156,7 @@ export function ComunicacionMobile() {
     const supabase = createBrowserClient();
     supabase.auth.getUser().then(({ data }) => setMiUserId(data.user?.id ?? null));
     listEmpleadosEmpresa().then((res) => { if (res.ok) setEmpleados(res.data); });
+    getZonaHorariaActiva().then(setZonaHoraria);
   }, []);
 
   const cargarCanales = useCallback(async () => {
@@ -166,7 +175,7 @@ export function ComunicacionMobile() {
       if (res.ok) {
         setMensajes((prev) => [
           ...prev.filter((m) => m.canalId !== canalActivo),
-          ...(res.data as Record<string, unknown>[]).map((r) => mapMensaje(r, miUserId)),
+          ...(res.data as Record<string, unknown>[]).map((r) => mapMensaje(r, miUserId, zonaHoraria)),
         ]);
       } else {
         toast.error("No tienes acceso a este canal");
@@ -174,7 +183,7 @@ export function ComunicacionMobile() {
       }
       setCargandoMsgs(false);
     });
-  }, [canalActivo, miUserId]);
+  }, [canalActivo, miUserId, zonaHoraria]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -186,7 +195,7 @@ export function ComunicacionMobile() {
     setInput("");
     const res = await sendMensaje(canalActivo, texto);
     if (!res.ok) { toast.error(res.error ?? "No se pudo enviar"); return; }
-    if (res.data) setMensajes((prev) => [...prev, mapMensaje(res.data as Record<string, unknown>, miUserId)]);
+    if (res.data) setMensajes((prev) => [...prev, mapMensaje(res.data as Record<string, unknown>, miUserId, zonaHoraria)]);
   }
 
   async function subirYEnviar(file: File, tipo: "imagen" | "audio" | "archivo") {
@@ -205,7 +214,7 @@ export function ComunicacionMobile() {
         adjuntoNombre: file.name, adjuntoMime: file.type || "application/octet-stream", adjuntoTamano: file.size,
       });
       if (!res.ok) { toast.error(res.error ?? "No se pudo enviar el adjunto"); return; }
-      if (res.data) setMensajes((prev) => [...prev, mapMensaje(res.data as Record<string, unknown>, miUserId)]);
+      if (res.data) setMensajes((prev) => [...prev, mapMensaje(res.data as Record<string, unknown>, miUserId, zonaHoraria)]);
     } catch {
       toast.error("No se pudo subir el archivo");
     } finally {

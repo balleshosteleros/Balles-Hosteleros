@@ -160,6 +160,7 @@ export function CrearEmpresaModal({ open, onOpenChange }: { open: boolean; onOpe
         nombre: res.data.nombre,
         iniciales: res.data.iniciales ?? iniciales,
         color: res.data.color ?? color,
+        zonaHoraria: configOperativa.zonaHoraria || "Europe/Madrid",
       });
       toast.success("Empresa creada con toda la estructura base (departamentos, roles, organigrama, plantillas…)");
       setEmpresaId(res.data.slug);

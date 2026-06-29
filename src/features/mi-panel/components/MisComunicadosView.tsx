@@ -8,26 +8,13 @@ import {
   listarComunicadosVisibles,
   type ComunicadoVisible,
 } from "@/features/mi-panel/actions/mi-panel-actions";
+import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
 const PRIORIDAD_COLOR: Record<string, string> = {
   alta: "bg-rose-100 text-rose-700 border-rose-200",
   normal: "bg-blue-100 text-blue-700 border-blue-200",
   baja: "bg-slate-100 text-slate-700 border-slate-200",
 };
-
-function formatFechaHora(s: string): string {
-  try {
-    return new Date(s).toLocaleString("es-ES", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return s;
-  }
-}
 
 export function MisComunicadosView() {
   const [items, setItems] = useState<ComunicadoVisible[]>([]);
@@ -74,7 +61,9 @@ export function MisComunicadosView() {
                       </Badge>
                     </div>
                     <p className="text-[11px] text-muted-foreground mt-0.5">
-                      {formatFechaHora(c.createdAt)}
+                      {formatFechaHoraEnZona(c.createdAt, c.zonaHoraria, {
+                        month: "short",
+                      })}
                     </p>
                   </div>
                 </div>

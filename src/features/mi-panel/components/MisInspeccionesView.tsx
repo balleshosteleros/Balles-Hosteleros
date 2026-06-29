@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CheckCircle2, FileSearch } from "lucide-react";
 import type { MiPanelInspeccionItem } from "../actions/inspecciones-actions";
+import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
 interface Props {
   inspecciones: MiPanelInspeccionItem[];
@@ -44,7 +45,7 @@ export function MisInspeccionesView({ inspecciones }: Props) {
               <td className="px-4 py-3">{i.nombre_inspector}</td>
               <td className="px-4 py-3 text-muted-foreground">
                 {i.fecha_inspeccion
-                  ? new Date(i.fecha_inspeccion).toLocaleString()
+                  ? formatFechaHoraEnZona(i.fecha_inspeccion, i.zona_horaria)
                   : "—"}
               </td>
               <td className="px-4 py-3">
@@ -57,7 +58,7 @@ export function MisInspeccionesView({ inspecciones }: Props) {
               <td className="px-4 py-3 text-muted-foreground">
                 <span className="inline-flex items-center gap-1 text-emerald-700">
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  {new Date(i.verificado_at).toLocaleString()}
+                  {formatFechaHoraEnZona(i.verificado_at, i.zona_horaria)}
                 </span>
               </td>
               <td className="px-4 py-3 text-right">
