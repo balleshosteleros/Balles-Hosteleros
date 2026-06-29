@@ -84,25 +84,20 @@ export function MisDepartamentosView() {
     setMounted(true);
   }, []);
 
-  // El auth-context puede marcar `permisosLoaded=true` un instante ANTES de que
-  // `roles` llegue poblado (carrera de cookies post-login + reintentos de
-  // loadFreshAuth). En ese hueco un director aparece sin roles → se pinta en
-  // falso "No tienes departamentos". Para evitarlo, durante unos segundos tras
-  // montar tratamos "permisos cargados pero sin ningún rol" como todavía
-  // cargando, dando tiempo a que el rol real resuelva.
-  const [graceElapsed, setGraceElapsed] = useState(false);
-  useEffect(() => {
-    if (!mounted) return;
-    const t = setTimeout(() => setGraceElapsed(true), 4000);
-    return () => clearTimeout(t);
-  }, [mounted]);
-  const rolesPendientes = roles.length === 0 && !graceElapsed;
+  // El auth-context resuelve `roles` de forma asíncrona (server action
+  // getUserPermisos + reintentos por la carrera de cookies post-login). Hasta
+  // que NO esté `permisosLoaded` no sabemos el rol real: un director aparece
+  // momentáneamente sin roles. `permisosLoaded` pasa a true solo cuando el
+  // fetch (o el caché) ha resuelto de verdad, así que es la señal correcta para
+  // saber "ya conozco el rol" — sin temporizadores arbitrarios que en dev (más
+  // lento que prod) expiraban antes de cargar el rol y rebotaban al director.
+  const rolesPendientes = !permisosLoaded;
 
   // Esta vista (MIS DEPARTAMENTOS) es exclusiva del rol dirección. Cualquier
   // otro rol que aterrice aquí se redirige a su panel personal (Mi Panel), que
   // es su landing por defecto. Esperamos a que (a) auth deje de cargar y (b)
-  // pase el periodo de gracia de roles: así no rebotamos a un director cuyos
-  // roles aún no han llegado por la carrera post-login.
+  // los permisos hayan resuelto: así nunca rebotamos a un director cuyos roles
+  // todavía no han llegado, por lento que sea el entorno.
   useEffect(() => {
     if (loading || rolesPendientes) return;
     if (!esDireccion) router.replace("/mi-panel");
@@ -117,18 +112,16 @@ export function MisDepartamentosView() {
     return ALL_DEPARTAMENTOS.filter((d) => puedeVer(d.modulo));
   }, [hasRole, permisosLoaded, puedeVer]);
 
-  // Loading hasta que (a) el componente esté montado, (b) los permisos hayan
-  // resuelto y (c) `rolesPendientes` haya pasado el periodo de gracia. admin/
-  // director cortocircuitan en `tiles` sin esperar permisos. Además, mientras un
-  // no-dirección está siendo redirigido a Mi Panel mantenemos el skeleton para
-  // no mostrar la cuadrícula. `rolesPendientes` también evita pintar "No tienes
+  // Loading hasta que (a) el componente esté montado, (b) auth deje de cargar y
+  // (c) los permisos hayan resuelto (`rolesPendientes = !permisosLoaded`).
+  // Mientras un no-dirección está siendo redirigido a Mi Panel mantenemos el
+  // skeleton para no mostrar la cuadrícula. Esto también evita pintar "No tienes
   // departamentos" en falso mientras el rol (p.ej. director) termina de resolver.
   const isLoading =
     !mounted ||
     loading ||
     rolesPendientes ||
-    !esDireccion ||
-    (!permisosLoaded && !esDireccion);
+    !esDireccion;
 
   const userName = profile?.nombre
     ? profile.apellidos
