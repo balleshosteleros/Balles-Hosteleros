@@ -5,6 +5,7 @@ import {
   ESTADOS_CONFIG,
   ORIGEN_LABELS,
   getFasePrincipal,
+  estadoRequiereResenas,
   type Candidato,
   type EstadoReclutamiento,
   type FasePrincipal,
@@ -25,6 +26,7 @@ import {
 import {
   ArrowLeft, Mail, MailCheck, MapPin,
   GripVertical, Send, X, UsersRound, CheckCircle2,
+  MinusCircle, XCircle, Star, CalendarDays,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -32,11 +34,7 @@ import {
   previewReclutamientoFaseEmail,
   estadosConEmailDeVacante,
 } from "@/features/rrhh/actions/reclutamiento-email-plantillas-actions";
-import {
-  sustituirVariablesReclutamiento,
-  VARIABLES_RECLUTAMIENTO_EJEMPLO,
-  parsearEnlacesCuerpo,
-} from "@/features/rrhh/lib/reclutamiento-email";
+import { parsearEnlacesCuerpo } from "@/features/rrhh/lib/reclutamiento-email";
 import { CandidatoDetailModal } from "@/features/rrhh/components/reclutamiento/CandidatoDetailModal";
 import { ContratarDialog } from "@/features/rrhh/components/reclutamiento/ContratarDialog";
 import { moverCandidatoAVacante } from "@/features/rrhh/actions/candidatos-actions";
@@ -57,6 +55,45 @@ interface KanbanPipelineProps {
 
 const CURRENT_USER = "Admin RRHH";
 
+// ─── Distintivo del cuestionario ────────────────────────────────
+// Solo se muestra si el candidato respondió el cuestionario de la vacante.
+//  · 5/5 aciertos  → aprobado: tick verde
+//  · 3–4 aciertos  → naranja con una línea en medio (parcial)
+//  · 0–2 aciertos  → suspenso: X roja
+function CuestionarioBadge({ aciertos, total }: { aciertos: number; total: number }) {
+  // 5 de 5 = aprobado pleno. El umbral "aprobado" es acertar TODAS.
+  const aprobado = total > 0 && aciertos === total;
+  const titulo = `Cuestionario · ${aciertos}/${total} correctas`;
+  if (aprobado) {
+    return (
+      <span className="shrink-0 text-emerald-600" title={titulo} aria-label={titulo}>
+        <CheckCircle2 className="h-3.5 w-3.5" />
+      </span>
+    );
+  }
+  if (aciertos >= 3) {
+    return (
+      <span className="shrink-0 text-orange-500" title={titulo} aria-label={titulo}>
+        <MinusCircle className="h-3.5 w-3.5" />
+      </span>
+    );
+  }
+  return (
+    <span className="shrink-0 text-red-600" title={titulo} aria-label={titulo}>
+      <XCircle className="h-3.5 w-3.5" />
+    </span>
+  );
+}
+
+/** Días completos en la fase actual (se reinicia a 0 al cambiar de fase). */
+function diasEnFaseDe(candidato: Candidato): number | null {
+  const desde = candidato.faseActualizadaAt;
+  if (!desde) return null;
+  const t = new Date(desde).getTime();
+  if (Number.isNaN(t)) return null;
+  return Math.max(0, Math.floor((Date.now() - t) / 86_400_000));
+}
+
 // ─── Candidate Card ─────────────────────────────────────────────
 function CandidatoCard({
   candidato,
@@ -67,20 +104,44 @@ function CandidatoCard({
   onDragStart: (e: React.DragEvent, c: Candidato) => void;
   onClick: (c: Candidato) => void;
 }) {
+  const dias = diasEnFaseDe(candidato);
   return (
     <div
       draggable
       onDragStart={(e) => onDragStart(e, candidato)}
       onClick={() => onClick(candidato)}
-      className="bg-card border border-border rounded-lg p-2 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow group"
+      className="relative bg-card border border-border rounded-lg p-2 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow group"
     >
+      {/* Esquina superior derecha: días en la fase actual (se reinicia al cambiar de fase). */}
+      {dias !== null && (
+        <span
+          className="absolute top-1 right-1 inline-flex items-center gap-0.5 rounded bg-muted/70 px-1 py-0.5 text-[9px] font-semibold text-muted-foreground tabular-nums"
+          title="Días en la fase actual"
+        >
+          <CalendarDays className="h-2.5 w-2.5" />
+          {dias === 0 ? "hoy" : `${dias}d`}
+        </span>
+      )}
       <div className="flex items-start gap-2">
         <GripVertical className="h-3.5 w-3.5 text-muted-foreground/30 mt-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1 mb-1">
+          <div className="flex items-center gap-1 mb-1 pr-10">
+            {/* Tick «visto»: la ficha ya se revisó (se abrió). */}
+            {candidato.vistoAt && (
+              <span className="shrink-0 text-emerald-600" title="Candidato visto" aria-label="Candidato visto">
+                <CheckCircle2 className="h-3 w-3" />
+              </span>
+            )}
             <span className="block font-semibold text-xs text-foreground truncate">
               {candidato.nombre} {candidato.apellidos}
             </span>
+            {/* Resultado del cuestionario de la vacante (verde/naranja/rojo). */}
+            {candidato.cuestionarioTotal != null && candidato.cuestionarioTotal > 0 && (
+              <CuestionarioBadge
+                aciertos={candidato.cuestionarioAciertos ?? 0}
+                total={candidato.cuestionarioTotal}
+              />
+            )}
             {/* Candidato ya contratado: distintivo de empleado (icono RRHH + tick, en verde). */}
             {candidato.promovidoAt && (
               <span
@@ -102,6 +163,18 @@ function CandidatoCard({
               <MapPin className="h-3 w-3 shrink-0" />
               <span className="truncate">{candidato.canal ? `${ORIGEN_LABELS[candidato.origen]} · ${candidato.canal}` : ORIGEN_LABELS[candidato.origen]}</span>
             </div>
+            {/* Nota media de las reseñas de la entrevista (1–5 estrellas). */}
+            {candidato.resenaMedia != null && (
+              <div
+                className="flex items-center gap-1 min-w-0"
+                title={`Reseñas · ${candidato.resenaMedia.toFixed(1)} / 5`}
+              >
+                <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400" />
+                <span className="truncate font-medium text-foreground/80">
+                  {candidato.resenaMedia.toFixed(1).replace(".", ",")}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -243,37 +316,12 @@ function FaseGroup({
   );
 }
 
-// ─── Variable replacement for email preview ────────────────────
-// Usa el MISMO motor de sustitución que el envío real, para que la previa
-// coincida con lo que recibe el candidato. Los datos del candidato/vacante son
-// reales; los de la empresa se muestran de ejemplo (en el envío salen los de la
-// empresa activa, resueltos en servidor).
-function reemplazarVariablesEmail(texto: string, candidato: Candidato, vacante: Vacante): string {
-  const nombreCompleto = [candidato.nombre, candidato.apellidos]
-    .filter(Boolean)
-    .join(" ")
-    .trim();
-  const vars: Record<string, string> = {
-    ...VARIABLES_RECLUTAMIENTO_EJEMPLO,
-    candidato_nombre: candidato.nombre,
-    candidato_apellidos: candidato.apellidos,
-    candidato_nombre_completo: nombreCompleto || candidato.nombre,
-    candidato_email: candidato.email,
-    candidato_telefono: candidato.telefono,
-    vacante_nombre: vacante.puesto,
-    vacante_ubicacion: vacante.ubicacion,
-    departamento_nombre: vacante.categoria || "",
-  };
-  return sustituirVariablesReclutamiento(texto, vars);
-}
-
 // ─── Email Confirmation Dialog ──────────────────────────────────
 function EmailConfirmDialog({
-  open, onOpenChange, candidato, estadoNuevo, vacante, onConfirm,
+  open, onOpenChange, candidato, estadoNuevo, onConfirm,
 }: {
   open: boolean; onOpenChange: (o: boolean) => void;
   candidato: Candidato | null; estadoNuevo: EstadoReclutamiento | null;
-  vacante: Vacante;
   onConfirm: (enviarEmail: boolean) => void;
 }) {
   // Plantilla asociada al estado destino de ESTE candidato (resuelta en servidor
@@ -337,11 +385,13 @@ function EmailConfirmDialog({
               <Mail className="h-3.5 w-3.5" /> Previsualización del email
             </p>
             <p className="text-xs text-muted-foreground"><span className="font-medium">Para:</span> {candidato.email}</p>
-            <p className="text-xs text-muted-foreground"><span className="font-medium">Asunto:</span> {reemplazarVariablesEmail(tpl.asunto, candidato, vacante)}</p>
-            {/* El cuerpo hace scroll por dentro si es largo: así la caja siempre
-                mide lo mismo y el diálogo queda uniforme. */}
+            <p className="text-xs text-muted-foreground"><span className="font-medium">Asunto:</span> {tpl.asunto}</p>
+            {/* Asunto/cuerpo llegan YA sustituidos con los datos reales desde el
+                servidor (previewReclutamientoFaseEmail), así que la previa coincide
+                con el correo que recibirá el candidato. El cuerpo hace scroll por
+                dentro si es largo: así la caja siempre mide lo mismo. */}
             <p className="text-xs text-muted-foreground leading-relaxed mt-1 whitespace-pre-wrap max-h-[40vh] overflow-y-auto pr-1">
-              {parsearEnlacesCuerpo(reemplazarVariablesEmail(tpl.cuerpo, candidato, vacante)).map((seg, i) =>
+              {parsearEnlacesCuerpo(tpl.cuerpo).map((seg, i) =>
                 seg.type === "link" ? (
                   <a key={i} href={seg.href} target="_blank" rel="noreferrer" className="text-blue-600 underline">
                     {seg.text}
@@ -488,6 +538,20 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
     const c = draggedCandidato.current;
     draggedCandidato.current = null;
     if (!c || c.fase === estadoDestino) return;
+    // Requisito de reseñas: para entrar en «Documentación» o cualquier fase por
+    // delante (Formación), o para descartarlo (ya tuvo la entrevista), el
+    // candidato debe tener la valoración de la entrevista COMPLETA (todas las
+    // reseñas con todos los criterios puntuados). Única excepción: «Papelera».
+    if (estadoRequiereResenas(estadoDestino) && !c.resenasCompletas) {
+      toast.error(
+        `${c.nombre} ${c.apellidos} no tiene la entrevista valorada`,
+        {
+          description:
+            "Antes de avanzar a esta fase debes completar TODAS las reseñas de la entrevista (todos los criterios). Solo «Papelera» no lo requiere.",
+        },
+      );
+      return;
+    }
     // Movimiento libre: cualquier estado/fase, hacia delante o hacia atrás.
     // Emails automáticos al cambiar de fase: si están desactivados, se mueve sin
     // correo y sin preguntar. Si están activos, se pide confirmación o se envía
@@ -604,7 +668,6 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
         onOpenChange={(o) => !o && setEmailConfirm(null)}
         candidato={emailConfirm?.candidato ?? null}
         estadoNuevo={emailConfirm?.estadoNuevo ?? null}
-        vacante={vacante}
         onConfirm={handleConfirmMove}
       />
     </div>

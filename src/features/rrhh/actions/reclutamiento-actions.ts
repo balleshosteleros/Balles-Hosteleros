@@ -101,6 +101,12 @@ interface CandidatoRowReal {
   empleado_id: string | null;
   activo: boolean | null;
   created_at: string;
+  visto_at: string | null;
+  fase_actualizada_at: string | null;
+  // Datos de la candidatura pública
+  genero: string | null;
+  ubicacion: string | null;
+  disponibilidad: string | null;
   // Paso «Documentación»
   dni_nie: string | null;
   iban: string | null;
@@ -126,7 +132,7 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
       : profileEmpresaId;
     if (!empresaId) return { ok: false, data: [] };
 
-    const [vacRes, candRes] = await Promise.all([
+    const [vacRes, candRes, cuestRes, resenasRes] = await Promise.all([
       supabase
         .from("vacantes")
         .select(`
@@ -144,18 +150,61 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
         .select(`
           id, empresa_id, vacante_id, nombre, apellidos, email, telefono,
           cv_url, notas, origen, canal_nombre, fase, estado, promovido_at, empleado_id,
-          activo, created_at,
+          activo, created_at, visto_at, fase_actualizada_at,
+          genero, ubicacion, disponibilidad,
           dni_nie, iban, num_seguridad_social,
           doc_dni_anverso_path, doc_dni_reverso_path, doc_iban_path, doc_ss_path,
           documentacion_completada_at
         `)
         .eq("empresa_id", empresaId)
         .order("created_at", { ascending: false }),
+      // Resultado del cuestionario de cada candidato (1 fila por candidato).
+      supabase
+        .from("candidato_cuestionario_respuestas")
+        .select("candidato_id, aciertos, total_preguntas")
+        .eq("empresa_id", empresaId),
+      // Reseñas (entrevista): se agregan en mapas más abajo para la media y el
+      // distintivo de «valoración completa».
+      supabase
+        .from("candidato_resenas")
+        .select("candidato_id, puntuaciones")
+        .eq("empresa_id", empresaId),
     ]);
 
     if (vacRes.error) throw vacRes.error;
     const vacantes = (vacRes.data ?? []) as unknown as VacanteRowReal[];
     const candidatos = ((candRes.data ?? []) as unknown as CandidatoRowReal[]);
+
+    // ── Cuestionario: aciertos/total por candidato ──
+    const cuestPorCandidato = new Map<string, { aciertos: number; total: number }>();
+    for (const r of (cuestRes.data ?? []) as { candidato_id: string; aciertos: number | null; total_preguntas: number | null }[]) {
+      if (!r.candidato_id) continue;
+      cuestPorCandidato.set(r.candidato_id, {
+        aciertos: r.aciertos ?? 0,
+        total: r.total_preguntas ?? 0,
+      });
+    }
+
+    // ── Reseñas: media de estrellas + si la entrevista está valorada ──
+    // Valorada (completa) = existe ≥1 reseña con criterios puntuados. El
+    // formulario de reseña ya obliga a puntuar TODOS los criterios para poder
+    // guardar, así que una reseña guardada equivale a valoración completa.
+    const resenaAcc = new Map<string, { suma: number; n: number }>();
+    for (const r of (resenasRes.data ?? []) as { candidato_id: string; puntuaciones: { criterioId?: string; estrellas?: number }[] | null }[]) {
+      if (!r.candidato_id) continue;
+      const punts = Array.isArray(r.puntuaciones) ? r.puntuaciones : [];
+      const valoradas = punts.filter((p) => (p?.estrellas ?? 0) > 0);
+      const acc = resenaAcc.get(r.candidato_id) ?? { suma: 0, n: 0 };
+      for (const p of valoradas) { acc.suma += p.estrellas ?? 0; acc.n += 1; }
+      resenaAcc.set(r.candidato_id, acc);
+    }
+    const resenasPorCandidato = new Map<string, { media: number | null; completas: boolean }>();
+    for (const [candId, acc] of resenaAcc) {
+      resenasPorCandidato.set(candId, {
+        media: acc.n > 0 ? acc.suma / acc.n : null,
+        completas: acc.n > 0,
+      });
+    }
 
     const candidatosByVacante = new Map<string, CandidatoRowReal[]>();
     for (const c of candidatos) {
@@ -214,7 +263,10 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
         orden: v.orden ?? null,
         area,
         organigramaNodeId: nodo?.id ?? null,
-        candidatos: cands.map((c) => ({
+        candidatos: cands.map((c) => {
+          const cuest = cuestPorCandidato.get(c.id);
+          const resena = resenasPorCandidato.get(c.id);
+          return {
           id: c.id,
           nombre: c.nombre,
           apellidos: c.apellidos ?? "",
@@ -225,11 +277,21 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
           origen: ORIGENES_VALIDOS.has(c.origen) ? c.origen : "otros",
           canal: c.canal_nombre ?? null,
           notasInternas: c.notas ?? "",
+          // Datos aportados en la candidatura pública (género, ubicación, disponibilidad)
+          ubicacion: c.ubicacion ?? undefined,
+          genero: c.genero === "masculino" || c.genero === "femenino" ? c.genero : undefined,
+          disponibilidad:
+            c.disponibilidad === "inmediato" || c.disponibilidad === "15_dias"
+              ? c.disponibilidad
+              : undefined,
           fase: ESTADOS_VALIDOS.has(c.estado) ? c.estado : "nuevo",
           vacanteId: v.id,
           reclutadorAsignado: "",
           historial: [] as never[],
           activo: c.activo ?? true,
+          // Revisión (tick «visto») y antigüedad en la fase actual (contador de días).
+          vistoAt: c.visto_at ?? null,
+          faseActualizadaAt: c.fase_actualizada_at ?? c.created_at ?? null,
           // Extras útiles para el botón "Crear en sistema" y avisos
           promovidoAt: c.promovido_at,
           empleadoId: c.empleado_id,
@@ -242,7 +304,14 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
           docIbanPath: c.doc_iban_path ?? null,
           docSsPath: c.doc_ss_path ?? null,
           documentacionCompletadaAt: c.documentacion_completada_at ?? null,
-        })),
+          // Cuestionario de la vacante (null si no lo ha respondido)
+          cuestionarioAciertos: cuest ? cuest.aciertos : null,
+          cuestionarioTotal: cuest ? cuest.total : null,
+          // Reseñas (entrevista)
+          resenaMedia: resena?.media ?? null,
+          resenasCompletas: resena?.completas ?? false,
+          };
+        }),
       };
     });
 

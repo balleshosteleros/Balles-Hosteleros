@@ -290,9 +290,14 @@ async function resolverEmailParaEstado(
 }
 
 /**
- * Previsualización para el diálogo del Kanban: devuelve el asunto/cuerpo (sin
- * sustituir) y si está activa la plantilla asociada al estado destino. `null` si
- * no hay email asociado.
+ * Previsualización para el diálogo del Kanban: devuelve el asunto/cuerpo y si
+ * está activa la plantilla asociada al estado destino. `null` si no hay email
+ * asociado.
+ *
+ * Las variables (`{{empresa_email}}`, `{{empresa_nombre}}`, etc.) se sustituyen
+ * aquí con los DATOS REALES de la empresa/candidato/vacante (mismo motor que el
+ * envío real, `buildReclutamientoEmailVars`), para que la previa muestre
+ * exactamente lo que recibirá el candidato y no datos de ejemplo.
  */
 export async function previewReclutamientoFaseEmail(
   candidatoId: string,
@@ -302,7 +307,35 @@ export async function previewReclutamientoFaseEmail(
   if (!empresaId) return null;
   const tpl = await resolverEmailParaEstado(supabase, empresaId, candidatoId, estado);
   if (!tpl) return null;
-  return { asunto: tpl.asunto, cuerpo: tpl.cuerpo, activa: tpl.activa };
+
+  const vars = await buildReclutamientoEmailVars(candidatoId);
+
+  // Paso «Documentación»: resuelve {{enlace_documentacion}} igual que el envío,
+  // pero SIN crear el token todavía (la previa no debe tener efectos). Si aún no
+  // existe, deja un texto-placeholder legible en lugar del enlace real.
+  if (estado === "documentacion") {
+    const { data: cand } = await supabase
+      .from("candidatos")
+      .select("documentacion_token")
+      .eq("id", candidatoId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    const token = (cand?.documentacion_token as string | null) ?? null;
+    if (token) {
+      const { enlaceDocumentacion } = await import(
+        "@/features/rrhh/lib/documentacion-candidato"
+      );
+      vars.enlace_documentacion = enlaceDocumentacion(token);
+    } else {
+      vars.enlace_documentacion = "(se generará un enlace personal al enviar)";
+    }
+  }
+
+  return {
+    asunto: sustituirVariablesReclutamiento(tpl.asunto, vars),
+    cuerpo: sustituirVariablesReclutamiento(tpl.cuerpo, vars),
+    activa: tpl.activa,
+  };
 }
 
 /**
