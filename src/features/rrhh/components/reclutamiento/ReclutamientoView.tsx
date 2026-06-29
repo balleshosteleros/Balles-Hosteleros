@@ -626,8 +626,8 @@ export function ReclutamientoView() {
                     .find(([, cfg]) => cfg.estados.includes(c.fase as EstadoReclutamiento))?.[0];
                   if (!fase) continue;
                   const res = await moverCandidatoFase(c.id, fase, c.fase);
-                  if (!res.ok && "error" in res && res.error === "OFFBOARDING_REQUIRED") {
-                    toast.error("Este candidato ya es empleado. Inicia el offboarding desde la pestaña Candidatos.");
+                  if (!res.ok && "error" in res && res.error === "YA_EMPLEADO") {
+                    toast.error("Este candidato ya es empleado y no puede descartarse desde aquí. Gestiona su baja desde la ficha del empleado.");
                   } else if (!res.ok) {
                     toast.error(("error" in res && res.error) || "Error al mover candidato");
                   } else if (res.empleadoYaContratado) {

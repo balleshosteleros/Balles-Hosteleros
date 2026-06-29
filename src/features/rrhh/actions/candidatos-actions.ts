@@ -170,7 +170,7 @@ export async function moverCandidatoFase(
     if (cand?.promovido_at && fase === "descartado") {
       return {
         ok: false,
-        error: "OFFBOARDING_REQUIRED",
+        error: "YA_EMPLEADO",
         empleadoId: cand.empleado_id,
       } as const;
     }
@@ -452,59 +452,3 @@ export async function eliminarCandidato(id: string) {
   }
 }
 
-export async function iniciarOffboarding(empleadoId: string) {
-  try {
-    const { supabase, user, empresaId } = await getContext();
-    if (!empresaId || !user) return { ok: false, error: "No autenticado" };
-
-    // Buscar plantilla por defecto OFF
-    const { data: plantilla } = await supabase
-      .from("plantillas_boarding")
-      .select("id, nombre, tareas")
-      .eq("empresa_id", empresaId)
-      .eq("tipo", "offboarding")
-      .eq("por_defecto", true)
-      .maybeSingle();
-
-    type TareaPlantilla = { id: string; nombre: string; orden: number };
-    const tareasIniciales = ((plantilla?.tareas ?? []) as TareaPlantilla[]).map((t) => ({
-      id: t.id,
-      nombre: t.nombre,
-      orden: t.orden,
-      completada: false,
-      fechaCompletado: null as string | null,
-    }));
-
-    const { data: proceso, error } = await supabase
-      .from("procesos_boarding")
-      .insert({
-        empresa_id: empresaId,
-        empleado_id: empleadoId,
-        plantilla_id: plantilla?.id ?? null,
-        plantilla_nombre: plantilla?.nombre ?? "OFF-BOARDING",
-        tipo: "offboarding",
-        estado: "activo",
-        tareas: tareasIniciales,
-        iniciado_por: user.id,
-      })
-      .select("id")
-      .single();
-
-    if (error) throw error;
-
-    // Desactivar empleado (constraint exige fecha_baja al desactivar)
-    await supabase
-      .from("empleados")
-      .update({
-        estado: "Inactivo",
-        fecha_baja: new Date().toISOString().slice(0, 10),
-      })
-      .eq("id", empleadoId)
-      .eq("empresa_id", empresaId);
-
-    return { ok: true, procesoId: proceso.id };
-  } catch (err: unknown) {
-    const msg = mensajeError(err);
-    return { ok: false, error: msg };
-  }
-}

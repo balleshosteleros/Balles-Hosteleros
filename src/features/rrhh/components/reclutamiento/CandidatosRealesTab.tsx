@@ -35,7 +35,6 @@ import {
 } from "@/features/rrhh/data/reclutamiento";
 import {
   listCandidatosReales,
-  iniciarOffboarding,
   eliminarCandidato,
   actualizarDatosCandidato,
 } from "@/features/rrhh/actions/candidatos-actions";
@@ -179,9 +178,6 @@ export function CandidatosRealesTab() {
   // Dialog de contratación (wizard 2 pasos)
   const [contratarCand, setContratarCand] = useState<CandidatoReal | null>(null);
 
-  // Aviso post-contratación → offboarding
-  const [offboardingDe, setOffboardingDe] = useState<{ empleadoId: string; nombre: string } | null>(null);
-
   // Ficha del candidato (modal completo: actividad, notas, reseñas, cuestionario, CV).
   const [selected, setSelected] = useState<CandidatoReal | null>(null);
 
@@ -268,22 +264,6 @@ export function CandidatosRealesTab() {
         }
       });
     })();
-  }
-
-  function ejecutarOffboarding() {
-    if (!offboardingDe) return;
-    startTransition(async () => {
-      const res = await iniciarOffboarding(offboardingDe.empleadoId);
-      if (res.ok) {
-        toast.success("Proceso de offboarding iniciado");
-        setOffboardingDe(null);
-        // Tras iniciar offboarding, marcar candidato como descartado/no_se_presenta
-        // (el original moverCandidatoFase fue rechazado)
-        void cargar();
-      } else {
-        toast.error(res.error ?? "Error al iniciar offboarding");
-      }
-    });
   }
 
   if (loading) {
@@ -618,31 +598,6 @@ export function CandidatosRealesTab() {
         } : null}
         onDone={() => void cargar()}
       />
-
-      {/* ── Aviso offboarding obligatorio ──────────────────── */}
-      <AlertDialog open={!!offboardingDe} onOpenChange={(o) => !o && setOffboardingDe(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-500" />
-              Este trabajador ya está contratado
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              <b>{offboardingDe?.nombre}</b> ya es empleado. Para descartarlo o darlo de baja debes iniciar el proceso de <b>Offboarding</b> (Boarding &gt; OFF).
-              Al confirmar se creará un proceso de offboarding usando la plantilla por defecto y podrás seguir los pasos de la baja.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={pending}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={ejecutarOffboarding}
-              disabled={pending}
-            >
-              Iniciar offboarding
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* ── Confirmación de borrado de candidato ──────────────────── */}
       {confirmDialog}

@@ -326,7 +326,6 @@ export const CATALOGO: ModuloDef[] = [
       },
       placeholder("jornadas", "Jornadas de vacantes"),
       placeholder("contratos", "Tipos de contrato"),
-      placeholder("boarding", "Boarding"),
       placeholder("bonus", "Bonus"),
       placeholder("points", "Points"),
       placeholder("pagos", "Pagos"),

@@ -2,7 +2,7 @@
 
 import {
   Briefcase, Calculator, FileText, Scale, User, UsersRound, Truck, Camera,
-  Wrench, Settings, CalendarDays, ChefHat, UserCheck, ClipboardList, ClipboardCheck,
+  Wrench, Settings, CalendarDays, ChefHat, ClipboardList, ClipboardCheck,
   Gift, Crown, Network, PercentDiamond, TrendingUp, FolderOpen, Calendar,
   Timer, UserRoundSearch, HandCoins, Megaphone, Package, FileArchive, Files,
   KeyRound, Gavel, FileUp, ShoppingCart, Warehouse, FlaskConical, GraduationCap,
@@ -158,7 +158,6 @@ export const rrhhSubs: SubItem[] = [
   { title: "CALENDARIOS", url: "/rrhh/calendarios", icon: Calendar },
   { title: "HORARIOS", url: "/rrhh/horarios", icon: Timer },
   { title: "RECLUTAMIENTO", url: "/rrhh/reclutamiento", icon: UserRoundSearch },
-  { title: "BOARDING", url: "/rrhh/boarding", icon: UserCheck },
   { title: "BONUS", url: "/rrhh/bonus", icon: Gift },
   { title: "POINTS", url: "/rrhh/points", icon: Trophy, badge: "2ª fase" },
   { title: "PAGOS", url: "/rrhh/pagos", icon: HandCoins },

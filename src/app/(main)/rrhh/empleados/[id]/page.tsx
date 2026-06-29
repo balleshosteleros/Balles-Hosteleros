@@ -40,7 +40,7 @@ import { cn } from "@/shared/lib/utils";
 import {
   User,
   Fingerprint, Inbox, FileSignature, Calendar, Timer,
-  UserRoundSearch, UserCheck, Gift, Trophy, HandCoins,
+  UserRoundSearch, Gift, Trophy, HandCoins,
   GraduationCap, ClipboardList, FileQuestion, FileSearch,
   Save, Loader2,
 } from "lucide-react";
@@ -55,7 +55,6 @@ const TOP_TABS = [
   { id: "calendarios",     label: "Calendarios",    icon: Calendar          },
   { id: "horarios",        label: "Horarios",       icon: Timer             },
   { id: "reclutamiento",   label: "Reclutamiento",  icon: UserRoundSearch   },
-  { id: "boarding",        label: "Boarding",       icon: UserCheck         },
   { id: "bonus",           label: "Bonus",          icon: Gift              },
   { id: "points",          label: "Points",         icon: Trophy            },
   { id: "pagos",           label: "Pagos",          icon: HandCoins         },
@@ -297,8 +296,6 @@ export default function FichaEmpleadoPage() {
         return <SubmoduloPorEmpleadoPlaceholder modulo="Calendarios" path="/rrhh/calendarios" empleado={empleado} />;
       case "reclutamiento":
         return <SubmoduloPorEmpleadoPlaceholder modulo="Reclutamiento" path="/rrhh/reclutamiento" empleado={empleado} />;
-      case "boarding":
-        return <SubmoduloPorEmpleadoPlaceholder modulo="Boarding" path="/rrhh/boarding" empleado={empleado} />;
       case "bonus":
         return <SubmoduloPorEmpleadoPlaceholder modulo="Bonus" path="/rrhh/bonus" empleado={empleado} />;
       case "points":

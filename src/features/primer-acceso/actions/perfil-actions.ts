@@ -90,46 +90,6 @@ export async function guardarPerfilCompleto(input: PerfilCompletoInput) {
 
   if (error) return { ok: false, error: error.message };
 
-  // Iniciar onboarding por defecto si existe plantilla y no hay proceso activo
-  const { data: existingProc } = await supabase
-    .from("procesos_boarding")
-    .select("id")
-    .eq("empleado_id", empleado.id)
-    .eq("tipo", "onboarding")
-    .eq("estado", "activo")
-    .maybeSingle();
-
-  if (!existingProc) {
-    const { data: plantilla } = await supabase
-      .from("plantillas_boarding")
-      .select("id, nombre, tareas")
-      .eq("empresa_id", empleado.empresa_id)
-      .eq("tipo", "onboarding")
-      .eq("por_defecto", true)
-      .maybeSingle();
-
-    if (plantilla) {
-      type TareaPlantilla = { id: string; nombre: string; orden: number };
-      const tareasIniciales = ((plantilla.tareas ?? []) as TareaPlantilla[]).map((t) => ({
-        id: t.id,
-        nombre: t.nombre,
-        orden: t.orden,
-        completada: false,
-        fechaCompletado: null as string | null,
-      }));
-      await supabase.from("procesos_boarding").insert({
-        empresa_id: empleado.empresa_id,
-        empleado_id: empleado.id,
-        plantilla_id: plantilla.id,
-        plantilla_nombre: plantilla.nombre,
-        tipo: "onboarding",
-        estado: "activo",
-        tareas: tareasIniciales,
-        iniciado_por: user.id,
-      });
-    }
-  }
-
   revalidatePath("/", "layout");
   return { ok: true };
 }
