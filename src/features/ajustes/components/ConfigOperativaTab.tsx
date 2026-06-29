@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { TZ_DESTACADAS } from "@/features/google-workspace/lib/timezones";
 
 export function ConfigOperativaTab() {
   const { ajustes, setAjustes } = useEmpresa();
@@ -45,9 +46,17 @@ export function ConfigOperativaTab() {
             <Select value={c.zonaHoraria} onValueChange={(v) => set("zonaHoraria", v)}>
               <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="Europe/Madrid">Europe/Madrid</SelectItem>
-                <SelectItem value="Europe/London">Europe/London</SelectItem>
-                <SelectItem value="America/New_York">America/New_York</SelectItem>
+                {/* La zona horaria rige cómo se muestran TODAS las horas de la
+                    empresa (PRP-069). Lista en español; incluye Canarias. */}
+                {TZ_DESTACADAS.map((z) => (
+                  <SelectItem key={z.value} value={z.value}>
+                    {z.nombre} · {z.value}
+                  </SelectItem>
+                ))}
+                {/* Conserva el valor guardado aunque no esté en la lista. */}
+                {c.zonaHoraria && !TZ_DESTACADAS.some((z) => z.value === c.zonaHoraria) && (
+                  <SelectItem value={c.zonaHoraria}>{c.zonaHoraria}</SelectItem>
+                )}
               </SelectContent>
             </Select>
           </div>
