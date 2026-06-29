@@ -13,9 +13,8 @@ export function CandidatosConfig() {
     { nombre: "Teléfono", obligatorio: true, activo: true },
     { nombre: "CV adjunto", obligatorio: false, activo: true },
     { nombre: "Carta de presentación", obligatorio: false, activo: false },
-    { nombre: "Disponibilidad", obligatorio: false, activo: true },
-    { nombre: "Experiencia previa", obligatorio: false, activo: false },
-    { nombre: "Foto", obligatorio: false, activo: false },
+    { nombre: "Disponibilidad", obligatorio: true, activo: true },
+    { nombre: "Experiencia previa", obligatorio: true, activo: true },
   ];
 
   return (

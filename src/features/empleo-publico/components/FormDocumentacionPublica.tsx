@@ -132,6 +132,11 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
   const [iban, setIban] = useState("");
   const [ss, setSs] = useState("");
 
+  // Datos personales adicionales del paso Documentación.
+  const [fotoPerfil, setFotoPerfil] = useState<DocState>(DOC_VACIO);
+  const [direccion, setDireccion] = useState("");
+  const [fechaNacimiento, setFechaNacimiento] = useState("");
+
   const [enviado, setEnviado] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -189,6 +194,11 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
     if (!dniAnverso.file) return "Adjunta el anverso de tu DNI/NIE";
     if (!dniReverso.file) return "Adjunta el reverso de tu DNI/NIE";
     if (!docSs.file) return "Adjunta el documento de la Seguridad Social";
+    if (!fotoPerfil.file) return "Adjunta tu foto de perfil";
+    if (!direccion.trim()) return "Indica tu dirección postal";
+    if (!fechaNacimiento) return "Indica tu fecha de nacimiento";
+    if (new Date(`${fechaNacimiento}T00:00:00`) >= new Date())
+      return "La fecha de nacimiento no es válida";
     // El anverso del DNI con IA fallida obliga a rehacer la foto (regla acordada).
     if (dniAnverso.deteccion === "fallo")
       return "No hemos podido leer tu DNI/NIE. Vuelve a hacer la foto del anverso con buena luz.";

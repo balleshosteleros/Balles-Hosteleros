@@ -45,6 +45,22 @@ export const DISPONIBILIDAD_LABELS: Record<Disponibilidad, string> = {
   "15_dias": "En 15 días",
 };
 
+// ─── Experiencia previa ────────────────────────────────────────
+// 4 tramos: sin experiencia + 3 rangos, el último abierto (infinito).
+export type ExperienciaPrevia = "sin_experiencia" | "menos_1" | "de_1_a_5" | "mas_5";
+
+export const EXPERIENCIA_PREVIA_LABELS: Record<ExperienciaPrevia, string> = {
+  sin_experiencia: "Sin experiencia",
+  menos_1: "Menos de 1 año",
+  de_1_a_5: "De 1 a 5 años",
+  mas_5: "Más de 5 años",
+};
+
+// Orden de presentación en selectores.
+export const EXPERIENCIA_PREVIA_OPCIONES = (
+  Object.keys(EXPERIENCIA_PREVIA_LABELS) as ExperienciaPrevia[]
+).map((value) => ({ value, label: EXPERIENCIA_PREVIA_LABELS[value] }));
+
 // ─── Fase config ────────────────────────────────────────────────
 export interface FasePrincipalConfig {
   label: string;
@@ -238,6 +254,7 @@ export interface Candidato {
   ubicacion?: string;
   genero?: Genero;
   disponibilidad?: Disponibilidad;
+  experienciaPrevia?: ExperienciaPrevia;
   sobreTi?: string;
   resenas?: ResenaCandidato[];
   notas?: NotaCandidato[];

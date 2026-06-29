@@ -1,17 +1,28 @@
 "use client";
 
-import { useEffect, useState, useTransition, useCallback } from "react";
+import { useEffect, useMemo, useState, useTransition, useCallback } from "react";
 import { toast } from "sonner";
 import {
-  Loader2, FileText, Sparkles,
-  AlertTriangle, Inbox, Trash2,
+  Loader2, FileText, Sparkles, Star,
+  AlertTriangle, Inbox, Trash2, Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table, TableBody, TableCell, TableHeader, TableRow,
 } from "@/components/ui/table";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+  aplicarOrdenToolbar,
+  coincideBusquedaUniversal,
+  type ToolbarColumna,
+  type ToolbarColumnaVisible,
+  type ToolbarFiltroActivo,
+  type ToolbarOrdenActivo,
+} from "@/shared/components/SubmoduleToolbar";
+import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
@@ -48,8 +59,11 @@ interface CandidatoReal {
   genero: string | null;
   ubicacion: string | null;
   disponibilidad: string | null;
+  experiencia_previa: string | null;
   carta_presentacion: string | null;
   puntuacion: number | null;
+  /** Nota final de las reseñas (media 0–5 de todas las estrellas), o null si no hay. */
+  nota_resenas: number | null;
   fase: Fase;
   estado: Estado;
   promovido_at: string | null;
@@ -93,6 +107,7 @@ function toCandidato(c: CandidatoReal): Candidato {
     ubicacion: c.ubicacion ?? undefined,
     genero: (c.genero === "masculino" || c.genero === "femenino" ? c.genero : undefined) as Candidato["genero"],
     disponibilidad: (c.disponibilidad === "inmediato" || c.disponibilidad === "15_dias" ? c.disponibilidad : undefined) as Candidato["disponibilidad"],
+    experienciaPrevia: (["sin_experiencia", "menos_1", "de_1_a_5", "mas_5"].includes(c.experiencia_previa ?? "") ? c.experiencia_previa : undefined) as Candidato["experienciaPrevia"],
     // "Carta de presentación" en la ficha = lo que el candidato escribió
     // (opcional) en el formulario público; mismo dato, una sola columna.
     sobreTi: c.carta_presentacion ?? undefined,
@@ -118,6 +133,40 @@ function vacanteParaModal(c: CandidatoReal | null): Vacante {
   };
 }
 
+// ─── Columnas configurables (BARRA HORIZONTAL 1) ────────────────
+const COLUMNAS_DEF: ToolbarColumna[] = [
+  { campo: "candidato", label: "Candidato", bloqueada: true },
+  { campo: "vacante", label: "Vacante" },
+  { campo: "estado", label: "Estado" },
+  { campo: "telefono", label: "Teléfono" },
+  { campo: "cuestionario", label: "Cuestionario" },
+  { campo: "resenas", label: "Reseñas" },
+  { campo: "cv", label: "CV" },
+  { campo: "perfil_creado", label: "Perfil creado" },
+];
+
+/** Accesor para filtros/orden de la toolbar. */
+function accesoCampo(c: CandidatoReal, campo: string): unknown {
+  switch (campo) {
+    case "candidato":
+      return `${c.nombre} ${c.apellidos ?? ""}`.trim();
+    case "vacante":
+      return c.vacantes?.titulo ?? "";
+    case "estado":
+      return ESTADOS_CONFIG[c.estado as EstadoReclutamiento]?.label ?? c.estado;
+    case "telefono":
+      return c.telefono ?? "";
+    case "cuestionario":
+      return c.puntuacion;
+    case "resenas":
+      return c.nota_resenas;
+    case "perfil_creado":
+      return c.created_at?.slice(0, 10) ?? "";
+    default:
+      return "";
+  }
+}
+
 export function CandidatosRealesTab() {
   const [items, setItems] = useState<CandidatoReal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -133,6 +182,57 @@ export function CandidatosRealesTab() {
 
   // Ficha del candidato (modal completo: actividad, notas, reseñas, cuestionario, CV).
   const [selected, setSelected] = useState<CandidatoReal | null>(null);
+
+  // ── Toolbar (BARRA HORIZONTAL 1): búsqueda + filtros/orden por columna ──
+  const [busqueda, setBusqueda] = useState("");
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
+  const [showConfig, setShowConfig] = useState(false);
+
+  const esVisible = useCallback(
+    (campo: string) => columnasVisibles[campo] !== false,
+    [columnasVisibles],
+  );
+
+  // Opciones del filtro de columna "Estado" = estados presentes en los datos.
+  const opcionesEstado = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of items) {
+      set.add(ESTADOS_CONFIG[c.estado as EstadoReclutamiento]?.label ?? c.estado);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "es"));
+  }, [items]);
+
+  // Opciones del filtro de columna "Vacante".
+  const opcionesVacante = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of items) set.add(c.vacantes?.titulo ?? "—");
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "es"));
+  }, [items]);
+
+  // Lista final: búsqueda + filtros de columna + orden.
+  const itemsFiltrados = useMemo(() => {
+    let lista = items;
+    if (busqueda.trim()) {
+      lista = lista.filter((c) =>
+        coincideBusquedaUniversal(
+          {
+            nombre: c.nombre,
+            apellidos: c.apellidos,
+            email: c.email,
+            telefono: c.telefono,
+            vacante: c.vacantes?.titulo,
+          },
+          busqueda,
+        ),
+      );
+    }
+    lista = aplicarFiltrosToolbar(lista, filtros, accesoCampo);
+    lista = aplicarOrdenToolbar(lista, orden, accesoCampo);
+    return lista;
+  }, [items, busqueda, filtros, orden]);
 
   // Toast informativo de "ya es empleado, movimiento solo organizativo"
   const cargar = useCallback(async () => {
@@ -210,26 +310,119 @@ export function CandidatosRealesTab() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-lg font-semibold">Candidatos</h2>
-      </div>
+      <SubmoduleToolbar
+        busqueda={busqueda}
+        onBusquedaChange={setBusqueda}
+        placeholderBusqueda="Buscar"
+        ocultarNuevo
+        columnas={COLUMNAS_DEF}
+        columnasVisibles={columnasVisibles}
+        onColumnasVisiblesChange={setColumnasVisibles}
+        columnasOrden={columnasOrden}
+        onColumnasOrdenChange={setColumnasOrden}
+        extraDerecha={
+          <Button
+            size="icon"
+            variant={showConfig ? "default" : "outline"}
+            className="h-9 w-9"
+            onClick={() => setShowConfig((v) => !v)}
+            title="Configuración"
+            aria-label="Configuración"
+          >
+            <Settings className="h-4 w-4" strokeWidth={1.75} />
+          </Button>
+        }
+      />
 
       <Card>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Candidato</TableHead>
-              <TableHead>Vacante</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead>Teléfono</TableHead>
-              <TableHead className="text-center">Cuestionario</TableHead>
-              <TableHead>CV</TableHead>
-              <TableHead>Perfil creado</TableHead>
-              <TableHead className="text-right">Opciones</TableHead>
+              {esVisible("candidato") && (
+                <TableColumnHeader
+                  label="Candidato"
+                  campo="candidato"
+                  ordenable
+                  orden={orden}
+                  onOrdenChange={setOrden}
+                />
+              )}
+              {esVisible("vacante") && (
+                <TableColumnHeader
+                  label="Vacante"
+                  campo="vacante"
+                  filtroTipo="lista"
+                  opciones={opcionesVacante}
+                  filtros={filtros}
+                  onFiltrosChange={setFiltros}
+                  ordenable
+                  orden={orden}
+                  onOrdenChange={setOrden}
+                />
+              )}
+              {esVisible("estado") && (
+                <TableColumnHeader
+                  label="Estado"
+                  campo="estado"
+                  filtroTipo="lista"
+                  opciones={opcionesEstado}
+                  filtros={filtros}
+                  onFiltrosChange={setFiltros}
+                />
+              )}
+              {esVisible("telefono") && (
+                <TableColumnHeader label="Teléfono" campo="telefono" />
+              )}
+              {esVisible("cuestionario") && (
+                <TableColumnHeader
+                  label="Cuestionario"
+                  campo="cuestionario"
+                  align="center"
+                  filtroTipo="numero"
+                  filtros={filtros}
+                  onFiltrosChange={setFiltros}
+                  ordenable
+                  orden={orden}
+                  onOrdenChange={setOrden}
+                  ordenLabelAsc="Menor"
+                  ordenLabelDesc="Mayor"
+                />
+              )}
+              {esVisible("resenas") && (
+                <TableColumnHeader
+                  label="Reseñas"
+                  campo="resenas"
+                  align="center"
+                  filtroTipo="numero"
+                  filtros={filtros}
+                  onFiltrosChange={setFiltros}
+                  ordenable
+                  orden={orden}
+                  onOrdenChange={setOrden}
+                  ordenLabelAsc="Menor"
+                  ordenLabelDesc="Mayor"
+                />
+              )}
+              {esVisible("cv") && <TableColumnHeader label="CV" campo="cv" />}
+              {esVisible("perfil_creado") && (
+                <TableColumnHeader
+                  label="Perfil creado"
+                  campo="perfil_creado"
+                  filtroTipo="fecha"
+                  filtros={filtros}
+                  onFiltrosChange={setFiltros}
+                  ordenable
+                  orden={orden}
+                  onOrdenChange={setOrden}
+                  ordenLabelAsc="Más antiguo"
+                  ordenLabelDesc="Más reciente"
+                />
+              )}
+              <TableColumnHeader label="Opciones" align="right" />
             </TableRow>
           </TableHeader>
           <TableBody>
-            {items.map((c) => {
+            {itemsFiltrados.map((c) => {
               const cfgEstado = ESTADOS_CONFIG[c.estado as EstadoReclutamiento];
               const mostrarBoton =
                 (c.estado === "prueba" || c.estado === "empleado") && c.promovido_at === null;
@@ -240,6 +433,7 @@ export function CandidatosRealesTab() {
                   className="cursor-pointer hover:bg-muted/50"
                   onClick={() => setSelected(c)}
                 >
+                  {esVisible("candidato") && (
                   <TableCell>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -258,7 +452,11 @@ export function CandidatosRealesTab() {
                       <span className="text-xs text-muted-foreground">{c.email}</span>
                     </div>
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{c.vacantes?.titulo ?? "—"}</TableCell>
+                  )}
+                  {esVisible("vacante") && (
+                    <TableCell className="text-muted-foreground">{c.vacantes?.titulo ?? "—"}</TableCell>
+                  )}
+                  {esVisible("estado") && (
                   <TableCell>
                     {cfgEstado ? (
                       <Badge variant="outline" className="text-[11px]" style={{ borderColor: cfgEstado.color, color: cfgEstado.color }}>
@@ -266,7 +464,11 @@ export function CandidatosRealesTab() {
                       </Badge>
                     ) : "—"}
                   </TableCell>
-                  <TableCell className="text-muted-foreground tabular-nums">{c.telefono ?? "—"}</TableCell>
+                  )}
+                  {esVisible("telefono") && (
+                    <TableCell className="text-muted-foreground tabular-nums">{c.telefono ?? "—"}</TableCell>
+                  )}
+                  {esVisible("cuestionario") && (
                   <TableCell className="text-center">
                     {c.puntuacion == null ? (
                       <span className="text-muted-foreground">—</span>
@@ -276,6 +478,21 @@ export function CandidatosRealesTab() {
                       </span>
                     )}
                   </TableCell>
+                  )}
+                  {esVisible("resenas") && (
+                  <TableCell className="text-center">
+                    {c.nota_resenas == null ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : (
+                      <span className="inline-flex items-center justify-center gap-1 font-semibold tabular-nums text-amber-600">
+                        <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                        {c.nota_resenas.toFixed(1)}
+                        <span className="text-xs font-medium text-muted-foreground">/ 5</span>
+                      </span>
+                    )}
+                  </TableCell>
+                  )}
+                  {esVisible("cv") && (
                   <TableCell>
                     {c.cv_url ? (
                       <a
@@ -291,7 +508,10 @@ export function CandidatosRealesTab() {
                       <span className="text-muted-foreground">—</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-muted-foreground tabular-nums">{fmtFecha(c.created_at)}</TableCell>
+                  )}
+                  {esVisible("perfil_creado") && (
+                    <TableCell className="text-muted-foreground tabular-nums">{fmtFecha(c.created_at)}</TableCell>
+                  )}
                   <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1">
                       {mostrarBoton ? (
@@ -327,6 +547,13 @@ export function CandidatosRealesTab() {
                 </TableRow>
               );
             })}
+            {itemsFiltrados.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={COLUMNAS_DEF.length + 1} className="py-10 text-center text-sm text-muted-foreground">
+                  No hay candidatos que coincidan con los filtros.
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </Card>
@@ -352,6 +579,7 @@ export function CandidatosRealesTab() {
                     genero: updated.genero ?? x.genero,
                     ubicacion: updated.ubicacion ?? x.ubicacion,
                     disponibilidad: updated.disponibilidad ?? x.disponibilidad,
+                    experiencia_previa: updated.experienciaPrevia ?? x.experiencia_previa,
                     carta_presentacion: updated.sobreTi ?? null,
                   }
                 : x,
@@ -363,6 +591,7 @@ export function CandidatosRealesTab() {
             genero: updated.genero ?? null,
             ubicacion: updated.ubicacion ?? null,
             disponibilidad: updated.disponibilidad ?? null,
+            experiencia_previa: updated.experienciaPrevia ?? null,
             carta_presentacion: updated.sobreTi ?? null,
           });
         }}

@@ -123,8 +123,13 @@ export function useDailyCounts(): DailyCounts {
     try {
       const ref = ymd(new Date());
       const [emailRes, calRes] = await Promise.allSettled([
+        // Cargamos el inbox completo (no solo is:unread) y contamos las
+        // CONVERSACIONES no leídas, igual que la bandeja del drawer. El
+        // endpoint agrupa por hilo, así que contar mensajes con q=is:unread
+        // daba un número distinto al que se ve en la bandeja (p. ej. 2 hilos
+        // con 3 mensajes no leídos → badge 3 vs bandeja 2).
         fetch(
-          "/api/google/gmail/messages?carpeta=inbox&q=is:unread&maxResults=50",
+          "/api/google/gmail/messages?carpeta=inbox&maxResults=50",
         ).then((r) => r.json()),
         fetch(`/api/google/calendar/events?view=day&date=${ref}`).then((r) =>
           r.json()
@@ -133,7 +138,9 @@ export function useDailyCounts(): DailyCounts {
 
       let emails = 0;
       if (emailRes.status === "fulfilled") {
-        emails = (emailRes.value?.mensajes ?? []).length;
+        const mensajes: Array<{ leido?: boolean }> =
+          emailRes.value?.mensajes ?? [];
+        emails = mensajes.filter((m) => m.leido === false).length;
       }
 
       let events = 0;

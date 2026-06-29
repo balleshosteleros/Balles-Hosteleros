@@ -76,23 +76,28 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Archivo requerido" }, { status: 400 });
     }
 
-    // Cuota global compartida con grabaciones.
+    // Onboarding = contenido global de la plataforma (empresa_id null), no
+    // aplica a la cuota por empresa. Solo sumamos los vídeos de onboarding
+    // contra un límite global propio (100 GB).
+    const ONBOARDING_LIMIT_BYTES = 100 * 1024 ** 3;
     const admin = createAdminClient();
-    const { data: usage } = await admin
-      .from("storage_usage_global")
-      .select("bytes_used, bytes_limit")
-      .single();
+    const { data: usageRows } = await admin
+      .from("recordings")
+      .select("file_size")
+      .eq("type", "onboarding");
 
-    const bytesUsed = Number(usage?.bytes_used ?? 0);
-    const bytesLimit = Number(usage?.bytes_limit ?? 9.5 * 1024 ** 3);
+    const bytesUsed = (usageRows ?? []).reduce(
+      (sum, r) => sum + Number(r.file_size ?? 0),
+      0
+    );
 
-    if (bytesUsed + file.size > bytesLimit) {
+    if (bytesUsed + file.size > ONBOARDING_LIMIT_BYTES) {
       const usedGb = (bytesUsed / 1024 ** 3).toFixed(2);
-      const limitGb = (bytesLimit / 1024 ** 3).toFixed(1);
+      const limitGb = (ONBOARDING_LIMIT_BYTES / 1024 ** 3).toFixed(1);
       return NextResponse.json(
         {
-          error: "Límite de almacenamiento de fase beta alcanzado",
-          detail: `Uso actual ${usedGb} GB / ${limitGb} GB.`,
+          error: "Límite de almacenamiento de vídeos de onboarding alcanzado",
+          detail: `Uso actual ${usedGb} GB / ${limitGb} GB. Borra vídeos antiguos o contacta soporte para ampliar.`,
         },
         { status: 413 }
       );

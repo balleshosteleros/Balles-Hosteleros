@@ -73,5 +73,60 @@ export const RECLUTAMIENTO_CUESTIONARIO_DEFAULT_SEED: {
         { id: "p5o3", texto: "Intentaría delegar la responsabilidad o esperar a que me pidan ayuda de nuevo.", correcta: false },
       ],
     },
+    {
+      id: "p6",
+      titulo: "En tu etapa más joven, cuando estudiabas (si fue tu caso), ¿cómo combinaste estudios y trabajo?",
+      tipo: "eleccion_multiple",
+      obligatoria: true,
+      opciones: [
+        { id: "p6o1", texto: "Preferí centrarme primero en estudiar y, una vez terminé, empecé a trabajar.", correcta: false },
+        { id: "p6o2", texto: "En algún periodo compaginé los estudios y el trabajo a la vez.", correcta: true },
+        { id: "p6o3", texto: "Me dediqué principalmente a una cosa cada vez, según el momento.", correcta: false },
+      ],
+    },
+    {
+      id: "p7",
+      titulo: "¿Cómo valoras la continuidad y el compromiso a largo plazo en un puesto de trabajo?",
+      tipo: "eleccion_multiple",
+      obligatoria: true,
+      opciones: [
+        { id: "p7o1", texto: "Me gusta implicarme y crecer dentro del mismo proyecto durante el mayor tiempo posible.", correcta: true },
+        { id: "p7o2", texto: "Lo valoro, aunque también me gusta cambiar de entorno cada cierto tiempo.", correcta: false },
+        { id: "p7o3", texto: "Prefiero no comprometerme demasiado y mantener mis opciones abiertas.", correcta: false },
+      ],
+    },
+    {
+      id: "p8",
+      titulo: "Si cometes un error en tu trabajo y nadie se ha dado cuenta, ¿qué sueles hacer?",
+      tipo: "eleccion_multiple",
+      obligatoria: true,
+      opciones: [
+        { id: "p8o1", texto: "Espero a ver si pasa desapercibido y, si nadie lo nota, no le doy más importancia.", correcta: false },
+        { id: "p8o2", texto: "Lo comento y trato de corregirlo cuanto antes, aunque suponga reconocer el fallo.", correcta: true },
+        { id: "p8o3", texto: "Lo arreglo por mi cuenta sin decir nada para no preocupar a nadie.", correcta: false },
+      ],
+    },
+    {
+      id: "p9",
+      titulo: "Cuando terminas tus tareas y ves que aún queda trabajo pendiente a tu alrededor, ¿cómo actúas?",
+      tipo: "eleccion_multiple",
+      obligatoria: true,
+      opciones: [
+        { id: "p9o1", texto: "Si nadie me pide ayuda, aprovecho para descansar hasta que me asignen algo.", correcta: false },
+        { id: "p9o2", texto: "Me ofrezco y echo una mano en lo que haga falta sin que me lo tengan que pedir.", correcta: true },
+        { id: "p9o3", texto: "Espero a que mi responsable me diga exactamente qué hacer a continuación.", correcta: false },
+      ],
+    },
+    {
+      id: "p10",
+      titulo: "En momentos de mucha actividad (fines de semana, picos o imprevistos), ¿cómo encajas los cambios de horario o refuerzos?",
+      tipo: "eleccion_multiple",
+      obligatoria: true,
+      opciones: [
+        { id: "p10o1", texto: "Entiendo que forman parte del trabajo y me adapto con buena disposición.", correcta: true },
+        { id: "p10o2", texto: "Los acepto puntualmente, pero prefiero que no se conviertan en algo habitual.", correcta: false },
+        { id: "p10o3", texto: "Procuro ceñirme a mi horario y solo cambio si no me queda otra opción.", correcta: false },
+      ],
+    },
   ],
 };

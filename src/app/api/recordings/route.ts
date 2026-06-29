@@ -74,23 +74,24 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Archivo requerido" }, { status: 400 });
     }
 
-    // Cuota global: leer con admin (la vista tiene SUM de todas las empresas).
+    // Cuota POR EMPRESA: cada empresa tiene su propio límite (default 500 GB).
     const admin = createAdminClient();
     const { data: usage } = await admin
-      .from("storage_usage_global")
+      .from("storage_usage_por_empresa")
       .select("bytes_used, bytes_limit")
+      .eq("empresa_id", profile.empresa_id)
       .single();
 
     const bytesUsed = Number(usage?.bytes_used ?? 0);
-    const bytesLimit = Number(usage?.bytes_limit ?? 9.5 * 1024 ** 3);
+    const bytesLimit = Number(usage?.bytes_limit ?? 500 * 1024 ** 3);
 
     if (bytesUsed + file.size > bytesLimit) {
       const usedGb = (bytesUsed / 1024 ** 3).toFixed(2);
       const limitGb = (bytesLimit / 1024 ** 3).toFixed(1);
       return NextResponse.json(
         {
-          error: "Límite de almacenamiento de fase beta alcanzado",
-          detail: `Uso actual ${usedGb} GB / ${limitGb} GB. Borra grabaciones antiguas o contacta soporte para ampliar.`,
+          error: "Has alcanzado el límite de almacenamiento de tu plan",
+          detail: `Uso actual ${usedGb} GB / ${limitGb} GB. Borra grabaciones antiguas o amplía tu plan para subir más.`,
         },
         { status: 413 }
       );

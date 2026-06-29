@@ -254,6 +254,21 @@ export async function deleteCuestionarioVacante(id: string) {
       return { ok: false, error: "No se puede eliminar el cuestionario por defecto." };
     }
 
+    // Bloqueo: si ya lo respondió algún candidato, NO se puede borrar (el
+    // candidato conserva el cuestionario que rellenó en su momento). Hay que
+    // crear/duplicar uno nuevo y editarlo en las vacantes.
+    const { count } = await supabase
+      .from("candidato_cuestionario_respuestas")
+      .select("id", { count: "exact", head: true })
+      .eq("cuestionario_plantilla_id", id);
+    if ((count ?? 0) > 0) {
+      return {
+        ok: false,
+        error:
+          "No se puede eliminar: candidatos ya han respondido este cuestionario. Sus respuestas quedan guardadas tal cual. Duplícalo para crear una versión nueva y asígnala en las vacantes.",
+      };
+    }
+
     // Desvincular de las vacantes que lo usen (volverán a 'sin cuestionario').
     await supabase
       .from("vacantes")

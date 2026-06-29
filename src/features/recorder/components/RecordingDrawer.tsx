@@ -42,7 +42,6 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { useRecordingStore } from "../store/recording-store";
 import { useRecorder, formatDuration } from "../contexts/recorder-context";
@@ -501,15 +500,13 @@ function RecordingsList() {
 
   useEffect(() => {
     let alive = true;
-    const supabase = createClient();
-    supabase
-      .from("storage_usage_global")
-      .select("bytes_used, bytes_limit")
-      .single()
-      .then(({ data }) => {
+    fetch("/api/recordings/quota")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
         if (!alive || !data) return;
         setQuota({ used: Number(data.bytes_used ?? 0), limit: Number(data.bytes_limit ?? 0) });
-      });
+      })
+      .catch(() => {});
     return () => {
       alive = false;
     };

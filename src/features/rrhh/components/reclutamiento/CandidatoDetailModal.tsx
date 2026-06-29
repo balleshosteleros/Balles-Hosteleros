@@ -79,11 +79,13 @@ import {
   FASES_PRINCIPALES_ORDER,
   GENERO_LABELS,
   DISPONIBILIDAD_LABELS,
+  EXPERIENCIA_PREVIA_LABELS,
   ORIGEN_LABELS,
   getFasePrincipal,
   estadoRequiereResenas,
   type Candidato,
   type Disponibilidad,
+  type ExperienciaPrevia,
   type EstadoReclutamiento,
   type Genero,
   type HistorialCambioFase,
@@ -820,6 +822,26 @@ function CandidatoSidebar({
             {(Object.keys(DISPONIBILIDAD_LABELS) as Disponibilidad[]).map((d) => (
               <SelectItem key={d} value={d} className="text-sm">
                 {DISPONIBILIDAD_LABELS[d]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+
+      <Field label="Experiencia previa">
+        <Select
+          value={candidato.experienciaPrevia ?? ""}
+          onValueChange={(v) =>
+            onUpdate({ ...candidato, experienciaPrevia: v as ExperienciaPrevia })
+          }
+        >
+          <SelectTrigger className="h-9 text-sm">
+            <SelectValue placeholder="Seleccionar" />
+          </SelectTrigger>
+          <SelectContent>
+            {(Object.keys(EXPERIENCIA_PREVIA_LABELS) as ExperienciaPrevia[]).map((e) => (
+              <SelectItem key={e} value={e} className="text-sm">
+                {EXPERIENCIA_PREVIA_LABELS[e]}
               </SelectItem>
             ))}
           </SelectContent>

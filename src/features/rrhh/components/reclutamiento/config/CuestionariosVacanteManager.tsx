@@ -130,7 +130,7 @@ export function CuestionariosVacanteManager() {
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => duplicar(c.id)} disabled={pending} title="Duplicar">
                   <Copy className="h-3.5 w-3.5" />
                 </Button>
-                {!c.esDefault && (
+                {!c.esDefault && !c.usado && (
                   <Button
                     variant="ghost"
                     size="icon"

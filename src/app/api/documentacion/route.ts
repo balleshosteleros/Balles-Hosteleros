@@ -41,6 +41,9 @@ const Schema = z.object({
   dni_nie: z.string().min(1).max(20),
   iban: z.string().min(1).max(40),
   num_seguridad_social: z.string().min(1).max(20),
+  direccion: z.string().min(1).max(200),
+  // YYYY-MM-DD; debe ser una fecha real y anterior a hoy.
+  fecha_nacimiento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha no válida"),
 });
 
 function service() {
@@ -81,9 +84,17 @@ export async function POST(req: Request) {
       dni_nie: String(fd.get("dni_nie") ?? "").trim(),
       iban: String(fd.get("iban") ?? "").trim(),
       num_seguridad_social: String(fd.get("num_seguridad_social") ?? "").trim(),
+      direccion: String(fd.get("direccion") ?? "").trim(),
+      fecha_nacimiento: String(fd.get("fecha_nacimiento") ?? "").trim(),
     });
     if (!parsed.success) {
       return NextResponse.json({ ok: false, error: "Datos incompletos" }, { status: 400 });
+    }
+
+    // La fecha de nacimiento debe ser real y estar en el pasado.
+    const fechaNac = new Date(`${parsed.data.fecha_nacimiento}T00:00:00Z`);
+    if (Number.isNaN(fechaNac.getTime()) || fechaNac.getTime() >= Date.now()) {
+      return NextResponse.json({ ok: false, error: "La fecha de nacimiento no es válida" }, { status: 400 });
     }
 
     // Normaliza + valida los números confirmados por la persona.
@@ -120,6 +131,7 @@ export async function POST(req: Request) {
     const dniReverso = fd.get("dni_reverso") as File | null;
     const docIban = fd.get("doc_iban") as File | null;
     const docSs = fd.get("doc_ss") as File | null;
+    const fotoPerfil = fd.get("foto_perfil") as File | null;
     if (!dniAnverso || dniAnverso.size === 0) {
       return NextResponse.json({ ok: false, error: "Falta el documento del DNI/NIE (anverso)" }, { status: 400 });
     }
@@ -129,6 +141,13 @@ export async function POST(req: Request) {
     if (!docSs || docSs.size === 0) {
       return NextResponse.json({ ok: false, error: "Falta el documento de la Seguridad Social" }, { status: 400 });
     }
+    if (!fotoPerfil || fotoPerfil.size === 0) {
+      return NextResponse.json({ ok: false, error: "Falta la foto de perfil" }, { status: 400 });
+    }
+    // La foto de perfil debe ser una imagen (no PDF).
+    if (!fotoPerfil.type.startsWith("image/")) {
+      return NextResponse.json({ ok: false, error: "La foto de perfil debe ser una imagen" }, { status: 400 });
+    }
 
     // Sube los documentos (best-effort por archivo; si alguno obligatorio falla, aborta).
     const subidas = await Promise.all([
@@ -136,12 +155,13 @@ export async function POST(req: Request) {
       subirDoc(supabase, dniReverso, empresaId, candidatoId, "dni_reverso"),
       subirDoc(supabase, docIban, empresaId, candidatoId, "iban"),
       subirDoc(supabase, docSs, empresaId, candidatoId, "ss"),
+      subirDoc(supabase, fotoPerfil, empresaId, candidatoId, "foto_perfil"),
     ]);
     const errSubida = subidas.find((s) => s.error)?.error;
     if (errSubida) {
       return NextResponse.json({ ok: false, error: `No se pudo subir un documento (${errSubida})` }, { status: 500 });
     }
-    const [anverso, reverso, ibanDoc, ssDoc] = subidas;
+    const [anverso, reverso, ibanDoc, ssDoc, fotoDoc] = subidas;
 
     // Guarda números + paths + sello de completado en la ficha.
     const { error: upErr } = await supabase
@@ -154,6 +174,9 @@ export async function POST(req: Request) {
         doc_dni_reverso_path: reverso.path,
         doc_iban_path: ibanDoc.path,
         doc_ss_path: ssDoc.path,
+        foto_perfil_path: fotoDoc.path,
+        direccion: parsed.data.direccion,
+        fecha_nacimiento: parsed.data.fecha_nacimiento,
         documentacion_completada_at: new Date().toISOString(),
       })
       .eq("id", candidatoId);

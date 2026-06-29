@@ -55,14 +55,30 @@ export async function listCandidatosReales() {
       .select(`
         id, empresa_id, vacante_id, empleado_id, nombre, apellidos, email,
         telefono, dni_nie, cv_url, origen, fase, estado, puntuacion, notas,
-        genero, ubicacion, disponibilidad, carta_presentacion,
+        genero, ubicacion, disponibilidad, experiencia_previa, carta_presentacion,
         promovido_at, activo, created_at,
-        vacantes(id, titulo, departamento_id, puesto_id)
+        vacantes(id, titulo, departamento_id, puesto_id),
+        candidato_resenas(puntuaciones)
       `)
       .eq("empresa_id", empresaId)
       .order("created_at", { ascending: false });
     if (error) throw error;
-    return { ok: true, data: data ?? [] };
+    // Nota final de las reseñas = media (0–5) de TODAS las estrellas de TODAS
+    // las reseñas del candidato. Misma fórmula que la ficha (CandidatoDetailModal).
+    const rows = (data ?? []).map((c) => {
+      const resenas = (c as { candidato_resenas?: { puntuaciones?: { estrellas?: number }[] }[] }).candidato_resenas ?? [];
+      const estrellas = resenas
+        .flatMap((r) => r.puntuaciones ?? [])
+        .map((p) => p.estrellas ?? 0)
+        .filter((n) => n > 0);
+      const nota_resenas = estrellas.length
+        ? estrellas.reduce((a, b) => a + b, 0) / estrellas.length
+        : null;
+      const { candidato_resenas: _omit, ...resto } = c as Record<string, unknown>;
+      void _omit;
+      return { ...resto, nota_resenas };
+    });
+    return { ok: true, data: rows };
   } catch (err) {
     console.error("[rrhh] listCandidatosReales:", err);
     return { ok: false, data: [] };
@@ -352,6 +368,7 @@ export async function actualizarDatosCandidato(
     genero?: "masculino" | "femenino" | null;
     ubicacion?: string | null;
     disponibilidad?: "inmediato" | "15_dias" | null;
+    experiencia_previa?: "sin_experiencia" | "menos_1" | "de_1_a_5" | "mas_5" | null;
     carta_presentacion?: string | null;
   },
 ) {
@@ -363,6 +380,7 @@ export async function actualizarDatosCandidato(
     if ("genero" in input) patch.genero = input.genero || null;
     if ("ubicacion" in input) patch.ubicacion = input.ubicacion?.trim() || null;
     if ("disponibilidad" in input) patch.disponibilidad = input.disponibilidad || null;
+    if ("experiencia_previa" in input) patch.experiencia_previa = input.experiencia_previa || null;
     if ("carta_presentacion" in input) patch.carta_presentacion = input.carta_presentacion?.trim() || null;
 
     const { error } = await supabase

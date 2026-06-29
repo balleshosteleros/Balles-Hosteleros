@@ -28,6 +28,7 @@ const CandidaturaSchema = z.object({
   genero: z.enum(["masculino", "femenino"]),
   ubicacion: z.string().min(1).max(160),
   disponibilidad: z.enum(["inmediato", "15_dias"]),
+  experiencia_previa: z.enum(["sin_experiencia", "menos_1", "de_1_a_5", "mas_5"]),
   carta_presentacion: z.string().max(5000).optional().default(""),
 });
 
@@ -136,6 +137,7 @@ export async function POST(req: Request) {
       genero: String(fd.get("genero") ?? "").trim(),
       ubicacion: String(fd.get("ubicacion") ?? "").trim(),
       disponibilidad: String(fd.get("disponibilidad") ?? "").trim(),
+      experiencia_previa: String(fd.get("experiencia_previa") ?? "").trim(),
       carta_presentacion: String(fd.get("carta_presentacion") ?? "").trim(),
     });
     if (!parsed.success) {
@@ -147,6 +149,7 @@ export async function POST(req: Request) {
     }
     const { empresa_id: empresaId, oferta_id: ofertaId,
             nombre, apellidos, email, telefono, genero, ubicacion, disponibilidad,
+            experiencia_previa: experienciaPrevia,
             carta_presentacion: cartaPresentacion } = parsed.data;
 
     if (!cv || cv.size === 0) {
@@ -319,6 +322,7 @@ export async function POST(req: Request) {
         genero,
         ubicacion,
         disponibilidad,
+        experiencia_previa: experienciaPrevia,
         cv_url: cvUrl,
         carta_presentacion: cartaPresentacion || null,
         origen,

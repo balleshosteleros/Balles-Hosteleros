@@ -29,6 +29,7 @@ interface FormState {
   genero: string;
   ubicacion: string;
   disponibilidad: string;
+  experiencia_previa: string;
   cv: File | null;
   carta_presentacion: string;
 }
@@ -41,6 +42,7 @@ const VACIO: FormState = {
   genero: "",
   ubicacion: "",
   disponibilidad: "",
+  experiencia_previa: "",
   cv: null,
   carta_presentacion: "",
 };
@@ -49,6 +51,14 @@ const VACIO: FormState = {
 const DISPONIBILIDAD_OPCIONES = [
   { value: "inmediato", label: "Inmediato" },
   { value: "15_dias", label: "En 15 días" },
+] as const;
+
+/** Opciones del desplegable «Experiencia previa» (obligatorio). */
+const EXPERIENCIA_OPCIONES = [
+  { value: "sin_experiencia", label: "Sin experiencia" },
+  { value: "menos_1", label: "Menos de 1 año" },
+  { value: "de_1_a_5", label: "De 1 a 5 años" },
+  { value: "mas_5", label: "Más de 5 años" },
 ] as const;
 
 const MAX_CV_BYTES = 5 * 1024 * 1024;
@@ -168,6 +178,7 @@ export function FormCandidaturaPublica({
     if (!form.genero) return "El género es obligatorio";
     if (!form.ubicacion.trim()) return "La ubicación es obligatoria";
     if (!form.disponibilidad) return "La disponibilidad es obligatoria";
+    if (!form.experiencia_previa) return "La experiencia previa es obligatoria";
     if (!form.cv) return "El currículum es obligatorio";
     if (form.cv.size > MAX_CV_BYTES) return "El CV no puede superar 5MB";
     if (form.cv.type !== "application/pdf") return "El CV debe ser un PDF";
@@ -209,6 +220,7 @@ export function FormCandidaturaPublica({
         fd.set("genero", form.genero);
         fd.set("ubicacion", form.ubicacion.trim());
         fd.set("disponibilidad", form.disponibilidad);
+        fd.set("experiencia_previa", form.experiencia_previa);
         fd.set("carta_presentacion", form.carta_presentacion.trim());
         if (canalCodigo) fd.set("canal_codigo", canalCodigo);
         if (form.cv) fd.set("cv", form.cv);
@@ -406,6 +418,22 @@ export function FormCandidaturaPublica({
             ))}
           </select>
         </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="experiencia_previa">Experiencia previa *</Label>
+        <select
+          id="experiencia_previa"
+          required
+          value={form.experiencia_previa}
+          onChange={(e) => update("experiencia_previa", e.target.value)}
+          className={SELECT_CLASS}
+        >
+          <option value="">Selecciona…</option>
+          {EXPERIENCIA_OPCIONES.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
       </div>
 
       <div className="space-y-1.5">
