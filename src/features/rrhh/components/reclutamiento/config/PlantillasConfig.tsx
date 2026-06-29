@@ -405,28 +405,26 @@ function PlantillasEmailTab() {
   const activasCount = plantillas.filter((p) => p.activa).length;
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h2 className="text-lg font-bold text-foreground">Plantillas de email</h2>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Biblioteca de correos reutilizables. Asocia cada uno a un estado desde Plantillas de estados o en cada vacante.
-          {!loading && <> {" "}{activasCount} de {plantillas.length} activas.</>}
-        </p>
+    <div className="space-y-6">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-bold text-foreground">Plantillas de email</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Biblioteca de correos reutilizables. Asocia cada uno a un estado desde Plantillas de estados o en cada vacante.
+            {!loading && <> {" "}{activasCount} de {plantillas.length} activas.</>}
+          </p>
+        </div>
+        <Button onClick={() => setCreando(true)} className="gap-1.5 shrink-0">
+          <Plus className="h-4 w-4" /> Nuevo
+        </Button>
       </div>
 
-      {/* Barra: + Nueva (izq) · Buscar (der) */}
-      <div className="flex items-center justify-between gap-3">
-        <Button onClick={() => setCreando(true)} className="gap-1.5 shrink-0">
-          <Plus className="h-4 w-4" /> Nueva plantilla
-        </Button>
+      {/* Buscar + filtro */}
+      <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[160px] max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Buscar plantilla..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
         </div>
-      </div>
-
-      {/* Filtros en fila aparte */}
-      <div className="flex flex-wrap items-center gap-2">
         <Select value={filtroActivo} onValueChange={setFiltroActivo}>
           <SelectTrigger className="w-36 h-9"><SelectValue /></SelectTrigger>
           <SelectContent>

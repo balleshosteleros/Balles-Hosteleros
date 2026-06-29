@@ -338,7 +338,7 @@ export function PlantillasEstadoTab() {
           </p>
         </div>
         <Button onClick={() => setCreando(true)} className="gap-1.5 shrink-0">
-          <Plus className="h-4 w-4" /> Nueva plantilla
+          <Plus className="h-4 w-4" /> Nuevo
         </Button>
       </div>
 

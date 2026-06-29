@@ -73,38 +73,35 @@ export function CuestionariosVacanteManager() {
   }
 
   return (
-    <Card>
-      <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+    <div className="space-y-6">
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h3 className="font-semibold text-foreground text-sm">Cuestionarios</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
+          <h2 className="text-lg font-bold text-foreground">Cuestionarios</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">
             El candidato los responde antes de enviar su candidatura. La nota (0–10) aparece en su ficha.
           </p>
         </div>
-        <Button onClick={abrirNuevo} className="gap-1.5">
+        <Button onClick={abrirNuevo} className="gap-1.5 shrink-0">
           <Plus className="h-4 w-4" /> Nuevo
         </Button>
       </div>
 
-      <CardContent className="p-0">
-        {loading ? (
-          <div className="py-10 flex items-center justify-center text-muted-foreground text-sm">
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Cargando…
-          </div>
-        ) : cuestionarios.length === 0 ? (
-          <div className="py-10 text-center text-sm text-muted-foreground">
-            No hay cuestionarios configurados
-          </div>
-        ) : (
-          cuestionarios.map((c) => (
+      {loading ? (
+        <div className="flex items-center justify-center py-16 text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin mr-2" /> Cargando cuestionarios…
+        </div>
+      ) : cuestionarios.length === 0 ? (
+        <div className="text-center py-16 text-muted-foreground text-sm">No hay cuestionarios configurados todavía.</div>
+      ) : (
+        <Card className="overflow-hidden">
+          <CardContent className="p-0">
+            {cuestionarios.map((c) => (
             <div
               key={c.id}
               className="flex items-center justify-between gap-3 px-5 py-3 border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
             >
               <div className="flex items-center gap-3 min-w-0">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <FileText className="h-4 w-4" />
-                </span>
+                <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-medium text-foreground truncate">{c.nombre}</span>
@@ -144,9 +141,10 @@ export function CuestionariosVacanteManager() {
                 )}
               </div>
             </div>
-          ))
-        )}
-      </CardContent>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <CuestionarioBuilderDialog
         open={builderOpen}
@@ -155,6 +153,6 @@ export function CuestionariosVacanteManager() {
         onSaved={cargar}
       />
       {dialog}
-    </Card>
+    </div>
   );
 }
