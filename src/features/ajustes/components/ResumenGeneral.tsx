@@ -1,6 +1,6 @@
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Card, CardContent } from "@/components/ui/card";
-import { Building2, Users, Layers, Mail, Phone, MapPin, CalendarDays, CheckCircle2 } from "lucide-react";
+import { Building2, Users, Layers, Mail, Phone, MapPin, CalendarDays } from "lucide-react";
 
 export function ResumenGeneral() {
   const { ajustes, empresaActual } = useEmpresa();
@@ -8,7 +8,6 @@ export function ResumenGeneral() {
 
   const cards = [
     { label: "Empresa", value: d.nombreComercial || empresaActual.nombre, icon: Building2, color: "text-primary" },
-    { label: "Estado", value: d.estado, icon: CheckCircle2, color: d.estado === "Activa" ? "text-green-500" : "text-red-500" },
     { label: "Usuarios con acceso", value: String(ajustes.usuarios.length), icon: Users, color: "text-blue-500" },
     { label: "Departamentos", value: String(ajustes.departamentos.filter((dp) => dp.estado === "Activo").length), icon: Layers, color: "text-purple-500" },
     { label: "Correo principal", value: d.correoGeneral || "Sin configurar", icon: Mail, color: "text-orange-500" },

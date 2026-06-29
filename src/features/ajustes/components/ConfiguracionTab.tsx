@@ -83,16 +83,6 @@ export const ConfiguracionTab = forwardRef<ConfiguracionTabHandle, { hideSaveBut
           <Field label="Provincia"           value={d.provincia}          onChange={(v) => setD("provincia", v)} />
           <Field label="País"                value={d.pais}               onChange={(v) => setD("pais", v)} />
           <Field label="Código postal"       value={d.codigoPostal}       onChange={(v) => setD("codigoPostal", v)} />
-          <div>
-            <Label className="text-xs font-bold">Estado de la empresa</Label>
-            <Select value={d.estado} onValueChange={(v) => setD("estado", v)}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Activa">Activa</SelectItem>
-                <SelectItem value="Inactiva">Inactiva</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
         </CardContent>
       </Card>
 
