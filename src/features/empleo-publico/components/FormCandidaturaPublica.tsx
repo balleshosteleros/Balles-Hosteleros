@@ -162,6 +162,10 @@ export function FormCandidaturaPublica({
   const [enviado, setEnviado] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // Aviso en vivo: el email/teléfono ya está registrado en una candidatura de
+  // esta empresa (one-candidate-per-company). Se comprueba mientras escribe.
+  const [emailDup, setEmailDup] = useState(false);
+  const [telDup, setTelDup] = useState(false);
 
   const tieneCuestionario = !!cuestionario && cuestionario.preguntas.length > 0;
 
@@ -169,12 +173,48 @@ export function FormCandidaturaPublica({
     setForm((p) => ({ ...p, [k]: v }));
   }
 
+  // Comprobación en vivo de email/teléfono duplicado (con debounce). Avisa en
+  // rojo bajo el campo concreto en cuanto detecta que ya existe en la empresa.
+  const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim());
+  const telDigitos = form.telefono.replace(/\D/g, "").length;
+  useEffect(() => {
+    const email = emailValido ? form.email.trim().toLowerCase() : "";
+    const telefono = telDigitos >= 9 ? form.telefono.trim() : "";
+    if (!email && !telefono) {
+      setEmailDup(false);
+      setTelDup(false);
+      return;
+    }
+    let activo = true;
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/empleo/candidatura/check", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ empresa_id: empresaId, email, telefono }),
+        });
+        const data = (await res.json()) as { emailExiste?: boolean; telefonoExiste?: boolean };
+        if (!activo) return;
+        setEmailDup(!!email && !!data.emailExiste);
+        setTelDup(!!telefono && !!data.telefonoExiste);
+      } catch {
+        // Silencioso: un fallo de red en el aviso no debe estorbar al candidato.
+      }
+    }, 450);
+    return () => {
+      activo = false;
+      clearTimeout(t);
+    };
+  }, [form.email, form.telefono, emailValido, telDigitos, empresaId]);
+
   function validarDatos(): string | null {
     if (!form.nombre.trim()) return "El nombre es obligatorio";
     if (!form.apellidos.trim()) return "Los apellidos son obligatorios";
     if (!form.email.trim()) return "El email es obligatorio";
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return "Email no válido";
+    if (emailDup) return "Este correo ya está registrado en una candidatura.";
     if (!form.telefono.trim()) return "El teléfono es obligatorio";
+    if (telDup) return "Este teléfono ya está registrado en una candidatura.";
     if (!form.genero) return "El género es obligatorio";
     if (!form.ubicacion.trim()) return "La ubicación es obligatoria";
     if (!form.disponibilidad) return "La disponibilidad es obligatoria";
@@ -373,7 +413,14 @@ export function FormCandidaturaPublica({
             value={form.email}
             onChange={(e) => update("email", e.target.value)}
             autoComplete="email"
+            aria-invalid={emailDup}
+            className={emailDup ? "border-destructive focus-visible:ring-destructive" : undefined}
           />
+          {emailDup && (
+            <p className="text-xs text-destructive">
+              Este correo ya está registrado en una candidatura.
+            </p>
+          )}
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="telefono">Teléfono *</Label>
@@ -384,7 +431,14 @@ export function FormCandidaturaPublica({
             value={form.telefono}
             onChange={(e) => update("telefono", e.target.value)}
             autoComplete="tel"
+            aria-invalid={telDup}
+            className={telDup ? "border-destructive focus-visible:ring-destructive" : undefined}
           />
+          {telDup && (
+            <p className="text-xs text-destructive">
+              Este teléfono ya está registrado en una candidatura.
+            </p>
+          )}
         </div>
       </div>
 
@@ -482,7 +536,7 @@ export function FormCandidaturaPublica({
         <p className="text-[11px] text-muted-foreground">
           Al enviar aceptas el tratamiento de tus datos para gestionar el proceso de selección.
         </p>
-        <Button type="submit" disabled={pending} size="lg">
+        <Button type="submit" disabled={pending || emailDup || telDup} size="lg">
           {pending ? (
             <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
           ) : tieneCuestionario ? (

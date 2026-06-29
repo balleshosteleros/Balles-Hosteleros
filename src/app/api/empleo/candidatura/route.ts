@@ -194,30 +194,37 @@ export async function POST(req: Request) {
     }
 
     // Configuración general de reclutamiento (Ajustes → RRHH → Reclutamiento).
-    // Gobierna si se admiten candidaturas duplicadas y si se avisa al equipo.
+    // Gobierna si se avisa al equipo de una nueva candidatura. Los duplicados
+    // (email/teléfono) se rechazan SIEMPRE más abajo, no dependen de la config.
     const { data: cfgRow } = await supabase
       .from("reclutamiento_config")
-      .select("permitir_candidaturas_duplicadas, notificar_reclutador_nueva_candidatura")
+      .select("notificar_reclutador_nueva_candidatura")
       .eq("empresa_id", empresaId)
       .maybeSingle();
-    const permitirDuplicadas = cfgRow?.permitir_candidaturas_duplicadas ?? false;
     const notificarNuevaCandidatura = cfgRow?.notificar_reclutador_nueva_candidatura ?? true;
 
-    // Candidaturas duplicadas: si NO se permiten, rechaza un email que ya se
-    // inscribió en ESTA misma oferta (mismo candidato, misma vacante).
-    if (!permitirDuplicadas) {
-      const { data: yaInscrito } = await supabase
-        .from("candidatos")
-        .select("id")
-        .eq("empresa_id", empresaId)
-        .eq("vacante_id", vacante.id)
-        .ilike("email", email)
-        .maybeSingle();
-      if (yaInscrito) {
-        return NextResponse.json(
-          { ok: false, error: "Ya hay una candidatura registrada con este correo para esta oferta." },
-          { status: 409 },
-        );
+    // One-candidate-per-company: el mismo email o teléfono no puede tener dos
+    // candidaturas en la empresa (en NINGUNA vacante). Se rechaza siempre —no
+    // depende de "permitir candidaturas duplicadas"— y se avisa del motivo
+    // concreto al candidato (email, teléfono o ambos).
+    {
+      const { data: dup } = await supabase
+        .rpc("candidato_duplicado_check", {
+          p_empresa_id: empresaId,
+          p_email: email || null,
+          p_telefono: telefono || null,
+        })
+        .maybeSingle<{ email_existe: boolean; telefono_existe: boolean }>();
+      const emailDup = !!dup?.email_existe;
+      const telDup = !!dup?.telefono_existe;
+      if (emailDup || telDup) {
+        const motivo =
+          emailDup && telDup
+            ? "Este correo y este teléfono ya están registrados en una candidatura."
+            : emailDup
+              ? "Este correo ya está registrado en una candidatura."
+              : "Este teléfono ya está registrado en una candidatura.";
+        return NextResponse.json({ ok: false, error: motivo }, { status: 409 });
       }
     }
 
