@@ -107,6 +107,7 @@ interface CandidatoRowReal {
   genero: string | null;
   ubicacion: string | null;
   disponibilidad: string | null;
+  carta_presentacion: string | null;
   // Paso «Documentación»
   dni_nie: string | null;
   iban: string | null;
@@ -154,7 +155,7 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
           id, empresa_id, vacante_id, nombre, apellidos, email, telefono,
           cv_url, notas, origen, canal_nombre, fase, estado, promovido_at, empleado_id,
           activo, created_at, visto_at, fase_actualizada_at,
-          genero, ubicacion, disponibilidad,
+          genero, ubicacion, disponibilidad, carta_presentacion,
           dni_nie, iban, num_seguridad_social,
           doc_dni_anverso_path, doc_dni_reverso_path, doc_iban_path, doc_ss_path,
           foto_perfil_path, direccion, fecha_nacimiento,
@@ -288,6 +289,8 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
             c.disponibilidad === "inmediato" || c.disponibilidad === "15_dias"
               ? c.disponibilidad
               : undefined,
+          // Carta de presentación escrita por el candidato (campo opcional).
+          sobreTi: c.carta_presentacion ?? undefined,
           fase: ESTADOS_VALIDOS.has(c.estado) ? c.estado : "nuevo",
           vacanteId: v.id,
           reclutadorAsignado: "",
