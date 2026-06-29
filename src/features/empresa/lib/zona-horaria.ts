@@ -104,6 +104,20 @@ export function minutosDiaEnZona(d: Date, tz: string): number {
 }
 
 /**
+ * "Hoy" como fecha "YYYY-MM-DD" en la zona dada (PRP-069). Para fechar registros
+ * (pedidos, inventarios, precios) en el DÍA local de la empresa, no en UTC del
+ * servidor: cerca de medianoche el día UTC puede ir uno por delante/detrás.
+ */
+export function hoyEnZona(tz: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: tzSegura(tz),
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+/**
  * "Ahora" en la zona dada: fecha "YYYY-MM-DD" y minutos del día (0–1439).
  * Reemplaza a `ahoraEnMadrid()` parametrizando la zona.
  */

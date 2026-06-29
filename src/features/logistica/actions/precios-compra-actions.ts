@@ -1,6 +1,8 @@
 "use server";
 
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
+import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
+import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 
 export interface PrecioCompraRow {
   id: string;
@@ -21,8 +23,12 @@ async function getContext() {
   return { supabase, userId, empresaId };
 }
 
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+/**
+ * "Hoy" como "YYYY-MM-DD" en la zona horaria de la empresa (PRP-069), no en UTC
+ * del servidor: cerca de medianoche el día UTC puede ir uno por delante/detrás.
+ */
+function todayIso(tz: string): string {
+  return hoyEnZona(tz);
 }
 
 function formatPrecioStr(n: number): string {
@@ -45,9 +51,10 @@ function shiftIsoDays(iso: string, days: number): string {
  */
 async function syncPrecioVigente(
   supabase: Awaited<ReturnType<typeof getContext>>["supabase"],
-  productoId: string
+  productoId: string,
+  tz: string
 ) {
-  const today = todayIso();
+  const today = todayIso(tz);
   const { data } = await supabase
     .from("producto_precios_compra")
     .select("precio, fecha_fin, proveedor, formato")
@@ -149,9 +156,10 @@ export async function addPrecioCompra(input: {
   observaciones?: string | null;
 }): Promise<{ ok: boolean; error?: string; data?: PrecioCompraRow }> {
   try {
-    const { supabase, userId } = await getContext();
+    const { supabase, userId, empresaId } = await getContext();
     if (!userId) return { ok: false, error: "No autenticado" };
     if (!input.productoId) return { ok: false, error: "Producto inválido" };
+    const tz = await getZonaHorariaEmpresa(supabase, empresaId);
     if (!Number.isFinite(input.precio) || input.precio < 0) {
       return { ok: false, error: "Precio inválido" };
     }
@@ -207,7 +215,7 @@ export async function addPrecioCompra(input: {
     // Re-encadenar fecha_fin de los anteriores (por proveedor) para que cierren
     // contra el siguiente del mismo proveedor.
     await recomputeFechaFin(supabase, input.productoId);
-    await syncPrecioVigente(supabase, input.productoId);
+    await syncPrecioVigente(supabase, input.productoId, tz);
     return { ok: true, data: data as PrecioCompraRow };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
@@ -226,7 +234,8 @@ export async function updatePrecioCompraFechaFin(input: {
   fechaFin: string | null; // YYYY-MM-DD | null
 }): Promise<{ ok: boolean; error?: string }> {
   try {
-    const { supabase } = await getContext();
+    const { supabase, empresaId } = await getContext();
+    const tz = await getZonaHorariaEmpresa(supabase, empresaId);
     const { data: row, error: e1 } = await supabase
       .from("producto_precios_compra")
       .select("id, producto_id, fecha_inicio, proveedor")
@@ -270,7 +279,7 @@ export async function updatePrecioCompraFechaFin(input: {
       .eq("id", input.id);
     if (error) throw error;
 
-    await syncPrecioVigente(supabase, row.producto_id as string);
+    await syncPrecioVigente(supabase, row.producto_id as string, tz);
     return { ok: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
@@ -294,7 +303,8 @@ export async function updatePrecioCompra(input: {
   fechaInicio: string;
 }): Promise<{ ok: boolean; error?: string; data?: PrecioCompraRow }> {
   try {
-    const { supabase } = await getContext();
+    const { supabase, empresaId } = await getContext();
+    const tz = await getZonaHorariaEmpresa(supabase, empresaId);
     if (!input.id) return { ok: false, error: "Entrada inválida" };
     if (!Number.isFinite(input.precio) || input.precio < 0) {
       return { ok: false, error: "Precio inválido" };
@@ -346,7 +356,7 @@ export async function updatePrecioCompra(input: {
     if (error) throw error;
 
     await recomputeFechaFin(supabase, row.producto_id as string);
-    await syncPrecioVigente(supabase, row.producto_id as string);
+    await syncPrecioVigente(supabase, row.producto_id as string, tz);
     return { ok: true, data: data as PrecioCompraRow };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
@@ -360,7 +370,8 @@ export async function deletePrecioCompra(id: string): Promise<{
   error?: string;
 }> {
   try {
-    const { supabase } = await getContext();
+    const { supabase, empresaId } = await getContext();
+    const tz = await getZonaHorariaEmpresa(supabase, empresaId);
     // Recoger producto_id antes de borrar para sincronizar después
     const { data: row } = await supabase
       .from("producto_precios_compra")
@@ -374,7 +385,7 @@ export async function deletePrecioCompra(id: string): Promise<{
     if (error) throw error;
     if (row?.producto_id) {
       await recomputeFechaFin(supabase, row.producto_id as string);
-      await syncPrecioVigente(supabase, row.producto_id as string);
+      await syncPrecioVigente(supabase, row.producto_id as string, tz);
     }
     return { ok: true };
   } catch (err) {

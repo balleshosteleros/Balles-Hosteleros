@@ -20,6 +20,8 @@ import {
   descontarStockPorVentas,
   type LineaVentaResuelta,
 } from "@/features/sala/pos/services/descontar-stock-por-ventas";
+import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
+import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 
 // ─── CONSTANTES ───────────────────────────────────────────────────────────────
 
@@ -246,16 +248,20 @@ export async function descontarStockPorVentasAgora(
     );
   }
 
-  const businessDay = fechaABusinessDay(fecha);
-  const errores: string[] = [];
-  let lineasProcesadas = 0;
-  let lineasSinMatch = 0;
-  let ingredientesDescontados = 0;
-
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
+
+  // PRP-069: si no viene `fecha` explícita, el día de negocio se calcula en la
+  // zona horaria de la EMPRESA, no en la hora local del servidor (que en prod es
+  // UTC): cerca de medianoche descargaría el día equivocado de Ágora.
+  const tz = await getZonaHorariaEmpresa(supabase, empresaId);
+  const businessDay = fechaABusinessDay(fecha, tz);
+  const errores: string[] = [];
+  let lineasProcesadas = 0;
+  let lineasSinMatch = 0;
+  let ingredientesDescontados = 0;
 
   // ─── 1. Fetch tickets ────────────────────────────────────────────────────
   let lineasVenta: LineaVenta[];
@@ -369,12 +375,14 @@ export async function descontarStockPorVentasAgora(
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
-function fechaABusinessDay(fecha?: string): string {
-  const d = fecha ? new Date(fecha) : new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}${m}${day}`;
+/**
+ * Día de negocio "YYYYMMDD" para Ágora. Si viene `fecha` (ya "YYYY-MM-DD") se
+ * respeta. Si no, se computa el día de HOY en la zona horaria de la empresa
+ * (PRP-069), no en la hora local del servidor.
+ */
+function fechaABusinessDay(fecha: string | undefined, tz: string): string {
+  const ymd = fecha ? fecha : hoyEnZona(tz); // ambos en formato YYYY-MM-DD
+  return ymd.replace(/-/g, "");
 }
 
 async function guardarLogDescuento(

@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 import {
   calcularTotalesLineas,
   ESTADOS_PEDIDO,
@@ -332,7 +333,8 @@ export function PedidosView() {
   };
 
   const handleConfirmarPedido = async (ped: Pedido) => {
-    const fecha = new Date().toISOString().slice(0, 10);
+    // "Hoy" en la zona de la empresa, no en UTC (PRP-069).
+    const fecha = hoyEnZona(empresaActual.zonaHoraria);
 
     const res = await createAlbaran({
       pedidoId: ped.id,

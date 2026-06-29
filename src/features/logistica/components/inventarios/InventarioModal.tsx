@@ -10,6 +10,8 @@ import {
   type TipoInventario,
   type PlantillaInventario,
 } from "@/features/logistica/data/inventarios";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 
 const NONE = "__NONE__";
 
@@ -29,7 +31,9 @@ interface Props {
 }
 
 export default function InventarioModal({ open, onOpenChange, tipos, plantillas, usuarioNombre, onCreate }: Props) {
-  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
+  const { empresaActual } = useEmpresa();
+  // "Hoy" en la zona horaria de la empresa, no en UTC del navegador (PRP-069).
+  const [fecha, setFecha] = useState(() => hoyEnZona(empresaActual.zonaHoraria));
   const [almacen, setAlmacen] = useState(ALMACENES_INVENTARIO[0]);
   const [tipoId, setTipoId] = useState<string>(tipos[0]?.id || "");
   const [plantillaId, setPlantillaId] = useState<string>(NONE);
@@ -53,7 +57,7 @@ export default function InventarioModal({ open, onOpenChange, tipos, plantillas,
     });
     onOpenChange(false);
     // Reset
-    setFecha(new Date().toISOString().slice(0, 10));
+    setFecha(hoyEnZona(empresaActual.zonaHoraria));
     setPlantillaId(NONE);
     setMotivoManual("");
   };

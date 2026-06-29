@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import { capitalizeText } from "@/shared/lib/utils";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
+import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
+import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 import type {
   Producto,
   TipoProducto,
@@ -207,7 +209,9 @@ export async function listProductos(tipo?: TipoProducto): Promise<Producto[]> {
     // El IVA ya no vive en `productos`; se guarda en el histórico de precios.
     const compraIds = productos.filter((p) => p.tipo === "compra").map((p) => p.id);
     if (compraIds.length > 0) {
-      const today = new Date().toISOString().slice(0, 10);
+      // PRP-069: "hoy" para filtrar el precio vigente se calcula en la zona de la
+      // empresa, no en UTC del servidor.
+      const today = hoyEnZona(await getZonaHorariaEmpresa(supabase, empresaId));
       const { data: precios } = await supabase
         .from("producto_precios_compra")
         .select("producto_id, iva, fecha_inicio, created_at")
@@ -319,7 +323,8 @@ export async function createProducto(
           precio: precioNum,
           // Nunca "sin IVA": si no vino uno explícito, aplicamos el tipo general.
           iva: parsed.data.iva ?? IVA_DEFAULT,
-          fecha_inicio: new Date().toISOString().slice(0, 10),
+          // PRP-069: fecha de inicio del precio en la zona horaria de la empresa.
+          fecha_inicio: hoyEnZona(await getZonaHorariaEmpresa(supabase, empresaId)),
           created_by: user.id,
         });
       }

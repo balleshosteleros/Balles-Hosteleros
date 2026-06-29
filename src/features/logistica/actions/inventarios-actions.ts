@@ -3,6 +3,8 @@
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { registrarMovimiento, revertirMovimientosPorDocumento } from "@/features/logistica/services/kardex";
+import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
+import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 
 async function getContext() {
   const { supabase, userId, empresaId } = await getLogisticaContext();
@@ -40,12 +42,15 @@ export async function createInventario(input: {
     const { supabase, user, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
 
+    // PRP-069: el fallback "hoy" se calcula en la zona horaria de la empresa.
+    const fechaInventario = input.fecha ?? hoyEnZona(await getZonaHorariaEmpresa(supabase, empresaId));
+
     const { data, error } = await supabase
       .from("inventarios")
       .insert({
         empresa_id: empresaId,
         nombre: input.nombre,
-        fecha: input.fecha ?? new Date().toISOString().slice(0, 10),
+        fecha: fechaInventario,
         almacen: input.almacen ?? null,
         motivo: input.motivo ?? null,
         tipo: input.tipo ?? null,
@@ -129,12 +134,17 @@ export async function confirmarInventarioKardex(
 
     const { data: inv } = await admin
       .from("inventarios")
-      .select("empresa_id, nombre")
+      .select("empresa_id, nombre, fecha")
       .eq("id", inventarioId)
       .maybeSingle();
     if (!inv) return { ok: false, error: "Inventario no encontrado" };
     const empresaId = String(inv.empresa_id); // inventarios.empresa_id es TEXT; stock_movimientos espera UUID
     const referencia = (inv.nombre as string) ?? "Inventario";
+    // PRP-069: el movimiento se fecha en el DÍA del documento (mediodía UTC para
+    // evitar saltos de día), no en el instante UTC de confirmación. Así un
+    // inventario de ayer no se mueve con timestamp de hoy.
+    const fechaDoc = (inv.fecha as string | null) ?? null;
+    const fechaMovimiento = fechaDoc ? `${fechaDoc}T12:00:00Z` : undefined;
 
     // Anti-doble: deshacer movimientos previos de este inventario antes de rehacer.
     await revertirMovimientosPorDocumento(
@@ -179,6 +189,7 @@ export async function confirmarInventarioKardex(
           origenLineaId: l.id,
           motivo: diff === 0 ? "Inventario sin cambios" : "Ajuste por inventario",
           createdBy: userId ?? null,
+          fecha: fechaMovimiento,
         },
         admin,
       );

@@ -1,6 +1,8 @@
 "use server";
 
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
+import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
+import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 
 async function getContext() {
   const { supabase, userId, empresaId } = await getLogisticaContext();
@@ -102,6 +104,10 @@ export async function createPedido(input: {
     const { supabase, user, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
 
+    // PRP-069: el día del pedido se fecha en la zona horaria de la EMPRESA, no en
+    // UTC del servidor (cerca de medianoche el día UTC puede ir uno por delante).
+    const tz = await getZonaHorariaEmpresa(supabase, empresaId);
+
     // Validar que todos los productoId existen en la BD
     const productoIds = input.lineas.map((l) => l.productoId);
     const { data: productosExistentes, error: checkErr } = await supabase
@@ -135,7 +141,7 @@ export async function createPedido(input: {
         proveedor_id: input.proveedorId ?? null,
         proveedor_nombre: input.proveedorNombre,
         numero: input.numero ?? null,
-        fecha: new Date().toISOString().split("T")[0],
+        fecha: hoyEnZona(tz),
         fecha_entrega: input.fechaEntrega ?? null,
         hora_entrega: input.horaEntrega ?? null,
         hora_entrega_hasta: input.horaEntregaHasta ?? null,

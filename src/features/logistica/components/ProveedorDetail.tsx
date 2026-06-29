@@ -13,6 +13,8 @@ import {
 import type { Producto } from "@/features/logistica/data/productos";
 import { listProductos } from "@/features/logistica/actions/producto-actions";
 import { listCategoriasProveedor } from "@/features/logistica/actions/categorias-proveedor-actions";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,6 +60,7 @@ type Props = {
 };
 
 export function ProveedorDetail({ proveedor, onBack, onSave, onDelete }: Props) {
+  const { empresaActual } = useEmpresa();
   const [form, setForm] = useState<Proveedor>(proveedor);
   const [saving, setSaving] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -157,7 +160,7 @@ export function ProveedorDetail({ proveedor, onBack, onSave, onDelete }: Props) 
     try {
       const updated: Proveedor = {
         ...form,
-        ultimaActualizacion: new Date().toISOString().slice(0, 10),
+        ultimaActualizacion: hoyEnZona(empresaActual.zonaHoraria),
       };
       const ok = await onSave(updated);
       if (ok) {

@@ -10,6 +10,8 @@ import { ALMACENES, type Pedido, type LineaPedido, type RepartoProveedor, calcLi
 import { listProveedores } from "@/features/logistica/actions/proveedores-actions";
 import { listProductos } from "@/features/logistica/actions/producto-actions";
 import type { Producto } from "@/features/logistica/data/productos";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 import { Trash2, Plus, Check, ChevronsUpDown, Search, AlertTriangle } from "lucide-react";
 
 /** Reparto vigente de un proveedor: negociado con nosotros con prioridad; si no, el genérico. */
@@ -182,6 +184,9 @@ function ProductoSearch({ value, productoId, onSelectProduct, onClear, proveedor
 
 // ── Modal principal ────────────────────────────────────────────────────────────
 export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNombre }: Props) {
+  const { empresaActual } = useEmpresa();
+  // "Hoy" en la zona de la empresa, no en UTC del navegador (PRP-069).
+  const hoy = hoyEnZona(empresaActual.zonaHoraria);
   const [saveError, setSaveError] = useState<string | null>(null);
   const isEdit = !!item;
   const almacenes = ALMACENES[empresaId] || ALMACENES.habana || ["COCINA", "BARRA"];
@@ -232,10 +237,10 @@ export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNom
   const [form, setForm] = useState(() => item ? { ...item } : {
     id: `ped-${Date.now()}`, numero: `PED-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900) + 100)}`,
     empresaId, empresa: empresaNombre, proveedor: "", proveedorId: "",
-    almacen: almacenes[0] ?? "", fecha: new Date().toISOString().slice(0, 10),
+    almacen: almacenes[0] ?? "", fecha: hoy,
     fechaEntrega: "", horaEntrega: "", horaEntregaHasta: "", estado: "Pendiente" as const,
     lineas: [emptyLinea()], dtoPct: 0, dtoEur: 0, notas: "",
-    albaranId: null, creador: "Usuario actual", ultimaActualizacion: new Date().toISOString().slice(0, 10),
+    albaranId: null, creador: "Usuario actual", ultimaActualizacion: hoy,
   });
 
   // Proveedor seleccionado (para su reparto) + evaluación día/hora vs. lo estipulado.
@@ -319,7 +324,7 @@ export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNom
       setSaveError(`Hay ${invalidLines.length} línea(s) sin producto válido. Selecciona productos de la lista.`);
       return;
     }
-    const updated = { ...form, ultimaActualizacion: new Date().toISOString().slice(0, 10) };
+    const updated = { ...form, ultimaActualizacion: hoy };
     onSave(updated as Pedido);
     onClose();
   };

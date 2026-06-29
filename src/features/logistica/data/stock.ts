@@ -34,8 +34,15 @@ export const UNIDADES_STOCK = ["kg", "L", "ud", "bot", "caja", "pack"];
 
 // ─── Helpers temporadas ───────────────────────────────────
 
-export function getTemporadaActiva(temporadas: TemporadaStock[]): TemporadaStock | null {
-  const hoy = new Date().toISOString().slice(0, 10);
+import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
+
+/**
+ * Temporada activa para "hoy". PRP-069: el día se calcula en la zona horaria de
+ * la empresa (`tz`), no en UTC del servidor. El llamador (server action) debe
+ * resolver la zona con `getZonaHorariaEmpresa()` y pasarla aquí.
+ */
+export function getTemporadaActiva(temporadas: TemporadaStock[], tz: string): TemporadaStock | null {
+  const hoy = hoyEnZona(tz);
   return temporadas.find((t) => t.fechaInicio <= hoy && t.fechaFin >= hoy) || null;
 }
 

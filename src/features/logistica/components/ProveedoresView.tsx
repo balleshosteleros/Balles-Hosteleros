@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 import {
   ESTADOS_PROVEEDOR, CATEGORIAS_PROVEEDOR, DIAS_REPARTO, VIAS_PAGO, PLAZOS_PAGO,
   type Proveedor, type EstadoProveedor,
@@ -572,7 +573,7 @@ export function ProveedoresView() {
       )}
 
       {/* Modal */}
-      <ProveedorModal open={modalOpen} onClose={() => setModalOpen(false)} onSave={handleSave} item={editItem} empresaId={empresaActual.id} categorias={categoriasBD} />
+      <ProveedorModal open={modalOpen} onClose={() => setModalOpen(false)} onSave={handleSave} item={editItem} empresaId={empresaActual.id} zonaHoraria={empresaActual.zonaHoraria} categorias={categoriasBD} />
 
       <ImportadorIACatalogoDialog
         open={iaProvOpen}
@@ -586,7 +587,7 @@ export function ProveedoresView() {
 
 // ─── Modal ────────────────────────────────────────────────
 
-function ProveedorModal({ open, onClose, onSave, item, empresaId, categorias }: { open: boolean; onClose: () => void; onSave: (p: Proveedor) => void; item: Proveedor | null; empresaId: string; categorias: string[] }) {
+function ProveedorModal({ open, onClose, onSave, item, empresaId, zonaHoraria, categorias }: { open: boolean; onClose: () => void; onSave: (p: Proveedor) => void; item: Proveedor | null; empresaId: string; zonaHoraria: string; categorias: string[] }) {
   const isEdit = !!item;
   const opcionesCategoria = categorias.length > 0 ? categorias : (CATEGORIAS_PROVEEDOR as unknown as string[]);
   const blankFactory = useCallback((): Proveedor => ({
@@ -602,8 +603,8 @@ function ProveedorModal({ open, onClose, onSave, item, empresaId, categorias }: 
     diaRepartoPrincipal: "Viernes",
     viaPago: "", viaPagoNegociada: "", plazoPago: "", plazoPagoNegociado: "",
     condicionesPago: "", plazo: "", observacionesLogisticas: "", comentariosInternos: "",
-    creador: "Usuario", createdAt: new Date().toISOString().slice(0, 10), ultimaActualizacion: new Date().toISOString().slice(0, 10),
-  }), [empresaId, opcionesCategoria]);
+    creador: "Usuario", createdAt: hoyEnZona(zonaHoraria), ultimaActualizacion: hoyEnZona(zonaHoraria),
+  }), [empresaId, zonaHoraria, opcionesCategoria]);
   const [form, setForm] = useState<Proveedor>(() => item || blankFactory());
   const [faltantes, setFaltantes] = useState<string[]>([]);
   const { validar } = useReglasSubmodulo("logistica", "proveedores");
@@ -635,7 +636,7 @@ function ProveedorModal({ open, onClose, onSave, item, empresaId, categorias }: 
       setFaltantes(labelsFaltantes);
       return;
     }
-    onSave({ ...form, ultimaActualizacion: new Date().toISOString().slice(0, 10) });
+    onSave({ ...form, ultimaActualizacion: hoyEnZona(zonaHoraria) });
     toast.success(isEdit ? "Proveedor actualizado" : "Proveedor creado");
     onClose();
   };
