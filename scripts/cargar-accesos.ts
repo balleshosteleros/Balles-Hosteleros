@@ -1,5 +1,6 @@
 /**
  * Carga puntual de credenciales en el módulo seguro de Accesos.
+ * Escribe en la tabla UNIFICADA `accesos_apps` (columna jsonb `accesos`).
  *
  * ── CÓMO FUNCIONA ────────────────────────────────────────────
  *   1. Lee la clave de cifrado y las credenciales de Supabase de .env.local
@@ -7,8 +8,10 @@
  *   2. Lee tu archivo LOCAL de datos:  scripts/accesos-datos.local.json
  *      (ese archivo lo creas TÚ, contiene las contraseñas EN CLARO y está
  *       en .gitignore: NUNCA se sube al repositorio).
- *   3. Por cada empresa: crea las apps, cifra las contraseñas y datos extra
- *      (AES-256-GCM), y asigna el ROL VISIBLE de cada credencial.
+ *   3. Por cada empresa y app: si la app ya existe (mismo nombre, normalizado)
+ *      se ACTUALIZA su array `accesos`; si no existe, se CREA con un id corto
+ *      `<pref>-xxN`. Cifra contraseñas y datos extra (AES-256-GCM) y asigna
+ *      los ROLES VISIBLES de cada credencial.
  *   4. Al terminar, BORRA tú el archivo accesos-datos.local.json.
  *
  * ── USO ──────────────────────────────────────────────────────
@@ -68,22 +71,31 @@ function encOpt(s: string): string {
   return s && s.length > 0 ? encrypt(s) : "";
 }
 
+// Normaliza un nombre de app para comparar (sin acentos, minúsculas, sin espacios extra).
+function norm(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // ── Tipos del archivo de datos ───────────────────────────────
 type DatoExtra = { nombre: string; valor: string };
 type CredData = {
   etiqueta: string;
   usuario?: string;
   password?: string;
-  url_especifica?: string;
   notas?: string;
-  rol_responsable?: string;
   datos_extra?: DatoExtra[];
   /** Nombres EXACTOS de roles (empresa_roles.nombre) que pueden verla. */
-  rol_visible: string[];
+  roles: string[];
 };
 type AppData = {
   nombre: string;
   url?: string;
+  icono?: string;
   logo_url?: string;
   categoria: string;
   notas?: string;
@@ -92,6 +104,8 @@ type AppData = {
 type EmpresaData = {
   /** slug o nombre exacto de la empresa (se resuelve por ambos). */
   empresa: string;
+  /** prefijo para ids nuevos (p.ej. "ba" para bacanal). */
+  prefijo_id: string;
   apps: AppData[];
 };
 
@@ -109,8 +123,9 @@ const supabase = createClient(url, key, {
 });
 
 async function main() {
-  console.log(DRY ? "🧪 MODO SIMULACIÓN (no se escribe nada)\n" : "🔒 Cargando accesos cifrados...\n");
-  let totalApps = 0;
+  console.log(DRY ? "🧪 MODO SIMULACIÓN (no se escribe nada)\n" : "🔒 Cargando accesos cifrados en accesos_apps...\n");
+  let totalAppsCreadas = 0;
+  let totalAppsActualizadas = 0;
   let totalCreds = 0;
   const avisos: string[] = [];
 
@@ -127,92 +142,119 @@ async function main() {
     }
     console.log(`🏢 ${empresa.nombre} (${empresa.id})`);
 
-    // Mapa de roles de la empresa por nombre (normalizado).
+    // Roles válidos de la empresa (para validar rol visible).
     const { data: roles } = await supabase
       .from("empresa_roles")
-      .select("id, nombre")
+      .select("nombre")
       .eq("empresa_id", empresa.id);
-    const rolPorNombre = new Map<string, string>();
-    for (const r of roles ?? []) rolPorNombre.set(r.nombre.trim().toUpperCase(), r.id);
+    const rolesValidos = new Set((roles ?? []).map((r) => r.nombre.trim().toUpperCase()));
+
+    // Apps existentes de la empresa (para upsert por nombre normalizado).
+    const { data: existentes } = await supabase
+      .from("accesos_apps")
+      .select("id, nombre")
+      .eq("empresa_slug", emp.empresa);
+    const idPorNombre = new Map<string, string>();
+    const idsUsados = new Set<string>();
+    for (const a of existentes ?? []) {
+      idPorNombre.set(norm(a.nombre), a.id);
+      idsUsados.add(a.id);
+    }
+
+    let contadorId = 1;
+    function nuevoId(): string {
+      let id = `${emp.prefijo_id}-x${contadorId++}`;
+      while (idsUsados.has(id)) id = `${emp.prefijo_id}-x${contadorId++}`;
+      idsUsados.add(id);
+      return id;
+    }
 
     for (const app of emp.apps) {
-      totalApps++;
-      let appId = "(dry)";
-      if (!DRY) {
-        const { data: appRow, error: appErr } = await supabase
-          .from("apps_externas")
-          .insert({
-            empresa_id: empresa.id,
-            nombre: app.nombre,
-            url: app.url || null,
-            logo_url: app.logo_url || null,
-            categoria: app.categoria,
-            notas: app.notas ?? "",
-          })
-          .select("id")
-          .single();
-        if (appErr || !appRow) {
-          avisos.push(`⚠️  [${empresa.nombre}] app "${app.nombre}": ${appErr?.message}`);
-          continue;
-        }
-        appId = appRow.id;
-      }
-      console.log(`   📱 ${app.nombre}  (${app.credenciales.length} cred.)`);
-
+      // Construir array de accesos cifrados.
+      const accesos: unknown[] = [];
       for (const c of app.credenciales) {
-        // Resolver ROL VISIBLE a ids.
-        const rolesIds: string[] = [];
-        for (const rn of c.rol_visible) {
-          const id = rolPorNombre.get(rn.trim().toUpperCase());
-          if (id) rolesIds.push(id);
-          else avisos.push(`⚠️  [${empresa.nombre}] "${app.nombre}/${c.etiqueta}": rol visible "${rn}" no existe.`);
+        const rolesCred: string[] = [];
+        for (const rn of c.roles) {
+          if (rolesValidos.has(rn.trim().toUpperCase())) rolesCred.push(rn.trim());
+          else avisos.push(`⚠️  [${empresa.nombre}] "${app.nombre}/${c.etiqueta}": rol "${rn}" no existe en la empresa.`);
         }
-        if (rolesIds.length === 0) {
-          avisos.push(`⛔ [${empresa.nombre}] "${app.nombre}/${c.etiqueta}": sin ROL VISIBLE válido — credencial OMITIDA.`);
+        if (rolesCred.length === 0) {
+          avisos.push(`⛔ [${empresa.nombre}] "${app.nombre}/${c.etiqueta}": sin ROL válido — credencial OMITIDA.`);
           continue;
         }
-
         const datosExtra = (c.datos_extra ?? [])
           .filter((d) => d.nombre?.trim() && d.valor?.length)
           .map((d) => ({ nombre: d.nombre.trim(), valor_cifrado: encOpt(d.valor) }));
 
+        accesos.push({
+          etiqueta: c.etiqueta,
+          usuario: c.usuario ?? "",
+          contrasena: encOpt(c.password ?? ""),
+          roles: rolesCred,
+          notas: c.notas ?? "",
+          datos_extra: datosExtra,
+        });
         totalCreds++;
-        if (DRY) {
-          console.log(`      ✓ ${c.etiqueta}  → ve: [${c.rol_visible.join(", ")}]  extra: ${datosExtra.length}`);
-          continue;
-        }
+      }
 
-        const { data: credRow, error: credErr } = await supabase
-          .from("app_credenciales")
-          .insert({
-            app_id: appId,
-            empresa_id: empresa.id,
-            etiqueta: c.etiqueta,
-            usuario: c.usuario ?? "",
-            password_cifrado: encOpt(c.password ?? ""),
-            url_especifica: c.url_especifica || null,
-            notas: c.notas ?? "",
-            rol_responsable: c.rol_responsable ?? "",
-            datos_extra: datosExtra,
-          })
-          .select("id")
-          .single();
-        if (credErr || !credRow) {
-          avisos.push(`⚠️  [${empresa.nombre}] "${app.nombre}/${c.etiqueta}": ${credErr?.message}`);
-          continue;
+      if (accesos.length === 0) {
+        avisos.push(`⚠️  [${empresa.nombre}] app "${app.nombre}" sin credenciales válidas — omitida.`);
+        continue;
+      }
+
+      // Roles autorizados de la app = unión de roles de sus credenciales.
+      const rolesApp = Array.from(
+        new Set(accesos.flatMap((a: any) => a.roles as string[])),
+      );
+      // Compat legacy: usuario/contrasena = primera credencial.
+      const primera: any = accesos[0];
+
+      const existeId = idPorNombre.get(norm(app.nombre));
+      const fila = {
+        empresa_slug: emp.empresa,
+        empresa_id: empresa.id,
+        nombre: app.nombre,
+        descripcion: "",
+        url: app.url ?? "",
+        icono: app.icono ?? "🔗",
+        logo_url: app.logo_url ?? null,
+        categoria: app.categoria,
+        departamentos: [] as string[],
+        roles_autorizados: rolesApp,
+        usuario: primera.usuario,
+        contrasena: primera.contrasena,
+        estado: "Activo",
+        responsable: "",
+        notas: app.notas ?? "",
+        tipo_integracion: "enlace",
+        accesos,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (existeId) {
+        totalAppsActualizadas++;
+        console.log(`   ♻️  ${app.nombre}  (${accesos.length} cred.)  [actualiza ${existeId}]`);
+        if (!DRY) {
+          const { error } = await supabase.from("accesos_apps").update(fila).eq("id", existeId);
+          if (error) avisos.push(`⚠️  update "${app.nombre}": ${error.message}`);
         }
-        const { error: rolErr } = await supabase.from("app_credencial_roles").insert(
-          rolesIds.map((rid) => ({ credencial_id: credRow.id, rol_id: rid, empresa_id: empresa.id })),
-        );
-        if (rolErr) avisos.push(`⚠️  roles de "${c.etiqueta}": ${rolErr.message}`);
-        console.log(`      ✓ ${c.etiqueta}  → ve: [${c.rol_visible.join(", ")}]`);
+      } else {
+        const id = nuevoId();
+        totalAppsCreadas++;
+        console.log(`   ✨ ${app.nombre}  (${accesos.length} cred.)  [crea ${id}]`);
+        if (!DRY) {
+          const { error } = await supabase.from("accesos_apps").insert({ id, ...fila });
+          if (error) avisos.push(`⚠️  insert "${app.nombre}": ${error.message}`);
+        }
       }
     }
     console.log("");
   }
 
   console.log("─".repeat(50));
-  console.log(`${DRY ? "Simulado" : "Cargado"}: ${totalApps} apps, ${totalCreds} credenciales.`);
+  console.log(
+    `${DRY ? "Simulado" : "Cargado"}: ${totalAppsCreadas} apps creadas, ${totalAppsActualizadas} actualizadas, ${totalCreds} credenciales.`,
+  );
   if (avisos.length) {
     console.log("\nAvisos:");
     for (const a of avisos) console.log("  " + a);

@@ -5,7 +5,6 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/features/layout/components/app-sidebar";
 import { AuthContext } from "@/features/auth/contexts/auth-context";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   LogOut,
@@ -13,11 +12,6 @@ import {
   CheckCircle2,
   Settings,
   Building2,
-  Eye,
-  Copy,
-  ExternalLink,
-  Loader2,
-  Search,
 } from "lucide-react";
 import { getRouteMeta } from "@/features/layout/data/nav-routes";
 import { useEffect, useState, useContext } from "react";
@@ -44,6 +38,10 @@ import {
   useDailyCounts,
 } from "@/features/google-workspace/components";
 import { AgendaDrawer } from "@/features/agenda/components/AgendaDrawer";
+import {
+  AplicacionesDrawer,
+  AccesosDrawer,
+} from "@/features/layout/components/AccesosDrawers";
 import { ToolsAvisoPopups } from "@/features/layout/components/ToolsAvisoPopups";
 import { CamarasDrawer } from "@/features/camaras/components/CamarasDrawer";
 import { RecordingTrigger } from "@/features/recorder/components/RecordingTrigger";
@@ -61,16 +59,6 @@ import {
   toolBadgeBg,
   type ToolColorKey,
 } from "@/features/layout/data/herramientas";
-import {
-  listAccesosApps,
-  revelarAccesoApp,
-} from "@/features/rrhh/actions/accesos-apps-actions";
-import {
-  VerificacionAccesosProvider,
-  useVerificacionAccesos,
-} from "@/features/rrhh/components/useVerificacionAccesos";
-import type { AccesoApp } from "@/features/rrhh/data/accesos-apps";
-import { toast } from "sonner";
 
 // Iconos de las herramientas — leídos del catálogo único.
 const ToolIcon = {
@@ -83,6 +71,7 @@ const ToolIcon = {
   agenda: HERRAMIENTA.agenda.Icon,
   videovigilancia: HERRAMIENTA.videovigilancia.Icon,
   aplicaciones: HERRAMIENTA.aplicaciones.Icon,
+  accesos: HERRAMIENTA.accesos.Icon,
 };
 
 function NavBadge({ count, color }: { count: number; color: ToolColorKey }) {
@@ -94,247 +83,6 @@ function NavBadge({ count, color }: { count: number; color: ToolColorKey }) {
     >
       {count > 9 ? "9+" : count}
     </span>
-  );
-}
-
-/** Contraseña o dato extra de un acceso dentro del desplegable: revela bajo demanda 10s. */
-function AccesoPasswordCell({
-  appId,
-  indice,
-  tiene,
-  nombreExtra,
-}: {
-  appId: string;
-  indice: number;
-  tiene: boolean;
-  nombreExtra?: string;
-}) {
-  const { ensureVerificado } = useVerificacionAccesos();
-  const [valor, setValor] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (valor === null) return;
-    const t = setTimeout(() => setValor(null), 10_000);
-    return () => clearTimeout(t);
-  }, [valor]);
-
-  if (!tiene) return <span className="text-muted-foreground text-[11px]">—</span>;
-
-  const revelar = async () => {
-    if (loading) return;
-    setLoading(true);
-    try {
-      const ok = await ensureVerificado();
-      if (!ok) return;
-      const res = await revelarAccesoApp(appId, indice, nombreExtra);
-      if (res.ok) setValor(res.contrasena);
-      else toast.error(res.error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <span className="inline-flex min-w-0 items-start justify-end gap-1 font-mono text-[11px]">
-      <span className="min-w-0 break-all text-right">{valor !== null ? valor : "••••"}</span>
-      {valor !== null ? (
-        <button
-          onClick={() => {
-            navigator.clipboard.writeText(valor);
-            toast.success(nombreExtra ? `${nombreExtra} copiado` : "Contraseña copiada");
-          }}
-          className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground"
-          title="Copiar"
-        >
-          <Copy className="h-3 w-3" />
-        </button>
-      ) : (
-        <button
-          onClick={revelar}
-          disabled={loading}
-          className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground disabled:opacity-50"
-          title="Ver contraseña"
-        >
-          {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />}
-        </button>
-      )}
-    </span>
-  );
-}
-
-/** Logo de la app en el desplegable (favicon/simpleicons con fallback a inicial). */
-function AccesoAppLogo({ nombre, logoUrl }: { nombre: string; logoUrl?: string | null }) {
-  const [err, setErr] = useState(false);
-  if (logoUrl && !err) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return (
-      <img
-        src={logoUrl}
-        alt=""
-        onError={() => setErr(true)}
-        className="h-5 w-5 rounded object-contain shrink-0"
-      />
-    );
-  }
-  return (
-    <div className="h-5 w-5 rounded bg-muted flex items-center justify-center text-[10px] font-bold shrink-0">
-      {nombre[0]?.toUpperCase() || "?"}
-    </div>
-  );
-}
-
-/** Desplegable de accesos a apps de la empresa actual (lectura segura + búsqueda). */
-function AccesosAppsMenu({ empresaSlug }: { empresaSlug: string }) {
-  const [open, setOpen] = useState(false);
-  const [apps, setApps] = useState<AccesoApp[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [busqueda, setBusqueda] = useState("");
-
-  useEffect(() => {
-    if (!open || !empresaSlug) return;
-    let alive = true;
-    setLoading(true);
-    setBusqueda("");
-    listAccesosApps(empresaSlug)
-      .then((rows) => {
-        if (alive) setApps(rows.filter((a) => a.estado === "Activo"));
-      })
-      .catch((e) => console.error("[accesos] menu:", e))
-      .finally(() => {
-        if (alive) setLoading(false);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [open, empresaSlug]);
-
-  // Filtra por nombre de app O por usuario/etiqueta de cualquiera de sus accesos.
-  const q = busqueda.trim().toLowerCase();
-  const appsFiltradas = !q
-    ? apps
-    : apps.filter((app) => {
-        if (app.nombre.toLowerCase().includes(q)) return true;
-        return app.accesos.some(
-          (acc) =>
-            (acc.usuario ?? "").toLowerCase().includes(q) ||
-            (acc.etiqueta ?? "").toLowerCase().includes(q),
-        );
-      });
-
-  return (
-    // Provider FUERA del DropdownMenu: el diálogo de verificación no se ve
-    // afectado por el cierre del desplegable.
-    <VerificacionAccesosProvider>
-      <DropdownMenu open={open} onOpenChange={setOpen}>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost" size="icon"
-            className="relative h-8 w-8"
-            title="Accesos a aplicaciones"
-          >
-            <ToolIcon.aplicaciones className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.aplicaciones.colorKey)}`} />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-80 max-h-[70vh] overflow-y-auto">
-          <DropdownMenuLabel className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-            Accesos a aplicaciones
-          </DropdownMenuLabel>
-          {/* Buscador: por app o por usuario */}
-          <div className="px-2 pb-2" onKeyDown={(e) => e.stopPropagation()}>
-            <div className="relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                placeholder="Buscar app o usuario…"
-                className="h-8 pl-7 text-xs"
-                autoFocus
-              />
-            </div>
-          </div>
-          <DropdownMenuSeparator />
-          {loading && (
-            <div className="px-3 py-3 text-xs text-muted-foreground">Cargando…</div>
-          )}
-          {!loading && appsFiltradas.length === 0 && (
-            <div className="px-3 py-3 text-xs text-muted-foreground">
-              {q ? "Sin coincidencias." : "No hay accesos."}
-            </div>
-          )}
-          {!loading &&
-            appsFiltradas.map((app) => (
-              <div key={app.id} className="px-3 py-2 border-b border-border/40 last:border-0">
-                <div className="flex items-center gap-2">
-                  <AccesoAppLogo nombre={app.nombre} logoUrl={app.logoUrl} />
-                  <span className="text-xs font-semibold truncate flex-1">{app.nombre}</span>
-                  {app.url && (
-                    <a
-                      href={app.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-muted-foreground hover:text-foreground shrink-0"
-                      title="Abrir"
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </a>
-                  )}
-                </div>
-                <div className="mt-1 space-y-1.5 pl-7">
-                  {app.accesos.map((acc, idx) => {
-                    const datosExtra = (acc.datosExtra ?? []).filter((d) => d.tiene);
-                    if (!acc.tieneContrasena && !acc.usuario && datosExtra.length === 0) {
-                      return null;
-                    }
-                    return (
-                      <div
-                        key={idx}
-                        className="space-y-0.5 border-l border-border/40 pl-2 first:border-l-0 first:pl-0"
-                      >
-                        {acc.etiqueta && (
-                          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                            {acc.etiqueta}
-                          </div>
-                        )}
-                        <div className="flex items-center justify-between gap-2 text-[11px]">
-                          <span className="font-mono truncate text-muted-foreground">
-                            <span className="not-italic">Usuario: </span>
-                            {acc.usuario || "—"}
-                          </span>
-                        </div>
-                        {(acc.tieneContrasena ?? false) && (
-                          <div className="flex items-start justify-between gap-2 text-[11px]">
-                            <span className="shrink-0 text-muted-foreground">Contraseña:</span>
-                            <AccesoPasswordCell
-                              appId={app.id}
-                              indice={idx}
-                              tiene={acc.tieneContrasena ?? false}
-                            />
-                          </div>
-                        )}
-                        {datosExtra.map((d) => (
-                          <div
-                            key={d.nombre}
-                            className="flex items-start justify-between gap-2 text-[11px]"
-                          >
-                            <span className="shrink-0 max-w-[45%] truncate text-muted-foreground">{d.nombre}:</span>
-                            <AccesoPasswordCell
-                              appId={app.id}
-                              indice={idx}
-                              tiene={!!d.tiene}
-                              nombreExtra={d.nombre}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </VerificacionAccesosProvider>
   );
 }
 
@@ -523,11 +271,32 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     {/* Separador visual */}
                     <span className="w-px h-5 bg-border mx-0.5" />
 
-                    {/* Accesos a apps externas — solo si el rol tiene HERR_APLICACIONES.
-                        Desplegable con usuario en claro y contraseña revelable bajo
-                        demanda (cifrado + verificación de identidad en server). */}
+                    {/* Apps externas — solo si el rol tiene HERR_APLICACIONES.
+                        Dos paneles de media pantalla:
+                         · Aplicaciones (cohete): enlaces + usuario, sin secretos.
+                         · Accesos y contraseñas (candado): bóveda segura con
+                           revelado bajo verificación de identidad. */}
                     {puedeVer("HERR_APLICACIONES") && (
-                      <AccesosAppsMenu empresaSlug={empresaActual.id} />
+                      <>
+                        <AplicacionesDrawer empresaSlug={empresaActual.id}>
+                          <Button
+                            variant="ghost" size="icon"
+                            className="relative h-8 w-8"
+                            title="Aplicaciones"
+                          >
+                            <ToolIcon.aplicaciones className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.aplicaciones.colorKey)}`} />
+                          </Button>
+                        </AplicacionesDrawer>
+                        <AccesosDrawer empresaSlug={empresaActual.id}>
+                          <Button
+                            variant="ghost" size="icon"
+                            className="relative h-8 w-8"
+                            title="Accesos y contraseñas"
+                          >
+                            <ToolIcon.accesos className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.accesos.colorKey)}`} />
+                          </Button>
+                        </AccesosDrawer>
+                      </>
                     )}
                   </div>
 

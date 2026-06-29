@@ -24,6 +24,7 @@ import {
   Notebook,
   Cctv,
   Rocket,
+  Lock,
   type LucideIcon,
 } from "lucide-react";
 
@@ -60,7 +61,8 @@ export type HerramientaId =
   | "telefono"
   | "agenda"
   | "videovigilancia"
-  | "aplicaciones";
+  | "aplicaciones"
+  | "accesos";
 
 export interface HerramientaDef {
   id: HerramientaId;
@@ -147,9 +149,16 @@ export const HERRAMIENTAS: HerramientaDef[] = [
   {
     id: "aplicaciones",
     nombre: "Aplicaciones",
-    descripcion: "Accesos directos a aplicaciones externas.",
+    descripcion: "Accesos directos a aplicaciones externas (abrir web y usuario).",
     Icon: Rocket,
     colorKey: "amber",
+  },
+  {
+    id: "accesos",
+    nombre: "Accesos y contraseñas",
+    descripcion: "Bóveda segura de contraseñas, PINs y claves. Revelado con verificación de identidad.",
+    Icon: Lock,
+    colorKey: "red",
   },
 ];
 

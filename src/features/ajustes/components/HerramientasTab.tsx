@@ -74,6 +74,13 @@ export function HerramientasTab() {
                     <ToolNotifPanel toolKey="aplicaciones" hasBadge={false} />
                   </div>
                 </div>
+              ) : id === "accesos" ? (
+                <p className="py-4 text-sm text-muted-foreground">
+                  La bóveda de contraseñas se gestiona desde &quot;Aplicaciones&quot;
+                  (cada app guarda sus credenciales). En la barra superior, el
+                  candado abre la consulta segura con verificación de identidad y
+                  revelado por rol.
+                </p>
               ) : (
                 <ToolNotifPanel
                   toolKey={id}
