@@ -105,3 +105,6 @@ Bancktrack/
 scripts/accesos-datos.local.json
 scripts/*-datos.local.json
 scripts/*.secret.json
+
+# Fichas técnicas Excel (pesadas, con imágenes embebidas) — no versionar
+docs/fichas-tecnicas/*.xlsx
