@@ -35,4 +35,16 @@ La **recepción de albaranes 100% móvil** que pediste. Entrada: en el móvil, *
 - **Fuera de v1:** albarán suelto (sin pedido), recibir en móvil albaranes ya creados en escritorio, editar precios en móvil, paso de factura.
 - No toca el importador de fichas (PRP-071) ni la siembra ni el esquema.
 
+## ⚠️ Bug encontrado en la prueba en vivo (afecta también a ESCRITORIO)
+
+Al probar §5 en vivo (recepción real, albarán creado y stock correcto) detecté que **el pedido NO pasaba a "Confirmado"** y reaparecía como pendiente. Causa raíz: `createAlbaran` (`src/features/logistica/actions/albaranes-actions.ts`) marca el pedido con:
+```
+update pedidos set estado='Confirmado', albaran_id=data.id, ...
+```
+pero **la tabla `pedidos` NO tiene columna `albaran_id`** (verificado en BD: las columnas son almacen, dto_*, enviado_at, estado, fecha*, hora_entrega*, notas, numero*, proveedor_*, total, updated_at — sin `albaran_id`). PostgREST rechaza el `update` entero → el pedido se queda en **"Enviado"**. El mismo problema afecta a `deleteAlbaran` (hace `albaran_id=null`) → al borrar un albarán el pedido no retrocede. En escritorio se enmascara con estado optimista local, pero en BD el pedido no transiciona.
+
+**Fix sugerido (tu zona):** o (a) añadir la columna `pedidos.albaran_id` (migración) y mantener el `update`, o (b) quitar `albaran_id` de los `update` de `createAlbaran`/`deleteAlbaran`. En §5 móvil lo he **blindado** marcando el pedido `Confirmado` por separado, con columnas válidas (commit `a9e6e97`), pero la causa raíz sigue en `createAlbaran`.
+
+---
+
 Relacionado: `docs/LOGISTICA_COMPRAS_PARA_IVAN_siembra_vs_ingest.md`, `docs/LOGISTICA_COMPRAS_ESTADO_Y_PLAN.md`.
