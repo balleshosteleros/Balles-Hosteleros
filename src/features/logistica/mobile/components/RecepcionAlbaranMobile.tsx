@@ -119,6 +119,7 @@ export function RecepcionAlbaranMobile({
       setDone({ numero: res.numero, aviso: res.stockAviso });
       if (res.stockAviso) toast.warning(`Recepción confirmada. Aviso de stock: ${res.stockAviso}`);
       else toast.success("Recepción confirmada — stock actualizado");
+      router.refresh(); // invalida la caché para que la bandeja no muestre el pedido ya recibido
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error al confirmar la recepción");
     } finally {
@@ -141,7 +142,7 @@ export function RecepcionAlbaranMobile({
             Aviso de stock: {done.aviso}
           </p>
         )}
-        <Button className="mt-6" onClick={() => router.push("/m/albaranes")}>
+        <Button className="mt-6" onClick={() => { router.refresh(); router.push("/m/albaranes"); }}>
           Volver a la bandeja
         </Button>
       </div>

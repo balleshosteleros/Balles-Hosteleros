@@ -110,6 +110,16 @@ export async function recibirAlbaranDesdePedido(input: {
     });
     if (!res.ok) return { ok: false, error: res.error };
 
+    // `createAlbaran` intenta marcar el pedido como Confirmado, pero su update referencia
+    // `pedidos.albaran_id` (columna que NO existe en el esquema) y falla en silencio, dejando
+    // el pedido en "Enviado" (reaparece en la bandeja). Lo confirmamos aquí con columnas válidas.
+    const { error: pedErr } = await supabase
+      .from("pedidos")
+      .update({ estado: "Confirmado", updated_at: new Date().toISOString() })
+      .eq("id", input.pedidoId)
+      .eq("empresa_id", empresaId);
+    if (pedErr) console.error("[recepcion-movil] no se pudo confirmar el pedido:", JSON.stringify(pedErr));
+
     // Recepción → suma stock (idempotente en la action).
     const est = await updateAlbaranEstado(res.id, "Entregado");
     const stockAviso = (est as { stockAviso?: string }).stockAviso;
