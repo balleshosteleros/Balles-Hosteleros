@@ -182,6 +182,19 @@ Migraciones versionadas como `.sql` idempotentes · zona horaria por empresa en 
 
 ---
 
-## 13. Aprendizajes (Self-Annealing)
+## 13. Estado de implementación (2026-06-30)
 
-_(se rellena durante la implementación)_
+- **Fase 1 (COMPLETADA, aplicada a BD):** modelo de fases reescrito en `reclutamiento.ts` (estado `formacion` unifica teórica/práctica; fases nuevas `contratacion`/`prueba`/`empleado`). Consumidores alineados (`CandidatosRealesTab`, `reclutamiento-actions`, seed estados, `PlantillasEstadoTab`, firmas `moverCandidatoFase`/`moverCandidatoAVacante` → `FasePrincipal`). Migración `20260630120000` aplicada.
+- **Fase 2 (COMPLETADA):** `contratarCandidato` parametrizado (`enviarAcceso`, `destino`). Orquestador `iniciarContratacion` (`contratacion-fase-actions.ts`): crea empleado + alta gestoría + contrato interno (PDF `contrato-interno-pdf.ts` → `crearFirmaInterno`). Pipeline: arrastrar a Contratación abre `ContratarDialog variante="iniciar"`. Email 1 (Formación): `{{enlace_formacion}}` + plantilla unificada con botón. Migración config `20260630130000` aplicada.
+- **Fases 3-4 (YA EXISTÍAN, PRP-068):** subida del contrato oficial por gestoría (`procesarSubidaContrato`) ya manda a firmar (Email 4) + Tick 3. Tick 4 (firmado) ya existía. **Añadido PRP-070:** al firmar contrato interno → candidato a `contrato_interno_firmado` + notif; al firmar contrato oficial → `alta_completada` + notif final.
+- **Fase 5 (servidor COMPLETADO):** cron `/api/cron/prueba-avisos` (registrado en `vercel.json`, 9:30) calcula días transcurridos/restantes y avisa por canal configurable. Email 5: `{{prueba_duracion_dias}}` + plantilla Prueba actualizada. Acceso del empleado diferido a Prueba (`enviarAccesoEmpleadoPorId` desde `moverCandidatoFase`). Actions de config onboarding (`getReclutamientoConfigOnboarding`/`save...`).
+- **Fase 5 (UI) + Fase 3 (UI):** en curso — tarjeta "Onboarding y periodo de prueba" en Ajustes y apartado "Documentos" (editor contrato interno) en PLANTILLAS.
+- **Pendiente:** QA end-to-end (Fase 6); aplicar/propagar seeds de plantilla a empresas existentes (aditivo); revisar que la columna "Empleado" y las nuevas fases se rendericen bien en el pipeline.
+
+## 14. Aprendizajes (Self-Annealing)
+
+- `empresas` NO tiene columna `cif`: el CIF está en `nif` (y `razon_social`).
+- `crearFirmaInterno`/`enviarAltaGestoria` operan sobre `empleados` (requieren empleado creado) → por eso el empleado se materializa al ENTRAR en Contratación, no en Prueba.
+- El estado del candidato es texto libre (sin constraint desde 20260623131000): la migración de fases es un simple UPDATE.
+- `reclutamiento_config` es 1 fila por empresa; todos los toggles/campos viven ahí.
+- La tabla de historial del candidato es `candidato_historial` (no `candidato_actividad`).

@@ -157,11 +157,11 @@ Cuando termines, Recursos Humanos revisará tu avance para continuar con el proc
     asunto: "Bienvenido/a a tu periodo de prueba — {{empresa_nombre}}",
     cuerpo: `Hola {{candidato_nombre}},
 
-Queríamos darte la bienvenida oficialmente en este inicio de tu período de prueba con nosotros. Estamos muy contentos de contar contigo en el equipo y queremos transmitirte que confiamos plenamente en tus capacidades.
+Queríamos darte la bienvenida oficialmente en este inicio de tu período de prueba con nosotros. Ya has sido dado/a de alta y has firmado la documentación correspondiente. Estamos muy contentos de contar contigo en el equipo y confiamos plenamente en tus capacidades.
 
-Estamos seguros de que superarás esta etapa sin ningún problema y de que tu adaptación será rápida y positiva.
+Tu periodo de prueba tendrá una duración de {{prueba_duracion_dias}} días. Durante este tiempo evaluaremos tu adaptación, tu actitud, tu desempeño y el cumplimiento de las normas internas.
 
-Durante los próximos días contarás con el acompañamiento y supervisión de tu formador, quien estará a tu disposición para ayudarte, resolver cualquier duda y guiarte en todo lo necesario para que te sientas cómodo/a y seguro/a en el desempeño de tus funciones. Te animamos a aprovechar este periodo para aprender, preguntar y familiarizarte con la dinámica de trabajo.
+Contarás con el acompañamiento y la supervisión de tu formador, que estará a tu disposición para ayudarte, resolver tus dudas y guiarte en todo lo necesario para que te sientas cómodo/a y seguro/a en el desempeño de tus funciones. Aprovecha este periodo para aprender, preguntar y familiarizarte con la dinámica de trabajo.
 
 Por nuestra parte, te deseamos lo mejor en esta nueva etapa y estamos convencidos de que será el comienzo de una buena experiencia profesional.
 

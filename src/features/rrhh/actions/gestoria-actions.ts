@@ -206,6 +206,87 @@ export async function saveReclutamientoConfigGeneral(input: ReclutamientoConfigG
 }
 
 // ============================================================
+// Config de ONBOARDING (PRP-070): Formación, Contrato interno y Periodo de prueba.
+// Vive en la misma fila por empresa de `reclutamiento_config`.
+// ============================================================
+
+export type PruebaAvisoCanal = "notificacion" | "email" | "ambos";
+
+export interface ReclutamientoConfigOnboarding {
+  formacion_url: string;
+  contrato_interno_plantilla: string;
+  prueba_duracion_dias: number;
+  prueba_aviso_dias: number;
+  prueba_aviso_canal: PruebaAvisoCanal;
+  prueba_aviso_activo: boolean;
+}
+
+const ONBOARDING_DEFAULT: ReclutamientoConfigOnboarding = {
+  formacion_url: "",
+  contrato_interno_plantilla: "",
+  prueba_duracion_dias: 30,
+  prueba_aviso_dias: 10,
+  prueba_aviso_canal: "ambos",
+  prueba_aviso_activo: true,
+};
+
+function normalizarCanal(v: unknown): PruebaAvisoCanal {
+  return v === "notificacion" || v === "email" ? v : "ambos";
+}
+
+export async function getReclutamientoConfigOnboarding(): Promise<{ ok: boolean; data: ReclutamientoConfigOnboarding }> {
+  try {
+    const { supabase, empresaId } = await getCtx();
+    if (!empresaId) return { ok: false, data: ONBOARDING_DEFAULT };
+    const { data } = await supabase
+      .from("reclutamiento_config")
+      .select("formacion_url, contrato_interno_plantilla, prueba_duracion_dias, prueba_aviso_dias, prueba_aviso_canal, prueba_aviso_activo")
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    return {
+      ok: true,
+      data: {
+        formacion_url: (data?.formacion_url as string | null) ?? "",
+        contrato_interno_plantilla: (data?.contrato_interno_plantilla as string | null) ?? "",
+        prueba_duracion_dias: (data?.prueba_duracion_dias as number | null) ?? 30,
+        prueba_aviso_dias: (data?.prueba_aviso_dias as number | null) ?? 10,
+        prueba_aviso_canal: normalizarCanal(data?.prueba_aviso_canal),
+        prueba_aviso_activo: (data?.prueba_aviso_activo as boolean | null) ?? true,
+      },
+    };
+  } catch (err) {
+    console.error("[rrhh] getReclutamientoConfigOnboarding:", err);
+    return { ok: false, data: ONBOARDING_DEFAULT };
+  }
+}
+
+export async function saveReclutamientoConfigOnboarding(input: ReclutamientoConfigOnboarding) {
+  try {
+    const { supabase, empresaId } = await getCtx();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+    const dur = Math.max(1, Math.min(365, Math.round(Number(input.prueba_duracion_dias) || 30)));
+    const aviso = Math.max(1, Math.min(dur, Math.round(Number(input.prueba_aviso_dias) || 10)));
+    const { error } = await supabase
+      .from("reclutamiento_config")
+      .upsert({
+        empresa_id: empresaId,
+        formacion_url: input.formacion_url.trim() || null,
+        contrato_interno_plantilla: input.contrato_interno_plantilla.trim() || null,
+        prueba_duracion_dias: dur,
+        prueba_aviso_dias: aviso,
+        prueba_aviso_canal: normalizarCanal(input.prueba_aviso_canal),
+        prueba_aviso_activo: input.prueba_aviso_activo,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "empresa_id" });
+    if (error) throw error;
+    return { ok: true as const };
+  } catch (err) {
+    console.error("[rrhh] saveReclutamientoConfigOnboarding:", err);
+    return { ok: false as const, error: "No se pudo guardar la configuración" };
+  }
+}
+
+// ============================================================
 // Campos del formulario de candidatura (activo / obligatorio por campo).
 // Vive en `reclutamiento_config.campos_formulario` (jsonb), 1 fila por empresa.
 // ============================================================

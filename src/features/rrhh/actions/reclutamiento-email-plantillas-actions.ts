@@ -598,6 +598,15 @@ export async function buildReclutamientoEmailVars(
     }
   }
 
+  // Duración del periodo de prueba (Ajustes → RRHH → Reclutamiento) para el
+  // placeholder {{prueba_duracion_dias}} del email de inicio de Prueba.
+  const { data: cfgPrueba } = await supabase
+    .from("reclutamiento_config")
+    .select("prueba_duracion_dias")
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+  const pruebaDuracionDias = (cfgPrueba?.prueba_duracion_dias as number | null) ?? 30;
+
   const { data: emp } = await supabase
     .from("empresas")
     .select("nombre, email_contacto, direccion, datos_generales, logo_url, isotipo_url")
@@ -634,6 +643,7 @@ export async function buildReclutamientoEmailVars(
     empresa_telefono: dgStr("telefonoPrincipal") || dgStr("telefonoSecundario"),
     empresa_web: dgStr("web"),
     empresa_direccion: dgStr("direccionLocal") || ((emp?.direccion as string | null) ?? ""),
+    prueba_duracion_dias: String(pruebaDuracionDias),
     ...overrides,
   };
   return vars;

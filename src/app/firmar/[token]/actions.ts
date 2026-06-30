@@ -605,9 +605,65 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
             dedupeKey: `gestoria_firmado:${ctok.id}`,
           });
         }
+
+        // PRP-070: el contrato OFICIAL firmado cierra la fase Contratación. El
+        // candidato pasa a `alta_completada` (RRHH ya puede pasarlo a Prueba).
+        try {
+          await admin
+            .from("candidatos")
+            .update({ estado: "alta_completada", fase: "contratacion" })
+            .eq("empleado_id", ctok.empleado_id as string)
+            .eq("empresa_id", ctok.empresa_id as string)
+            .in("estado", [
+              "alta_enviada", "contrato_interno_firmado",
+              "contrato_oficial_subido", "contrato_oficial_firmado",
+            ]);
+          // Aviso final: todo firmado, RRHH puede pasar a Prueba.
+          await notificarRrhhGestoria({
+            empresaId: ctok.empresa_id as string,
+            tipo: "alta_completada",
+            titulo: `Alta y contrato completados: ${datos.empleadoNombre}`,
+            mensaje: `Toda la documentación de ${datos.empleadoNombre} está firmada. Ya puedes pasarlo a la fase de Prueba.`,
+            empleadoId: ctok.empleado_id as string,
+            dedupeKey: `alta_completada:${ctok.id}`,
+          });
+        } catch (e) {
+          console.error("[firmar/firmar] cierre alta_completada:", e);
+        }
       }
     } catch (e) {
       console.error("[firmar/firmar] aviso gestoría firmado:", e);
+    }
+
+    // PRP-070: si el documento firmado es el CONTRATO INTERNO, avanza el candidato
+    // al estado `contrato_interno_firmado` y avisa a RRHH. El contrato firmado ya
+    // queda archivado en la carpeta del empleado por el módulo de Firmas.
+    if ((doc.tipo as string) === "contrato_interno") {
+      try {
+        const empleadoId = doc.empleado_id as string;
+        const empresaIdDoc = doc.empresa_id as string;
+        // Avanza el candidato vinculado a este empleado (si sigue en Contratación).
+        await admin
+          .from("candidatos")
+          .update({ estado: "contrato_interno_firmado", fase: "contratacion" })
+          .eq("empleado_id", empleadoId)
+          .eq("empresa_id", empresaIdDoc)
+          .in("estado", ["alta_enviada", "alta_pendiente_revision"]);
+
+        const { notificarRrhhGestoria } = await import(
+          "@/features/rrhh/services/gestoria/gestoria-contrato"
+        );
+        await notificarRrhhGestoria({
+          empresaId: empresaIdDoc,
+          tipo: "contrato_interno_firmado",
+          titulo: `Contrato interno firmado: ${datos.empleadoNombre}`,
+          mensaje: `${datos.empleadoNombre} ha firmado el contrato interno. Queda guardado en su carpeta de documentos.`,
+          empleadoId,
+          dedupeKey: `contrato_interno_firmado:${documentoId}`,
+        });
+      } catch (e) {
+        console.error("[firmar/firmar] contrato interno firmado:", e);
+      }
     }
 
     return { ok: true, descargaUrl };

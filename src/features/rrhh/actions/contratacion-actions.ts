@@ -377,3 +377,49 @@ async function enviarAltaGestoriaSeguro(empleadoId: string): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Envía el email de ACCESO (elige tu contraseña) a un empleado ya creado.
+ * Se usa al pasar el candidato a la fase Prueba (PRP-070): el empleado se creó
+ * al entrar en Contratación con el acceso diferido. Best-effort e idempotente
+ * en la práctica (el recovery link más reciente invalida al anterior).
+ */
+export async function enviarAccesoEmpleadoPorId(
+  empleadoId: string,
+): Promise<{ ok: boolean; enviado?: boolean; error?: string }> {
+  try {
+    const admin = createAdminClient();
+    const { data: emp } = await admin
+      .from("empleados")
+      .select("email_empresa, email_personal, nombre, empresa_id")
+      .eq("id", empleadoId)
+      .maybeSingle();
+    if (!emp) return { ok: false, error: "Empleado no encontrado" };
+    const loginEmail = ((emp.email_empresa as string | null) || (emp.email_personal as string | null) || "").toLowerCase();
+    if (!loginEmail) return { ok: false, error: "El empleado no tiene email de acceso" };
+
+    const siteUrl =
+      process.env.NEXT_PUBLIC_APP_URL ??
+      process.env.NEXT_PUBLIC_SITE_URL ??
+      (process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : null) ??
+      "http://localhost:3000";
+    const redirectTo = `${siteUrl.replace(/\/$/, "")}/update-password`;
+    const { data: linkData } = await admin.auth.admin.generateLink({
+      type: "recovery", email: loginEmail, options: { redirectTo },
+    });
+    const actionUrl = buildRecoveryActionUrl(siteUrl, linkData?.properties ?? undefined);
+    if (!actionUrl) return { ok: false, error: "No se pudo generar el enlace de acceso" };
+
+    const empresaId = emp.empresa_id as string;
+    const empresaNombre = await admin.from("empresas").select("nombre").eq("id", empresaId).single()
+      .then((r) => r.data?.nombre ?? "tu empresa");
+    const { subject, html, text } = bienvenidaEmpleadoEmail({
+      recipientName: (emp.nombre as string) ?? "", actionUrl, empresaNombre,
+    });
+    const sendRes = await sendEmail({ to: loginEmail, subject, html, text, empresaId });
+    return { ok: true, enviado: sendRes.ok };
+  } catch (err) {
+    console.error("[contratacion] enviarAccesoEmpleadoPorId:", err);
+    return { ok: false, error: "No se pudo enviar el email de acceso" };
+  }
+}

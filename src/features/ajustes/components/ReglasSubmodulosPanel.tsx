@@ -33,6 +33,7 @@ import { JornadasVacantesPanel } from "@/features/ajustes/components/JornadasVac
 import { TiposContratoPanel } from "@/features/ajustes/components/TiposContratoPanel";
 import { GestoriaConfig } from "@/features/rrhh/components/reclutamiento/config/GestoriaConfig";
 import { ConfigGeneralConfig } from "@/features/rrhh/components/reclutamiento/config/ConfigGeneralConfig";
+import { OnboardingPruebaConfig } from "@/features/rrhh/components/reclutamiento/config/OnboardingPruebaConfig";
 
 // ============================================================
 // Tipado del estado local
@@ -248,6 +249,9 @@ function SubmoduloRow({
                 <>
                   <div className="border-t pt-3">
                     <GestoriaConfig embedded />
+                  </div>
+                  <div className="border-t pt-3">
+                    <OnboardingPruebaConfig embedded />
                   </div>
                   <div className="border-t pt-3">
                     <ConfigGeneralConfig embedded />

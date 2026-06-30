@@ -184,6 +184,19 @@ export async function moverCandidatoFase(
 
     if (error) throw error;
 
+    // PRP-070: al ENTRAR en la fase Prueba, el empleado (creado en Contratación)
+    // recibe el email de acceso (elige contraseña), diferido hasta este momento.
+    if (estado === "prueba" && cand?.estado !== "prueba" && cand?.empleado_id) {
+      try {
+        const { enviarAccesoEmpleadoPorId } = await import(
+          "@/features/rrhh/actions/contratacion-actions"
+        );
+        await enviarAccesoEmpleadoPorId(cand.empleado_id as string);
+      } catch (e) {
+        console.error("[candidatos] acceso al pasar a prueba:", e);
+      }
+    }
+
     // Registra la actividad (apartado "Actividad" de la ficha): quién, cuándo y
     // de qué estado a cuál. El flag email_enviado lo marca después el envío del
     // correo de fase, si lo hubo. No bloquea el movimiento si fallara.

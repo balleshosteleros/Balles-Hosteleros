@@ -29,6 +29,7 @@ export const VARIABLES_RECLUTAMIENTO: VariableReclutamiento[] = [
   { variable: "{{candidato_telefono}}", descripcion: "Teléfono del candidato", grupo: "Candidato" },
   { variable: "{{enlace_documentacion}}", descripcion: "Enlace personal para que el candidato suba su documentación (solo plantilla Documentación)", grupo: "Candidato" },
   { variable: "{{enlace_formacion}}", descripcion: "Enlace de acceso a la formación (configurable en Ajustes → RRHH → Reclutamiento; solo plantilla Formación)", grupo: "Candidato" },
+  { variable: "{{prueba_duracion_dias}}", descripcion: "Duración del periodo de prueba en días (configurable; solo plantilla Prueba)", grupo: "Candidato" },
   // ── Vacante / puesto ──
   { variable: "{{vacante_nombre}}", descripcion: "Nombre de la vacante", grupo: "Vacante" },
   { variable: "{{vacante_ubicacion}}", descripcion: "Ubicación de la vacante", grupo: "Vacante" },
@@ -61,6 +62,7 @@ export const VARIABLES_RECLUTAMIENTO_EJEMPLO: Record<string, string> = {
   candidato_telefono: "612 345 678",
   enlace_documentacion: "https://app.balleshosteleros.com/documentacion/ejemplo",
   enlace_formacion: "https://formacion.empresa.com",
+  prueba_duracion_dias: "30",
   vacante_nombre: "Camarero/a",
   vacante_ubicacion: "Sala principal",
   departamento_nombre: "Sala",
