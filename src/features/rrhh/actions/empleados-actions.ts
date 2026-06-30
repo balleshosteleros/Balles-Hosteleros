@@ -947,20 +947,35 @@ export async function copiarEmpleadoAEmpresa(input: {
       user_id: origen.user_id,
       nombre: o.nombre,
       apellidos: o.apellidos ?? null,
+      // Datos personales = reflejo idéntico en todas las empresas.
+      tipo_documento: o.tipo_documento ?? null,
       dni_nie: o.dni_nie ?? null,
       fecha_nacimiento: o.fecha_nacimiento ?? null,
       nacionalidad: o.nacionalidad ?? null,
+      genero: o.genero ?? null,
+      estado_civil: o.estado_civil ?? null,
       telefono: o.telefono ?? null,
+      telefono_empresa: o.telefono_empresa ?? null,
       email_personal: o.email_personal ?? null,
       email_empresa: emailEmpresa,
       direccion: o.direccion ?? null,
+      codigo_postal: o.codigo_postal ?? null,
+      ciudad: o.ciudad ?? null,
+      provincia: o.provincia ?? null,
+      pais: o.pais ?? null,
       numero_ss: o.numero_ss ?? null,
       iban: o.iban ?? null,
+      banco_codigo: o.banco_codigo ?? null,
+      banco_nombre: o.banco_nombre ?? null,
+      titular_cuenta: o.titular_cuenta ?? null,
+      iban_verificado: Boolean(o.iban_verificado),
       dni_archivo_url: o.dni_archivo_url ?? null,
       contacto_emergencia_nombre: o.contacto_emergencia_nombre ?? null,
       contacto_emergencia_telefono: o.contacto_emergencia_telefono ?? null,
       contacto_emergencia_relacion: o.contacto_emergencia_relacion ?? null,
       talla_uniforme: o.talla_uniforme ?? null,
+      talla_camiseta: o.talla_camiseta ?? null,
+      talla_pantalon: o.talla_pantalon ?? null,
       alergias_medicas: o.alergias_medicas ?? null,
       avatar_url: o.avatar_url ?? null,
       permite_teletrabajo: Boolean(o.permite_teletrabajo),
@@ -1050,48 +1065,50 @@ export async function getEmpleadoConPerfil(empleadoId: string) {
     if (error) throw error;
     if (!emp) return { ok: false, error: "Empleado no encontrado", data: null };
 
-    let perfil: Record<string, unknown> | null = null;
+    // Datos personales = ficha de empleado (fuente única). Solo el email de
+    // cuenta (login) se lee de usuarios. emergencia_* del formulario mapea a
+    // contacto_emergencia_* en empleados.
+    const e = emp as Record<string, unknown>;
+    let emailCuenta: string | null = null;
     if (emp.user_id) {
-      const { data: p } = await supabase
+      const { data: cuenta } = await supabase
         .from("usuarios")
-        .select(
-          "nombre, apellidos, email, tipo_documento, dni_nie, fecha_nacimiento, nacionalidad, genero, estado_civil, numero_ss, telefono, telefono_empresa, email_personal, email_empresa, direccion, codigo_postal, ciudad, provincia, pais, iban, banco_codigo, banco_nombre, titular_cuenta, iban_verificado, emergencia_nombre, emergencia_relacion, emergencia_telefono, talla_camiseta, talla_pantalon",
-        )
+        .select("email")
         .eq("id", emp.user_id)
         .maybeSingle();
-      perfil = p ?? null;
+      emailCuenta = (cuenta?.email as string | null) ?? null;
     }
 
     const datosPersonales: DatosPersonalesCompletos = {
-      nombre: (perfil?.nombre as string | null) ?? emp.nombre ?? null,
-      apellidos: (perfil?.apellidos as string | null) ?? emp.apellidos ?? null,
-      email: (perfil?.email as string | null) ?? emp.email_empresa ?? emp.email_personal ?? null,
-      tipo_documento: (perfil?.tipo_documento as DatosPersonalesCompletos["tipo_documento"]) ?? null,
-      dni_nie: (perfil?.dni_nie as string | null) ?? emp.dni_nie ?? null,
-      fecha_nacimiento: (perfil?.fecha_nacimiento as string | null) ?? emp.fecha_nacimiento ?? null,
-      nacionalidad: (perfil?.nacionalidad as string | null) ?? emp.nacionalidad ?? null,
-      genero: (perfil?.genero as string | null) ?? null,
-      estado_civil: (perfil?.estado_civil as string | null) ?? null,
-      numero_ss: (perfil?.numero_ss as string | null) ?? emp.numero_ss ?? null,
-      telefono: (perfil?.telefono as string | null) ?? emp.telefono ?? null,
-      telefono_empresa: (perfil?.telefono_empresa as string | null) ?? null,
-      email_personal: (perfil?.email_personal as string | null) ?? emp.email_personal ?? null,
-      email_empresa: (perfil?.email_empresa as string | null) ?? emp.email_empresa ?? null,
-      direccion: (perfil?.direccion as string | null) ?? emp.direccion ?? null,
-      codigo_postal: (perfil?.codigo_postal as string | null) ?? null,
-      ciudad: (perfil?.ciudad as string | null) ?? null,
-      provincia: (perfil?.provincia as string | null) ?? null,
-      pais: (perfil?.pais as string | null) ?? null,
-      iban: (perfil?.iban as string | null) ?? null,
-      banco_codigo: (perfil?.banco_codigo as string | null) ?? null,
-      banco_nombre: (perfil?.banco_nombre as string | null) ?? null,
-      titular_cuenta: (perfil?.titular_cuenta as string | null) ?? null,
-      iban_verificado: Boolean(perfil?.iban_verificado),
-      emergencia_nombre: (perfil?.emergencia_nombre as string | null) ?? null,
-      emergencia_relacion: (perfil?.emergencia_relacion as string | null) ?? null,
-      emergencia_telefono: (perfil?.emergencia_telefono as string | null) ?? null,
-      talla_camiseta: (perfil?.talla_camiseta as string | null) ?? null,
-      talla_pantalon: (perfil?.talla_pantalon as string | null) ?? null,
+      nombre: (e.nombre as string | null) ?? null,
+      apellidos: (e.apellidos as string | null) ?? null,
+      email: emailCuenta ?? (e.email_empresa as string | null) ?? (e.email_personal as string | null) ?? null,
+      tipo_documento: (e.tipo_documento as DatosPersonalesCompletos["tipo_documento"]) ?? null,
+      dni_nie: (e.dni_nie as string | null) ?? null,
+      fecha_nacimiento: (e.fecha_nacimiento as string | null) ?? null,
+      nacionalidad: (e.nacionalidad as string | null) ?? null,
+      genero: (e.genero as string | null) ?? null,
+      estado_civil: (e.estado_civil as string | null) ?? null,
+      numero_ss: (e.numero_ss as string | null) ?? null,
+      telefono: (e.telefono as string | null) ?? null,
+      telefono_empresa: (e.telefono_empresa as string | null) ?? null,
+      email_personal: (e.email_personal as string | null) ?? null,
+      email_empresa: (e.email_empresa as string | null) ?? null,
+      direccion: (e.direccion as string | null) ?? null,
+      codigo_postal: (e.codigo_postal as string | null) ?? null,
+      ciudad: (e.ciudad as string | null) ?? null,
+      provincia: (e.provincia as string | null) ?? null,
+      pais: (e.pais as string | null) ?? null,
+      iban: (e.iban as string | null) ?? null,
+      banco_codigo: (e.banco_codigo as string | null) ?? null,
+      banco_nombre: (e.banco_nombre as string | null) ?? null,
+      titular_cuenta: (e.titular_cuenta as string | null) ?? null,
+      iban_verificado: Boolean(e.iban_verificado),
+      emergencia_nombre: (e.contacto_emergencia_nombre as string | null) ?? null,
+      emergencia_relacion: (e.contacto_emergencia_relacion as string | null) ?? null,
+      emergencia_telefono: (e.contacto_emergencia_telefono as string | null) ?? null,
+      talla_camiseta: (e.talla_camiseta as string | null) ?? null,
+      talla_pantalon: (e.talla_pantalon as string | null) ?? null,
     };
 
     // Empresas a las que tiene acceso (user_empresas) + cuál es la principal.
@@ -1263,6 +1280,11 @@ export async function guardarPerfilEmpleado(
     };
     const iban = trim(datos.iban)?.replace(/\s+/g, "").toUpperCase() ?? null;
 
+    const tallaCamiseta = trim(datos.talla_camiseta);
+    // empleados es la fuente única de datos personales. Escribimos en esta
+    // ficha; el trigger de BD replica los datos personales al resto de fichas
+    // del mismo user_id (multi-empresa espejo). emergencia_* del formulario
+    // mapea a contacto_emergencia_*; talla_uniforme refleja la de camiseta.
     const payload: Record<string, unknown> = {
       nombre: normalizarNombreOrNull(datos.nombre),
       apellidos: normalizarNombreOrNull(datos.apellidos),
@@ -1286,32 +1308,22 @@ export async function guardarPerfilEmpleado(
       banco_codigo: trim(datos.banco_codigo),
       banco_nombre: trim(datos.banco_nombre),
       titular_cuenta: trim(datos.titular_cuenta),
-      emergencia_nombre: normalizarNombreOrNull(datos.emergencia_nombre),
-      emergencia_relacion: trim(datos.emergencia_relacion),
-      emergencia_telefono: trim(datos.emergencia_telefono),
-      talla_camiseta: trim(datos.talla_camiseta),
+      contacto_emergencia_nombre: normalizarNombreOrNull(datos.emergencia_nombre),
+      contacto_emergencia_relacion: trim(datos.emergencia_relacion),
+      contacto_emergencia_telefono: trim(datos.emergencia_telefono),
+      talla_camiseta: tallaCamiseta,
       talla_pantalon: trim(datos.talla_pantalon),
-      datos_personales_actualizado_at: new Date().toISOString(),
+      talla_uniforme: tallaCamiseta,
       updated_at: new Date().toISOString(),
     };
+    // nombre es NOT NULL en empleados: si llega vacío, no lo pisamos.
+    if (payload.nombre == null) delete payload.nombre;
 
     const { error: updErr } = await admin
-      .from("usuarios")
+      .from("empleados")
       .update(payload)
-      .eq("id", emp.user_id);
+      .eq("id", empleadoId);
     if (updErr) return { ok: false, error: friendlyError(updErr) };
-
-    // También sincronizamos nombre/apellidos en empleados para que la lista
-    // de RRHH muestre los cambios sin tener que mirar el join. Sólo actualizamos
-    // los campos que llegaron en el payload — nombre es NOT NULL en empleados.
-    const empleadoPatch: Record<string, unknown> = {};
-    const nombreNorm = normalizarNombre(datos.nombre);
-    if (nombreNorm) empleadoPatch.nombre = nombreNorm;
-    if (datos.apellidos !== undefined)
-      empleadoPatch.apellidos = normalizarNombreOrNull(datos.apellidos);
-    if (Object.keys(empleadoPatch).length > 0) {
-      await admin.from("empleados").update(empleadoPatch).eq("id", empleadoId);
-    }
 
     revalidatePath(`/rrhh/empleados/${empleadoId}`);
     revalidatePath("/rrhh/empleados");

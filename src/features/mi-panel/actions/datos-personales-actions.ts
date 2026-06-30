@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { getAppContext } from "@/lib/supabase/get-context";
 import { revalidatePath } from "next/cache";
 import {
   validarDocumento,
@@ -54,11 +54,11 @@ export async function guardarDatosPersonales(
   input: DatosPersonalesInput,
 ): Promise<GuardarDatosResultado> {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { ok: false, error: "Sesión no válida" };
+    // empleados es la fuente única de datos personales. usuarios es solo
+    // acceso. Escribimos en la ficha de la empresa activa; un trigger de BD
+    // replica los datos personales al resto de fichas del mismo user_id.
+    const { supabase, userId, empresaId } = await getAppContext();
+    if (!userId) return { ok: false, error: "Sesión no válida" };
 
     // Validación documento
     const tipoDoc = (trim(input.tipo_documento) as TipoDocumento) || null;
@@ -86,30 +86,26 @@ export async function guardarDatosPersonales(
 
     // Comprobación de IBAN duplicado dentro de la empresa: evita que la nómina
     // de un trabajador caiga en la cuenta de otro por error o suplantación.
-    if (iban) {
-      const { data: profile } = await supabase
-        .from("usuarios")
-        .select("empresa_id")
-        .eq("user_id", user.id)
-        .single();
-      if (profile?.empresa_id) {
-        const { data: choque } = await supabase
-          .from("usuarios")
-          .select("user_id, nombre, apellidos")
-          .eq("empresa_id", profile.empresa_id)
-          .eq("iban", iban)
-          .neq("user_id", user.id)
-          .maybeSingle();
-        if (choque) {
-          const otro = `${choque.nombre ?? ""} ${choque.apellidos ?? ""}`.trim() || "otro empleado";
-          return {
-            ok: false,
-            error: `Ese IBAN ya está registrado a nombre de ${otro}. Avisa a RRHH si es un error.`,
-          };
-        }
+    if (iban && empresaId) {
+      const { data: choque } = await supabase
+        .from("empleados")
+        .select("user_id, nombre, apellidos")
+        .eq("empresa_id", empresaId)
+        .eq("iban", iban)
+        .neq("user_id", userId)
+        .maybeSingle();
+      if (choque) {
+        const otro = `${choque.nombre ?? ""} ${choque.apellidos ?? ""}`.trim() || "otro empleado";
+        return {
+          ok: false,
+          error: `Ese IBAN ya está registrado a nombre de ${otro}. Avisa a RRHH si es un error.`,
+        };
       }
     }
 
+    const tallaCamiseta = trim(input.talla_camiseta);
+    // payload sobre columnas de `empleados`. emergencia_* del portal mapea a
+    // contacto_emergencia_*; talla_uniforme refleja la talla de camiseta.
     const payload = {
       nombre: trim(input.nombre),
       apellidos: trim(input.apellidos),
@@ -133,19 +129,20 @@ export async function guardarDatosPersonales(
       banco_codigo: bancoCodigo,
       banco_nombre: bancoNombre,
       titular_cuenta: trim(input.titular_cuenta),
-      emergencia_nombre: trim(input.emergencia_nombre),
-      emergencia_relacion: trim(input.emergencia_relacion),
-      emergencia_telefono: trim(input.emergencia_telefono),
-      talla_camiseta: trim(input.talla_camiseta),
+      contacto_emergencia_nombre: trim(input.emergencia_nombre),
+      contacto_emergencia_relacion: trim(input.emergencia_relacion),
+      contacto_emergencia_telefono: trim(input.emergencia_telefono),
+      talla_camiseta: tallaCamiseta,
       talla_pantalon: trim(input.talla_pantalon),
-      datos_personales_actualizado_at: new Date().toISOString(),
+      talla_uniforme: tallaCamiseta,
       updated_at: new Date().toISOString(),
     };
 
-    const { error } = await supabase
-      .from("usuarios")
-      .update(payload)
-      .eq("user_id", user.id);
+    // Escribe en la ficha de empleado de la empresa activa. El trigger de BD
+    // replica los datos personales a las demás fichas del mismo user_id.
+    let q = supabase.from("empleados").update(payload).eq("user_id", userId);
+    if (empresaId) q = q.eq("empresa_id", empresaId);
+    const { error } = await q;
 
     if (error) {
       console.error("[guardarDatosPersonales] update error", error);
@@ -195,25 +192,61 @@ export interface DatosPersonalesCompletos {
 
 export async function cargarDatosPersonales(): Promise<DatosPersonalesCompletos | null> {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return null;
-    const { data, error } = await supabase
-      .from("usuarios")
+    const { supabase, userId, empresaId } = await getAppContext();
+    if (!userId) return null;
+
+    // Datos personales: desde la ficha de empleado de la empresa activa.
+    let q = supabase
+      .from("empleados")
       .select(
-        "nombre, apellidos, email, tipo_documento, dni_nie, fecha_nacimiento, nacionalidad, genero, estado_civil, numero_ss, telefono, telefono_empresa, email_personal, email_empresa, direccion, codigo_postal, ciudad, provincia, pais, iban, banco_codigo, banco_nombre, titular_cuenta, iban_verificado, emergencia_nombre, emergencia_relacion, emergencia_telefono, talla_camiseta, talla_pantalon",
+        "nombre, apellidos, tipo_documento, dni_nie, fecha_nacimiento, nacionalidad, genero, estado_civil, numero_ss, telefono, telefono_empresa, email_personal, email_empresa, direccion, codigo_postal, ciudad, provincia, pais, iban, banco_codigo, banco_nombre, titular_cuenta, iban_verificado, contacto_emergencia_nombre, contacto_emergencia_relacion, contacto_emergencia_telefono, talla_camiseta, talla_pantalon",
       )
-      .eq("user_id", user.id)
-      .single();
+      .eq("user_id", userId);
+    if (empresaId) q = q.eq("empresa_id", empresaId);
+    const { data, error } = await q.limit(1).maybeSingle();
     if (error) {
       console.error("[cargarDatosPersonales] error", error);
       return null;
     }
+    if (!data) return null;
+
+    // email de cuenta (login) sigue viviendo en usuarios.
+    const { data: cuenta } = await supabase
+      .from("usuarios")
+      .select("email")
+      .eq("user_id", userId)
+      .maybeSingle();
+
     return {
-      ...data,
+      nombre: data.nombre,
+      apellidos: data.apellidos,
+      email: cuenta?.email ?? null,
+      tipo_documento: data.tipo_documento as TipoDocumento | null,
+      dni_nie: data.dni_nie,
+      fecha_nacimiento: data.fecha_nacimiento,
+      nacionalidad: data.nacionalidad,
+      genero: data.genero,
+      estado_civil: data.estado_civil,
+      numero_ss: data.numero_ss,
+      telefono: data.telefono,
+      telefono_empresa: data.telefono_empresa,
+      email_personal: data.email_personal,
+      email_empresa: data.email_empresa,
+      direccion: data.direccion,
+      codigo_postal: data.codigo_postal,
+      ciudad: data.ciudad,
+      provincia: data.provincia,
+      pais: data.pais,
+      iban: data.iban,
+      banco_codigo: data.banco_codigo,
+      banco_nombre: data.banco_nombre,
+      titular_cuenta: data.titular_cuenta,
       iban_verificado: Boolean(data.iban_verificado),
+      emergencia_nombre: data.contacto_emergencia_nombre,
+      emergencia_relacion: data.contacto_emergencia_relacion,
+      emergencia_telefono: data.contacto_emergencia_telefono,
+      talla_camiseta: data.talla_camiseta,
+      talla_pantalon: data.talla_pantalon,
     } as DatosPersonalesCompletos;
   } catch (err) {
     console.error("[cargarDatosPersonales] excepción", err);
