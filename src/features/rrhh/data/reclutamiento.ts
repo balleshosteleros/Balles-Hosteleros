@@ -1,15 +1,16 @@
 // ─── Fase principal (3 grupos) ──────────────────────────────────
-// Incluye los nombres legacy ("nuevo", "en_progreso", "oferta",
-// "seleccionado") para no romper historial antiguo en BD; el render
-// activo solo usa los 3 nuevos.
+// El pipeline tiene 3 grupos: Selección · Onboarding · Descartado.
+// «Onboarding» agrupa como sub-columnas: Formación · Contratación · Prueba ·
+// Empleado. Se mantienen los nombres legacy de fase para historial antiguo.
 export type FasePrincipal =
   | "seleccion"
+  | "onboarding"
+  | "descartado"
+  // Aliases legacy de fase (historial antiguo en BD; mapean a las 3 nuevas)
   | "formacion"
   | "contratacion"
   | "prueba"
   | "empleado"
-  | "descartado"
-  // Aliases legacy (historial antiguo en BD)
   | "nuevo"
   | "en_progreso"
   | "oferta"
@@ -93,12 +94,10 @@ export interface FasePrincipalConfig {
 // Solo las 3 fases canónicas se muestran en el pipeline; las legacy
 // se mantienen como alias para que el historial antiguo se renderice
 // sin crashear.
+// 3 fases canónicas en el pipeline: Selección · Onboarding · Descartado.
 export const FASES_PRINCIPALES_ORDER: FasePrincipal[] = [
   "seleccion",
-  "formacion",
-  "contratacion",
-  "prueba",
-  "empleado",
+  "onboarding",
   "descartado",
 ];
 
@@ -110,41 +109,15 @@ const SELECCION_CONFIG: FasePrincipalConfig = {
   estados: ["nuevo", "elegido", "entrevista", "documentacion"],
 };
 
-const FORMACION_CONFIG: FasePrincipalConfig = {
-  label: "Formación",
+// «Onboarding»: una sola fase con 4 sub-columnas (Formación · Contratación ·
+// Prueba · Empleado). Cada una mantiene su color propio de columna; la cabecera
+// de la fase usa el verde de incorporación.
+const ONBOARDING_CONFIG: FasePrincipalConfig = {
+  label: "Onboarding",
   color: "hsl(145, 63%, 42%)",
   colorFrom: "hsl(145, 70%, 50%)",
   colorTo: "hsl(145, 55%, 35%)",
-  // Una sola columna. `teorica`/`practica` son legacy y NO se muestran como
-  // columnas (se mapean a «formacion» vía getFasePrincipal para el historial).
-  estados: ["formacion"],
-};
-
-const CONTRATACION_CONFIG: FasePrincipalConfig = {
-  label: "Contratación",
-  color: "hsl(38, 92%, 50%)",
-  colorFrom: "hsl(38, 95%, 56%)",
-  colorTo: "hsl(28, 85%, 46%)",
-  // Una sola columna. El avance interno (alta a gestoría, contrato interno y
-  // oficial firmados) se gestiona automáticamente y se ve en la ficha, no como
-  // columnas. Los antiguos sub-estados son legacy y se mapean a «contratacion».
-  estados: ["contratacion"],
-};
-
-const PRUEBA_CONFIG: FasePrincipalConfig = {
-  label: "Prueba",
-  color: "hsl(265, 60%, 55%)",
-  colorFrom: "hsl(265, 65%, 60%)",
-  colorTo: "hsl(265, 55%, 45%)",
-  estados: ["prueba"],
-};
-
-const EMPLEADO_CONFIG: FasePrincipalConfig = {
-  label: "Empleado",
-  color: "hsl(145, 63%, 42%)",
-  colorFrom: "hsl(145, 70%, 50%)",
-  colorTo: "hsl(145, 55%, 35%)",
-  estados: ["empleado"],
+  estados: ["formacion", "contratacion", "prueba", "empleado"],
 };
 
 const DESCARTADO_CONFIG: FasePrincipalConfig = {
@@ -157,18 +130,19 @@ const DESCARTADO_CONFIG: FasePrincipalConfig = {
 
 export const FASES_PRINCIPALES: Record<FasePrincipal, FasePrincipalConfig> = {
   seleccion: SELECCION_CONFIG,
-  formacion: FORMACION_CONFIG,
-  contratacion: CONTRATACION_CONFIG,
-  prueba: PRUEBA_CONFIG,
-  empleado: EMPLEADO_CONFIG,
+  onboarding: ONBOARDING_CONFIG,
   descartado: DESCARTADO_CONFIG,
-  // Aliases legacy — apuntan a la fase nueva equivalente para que
-  // FASES_PRINCIPALES[historialAntiguo.faseAnterior] siga devolviendo
-  // un config válido sin crashear.
+  // Aliases legacy de fase — apuntan a la fase nueva equivalente para que
+  // FASES_PRINCIPALES[historialAntiguo.faseAnterior] siga devolviendo un config
+  // válido sin crashear.
+  formacion: ONBOARDING_CONFIG,
+  contratacion: ONBOARDING_CONFIG,
+  prueba: ONBOARDING_CONFIG,
+  empleado: ONBOARDING_CONFIG,
   nuevo: SELECCION_CONFIG,
   en_progreso: SELECCION_CONFIG,
   oferta: SELECCION_CONFIG,
-  seleccionado: FORMACION_CONFIG,
+  seleccionado: ONBOARDING_CONFIG,
 };
 
 // ─── Estado config ──────────────────────────────────────────────
@@ -222,13 +196,11 @@ export const FASES_CONFIG = ESTADOS_CONFIG;
 // ─── Helper: get the fase principal (canónica) for a given estado ──
 export function getFasePrincipal(estado: EstadoReclutamiento): FasePrincipal {
   if (SELECCION_CONFIG.estados.includes(estado)) return "seleccion";
-  if (LEGACY_A_FORMACION.has(estado)) return "formacion";
-  if (LEGACY_A_CONTRATACION.has(estado)) return "contratacion";
-  if (FORMACION_CONFIG.estados.includes(estado)) return "formacion";
-  if (CONTRATACION_CONFIG.estados.includes(estado)) return "contratacion";
-  if (PRUEBA_CONFIG.estados.includes(estado)) return "prueba";
-  if (EMPLEADO_CONFIG.estados.includes(estado)) return "empleado";
   if (DESCARTADO_CONFIG.estados.includes(estado)) return "descartado";
+  // Todo lo demás (formacion, contratacion, prueba, empleado + sus legacy)
+  // pertenece a la única fase «Onboarding».
+  if (ONBOARDING_CONFIG.estados.includes(estado)) return "onboarding";
+  if (LEGACY_A_FORMACION.has(estado) || LEGACY_A_CONTRATACION.has(estado)) return "onboarding";
   return "seleccion";
 }
 
@@ -511,14 +483,9 @@ export function calcularMetricasEmbudo(candidatos: Candidato[]): MetricasEmbudo 
     estados.reduce((acc, e) => acc + (counts[e] || 0), 0);
 
   const seleccionCount = sumEstados(SELECCION_CONFIG.estados);
-  // «En proceso» agrupa todo el tramo de avance posterior a Selección:
-  // Formación + Contratación + Prueba + Empleado.
-  const formacionCount = sumEstados([
-    ...FORMACION_CONFIG.estados,
-    ...CONTRATACION_CONFIG.estados,
-    ...PRUEBA_CONFIG.estados,
-    ...EMPLEADO_CONFIG.estados,
-  ]);
+  // «Onboarding» agrupa el tramo posterior a Selección (Formación · Contratación
+  // · Prueba · Empleado).
+  const formacionCount = sumEstados(ONBOARDING_CONFIG.estados);
   const descartadoCount = sumEstados(DESCARTADO_CONFIG.estados);
 
   const pct = (n: number) =>
@@ -539,10 +506,7 @@ export function calcularMetricasEmbudo(candidatos: Candidato[]): MetricasEmbudo 
     grupoDescartado: { count: descartadoCount, porcentaje: pct(descartadoCount) },
     progreso: [
       ...SELECCION_CONFIG.estados.map(filaEstado),
-      ...FORMACION_CONFIG.estados.map(filaEstado),
-      ...CONTRATACION_CONFIG.estados.map(filaEstado),
-      ...PRUEBA_CONFIG.estados.map(filaEstado),
-      ...EMPLEADO_CONFIG.estados.map(filaEstado),
+      ...ONBOARDING_CONFIG.estados.map(filaEstado),
     ],
     descartado: DESCARTADO_CONFIG.estados.map(filaEstado),
   };

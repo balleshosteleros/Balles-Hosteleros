@@ -28,7 +28,8 @@ export interface PlantillaEstadoItem {
   key: string;
   label: string;
   color: string;
-  fase: "seleccion" | "formacion" | "contratacion" | "prueba" | "empleado" | "descartado";
+  // 3 fases canónicas + legacy (datos antiguos en BD: formacion/contratacion/prueba/empleado).
+  fase: "seleccion" | "onboarding" | "descartado" | "formacion" | "contratacion" | "prueba" | "empleado";
   orden: number;
   /** Email (biblioteca suelta) que se envía por defecto al pasar a este estado. */
   email_plantilla_id?: string | null;

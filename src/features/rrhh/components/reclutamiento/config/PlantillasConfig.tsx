@@ -14,11 +14,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import {
   Pencil, Mail, Eye, Search, Plus, Copy, Trash2,
   Variable, CheckCircle2, XCircle, Loader2,
-  Workflow, ClipboardList, Link2, FileText,
+  ClipboardList, Link2, FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
-import { PlantillasEstadoTab } from "./PlantillasEstadoTab";
 import { CuestionariosVacanteManager } from "./CuestionariosVacanteManager";
 import { DocumentosPlantillaTab } from "./DocumentosPlantillaTab";
 import {
@@ -518,11 +517,13 @@ function PlantillasEmailTab() {
 }
 
 // ─── Selector de tipo de plantilla (3 botones azules) ───────────
-type TipoPlantilla = "emails" | "estados" | "cuestionarios" | "documentos";
+// Las FASES/estados del pipeline son fijas del software (Selección · Onboarding ·
+// Descartado): no se editan desde aquí, para no romper el flujo. Por eso no hay
+// pestaña «Estados».
+type TipoPlantilla = "emails" | "cuestionarios" | "documentos";
 
 const BOTONES_PLANTILLA: { id: TipoPlantilla; label: string; icon: React.ReactNode }[] = [
   { id: "emails", label: "Emails", icon: <Mail className="h-4 w-4" /> },
-  { id: "estados", label: "Estados", icon: <Workflow className="h-4 w-4" /> },
   { id: "cuestionarios", label: "Cuestionarios", icon: <ClipboardList className="h-4 w-4" /> },
   { id: "documentos", label: "Documentos", icon: <FileText className="h-4 w-4" /> },
 ];
@@ -556,7 +557,6 @@ export function PlantillasConfig() {
       </div>
 
       {tipo === "emails" && <PlantillasEmailTab />}
-      {tipo === "estados" && <PlantillasEstadoTab />}
       {tipo === "cuestionarios" && <CuestionariosVacanteManager />}
       {tipo === "documentos" && <DocumentosPlantillaTab />}
     </div>

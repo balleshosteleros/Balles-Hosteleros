@@ -13,10 +13,7 @@
 
 export type FasePlantillaEstado =
   | "seleccion"
-  | "formacion"
-  | "contratacion"
-  | "prueba"
-  | "empleado"
+  | "onboarding"
   | "descartado";
 
 export interface PlantillaEstadoItemSeed {
@@ -53,11 +50,11 @@ export const RECLUTAMIENTO_PLANTILLA_ESTADOS_SEED: PlantillaEstadoSeed = {
     { key: "elegido", label: "Elegido", color: "hsl(220, 70%, 55%)", fase: "seleccion", orden: 2, defaultEmailNombre: "Elegido" },
     { key: "entrevista", label: "Entrevista", color: "hsl(220, 70%, 55%)", fase: "seleccion", orden: 3, defaultEmailNombre: "Entrevista" },
     { key: "documentacion", label: "Documentación", color: "hsl(220, 70%, 55%)", fase: "seleccion", orden: 4, defaultEmailNombre: "Documentación" },
-    // ── Onboarding: 4 columnas (Formación · Contratación · Prueba · Empleado) ──
-    { key: "formacion", label: "Formación", color: "hsl(145, 63%, 42%)", fase: "formacion", orden: 5, defaultEmailNombre: "Formación" },
-    { key: "contratacion", label: "Contratación", color: "hsl(38, 92%, 50%)", fase: "contratacion", orden: 6, defaultEmailNombre: "Contratación" },
-    { key: "prueba", label: "Prueba", color: "hsl(265, 60%, 55%)", fase: "prueba", orden: 7, defaultEmailNombre: "Prueba" },
-    { key: "empleado", label: "Empleado", color: "hsl(145, 63%, 42%)", fase: "empleado", orden: 8, defaultEmailNombre: "Empleado" },
+    // ── Onboarding: 1 fase con 4 sub-columnas (Formación · Contratación · Prueba · Empleado) ──
+    { key: "formacion", label: "Formación", color: "hsl(145, 63%, 42%)", fase: "onboarding", orden: 5, defaultEmailNombre: "Formación" },
+    { key: "contratacion", label: "Contratación", color: "hsl(38, 92%, 50%)", fase: "onboarding", orden: 6, defaultEmailNombre: "Contratación" },
+    { key: "prueba", label: "Prueba", color: "hsl(265, 60%, 55%)", fase: "onboarding", orden: 7, defaultEmailNombre: "Prueba" },
+    { key: "empleado", label: "Empleado", color: "hsl(145, 63%, 42%)", fase: "onboarding", orden: 8, defaultEmailNombre: "Empleado" },
     // ── Fase Descartado (todos heredan el color oficial de la fase) ──
     { key: "papelera", label: "Papelera", color: "hsl(0, 72%, 51%)", fase: "descartado", orden: 9, defaultEmailNombre: "Papelera" },
     { key: "no_se_presenta", label: "No se presenta", color: "hsl(0, 72%, 51%)", fase: "descartado", orden: 10, defaultEmailNombre: "No se presenta" },
@@ -65,11 +62,15 @@ export const RECLUTAMIENTO_PLANTILLA_ESTADOS_SEED: PlantillaEstadoSeed = {
   ],
 };
 
-export const FASES_PLANTILLA_ESTADO: Record<FasePlantillaEstado, { label: string; color: string }> = {
+// Incluye las fases legacy (formacion/contratacion/prueba/empleado) mapeadas a
+// «Onboarding», por si una plantilla de estados guardada en BD las usa todavía.
+export const FASES_PLANTILLA_ESTADO: Record<string, { label: string; color: string }> = {
   seleccion: { label: "Selección", color: "hsl(220, 70%, 55%)" },
-  formacion: { label: "Formación", color: "hsl(145, 63%, 42%)" },
-  contratacion: { label: "Contratación", color: "hsl(38, 92%, 50%)" },
-  prueba: { label: "Prueba", color: "hsl(265, 60%, 55%)" },
-  empleado: { label: "Empleado", color: "hsl(145, 63%, 42%)" },
+  onboarding: { label: "Onboarding", color: "hsl(145, 63%, 42%)" },
   descartado: { label: "Descartado", color: "hsl(0, 72%, 51%)" },
+  // legacy
+  formacion: { label: "Onboarding", color: "hsl(145, 63%, 42%)" },
+  contratacion: { label: "Onboarding", color: "hsl(145, 63%, 42%)" },
+  prueba: { label: "Onboarding", color: "hsl(145, 63%, 42%)" },
+  empleado: { label: "Onboarding", color: "hsl(145, 63%, 42%)" },
 };

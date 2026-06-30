@@ -647,9 +647,10 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
       </div>
 
       {/* Kanban Board */}
-      {/* Layout: Selección + Formación arriba a todo el ancho (sub-columnas
-          legibles); Descartado abajo como banda horizontal compacta. Arrastrar
-          una tarjeta a la banda inferior la mueve a un estado de Descartado. */}
+      {/* Layout: Selección + Onboarding arriba a todo el ancho (Onboarding tiene
+          4 sub-columnas: Formación · Contratación · Prueba · Empleado); Descartado
+          abajo como banda horizontal compacta. Arrastrar una tarjeta a la banda
+          inferior la mueve a un estado de Descartado. */}
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
         <div className="flex gap-2 w-full">
           {FASES_PRINCIPALES_ORDER.filter((f) => f !== "descartado").map((fase) => (
