@@ -134,6 +134,11 @@ export function MisDepartamentosView() {
     ? `${DIAS_LARGOS[today.getDay()]} ${today.getDate()} de ${MESES_LARGOS[today.getMonth()]}`
     : "";
 
+  // El subtítulo depende del rol, que se resuelve async. Mientras se carga no lo
+  // mostramos en vez de pintar el genérico de rol=null y que parpadee al genérico
+  // → real (lo que hacía que la cabecera se viera incompleta/rota al entrar).
+  const subtitulo = !isLoading ? dashboardSubtitlePorRol(rolPrincipal) : "";
+
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6">
       {/* Cabecera — se renderiza solo tras montar para evitar hydration mismatch
@@ -145,20 +150,30 @@ export function MisDepartamentosView() {
               {saludoSegunHora()}{userName ? `, ${userName.split(" ")[0]}` : ""}
             </h1>
             <p className="text-sm text-muted-foreground capitalize">{fechaLarga}</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              {dashboardSubtitlePorRol(rolPrincipal)}
+            <p className="text-sm text-muted-foreground mt-1 min-h-[1.25rem]">
+              {subtitulo}
             </p>
           </>
         ) : null}
       </div>
 
       {isLoading ? (
-        // Skeleton mientras montamos y resolvemos permisos. Evita el flash de
-        // "No tienes departamentos asignados todavía" antes de que el contexto
-        // de auth termine de cargar.
+        // Skeleton mientras montamos y resolvemos permisos. Insinúa la estructura
+        // real de la tarjeta (icono + dos líneas de texto) para que se lea como
+        // "cargando" y no como bloques grises vacíos que parecen rotos.
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Card key={i} className="p-5 h-[92px] animate-pulse bg-muted/40 border-muted" />
+            <Card key={i} className="p-5 h-full border-muted">
+              <div className="flex items-start gap-3">
+                <div className="shrink-0 rounded-xl bg-muted/60 p-3 animate-pulse">
+                  <div className="h-6 w-6" />
+                </div>
+                <div className="min-w-0 flex-1 space-y-2 pt-1">
+                  <div className="h-3.5 w-2/3 rounded bg-muted/60 animate-pulse" />
+                  <div className="h-3 w-full rounded bg-muted/40 animate-pulse" />
+                </div>
+              </div>
+            </Card>
           ))}
         </div>
       ) : tiles.length === 0 ? (
