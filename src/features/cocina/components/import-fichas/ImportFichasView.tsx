@@ -188,8 +188,26 @@ export function ImportFichasView() {
           <ResumenCard icon={<CheckCircle2 className="size-4" />} label="Creadas" valor={informe.creados} />
           <ResumenCard icon={<CheckCircle2 className="size-4" />} label="Actualizadas" valor={informe.actualizados} />
           <ResumenCard icon={<AlertTriangle className="size-4" />} label="Faltan (a dar de alta)" valor={informe.faltan.length} />
-          <ResumenCard icon={<HelpCircle className="size-4" />} label="Platos con error" valor={informe.fallidos.length} />
+          <ResumenCard icon={<HelpCircle className="size-4" />} label="Sin producto de venta" valor={informe.sinProductoVenta.length} />
         </div>
+
+        {informe.sinProductoVenta.length > 0 && (
+          <Card>
+            <CardContent className="pt-4">
+              <h3 className="font-medium mb-2">Platos sin producto de venta (no importados)</h3>
+              <p className="text-xs text-muted-foreground mb-3">
+                Un escandallo debe ir ligado a un producto de venta con el mismo
+                nombre. Estos platos del Excel no coinciden con ninguno; crea el
+                producto de venta o ajusta el nombre, y vuelve a importar.
+              </p>
+              <ul className="text-sm space-y-1">
+                {informe.sinProductoVenta.map((p, i) => (
+                  <li key={i}>{p}</li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
 
         {informe.faltan.length > 0 && (
           <Card>

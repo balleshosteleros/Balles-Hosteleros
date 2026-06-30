@@ -20,6 +20,22 @@ export type PreviewResponse =
   | { ok: true; data: PreviewResult }
   | { ok: false; error: string };
 
+/** Sentence case + colapsa espacios: primera letra mayúscula, resto minúscula. */
+function sentenceCase(s: string): string {
+  const t = s.trim().replace(/\s+/g, " ");
+  return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+}
+
+/** Normaliza para emparejar nombres (sin acentos, sin signos, sin espacios extra). */
+function normNombre(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9ñ]+/g, " ")
+    .trim();
+}
+
 /**
  * Recibe el Excel como base64 (lo manda el cliente tras leer el File), lo
  * parsea y devuelve la previsualización emparejada contra los productos de
@@ -87,6 +103,8 @@ export interface ImportInforme {
   fallidos: { plato: string; error: string }[];
   /** Líneas omitidas por marcarse "falta" (productos a dar de alta). */
   faltan: { plato: string; ingrediente: string }[];
+  /** Platos que NO se importaron por no existir su producto de venta (regla: escandallo ligado obligatorio). */
+  sinProductoVenta: string[];
 }
 
 export type ImportResponse =
@@ -104,15 +122,28 @@ export async function importarFichas(payload: ImportPayload): Promise<ImportResp
     const { supabase, empresaId } = await getAppContext();
     if (!empresaId) return { ok: false, error: "No hay empresa activa." };
 
-    // Índice de escandallos existentes por nombre normalizado (para idempotencia).
+    // Productos de venta de la empresa: un escandallo de plato DEBE ligarse a uno
+    // (regla de integridad). Indexados por nombre normalizado.
+    const { data: ventas, error: vErr } = await supabase
+      .from("productos")
+      .select("id,nombre")
+      .eq("empresa_id", empresaId)
+      .eq("tipo", "venta");
+    if (vErr) throw vErr;
+    const ventaPorNombre = new Map<string, { id: string; nombre: string }>();
+    for (const v of ventas ?? []) {
+      ventaPorNombre.set(normNombre(String(v.nombre)), { id: v.id as string, nombre: String(v.nombre) });
+    }
+
+    // Escandallos existentes (idempotencia por producto_id, que es único).
     const { data: existentes, error: exErr } = await supabase
       .from("escandallos")
-      .select("id,nombre")
+      .select("id,producto_id")
       .eq("empresa_id", empresaId);
     if (exErr) throw exErr;
-    const idPorNombre = new Map<string, string>();
+    const escPorProducto = new Map<string, string>();
     for (const e of existentes ?? []) {
-      idPorNombre.set(String(e.nombre).toLowerCase().trim(), e.id as string);
+      if (e.producto_id) escPorProducto.set(e.producto_id as string, e.id as string);
     }
 
     const informe: ImportInforme = {
@@ -120,13 +151,21 @@ export async function importarFichas(payload: ImportPayload): Promise<ImportResp
       actualizados: 0,
       fallidos: [],
       faltan: [],
+      sinProductoVenta: [],
     };
 
     for (const plato of payload.platos) {
+      // Regla: el escandallo debe ligarse a un producto de venta existente.
+      const venta = ventaPorNombre.get(normNombre(plato.plato));
+      if (!venta) {
+        informe.sinProductoVenta.push(plato.plato);
+        continue; // NO se crea escandallo huérfano.
+      }
+
       const ingredientes: EscandalloIngredienteInput[] = [];
       for (const l of plato.lineas) {
         if (l.falta || !l.productoId) {
-          informe.faltan.push({ plato: plato.plato, ingrediente: l.ingrediente });
+          informe.faltan.push({ plato: venta.nombre, ingrediente: l.ingrediente });
           continue;
         }
         ingredientes.push({
@@ -139,19 +178,21 @@ export async function importarFichas(payload: ImportPayload): Promise<ImportResp
       }
 
       const input = {
-        nombre: plato.plato,
+        // Mismo nombre que el producto de venta (manda la carta), sentence case.
+        nombre: sentenceCase(venta.nombre),
         categoria: plato.categoria,
         estado: "Activa",
+        productoId: venta.id,
         ingredientes,
       };
 
-      const existenteId = idPorNombre.get(plato.plato.toLowerCase().trim());
+      const existenteId = escPorProducto.get(venta.id);
       const res = existenteId
         ? await updateEscandallo(existenteId, input)
         : await createEscandallo(input);
 
       if (!res.ok) {
-        informe.fallidos.push({ plato: plato.plato, error: res.error ?? "error" });
+        informe.fallidos.push({ plato: venta.nombre, error: res.error ?? "error" });
       } else if (existenteId) {
         informe.actualizados++;
       } else {
