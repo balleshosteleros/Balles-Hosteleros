@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import {
   type ReclutamientoConfigOnboarding,
   type PruebaAvisoCanal,
 } from "@/features/rrhh/actions/gestoria-actions";
+import type { ConfigSectionHandle } from "./tipos";
 
 const CANALES: { value: PruebaAvisoCanal; label: string }[] = [
   { value: "notificacion", label: "Notificación" },
@@ -22,25 +23,42 @@ const CANALES: { value: PruebaAvisoCanal; label: string }[] = [
   { value: "ambos", label: "Ambos" },
 ];
 
-export function OnboardingPruebaConfig({ embedded = false }: { embedded?: boolean } = {}) {
+export const OnboardingPruebaConfig = forwardRef<
+  ConfigSectionHandle,
+  { embedded?: boolean }
+>(function OnboardingPruebaConfig({ embedded = false } = {}, ref) {
   const [config, setConfig] = useState<ReclutamientoConfigOnboarding | null>(null);
   const [saving, setSaving] = useState(false);
+  const inicialRef = useRef<string>("");
 
   useEffect(() => {
-    void getReclutamientoConfigOnboarding().then((r) => setConfig(r.data));
+    void getReclutamientoConfigOnboarding().then((r) => {
+      setConfig(r.data);
+      inicialRef.current = JSON.stringify(r.data);
+    });
   }, []);
 
-  const guardar = async () => {
-    if (!config) return;
+  const guardar = async (): Promise<boolean> => {
+    if (!config) return true;
+    if (JSON.stringify(config) === inicialRef.current) return true;
     setSaving(true);
     try {
       const res = await saveReclutamientoConfigOnboarding(config);
-      if (res.ok) toast.success("Configuración guardada");
-      else toast.error(res.error ?? "No se pudo guardar");
+      if (res.ok) {
+        inicialRef.current = JSON.stringify(config);
+        return true;
+      }
+      toast.error(res.error ?? "No se pudo guardar el onboarding");
+      return false;
     } finally {
       setSaving(false);
     }
   };
+
+  useImperativeHandle(ref, () => ({
+    guardar,
+    hayCambios: () => !!config && JSON.stringify(config) !== inicialRef.current,
+  }));
 
   if (!config) {
     return <div className="flex items-center gap-2 text-muted-foreground py-8"><Loader2 className="h-4 w-4 animate-spin" /> Cargando…</div>;
@@ -149,9 +167,11 @@ export function OnboardingPruebaConfig({ embedded = false }: { embedded?: boolea
         </div>
       </div>
 
-      <Button onClick={guardar} disabled={saving}>
-        {saving ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Guardando…</> : "Guardar"}
-      </Button>
+      {!embedded && (
+        <Button onClick={() => void guardar()} disabled={saving}>
+          {saving ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Guardando…</> : "Guardar"}
+        </Button>
+      )}
     </div>
   );
 
@@ -180,4 +200,4 @@ export function OnboardingPruebaConfig({ embedded = false }: { embedded?: boolea
       <CardContent>{cuerpo}</CardContent>
     </Card>
   );
-}
+});

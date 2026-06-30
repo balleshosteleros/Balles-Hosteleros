@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,26 +18,44 @@ import {
   GESTORIA_CAMPOS,
   type GestoriaCamposConfig,
 } from "@/features/rrhh/data/campos-gestoria";
+import type { ConfigSectionHandle } from "./tipos";
 
-export function GestoriaConfig({ embedded = false }: { embedded?: boolean } = {}) {
+export const GestoriaConfig = forwardRef<
+  ConfigSectionHandle,
+  { embedded?: boolean }
+>(function GestoriaConfig({ embedded = false } = {}, ref) {
   const [config, setConfig] = useState<ReclutamientoConfig | null>(null);
   const [saving, setSaving] = useState(false);
+  const inicialRef = useRef<string>("");
 
   useEffect(() => {
-    void getReclutamientoConfig().then((r) => setConfig(r.data));
+    void getReclutamientoConfig().then((r) => {
+      setConfig(r.data);
+      inicialRef.current = JSON.stringify(r.data);
+    });
   }, []);
 
-  const guardar = async () => {
-    if (!config) return;
+  const guardar = async (): Promise<boolean> => {
+    if (!config) return true;
+    if (JSON.stringify(config) === inicialRef.current) return true;
     setSaving(true);
     try {
       const res = await saveReclutamientoConfig(config);
-      if (res.ok) toast.success("Configuración guardada");
-      else toast.error(res.error ?? "No se pudo guardar");
+      if (res.ok) {
+        inicialRef.current = JSON.stringify(config);
+        return true;
+      }
+      toast.error(res.error ?? "No se pudo guardar el alta a la gestoría");
+      return false;
     } finally {
       setSaving(false);
     }
   };
+
+  useImperativeHandle(ref, () => ({
+    guardar,
+    hayCambios: () => !!config && JSON.stringify(config) !== inicialRef.current,
+  }));
 
   if (!config) {
     return <div className="flex items-center gap-2 text-muted-foreground py-8"><Loader2 className="h-4 w-4 animate-spin" /> Cargando…</div>;
@@ -177,9 +195,11 @@ export function GestoriaConfig({ embedded = false }: { embedded?: boolean } = {}
         </div>
       </div>
 
-      <Button onClick={guardar} disabled={saving}>
-        {saving ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Guardando…</> : "Guardar"}
-      </Button>
+      {!embedded && (
+        <Button onClick={() => void guardar()} disabled={saving}>
+          {saving ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Guardando…</> : "Guardar"}
+        </Button>
+      )}
     </div>
   );
 
@@ -210,4 +230,4 @@ export function GestoriaConfig({ embedded = false }: { embedded?: boolean } = {}
       <CardContent>{cuerpo}</CardContent>
     </Card>
   );
-}
+});

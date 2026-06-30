@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
@@ -34,6 +34,7 @@ import { TiposContratoPanel } from "@/features/ajustes/components/TiposContratoP
 import { GestoriaConfig } from "@/features/rrhh/components/reclutamiento/config/GestoriaConfig";
 import { ConfigGeneralConfig } from "@/features/rrhh/components/reclutamiento/config/ConfigGeneralConfig";
 import { OnboardingPruebaConfig } from "@/features/rrhh/components/reclutamiento/config/OnboardingPruebaConfig";
+import type { ConfigSectionHandle } from "@/features/rrhh/components/reclutamiento/config/tipos";
 
 // ============================================================
 // Tipado del estado local
@@ -182,14 +183,22 @@ function OperativaCompraProveedores() {
 // Fila de submódulo (acordeón anidado dentro del módulo)
 // ============================================================
 
+interface ReclutamientoRefs {
+  gestoria: React.RefObject<ConfigSectionHandle | null>;
+  onboarding: React.RefObject<ConfigSectionHandle | null>;
+  general: React.RefObject<ConfigSectionHandle | null>;
+}
+
 function SubmoduloRow({
   submodulo,
   reglaSub,
   onChangeRegla,
+  reclutamientoRefs,
 }: {
   submodulo: SubmoduloDef;
   reglaSub: ReglaLocalSub;
   onChangeRegla: (r: ReglaLocalSub) => void;
+  reclutamientoRefs?: ReclutamientoRefs;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -248,13 +257,13 @@ function SubmoduloRow({
               {submodulo.key === "reclutamiento" && (
                 <>
                   <div className="border-t pt-3">
-                    <GestoriaConfig embedded />
+                    <GestoriaConfig embedded ref={reclutamientoRefs?.gestoria} />
                   </div>
                   <div className="border-t pt-3">
-                    <OnboardingPruebaConfig embedded />
+                    <OnboardingPruebaConfig embedded ref={reclutamientoRefs?.onboarding} />
                   </div>
                   <div className="border-t pt-3">
-                    <ConfigGeneralConfig embedded />
+                    <ConfigGeneralConfig embedded ref={reclutamientoRefs?.general} />
                   </div>
                 </>
               )}
@@ -286,6 +295,19 @@ export function ReglasSubmodulosPanel({ moduloKey }: { moduloKey: string }) {
   const [moduloNoPersonalizado, setModuloNoPersonalizado] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // Secciones de Reclutamiento embebidas: guardan vía handle imperativo para
+  // que el botón «Guardar» del panel las persista junto con los campos
+  // obligatorios (un único botón en lugar de cuatro).
+  const reclutamientoRefs = useRef<ReclutamientoRefs>({
+    gestoria: { current: null },
+    onboarding: { current: null },
+    general: { current: null },
+  }).current;
+  const tieneReclutamiento = useMemo(
+    () => !!modulo?.submodulos.some((s) => s.key === "reclutamiento"),
+    [modulo],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -378,15 +400,34 @@ export function ReglasSubmodulosPanel({ moduloKey }: { moduloKey: string }) {
         }
       }
 
-      if (tareas.length === 0) {
+      // Secciones de Reclutamiento (gestoría, onboarding, config general):
+      // cada handle guarda sólo si tiene cambios y devuelve si fue bien.
+      const handles = tieneReclutamiento
+        ? [
+            reclutamientoRefs.gestoria.current,
+            reclutamientoRefs.onboarding.current,
+            reclutamientoRefs.general.current,
+          ].filter((h): h is ConfigSectionHandle => h != null)
+        : [];
+      const hayCambiosReclutamiento = handles.some((h) => h.hayCambios());
+
+      if (tareas.length === 0 && !hayCambiosReclutamiento) {
         toast.info("No hay cambios pendientes");
         return;
       }
 
-      const resultados = await Promise.all(tareas);
+      const [resultados, oks] = await Promise.all([
+        Promise.all(tareas),
+        Promise.all(handles.map((h) => h.guardar())),
+      ]);
+
       const errores = resultados.filter((r) => r.error);
       if (errores.length > 0) {
         toast.error(`Error al guardar: ${errores[0].error}`);
+        return;
+      }
+      if (oks.some((ok) => !ok)) {
+        // El handle que falló ya mostró su propio toast de error.
         return;
       }
 
@@ -420,14 +461,23 @@ export function ReglasSubmodulosPanel({ moduloKey }: { moduloKey: string }) {
               submodulo={sub}
               reglaSub={getReglaSub(sub.key)}
               onChangeRegla={(r) => setReglaSub(sub.key, r)}
+              reclutamientoRefs={tieneReclutamiento ? reclutamientoRefs : undefined}
             />
           ))}
         </div>
       </div>
 
-      {/* Botón guardar (sticky al final) */}
+      {/* Botón guardar único — persiste campos obligatorios + (si aplica) las
+          secciones de Reclutamiento embebidas. En módulos con Reclutamiento el
+          botón queda siempre activo: los cambios de esas secciones no se
+          reflejan en `hayCambios` y la propia acción decide si hay algo que
+          guardar. */}
       <div className="flex justify-end pt-2 border-t">
-        <Button size="sm" onClick={guardar} disabled={!hayCambios || saving}>
+        <Button
+          size="sm"
+          onClick={guardar}
+          disabled={saving || (!hayCambios && !tieneReclutamiento)}
+        >
           {saving ? "Guardando..." : "Guardar"}
         </Button>
       </div>

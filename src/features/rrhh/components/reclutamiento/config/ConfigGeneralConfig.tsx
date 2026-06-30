@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,6 +13,7 @@ import {
   saveReclutamientoConfigGeneral,
   type ReclutamientoConfigGeneral,
 } from "@/features/rrhh/actions/gestoria-actions";
+import type { ConfigSectionHandle } from "./tipos";
 
 type BoolKey = {
   [K in keyof ReclutamientoConfigGeneral]: ReclutamientoConfigGeneral[K] extends boolean ? K : never;
@@ -32,12 +33,19 @@ const GENERALES: { key: BoolKey; label: string }[] = [
   { key: "notificar_reclutador_nueva_candidatura", label: "Notificar al reclutador cuando llega una nueva candidatura" },
 ];
 
-export function ConfigGeneralConfig({ embedded = false }: { embedded?: boolean }) {
+export const ConfigGeneralConfig = forwardRef<
+  ConfigSectionHandle,
+  { embedded?: boolean }
+>(function ConfigGeneralConfig({ embedded = false }, ref) {
   const [config, setConfig] = useState<ReclutamientoConfigGeneral | null>(null);
   const [saving, setSaving] = useState(false);
+  const inicialRef = useRef<string>("");
 
   useEffect(() => {
-    void getReclutamientoConfigGeneral().then((r) => setConfig(r.data));
+    void getReclutamientoConfigGeneral().then((r) => {
+      setConfig(r.data);
+      inicialRef.current = JSON.stringify(r.data);
+    });
   }, []);
 
   const setBool = (key: BoolKey) => {
@@ -47,17 +55,27 @@ export function ConfigGeneralConfig({ embedded = false }: { embedded?: boolean }
     setConfig((c) => (c ? { ...c, [key]: value } : c));
   };
 
-  const guardar = async () => {
-    if (!config) return;
+  const guardar = async (): Promise<boolean> => {
+    if (!config) return true;
+    if (JSON.stringify(config) === inicialRef.current) return true;
     setSaving(true);
     try {
       const res = await saveReclutamientoConfigGeneral(config);
-      if (res.ok) toast.success("Configuración guardada");
-      else toast.error(res.error ?? "No se pudo guardar");
+      if (res.ok) {
+        inicialRef.current = JSON.stringify(config);
+        return true;
+      }
+      toast.error(res.error ?? "No se pudo guardar la configuración general");
+      return false;
     } finally {
       setSaving(false);
     }
   };
+
+  useImperativeHandle(ref, () => ({
+    guardar,
+    hayCambios: () => !!config && JSON.stringify(config) !== inicialRef.current,
+  }));
 
   if (!config) {
     return (
@@ -134,11 +152,13 @@ export function ConfigGeneralConfig({ embedded = false }: { embedded?: boolean }
 
       {seccionToggles("Ajustes generales", null, GENERALES)}
 
-      <div className="flex justify-end">
-        <Button onClick={guardar} disabled={saving}>
-          {saving ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Guardando…</> : "Guardar"}
-        </Button>
-      </div>
+      {!embedded && (
+        <div className="flex justify-end">
+          <Button onClick={() => void guardar()} disabled={saving}>
+            {saving ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Guardando…</> : "Guardar"}
+          </Button>
+        </div>
+      )}
     </div>
   );
-}
+});
