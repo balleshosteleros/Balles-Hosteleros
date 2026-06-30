@@ -21,7 +21,7 @@
 import "server-only";
 import nodemailer from "nodemailer";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { fetchEmpresaBrand, brandHeaderHtml, inyectarCabecera } from "@/lib/email/brand-header";
+import { fetchEmpresaBrand, brandHeaderHtml, brandHeaderInline, inyectarCabecera } from "@/lib/email/brand-header";
 
 /** Dirección no-reply: capa cualquier respuesta a los correos del software. */
 const NOREPLY =
@@ -120,10 +120,22 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
 
   // Cabecera corporativa: antepone el isotipo de la empresa al HTML (best-effort:
   // si falla la lectura de marca, se envía el correo sin cabecera).
+  // El logo se INCRUSTA como adjunto inline (cid:) para que Gmail/Outlook lo
+  // muestren AUTOMÁTICAMENTE, sin el aviso «mostrar imágenes». Si la descarga
+  // falla, se cae a la URL externa (comportamiento anterior).
   let html = input.html;
+  const inlineAttachments: { filename: string; content: Buffer; cid: string; contentType: string }[] = [];
   if (input.empresaId && input.brandHeader !== false) {
     const brand = await fetchEmpresaBrand(input.empresaId);
-    if (brand) html = inyectarCabecera(html, brandHeaderHtml(brand));
+    if (brand) {
+      const inline = await brandHeaderInline(brand);
+      if (inline) {
+        html = inyectarCabecera(html, inline.html);
+        inlineAttachments.push(inline.attachment);
+      } else {
+        html = inyectarCabecera(html, brandHeaderHtml(brand));
+      }
+    }
   }
 
   try {
@@ -143,11 +155,21 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
       html,
       text: input.text,
       replyTo,
-      attachments: input.attachments?.map((a) => ({
-        filename: a.filename,
-        content: a.content instanceof Uint8Array ? Buffer.from(a.content) : a.content,
-        contentType: a.contentType,
-      })),
+      attachments: [
+        // Logo inline (cid:) — se muestra sin pedir «mostrar imágenes».
+        ...inlineAttachments.map((a) => ({
+          filename: a.filename,
+          content: a.content,
+          contentType: a.contentType,
+          cid: a.cid,
+        })),
+        // Adjuntos normales que pase el llamador.
+        ...(input.attachments?.map((a) => ({
+          filename: a.filename,
+          content: a.content instanceof Uint8Array ? Buffer.from(a.content) : a.content,
+          contentType: a.contentType,
+        })) ?? []),
+      ],
     });
     // Cuenta el envío y avisa si nos acercamos al límite diario (best-effort:
     // nunca rompe ni ralentiza de forma crítica el flujo de negocio).

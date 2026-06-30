@@ -55,6 +55,35 @@ export function brandHeaderHtml(brand: EmpresaBrand): string {
   return `<div style="text-align:center;padding:32px 24px 12px 24px;"><img src="${escapeAttr(src)}" alt="${alt}" style="${sizeStyle}height:auto;width:auto;display:inline-block;border:0;outline:none;text-decoration:none;" /></div>`;
 }
 
+/**
+ * Cabecera con la imagen INCRUSTADA (inline CID): devuelve el HTML que apunta a
+ * `cid:<id>` y el adjunto inline a añadir al correo. Así Gmail/Outlook muestran
+ * el logo AUTOMÁTICAMENTE, sin pedir «mostrar imágenes». Si la descarga falla,
+ * devuelve `null` y el llamador usa la versión con URL externa (fallback).
+ */
+export async function brandHeaderInline(
+  brand: EmpresaBrand,
+): Promise<{ html: string; attachment: { filename: string; content: Buffer; cid: string; contentType: string } } | null> {
+  const isIsotipo = esUrlAbsoluta(brand.isotipoUrl);
+  const src = isIsotipo ? brand.isotipoUrl : esUrlAbsoluta(brand.logoUrl) ? brand.logoUrl : "";
+  if (!src) return null;
+  try {
+    const res = await fetch(src);
+    if (!res.ok) return null;
+    const contentType = res.headers.get("content-type") || "image/png";
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length === 0) return null;
+    const cid = "marca-empresa-logo";
+    const alt = escapeAttr(brand.nombre || "");
+    const sizeStyle = isIsotipo ? "max-height:110px;max-width:110px;" : "max-height:88px;max-width:300px;";
+    const ext = contentType.includes("svg") ? "svg" : contentType.includes("jpeg") ? "jpg" : "png";
+    const html = `<div style="text-align:center;padding:32px 24px 12px 24px;"><img src="cid:${cid}" alt="${alt}" style="${sizeStyle}height:auto;width:auto;display:inline-block;border:0;outline:none;text-decoration:none;" /></div>`;
+    return { html, attachment: { filename: `logo.${ext}`, content: buf, cid, contentType } };
+  } catch {
+    return null;
+  }
+}
+
 /** Lee marca de la empresa (nombre + isotipo + logo). Nunca lanza. */
 export async function fetchEmpresaBrand(empresaId: string): Promise<EmpresaBrand | null> {
   try {

@@ -398,8 +398,13 @@ export async function enviarAltaGestoria(empleadoId: string, opts?: { forzar?: b
       epigrafe: { label: "Epígrafe/cotización", value: epigrafe },
     };
 
+    // Cada dato como una fila de FICHA: etiqueta gris a la izquierda, valor en
+    // negrita a la derecha, con separadores suaves (se aprecia como tarjeta).
     const fila = (k: string, v: string | null | undefined) =>
-      `<tr><td style="padding:4px 12px 4px 0;color:#666">${k}</td><td style="padding:4px 0;font-weight:600">${v || "—"}</td></tr>`;
+      `<tr>
+        <td style="padding:10px 16px;color:#64748b;font-size:13px;border-bottom:1px solid #eef2f7;white-space:nowrap;">${k}</td>
+        <td style="padding:10px 16px;color:#0f172a;font-weight:600;font-size:14px;border-bottom:1px solid #eef2f7;text-align:right;">${v || "—"}</td>
+      </tr>`;
 
     const filasHtml = GESTORIA_CAMPOS
       .filter(({ key }) => campos[key])
@@ -417,8 +422,12 @@ export async function enviarAltaGestoria(empleadoId: string, opts?: { forzar?: b
     const botonHtml = tk.ok ? botonSubidaContratoHtml(tk.token) : "";
     const enlaceText = tk.ok ? `\n\nSubir el contrato firmado: ${urlSubidaContrato(tk.token)}` : "";
 
-    // Tabla de datos del trabajador (se inyecta donde el cuerpo ponga {{gestoria_datos}}).
-    const tablaHtml = `<table style="border-collapse:collapse;font-size:14px">${filasHtml}</table>`;
+    // Ficha de datos del trabajador (tarjeta), se inyecta donde el cuerpo ponga {{gestoria_datos}}.
+    const tablaHtml = `
+      <table role="presentation" width="100%" style="border-collapse:separate;border-spacing:0;margin:18px 0;max-width:480px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+        <tr><td colspan="2" style="background:#f8fafc;padding:12px 16px;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#475569;border-bottom:1px solid #e2e8f0;">Datos del trabajador</td></tr>
+        ${filasHtml}
+      </table>`;
 
     // Plantilla editable «Gestoría · alta de contrato» (UI Plantillas de email).
     const { resolverPlantillaOnboarding, cuerpoOnboardingAHtml, PLANTILLAS_ONBOARDING } = await import(
@@ -438,8 +447,9 @@ export async function enviarAltaGestoria(empleadoId: string, opts?: { forzar?: b
     if (tpl) {
       subject = tpl.asunto;
       // El cuerpo editable inserta la tabla en {{gestoria_datos}} (o al final si no está).
-      const cuerpoHtml = tpl.cuerpo.includes("{{gestoria_datos}}")
-        ? cuerpoOnboardingAHtml(tpl.cuerpo.replace("{{gestoria_datos}}", " ")).replace(" ", tablaHtml)
+      const partes = tpl.cuerpo.split("{{gestoria_datos}}");
+      const cuerpoHtml = partes.length > 1
+        ? partes.map((p) => cuerpoOnboardingAHtml(p)).join(tablaHtml)
         : `${cuerpoOnboardingAHtml(tpl.cuerpo)}${tablaHtml}`;
       html = `${cuerpoHtml}${botonHtml}`;
       text = `${tpl.cuerpo.replace("{{gestoria_datos}}", `\n${filasText}`)}${enlaceText}`;
