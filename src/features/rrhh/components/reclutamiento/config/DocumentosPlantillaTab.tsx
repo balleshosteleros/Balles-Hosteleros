@@ -11,6 +11,7 @@ import {
   type ReclutamientoConfigOnboarding,
 } from "@/features/rrhh/actions/gestoria-actions";
 import { toast } from "sonner";
+import { CONTRATO_INTERNO_DEFAULT } from "@/features/rrhh/services/firmas/contrato-interno-texto";
 
 // Placeholders admitidos en el cuerpo del contrato interno.
 const PLACEHOLDERS: { codigo: string; descripcion: string }[] = [
@@ -33,7 +34,9 @@ function ContratoInternoEditor({ onBack }: { onBack: () => void }) {
   const reload = useCallback(async () => {
     const res = await getReclutamientoConfigOnboarding();
     setConfig(res.data);
-    setTexto(res.data.contrato_interno_plantilla ?? "");
+    // Si aún no hay texto guardado, precarga el del sistema (Contrato privado de
+    // trabajo) para que se vea y se pueda editar directamente.
+    setTexto(res.data.contrato_interno_plantilla?.trim() || CONTRATO_INTERNO_DEFAULT);
     setLoading(false);
   }, []);
 
@@ -155,9 +158,9 @@ export function DocumentosPlantillaTab() {
             <div className="flex items-center gap-4 flex-1 min-w-0">
               <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-foreground truncate">Contrato interno</div>
+                <div className="text-sm font-medium text-foreground truncate">Contrato privado de trabajo</div>
                 <div className="text-xs text-muted-foreground truncate">
-                  Documento que se entrega al empleado al darle de alta.
+                  Documento interno que firma el trabajador al darle de alta (compromiso con el Manual Operativo).
                 </div>
               </div>
             </div>

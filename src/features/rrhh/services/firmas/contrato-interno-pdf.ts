@@ -33,39 +33,13 @@ const FONT_SIZE = 11;
 const LINE_HEIGHT = 16;
 const MAX_CHARS = 88; // ancho aproximado de línea para el wrap
 
-/**
- * Texto por defecto del contrato interno. Admite placeholders que se sustituyen
- * antes de renderizar: {nombre}, {dni}, {empresa}, {puesto}, {ciudad}, {fecha}.
- */
-export const CONTRATO_INTERNO_DEFAULT = `Por el presente documento, D./Dña. {nombre}{dni_clausula}, que se incorpora al puesto de {puesto} en {empresa}, declara y acepta lo siguiente:
-
-1. Que ha recibido la formación previa necesaria para el desempeño de su puesto y que ha podido resolver sus dudas sobre el funcionamiento de la empresa.
-
-2. Que conoce y acepta las normas internas, los procedimientos básicos y la forma de trabajar de la empresa, explicados durante la fase de formación.
-
-3. Que comprende las condiciones internas que se le han explicado antes de comenzar a trabajar.
-
-4. Que su alta ha sido procesada y enviada a la gestoría antes de su incorporación.
-
-5. Que se compromete a cumplir las normas internas, a mantener la confidencialidad de la información de la empresa y a desempeñar sus funciones con diligencia y profesionalidad.
-
-Este documento tiene validez interna entre la empresa y el trabajador y se firma con carácter previo al inicio de la prestación de servicios.`;
-
-/** Sustituye los placeholders del cuerpo del contrato interno. */
-export function sustituirContratoInterno(
-  plantilla: string,
-  vars: { nombre: string; dni: string | null; empresa: string; puesto: string | null; ciudad: string | null; fecha: string },
-): string {
-  const dniClausula = vars.dni ? `, con DNI/NIE ${vars.dni},` : "";
-  return plantilla
-    .replace(/\{nombre\}/g, vars.nombre)
-    .replace(/\{dni_clausula\}/g, dniClausula)
-    .replace(/\{dni\}/g, vars.dni ?? "—")
-    .replace(/\{empresa\}/g, vars.empresa)
-    .replace(/\{puesto\}/g, vars.puesto ?? "—")
-    .replace(/\{ciudad\}/g, vars.ciudad ?? "—")
-    .replace(/\{fecha\}/g, vars.fecha);
-}
+// Texto por defecto y sustitución de placeholders viven en un módulo plano para
+// poder compartirlos con el editor (cliente). Se reexportan por compatibilidad.
+export {
+  CONTRATO_INTERNO_DEFAULT,
+  sustituirContratoInterno,
+} from "@/features/rrhh/services/firmas/contrato-interno-texto";
+import { CONTRATO_INTERNO_DEFAULT, sustituirContratoInterno } from "@/features/rrhh/services/firmas/contrato-interno-texto";
 
 export async function generarContratoInternoPDF(
   input: ContratoInternoInput,
@@ -112,7 +86,7 @@ export async function generarContratoInternoPDF(
   };
 
   // ─── Título ─────────────────────────────────────────────
-  page.drawText("CONTRATO INTERNO", { x: MARGIN_X, y, size: 16, font: fontBold, color: rgb(0.06, 0.09, 0.16) });
+  page.drawText("CONTRATO PRIVADO DE TRABAJO", { x: MARGIN_X, y, size: 16, font: fontBold, color: rgb(0.06, 0.09, 0.16) });
   y -= 8;
   page.drawLine({ start: { x: MARGIN_X, y }, end: { x: PAGE_W - MARGIN_X, y }, thickness: 0.8, color: rgb(0.6, 0.65, 0.72) });
   y -= 28;
