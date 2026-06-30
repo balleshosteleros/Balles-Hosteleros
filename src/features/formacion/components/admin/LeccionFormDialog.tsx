@@ -96,6 +96,7 @@ export function LeccionFormDialog({ cursoId, mode, onClose }: Props) {
         cursoId,
         seccionId,
         orden: ordenSiguiente,
+        publicado: true,
         recursos: [],
         ...comun,
       });

@@ -92,6 +92,7 @@ export function CursoEditor({ cursoId, onClose }: Props) {
       cursoId,
       titulo: nuevaSeccionTit.trim(),
       orden: ordenSiguiente,
+      publicado: true,
     });
     setNuevaSeccionTit("");
   }

@@ -11,13 +11,16 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
   ListChecks, Plus, Pencil, Trash2, FolderPlus, Video, FileUp, Loader2, GripVertical,
-  FileText, CheckCircle2,
+  FileText, CheckCircle2, Eye, EyeOff, ImagePlus, ArrowRightLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { useFormacionStore, leccionesDeCurso } from "@/features/formacion/store/use-formacion-store";
-import { uploadFormacionDoc } from "@/features/formacion/actions/formacion-actions";
+import { uploadFormacionDoc, dbSetSeccionPublicada } from "@/features/formacion/actions/formacion-actions";
 import {
   listCuestionario, guardarPreguntaCuestionario, borrarPreguntaCuestionario,
   type PreguntaCuestionario, type OpcionCuestionario,
@@ -45,8 +48,29 @@ export function CursoEditorSidebar({ cursoId, activaId, onSelect }: Props) {
   const addLeccion = useFormacionStore((s) => s.addLeccion);
   const updateLeccion = useFormacionStore((s) => s.updateLeccion);
   const removeLeccion = useFormacionStore((s) => s.removeLeccion);
+  const hydrate = useFormacionStore((s) => s.hydrate);
 
   const { secciones: cs, leccionesPorSeccion } = leccionesDeCurso(secciones, lecciones, cursoId);
+
+  // Publicar/despublicar TEMA con cascada a sus lecciones (persiste en BD).
+  async function toggleTemaPublicado(sec: Seccion) {
+    const nuevo = !sec.publicado;
+    updateSeccion(sec.id, { publicado: nuevo });
+    for (const l of leccionesPorSeccion.get(sec.id) ?? []) updateLeccion(l.id, { publicado: nuevo });
+    await dbSetSeccionPublicada(sec.id, nuevo);
+    toast.success(nuevo ? "Tema publicado (y sus lecciones)" : "Tema oculto (y sus lecciones)");
+  }
+  // Publicar/despublicar una LECCIÓN suelta.
+  function toggleLeccionPublicada(l: Leccion) {
+    updateLeccion(l.id, { publicado: !l.publicado });
+  }
+  // Mover una lección a otro tema.
+  function moverLeccion(l: Leccion, nuevaSeccionId: string) {
+    if (nuevaSeccionId === l.seccionId) return;
+    const orden = (leccionesPorSeccion.get(nuevaSeccionId) ?? []).length;
+    updateLeccion(l.id, { seccionId: nuevaSeccionId, orden });
+    toast.success("Lección movida de tema");
+  }
 
   // ── Diálogo de módulo ──
   const [moduloOpen, setModuloOpen] = useState(false);
@@ -70,7 +94,7 @@ export function CursoEditorSidebar({ cursoId, activaId, onSelect }: Props) {
       updateSeccion(moduloEdit.id, { titulo: t });
     } else {
       const orden = cs.length;
-      addSeccion({ cursoId, titulo: t, orden });
+      addSeccion({ cursoId, titulo: t, orden, publicado: true });
     }
     setModuloOpen(false);
   }
@@ -104,11 +128,17 @@ export function CursoEditorSidebar({ cursoId, activaId, onSelect }: Props) {
   // Cuestionario tipo test
   const [cuestionario, setCuestionario] = useState<PreguntaCuestionario[]>([]);
 
+  // Portada del vídeo (imagen miniatura) — sube a formacion-docs y guarda URL pública.
+  const [lecCover, setLecCover] = useState<string | undefined>(undefined);
+  const [subiendoCover, setSubiendoCover] = useState(false);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+
   function abrirNuevaLeccion(seccionId: string) {
     setLeccionEdit(null);
     setSeccionDestino(seccionId);
     setLecTitulo(""); setLecVideoUrl(""); setLecContenido(""); setLecDuracion(0);
     setLecDocPath(undefined); setLecDocNombre(undefined); setLecDocTipo(undefined);
+    setLecCover(undefined);
     setCuestionario([]);
     setLeccionOpen(true);
   }
@@ -117,9 +147,27 @@ export function CursoEditorSidebar({ cursoId, activaId, onSelect }: Props) {
     setSeccionDestino(l.seccionId);
     setLecTitulo(l.titulo); setLecVideoUrl(l.url); setLecContenido(l.contenido ?? "");
     setLecDuracion(l.duracionMin);
+    setLecCover(l.cover);
     setLecDocPath(l.documentoPath); setLecDocNombre(l.documentoNombre); setLecDocTipo(l.documentoTipo);
     setCuestionario(await listCuestionario(l.id));
     setLeccionOpen(true);
+  }
+
+  async function handleSubirCover(file: File) {
+    setSubiendoCover(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("title", `portada-${lecTitulo || "leccion"}`);
+      fd.append("mimeType", file.type);
+      const res = await fetch("/api/formacion/video", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error ?? "No se pudo subir la portada"); return; }
+      setLecCover(data.url);
+      toast.success("Portada subida");
+    } finally {
+      setSubiendoCover(false);
+    }
   }
 
   async function handleSubirDoc(file: File) {
@@ -167,6 +215,7 @@ export function CursoEditorSidebar({ cursoId, activaId, onSelect }: Props) {
       leccionId = leccionEdit.id;
       updateLeccion(leccionId, {
         titulo: t, url: lecVideoUrl, contenido: lecContenido, duracionMin: lecDuracion,
+        cover: lecCover,
         documentoPath: lecDocPath, documentoNombre: lecDocNombre, documentoTipo: lecDocTipo,
       });
     } else {
@@ -174,6 +223,7 @@ export function CursoEditorSidebar({ cursoId, activaId, onSelect }: Props) {
       leccionId = addLeccion({
         cursoId, seccionId: seccionDestino, titulo: t, descripcion: "",
         url: lecVideoUrl, contenido: lecContenido, duracionMin: lecDuracion,
+        publicado: true, cover: lecCover,
         documentoPath: lecDocPath, documentoNombre: lecDocNombre, documentoTipo: lecDocTipo,
         orden, fechaSubida: "",
       });
@@ -251,9 +301,14 @@ export function CursoEditorSidebar({ cursoId, activaId, onSelect }: Props) {
               <li key={sec.id} className="space-y-1">
                 <div className="flex items-center gap-1 px-2 group">
                   <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
-                  <span className="flex-1 text-[11px] font-bold uppercase tracking-widest text-muted-foreground truncate">
+                  <span className={`flex-1 text-[11px] font-bold uppercase tracking-widest truncate ${sec.publicado ? "text-muted-foreground" : "text-amber-600/70 line-through"}`}>
                     {sec.titulo}
                   </span>
+                  <button onClick={() => toggleTemaPublicado(sec)}
+                    title={sec.publicado ? "Tema publicado — ocultar (y sus lecciones)" : "Tema oculto — publicar (y sus lecciones)"}
+                    className={`p-1 ${sec.publicado ? "text-emerald-600" : "text-amber-500"} hover:opacity-70`}>
+                    {sec.publicado ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                  </button>
                   <button onClick={() => abrirEditarModulo(sec)} title="Editar módulo"
                     className="p-1 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100">
                     <Pencil className="h-3.5 w-3.5" />
@@ -265,7 +320,7 @@ export function CursoEditorSidebar({ cursoId, activaId, onSelect }: Props) {
                 </div>
                 <ul className="space-y-0.5">
                   {ls.map((l, i) => (
-                    <li key={l.id} className="group flex items-center gap-1">
+                    <li key={l.id} className="group flex items-center gap-0.5">
                       <button
                         type="button"
                         onClick={() => onSelect(l.id)}
@@ -274,10 +329,30 @@ export function CursoEditorSidebar({ cursoId, activaId, onSelect }: Props) {
                         }`}
                       >
                         <Video className="mt-0.5 h-4 w-4 text-muted-foreground shrink-0" />
-                        <span className="line-clamp-2 text-[13px] font-medium leading-snug">
+                        <span className={`line-clamp-2 text-[13px] font-medium leading-snug ${!l.publicado && "text-amber-600/70 line-through"}`}>
                           {i + 1}. {l.titulo}
                         </span>
                       </button>
+                      <button onClick={() => toggleLeccionPublicada(l)}
+                        title={l.publicado ? "Publicada — ocultar" : "Oculta — publicar"}
+                        className={`p-1 ${l.publicado ? "text-emerald-600" : "text-amber-500"} hover:opacity-70`}>
+                        {l.publicado ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                      </button>
+                      {cs.length > 1 && (
+                        <Select value={l.seccionId} onValueChange={(v) => moverLeccion(l, v)}>
+                          <SelectTrigger className="h-7 w-7 p-0 border-0 bg-transparent opacity-0 group-hover:opacity-100 [&>svg]:hidden justify-center"
+                            title="Mover a otro tema">
+                            <ArrowRightLeft className="h-3.5 w-3.5 text-muted-foreground" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {cs.map((s2) => (
+                              <SelectItem key={s2.id} value={s2.id} disabled={s2.id === l.seccionId}>
+                                {s2.titulo}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
                       <button onClick={() => abrirEditarLeccion(l)} title="Editar"
                         className="p-1 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100">
                         <Pencil className="h-3.5 w-3.5" />
@@ -350,6 +425,24 @@ export function CursoEditorSidebar({ cursoId, activaId, onSelect }: Props) {
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handleSubirVideo(f); }} />
               <Input value={lecVideoUrl} onChange={(e) => setLecVideoUrl(e.target.value)}
                 placeholder="…o pega una URL de vídeo" className="text-xs" />
+            </div>
+
+            {/* Portada del vídeo (imagen miniatura) */}
+            <div className="space-y-1.5">
+              <Label>Portada del vídeo (opcional)</Label>
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="outline" size="sm" className="gap-1.5"
+                  onClick={() => coverInputRef.current?.click()} disabled={subiendoCover}>
+                  {subiendoCover ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+                  {subiendoCover ? "Subiendo…" : "Subir portada"}
+                </Button>
+                {lecCover && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={lecCover} alt="portada" className="h-10 w-16 rounded object-cover border" />
+                )}
+              </div>
+              <input ref={coverInputRef} type="file" accept="image/*" className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleSubirCover(f); }} />
             </div>
 
             <div className="space-y-1.5">

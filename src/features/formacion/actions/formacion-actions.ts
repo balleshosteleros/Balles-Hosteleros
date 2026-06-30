@@ -44,15 +44,20 @@ function toCurso(r: CursoRow, puestoNombre: string | null): Curso {
     publicado: r.publicado ?? true,
   };
 }
-type SeccionRow = { id: string; curso_id: string; titulo: string; orden: number };
+type SeccionRow = { id: string; curso_id: string; titulo: string; orden: number; descripcion: string | null; publicado: boolean | null };
 function toSeccion(r: SeccionRow): Seccion {
-  return { id: r.id, cursoId: r.curso_id, titulo: r.titulo ?? "", orden: r.orden ?? 0 };
+  return {
+    id: r.id, cursoId: r.curso_id, titulo: r.titulo ?? "", orden: r.orden ?? 0,
+    descripcion: r.descripcion ?? undefined,
+    publicado: r.publicado ?? true,
+  };
 }
 type LeccionRow = {
   id: string; curso_id: string; seccion_id: string; titulo: string;
   descripcion: string | null; video_url: string | null; documento_path: string | null;
   documento_nombre: string | null; documento_tipo: string | null; contenido: string | null;
   duracion_min: number; orden: number; created_at: string;
+  publicado: boolean | null; cover: string | null;
 };
 function toLeccion(r: LeccionRow): Leccion {
   return {
@@ -65,6 +70,8 @@ function toLeccion(r: LeccionRow): Leccion {
     duracionMin: r.duracion_min ?? 0,
     orden: r.orden ?? 0,
     fechaSubida: (r.created_at ?? "").slice(0, 10),
+    publicado: r.publicado ?? true,
+    cover: r.cover ?? undefined,
     contenido: r.contenido ?? undefined,
     documentoPath: r.documento_path ?? undefined,
     documentoNombre: r.documento_nombre ?? undefined,
@@ -291,6 +298,7 @@ export async function dbCreateSeccion(s: Seccion): Promise<{ ok: boolean; error?
     if (!empresaId) return { ok: false, error: "No autenticado" };
     const { error } = await supabase.from("formacion_secciones").insert({
       id: s.id, empresa_id: empresaId, curso_id: s.cursoId, titulo: s.titulo, orden: s.orden,
+      descripcion: s.descripcion ?? null, publicado: s.publicado ?? true,
     });
     if (error) throw error;
     return { ok: true };
@@ -302,6 +310,8 @@ export async function dbUpdateSeccion(id: string, patch: Partial<Seccion>) {
     const upd: Record<string, unknown> = {};
     if (patch.titulo !== undefined) upd.titulo = patch.titulo;
     if (patch.orden !== undefined) upd.orden = patch.orden;
+    if (patch.descripcion !== undefined) upd.descripcion = patch.descripcion ?? null;
+    if (patch.publicado !== undefined) upd.publicado = patch.publicado;
     const { error } = await supabase.from("formacion_secciones").update(upd).eq("id", id);
     if (error) throw error;
     return { ok: true };
@@ -309,6 +319,26 @@ export async function dbUpdateSeccion(id: string, patch: Partial<Seccion>) {
 }
 export async function dbDeleteSeccion(id: string) {
   return del("formacion_secciones", id, "dbDeleteSeccion");
+}
+
+/**
+ * Publica/despublica un TEMA y, en cascada, TODAS sus lecciones. El alumno
+ * verá u ocultará el bloque entero. Devuelve ok para que el store refresque.
+ */
+export async function dbSetSeccionPublicada(
+  seccionId: string,
+  publicado: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { supabase } = await ctx();
+    const { error: e1 } = await supabase
+      .from("formacion_secciones").update({ publicado }).eq("id", seccionId);
+    if (e1) throw e1;
+    const { error: e2 } = await supabase
+      .from("formacion_lecciones").update({ publicado }).eq("seccion_id", seccionId);
+    if (e2) throw e2;
+    return { ok: true };
+  } catch (e) { return fail("dbSetSeccionPublicada", e); }
 }
 
 export async function dbCreateLeccion(l: Leccion): Promise<{ ok: boolean; error?: string }> {
@@ -321,6 +351,7 @@ export async function dbCreateLeccion(l: Leccion): Promise<{ ok: boolean; error?
       contenido: l.contenido ?? null,
       documento_path: l.documentoPath ?? null, documento_nombre: l.documentoNombre ?? null,
       documento_tipo: l.documentoTipo ?? null,
+      publicado: l.publicado ?? true, cover: l.cover ?? null,
       duracion_min: l.duracionMin, orden: l.orden,
     });
     if (error) throw error;
@@ -338,6 +369,9 @@ export async function dbUpdateLeccion(id: string, patch: Partial<Leccion>) {
     if (patch.documentoPath !== undefined) upd.documento_path = patch.documentoPath ?? null;
     if (patch.documentoNombre !== undefined) upd.documento_nombre = patch.documentoNombre ?? null;
     if (patch.documentoTipo !== undefined) upd.documento_tipo = patch.documentoTipo ?? null;
+    if (patch.publicado !== undefined) upd.publicado = patch.publicado;
+    if (patch.cover !== undefined) upd.cover = patch.cover ?? null;
+    if (patch.seccionId !== undefined) upd.seccion_id = patch.seccionId;
     if (patch.duracionMin !== undefined) upd.duracion_min = patch.duracionMin;
     if (patch.orden !== undefined) upd.orden = patch.orden;
     const { error } = await supabase.from("formacion_lecciones").update(upd).eq("id", id);

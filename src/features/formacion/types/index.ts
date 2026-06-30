@@ -55,6 +55,10 @@ export interface Seccion {
   cursoId: string;
   titulo: string;
   orden: number;
+  /** Texto libre del tema. */
+  descripcion?: string;
+  /** Si false, el tema y todas sus lecciones quedan ocultos al empleado. */
+  publicado: boolean;
 }
 
 export interface RecursoLeccion {
@@ -77,6 +81,10 @@ export interface Leccion {
   duracionMin: number;
   orden: number;
   fechaSubida: string;
+  /** Si false, el empleado no ve esta lección. */
+  publicado: boolean;
+  /** URL/imagen de portada del vídeo (miniatura). */
+  cover?: string;
   /** Texto libre adicional que se muestra bajo el vídeo. */
   contenido?: string;
   /** Documento adjunto (uno por tarea) en el bucket privado `formacion-docs`. */

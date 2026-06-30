@@ -65,13 +65,23 @@ export function CursoVista({ cursoId, admin = false }: Props) {
   }, [hydrated, hydrate, userKey]);
 
   const curso = cursos.find((c) => c.id === cursoId);
+  // El admin ve todo; el alumno solo temas y lecciones publicados.
+  const seccionesVis = useMemo(
+    () => (admin ? secciones : secciones.filter((s) => s.publicado !== false)),
+    [secciones, admin],
+  );
+  const leccionesVis = useMemo(
+    () => (admin ? lecciones : lecciones.filter((l) => l.publicado !== false)),
+    [lecciones, admin],
+  );
+
   const ordenadas = useMemo(
-    () => leccionesOrdenadas(secciones, lecciones, cursoId),
-    [secciones, lecciones, cursoId],
+    () => leccionesOrdenadas(seccionesVis, leccionesVis, cursoId),
+    [seccionesVis, leccionesVis, cursoId],
   );
   const { secciones: cs, leccionesPorSeccion } = useMemo(
-    () => leccionesDeCurso(secciones, lecciones, cursoId),
-    [secciones, lecciones, cursoId],
+    () => leccionesDeCurso(seccionesVis, leccionesVis, cursoId),
+    [seccionesVis, leccionesVis, cursoId],
   );
 
   // Lección activa: ?leccion=... → primera no completada → primera del curso
