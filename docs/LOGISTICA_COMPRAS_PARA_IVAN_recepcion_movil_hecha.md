@@ -43,7 +43,11 @@ update pedidos set estado='Confirmado', albaran_id=data.id, ...
 ```
 pero **la tabla `pedidos` NO tiene columna `albaran_id`** (verificado en BD: las columnas son almacen, dto_*, enviado_at, estado, fecha*, hora_entrega*, notas, numero*, proveedor_*, total, updated_at — sin `albaran_id`). PostgREST rechaza el `update` entero → el pedido se queda en **"Enviado"**. El mismo problema afecta a `deleteAlbaran` (hace `albaran_id=null`) → al borrar un albarán el pedido no retrocede. En escritorio se enmascara con estado optimista local, pero en BD el pedido no transiciona.
 
-**Fix sugerido (tu zona):** o (a) añadir la columna `pedidos.albaran_id` (migración) y mantener el `update`, o (b) quitar `albaran_id` de los `update` de `createAlbaran`/`deleteAlbaran`. En §5 móvil lo he **blindado** marcando el pedido `Confirmado` por separado, con columnas válidas (commit `a9e6e97`), pero la causa raíz sigue en `createAlbaran`.
+**Fix = AÑADIR la columna** (verificado: además de escribirse, se **LEE** en `PedidosView.tsx:90` → `Pedido.albaranId`, que alimenta el "albarán vinculado" y el bloqueo de borrado del pedido; y **NO existe ninguna migración** que la creara). Quitar la referencia sería peor (habría que reescribir también el lado de lectura).
+
+**Migración LISTA y commiteada:** `supabase/migrations/20260630170000_pedidos_albaran_id.sql` — `ADD COLUMN IF NOT EXISTS albaran_id uuid REFERENCES albaranes(id) ON DELETE SET NULL` + índice + backfill desde `albaranes.pedido_id` (idempotente).
+
+**FALTA APLICARLA A PROD.** No la apliqué yo: el guardarraíl de migraciones de producción lo bloquea (necesita aprobación específica). Aplícala con `supabase db push` (tu flujo normal de migraciones) o pegando el SQL en el editor de Supabase. Una vez aplicada, el `createAlbaran` original ya marca el pedido `Confirmado` solo y el parche de §5 móvil (commit `a9e6e97`) se vuelve redundante (inofensivo).
 
 ---
 
