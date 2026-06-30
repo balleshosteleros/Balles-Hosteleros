@@ -242,7 +242,7 @@ export function ImportFichasView() {
   return (
     <div className="space-y-6 pb-28">
       <div>
-        <h1 className="text-2xl font-semibold">Importar fichas técnicas</h1>
+        <h1 className="text-2xl font-semibold">Importar escandallos desde Excel</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Sube el Excel de platos. El sistema propone a qué producto corresponde
           cada ingrediente; tú confirmas o corriges antes de importar. No se

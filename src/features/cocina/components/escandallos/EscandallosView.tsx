@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useTabQuery } from "@/shared/hooks/use-tab-query";
 import { getRouteMeta } from "@/features/layout/data/nav-routes";
@@ -1229,6 +1229,7 @@ function EscandalloDetalle({
 // ─── Main Page ─────────────────────────────────────────────────
 export function EscandallosView() {
   const { empresaActual } = useEmpresa();
+  const router = useRouter();
 
   const [escandallos, setEscandallos] = useState<Record<string, Escandallo[]>>({});
   const [categorias, setCategorias] = useState<Record<string, CategoriaEscandallo[]>>({});
@@ -1562,6 +1563,14 @@ export function EscandallosView() {
         onFiltrosChange={setFiltros}
         extraDerecha={
           <>
+            <Button
+              variant="outline"
+              className="h-9 gap-1.5 text-xs"
+              onClick={() => router.push("/cocina/importar-fichas")}
+              title="Importar escandallos desde Excel"
+            >
+              <Upload className="h-4 w-4" strokeWidth={1.75} /> Importar desde Excel
+            </Button>
             <Button
               size="icon"
               variant={tab === "analisis" ? "default" : "outline"}
