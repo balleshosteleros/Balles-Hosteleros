@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
-import { LANDING_PATH } from '@/features/auth/lib/role-redirect'
+import { landingPorRol } from '@/features/auth/lib/role-redirect'
+import { getRolContext } from '@/features/auth/actions/permisos-actions'
 import { checkProfileGuard } from '@/features/auth/lib/profile-guard'
 import {
   readAccounts,
@@ -103,7 +104,11 @@ export async function GET(request: Request) {
       clearPending(fail)
       return fail
     }
-    target = LANDING_PATH
+    // Landing por ROL (no por puesto): director/admin → Mis Departamentos;
+    // el resto → Mis Paneles. Lo decidimos aquí en el servidor para que cada
+    // usuario aterrice directo en su página, sin parpadeo ni rebote en cliente.
+    const rolCtx = await getRolContext(data.session.user.id)
+    target = landingPorRol(rolCtx.esDirector)
   }
 
   const response = NextResponse.redirect(`${origin}${target}`)

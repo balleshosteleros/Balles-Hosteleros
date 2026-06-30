@@ -1,18 +1,27 @@
 /**
- * Tras login válido, todo usuario aterriza en /mis-departamentos. Allí, la vista
- * MisDepartamentosView aplica la regla por rol:
- *   - Rol dirección (director/admin) → permanece en Mis Departamentos (cuadrícula
- *     de departamentos, con el botón DIRECCIÓN visible).
- *   - Resto de roles → se redirigen a /mi-panel (su landing por defecto).
+ * Landing por ROL tras un login válido (no por puesto):
+ *   - Rol dirección (director/admin) → /mis-departamentos (cuadrícula de
+ *     departamentos del grupo).
+ *   - Resto de roles → /mi-panel (su panel personal por defecto).
  *
- * IMPORTANTE: solo redirigir aquí cuando el profile haya pasado checkProfileGuard.
- * Si el caller no valida, hay que llamar a checkProfileGuard antes.
+ * La decisión se toma en el servidor (callback de login) leyendo getRolContext,
+ * para que cada usuario aterrice directo en su página, sin parpadeo ni rebote
+ * en cliente.
+ *
+ * IMPORTANTE: solo redirigir tras pasar checkProfileGuard.
  */
-export const LANDING_PATH = '/mis-departamentos'
+export const LANDING_DIRECCION = '/mis-departamentos'
+export const LANDING_RESTO = '/mi-panel'
+
+/** Default histórico (fallback). Equivale al landing de dirección. */
+export const LANDING_PATH = LANDING_DIRECCION
+
+export function landingPorRol(esDirector: boolean): string {
+  return esDirector ? LANDING_DIRECCION : LANDING_RESTO
+}
 
 /**
- * @deprecated Usar LANDING_PATH directamente y validar profile con checkProfileGuard.
- * Se mantiene como passthrough para no romper imports existentes.
+ * @deprecated Usar landingPorRol(esDirector). Passthrough para imports antiguos.
  */
 export function getRedirectByRolLabel(
   _rolLabel: string | null | undefined,

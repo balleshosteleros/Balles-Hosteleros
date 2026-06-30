@@ -4,7 +4,8 @@ import { headers, cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { LANDING_PATH } from '@/features/auth/lib/role-redirect'
+import { landingPorRol } from '@/features/auth/lib/role-redirect'
+import { getRolContext } from '@/features/auth/actions/permisos-actions'
 import { SESION_INICIO_COOKIE } from '@/features/auth/lib/session-expiry'
 import {
   checkProfileGuard,
@@ -50,8 +51,10 @@ export async function login(formData: FormData) {
     return { error: PROFILE_GUARD_MESSAGES[guard.code] }
   }
 
+  // Landing por ROL: director/admin → Mis Departamentos; resto → Mis Paneles.
+  const { esDirector } = await getRolContext(data.user.id)
   revalidatePath('/', 'layout')
-  redirect(LANDING_PATH)
+  redirect(landingPorRol(esDirector))
 }
 
 export async function loginAsDemo(_formData: FormData) {
@@ -204,8 +207,9 @@ export async function updatePassword(formData: FormData) {
     return { error: PROFILE_GUARD_MESSAGES[guard.code] }
   }
 
+  const { esDirector } = await getRolContext(user.id)
   revalidatePath('/', 'layout')
-  redirect(LANDING_PATH)
+  redirect(landingPorRol(esDirector))
 }
 
 export async function updateProfile(formData: FormData) {

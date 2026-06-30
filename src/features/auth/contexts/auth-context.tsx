@@ -136,7 +136,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<AuthProfile | null>(null);
   const [roles, setRoles] = useState<AppRole[]>(initialCache?.roles ?? []);
-  const [loading, setLoading] = useState(true);
+  // Si hay caché del último usuario, arrancamos SIN loading: roles y permisos ya
+  // están hidratados desde el primer render, así que la UI (sidebar, gates,
+  // cuadrícula de "Mis Departamentos") se pinta al instante. El refresco
+  // stale-while-revalidate corre igualmente en segundo plano dentro del effect.
+  // Sin esto, un director cacheado se quedaba en skeleton hasta que el server
+  // action getUserPermisos resolvía (auth.getUser + 2 queries + posibles
+  // reintentos por la carrera de cookies) — varios cientos de ms innecesarios.
+  const [loading, setLoading] = useState(initialCache === null);
   const [permisos, setPermisos] = useState<PermisoModulo[]>(initialCache?.permisos ?? []);
   const [permisosLoaded, setPermisosLoaded] = useState(initialCache !== null);
 
@@ -152,18 +159,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
 
-        // Cada vez que el usuario inicia sesión, la app abre en "Mis Paneles".
-        // Reseteamos el modo de vista persistido para que un cambio puntual a
-        // "Mis Departamentos" no se herede en el siguiente login.
-        if (event === "SIGNED_IN" && typeof window !== "undefined") {
-          try {
-            window.localStorage.setItem("bh_view_mode", "paneles");
-            const maxAge = 365 * 24 * 60 * 60;
-            document.cookie = `bh_view_mode=paneles; path=/; max-age=${maxAge}; samesite=lax`;
-          } catch {
-            // storage/cookies no disponibles → ignoramos
-          }
-        }
+        // El modo de vista por defecto se sincroniza con el ROL una vez resuelto
+        // (ver setViewModePorRol dentro de loadFreshAuth): director → "departamentos",
+        // resto → "paneles". No lo forzamos aquí en SIGNED_IN porque todavía no
+        // conocemos el rol; hacerlo a "paneles" hacía que un director arrancara en
+        // el modo equivocado y tuviera que rebotar.
 
         if (session?.user) {
           const userId = session.user.id;
@@ -202,7 +202,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 .from("usuarios")
                 .select("nombre, apellidos, email, empresa_id, avatar_url, avatar_obligatorio, rol_label, departamento")
                 .eq("user_id", userId)
-                .single(),
+                .single()
+                // Nunca dejamos que un rechazo de esta query rompa el Promise.all
+                // y deje la UI colgada en skeleton (permisosLoaded sin marcar).
+                .then((r) => r, (e) => {
+                  console.error("[auth] error cargando perfil", e);
+                  return { data: null };
+                }),
               // Pasamos el access_token de la sesión para que el server action
               // valide al usuario sin depender de las cookies (que tras el
               // redirect del login pueden no estar propagadas → carrera que
@@ -248,6 +254,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setPermisos(nextPermisos);
             setPermisosLoaded(true);
             setLoading(false);
+
+            // Sincroniza el modo de vista por defecto con el ROL: director/admin
+            // → "departamentos", resto → "paneles". Así el conmutador del header
+            // y futuras cargas reflejan el rol real, y el director no arranca en
+            // el modo "paneles" equivocado.
+            if (typeof window !== "undefined") {
+              const esDir = nextRoles.includes("director") || nextRoles.includes("admin");
+              const modo = esDir ? "departamentos" : "paneles";
+              try {
+                window.localStorage.setItem("bh_view_mode", modo);
+                const maxAge = 365 * 24 * 60 * 60;
+                document.cookie = `bh_view_mode=${modo}; path=/; max-age=${maxAge}; samesite=lax`;
+              } catch {
+                // storage/cookies no disponibles → ignoramos
+              }
+            }
 
             // Solo persistimos el caché si el fetch fue real. Así un fallo
             // transitorio no corrompe el localStorage para el próximo mount.
