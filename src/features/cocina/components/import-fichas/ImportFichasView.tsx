@@ -10,7 +10,12 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { previewFichas } from "@/features/cocina/actions/import-fichas-actions";
+import {
+  previewFichas,
+  importarFichas,
+  type ImportInforme,
+  type ImportPayload,
+} from "@/features/cocina/actions/import-fichas-actions";
 import type {
   PreviewLinea,
   PreviewResult,
@@ -61,6 +66,8 @@ export function ImportFichasView() {
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [decisiones, setDecisiones] = useState<Record<string, DecisionLinea>>({});
   const [editando, setEditando] = useState<{ key: string; linea: PreviewLinea } | null>(null);
+  const [importando, setImportando] = useState(false);
+  const [informe, setInforme] = useState<ImportInforme | null>(null);
 
   const onArchivo = useCallback(
     async (file: File | undefined) => {
@@ -129,6 +136,108 @@ export function ImportFichasView() {
       pendientes: vals.filter((d) => d.decision === "pendiente").length,
     };
   }, [decisiones]);
+
+  const hayPendientes = resumenDecisiones.pendientes > 0;
+
+  const onImportar = useCallback(async () => {
+    if (!preview) return;
+    // Construir payload agrupado por plato a partir de las decisiones.
+    const platosMap = new Map<string, ImportPayload["platos"][number]>();
+    preview.lineas.forEach((l, i) => {
+      const key = keyLinea(l, i);
+      const d = decisiones[key];
+      if (!platosMap.has(l.plato)) {
+        platosMap.set(l.plato, { plato: l.plato, categoria: null, lineas: [] });
+      }
+      const elegido = d?.candidatoElegido ?? l.match.candidato;
+      const esFalta = d?.decision === "falta" || d?.decision === "pendiente";
+      platosMap.get(l.plato)!.lineas.push({
+        ingrediente: l.ingrediente,
+        cantidad: l.cantidad,
+        unidad: l.unidad,
+        productoId: esFalta ? null : elegido?.id ?? null,
+        tipo: esFalta ? null : elegido?.tipo ?? null,
+        falta: esFalta,
+      });
+    });
+
+    setImportando(true);
+    try {
+      const res = await importarFichas({ platos: Array.from(platosMap.values()) });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setInforme(res.informe);
+      toast.success(
+        `${res.informe.creados} creadas · ${res.informe.actualizados} actualizadas`
+      );
+    } catch {
+      toast.error("Falló la importación.");
+    } finally {
+      setImportando(false);
+    }
+  }, [preview, decisiones]);
+
+  // Pantalla de informe final.
+  if (informe) {
+    return (
+      <div className="space-y-6 pb-28">
+        <h1 className="text-2xl font-semibold">Importación completada</h1>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <ResumenCard icon={<CheckCircle2 className="size-4" />} label="Creadas" valor={informe.creados} />
+          <ResumenCard icon={<CheckCircle2 className="size-4" />} label="Actualizadas" valor={informe.actualizados} />
+          <ResumenCard icon={<AlertTriangle className="size-4" />} label="Faltan (a dar de alta)" valor={informe.faltan.length} />
+          <ResumenCard icon={<HelpCircle className="size-4" />} label="Platos con error" valor={informe.fallidos.length} />
+        </div>
+
+        {informe.faltan.length > 0 && (
+          <Card>
+            <CardContent className="pt-4">
+              <h3 className="font-medium mb-2">Productos a dar de alta</h3>
+              <p className="text-xs text-muted-foreground mb-3">
+                Estos ingredientes no se importaron porque no existían. Dalos de
+                alta en Productos y vuelve a importar para completarlos.
+              </p>
+              <ul className="text-sm space-y-1">
+                {informe.faltan.map((f, i) => (
+                  <li key={i}>
+                    <span className="text-muted-foreground">{f.plato}:</span> {f.ingrediente}
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
+
+        {informe.fallidos.length > 0 && (
+          <Card>
+            <CardContent className="pt-4">
+              <h3 className="font-medium mb-2 text-rose-600">Platos con error</h3>
+              <ul className="text-sm space-y-1">
+                {informe.fallidos.map((f, i) => (
+                  <li key={i}>
+                    {f.plato}: <span className="text-muted-foreground">{f.error}</span>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
+
+        <Button
+          variant="outline"
+          onClick={() => {
+            setInforme(null);
+            setPreview(null);
+            setDecisiones({});
+          }}
+        >
+          Importar otro Excel
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-28">
@@ -249,6 +358,18 @@ export function ImportFichasView() {
               </CardContent>
             </Card>
           ))}
+
+          {/* Barra de acción */}
+          <div className="sticky bottom-4 flex items-center justify-between rounded-lg border bg-background/95 px-4 py-3 shadow-sm backdrop-blur">
+            <span className="text-sm text-muted-foreground">
+              {hayPendientes
+                ? `${resumenDecisiones.pendientes} líneas sin revisar (se importarán como "falta")`
+                : "Todo revisado"}
+            </span>
+            <Button onClick={onImportar} disabled={importando}>
+              {importando ? "Importando…" : "Importar"}
+            </Button>
+          </div>
         </>
       )}
 

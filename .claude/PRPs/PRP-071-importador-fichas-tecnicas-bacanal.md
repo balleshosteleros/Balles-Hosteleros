@@ -75,8 +75,10 @@ Por tanto:
 
 - **Fase 1 ✅ COMPLETADA (2026-06-30)** — módulo `src/features/cocina/services/import-fichas/` (`types`, `parser`, `matcher`, `preview`, `index` + `verify.script.ts`). Sobre el Excel real: 59 platos, 173 ingredientes → 48 exactos / 50 probables / 90 dudosos / 44 sin candidato. Typecheck limpio. **No toca BD.**
 - **Fase 2 — ❌ ELIMINADA.** Verificado que el anidado funciona sin esquema nuevo: `tipo='elaboracion'` ya existe en BACANAL (4 filas) y el matcher empareja contra ellas (p.ej. "Puré de patata" → "Pure de patatas" [elaboracion]). No se toca la BD.
-- **Fase 3 — Pantalla de revisión:** UI de emparejado asistido + combobox de corrección (dentro de Dialog) + lista de "faltan". Candidatos = productos compra + elaboraciones existentes.
-- **Fase 4 — Escritura + informe:** reutiliza `createEscandallo`/`updateEscandallo` de `cocina/actions/escandallos-actions.ts` (que ya sincroniza a `producto_composicion`), idempotente por (empresa, nombre de plato); informe final.
+- **Fase 3 ✅ COMPLETADA (2026-06-30)** — `import-fichas-actions.ts` (previewFichas) + `ImportFichasView` + `CorregirMatchDialog` (combobox en Dialog) + ruta `/cocina/importar-fichas`. Typecheck limpio.
+- **Fase 4 ✅ COMPLETADA (2026-06-30)** — `importarFichas` reutiliza `createEscandallo`/`updateEscandallo`, idempotente por (empresa, nombre de plato) — reimportar actualiza, no duplica. Informe final (creadas/actualizadas/faltan/errores) + lista de "productos a dar de alta". Typecheck limpio.
+  - ⚠️ **Limitación conocida:** el escandallo importado NO se enlaza aún a un `producto` de venta (`productoId`), así que no sincroniza a `producto_composicion` ni fija coste autoritativo. La ficha queda creada con sus ingredientes; el enlace a producto de venta es trabajo posterior (Fase 5 o aparte).
+  - ⏳ **Pendiente de prueba en navegador** con el Excel real (sin runner E2E; validar manualmente).
 - **Fase 5 — ELABORACIONES:** segundo Excel para crear las sub-fichas (`productos tipo='elaboracion'` + su escandallo) y enlazarlas a los platos.
 
 ## 7. Riesgos / notas
